@@ -591,7 +591,7 @@ func TestToolLoopGuard_BrowserFindMatchResetsNoMatchLoop(t *testing.T) {
 
 func TestToolLoopGuard_BrowserNetworkNoMatchesStopsNetworkSearchLoop(t *testing.T) {
 	g := newToolLoopGuard()
-	noMatch := "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://dash.example/subnets/120\nquery: \"market_cap\"\nMATCHES: none\nNext: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n"
+	noMatch := "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://dash.example/subnets/120\nquery: \"market_cap\"\nMATCHES: none\nRECENT_CAPTURED_RESPONSES:\n- n1 status=200 resource=fetch content_type=application/json url=https://dash.example/api/subnets/120/metrics\n  json_paths: $.market_cap=\"201.04K T\"\nFailure: kind=no_matches\nNext: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n"
 	for i := 1; i < browserNetworkNoMatchThreshold; i++ {
 		args := json.RawMessage(`{"query":"metric-` + fmt.Sprintf("%d", i) + `","max_results":3}`)
 		if got := g.recordAttempt("browser_network", args); got != "" {
@@ -613,13 +613,35 @@ func TestToolLoopGuard_BrowserNetworkNoMatchesStopsNetworkSearchLoop(t *testing.
 	for _, want := range []string{
 		"browser_network returned no captured response matches",
 		"https://dash.example/subnets/120",
-		"browser_snapshot",
-		"relevant tab or wait once",
+		"RECENT_CAPTURED_RESPONSES",
+		"browser_network_read",
+		"json_path",
 		"mark hidden fields unverified",
 		"Failure: kind=loop_guard_no_new_evidence",
 	} {
 		if !strings.Contains(guard, want) {
 			t.Fatalf("browser_network no-new-evidence guard missing %q: %q", want, guard)
+		}
+	}
+}
+
+func TestToolLoopGuard_BrowserNetworkNoMatchesWithoutRecentRefsUsesFallbacks(t *testing.T) {
+	g := newToolLoopGuard()
+	noMatch := "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://dash.example/subnets/120\nquery: \"market_cap\"\nMATCHES: none\nFailure: kind=no_matches\nNext: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n"
+	for i := 0; i < browserNetworkNoMatchThreshold; i++ {
+		guard, _ := g.recordToolResult("browser_network", json.RawMessage(`{"query":"q"}`), noMatch, false)
+		if i < browserNetworkNoMatchThreshold-1 && guard != "" {
+			t.Fatalf("browser_network no-match %d should not guard yet: %q", i+1, guard)
+		}
+		if i == browserNetworkNoMatchThreshold-1 {
+			for _, want := range []string{"browser_snapshot", "relevant tab or wait once", "known API/text/source endpoint"} {
+				if !strings.Contains(guard, want) {
+					t.Fatalf("fallback no-new-evidence guard missing %q: %q", want, guard)
+				}
+			}
+			if strings.Contains(guard, "RECENT_CAPTURED_RESPONSES") {
+				t.Fatalf("fallback guard should not mention recent refs: %q", guard)
+			}
 		}
 	}
 }

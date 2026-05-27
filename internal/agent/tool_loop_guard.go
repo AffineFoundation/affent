@@ -310,7 +310,7 @@ func (g *toolLoopGuard) recordBrowserNetworkNoMatch(tool, result string, isErr b
 	if g.browserNetworkNoMatchCount < browserNetworkNoMatchThreshold {
 		return ""
 	}
-	return browserNetworkNoNewEvidenceMessage(page, g.browserNetworkNoMatchCount)
+	return browserNetworkNoNewEvidenceMessage(page, g.browserNetworkNoMatchCount, browserNetworkHasRecentCapturedResponses(result))
 }
 
 func browserNetworkNoMatches(result string) bool {
@@ -335,13 +335,38 @@ func browserNetworkCurrentPage(result string) string {
 	return ""
 }
 
-func browserNetworkNoNewEvidenceMessage(rawURL string, count int) string {
+func browserNetworkHasRecentCapturedResponses(result string) bool {
+	inRecent := false
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "RECENT_CAPTURED_RESPONSES:" {
+			inRecent = true
+			continue
+		}
+		if !inRecent {
+			continue
+		}
+		if strings.HasPrefix(line, "- n") || strings.HasPrefix(line, "json_paths:") {
+			return true
+		}
+		if line == "" || strings.HasPrefix(line, "Failure:") || strings.HasPrefix(line, "Next:") {
+			return false
+		}
+	}
+	return false
+}
+
+func browserNetworkNoNewEvidenceMessage(rawURL string, count int, hasRecent bool) string {
 	source := "the current rendered page"
 	if rawURL != "" && rawURL != "__unknown_browser_page__" {
 		source = fmt.Sprintf("%q", rawURL)
 	}
+	next := "inspect the current browser_snapshot once for visible labels, interact with the relevant tab or wait once if data has not loaded, use a known API/text/source endpoint, or mark hidden fields unverified."
+	if hasRecent {
+		next = "read one RECENT_CAPTURED_RESPONSES ref with browser_network_read, using a listed json_path when present, before doing any more browser_network searches; otherwise mark hidden fields unverified."
+	}
 	return withLoopGuardFailureKind(
-		fmt.Sprintf("loop_guard: browser_network returned no captured response matches on %s %d times this turn. Repeating network searches is unlikely to add evidence unless the page loads new XHR/fetch responses.\nNext: inspect the current browser_snapshot once for visible labels, interact with the relevant tab or wait once if data has not loaded, use a known API/text/source endpoint, or mark hidden fields unverified.", source, count),
+		fmt.Sprintf("loop_guard: browser_network returned no captured response matches on %s %d times this turn. Repeating network searches is unlikely to add evidence unless the page loads new XHR/fetch responses.\nNext: %s", source, count, next),
 		loopGuardNoNewEvidenceKind,
 	)
 }

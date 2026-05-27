@@ -432,9 +432,10 @@ uses the same pattern: `browser_network` includes the current rendered page in
 its compact output, a no-match result is marked as structured
 `Failure: kind=no_matches` without becoming a tool error, and repeated
 no-match searches on that same page trigger `loop_guard_no_new_evidence` so
-the agent waits once, interacts with the relevant tab, switches to a known
-API/text/source endpoint, or marks hidden fields unverified instead of cycling
-through metric synonyms. Per-turn workflow caps emit
+the agent reads a listed recent captured ref with `browser_network_read` when
+available, otherwise waits once, interacts with the relevant tab, switches to
+a known API/text/source endpoint, or marks hidden fields unverified instead of
+cycling through metric synonyms. Per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose
