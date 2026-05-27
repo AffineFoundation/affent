@@ -934,6 +934,14 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", Confidence: "high", Reason: "dynamic widgets lacked text", RequiredAction: "read browser network responses"},
 			},
 		},
+		LoopProtocolFeeds: agenteval.LoopProtocolFeedStats{
+			Count:  2,
+			ByMode: map[string]int{"digest": 1, "full": 1},
+			Latest: agenteval.LoopProtocolFeed{LoopID: "longrun", Status: "running", Mode: "digest", FeedNumber: 2, ProtocolFeeds: 2, ProtocolPath: ".affent/loops/longrun/LOOP.md"},
+			Examples: []agenteval.LoopProtocolFeed{
+				{LoopID: "longrun", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/longrun/LOOP.md"},
+			},
+		},
 		ContextCompactions: agenteval.ContextCompactionStats{
 			Count:           2,
 			Reactive:        1,
@@ -1011,7 +1019,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -1023,6 +1031,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
+		"loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md",
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
 	} {
@@ -1333,6 +1342,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", RequiredAction: "read browser network responses"},
 			},
 		},
+		LoopProtocolFeeds: agenteval.LoopProtocolFeedStats{
+			Count:  2,
+			ByMode: map[string]int{"digest": 1, "full": 1},
+			Latest: agenteval.LoopProtocolFeed{LoopID: "taostats-rendered", Status: "running", Mode: "digest", FeedNumber: 2, ProtocolFeeds: 2, ProtocolPath: ".affent/loops/taostats-rendered/LOOP.md"},
+			Examples: []agenteval.LoopProtocolFeed{
+				{LoopID: "taostats-rendered", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/taostats-rendered/LOOP.md"},
+			},
+		},
 		ContextCompactions: agenteval.ContextCompactionStats{
 			Count:           1,
 			Reactive:        1,
@@ -1445,6 +1462,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
 		t.Fatalf("summary output missing loop decision rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1") {
+		t.Fatalf("summary output missing loop protocol feed rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,summary_bytes=2048,summary_missing=0,summary_empty=0") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
@@ -1591,6 +1611,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if len(summary.LoopDecisionExamples) != 1 ||
 		summary.LoopDecisionExamples[0].Scenario != "taostats-rendered" {
 		t.Fatalf("LoopDecisionExamples = %#v", summary.LoopDecisionExamples)
+	}
+	if summary.LoopProtocolFeeds != 2 || summary.LoopProtocolFeedByMode["digest"] != 1 || summary.LoopProtocolFeedByMode["full"] != 1 {
+		t.Fatalf("loop protocol feed summary = count:%d modes:%#v", summary.LoopProtocolFeeds, summary.LoopProtocolFeedByMode)
+	}
+	if len(summary.LoopProtocolFeedExamples) != 1 ||
+		summary.LoopProtocolFeedExamples[0].Scenario != "taostats-rendered" ||
+		summary.LoopProtocolFeedExamples[0].Mode != "full" {
+		t.Fatalf("LoopProtocolFeedExamples = %#v", summary.LoopProtocolFeedExamples)
 	}
 	if len(summary.ContextCompactionExamples) != 1 ||
 		summary.ContextCompactionExamples[0].TurnID != "turn-summary" ||
@@ -1850,6 +1878,14 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", RequiredAction: "read browser network responses"},
 			},
 		},
+		LoopProtocolFeeds: agenteval.LoopProtocolFeedStats{
+			Count:  2,
+			ByMode: map[string]int{"digest": 1, "full": 1},
+			Latest: agenteval.LoopProtocolFeed{LoopID: "sample-loop", Status: "running", Mode: "digest", FeedNumber: 2, ProtocolFeeds: 2, ProtocolPath: ".affent/loops/sample-loop/LOOP.md"},
+			Examples: []agenteval.LoopProtocolFeed{
+				{LoopID: "sample-loop", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/sample-loop/LOOP.md"},
+			},
+		},
 		ContextCompactions: agenteval.ContextCompactionStats{
 			Count:           3,
 			Reactive:        1,
@@ -2003,6 +2039,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"plan_calls":                          float64(2),
 		"plan_errors":                         float64(1),
 		"loop_decisions":                      float64(1),
+		"loop_protocol_feeds":                 float64(2),
 		"context_compactions":                 float64(3),
 		"context_compactions_reactive":        float64(1),
 		"context_compaction_removed_messages": float64(48),
@@ -2218,6 +2255,22 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	loopDecisionExamples, ok := got["loop_decision_examples"].([]any)
 	if !ok || len(loopDecisionExamples) != 1 {
 		t.Fatalf("loop_decision_examples = %#v\njson=%s", got["loop_decision_examples"], out.String())
+	}
+	loopProtocolFeedByMode, ok := got["loop_protocol_feed_by_mode"].(map[string]any)
+	if !ok || loopProtocolFeedByMode["digest"] != float64(1) || loopProtocolFeedByMode["full"] != float64(1) {
+		t.Fatalf("loop_protocol_feed_by_mode = %#v\njson=%s", got["loop_protocol_feed_by_mode"], out.String())
+	}
+	loopProtocolFeedExamples, ok := got["loop_protocol_feed_examples"].([]any)
+	if !ok || len(loopProtocolFeedExamples) != 1 {
+		t.Fatalf("loop_protocol_feed_examples = %#v\njson=%s", got["loop_protocol_feed_examples"], out.String())
+	}
+	loopProtocolFeedExample, ok := loopProtocolFeedExamples[0].(map[string]any)
+	if !ok ||
+		loopProtocolFeedExample["loop_id"] != "sample-loop" ||
+		loopProtocolFeedExample["mode"] != "full" ||
+		loopProtocolFeedExample["feed_number"] != float64(1) ||
+		loopProtocolFeedExample["protocol_path"] != ".affent/loops/sample-loop/LOOP.md" {
+		t.Fatalf("loop_protocol_feed_example = %#v\njson=%s", loopProtocolFeedExamples[0], out.String())
 	}
 	contextCompactionExamples, ok := got["context_compaction_examples"].([]any)
 	if !ok || len(contextCompactionExamples) != 1 {
@@ -2765,6 +2818,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		LoopDecisionExamples: []agenteval.LoopDecision{
 			{Scenario: "taostats-rendered", Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
 		},
+		LoopProtocolFeeds:      2,
+		LoopProtocolFeedByMode: map[string]int{"digest": 1, "full": 1},
+		LoopProtocolFeedExamples: []agenteval.LoopProtocolFeed{{
+			Scenario:      "taostats-rendered",
+			LoopID:        "taostats-rendered",
+			Status:        "running",
+			Mode:          "digest",
+			FeedNumber:    4,
+			ProtocolFeeds: 4,
+			ProtocolPath:  ".affent/loops/taostats-rendered/LOOP.md",
+		}},
 		ContextCompactions:              1,
 		ContextCompactionsReactive:      1,
 		ContextCompactionRemoved:        32,
@@ -3034,6 +3098,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"plan_calls":                            float64(3),
 		"plan_errors":                           float64(1),
 		"loop_decisions":                        float64(1),
+		"loop_protocol_feeds":                   float64(2),
 		"runtime_surface_rate":                  float64(1),
 		"runtime_surface_scenarios":             float64(2),
 	} {
@@ -3321,6 +3386,22 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	loopDecisionExample, ok := loopDecisionExamples[0].(map[string]any)
 	if !ok || loopDecisionExample["scenario"] != "taostats-rendered" {
 		t.Fatalf("loop_decision_example = %#v\njson=%s", loopDecisionExamples[0], out.String())
+	}
+	loopProtocolFeedByMode, ok := got["loop_protocol_feed_by_mode"].(map[string]any)
+	if !ok || loopProtocolFeedByMode["digest"] != float64(1) || loopProtocolFeedByMode["full"] != float64(1) {
+		t.Fatalf("loop_protocol_feed_by_mode = %#v\njson=%s", got["loop_protocol_feed_by_mode"], out.String())
+	}
+	loopProtocolFeedExamples, ok := got["loop_protocol_feed_examples"].([]any)
+	if !ok || len(loopProtocolFeedExamples) != 1 {
+		t.Fatalf("loop_protocol_feed_examples = %#v\njson=%s", got["loop_protocol_feed_examples"], out.String())
+	}
+	loopProtocolFeedExample, ok := loopProtocolFeedExamples[0].(map[string]any)
+	if !ok ||
+		loopProtocolFeedExample["scenario"] != "taostats-rendered" ||
+		loopProtocolFeedExample["loop_id"] != "taostats-rendered" ||
+		loopProtocolFeedExample["mode"] != "digest" ||
+		loopProtocolFeedExample["feed_number"] != float64(4) {
+		t.Fatalf("loop_protocol_feed_example = %#v\njson=%s", loopProtocolFeedExamples[0], out.String())
 	}
 	contextCompactionExamples, ok := got["context_compaction_examples"].([]any)
 	if !ok || len(contextCompactionExamples) != 1 {

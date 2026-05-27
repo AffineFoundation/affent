@@ -79,6 +79,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
+		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"protocol_path":".affent/loops/longrun/LOOP.md"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
@@ -178,6 +179,13 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		loopDecisions.Examples[0].Trigger != "source_access_dynamic_partial" ||
 		!strings.Contains(loopDecisions.Examples[0].RequiredAction, "browser network") {
 		t.Fatalf("LoopDecisionStats examples = %+v", loopDecisions.Examples)
+	}
+	feeds := trace.LoopProtocolFeedStats(1)
+	if feeds.Count != 1 || feeds.ByMode["digest"] != 1 || feeds.Latest.FeedNumber != 4 || feeds.Latest.ProtocolPath != ".affent/loops/longrun/LOOP.md" {
+		t.Fatalf("LoopProtocolFeedStats = %+v", feeds)
+	}
+	if len(feeds.Examples) != 1 || feeds.Examples[0].LoopID != "longrun" || feeds.Examples[0].Mode != "digest" {
+		t.Fatalf("LoopProtocolFeedStats examples = %+v", feeds.Examples)
 	}
 	compactions := trace.ContextCompactionStats(1)
 	if compactions.Count != 1 || compactions.Reactive != 1 || compactions.Proactive != 0 || compactions.RemovedMessages != 32 || compactions.SummaryBytes != 2048 {

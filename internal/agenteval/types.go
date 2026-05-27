@@ -145,6 +145,10 @@ type Trace struct {
 	// evidence_quality defer events. These are separate from assistant text so
 	// evals can measure when guardrails fired and whether they were actionable.
 	LoopDecisions []LoopDecision
+	// LoopProtocolFeeds records LOOP.md injections into model context. These
+	// events let long-run evals measure protocol feed cadence and full/digest
+	// context pressure without reading sidecar loop files.
+	LoopProtocolFeeds []LoopProtocolFeed
 	// ContextCompactions records model-context rewrites produced by the
 	// rolling compactor. The full user-visible trace remains in events.jsonl;
 	// these entries let long-run evals assert that context pressure was handled.
@@ -451,6 +455,24 @@ type LoopDecisionStats struct {
 	ByDecision map[string]int
 	ByMatch    map[string]int
 	Examples   []LoopDecision
+}
+
+type LoopProtocolFeed struct {
+	Scenario      string `json:"scenario,omitempty"`
+	TurnID        string `json:"turn_id,omitempty"`
+	LoopID        string `json:"loop_id,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Mode          string `json:"mode"`
+	FeedNumber    int    `json:"feed_number"`
+	ProtocolFeeds int    `json:"protocol_feeds,omitempty"`
+	ProtocolPath  string `json:"protocol_path,omitempty"`
+}
+
+type LoopProtocolFeedStats struct {
+	Count    int
+	ByMode   map[string]int
+	Latest   LoopProtocolFeed
+	Examples []LoopProtocolFeed
 }
 
 type ContextCompaction struct {
@@ -1131,6 +1153,33 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 			RequiredAction: compactOneLine(decision.RequiredAction, 260),
 			TurnID:         decision.TurnID,
 			DecisionID:     decision.DecisionID,
+		})
+	}
+	return stats
+}
+
+func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
+	stats := LoopProtocolFeedStats{}
+	for _, feed := range t.LoopProtocolFeeds {
+		stats.Count++
+		if feed.Mode != "" {
+			if stats.ByMode == nil {
+				stats.ByMode = map[string]int{}
+			}
+			stats.ByMode[feed.Mode]++
+		}
+		stats.Latest = feed
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, LoopProtocolFeed{
+			TurnID:        feed.TurnID,
+			LoopID:        feed.LoopID,
+			Status:        feed.Status,
+			Mode:          feed.Mode,
+			FeedNumber:    feed.FeedNumber,
+			ProtocolFeeds: feed.ProtocolFeeds,
+			ProtocolPath:  feed.ProtocolPath,
 		})
 	}
 	return stats

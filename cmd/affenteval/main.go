@@ -641,6 +641,9 @@ type batchSummary struct {
 	LoopDecisionByKind                   map[string]int
 	LoopDecisionByDecision               map[string]int
 	LoopDecisionExamples                 []agenteval.LoopDecision
+	LoopProtocolFeeds                    int
+	LoopProtocolFeedByMode               map[string]int
+	LoopProtocolFeedExamples             []agenteval.LoopProtocolFeed
 	ContextCompactions                   int
 	ContextCompactionsReactive           int
 	ContextCompactionRemoved             int
@@ -814,6 +817,14 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.LoopDecisionByDecision[k] += v
 	}
 	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.LoopProtocolFeeds += res.LoopProtocolFeeds.Count
+	for k, v := range res.LoopProtocolFeeds.ByMode {
+		if s.LoopProtocolFeedByMode == nil {
+			s.LoopProtocolFeedByMode = map[string]int{}
+		}
+		s.LoopProtocolFeedByMode[k] += v
+	}
+	s.LoopProtocolFeedExamples = appendLoopProtocolFeedExamples(s.LoopProtocolFeedExamples, res.LoopProtocolFeeds.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ContextCompactions += res.ContextCompactions.Count
 	s.ContextCompactionsReactive += res.ContextCompactions.Reactive
 	s.ContextCompactionRemoved += res.ContextCompactions.RemovedMessages
@@ -1241,6 +1252,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(s.LoopDecisionByDecision))
 		}
 	}
+	if s.LoopProtocolFeeds > 0 {
+		fmt.Fprintf(w, " loop_protocol_feeds=%d", s.LoopProtocolFeeds)
+		if len(s.LoopProtocolFeedByMode) > 0 {
+			fmt.Fprintf(w, " loop_protocol_feed_modes=%s", formatStringIntCounts(s.LoopProtocolFeedByMode))
+		}
+	}
 	if s.ContextCompactions > 0 {
 		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			s.ContextCompactions,
@@ -1297,6 +1314,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
+	printLoopProtocolFeedExampleLines(w, s.LoopProtocolFeedExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printPlanExampleLines(w, s.PlanExamples, "")
 	printToolTruncationExampleLines(w, s.ToolTruncationExamples, "")
@@ -1933,6 +1951,26 @@ func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecisio
 	}
 }
 
+func printLoopProtocolFeedExampleLines(w io.Writer, examples []agenteval.LoopProtocolFeed, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sloop_protocol_feed_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.LoopID != "" {
+			fmt.Fprintf(w, " loop_id=%s", ex.LoopID)
+		}
+		fmt.Fprintf(w, " mode=%s feed=%d", ex.Mode, ex.FeedNumber)
+		if ex.ProtocolFeeds > 0 && ex.ProtocolFeeds != ex.FeedNumber {
+			fmt.Fprintf(w, " total=%d", ex.ProtocolFeeds)
+		}
+		if ex.ProtocolPath != "" {
+			fmt.Fprintf(w, " path=%s", ex.ProtocolPath)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSearchExample, indent string) {
 	for _, ex := range examples {
 		fmt.Fprintf(w, "%ssession_search_example:", indent)
@@ -2406,6 +2444,9 @@ type batchResultRecord struct {
 	LoopDecisionByKind               map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision           map[string]int                             `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples             []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	LoopProtocolFeeds                int                                        `json:"loop_protocol_feeds,omitempty"`
+	LoopProtocolFeedByMode           map[string]int                             `json:"loop_protocol_feed_by_mode,omitempty"`
+	LoopProtocolFeedExamples         []agenteval.LoopProtocolFeed               `json:"loop_protocol_feed_examples,omitempty"`
 	ContextCompactions               int                                        `json:"context_compactions,omitempty"`
 	ContextCompactionsReactive       int                                        `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemoved         int                                        `json:"context_compaction_removed_messages,omitempty"`
@@ -2539,6 +2580,9 @@ type batchSummaryRecord struct {
 	LoopDecisionByKind                   map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision               map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples                 []agenteval.LoopDecision                         `json:"loop_decision_examples,omitempty"`
+	LoopProtocolFeeds                    int                                              `json:"loop_protocol_feeds,omitempty"`
+	LoopProtocolFeedByMode               map[string]int                                   `json:"loop_protocol_feed_by_mode,omitempty"`
+	LoopProtocolFeedExamples             []agenteval.LoopProtocolFeed                     `json:"loop_protocol_feed_examples,omitempty"`
 	ContextCompactions                   int                                              `json:"context_compactions,omitempty"`
 	ContextCompactionsReactive           int                                              `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemoved             int                                              `json:"context_compaction_removed_messages,omitempty"`
@@ -2694,6 +2738,9 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		LoopDecisionByKind:               cloneStringIntMap(res.LoopDecisionStats.ByKind),
 		LoopDecisionByDecision:           cloneStringIntMap(res.LoopDecisionStats.ByDecision),
 		LoopDecisionExamples:             cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
+		LoopProtocolFeeds:                res.LoopProtocolFeeds.Count,
+		LoopProtocolFeedByMode:           cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
+		LoopProtocolFeedExamples:         cloneLoopProtocolFeedExamples(res.LoopProtocolFeeds.Examples),
 		ContextCompactions:               res.ContextCompactions.Count,
 		ContextCompactionsReactive:       res.ContextCompactions.Reactive,
 		ContextCompactionRemoved:         res.ContextCompactions.RemovedMessages,
@@ -2901,6 +2948,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		LoopDecisionByKind:                   cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:               cloneStringIntMap(s.LoopDecisionByDecision),
 		LoopDecisionExamples:                 cloneLoopDecisionExamples(s.LoopDecisionExamples),
+		LoopProtocolFeeds:                    s.LoopProtocolFeeds,
+		LoopProtocolFeedByMode:               cloneStringIntMap(s.LoopProtocolFeedByMode),
+		LoopProtocolFeedExamples:             cloneLoopProtocolFeedExamples(s.LoopProtocolFeedExamples),
 		ContextCompactions:                   s.ContextCompactions,
 		ContextCompactionsReactive:           s.ContextCompactionsReactive,
 		ContextCompactionRemoved:             s.ContextCompactionRemoved,
@@ -3240,6 +3290,13 @@ func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDeci
 	return append([]agenteval.LoopDecision(nil), in...)
 }
 
+func cloneLoopProtocolFeedExamples(in []agenteval.LoopProtocolFeed) []agenteval.LoopProtocolFeed {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.LoopProtocolFeed(nil), in...)
+}
+
 func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteval.ContextCompaction {
 	if len(in) == 0 {
 		return nil
@@ -3248,6 +3305,22 @@ func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteva
 }
 
 func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, scenario string, limit int) []agenteval.LoopDecision {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendLoopProtocolFeedExamples(dst, src []agenteval.LoopProtocolFeed, scenario string, limit int) []agenteval.LoopProtocolFeed {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3588,6 +3661,12 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(res.LoopDecisionStats.ByDecision))
 		}
 	}
+	if res.LoopProtocolFeeds.Count > 0 {
+		fmt.Fprintf(w, " loop_protocol_feeds=%d", res.LoopProtocolFeeds.Count)
+		if len(res.LoopProtocolFeeds.ByMode) > 0 {
+			fmt.Fprintf(w, " loop_protocol_feed_modes=%s", formatStringIntCounts(res.LoopProtocolFeeds.ByMode))
+		}
+	}
 	if res.ContextCompactions.Count > 0 {
 		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			res.ContextCompactions.Count,
@@ -3640,6 +3719,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
+	printLoopProtocolFeedExampleLines(w, res.LoopProtocolFeeds.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
 	printPlanExampleLines(w, res.PlanExamples, "  ")
 	printToolTruncationExampleLines(w, res.ToolTruncationExamples, "  ")

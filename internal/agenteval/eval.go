@@ -191,6 +191,7 @@ type BatchResult struct {
 	RuntimeErrorByKind     map[string]int
 	RuntimeErrorExamples   map[string][]RuntimeErrorExample
 	LoopDecisionStats      LoopDecisionStats
+	LoopProtocolFeeds      LoopProtocolFeedStats
 	ContextCompactions     ContextCompactionStats
 	ToolRepairExamples     []ToolRepairExample
 	ToolFailureExamples    map[string][]ToolFailureExample
@@ -249,6 +250,7 @@ type DebugManifest struct {
 	DebugBrief                       *DebugBrief                   `json:"debug_brief,omitempty"`
 	ToolRepairExamples               []ToolRepairExample           `json:"tool_repair_examples,omitempty"`
 	LoopGuardExamples                []LoopGuardExample            `json:"loop_guard_examples,omitempty"`
+	LoopProtocolFeedExamples         []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
 	SourceAccessExamples             []SourceAccessExample         `json:"source_access_examples,omitempty"`
 	BrowserNetworkExamples           []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
 	MemoryUpdateExamples             []MemoryUpdateExample         `json:"memory_update_examples,omitempty"`
@@ -568,44 +570,48 @@ type DebugTranscriptRef struct {
 }
 
 type DebugMetrics struct {
-	TurnEndReason              string         `json:"turn_end_reason,omitempty"`
-	ToolCalls                  int            `json:"tool_calls"`
-	ToolErrors                 int            `json:"tool_errors"`
-	ToolArgsRepaired           int            `json:"tool_args_repaired"`
-	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
-	ToolRepairCalls            int            `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded        int            `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
-	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
-	ForcedNoTools              int            `json:"forced_no_tools"`
-	SourceAccessResults        int            `json:"source_access_results"`
-	SourceAccessVerified       int            `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly  int            `json:"source_access_discovery_only"`
-	SourceAccessNetwork        int            `json:"source_access_network"`
-	SourceAccessDynamicPartial int            `json:"source_access_dynamic_partial"`
-	MemoryUpdates              int            `json:"memory_updates"`
-	MemoryUpdateAdd            int            `json:"memory_update_add,omitempty"`
-	MemoryUpdateReplace        int            `json:"memory_update_replace,omitempty"`
-	MemoryUpdateRemove         int            `json:"memory_update_remove,omitempty"`
-	SessionSearchCalls         int            `json:"session_search_calls,omitempty"`
-	SessionSearchResults       int            `json:"session_search_results,omitempty"`
-	SessionSearchContextHits   int            `json:"session_search_context_hits,omitempty"`
-	SessionSearchMatchedTerms  int            `json:"session_search_matched_terms,omitempty"`
-	ContextCompactions         int            `json:"context_compactions"`
-	ReactiveContextCompactions int            `json:"reactive_context_compactions"`
-	ContextCompactionRemoved   int            `json:"context_compaction_removed_messages"`
-	ContextCompactionSummary   int            `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionMissing   int            `json:"context_compaction_summary_missing,omitempty"`
-	ContextCompactionEmpty     int            `json:"context_compaction_summary_empty,omitempty"`
-	ToolContextTruncated       int            `json:"tool_context_truncated,omitempty"`
-	ToolContextOmittedBytes    int            `json:"tool_context_omitted_bytes,omitempty"`
-	InputTokens                int            `json:"input_tokens"`
-	OutputTokens               int            `json:"output_tokens"`
-	TraceEvents                int            `json:"trace_events,omitempty"`
-	TraceEventTypes            map[string]int `json:"trace_event_types,omitempty"`
+	TurnEndReason                string         `json:"turn_end_reason,omitempty"`
+	ToolCalls                    int            `json:"tool_calls"`
+	ToolErrors                   int            `json:"tool_errors"`
+	ToolArgsRepaired             int            `json:"tool_args_repaired"`
+	ToolNameCanonicalized        int            `json:"tool_name_canonicalized"`
+	ToolRepairCalls              int            `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded          int            `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed             int            `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes              int            `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind             map[string]int `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind            map[string]int `json:"tool_failure_by_kind,omitempty"`
+	LoopGuardInterventions       int            `json:"loop_guard_interventions"`
+	ForcedNoTools                int            `json:"forced_no_tools"`
+	LoopProtocolFeeds            int            `json:"loop_protocol_feeds,omitempty"`
+	LoopProtocolFeedByMode       map[string]int `json:"loop_protocol_feed_by_mode,omitempty"`
+	LatestLoopProtocolFeedNumber int            `json:"latest_loop_protocol_feed_number,omitempty"`
+	LatestLoopProtocolFeedMode   string         `json:"latest_loop_protocol_feed_mode,omitempty"`
+	SourceAccessResults          int            `json:"source_access_results"`
+	SourceAccessVerified         int            `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly    int            `json:"source_access_discovery_only"`
+	SourceAccessNetwork          int            `json:"source_access_network"`
+	SourceAccessDynamicPartial   int            `json:"source_access_dynamic_partial"`
+	MemoryUpdates                int            `json:"memory_updates"`
+	MemoryUpdateAdd              int            `json:"memory_update_add,omitempty"`
+	MemoryUpdateReplace          int            `json:"memory_update_replace,omitempty"`
+	MemoryUpdateRemove           int            `json:"memory_update_remove,omitempty"`
+	SessionSearchCalls           int            `json:"session_search_calls,omitempty"`
+	SessionSearchResults         int            `json:"session_search_results,omitempty"`
+	SessionSearchContextHits     int            `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms    int            `json:"session_search_matched_terms,omitempty"`
+	ContextCompactions           int            `json:"context_compactions"`
+	ReactiveContextCompactions   int            `json:"reactive_context_compactions"`
+	ContextCompactionRemoved     int            `json:"context_compaction_removed_messages"`
+	ContextCompactionSummary     int            `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionMissing     int            `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionEmpty       int            `json:"context_compaction_summary_empty,omitempty"`
+	ToolContextTruncated         int            `json:"tool_context_truncated,omitempty"`
+	ToolContextOmittedBytes      int            `json:"tool_context_omitted_bytes,omitempty"`
+	InputTokens                  int            `json:"input_tokens"`
+	OutputTokens                 int            `json:"output_tokens"`
+	TraceEvents                  int            `json:"trace_events,omitempty"`
+	TraceEventTypes              map[string]int `json:"trace_event_types,omitempty"`
 }
 
 type VerifierResult struct {
@@ -827,6 +833,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
 		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
+		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
@@ -946,6 +953,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		DebugBrief:                       BuildDebugBrief(*res),
 		ToolRepairExamples:               append([]ToolRepairExample(nil), res.ToolRepairExamples...),
 		LoopGuardExamples:                append([]LoopGuardExample(nil), res.LoopGuardExamples...),
+		LoopProtocolFeedExamples:         append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
 		SourceAccessExamples:             append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		BrowserNetworkExamples:           append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
 		MemoryUpdateExamples:             append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
@@ -956,44 +964,48 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ChildTranscripts:                 append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
 		RuntimeSurface:                   cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
-			TurnEndReason:              res.TurnEndReason,
-			ToolCalls:                  res.ToolCalls,
-			ToolErrors:                 res.ToolStats.ToolErrors,
-			ToolArgsRepaired:           res.ToolStats.ToolArgsRepaired,
-			ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
-			ToolRepairCalls:            res.Repair.Calls,
-			ToolRepairSucceeded:        res.Repair.SucceededCalls,
-			ToolRepairFailed:           res.Repair.FailedCalls,
-			ToolRepairNotes:            res.Repair.Notes,
-			ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
-			ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
-			LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
-			ForcedNoTools:              res.ToolStats.ForcedNoTools,
-			SourceAccessResults:        res.ToolStats.SourceAccessResults,
-			SourceAccessVerified:       res.ToolStats.SourceAccessVerified,
-			SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
-			SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
-			SourceAccessDynamicPartial: res.ToolStats.SourceAccessDynamicPartial,
-			MemoryUpdates:              res.ToolStats.MemoryUpdates,
-			MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
-			MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
-			MemoryUpdateRemove:         res.ToolStats.MemoryUpdateRemove,
-			SessionSearchCalls:         res.ToolStats.SessionSearchCalls,
-			SessionSearchResults:       res.ToolStats.SessionSearchResults,
-			SessionSearchContextHits:   res.ToolStats.SessionSearchContextHits,
-			SessionSearchMatchedTerms:  res.ToolStats.SessionSearchMatchedTerms,
-			ContextCompactions:         res.ContextCompactions.Count,
-			ReactiveContextCompactions: res.ContextCompactions.Reactive,
-			ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
-			ContextCompactionSummary:   res.ContextCompactions.SummaryBytes,
-			ContextCompactionMissing:   res.ContextCompactions.SummaryMissing,
-			ContextCompactionEmpty:     res.ContextCompactions.SummaryEmpty,
-			ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
-			ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
-			InputTokens:                res.Usage.InputTokens,
-			OutputTokens:               res.Usage.OutputTokens,
-			TraceEvents:                res.TraceEvents,
-			TraceEventTypes:            cloneStringIntMap(res.TraceEventTypes),
+			TurnEndReason:                res.TurnEndReason,
+			ToolCalls:                    res.ToolCalls,
+			ToolErrors:                   res.ToolStats.ToolErrors,
+			ToolArgsRepaired:             res.ToolStats.ToolArgsRepaired,
+			ToolNameCanonicalized:        res.ToolStats.ToolNameCanonicalized,
+			ToolRepairCalls:              res.Repair.Calls,
+			ToolRepairSucceeded:          res.Repair.SucceededCalls,
+			ToolRepairFailed:             res.Repair.FailedCalls,
+			ToolRepairNotes:              res.Repair.Notes,
+			ToolRepairByKind:             cloneStringIntMap(res.Repair.ByKind),
+			ToolFailureByKind:            cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+			LoopGuardInterventions:       res.ToolStats.LoopGuardInterventions,
+			ForcedNoTools:                res.ToolStats.ForcedNoTools,
+			LoopProtocolFeeds:            res.LoopProtocolFeeds.Count,
+			LoopProtocolFeedByMode:       cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
+			LatestLoopProtocolFeedNumber: res.LoopProtocolFeeds.Latest.FeedNumber,
+			LatestLoopProtocolFeedMode:   res.LoopProtocolFeeds.Latest.Mode,
+			SourceAccessResults:          res.ToolStats.SourceAccessResults,
+			SourceAccessVerified:         res.ToolStats.SourceAccessVerified,
+			SourceAccessDiscoveryOnly:    res.ToolStats.SourceAccessDiscoveryOnly,
+			SourceAccessNetwork:          res.ToolStats.SourceAccessNetwork,
+			SourceAccessDynamicPartial:   res.ToolStats.SourceAccessDynamicPartial,
+			MemoryUpdates:                res.ToolStats.MemoryUpdates,
+			MemoryUpdateAdd:              res.ToolStats.MemoryUpdateAdd,
+			MemoryUpdateReplace:          res.ToolStats.MemoryUpdateReplace,
+			MemoryUpdateRemove:           res.ToolStats.MemoryUpdateRemove,
+			SessionSearchCalls:           res.ToolStats.SessionSearchCalls,
+			SessionSearchResults:         res.ToolStats.SessionSearchResults,
+			SessionSearchContextHits:     res.ToolStats.SessionSearchContextHits,
+			SessionSearchMatchedTerms:    res.ToolStats.SessionSearchMatchedTerms,
+			ContextCompactions:           res.ContextCompactions.Count,
+			ReactiveContextCompactions:   res.ContextCompactions.Reactive,
+			ContextCompactionRemoved:     res.ContextCompactions.RemovedMessages,
+			ContextCompactionSummary:     res.ContextCompactions.SummaryBytes,
+			ContextCompactionMissing:     res.ContextCompactions.SummaryMissing,
+			ContextCompactionEmpty:       res.ContextCompactions.SummaryEmpty,
+			ToolContextTruncated:         res.ToolStats.ToolContextTruncated,
+			ToolContextOmittedBytes:      res.ToolStats.ToolContextOmittedBytes,
+			InputTokens:                  res.Usage.InputTokens,
+			OutputTokens:                 res.Usage.OutputTokens,
+			TraceEvents:                  res.TraceEvents,
+			TraceEventTypes:              cloneStringIntMap(res.TraceEventTypes),
 		},
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}

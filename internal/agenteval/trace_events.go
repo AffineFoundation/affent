@@ -196,6 +196,23 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			TurnID:         p.TurnID,
 			DecisionID:     p.DecisionID,
 		})
+	case sse.TypeLoopProtocolFeed:
+		var p sse.LoopProtocolFeedPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.LoopProtocolFeeds = append(t.LoopProtocolFeeds, LoopProtocolFeed{
+			TurnID:        p.TurnID,
+			LoopID:        p.LoopID,
+			Status:        p.Status,
+			Mode:          p.Mode,
+			FeedNumber:    p.FeedNumber,
+			ProtocolFeeds: p.ProtocolFeeds,
+			ProtocolPath:  p.ProtocolPath,
+		})
 	case sse.TypeContextCompact:
 		var p sse.ContextCompactPayload
 		if err := json.Unmarshal(data, &p); err != nil {

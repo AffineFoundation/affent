@@ -215,6 +215,16 @@ Scenario records describe one eval case:
   `loop_guard_interventions` or `forced_no_tools` spike and the generic
   failure-kind counts do not show which attempted call was blocked. Summary
   records include the originating scenario.
+- `loop_protocol_feeds`: optional count of loop protocol injections into model
+  context for this scenario.
+- `loop_protocol_feed_by_mode`: optional map of feed mode to count. Known modes
+  are `full` and `digest`; future modes should be treated as diagnostic labels.
+- `loop_protocol_feed_examples`: optional bounded examples of protocol feed
+  events. Each sample includes turn id, loop id, loop status, feed mode,
+  sequential feed number, persisted protocol feed count, and protocol path.
+  Summary records include the originating scenario. Use these fields to verify
+  that long-running loop sessions actually refreshed `LOOP.md` without
+  overfeeding the model context.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.
@@ -402,9 +412,14 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_examples`, `loop_guard_examples`, `runtime_error_examples`,
   `source_access_examples`, `browser_network_examples`,
   `memory_update_examples`, `session_search_examples`, `tool_truncation_examples`,
-  `context_compaction_examples`, `loop_decision_examples`, and `plan_examples`
-  include their originating scenario so long-run batch failures can be routed
-  directly to the right trace/timeline.
+  `context_compaction_examples`, `loop_decision_examples`,
+  `loop_protocol_feed_examples`, and `plan_examples` include their originating
+  scenario so long-run batch failures can be routed directly to the right
+  trace/timeline.
+- Loop protocol feed totals: `loop_protocol_feeds`,
+  `loop_protocol_feed_by_mode`, and `loop_protocol_feed_examples`, useful for
+  checking whether a long-run scenario kept its per-session protocol state in
+  attention after compaction or multi-turn drift.
 - Context pressure totals: `context_compactions`,
   `context_compactions_reactive`, `context_compaction_removed_messages`,
   `context_compaction_summary_bytes`, `context_compaction_summary_missing`, and
