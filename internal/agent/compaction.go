@@ -815,7 +815,13 @@ func compactPlanResultForSummary(content string) (string, bool) {
 		return "", false
 	}
 	var b strings.Builder
+	if label := activePlanStatusLabel(st.Steps); label != "" {
+		fmt.Fprintf(&b, "plan_status: %s", label)
+	}
 	if st.Message != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
 		fmt.Fprintf(&b, "message: %s", textutil.Preview(strings.TrimSpace(st.Message), compactMemoryMaxText))
 	}
 	if st.UpdatedAt != "" {

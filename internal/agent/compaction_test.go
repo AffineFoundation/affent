@@ -916,6 +916,24 @@ func TestCompact_DoesNotSeverToolCallPair_AtHeadBoundary(t *testing.T) {
 	}
 }
 
+func TestCompactPlanResultForSummaryIncludesPlanStatusLabel(t *testing.T) {
+	got, ok := compactPlanResultForSummary(`{"message":"updated step 2","steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"in_progress","evidence":["cmd/affentctl/cmd_run.go"]}]}`)
+	if !ok {
+		t.Fatal("compactPlanResultForSummary ok=false")
+	}
+	for _, want := range []string{
+		"plan_status: plan:1/2:active",
+		"message: updated step 2",
+		"steps:",
+		"2. [in_progress] ship",
+		"evidence=cmd/affentctl/cmd_run.go",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("plan summary missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestIsContextOverflow(t *testing.T) {
 	cases := map[string]bool{
 		// Already covered before this iteration:

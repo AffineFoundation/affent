@@ -120,12 +120,13 @@ After review, execute the unfinished plan:
 Inside `affentctl chat`, use `/plan draft <request>`, `/plan execute [note]`,
 `/plan`, and `/plan clear`.
 
-Active plans are injected back into each turn with completed step details
-omitted, the current unfinished step called out explicitly, and a reminder to
-update that same step with status, evidence, or note after progress. This is a
-bounded execution aid rather than a strict workflow engine: the runtime steers
-the model to execute and update the current step, while loop guards and evals
-track whether the plan tool was used cleanly. Execute-plan turns also reject
+Active plans are injected back into each turn with a compact `plan:x/y:status`
+label, completed step details omitted, the current unfinished step called out
+explicitly, and a reminder to update that same step with status, evidence, or
+note after progress. This is a bounded execution aid rather than a strict
+workflow engine: the runtime steers the model to execute and update the current
+step, while loop guards and evals track whether the plan tool was used cleanly.
+Execute-plan turns also reject
 `plan action=set` and `plan action=clear` so a confirmed plan is updated in
 place instead of being silently replaced during execution. Eval debug
 manifests, timelines, and JSONL records include bounded `plan_examples` with
@@ -837,6 +838,9 @@ When rolling compaction later summarizes the session, `run_task` and
 (`summary`/`findings` or `report` plus bounded metadata and tool-call names)
 instead of raw JSON, so long sessions preserve the evidence the parent acted on
 without paying to re-summarize child transcripts or bulky response metadata.
+Compacted plan tool results also include the same `plan:x/y:status` label so
+post-compaction recovery can identify current progress even if natural-language
+step text was shortened.
 If the compacted span included an active `LOOP.md` feed, the rolling summary
 also receives a deterministic `LOOP_PROTOCOL:` anchor with the protocol path,
 feed mode/count, loop id/status, and active plan checkpoint. This keeps

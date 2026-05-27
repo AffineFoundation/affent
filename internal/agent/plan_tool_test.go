@@ -542,6 +542,7 @@ func TestWithActivePlanSkillProviderInjectsPersistedPlan(t *testing.T) {
 	got := provider("continue")
 	for _, want := range []string{
 		"AFFENT ACTIVE PLAN:",
+		"Plan status: plan:1/2:active.",
 		"Completed steps: 1 (details omitted from active context).",
 		"Current step: 2. Execute this step before broadening",
 		"2. [in_progress] continue implementation note: resume here",
@@ -569,6 +570,26 @@ func TestActivePlanCurrentStepPrefersInProgressThenPending(t *testing.T) {
 	steps[2].Status = "completed"
 	if got, want := activePlanCurrentStepIndex(steps), 2; got != want {
 		t.Fatalf("current step without in_progress = %d, want %d", got, want)
+	}
+}
+
+func TestActivePlanStatusLabel(t *testing.T) {
+	cases := []struct {
+		name  string
+		steps []planStep
+		want  string
+	}{
+		{name: "active", steps: []planStep{{Status: "completed"}, {Status: "in_progress"}}, want: "plan:1/2:active"},
+		{name: "blocked", steps: []planStep{{Status: "completed"}, {Status: "blocked"}}, want: "plan:1/2:blocked"},
+		{name: "pending", steps: []planStep{{Status: "pending"}}, want: "plan:0/1"},
+		{name: "done", steps: []planStep{{Status: "completed"}, {Status: "completed"}}, want: "plan:2/2:done"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := activePlanStatusLabel(tc.steps); got != tc.want {
+				t.Fatalf("activePlanStatusLabel = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

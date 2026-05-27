@@ -680,6 +680,9 @@ func activePlanSkillBlock(planPath string) string {
 	var b strings.Builder
 	b.WriteString("AFFENT ACTIVE PLAN:\n")
 	b.WriteString("This is the persisted task plan for the current session. Continue from it, update it when progress changes, and avoid restarting already completed steps.\n")
+	if label := activePlanStatusLabel(st.Steps); label != "" {
+		fmt.Fprintf(&b, "Plan status: %s.\n", label)
+	}
 	completed := 0
 	for _, step := range st.Steps {
 		if planStepCompleted(step) {
@@ -699,6 +702,38 @@ func activePlanSkillBlock(planPath string) string {
 		b.WriteString(formatActivePlanStep(i+1, step))
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func activePlanStatusLabel(steps []planStep) string {
+	total := len(steps)
+	if total == 0 {
+		return ""
+	}
+	completed := 0
+	active := false
+	blocked := false
+	for _, step := range steps {
+		status := strings.ToLower(strings.TrimSpace(step.Status))
+		switch status {
+		case "completed":
+			completed++
+		case "in_progress":
+			active = true
+		case "blocked":
+			blocked = true
+		}
+	}
+	label := fmt.Sprintf("plan:%d/%d", completed, total)
+	if completed == total {
+		return label + ":done"
+	}
+	if active {
+		label += ":active"
+	}
+	if blocked {
+		label += ":blocked"
+	}
+	return label
 }
 
 func activePlanCurrentStepIndex(steps []planStep) int {
