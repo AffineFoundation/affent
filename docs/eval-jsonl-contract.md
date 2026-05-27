@@ -226,8 +226,11 @@ Scenario records describe one eval case:
   `discovery_only`), accessed/requested URLs, URL field, source method, HTTP
   status, content type, and JSON path when present. Browser network reads also
   include the captured response `ref` when the `SourceAccess:` header carried
-  one. Batch summary examples also include the originating scenario name so a
-  failed live-web evidence chain can be traced directly.
+  one. Samples include a compact `result_preview` after the `SourceAccess:`
+  provenance header so operators can see the actual evidence body (for example
+  a JSON value or rendered page text) without opening the full trace. Batch
+  summary examples also include the originating scenario name so a failed
+  live-web evidence chain can be traced directly.
 - `browser_network_examples`: optional bounded examples of `browser_network`
   searches. These are diagnostic refs/checks, not citable factual evidence.
   Each sample includes tool index, call id, current page URL, query, status
