@@ -339,6 +339,7 @@ func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
 	}
 	if !strings.Contains(searchOut, "CURRENT_PAGE: https://taostats.io/subnets/120") ||
 		!strings.Contains(searchOut, "MATCHES: none") ||
+		!strings.Contains(searchOut, "Failure: kind=no_matches") ||
 		!strings.Contains(searchOut, "mark hidden fields unverified") {
 		t.Fatalf("no-match output missing recovery guidance:\n%s", searchOut)
 	}

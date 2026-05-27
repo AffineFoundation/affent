@@ -614,7 +614,8 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 			{CallID: "c1", Tool: "web_fetch", ExitCode: 1, Result: "Error\nFailure: kind=blocked\nNext: use another source"},
 			{CallID: "c2", Tool: "web_fetch", ExitCode: 0, Result: "[empty response: URL=https://example]\nFailure: kind=empty_response"},
 			{CallID: "c3", Tool: "web_search", ExitCode: 0, Result: "(no results)\nFailure: kind=no_results"},
-			{CallID: "c4", Tool: "read_file", ExitCode: 0, Result: "Failure: kind=not_a_tool_failure"},
+			{CallID: "c4", Tool: "browser_network", ExitCode: 0, Result: "BROWSER NETWORK EVIDENCE\nMATCHES: none\nFailure: kind=no_matches"},
+			{CallID: "c5", Tool: "read_file", ExitCode: 0, Result: "Failure: kind=not_a_tool_failure"},
 		}}
 		if res := ToolFailureKindAtLeast("blocked", 1).Eval(trace); !res.Pass {
 			t.Fatalf("expected text fallback blocked check to pass: %+v", res)
@@ -624,6 +625,9 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 		}
 		if res := ToolFailureKindAtLeast("no_results", 1).Eval(trace); !res.Pass {
 			t.Fatalf("expected text fallback no_results check to pass: %+v", res)
+		}
+		if res := ToolFailureKindAtLeast("no_matches", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected text fallback no_matches check to pass: %+v", res)
 		}
 		if res := ToolFailureKindAtLeast("not_a_tool_failure", 1).Eval(trace); res.Pass {
 			t.Fatalf("successful read_file text must not count as failure kind: %+v", res)

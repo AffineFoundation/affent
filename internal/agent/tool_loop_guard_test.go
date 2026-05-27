@@ -496,6 +496,7 @@ func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
 		{name: "web fetch hard error", tool: "web_fetch", result: "Error: http 403", isErr: true, want: false},
 		{name: "web search no results", tool: "web_search", result: "(no results)\nFailure: kind=no_results", want: false},
 		{name: "web search hits", tool: "web_search", result: "1. Result\n   https://example.com\n   snippet", want: true},
+		{name: "browser network no matches", tool: "browser_network", result: "BROWSER NETWORK EVIDENCE\nMATCHES: none\nFailure: kind=no_matches", want: true},
 		{name: "other tool literal text", tool: "shell", result: "[empty response: not a web_fetch marker]", want: true},
 	}
 

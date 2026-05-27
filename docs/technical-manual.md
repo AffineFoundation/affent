@@ -429,10 +429,12 @@ times in one turn, the runtime emits `loop_guard_no_new_evidence` and steers
 the model toward one snapshot inspection, `browser_network`/`browser_network_read`,
 a different source, or a clearly marked gap. Captured network evidence search
 uses the same pattern: `browser_network` includes the current rendered page in
-its compact output, and repeated no-match searches on that same page trigger
-`loop_guard_no_new_evidence` so the agent waits once, interacts with the
-relevant tab, switches to a known API/text/source endpoint, or marks hidden
-fields unverified instead of cycling through metric synonyms. Per-turn workflow caps emit
+its compact output, a no-match result is marked as structured
+`Failure: kind=no_matches` without becoming a tool error, and repeated
+no-match searches on that same page trigger `loop_guard_no_new_evidence` so
+the agent waits once, interacts with the relevant tab, switches to a known
+API/text/source endpoint, or marks hidden fields unverified instead of cycling
+through metric synonyms. Per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose
@@ -462,10 +464,10 @@ opening the full transcript. Each
 `failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
 useful recovery path from a run that simply accumulated failed retrievals,
 discovery-only pages, empty recall, or policy violations.
-Successful-but-no-evidence web results, such as `dynamic_shell`,
-`empty_response`, `non_text`, or `no_results`, contribute to
-`tool_failure_by_kind` even when their `tool.result.exit_code` is `0`;
-`tool_errors` remains reserved for non-zero tool exits.
+Successful-but-no-evidence web/browser results, such as `dynamic_shell`,
+`empty_response`, `non_text`, `no_results`, or browser-network `no_matches`,
+contribute to `tool_failure_by_kind` even when their `tool.result.exit_code` is
+`0`; `tool_errors` remains reserved for non-zero tool exits.
 
 Runtime LLM errors use the same idea on `error.failure_kind` when the loop can
 classify them. Known values include `llm_timeout` for per-call or stream-idle
@@ -573,10 +575,12 @@ Browser sessions also keep a bounded same-site XHR/fetch evidence log.
 `browser_network` searches captured JSON/text responses and returns compact
 refs with the current rendered page context; WebUI activity summaries surface
 that page, query, and match/no-match status so operators can see when a long
-run is cycling through network-evidence searches. The search tokenizer handles
-common API field shapes such as `market_cap`, `marketCap`, and `volume24h`, so
-user-facing metric labels can find hidden JSON fields without site-specific
-scrapers. `browser_network_read` reads a selected ref with
+run is cycling through network-evidence searches. No-match searches include
+`Failure: kind=no_matches` so evals and summaries can count failed evidence
+discovery separately from successful `browser_network_read` source evidence.
+The search tokenizer handles common API field shapes such as `market_cap`,
+`marketCap`, and `volume24h`, so user-facing metric labels can find hidden JSON
+fields without site-specific scrapers. `browser_network_read` reads a selected ref with
 `SourceAccess: browser_network_url=...; ref=...; status=200;
 content_type=application/json; source_method=network_xhr_fetch`.
 Large JSON/text responses are accepted up to the browser response-cache cap and

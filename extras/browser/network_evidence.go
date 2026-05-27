@@ -545,6 +545,7 @@ func formatNetworkSearchResults(query, pageURL string, entries []NetworkEvidence
 	}
 	if len(entries) == 0 {
 		b.WriteString("MATCHES: none\n")
+		b.WriteString("Failure: kind=no_matches\n")
 		b.WriteString("Next: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n")
 		return b.String()
 	}

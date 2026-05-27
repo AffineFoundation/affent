@@ -624,6 +624,9 @@ func toolOutcomeCountsAsSuccess(tool, result string, isErr bool) bool {
 	if isErr {
 		return false
 	}
+	if tool == "browser_network" {
+		return true
+	}
 	return !isNoEvidenceResult(tool, result)
 }
 

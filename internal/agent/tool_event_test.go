@@ -52,6 +52,11 @@ func TestRecordToolFailureKind(t *testing.T) {
 	if stats.ToolFailureByKind["dynamic_shell"] != 1 {
 		t.Fatalf("no-evidence web_fetch should count failure kind: %+v", stats.ToolFailureByKind)
 	}
+
+	recordToolFailureKind(&stats, "browser_network", "BROWSER NETWORK EVIDENCE\nMATCHES: none\nFailure: kind=no_matches\nNext: wait once.", false)
+	if stats.ToolFailureByKind["no_matches"] != 1 {
+		t.Fatalf("no-evidence browser_network should count failure kind: %+v", stats.ToolFailureByKind)
+	}
 }
 
 func TestRecordSourceAccessStats(t *testing.T) {
@@ -164,6 +169,9 @@ func TestToolFailureKindForOutcome(t *testing.T) {
 	}
 	if got := toolFailureKindForOutcome("web_search", "(no results)\nFailure: kind=no_results", false); got != "no_results" {
 		t.Fatalf("no-results failure kind = %q, want no_results", got)
+	}
+	if got := toolFailureKindForOutcome("browser_network", "BROWSER NETWORK EVIDENCE\nMATCHES: none\nFailure: kind=no_matches", false); got != "no_matches" {
+		t.Fatalf("browser-network no-match failure kind = %q, want no_matches", got)
 	}
 	if got := toolFailureKindForOutcome("read_file", "Failure: kind=blocked", false); got != "" {
 		t.Fatalf("successful read_file content should not set FailureKind, got %q", got)

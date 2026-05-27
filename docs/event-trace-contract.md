@@ -248,13 +248,14 @@ external-calibration reminder paired with a `loop.decision`.
 - `tool_failure_by_kind`: object keyed by structured tool failure kind. Tools
   that can explain recoverable failures should include a line like
   `Failure: kind=blocked` in their result or error text; the runtime aggregates
-  those kinds here. Web no-evidence results can contribute here even when their
-  `tool.result.exit_code` is `0`; use `tool_errors` when you specifically need
-  non-zero tool exits. Known web kinds include `invalid_args`, `blocked`,
+  those kinds here. Web and browser-network no-evidence results can contribute
+  here even when their `tool.result.exit_code` is `0`; use `tool_errors` when
+  you specifically need non-zero tool exits. Known web/browser kinds include
+  `invalid_args`, `blocked`,
   `not_found`, `rate_limited`, `server_error`, `http_error`,
   `private_network_blocked`, `timeout`, `network_error`, `empty_response`,
-  `dynamic_shell`, `non_text`, `no_results`, `search_error`, `stale_ref`, and
-  `not_interactable`. Known runtime policy kinds include
+  `dynamic_shell`, `non_text`, `no_results`, `no_matches`, `search_error`,
+  `stale_ref`, and `not_interactable`. Known runtime policy kinds include
   `tool_policy_first_tool`, `tool_policy_repeat`, and `tool_policy_active`.
 - `tool_errors`: count of tool results emitted with non-zero `exit_code`,
   including guard rejections and skipped calls. This is narrower than

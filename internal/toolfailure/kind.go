@@ -64,6 +64,8 @@ func IsNoEvidenceResult(tool, result string) bool {
 		return IsNoEvidenceWebFetchResult(result)
 	case "web_search":
 		return IsNoEvidenceWebSearchResult(result)
+	case "browser_network":
+		return IsNoEvidenceBrowserNetworkResult(result)
 	default:
 		return false
 	}
@@ -85,6 +87,12 @@ func IsNoEvidenceWebSearchResult(result string) bool {
 	result = strings.TrimSpace(result)
 	return strings.HasPrefix(result, "(no results)") ||
 		strings.HasPrefix(result, "(no usable results:")
+}
+
+func IsNoEvidenceBrowserNetworkResult(result string) bool {
+	result = strings.TrimSpace(result)
+	return strings.HasPrefix(result, "BROWSER NETWORK EVIDENCE") &&
+		strings.Contains(result, "\nMATCHES: none\n")
 }
 
 func validKind(kind string) bool {
