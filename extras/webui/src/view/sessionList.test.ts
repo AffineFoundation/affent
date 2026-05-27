@@ -188,6 +188,59 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("loop.md not running");
   });
 
+  it("surfaces pending loop timers when LOOP.md is not running", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "pending-loop-timer",
+        durable: true,
+        has_schedules: true,
+        has_loop_protocol: true,
+        loop_protocol: {
+          path: ".affent/loops/pending-loop-timer/LOOP.md",
+          status: "draft",
+          bytes: 256,
+        },
+        schedules: {
+          count: 1,
+          enabled: 1,
+          next_schedule_kind: "loop_tick",
+          next_prompt_preview: "Scheduled loop tick for session: runtime hardening",
+          next_run_at: "2026-05-27T14:00:00Z",
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics.some((metric) => metric.startsWith("Timer 1 pending/1, waiting for LOOP.md activation"))).toBe(true);
+    expect(rows[0].stats).toContain("Timer 1 pending/1");
+    expect(rows[0].chips).toContain("timers");
+    expect(rows[0].searchText).toContain("waiting for loop.md activation");
+  });
+
+  it("keeps loop timers active in the row when LOOP.md is running", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "active-loop-timer",
+        durable: true,
+        has_schedules: true,
+        has_loop_protocol: true,
+        loop_protocol: {
+          path: ".affent/loops/active-loop-timer/LOOP.md",
+          status: "running",
+          bytes: 256,
+        },
+        schedules: {
+          count: 1,
+          enabled: 1,
+          next_schedule_kind: "loop_tick",
+          next_prompt_preview: "Scheduled loop tick for session: runtime hardening",
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Timer 1/1");
+    expect(rows[0].stats).not.toContain("pending");
+  });
+
   it("surfaces loop protocol status in row stats and chips", () => {
     const rows = buildSessionRows([
       session({

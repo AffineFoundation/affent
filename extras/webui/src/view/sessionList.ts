@@ -1,4 +1,4 @@
-import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSchedulesSummary, SessionSummary } from "../api/sessions";
+import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
 import { conversationTopicFromTurns } from "./continuationPrompt";
@@ -510,7 +510,7 @@ function usageMetrics(session: SessionSummary): string[] {
   if (planMetric) metrics.push(planMetric);
   const loopMetric = sessionLoopProtocolMetric(session);
   if (loopMetric) metrics.push(loopMetric);
-  const scheduleMetric = sessionScheduleMetric(session.schedules);
+  const scheduleMetric = sessionScheduleMetric(session);
   if (scheduleMetric) metrics.push(scheduleMetric);
   return metrics;
 }
@@ -711,13 +711,30 @@ function loopDecisionMetricResult(kind: string, decision: string): string {
   return `${kind}:${decision}`;
 }
 
-function sessionScheduleMetric(summary: SessionSchedulesSummary | undefined): string | undefined {
+function sessionScheduleMetric(session: SessionSummary): string | undefined {
+  const summary = session.schedules;
   if (!summary || summary.count <= 0) return undefined;
-  const parts = [`Timer ${summary.enabled}/${summary.count}`];
+  const pendingLoopTimers = pendingLoopTimerCount(session);
+  const parts = [pendingLoopTimers > 0 ? `Timer ${pendingLoopTimers} pending/${summary.count}` : `Timer ${summary.enabled}/${summary.count}`];
   if ((summary.error_count ?? 0) > 0) parts.push(`${summary.error_count} error${summary.error_count === 1 ? "" : "s"}`);
   if (summary.last_error) parts.push(`last ${summarize(summary.last_error, 72)}`);
+  if (pendingLoopTimers > 0) parts.push("waiting for LOOP.md activation");
   if (summary.next_run_at) parts.push(`next ${formatTimestamp(summary.next_run_at)}`);
   return parts.join(", ");
+}
+
+function pendingLoopTimerCount(session: SessionSummary): number {
+  const summary = session.schedules;
+  if (!summary || summary.enabled <= 0 || loopProtocolRunning(session)) return 0;
+  if (summary.next_schedule_kind === "loop_tick") return summary.enabled;
+  const preview = summary.next_prompt_preview?.trim().toLowerCase() ?? "";
+  if (preview.includes("scheduled loop tick")) return summary.enabled;
+  return 0;
+}
+
+function loopProtocolRunning(session: SessionSummary): boolean {
+  const status = session.loop_protocol?.state?.status?.trim() || session.loop_state?.status?.trim() || session.loop_protocol?.status?.trim();
+  return status?.toLowerCase() === "running";
 }
 
 function planStatusLabel(plan: SessionPlanSummary): string {
