@@ -301,10 +301,11 @@ dashboard output so small and medium models see the next actionable refs before
 context truncation. Snapshot extraction pierces open shadow DOM roots for both
 visible text and interactive refs, and browser interaction tools resolve those
 refs through the same shadow-aware lookup. This lets component-heavy dashboards
-expose ordinary facts and controls without dumping raw HTML. Search backends
-can still time out, rate-limit, or return no usable URLs. The tools surface
-those cases as structured failures so the agent can switch source instead of
-burning turns:
+expose ordinary facts and controls without dumping raw HTML. `browser_find`
+uses the same shadow-aware scan, so targeted searches stay consistent with
+snapshots on component-heavy pages. Search backends can still time out,
+rate-limit, or return no usable URLs. The tools surface those cases as
+structured failures so the agent can switch source instead of burning turns:
 
 The main agent prompt includes the current UTC date as runtime context. For
 current market, news, or trend answers, the model is instructed to treat that as

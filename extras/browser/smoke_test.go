@@ -143,6 +143,19 @@ func TestSession_SnapshotPicksUpOpenShadowDOM(t *testing.T) {
 	if !strings.Contains(result, "shadow clicked") {
 		t.Fatalf("post-click shadow snapshot missing updated status:\n%s", result)
 	}
+
+	findOut, err := FindTool(sess).Execute(ctx, []byte(`{"query":"shadow market cap","max_results":3}`))
+	if err != nil {
+		t.Fatalf("browser_find shadow DOM: %v", err)
+	}
+	for _, want := range []string{
+		`QUERY: "shadow market cap"`,
+		`[text p] Shadow market cap 201.04K T`,
+	} {
+		if !strings.Contains(findOut, want) {
+			t.Fatalf("shadow DOM browser_find missing %q:\n%s", want, findOut)
+		}
+	}
 }
 
 func TestSession_ClickStaleRef(t *testing.T) {

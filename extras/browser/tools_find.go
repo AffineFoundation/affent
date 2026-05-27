@@ -142,7 +142,6 @@ func browserFindJS(query string, limit int) string {
 	return fmt.Sprintf(`() => {
   const query = %s;
   const maxResults = %d;
-  document.querySelectorAll('[data-affent-ref]').forEach(el => el.removeAttribute('data-affent-ref'));
 
   function clean(s) {
     return (s || '').toString().trim().replace(/\s+/g, ' ');
@@ -183,12 +182,40 @@ func browserFindJS(query string, limit int) string {
     if (parseFloat(cs.opacity || '1') === 0) return false;
     return true;
   }
+  function forEachElement(selector, fn) {
+    const seen = new Set();
+    function visit(root) {
+      let matches = [];
+      try {
+        matches = root.querySelectorAll(selector);
+      } catch (_) {
+        return;
+      }
+      matches.forEach(el => {
+        if (seen.has(el)) return;
+        seen.add(el);
+        fn(el);
+      });
+      let all = [];
+      try {
+        all = root.querySelectorAll('*');
+      } catch (_) {
+        return;
+      }
+      all.forEach(el => {
+        if (el.shadowRoot) visit(el.shadowRoot);
+      });
+    }
+    visit(document);
+  }
+  forEachElement('[data-affent-ref]', el => el.removeAttribute('data-affent-ref'));
   function accessibleName(el) {
     const ariaLabel = el.getAttribute && el.getAttribute('aria-label');
     if (ariaLabel) return clean(ariaLabel).slice(0, 200);
     const ariaLabelledBy = el.getAttribute && el.getAttribute('aria-labelledby');
     if (ariaLabelledBy) {
-      const ref = document.getElementById(ariaLabelledBy);
+      const root = el.getRootNode && el.getRootNode();
+      const ref = root && root.getElementById ? root.getElementById(ariaLabelledBy) : document.getElementById(ariaLabelledBy);
       if (ref) return clean(ref.textContent).slice(0, 200);
     }
     const alt = el.getAttribute && el.getAttribute('alt');
@@ -279,7 +306,7 @@ func browserFindJS(query string, limit int) string {
     '[tabindex]:not([tabindex="-1"])',
   ].join(',');
   let nextRef = 0;
-  document.querySelectorAll(interactiveSelectors).forEach(el => {
+  forEachElement(interactiveSelectors, el => {
     if (!isVisible(el)) return;
     nextRef++;
     el.setAttribute('data-affent-ref', String(nextRef));
@@ -310,12 +337,12 @@ func browserFindJS(query string, limit int) string {
     textBlocks.push({ type, text: snippet });
   };
   const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,td,blockquote,pre';
-  document.querySelectorAll(namedBlocks).forEach(el => {
+  forEachElement(namedBlocks, el => {
     if (remaining() <= 0 || !isVisible(el)) return;
     addText(el, el.tagName.toLowerCase(), visibleText(el));
   });
   const candidates = ['div', 'span', 'section', 'article'];
-  document.querySelectorAll(candidates.join(',')).forEach(el => {
+  forEachElement(candidates.join(','), el => {
     if (remaining() <= 0 || !isVisible(el)) return;
     addText(el, el.tagName.toLowerCase(), directText(el));
   });
