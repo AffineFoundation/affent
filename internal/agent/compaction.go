@@ -368,6 +368,10 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactSessionSearchResultForSummary(content); ok {
 			return out
 		}
+	case "browser_network":
+		if out, ok := compactBrowserNetworkResultForSummary(content); ok {
+			return out
+		}
 	case "web_fetch", "browser_snapshot", "browser_find", "browser_network_read":
 		if out, ok := compactSourceAccessResultForSummary(content); ok {
 			return out
@@ -390,6 +394,90 @@ func compactToolResultForSummary(toolName, content string) string {
 		}
 	}
 	return content
+}
+
+func compactBrowserNetworkResultForSummary(content string) (string, bool) {
+	body := strings.TrimSpace(content)
+	if !strings.HasPrefix(body, "BROWSER NETWORK EVIDENCE") {
+		return "", false
+	}
+
+	type networkMatch struct {
+		line      string
+		preview   string
+		jsonPaths string
+	}
+
+	var currentPage, query, next string
+	noMatches := false
+	inMatches := false
+	var matches []networkMatch
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case trimmed == "" || trimmed == "BROWSER NETWORK EVIDENCE":
+			continue
+		case strings.HasPrefix(trimmed, "CURRENT_PAGE:"):
+			currentPage = strings.TrimSpace(strings.TrimPrefix(trimmed, "CURRENT_PAGE:"))
+		case strings.HasPrefix(trimmed, "query:"):
+			query = strings.TrimSpace(strings.TrimPrefix(trimmed, "query:"))
+		case trimmed == "MATCHES: none":
+			noMatches = true
+			inMatches = false
+		case trimmed == "MATCHES:":
+			inMatches = true
+		case strings.HasPrefix(trimmed, "Next:"):
+			next = strings.TrimSpace(trimmed)
+			inMatches = false
+		case inMatches && strings.HasPrefix(trimmed, "- "):
+			if len(matches) < compactDelegationMaxList {
+				matches = append(matches, networkMatch{line: strings.TrimSpace(strings.TrimPrefix(trimmed, "- "))})
+			}
+		case inMatches && strings.HasPrefix(trimmed, "preview:") && len(matches) > 0:
+			matches[len(matches)-1].preview = strings.TrimSpace(strings.TrimPrefix(trimmed, "preview:"))
+		case inMatches && strings.HasPrefix(trimmed, "json_paths:") && len(matches) > 0:
+			matches[len(matches)-1].jsonPaths = strings.TrimSpace(strings.TrimPrefix(trimmed, "json_paths:"))
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("browser_network:")
+	if currentPage != "" {
+		fmt.Fprintf(&b, " current_page=%s", textutil.Preview(currentPage, 500))
+	}
+	if query != "" {
+		fmt.Fprintf(&b, " query=%s", textutil.Preview(query, 240))
+	}
+	switch {
+	case noMatches:
+		b.WriteString(" match_status=none")
+	case len(matches) > 0:
+		fmt.Fprintf(&b, " matches=%d", len(matches))
+	}
+	if len(matches) > 0 {
+		b.WriteString("\nrefs:")
+		for _, match := range matches {
+			b.WriteString("\n- ")
+			b.WriteString(textutil.Preview(strings.TrimSpace(match.line), compactWorkspaceLineMax))
+			if match.preview != "" {
+				b.WriteString("\n  preview: ")
+				b.WriteString(textutil.Preview(textutil.CompactWhitespace(match.preview), compactMemoryMaxText))
+			}
+			if match.jsonPaths != "" {
+				b.WriteString("\n  json_paths: ")
+				b.WriteString(textutil.Preview(strings.TrimSpace(match.jsonPaths), compactMemoryMaxText))
+			}
+		}
+	}
+	if next != "" {
+		b.WriteString("\n")
+		b.WriteString(textutil.Preview(next, compactMemoryMaxText))
+	}
+	if b.String() == "browser_network:" {
+		b.WriteString("\ntext_preview:\n")
+		b.WriteString(textutil.Preview(body, compactWebEvidenceMaxText))
+	}
+	return b.String(), true
 }
 
 func compactMemoryResultForSummary(content string) (string, bool) {

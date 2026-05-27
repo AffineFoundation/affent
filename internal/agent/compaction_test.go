@@ -225,6 +225,55 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		}
 	})
 
+	t.Run("browser network search keeps no-match recovery state", func(t *testing.T) {
+		raw := "BROWSER NETWORK EVIDENCE\n" +
+			"CURRENT_PAGE: https://taostats.io/subnets/120/statistics\n" +
+			"query: \"market_cap\"\n" +
+			"MATCHES: none\n" +
+			"Next: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n"
+		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[browser_network]",
+			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"market_cap\" match_status=none",
+			"Next: wait for the page to load dynamic data",
+			"mark hidden fields unverified",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact browser_network no-match result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, "BROWSER NETWORK EVIDENCE") || strings.Contains(got, "CURRENT_PAGE:") {
+			t.Fatalf("compact browser_network result should not expose raw scaffolding:\n%s", got)
+		}
+	})
+
+	t.Run("browser network search keeps refs paths and bounded previews", func(t *testing.T) {
+		raw := "BROWSER NETWORK EVIDENCE\n" +
+			"CURRENT_PAGE: https://taostats.io/subnets/120/statistics\n" +
+			"query: \"validator market cap\"\n" +
+			"MATCHES:\n" +
+			"- n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics\n" +
+			"  preview: {\"subnet\":\"120\",\"market_cap\":\"195094\",\"validators\":42," + strings.Repeat("\"noise\":\"row\",", 120) + "}\n" +
+			"  json_paths: $.data.market_cap=195094; $.data.validators=42\n" +
+			"Next: call browser_network_read with the most relevant ref and json_path before citing values.\n"
+		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[browser_network]",
+			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"validator market cap\" matches=1",
+			"n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics",
+			"preview: {\"subnet\":\"120\",\"market_cap\":\"195094\",\"validators\":42",
+			"json_paths: $.data.market_cap=195094; $.data.validators=42",
+			"Next: call browser_network_read",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact browser_network match result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, strings.Repeat("\"noise\":\"row\",", 80)) {
+			t.Fatalf("compact browser_network result should bound long previews:\n%s", got)
+		}
+	})
+
 	t.Run("file context result keeps file structure without raw JSON", func(t *testing.T) {
 		raw := `{"path":"internal/agent/compaction.go","bytes":12000,"truncated":true,"lines":320,"query":"compact","head":[{"line":1,"text":"package agent"}],"matches":[{"start_line":347,"end_line":352,"hit_line":349,"text":"func compactToolResultForSummary(toolName, content string) string {"}],"tail":[{"line":320,"text":"}"}],"symbols":[{"name":"compactToolResultForSummary","kind":"func","line":347,"signature":"func compactToolResultForSummary(toolName, content string) string"}]}`
 		got := formatEvent(ChatMessage{Role: "tool", Name: "file_context", Content: raw})
