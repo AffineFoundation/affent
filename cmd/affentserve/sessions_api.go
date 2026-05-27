@@ -731,6 +731,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			return sessionSummary{}, false, err
 		}
 		summary.LatestMemoryUpdate = memoryUpdate
+		tools, err := toolStatsSummaryFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.Tools = tools
 		cwd, _, err := latestShellCWDFromEventsFile(filepath.Join(dir, "events.jsonl"))
 		if err != nil {
 			return sessionSummary{}, false, err
@@ -1005,6 +1010,7 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if a.ID == "" {
 		a.ID = b.ID
 	}
+	aWasActive := a.Active
 	a.Active = a.Active || b.Active
 	a.Durable = a.Durable || b.Durable
 	a.HasConversation = a.HasConversation || b.HasConversation
@@ -1080,7 +1086,7 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if b.Usage != nil {
 		a.Usage = b.Usage
 	}
-	if b.Tools != nil {
+	if b.Tools != nil && (a.Tools == nil || (b.Active && !aWasActive)) {
 		a.Tools = b.Tools
 	}
 	if b.Browser != nil {
@@ -1423,6 +1429,100 @@ func latestShellCWDFromEventsFile(path string) (string, bool, error) {
 		return "", false, err
 	}
 	return scanShellCWDFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func toolStatsSummaryFromEventsFile(path string) (*ToolStatsSnapshot, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return nil, err
+	}
+	return scanToolStatsFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {
+	var summary ToolStatsSnapshot
+	seen := false
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeTurnEnd {
+			continue
+		}
+		var p sse.TurnEndPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil || p.ToolStats == nil {
+			continue
+		}
+		addToolStatsSnapshot(&summary, toolStatsSnapshotFromRuntime(*p.ToolStats))
+		seen = true
+	}
+	if !seen {
+		return nil, nil
+	}
+	return &summary, nil
+}
+
+func toolStatsSnapshotFromRuntime(stats sse.ToolRuntimeStats) ToolStatsSnapshot {
+	return ToolStatsSnapshot{
+		ToolRequests:           int64(stats.ToolRequests),
+		ToolNameCanonicalized:  int64(stats.ToolNameCanonicalized),
+		ToolArgsRepaired:       int64(stats.ToolArgsRepaired),
+		ToolRepairCalls:        int64(stats.ToolRepairCalls),
+		ToolRepairSucceeded:    int64(stats.ToolRepairSucceeded),
+		ToolRepairFailed:       int64(stats.ToolRepairFailed),
+		ToolRepairNotes:        int64(stats.ToolRepairNotes),
+		ToolRepairByKind:       stringIntMapToInt64(stats.ToolRepairByKind),
+		ToolFailureByKind:      stringIntMapToInt64(stats.ToolFailureByKind),
+		ToolErrors:             int64(stats.ToolErrors),
+		ToolDurationMS:         stats.ToolDurationMS,
+		LoopGuardInterventions: int64(stats.LoopGuardInterventions),
+		ForcedNoTools:          int64(stats.ForcedNoTools),
+		SourceAccessResults:    int64(stats.SourceAccessResults),
+		SourceAccessVerified:   int64(stats.SourceAccessVerified),
+		SourceAccessDiscovery:  int64(stats.SourceAccessDiscoveryOnly),
+		SourceAccessNetwork:    int64(stats.SourceAccessNetwork),
+		SourceAccessDynamic:    int64(stats.SourceAccessDynamicPartial),
+		MemoryUpdates:          int64(stats.MemoryUpdates),
+		MemoryUpdateAdd:        int64(stats.MemoryUpdateAdd),
+		MemoryUpdateReplace:    int64(stats.MemoryUpdateReplace),
+		MemoryUpdateRemove:     int64(stats.MemoryUpdateRemove),
+		MemorySearchCalls:      int64(stats.MemorySearchCalls),
+		MemorySearchMisses:     int64(stats.MemorySearchMisses),
+		SessionSearchCalls:     int64(stats.SessionSearchCalls),
+		SessionSearchResults:   int64(stats.SessionSearchResults),
+		SessionSearchContext:   int64(stats.SessionSearchContextHits),
+		SessionSearchTerms:     int64(stats.SessionSearchMatchedTerms),
+		SessionSearchRecent:    int64(stats.SessionSearchRecent),
+		ToolContextTruncated:   int64(stats.ToolContextTruncated),
+		ToolContextOmitted:     int64(stats.ToolContextOmittedBytes),
+	}
+}
+
+func stringIntMapToInt64(in map[string]int) map[string]int64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(in))
+	for key, value := range in {
+		out[key] = int64(value)
+	}
+	return out
 }
 
 func scanShellCWDFromEvents(r *bufio.Reader) (string, bool, error) {

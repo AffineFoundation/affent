@@ -954,6 +954,68 @@ func TestSummarizeDurableSessionKeepsSpecificRuntimeErrorRecoveryHint(t *testing
 	}
 }
 
+func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "durable-tool-stats")
+	dir := pool.sessionDirPath("durable-tool-stats")
+
+	body := sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t1",
+		Reason: sse.TurnEndCompleted,
+		ToolStats: &sse.ToolRuntimeStats{
+			ToolRequests:           2,
+			ToolErrors:             1,
+			ToolDurationMS:         15,
+			LoopGuardInterventions: 1,
+			ForcedNoTools:          1,
+			SourceAccessNetwork:    1,
+			MemorySearchCalls:      1,
+			MemorySearchMisses:     1,
+			ToolFailureByKind:      map[string]int{"dynamic_shell": 1},
+		},
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t2",
+		Reason: sse.TurnEndMaxTurns,
+		ToolStats: &sse.ToolRuntimeStats{
+			ToolRequests:            3,
+			LoopGuardInterventions:  2,
+			SessionSearchCalls:      1,
+			SessionSearchResults:    4,
+			ToolContextTruncated:    1,
+			ToolContextOmittedBytes: 512,
+			ToolFailureByKind:       map[string]int{"no_matches": 2},
+		},
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "durable-tool-stats")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.Tools == nil {
+		t.Fatalf("durable tool stats missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.Tools.ToolRequests != 5 ||
+		summary.Tools.ToolErrors != 1 ||
+		summary.Tools.ToolDurationMS != 15 ||
+		summary.Tools.LoopGuardInterventions != 3 ||
+		summary.Tools.ForcedNoTools != 1 ||
+		summary.Tools.SourceAccessNetwork != 1 ||
+		summary.Tools.MemorySearchCalls != 1 ||
+		summary.Tools.MemorySearchMisses != 1 ||
+		summary.Tools.SessionSearchCalls != 1 ||
+		summary.Tools.SessionSearchResults != 4 ||
+		summary.Tools.ToolContextTruncated != 1 ||
+		summary.Tools.ToolContextOmitted != 512 {
+		t.Fatalf("durable tool stats = %+v, want aggregated turn.end stats", summary.Tools)
+	}
+	if summary.Tools.ToolFailureByKind["dynamic_shell"] != 1 || summary.Tools.ToolFailureByKind["no_matches"] != 2 {
+		t.Fatalf("tool_failure_by_kind = %+v, want aggregated failure kinds", summary.Tools.ToolFailureByKind)
+	}
+}
+
 func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
 	got := mergeSessionSummaries(
 		sessionSummary{
@@ -973,6 +1035,40 @@ func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testin
 	}
 	if got.LatestUserMessage != "请继续同一个任务。基于已有证据输出报告" {
 		t.Fatalf("latest_user_message = %q, want active latest prompt", got.LatestUserMessage)
+	}
+}
+
+func TestMergeSessionSummariesKeepsActiveToolStats(t *testing.T) {
+	got := mergeSessionSummaries(
+		sessionSummary{
+			ID:     "active",
+			Active: true,
+			Tools:  &ToolStatsSnapshot{ToolRequests: 9, ToolErrors: 1},
+		},
+		sessionSummary{
+			ID:      "active",
+			Durable: true,
+			Tools:   &ToolStatsSnapshot{ToolRequests: 2, LoopGuardInterventions: 1},
+		},
+	)
+	if got.Tools == nil || got.Tools.ToolRequests != 9 || got.Tools.ToolErrors != 1 || got.Tools.LoopGuardInterventions != 0 {
+		t.Fatalf("merged active-first tool stats = %+v, want active stats", got.Tools)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{
+			ID:      "active",
+			Durable: true,
+			Tools:   &ToolStatsSnapshot{ToolRequests: 2, LoopGuardInterventions: 1},
+		},
+		sessionSummary{
+			ID:     "active",
+			Active: true,
+			Tools:  &ToolStatsSnapshot{ToolRequests: 9, ToolErrors: 1},
+		},
+	)
+	if got.Tools == nil || got.Tools.ToolRequests != 9 || got.Tools.ToolErrors != 1 || got.Tools.LoopGuardInterventions != 0 {
+		t.Fatalf("merged durable-first tool stats = %+v, want active stats", got.Tools)
 	}
 }
 
