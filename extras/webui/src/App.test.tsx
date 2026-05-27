@@ -710,6 +710,14 @@ describe("App", () => {
           },
         });
       }
+      if (url === "/v1/sessions/timer-control/schedules/sched_1" && init?.method === "DELETE") {
+        return jsonResponse({
+          session_id: "timer-control",
+          schedule_id: "sched_1",
+          cleared: true,
+          summary: { count: 0, enabled: 0 },
+        });
+      }
       return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
     });
     vi.stubGlobal("fetch", fetchImpl);
@@ -729,7 +737,13 @@ describe("App", () => {
     expect(body.enabled).toBe(true);
     expect(body.next_run_at).toMatch(/Z$/);
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Scheduled check-in for session: long running subnet analysis");
     expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
+
+    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Delete timer" }));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "DELETE" })));
+    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("None");
+    expect(screen.queryByTestId("session-schedule-list")).toBeNull();
   });
 
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {

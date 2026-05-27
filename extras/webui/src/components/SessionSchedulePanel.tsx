@@ -1,13 +1,25 @@
-import type { SessionSchedulesSummary } from "../api/sessions";
+import type { SessionSchedule, SessionSchedulesSummary } from "../api/sessions";
 
 export function SessionSchedulePanel({
   summary,
+  schedules,
   busy,
+  loading = false,
+  error,
+  deletingId,
+  onLoadSchedules,
+  onDeleteSchedule,
   onScheduleCheckIn,
   onScheduleDaily,
 }: {
   summary?: SessionSchedulesSummary;
+  schedules?: SessionSchedule[];
   busy?: "checkin" | "daily";
+  loading?: boolean;
+  error?: string;
+  deletingId?: string;
+  onLoadSchedules?: () => Promise<void> | void;
+  onDeleteSchedule?: (scheduleId: string) => Promise<void> | void;
   onScheduleCheckIn?: () => Promise<void> | void;
   onScheduleDaily?: () => Promise<void> | void;
 }) {
@@ -19,7 +31,7 @@ export function SessionSchedulePanel({
   const detail = next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "No scheduled prompts";
 
   return (
-    <details className="session-plan-panel session-schedule-panel" data-testid="session-schedule-panel" open={count === 0}>
+    <details className="session-plan-panel session-schedule-panel" data-testid="session-schedule-panel" open={count === 0 || !!schedules?.length || loading || !!error}>
       <summary className="session-plan-summary">
         <span className="session-plan-kicker">Timers</span>
         <strong>{title}</strong>
@@ -32,7 +44,45 @@ export function SessionSchedulePanel({
           {next ? <ScheduleField label="Next" value={next} /> : null}
         </div>
         {preview ? <p className="session-loop-preview">{preview}</p> : null}
+        {error ? (
+          <div className="session-plan-empty error" role="alert">
+            {error}
+          </div>
+        ) : null}
+        {schedules && schedules.length > 0 ? (
+          <ol className="session-schedule-list" data-testid="session-schedule-list">
+            {schedules.map((schedule) => (
+              <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
+                <div className="session-schedule-item-main">
+                  <strong>{schedule.enabled ? "Active" : "Paused"} · {formatScheduleTime(schedule.next_run_at)}</strong>
+                  <p>{schedule.prompt}</p>
+                  <small>{scheduleMeta(schedule)}</small>
+                </div>
+                {onDeleteSchedule ? (
+                  <button
+                    type="button"
+                    className="ghost-action danger-action"
+                    disabled={!!deletingId}
+                    onClick={() => void onDeleteSchedule(schedule.id)}
+                  >
+                    {deletingId === schedule.id ? "Deleting" : "Delete timer"}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        ) : null}
         <div className="session-loop-actions">
+          {onLoadSchedules && count > 0 ? (
+            <button
+              type="button"
+              className="ghost-action"
+              disabled={loading}
+              onClick={() => void onLoadSchedules()}
+            >
+              {loading ? "Loading timers" : schedules ? "Refresh timers" : "View timers"}
+            </button>
+          ) : null}
           {onScheduleCheckIn ? (
             <button
               type="button"
@@ -66,6 +116,30 @@ function ScheduleField({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function scheduleMeta(schedule: SessionSchedule): string {
+  const parts: string[] = [schedule.repeat_interval_seconds ? `Repeats every ${formatDuration(schedule.repeat_interval_seconds)}` : "One-time"];
+  if (schedule.run_count && schedule.run_count > 0) parts.push(`${schedule.run_count} run${schedule.run_count === 1 ? "" : "s"}`);
+  if (schedule.last_run_at) parts.push(`last ${formatScheduleTime(schedule.last_run_at)}`);
+  if (schedule.last_error) parts.push(`error ${schedule.last_error}`);
+  return parts.join(" · ");
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds % 86400 === 0) {
+    const days = seconds / 86400;
+    return `${days}d`;
+  }
+  if (seconds % 3600 === 0) {
+    const hours = seconds / 3600;
+    return `${hours}h`;
+  }
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60;
+    return `${minutes}m`;
+  }
+  return `${seconds}s`;
 }
 
 function formatScheduleTime(value: string): string {

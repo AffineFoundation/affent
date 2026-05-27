@@ -5,6 +5,7 @@ import {
   cancelSessionTurn,
   createSessionSchedule,
   createSession,
+  deleteSessionSchedule,
   deleteSessionLoopProtocol,
   deleteSession,
   getSessionMemory,
@@ -12,6 +13,7 @@ import {
   getSessionPlan,
   getSessionHistory,
   installSkill,
+  listSessionSchedules,
   listSessions,
   listSkills,
   readSessionArtifact,
@@ -19,6 +21,8 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
+  type SessionSchedule,
+  type SessionScheduleDeleteResponse,
   type SessionSchedulesResponse,
   type SessionLoopProtocolDeleteResponse,
   type SessionLoopProtocolResponse,
@@ -100,6 +104,12 @@ type LoopProtocolState =
   | { state: "ready"; sessionId: string; protocol: SessionLoopProtocolResponse }
   | { state: "error"; sessionId: string; error: string };
 
+type ScheduleState =
+  | { state: "idle" }
+  | { state: "loading"; sessionId: string }
+  | { state: "ready"; sessionId: string; schedules: SessionSchedule[] }
+  | { state: "error"; sessionId: string; error: string; schedules?: SessionSchedule[] };
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -132,6 +142,8 @@ export function App() {
   const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
   const [planState, setPlanState] = useState<PlanState>({ state: "idle" });
   const [loopProtocolState, setLoopProtocolState] = useState<LoopProtocolState>({ state: "idle" });
+  const [scheduleState, setScheduleState] = useState<ScheduleState>({ state: "idle" });
+  const [deletingScheduleId, setDeletingScheduleId] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -197,6 +209,9 @@ export function App() {
   const selectedLoopState = selectedSession?.loop_protocol?.state ?? selectedSession?.loop_state;
   const selectedLoopProtocolState = loopProtocolState.state !== "idle" && loopProtocolState.sessionId === selectedSessionId
     ? loopProtocolState
+    : { state: "idle" as const };
+  const selectedScheduleState = scheduleState.state !== "idle" && scheduleState.sessionId === selectedSessionId
+    ? scheduleState
     : { state: "idle" as const };
   const showLoopContext = !demoActive && !!selectedSessionId && (selectedSession?.has_loop_protocol || selectedSession?.has_loop_state || !!selectedSession?.loop_protocol || !!selectedSession?.loop_state);
   const showScheduleContext = !demoActive && !!selectedSessionId;
@@ -654,6 +669,8 @@ export function App() {
     setCancelBusy(false);
     setLoopProtocolBusy(false);
     setScheduleBusy(undefined);
+    setScheduleState({ state: "idle" });
+    setDeletingScheduleId(undefined);
     setComposerDraft(undefined);
     setComposerFocusSignal((current) => current + 1);
     setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
@@ -680,6 +697,8 @@ export function App() {
         setCancelBusy(false);
         setLoopProtocolBusy(false);
         setScheduleBusy(undefined);
+        setScheduleState({ state: "idle" });
+        setDeletingScheduleId(undefined);
         setLoopProtocolState({ state: "idle" });
       }
       setStatus({ state: "connected", label: "Ready", detail: "Chat deleted" });
@@ -836,11 +855,45 @@ export function App() {
         enabled: true,
       });
       markSessionSchedules(sessionId, resp);
+      setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
       setStatus({ state: "connected", label: "Ready", detail: daily ? "Daily check-in scheduled" : "Check-in scheduled" });
     } catch (err) {
       setStatus({ state: "error", label: "Schedule failed", detail: formatError(err) });
     } finally {
       setScheduleBusy(undefined);
+    }
+  }
+
+  async function handleLoadSchedules(): Promise<void> {
+    if (!selectedSessionId || selectedScheduleState.state === "loading") return;
+    const sessionId = selectedSessionId;
+    setScheduleState({ state: "loading", sessionId });
+    try {
+      const resp = await listSessionSchedules(client, sessionId);
+      markSessionSchedules(sessionId, resp);
+      setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
+    } catch (err) {
+      setScheduleState({ state: "error", sessionId, error: formatError(err) });
+    }
+  }
+
+  async function handleDeleteSchedule(scheduleId: string): Promise<void> {
+    if (!selectedSessionId || deletingScheduleId) return;
+    const sessionId = selectedSessionId;
+    setDeletingScheduleId(scheduleId);
+    try {
+      const resp = await deleteSessionSchedule(client, sessionId, scheduleId);
+      markSessionScheduleDelete(sessionId, resp);
+      setScheduleState((current) => {
+        if (current.state === "idle" || current.sessionId !== sessionId) return current;
+        const currentSchedules = current.state === "ready" || current.state === "error" ? current.schedules ?? [] : [];
+        return { state: "ready", sessionId, schedules: currentSchedules.filter((schedule) => schedule.id !== scheduleId) };
+      });
+      setStatus({ state: "connected", label: "Ready", detail: resp.cleared ? "Timer deleted" : "Timer already removed" });
+    } catch (err) {
+      setStatus({ state: "error", label: "Delete timer failed", detail: formatError(err) });
+    } finally {
+      setDeletingScheduleId(undefined);
     }
   }
 
@@ -953,6 +1006,18 @@ export function App() {
       return {
         ...item,
         durable: true,
+        has_schedules: hasSchedules,
+        schedules: hasSchedules ? resp.summary : undefined,
+      };
+    }));
+  }
+
+  function markSessionScheduleDelete(sessionId: string, resp: SessionScheduleDeleteResponse) {
+    setSessions((current) => current.map((item) => {
+      if (item.id !== sessionId) return item;
+      const hasSchedules = (resp.summary?.count ?? 0) > 0;
+      return {
+        ...item,
         has_schedules: hasSchedules,
         schedules: hasSchedules ? resp.summary : undefined,
       };
@@ -1175,7 +1240,13 @@ export function App() {
                 {showScheduleContext ? (
                   <SessionSchedulePanel
                     summary={selectedSession?.schedules}
+                    schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
                     busy={scheduleBusy}
+                    loading={selectedScheduleState.state === "loading"}
+                    error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
+                    deletingId={deletingScheduleId}
+                    onLoadSchedules={handleLoadSchedules}
+                    onDeleteSchedule={handleDeleteSchedule}
                     onScheduleCheckIn={() => handleCreateSchedule("checkin")}
                     onScheduleDaily={() => handleCreateSchedule("daily")}
                   />
