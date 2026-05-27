@@ -541,6 +541,73 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromVisibleLoopDecision(t *t
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromMaxTurns(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "max-turns-hint")
+	dir := pool.sessionDirPath("max-turns-hint")
+
+	toolRecovery := "blocked\nNext: use a different source before retrying\nFailure: kind=blocked"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t1", CallID: "c1", ExitCode: 1, ResultSummary: toolRecovery, Result: toolRecovery})+
+			sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+				TurnID: "t1",
+				Reason: sse.TurnEndMaxTurns,
+				ToolStats: &sse.ToolRuntimeStats{
+					ToolRequests:           10,
+					ToolErrors:             2,
+					LoopGuardInterventions: 1,
+					ToolContextTruncated:   1,
+				},
+			}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "max-turns-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{
+		"turn reached the tool-step budget",
+		"change strategy",
+		"inspect artifacts",
+	} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestSummarizeDurableSessionKeepsSpecificRuntimeErrorRecoveryHint(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "runtime-error-hint")
+	dir := pool.sessionDirPath("runtime-error-hint")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t1", Code: "llm_timeout", Message: "upstream provider timed out while streaming", FailureKind: "llm_timeout", Recoverable: true})+
+			sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t1", Reason: sse.TurnEndError}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "runtime-error-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if !strings.Contains(summary.LatestRecoveryHint, "upstream provider timed out while streaming") ||
+		!strings.Contains(summary.LatestRecoveryHint, "retry or continue from persisted state") {
+		t.Fatalf("latest_recovery_hint = %q, want specific runtime error recovery hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
 	got := mergeSessionSummaries(
 		sessionSummary{

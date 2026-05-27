@@ -1255,6 +1255,7 @@ func scanMemoryUpdatesFromEvents(r *bufio.Reader) (*sse.MemoryUpdateMeta, error)
 
 func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 	latest := ""
+	latestTurnID := ""
 	for {
 		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
 		if errors.Is(err, io.EOF) {
@@ -1265,6 +1266,13 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		}
 		if tooLong {
 			continue
+		}
+		setLatest := func(hint, turnID string) {
+			if hint == "" {
+				return
+			}
+			latest = hint
+			latestTurnID = strings.TrimSpace(turnID)
 		}
 		line = bytes.TrimRight(line, "\r\n")
 		var ev sse.Event
@@ -1277,7 +1285,25 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 				continue
 			}
 			if hint := recoveryHintFromText(p.Next); hint != "" {
-				latest = hint
+				setLatest(hint, "")
+			}
+			continue
+		}
+		if ev.Type == sse.TypeError {
+			var p sse.ErrorPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			setLatest(recoveryHintFromErrorPayload(p), p.TurnID)
+			continue
+		}
+		if ev.Type == sse.TypeTurnEnd {
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if hint := recoveryHintFromTurnEnd(p, latestTurnID); hint != "" {
+				setLatest(hint, p.TurnID)
 			}
 			continue
 		}
@@ -1287,7 +1313,7 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 				continue
 			}
 			if hint := recoveryHintFromLoopDecision(p); hint != "" {
-				latest = hint
+				setLatest(hint, p.TurnID)
 			}
 			continue
 		}
@@ -1303,10 +1329,44 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		}
 		hint := recoveryHintFromToolResult(p.ResultSummary, p.Result)
 		if hint != "" {
-			latest = hint
+			setLatest(hint, p.TurnID)
 		}
 	}
 	return latest, nil
+}
+
+func recoveryHintFromErrorPayload(p sse.ErrorPayload) string {
+	msg := strings.Join(strings.Fields(strings.TrimSpace(p.Message)), " ")
+	if msg == "" {
+		return ""
+	}
+	if p.Recoverable {
+		return recoveryHintFromText("runtime error: " + msg + "; inspect recent trace/tool evidence, then retry or continue from persisted state if safe.")
+	}
+	return recoveryHintFromText("runtime error: " + msg + "; inspect recent trace/tool evidence before continuing.")
+}
+
+func recoveryHintFromTurnEnd(p sse.TurnEndPayload, latestTurnID string) string {
+	switch p.Reason {
+	case sse.TurnEndMaxTurns:
+		parts := []string{"turn reached the tool-step budget; change strategy before retrying the same tool loop; continue from gathered evidence"}
+		if p.ToolStats != nil {
+			if p.ToolStats.LoopGuardInterventions > 0 {
+				parts = append(parts, "loop guards fired")
+			}
+			if p.ToolStats.ToolContextTruncated > 0 {
+				parts = append(parts, "inspect artifacts/trace for omitted output")
+			}
+		}
+		return recoveryHintFromText(strings.Join(parts, "; "))
+	case sse.TurnEndError:
+		if p.TurnID != "" && latestTurnID == p.TurnID {
+			return ""
+		}
+		return recoveryHintFromText("turn ended with a runtime error; inspect recent error/tool events and resume from persisted evidence before retrying.")
+	default:
+		return ""
+	}
 }
 
 func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {
