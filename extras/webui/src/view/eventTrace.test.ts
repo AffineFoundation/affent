@@ -654,6 +654,51 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("surfaces browser scroll telemetry on tool result rows", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "browser_scroll" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 18,
+          result_summary: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence",
+          result: [
+            "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence",
+            "PAGE TEXT:",
+            "Market Cap",
+            "SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+            "Next: scrolling did not move the page; use browser_network/browser_network_read for hidden XHR/fetch data.",
+          ].join("\n"),
+          result_truncated: false,
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action finished",
+        meta: [
+          "browser_scroll",
+          "18 ms",
+          "scroll down no movement at bottom y 1200/1200",
+          "partial source",
+          "https://taostats.io/subnets/120",
+          "preview PAGE TEXT: Market Cap",
+        ],
+        badges: ["dynamic_partial", "scroll no movement", "scroll bottom"],
+      },
+    });
+  });
+
   it("collapses whitespace and truncates long summaries", () => {
     expect(streamSummary("  line one\n\tline two  ")).toBe("line one line two");
     expect(streamSummary("x".repeat(120))).toBe(`${"x".repeat(95)}...`);

@@ -44,7 +44,11 @@ export function sourceAccessResultPreview(result: string | undefined, maxChars =
   const lines = result.split(/\r?\n/);
   const sourceLineIndex = lines.findIndex((line) => line.trimStart().startsWith("SourceAccess:"));
   if (sourceLineIndex < 0) return undefined;
-  const body = lines.slice(sourceLineIndex + 1).join("\n");
+  const body = lines
+    .slice(sourceLineIndex + 1)
+    .filter((line) => !line.trimStart().startsWith("SCROLL:"))
+    .filter((line) => !line.trimStart().startsWith("Next: scrolling did not move the page"))
+    .join("\n");
   return compactLine(body, maxChars);
 }
 

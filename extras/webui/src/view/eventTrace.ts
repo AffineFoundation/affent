@@ -502,13 +502,15 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const resultTruncated = readBoolean(event.data, "result_truncated");
   const contextBytes = readNumber(event.data, "context_bytes");
   const contextOmittedBytes = readNumber(event.data, "context_omitted_bytes");
-  const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
+  const fullResultText = readString(event.data, "result") ?? readString(event.data, "result_summary") ?? "";
+  const sourceAccess = describeSourceAccess(fullResultText);
   const memoryUpdate = tool === "memory" ? memoryUpdateMeta(event) : [];
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
-  const resultText = readString(event.data, "result_summary") ?? readString(event.data, "result") ?? "";
+  const resultText = readString(event.data, "result_summary") ?? fullResultText;
   const nextHint = typeof exitCode === "number" && exitCode !== 0 ? toolResultNextHint(event) : undefined;
-  const loopGuard = loopGuardMeta(event, resultText);
+  const loopGuard = loopGuardMeta(event, fullResultText || resultText);
+  const scrollTelemetry = tool === "browser_scroll" ? browserScrollTelemetryMeta(fullResultText) : undefined;
   const resultPreview = sessionSearchPayload
     ? readString(sessionSearchPayload, "message")
     : memoryUpdate.length > 0
@@ -520,6 +522,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     ...memoryUpdate,
     ...sessionSearch,
     ...loopGuard,
+    scrollTelemetry,
     !loopGuard.length && nextHint ? `next ${streamSummary(nextHint)}` : undefined,
     sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
     sourceAccess ? sourceAccess.accessedUrl : !loopGuard.length && resultPreview ? streamSummary(resultPreview) : undefined,
@@ -590,14 +593,61 @@ function toolContextMeta(contextBytes?: number, contextOmittedBytes?: number): s
 function toolResultBadges(event: NormalizedEvent): string[] {
   const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
   const memoryAction = memoryUpdateAction(event);
+  const resultText = readString(event.data, "result") ?? readString(event.data, "result_summary") ?? "";
   return compact([
     ...eventFailureKinds(event),
     memoryAction ? `memory ${memoryAction}` : undefined,
     sourceAccess ? sourceAccess.status : undefined,
+    ...browserScrollTelemetryBadges(resultText),
     (readNumber(event.data, "context_omitted_bytes") ?? 0) > 0 ? "context trimmed" : undefined,
     readBoolean(event.data, "result_truncated") ? "truncated" : undefined,
     readString(event.data, "result_artifact_path") ? "full output" : undefined,
   ]);
+}
+
+interface BrowserScrollTelemetry {
+  direction?: string;
+  beforeY?: string;
+  afterY?: string;
+  maxY?: string;
+  movement?: string;
+  boundary?: string;
+}
+
+function browserScrollTelemetryMeta(text: string): string | undefined {
+  const telemetry = parseBrowserScrollTelemetry(text);
+  if (!telemetry) return undefined;
+  const direction = telemetry.direction ? `scroll ${telemetry.direction}` : "scroll";
+  const movement = telemetry.movement === "none" ? "no movement" : telemetry.movement;
+  const boundary = telemetry.boundary ? `at ${telemetry.boundary}` : undefined;
+  const position = telemetry.afterY && telemetry.maxY ? `y ${telemetry.afterY}/${telemetry.maxY}` : undefined;
+  return compact([direction, movement, boundary, position]).join(" ");
+}
+
+function browserScrollTelemetryBadges(text: string): string[] {
+  const telemetry = parseBrowserScrollTelemetry(text);
+  if (!telemetry) return [];
+  return compact([
+    telemetry.movement === "none" ? "scroll no movement" : undefined,
+    telemetry.boundary ? `scroll ${telemetry.boundary}` : undefined,
+  ]);
+}
+
+function parseBrowserScrollTelemetry(text: string): BrowserScrollTelemetry | undefined {
+  const line = text.split("\n").map((part) => part.trim()).find((part) => part.startsWith("SCROLL:"));
+  if (!line) return undefined;
+  const telemetry: BrowserScrollTelemetry = {};
+  for (const field of line.replace(/^SCROLL:\s*/, "").split(/\s+/)) {
+    const [key, value] = field.split("=", 2);
+    if (!key || !value) continue;
+    if (key === "direction") telemetry.direction = value;
+    if (key === "before_y") telemetry.beforeY = value;
+    if (key === "after_y") telemetry.afterY = value;
+    if (key === "max_y") telemetry.maxY = value;
+    if (key === "movement") telemetry.movement = value;
+    if (key === "boundary") telemetry.boundary = value;
+  }
+  return telemetry;
 }
 
 function memoryUpdateMeta(event: NormalizedEvent): string[] {
