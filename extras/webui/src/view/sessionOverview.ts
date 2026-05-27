@@ -247,16 +247,31 @@ function buildLoopMetric(session: SessionState): SessionOverviewMetric | undefin
     return acc;
   }, { interventions: 0, forcedNoTools: 0, maxTurns: 0 });
   const visibleDecisions = session.loopDecisions.filter((decision) => decision.visible_in_ui !== false);
-  if (stats.interventions <= 0 && stats.forcedNoTools <= 0 && stats.maxTurns <= 0 && visibleDecisions.length === 0) return undefined;
+  const loopFeeds = session.loopProtocolFeeds;
+  if (stats.interventions <= 0 && stats.forcedNoTools <= 0 && stats.maxTurns <= 0 && visibleDecisions.length === 0 && loopFeeds.length === 0) return undefined;
   const parts: string[] = [];
   if (stats.maxTurns > 0) parts.push(`${stats.maxTurns} max-turn${stats.maxTurns === 1 ? "" : "s"}`);
   if (stats.interventions > 0) parts.push(`${stats.interventions} guard${stats.interventions === 1 ? "" : "s"}`);
   if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} no-tools`);
+  if (loopFeeds.length > 0) parts.push(loopProtocolFeedMetric(loopFeeds));
   if (visibleDecisions.length > 0) {
     const latest = visibleDecisions.at(-1);
     parts.push(`${visibleDecisions.length} decision${visibleDecisions.length === 1 ? "" : "s"}${latest?.decision ? ` ${latest.decision}` : ""}`);
   }
   return { label: "Loop", value: parts.join(" · "), tone: stats.maxTurns > 0 || stats.interventions > 0 ? "warning" : undefined };
+}
+
+function loopProtocolFeedMetric(feeds: SessionState["loopProtocolFeeds"]): string {
+  const latest = feeds.at(-1);
+  const count = `${feeds.length} ${feeds.length === 1 ? "feed" : "feeds"}`;
+  if (!latest) return count;
+  const checkpoint = [
+    latest.mode,
+    latest.plan_label,
+    latest.plan_current_step_index ? `step ${latest.plan_current_step_index}` : undefined,
+    latest.plan_current_step_status,
+  ].filter(Boolean);
+  return checkpoint.length > 0 ? `${count} ${checkpoint.join(" ")}` : count;
 }
 
 function buildSourceAccessMetric(session: SessionState): SessionOverviewMetric | undefined {

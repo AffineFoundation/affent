@@ -229,6 +229,37 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces loop protocol feed checkpoints in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue active loop" } },
+      {
+        id: 3,
+        type: "loop.protocol_feed",
+        data: {
+          turn_id: "t1",
+          mode: "full",
+          feed_number: 1,
+          protocol_path: ".affent/loops/plan-loop/LOOP.md",
+          plan_label: "plan:1/3:active",
+          plan_current_step_index: 2,
+          plan_current_step_status: "in_progress",
+          plan_current_step: "verify browser network evidence",
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Loop", value: "1 feed full plan:1/3:active step 2 in_progress", tone: undefined },
+    ]));
+  });
+
   it("surfaces context compactions in the session overview", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
