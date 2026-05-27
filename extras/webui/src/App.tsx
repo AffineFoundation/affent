@@ -47,6 +47,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
+import { SessionAutomationPanel } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
@@ -283,10 +284,6 @@ export function App() {
   const sessionFiles = useMemo(() => buildSessionFiles(session), [session]);
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
-  const workbenchAttention = useMemo(
-    () => buildWorkbenchAttention({ overview, files: sessionFiles, changes: sessionChanges, run: sessionRun }),
-    [overview, sessionChanges, sessionFiles, sessionRun],
-  );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
@@ -296,6 +293,10 @@ export function App() {
   const automationContext = showAutomationContext
     ? automationContextDisplay(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState)
     : undefined;
+  const workbenchAttention = useMemo(
+    () => buildWorkbenchAttention({ overview, files: sessionFiles, changes: sessionChanges, run: sessionRun, automation: automationContext }),
+    [automationContext, overview, sessionChanges, sessionFiles, sessionRun],
+  );
   const showSurfaceContext = showChatContext || showWorkflowStatus || showAutomationContext;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
@@ -1268,6 +1269,54 @@ export function App() {
     }
   }
 
+  function renderAutomationPanel(defaultOpen = false, testId = "session-automation-panel") {
+    if (!automationContext) return null;
+    return (
+      <SessionAutomationPanel
+        title={automationContext.title}
+        detail={automationContext.detail}
+        defaultOpen={defaultOpen}
+        testId={testId}
+      >
+        {showLoopContext ? (
+          <SessionLoopPanel
+            embedded
+            summary={selectedSession?.loop_protocol}
+            state={selectedLoopState}
+            disabling={loopProtocolBusy}
+            defaultGoal={selectedSessionTitle ?? selectedSessionId}
+            starting={loopProtocolBusy || actionBusy || session.status === "running"}
+            onStart={handleStartLoop}
+            onDisable={handleDisableLoopProtocol}
+            protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
+            events={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.events : undefined}
+            loadingProtocol={selectedLoopProtocolState.state === "loading"}
+            protocolError={selectedLoopProtocolState.state === "error" ? selectedLoopProtocolState.error : undefined}
+            onLoadProtocol={handleLoadLoopProtocol}
+            onUseAsDraft={handleUseLoopProtocolDraft}
+          />
+        ) : null}
+        {showScheduleContext ? (
+          <SessionSchedulePanel
+            embedded
+            summary={selectedSession?.schedules}
+            schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
+            busy={scheduleBusy}
+            disabled={actionBusy || session.status === "running"}
+            loading={selectedScheduleState.state === "loading"}
+            error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
+            deletingId={deletingScheduleId}
+            updatingId={updatingScheduleId}
+            loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
+            onLoadSchedules={handleLoadSchedules}
+            onUpdateSchedule={handleUpdateSchedule}
+            onDeleteSchedule={handleDeleteSchedule}
+          />
+        ) : null}
+      </SessionAutomationPanel>
+    );
+  }
+
   return (
     <div
       className="app"
@@ -1345,6 +1394,7 @@ export function App() {
                   automationDetail={automationContext?.detail}
                   defaultOpen
                 />
+                {showAutomationContext ? renderAutomationPanel(workbenchAttention?.target === "automation", "workbench-automation-panel") : null}
                 {sessionFiles.items.length > 0 ? (
                   <SessionFilesPanel
                     files={sessionFiles}
@@ -1455,52 +1505,7 @@ export function App() {
                   loading={planState.state === "loading"}
                   error={planState.state === "error" ? planState.error : undefined}
                 />
-                {showAutomationContext && automationContext ? (
-                  <details className="session-plan-panel session-automation-panel" data-testid="session-automation-panel">
-                    <summary className="session-plan-summary">
-                      <span className="session-plan-kicker">Automation</span>
-                      <strong>{automationContext.title}</strong>
-                      <span>{automationContext.detail}</span>
-                    </summary>
-                    <div className="session-plan-body session-automation-body">
-                      {showLoopContext ? (
-                        <SessionLoopPanel
-                          embedded
-                          summary={selectedSession?.loop_protocol}
-                          state={selectedLoopState}
-                          disabling={loopProtocolBusy}
-                          defaultGoal={selectedSessionTitle ?? selectedSessionId}
-                          starting={loopProtocolBusy || actionBusy || session.status === "running"}
-                          onStart={handleStartLoop}
-                          onDisable={handleDisableLoopProtocol}
-                          protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
-                          events={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.events : undefined}
-                          loadingProtocol={selectedLoopProtocolState.state === "loading"}
-                          protocolError={selectedLoopProtocolState.state === "error" ? selectedLoopProtocolState.error : undefined}
-                          onLoadProtocol={handleLoadLoopProtocol}
-                          onUseAsDraft={handleUseLoopProtocolDraft}
-                        />
-                      ) : null}
-                      {showScheduleContext ? (
-                        <SessionSchedulePanel
-                          embedded
-                          summary={selectedSession?.schedules}
-                          schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
-                          busy={scheduleBusy}
-                          disabled={actionBusy || session.status === "running"}
-                          loading={selectedScheduleState.state === "loading"}
-                          error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
-                          deletingId={deletingScheduleId}
-                          updatingId={updatingScheduleId}
-                          loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
-                          onLoadSchedules={handleLoadSchedules}
-                          onUpdateSchedule={handleUpdateSchedule}
-                          onDeleteSchedule={handleDeleteSchedule}
-                        />
-                      ) : null}
-                    </div>
-                  </details>
-                ) : null}
+                {showAutomationContext ? renderAutomationPanel() : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>
             ) : null}

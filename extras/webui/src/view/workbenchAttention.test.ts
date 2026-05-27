@@ -39,6 +39,29 @@ describe("buildWorkbenchAttention", () => {
       run: run(),
     })).toBeUndefined();
   });
+
+  it("opens automation for pending loop or timer work without badging normal running automation", () => {
+    expect(buildWorkbenchAttention({
+      overview: overview(),
+      files: files(),
+      changes: changes(),
+      run: run(),
+      automation: { title: "Loop waiting · 1 timer pending", detail: "Long-running protocol and timers share one automation surface" },
+    })).toEqual({
+      label: "Loop waiting · 1 timer pending",
+      detail: "Long-running protocol and timers share one automation surface",
+      tone: "warning",
+      target: "automation",
+    });
+
+    expect(buildWorkbenchAttention({
+      overview: overview(),
+      files: files(),
+      changes: changes(),
+      run: run(),
+      automation: { title: "Loop running · 1 timer active", detail: "Long-running protocol and timers share one automation surface" },
+    })).toBeUndefined();
+  });
 });
 
 function overview(overrides: Partial<SessionOverview> = {}): SessionOverview {

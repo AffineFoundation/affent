@@ -4,7 +4,7 @@ import type { SessionOverview } from "./sessionOverview";
 import type { SessionRunView } from "./sessionRun";
 
 export type WorkbenchAttentionTone = "error" | "warning" | "attention";
-export type WorkbenchAttentionTarget = "context" | "files" | "changes" | "run";
+export type WorkbenchAttentionTarget = "context" | "files" | "changes" | "run" | "automation";
 
 export interface WorkbenchAttention {
   label: string;
@@ -18,11 +18,13 @@ export function buildWorkbenchAttention({
   files,
   changes,
   run,
+  automation,
 }: {
   overview: SessionOverview;
   files: SessionFilesView;
   changes: SessionChangesView;
   run: SessionRunView;
+  automation?: { title: string; detail: string };
 }): WorkbenchAttention | undefined {
   const currentIssue = overview.metrics.find((metric) => (metric.label === "Issue" || metric.label === "Issues") && metric.value.trim());
   if (currentIssue) {
@@ -41,6 +43,9 @@ export function buildWorkbenchAttention({
   const recovery = overview.metrics.find((metric) => metric.label === "Recovery" && metric.value.trim());
   if (recovery) return { label: "Recovery hint", detail: recovery.value, tone: "warning", target: "context" };
 
+  const automationAttention = automation ? automationWorkbenchAttention(automation) : undefined;
+  if (automationAttention) return automationAttention;
+
   const runningCommands = run.commands.filter((command) => command.status === "running").length;
   if (runningCommands > 0) return { label: runningCommandLabel(runningCommands), detail: "View run", tone: "warning", target: "run" };
 
@@ -53,6 +58,19 @@ export function buildWorkbenchAttention({
   const changedFiles = changes.files.filter((file) => file.status === "changed").length;
   if (changedFiles > 0) return { label: changedFileLabel(changedFiles), detail: "Review changes", tone: "attention", target: "changes" };
 
+  return undefined;
+}
+
+function automationWorkbenchAttention(automation: { title: string; detail: string }): WorkbenchAttention | undefined {
+  const title = automation.title.trim();
+  const normalized = title.toLowerCase();
+  if (!title) return undefined;
+  if (normalized.includes("failed") || normalized.includes("error")) {
+    return { label: title, detail: "View automation", tone: "error", target: "automation" };
+  }
+  if (normalized.includes("waiting") || normalized.includes("review") || normalized.includes("pending")) {
+    return { label: title, detail: automation.detail, tone: "warning", target: "automation" };
+  }
   return undefined;
 }
 
