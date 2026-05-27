@@ -2194,11 +2194,13 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, msgs []ChatMessage) {
 	summaryBytes := 0
 	summaryPreview := ""
+	loopProtocolAnchor := ""
 	for _, msg := range msgs {
 		if msg.Role == "user" && strings.HasPrefix(msg.Content, summaryPrefix) {
 			summary := strings.TrimSpace(strings.TrimPrefix(msg.Content, summaryPrefix))
 			summaryBytes = len(summary)
 			summaryPreview = textutil.Preview(summary, MaxContextSummaryPreviewInEvent)
+			loopProtocolAnchor = latestLoopProtocolSummaryAnchorFromText(summary)
 			break
 		}
 	}
@@ -2207,15 +2209,16 @@ func (l *Loop) publishContextCompacted(turnID string, before, after int, reactiv
 		reason = "context_overflow"
 	}
 	l.publish(sse.TypeContextCompact, sse.ContextCompactPayload{
-		TurnID:          turnID,
-		BeforeMessages:  before,
-		AfterMessages:   after,
-		RemovedMessages: before - after,
-		Reactive:        reactive,
-		Reason:          reason,
-		SummaryPresent:  summaryBytes > 0,
-		SummaryBytes:    summaryBytes,
-		SummaryPreview:  summaryPreview,
+		TurnID:             turnID,
+		BeforeMessages:     before,
+		AfterMessages:      after,
+		RemovedMessages:    before - after,
+		Reactive:           reactive,
+		Reason:             reason,
+		SummaryPresent:     summaryBytes > 0,
+		SummaryBytes:       summaryBytes,
+		SummaryPreview:     summaryPreview,
+		LoopProtocolAnchor: loopProtocolAnchor,
 	})
 }
 

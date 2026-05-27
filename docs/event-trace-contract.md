@@ -249,6 +249,21 @@ diagnostics.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
   model-context insertion.
 
+### `context.compacted`
+
+- `turn_id`: optional runtime turn id for the turn that compacted context.
+- `before_messages`, `after_messages`, `removed_messages`: model-context
+  message counts before and after the rewrite.
+- `reactive`: true when compaction happened after an upstream context-overflow
+  rejection; false for proactive threshold compaction.
+- `reason`: compact reason, currently `threshold` or `context_overflow`.
+- `summary_present`, `summary_bytes`, `summary_preview`: bounded diagnostics
+  for the rolling summary inserted back into model context.
+- `loop_protocol_anchor`: optional deterministic recovery anchor copied from a
+  compacted `LOOP.md` feed summary. It keeps the protocol path, feed metadata,
+  loop id/status, and active plan checkpoint visible even when
+  `summary_preview` is truncated before the anchor.
+
 ### `loop.protocol_feed`
 
 - `turn_id`: optional runtime turn id for the user turn that received the

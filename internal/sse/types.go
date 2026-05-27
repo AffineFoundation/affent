@@ -296,15 +296,16 @@ type LoopDecisionPayload struct {
 // publication so trace/UI can inspect what state survived without receiving an
 // unbounded copy of the conversation.
 type ContextCompactPayload struct {
-	TurnID          string `json:"turn_id,omitempty"`
-	BeforeMessages  int    `json:"before_messages"`
-	AfterMessages   int    `json:"after_messages"`
-	RemovedMessages int    `json:"removed_messages"`
-	Reactive        bool   `json:"reactive"`
-	Reason          string `json:"reason"`
-	SummaryPresent  bool   `json:"summary_present,omitempty"`
-	SummaryBytes    int    `json:"summary_bytes,omitempty"`
-	SummaryPreview  string `json:"summary_preview,omitempty"`
+	TurnID             string `json:"turn_id,omitempty"`
+	BeforeMessages     int    `json:"before_messages"`
+	AfterMessages      int    `json:"after_messages"`
+	RemovedMessages    int    `json:"removed_messages"`
+	Reactive           bool   `json:"reactive"`
+	Reason             string `json:"reason"`
+	SummaryPresent     bool   `json:"summary_present,omitempty"`
+	SummaryBytes       int    `json:"summary_bytes,omitempty"`
+	SummaryPreview     string `json:"summary_preview,omitempty"`
+	LoopProtocolAnchor string `json:"loop_protocol_anchor,omitempty"`
 }
 
 type ToolRuntimeStats struct {

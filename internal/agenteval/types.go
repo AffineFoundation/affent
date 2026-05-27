@@ -480,16 +480,17 @@ type LoopProtocolFeedStats struct {
 }
 
 type ContextCompaction struct {
-	Scenario        string `json:"scenario,omitempty"`
-	TurnID          string `json:"turn_id,omitempty"`
-	BeforeMessages  int    `json:"before_messages"`
-	AfterMessages   int    `json:"after_messages"`
-	RemovedMessages int    `json:"removed_messages"`
-	Reactive        bool   `json:"reactive"`
-	Reason          string `json:"reason"`
-	SummaryPresent  bool   `json:"summary_present,omitempty"`
-	SummaryBytes    int    `json:"summary_bytes,omitempty"`
-	SummaryPreview  string `json:"summary_preview,omitempty"`
+	Scenario           string `json:"scenario,omitempty"`
+	TurnID             string `json:"turn_id,omitempty"`
+	BeforeMessages     int    `json:"before_messages"`
+	AfterMessages      int    `json:"after_messages"`
+	RemovedMessages    int    `json:"removed_messages"`
+	Reactive           bool   `json:"reactive"`
+	Reason             string `json:"reason"`
+	SummaryPresent     bool   `json:"summary_present,omitempty"`
+	SummaryBytes       int    `json:"summary_bytes,omitempty"`
+	SummaryPreview     string `json:"summary_preview,omitempty"`
+	LoopProtocolAnchor string `json:"loop_protocol_anchor,omitempty"`
 }
 
 type ContextCompactionStats struct {
@@ -1221,15 +1222,16 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, ContextCompaction{
-			TurnID:          compaction.TurnID,
-			BeforeMessages:  compaction.BeforeMessages,
-			AfterMessages:   compaction.AfterMessages,
-			RemovedMessages: compaction.RemovedMessages,
-			Reactive:        compaction.Reactive,
-			Reason:          compaction.Reason,
-			SummaryPresent:  compaction.SummaryPresent,
-			SummaryBytes:    compaction.SummaryBytes,
-			SummaryPreview:  compactOneLine(compaction.SummaryPreview, 600),
+			TurnID:             compaction.TurnID,
+			BeforeMessages:     compaction.BeforeMessages,
+			AfterMessages:      compaction.AfterMessages,
+			RemovedMessages:    compaction.RemovedMessages,
+			Reactive:           compaction.Reactive,
+			Reason:             compaction.Reason,
+			SummaryPresent:     compaction.SummaryPresent,
+			SummaryBytes:       compaction.SummaryBytes,
+			SummaryPreview:     compactOneLine(compaction.SummaryPreview, 600),
+			LoopProtocolAnchor: compaction.LoopProtocolAnchor,
 		})
 	}
 	return stats

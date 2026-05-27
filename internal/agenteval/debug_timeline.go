@@ -862,6 +862,9 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 			c.SummaryBytes,
 			timelineInline(c.Reason, 300),
 		)
+		if c.LoopProtocolAnchor != "" {
+			fmt.Fprintf(b, "   loop_protocol_anchor: `%s`\n", timelineInline(c.LoopProtocolAnchor, timelineArgsPreviewBytes))
+		}
 		if c.SummaryPreview != "" {
 			b.WriteString("   summary_preview:\n")
 			b.WriteString("   ```text\n")

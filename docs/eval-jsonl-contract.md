@@ -421,7 +421,9 @@ Summary records aggregate all scenario records from the same process:
   `context_compaction_examples`, `loop_decision_examples`,
   `loop_protocol_feed_examples`, and `plan_examples` include their originating
   scenario so long-run batch failures can be routed directly to the right
-  trace/timeline.
+  trace/timeline. Context compaction examples may include
+  `loop_protocol_anchor` when the compacted summary preserved a per-session
+  `LOOP.md` recovery pointer.
 - Loop protocol feed totals: `loop_protocol_feed_scenarios`,
   `loop_protocol_feeds`, `loop_protocol_feed_by_mode`, and
   `loop_protocol_feed_examples`, useful for checking whether a long-run

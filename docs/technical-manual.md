@@ -780,7 +780,10 @@ If the compacted span included an active `LOOP.md` feed, the rolling summary
 also receives a deterministic `LOOP_PROTOCOL:` anchor with the protocol path,
 feed mode/count, loop id/status, and active plan checkpoint. This keeps
 post-compaction recovery pointed at the per-session protocol even when the
-summarizer model omits that detail from its natural-language summary.
+summarizer model omits that detail from its natural-language summary. The
+runtime also mirrors that line into the `context.compacted`
+`loop_protocol_anchor` field so trace, WebUI, and eval tooling can display it
+without relying on the bounded summary preview.
 Eval debug manifests index the retained child transcript paths and sizes under
 `child_transcripts`, and timelines include a `Child Transcripts` section, so
 operators can jump to isolated child work without pushing transcript contents

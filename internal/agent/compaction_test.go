@@ -692,6 +692,60 @@ func TestLoopMaybeCompactPublishesContextCompacted(t *testing.T) {
 	if payload.Reactive || payload.Reason != "threshold" || !payload.SummaryPresent || payload.SummaryBytes != len("earlier work") || payload.SummaryPreview != "earlier work" {
 		t.Fatalf("payload = %+v, want proactive threshold summary metadata", payload)
 	}
+	if payload.LoopProtocolAnchor != "" {
+		t.Fatalf("payload should not expose loop anchor when summary has none: %+v", payload)
+	}
+}
+
+func TestLoopMaybeCompactPublishesLoopProtocolAnchor(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []ChatMessage{{Role: "system", Content: "sys"}}
+	for i := 0; i < 20; i++ {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		msgs = append(msgs, ChatMessage{Role: role, Content: "msg" + string(rune('a'+i))})
+	}
+	if err := conv.Replace(msgs); err != nil {
+		t.Fatal(err)
+	}
+	anchor := `LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 loop_id=longrun status=running plan=plan:1/3:active current=2:in_progress step="verify browser evidence"; reload LOOP.md when needed.`
+	events := make(chan sse.Event, 8)
+	loop := &Loop{
+		Conv:   conv,
+		Events: events,
+		Compactor: &stubCompactor{
+			LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 4},
+			summary:             "earlier work\n" + anchor,
+		},
+	}
+
+	if !loop.maybeCompact(context.Background(), "turn-loop", true) {
+		t.Fatal("maybeCompact should report a successful compaction")
+	}
+
+	var payload sse.ContextCompactPayload
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeContextCompact {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompact)
+		}
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode context.compacted: %v", err)
+		}
+	default:
+		t.Fatal("expected context.compacted event")
+	}
+	if !payload.Reactive || payload.Reason != "context_overflow" {
+		t.Fatalf("payload = %+v, want reactive context_overflow", payload)
+	}
+	if payload.LoopProtocolAnchor != anchor {
+		t.Fatalf("LoopProtocolAnchor = %q, want %q", payload.LoopProtocolAnchor, anchor)
+	}
 }
 
 // Rolling: a second compaction pass should detect the existing summary
