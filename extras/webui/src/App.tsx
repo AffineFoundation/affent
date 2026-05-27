@@ -247,8 +247,8 @@ export function App() {
       session,
       workflow,
       hasSelectedSession: !!selectedSessionId,
-      pendingTask: pendingMessage?.kind === "task" ? pendingMessage.text : undefined,
-      pendingGuidance: pendingMessage?.kind === "guidance" ? pendingMessage.text : undefined,
+      pendingTask: pendingMessage?.kind === "task" ? pendingMessageDisplay(pendingMessage) : undefined,
+      pendingGuidance: pendingMessage?.kind === "guidance" ? pendingMessageDisplay(pendingMessage) : undefined,
       sessionTitle: selectedSessionTitle,
       planSummary: planPanelSummary,
       contextSummary: selectedSession?.context,
@@ -579,7 +579,7 @@ export function App() {
 
   useEffect(() => {
     if (!pendingMessage || pendingMessage.kind !== "task") return;
-    const accepted = session.turns.some((turn) => (turn.userText ?? "").trim() === pendingMessage.text);
+    const accepted = session.turns.some((turn) => pendingMessageMatchesTurn(pendingMessage, turn.userText));
     if (accepted) setPendingMessage(undefined);
   }, [pendingMessage, session.turns]);
 
@@ -812,9 +812,10 @@ export function App() {
     if (!trimmedGoal) return;
     let targetSessionId = selectedSessionId;
     const activationPrompt = webLoopActivationPrompt(trimmedGoal);
+    const displayText = `Set up loop: ${trimmedGoal}`;
     sendInFlightRef.current = true;
     sendFailedRef.current = false;
-    setPendingMessage({ text: activationPrompt, kind: "task" });
+    setPendingMessage({ text: activationPrompt, displayText, kind: "task" });
     setActionBusy(true);
     try {
       if (!targetSessionId) {
@@ -829,9 +830,9 @@ export function App() {
         goal: trimmedGoal,
       });
       markSessionLoopProtocol(targetSessionId, loopProtocol, trimmedGoal);
-      await sendSessionMessage(client, targetSessionId, { content: activationPrompt });
+      await sendSessionMessage(client, targetSessionId, { content: activationPrompt, display_text: displayText });
       sendInFlightRef.current = false;
-      markSessionLive(targetSessionId, `Set up loop: ${trimmedGoal}`);
+      markSessionLive(targetSessionId, displayText);
       const hasOpenStream = streamSessionIdRef.current === targetSessionId && !streamClosedRef.current;
       if (!hasOpenStream) {
         const reconciled = await loadHistory(targetSessionId);
@@ -860,6 +861,7 @@ export function App() {
     const firstDelayMs = loopTick ? 30 * 60 * 1000 : daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
     const next = new Date(Date.now() + firstDelayMs);
     const calibrationPrompt = webScheduleCalibrationPrompt(kind, sessionTitle);
+    const calibrationDisplay = webScheduleCalibrationSummary(kind, sessionTitle);
     setScheduleBusy(kind);
     try {
       const resp = await createSessionSchedule(client, sessionId, {
@@ -882,11 +884,11 @@ export function App() {
       }
       sendInFlightRef.current = true;
       sendFailedRef.current = false;
-      setPendingMessage({ text: calibrationPrompt, kind: "task" });
+      setPendingMessage({ text: calibrationPrompt, displayText: calibrationDisplay, kind: "task" });
       setActionBusy(true);
-      await sendSessionMessage(client, sessionId, { content: calibrationPrompt });
+      await sendSessionMessage(client, sessionId, { content: calibrationPrompt, display_text: calibrationDisplay });
       sendInFlightRef.current = false;
-      markSessionLive(sessionId, webScheduleCalibrationSummary(kind, sessionTitle));
+      markSessionLive(sessionId, calibrationDisplay);
       const hasOpenStream = streamSessionIdRef.current === sessionId && !streamClosedRef.current;
       if (!hasOpenStream) {
         const reconciled = await loadHistory(sessionId);
@@ -958,7 +960,7 @@ export function App() {
   function releaseSettledTurn(nextSession: SessionState, pendingText?: string) {
     if (nextSession.status === "running") return;
     const accepted = pendingText
-      ? nextSession.turns.some((turn) => (turn.userText ?? "").trim() === pendingText.trim())
+      ? nextSession.turns.some((turn) => (turn.userText ?? "").trim() === pendingText.trim() || pendingMessageMatchesTurn(pendingMessage, turn.userText))
       : true;
     if (accepted) {
       setPendingMessage(undefined);
@@ -1259,7 +1261,7 @@ export function App() {
               sessions={sessions}
               selectedId={selectedSessionId}
               currentSession={session}
-              pendingTask={pendingMessage?.kind === "task" ? pendingMessage.text : undefined}
+              pendingTask={pendingMessage?.kind === "task" ? pendingMessageDisplay(pendingMessage) : undefined}
               demoActive={demoActive}
               onSelect={(nextSessionId) => resetSessionSurface(nextSessionId, { preserveSession: true })}
               onNew={() => void handleNewSession()}
@@ -1449,6 +1451,17 @@ function webScheduledLoopTickPrompt(sessionTitle: string): string {
 
 function toRfc3339Seconds(value: Date): string {
   return new Date(Math.ceil(value.getTime() / 1000) * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+
+function pendingMessageDisplay(message?: PendingMessageView): string | undefined {
+  if (!message) return undefined;
+  return message.displayText?.trim() || message.text;
+}
+
+function pendingMessageMatchesTurn(message: PendingMessageView | undefined, turnText?: string): boolean {
+  const text = turnText?.trim();
+  if (!message || !text) return false;
+  return text === message.text.trim() || text === pendingMessageDisplay(message);
 }
 
 function isPlanMutationAction(value: unknown): boolean {

@@ -53,6 +53,7 @@ func TestHandleSessionMessage_RejectsInvalidBody(t *testing.T) {
 		wants []string
 	}{
 		{"empty content", `{"content":"   "}`, []string{"content is required"}},
+		{"display too large", `{"content":"hello","display_text":"` + strings.Repeat("x", maxSessionMessageDisplay+1) + `"}`, []string{"display_text too large"}},
 		{"bad mode", `{"content":"hello","mode":"fast"}`, []string{"mode must be one of", "plan_only", "execute_plan"}},
 		{"unknown field", `{"content":"hello","role":"user"}`, []string{"unknown field", "role"}},
 		{"multiple objects", `{"content":"hello"} {"content":"again"}`, []string{"single JSON object"}},
@@ -72,6 +73,46 @@ func TestHandleSessionMessage_RejectsInvalidBody(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandleSessionMessage_PublishesDisplayTextForGeneratedPrompts(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/display-text/messages", strings.NewReader(`{"content":"internal loop setup prompt with detailed tool instructions","display_text":"Set up loop: market monitor"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("display-text"), "events.jsonl"), `"display_text":"Set up loop: market monitor"`)
+
+	h := httptest.NewRequest(http.MethodGet, "/v1/sessions/display-text/history", nil)
+	hw := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(hw, h)
+	if got := hw.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("history status = %d, want 200; body=%s", got, hw.Body.String())
+	}
+	var history sessionHistoryResponse
+	if err := json.Unmarshal(hw.Body.Bytes(), &history); err != nil {
+		t.Fatalf("decode history: %v", err)
+	}
+	for _, ev := range history.Events {
+		if ev.Type != "user.message" {
+			continue
+		}
+		var payload struct {
+			Text        string `json:"text"`
+			DisplayText string `json:"display_text"`
+		}
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode user payload: %v", err)
+		}
+		if payload.Text != "internal loop setup prompt with detailed tool instructions" || payload.DisplayText != "Set up loop: market monitor" {
+			t.Fatalf("user payload = %+v", payload)
+		}
+		return
+	}
+	t.Fatalf("history missing user.message: %+v", history.Events)
 }
 
 func TestHandleSessionMessage_PlanOnlyStartsConstrainedTurn(t *testing.T) {

@@ -121,7 +121,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
     }
     case EventType.UserMessage: {
       const p = ev.data as UserMessagePayload;
-      return updateTurn(state, p.turn_id, (t) => ({ ...t, userText: p.text }));
+      return updateTurn(state, p.turn_id, (t) => ({ ...t, userText: p.display_text || p.text }));
     }
     case EventType.RuntimeSurface: {
       const p = ev.data as RuntimeSurfacePayload;

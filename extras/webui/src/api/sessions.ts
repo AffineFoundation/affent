@@ -443,6 +443,7 @@ export interface SessionCreateRequest {
 
 export interface SessionMessageRequest {
   content: string;
+  display_text?: string;
 }
 
 export interface SessionMessageResponse {

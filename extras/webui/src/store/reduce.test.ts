@@ -64,6 +64,25 @@ describe("reduce — message deltas accumulate before done", () => {
   });
 });
 
+describe("reduce — user display text", () => {
+  it("uses display_text for generated control prompts", () => {
+    const s = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "user.message",
+        data: {
+          turn_id: "t1",
+          text: "internal loop setup prompt with detailed tool instructions",
+          display_text: "Set up loop: market monitor",
+        },
+      },
+    ]);
+
+    expect(s.turns[0].userText).toBe("Set up loop: market monitor");
+  });
+});
+
 describe("reduce — tool error", () => {
   it("marks the tool call as error and preserves the Next: hint", () => {
     const s = reduceRawEvents(toolError);

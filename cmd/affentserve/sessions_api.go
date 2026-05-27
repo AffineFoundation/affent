@@ -970,7 +970,7 @@ func scanUserMessagesFromEvents(r *bufio.Reader) (sessionUserMessageScan, error)
 		if err := json.Unmarshal(ev.Data, &p); err != nil {
 			continue
 		}
-		summary := summarizeLatestUserMessage(p.Text)
+		summary := summarizeLatestUserMessage(firstNonEmpty(p.DisplayText, p.Text))
 		if summary == "" {
 			continue
 		}
@@ -1429,6 +1429,16 @@ func summarizeLatestUserMessage(text string) string {
 	text = unwrapSessionSummaryUserPrompt(text)
 	singleLine := textutil.CompactWhitespace(text)
 	return textutil.PreviewRunes(singleLine, maxSessionTaskSummaryChars, "...")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func unwrapSessionSummaryUserPrompt(text string) string {

@@ -231,6 +231,9 @@ type TurnOptions struct {
 	// UserSource marks non-manual turn origins in trace metadata. Empty means
 	// the turn came from a direct user/API message.
 	UserSource string
+	// UserDisplayText is an optional UI-facing label for generated control
+	// prompts. The model still receives the full user text.
+	UserDisplayText string
 	// ScheduleID identifies the session schedule that fired this turn, when
 	// UserSource == "schedule".
 	ScheduleID string
@@ -842,7 +845,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	l.publish(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
 	// Mirror the user's text into the event stream so SSE replays show
 	// the full conversation, not just assistant output.
-	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText, Source: opts.UserSource, ScheduleID: opts.ScheduleID, ScheduleKind: opts.ScheduleKind})
+	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText, DisplayText: opts.UserDisplayText, Source: opts.UserSource, ScheduleID: opts.ScheduleID, ScheduleKind: opts.ScheduleKind})
 	l.publishRuntimeSurface(turnID, opts)
 	if payload, ok := l.researchCheckpointDecision(userText, opts); ok {
 		payload.TurnID = turnID

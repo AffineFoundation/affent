@@ -15,6 +15,7 @@ import (
 
 const (
 	maxSessionMessageBodyBytes  = 4 * 1024 * 1024
+	maxSessionMessageDisplay    = 512
 	sessionPlanOnlyMaxToolCalls = 2
 )
 
@@ -25,8 +26,9 @@ const (
 )
 
 type sessionMessageRequest struct {
-	Content string `json:"content"`
-	Mode    string `json:"mode,omitempty"`
+	Content     string `json:"content"`
+	DisplayText string `json:"display_text,omitempty"`
+	Mode        string `json:"mode,omitempty"`
 }
 
 type sessionMessageResponse struct {
@@ -54,9 +56,14 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		return
 	}
 	content := strings.TrimSpace(req.Content)
+	displayText := strings.TrimSpace(req.DisplayText)
 	mode, err := normalizeSessionMessageMode(req.Mode)
 	if err != nil {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session message request", err, "bad_request")
+		return
+	}
+	if len([]byte(displayText)) > maxSessionMessageDisplay {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "display_text too large", fmt.Errorf("display_text exceeds %d bytes", maxSessionMessageDisplay), "bad_request")
 		return
 	}
 	if content == "" && mode != sessionMessageModeExecutePlan {
@@ -92,6 +99,7 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", err, "mode_unavailable")
 		return
 	}
+	opts.UserDisplayText = displayText
 	turnID, err := sess.SendUserWithOptions(r.Context(), content, opts)
 	if err != nil {
 		switch {

@@ -403,6 +403,26 @@ func sessionEventLine(t *testing.T, typ string, payload any) string {
 	return string(raw) + "\n"
 }
 
+func TestUserMessageSummariesPreferDisplayText(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "events.jsonl")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID:      "t1",
+		Text:        "internal loop setup prompt with detailed tool instructions",
+		DisplayText: "Set up loop: market monitor",
+	})
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	latest, topic, err := userMessageSummariesFromEventsFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest != "Set up loop: market monitor" || topic != "Set up loop: market monitor" {
+		t.Fatalf("latest/topic = %q/%q, want display text", latest, topic)
+	}
+}
+
 func TestSummarizeSessionTitleFromUserMessage(t *testing.T) {
 	for _, tc := range []struct {
 		name string

@@ -44,6 +44,7 @@ type TurnStartPayload struct {
 type UserMessagePayload struct {
 	TurnID       string `json:"turn_id"`
 	Text         string `json:"text"`
+	DisplayText  string `json:"display_text,omitempty"`
 	Source       string `json:"source,omitempty"`
 	ScheduleID   string `json:"schedule_id,omitempty"`
 	ScheduleKind string `json:"schedule_kind,omitempty"`

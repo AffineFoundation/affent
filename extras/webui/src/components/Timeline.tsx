@@ -47,7 +47,7 @@ export function Timeline({
   const touchStartY = useRef<number | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
-  const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingMessage.text : undefined;
+  const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingDisplayText(pendingMessage) : undefined;
 
   useEffect(() => {
     if (prevSessionId.current === sessionId) return;
@@ -347,6 +347,7 @@ const starterDrafts = [
 
 export interface PendingMessageView {
   text: string;
+  displayText?: string;
   kind: "task" | "guidance";
 }
 
@@ -403,7 +404,7 @@ function GuidanceReceipt({
 }
 
 function PendingTurn({ message, followUp }: { message: PendingMessageView; followUp: boolean }) {
-  const text = message.text;
+  const visibleText = pendingDisplayText(message);
   const isGuidance = message.kind === "guidance";
   const responseLabel = isGuidance
     ? "Applying your guidance to the current run."
@@ -422,8 +423,8 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
       <header className="flow-turn-head">
         <div className="turn-title-group">
           <div className="turn-index">{isGuidance ? "Guidance" : "You"}</div>
-          <div className="turn-title" data-testid="turn-title" title={text}>
-            {summarize(text, 72)}
+          <div className="turn-title" data-testid="turn-title" title={visibleText}>
+            {summarize(visibleText, 72)}
           </div>
         </div>
         <div className="flow-status">
@@ -434,7 +435,7 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
       <div className="conversation-turn">
         <div className="flow-step flow-step-user" role="group" aria-label={isGuidance ? "Guidance for current run" : "You message"}>
           {isGuidance ? <span className="pending-guidance-label">Live guidance</span> : null}
-          <div className="flow-text">{text}</div>
+          <div className="flow-text">{visibleText}</div>
           <div className="message-actions message-side-actions" data-side="user">
             <CopyMenu
               label="..."
@@ -443,7 +444,7 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
               panelClassName="message-copy-menu-panel"
               triggerClassName="message-side-trigger"
             >
-              <CopyButton label="Copy" value={text} className="message-action" />
+              <CopyButton label="Copy" value={visibleText} className="message-action" />
             </CopyMenu>
           </div>
         </div>
@@ -461,6 +462,10 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
       </div>
     </section>
   );
+}
+
+function pendingDisplayText(message: PendingMessageView): string {
+  return message.displayText?.trim() || message.text;
 }
 
 function latestDistance(scrollRoot?: HTMLElement | null): number {
