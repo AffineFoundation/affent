@@ -40,19 +40,16 @@ describe("buildComposerTaskHint", () => {
     });
   });
 
-  it("nudges code discovery toward repo search when workspace tools are available", () => {
-    expect(buildComposerTaskHint("find the implementation of repo_search in this workspace", runtimeWithRepoSearch())).toEqual({
-      label: "Repo search ready",
-      detail: "Use workspace text search before broad file reads; paste the likely file or symbol if you already know it.",
-      tone: "ready",
-    });
+  it("stays quiet for code discovery when workspace tools are available", () => {
+    expect(buildComposerTaskHint("find the implementation of repo_search in this workspace", runtimeWithRepoSearch())).toBeUndefined();
+    expect(buildComposerTaskHint("find the implementation of symbol_context in this workspace", runtimeWithSymbolContext())).toBeUndefined();
   });
 
-  it("nudges code discovery toward symbol context before repo search when both are available", () => {
-    expect(buildComposerTaskHint("find the implementation of symbol_context in this workspace", runtimeWithSymbolContext())).toEqual({
-      label: "Symbol lookup ready",
-      detail: "Exact declarations can be checked before broader workspace search; include symbol or file names if you know them.",
-      tone: "ready",
+  it("warns when code discovery cannot use local project tools", () => {
+    expect(buildComposerTaskHint("search the repo for the session capability wiring", runtimeWithFilesUnavailable())).toEqual({
+      label: "Local project tools are off",
+      detail: "Paste file paths, snippets, or a workspace snapshot so the task can still use direct evidence.",
+      tone: "warning",
     });
   });
 
@@ -121,6 +118,18 @@ function runtimeWithSymbolContext(): RuntimeCapabilityView {
       { group: "Research", label: "No live sources", detail: "Current outside information may be incomplete.", tone: "warning" },
       { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
       { group: "Discovery", label: "Symbol index + repo search", detail: "Can locate declarations and search workspace text before broad file reads.", tone: "ready" },
+    ],
+  };
+}
+
+function runtimeWithFilesUnavailable(): RuntimeCapabilityView {
+  return {
+    headline: "project",
+    detail: "project",
+    tone: "warning",
+    research: "off",
+    chips: [
+      { group: "Files", label: "Unavailable", detail: "Workspace files are unavailable.", tone: "warning" },
     ],
   };
 }

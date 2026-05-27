@@ -204,22 +204,6 @@ function buildCodeDiscoveryHint(runtime?: RuntimeCapabilityView): ComposerTaskHi
     };
   }
 
-  if (runtime.chips.some((chip) => chip.group === "Discovery" && chip.label.includes("Symbol index"))) {
-    return {
-      label: "Symbol lookup ready",
-      detail: "Exact declarations can be checked before broader workspace search; include symbol or file names if you know them.",
-      tone: "ready",
-    };
-  }
-
-  if (runtime.chips.some((chip) => chip.group === "Discovery" && chip.label === "Repo search")) {
-    return {
-      label: "Repo search ready",
-      detail: "Use workspace text search before broad file reads; paste the likely file or symbol if you already know it.",
-      tone: "ready",
-    };
-  }
-
   if (runtime.chips.some((chip) => chip.group === "Files" && chip.label === "Unavailable")) {
     return {
       label: "Local project tools are off",

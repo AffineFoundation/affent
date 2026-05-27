@@ -301,6 +301,24 @@ describe("Composer", () => {
     expect(screen.getByRole("button", { name: "Start anyway" })).toBeEnabled();
   });
 
+  it("does not advertise normal workspace search capability in the composer", async () => {
+    const user = userEvent.setup();
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        runtimeCapabilities={runtimeWithRepoSearch()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "find the implementation of session capability wiring");
+
+    expect(screen.queryByTestId("composer-task-hint")).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+  });
+
   it("guides skill installation through the runtime skill workflow", async () => {
     const user = userEvent.setup();
     render(
@@ -632,6 +650,19 @@ function runtimeWithSkillInstall(): RuntimeCapabilityView {
     chips: [
       { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
       { group: "Skills", label: "Skill install", detail: "Can install and activate runtime skills without restarting.", tone: "ready" },
+    ],
+  };
+}
+
+function runtimeWithRepoSearch(): RuntimeCapabilityView {
+  return {
+    headline: "project",
+    detail: "project",
+    tone: "ready",
+    research: "off",
+    chips: [
+      { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
+      { group: "Discovery", label: "Repo search", detail: "Can search workspace text before broad file reads.", tone: "ready" },
     ],
   };
 }
