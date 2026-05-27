@@ -96,8 +96,6 @@ const (
 // Output is a single JSON object matching Snapshot's fields (minus
 // SnapshotID, which the Go side fills in).
 const snapshotJS = `() => {
-  document.querySelectorAll('[data-affent-ref]').forEach(el => el.removeAttribute('data-affent-ref'));
-
   function isVisible(el) {
     if (!el || !el.getBoundingClientRect) return false;
     const rect = el.getBoundingClientRect();
@@ -112,12 +110,50 @@ const snapshotJS = `() => {
     return (s || '').toString().trim().replace(/\s+/g, ' ');
   }
 
+  function forEachElement(selector, fn) {
+    const seen = new Set();
+    function visit(root) {
+      let matches = [];
+      try {
+        matches = root.querySelectorAll(selector);
+      } catch (_) {
+        return;
+      }
+      matches.forEach(el => {
+        if (seen.has(el)) return;
+        seen.add(el);
+        fn(el);
+      });
+      let all = [];
+      try {
+        all = root.querySelectorAll('*');
+      } catch (_) {
+        return;
+      }
+      all.forEach(el => {
+        if (el.shadowRoot) visit(el.shadowRoot);
+      });
+    }
+    visit(document);
+  }
+
+  function firstElement(selector) {
+    let found = null;
+    forEachElement(selector, el => {
+      if (!found) found = el;
+    });
+    return found;
+  }
+
+  forEachElement('[data-affent-ref]', el => el.removeAttribute('data-affent-ref'));
+
   function accessibleName(el) {
     const ariaLabel = el.getAttribute && el.getAttribute('aria-label');
     if (ariaLabel) return clean(ariaLabel).slice(0, 200);
     const ariaLabelledBy = el.getAttribute && el.getAttribute('aria-labelledby');
     if (ariaLabelledBy) {
-      const ref = document.getElementById(ariaLabelledBy);
+      const root = el.getRootNode && el.getRootNode();
+      const ref = root && root.getElementById ? root.getElementById(ariaLabelledBy) : document.getElementById(ariaLabelledBy);
       if (ref) return clean(ref.textContent).slice(0, 200);
     }
     const alt = el.getAttribute && el.getAttribute('alt');
@@ -161,7 +197,7 @@ const snapshotJS = `() => {
 
   let nextRef = 0;
   const interactive = [];
-  document.querySelectorAll(interactiveSelectors).forEach(el => {
+  forEachElement(interactiveSelectors, el => {
     if (!isVisible(el)) return;
     nextRef++;
     el.setAttribute('data-affent-ref', String(nextRef));
@@ -193,7 +229,7 @@ const snapshotJS = `() => {
     ];
     return selectors.some(sel => {
       try {
-        const el = document.querySelector(sel);
+        const el = firstElement(sel);
         if (!el) return false;
         if (el.tagName === 'SCRIPT') return true;
         return isVisible(el) || !!el.closest('[aria-hidden="false"]');
@@ -213,7 +249,7 @@ const snapshotJS = `() => {
     ];
     let count = 0;
     selectors.forEach(sel => {
-      document.querySelectorAll(sel).forEach(el => {
+      forEachElement(sel, el => {
         if (!isVisible(el)) return;
         const text = clean(el.textContent);
         const aria = clean(el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('aria-valuetext') || el.getAttribute('title')));
@@ -248,7 +284,7 @@ const snapshotJS = `() => {
     return false;
   }
 
-  document.querySelectorAll(namedBlocks).forEach(el => {
+  forEachElement(namedBlocks, el => {
     if (truncated) return;
     if (!isVisible(el)) return;
     const text = clean(el.textContent);
@@ -257,7 +293,7 @@ const snapshotJS = `() => {
     blocks.push({ type: el.tagName.toLowerCase(), text: text.slice(0, MAX_BLOCK_CHARS) });
     blockCount++;
   });
-  document.querySelectorAll(candidates.join(',')).forEach(el => {
+  forEachElement(candidates.join(','), el => {
     if (truncated) return;
     if (!isVisible(el)) return;
     if (!hasDirectText(el)) return;
@@ -337,13 +373,33 @@ func applyNetworkSettleDiagnostic(snap *Snapshot, settled bool) {
 // attribute on different elements.
 func (s *Session) elementByRef(ctx context.Context, ref int) (*rod.Element, error) {
 	page := s.withContext(ctx)
-	selector := fmt.Sprintf(`[data-affent-ref="%d"]`, ref)
-	el, err := page.Element(selector)
+	el, err := page.ElementByJS(rod.Eval(shadowPiercingElementByRefJS, ref))
 	if err != nil {
 		return nil, &StaleRefError{Ref: ref, Cause: err}
 	}
 	return el, nil
 }
+
+const shadowPiercingElementByRefJS = `(ref) => {
+  const selector = '[data-affent-ref="' + String(ref).replace(/"/g, '\\"') + '"]';
+  function find(root) {
+    let direct = null;
+    try {
+      direct = root.querySelector(selector);
+    } catch (_) {
+      return null;
+    }
+    if (direct) return direct;
+    const all = root.querySelectorAll('*');
+    for (const el of all) {
+      if (!el.shadowRoot) continue;
+      const found = find(el.shadowRoot);
+      if (found) return found;
+    }
+    return null;
+  }
+  return find(document);
+}`
 
 // StaleRefError is returned when click/type/etc. cannot resolve a ref.
 type StaleRefError struct {

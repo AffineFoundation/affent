@@ -111,9 +111,10 @@ type Session struct {
 	mu sync.Mutex
 	// refsMu guards snapshotID. We don't keep a Go-side ref→element
 	// map because the JS side stamps data-affent-ref="N" on each
-	// element; Go-side lookups go through page.Element(`[data-affent-
-	// ref="N"]`). Each new Snapshot() clears the attribute on prior
-	// elements before stamping, so stale refs miss their selector.
+	// element; Go-side lookups use a shadow-piercing JS query for
+	// data-affent-ref="N". Each new Snapshot() clears the attribute
+	// on prior elements before stamping, so stale refs miss their
+	// selector.
 	refsMu     sync.Mutex
 	snapshotID int64
 

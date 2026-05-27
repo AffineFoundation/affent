@@ -92,6 +92,59 @@ func TestSession_SnapshotPicksUpInteractiveAndText(t *testing.T) {
 	}
 }
 
+func TestSession_SnapshotPicksUpOpenShadowDOM(t *testing.T) {
+	bin := findChromium(t)
+	sess, err := NewSession(SessionConfig{
+		BinaryPath: bin,
+		NoSandbox:  true,
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	defer sess.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	const body = `<html><body>
+        <h1>Host document</h1>
+        <metric-card id="metric"></metric-card>
+        <script>
+          const root = document.getElementById('metric').attachShadow({mode: 'open'});
+          root.innerHTML = '<h2>Shadow metric panel</h2><p>Shadow market cap 201.04K T</p><button>Reveal shadow status</button><div id="status">shadow idle</div>';
+          root.querySelector('button').addEventListener('click', () => {
+            root.getElementById('status').textContent = 'shadow clicked';
+          });
+        </script>
+    </body></html>`
+
+	out, err := runNavigate(ctx, sess, dataURL(body), "")
+	if err != nil {
+		t.Fatalf("runNavigate: %v", err)
+	}
+	for _, want := range []string{
+		"h2: Shadow metric panel",
+		"p: Shadow market cap 201.04K T",
+		"button",
+		"Reveal shadow status",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("shadow DOM snapshot missing %q:\n%s", want, out)
+		}
+	}
+	ref := findFirstRef(out, "button")
+	if ref == 0 {
+		t.Fatalf("shadow DOM button did not get a ref:\n%s", out)
+	}
+	result, err := ClickTool(sess).Execute(ctx, []byte(`{"ref":`+intStr(ref)+`}`))
+	if err != nil {
+		t.Fatalf("click shadow DOM button: %v", err)
+	}
+	if !strings.Contains(result, "shadow clicked") {
+		t.Fatalf("post-click shadow snapshot missing updated status:\n%s", result)
+	}
+}
+
 func TestSession_ClickStaleRef(t *testing.T) {
 	bin := findChromium(t)
 	sess, err := NewSession(SessionConfig{
