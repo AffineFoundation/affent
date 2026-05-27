@@ -2141,6 +2141,26 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 }
 
+func TestEvalJSONLContractDocumentsBrowserNetworkExamples(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "eval-jsonl-contract.md"))
+	if err != nil {
+		t.Fatalf("read eval JSONL contract: %v", err)
+	}
+	doc := string(raw)
+	for _, want := range []string{
+		"`browser_network_examples`",
+		"not citable factual evidence",
+		"`browser_network_read`",
+		"`browser_network:unread_refs`",
+		"`browser_network:refs`",
+		"`source_access_examples`, `browser_network_examples`",
+	} {
+		if !strings.Contains(doc, want) {
+			t.Fatalf("eval JSONL contract missing %q", want)
+		}
+	}
+}
+
 func jsonArrayContainsString(raw any, want string) bool {
 	values, ok := raw.([]any)
 	if !ok {

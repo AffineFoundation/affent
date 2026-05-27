@@ -182,6 +182,8 @@ Scenario records describe one eval case:
   `source_dynamic_partial`, `source_dynamic_without_network`,
   `source_dynamic_without_decision`, `source_unverified_all`,
   `source_discovery_only_all`,
+  `browser_network`, `browser_network:no_matches`,
+  `browser_network:unread_refs`, `browser_network:refs`,
   `memory_update:replace`, `empty_recall`,
   `loop_guard:forced_no_tools`,
   `recall:no_context`, `recall:no_matched_terms`,
@@ -223,6 +225,14 @@ Scenario records describe one eval case:
   `discovery_only`), accessed/requested URLs, URL field, source method, and
   JSON path when present. Batch summary examples also include the originating
   scenario name so a failed live-web evidence chain can be traced directly.
+- `browser_network_examples`: optional bounded examples of `browser_network`
+  searches. These are diagnostic refs/checks, not citable factual evidence.
+  Each sample includes tool index, call id, current page URL, query, status
+  (`matches`, `no_matches`, or `unknown`), bounded network refs, whether the
+  refs require `browser_network_read`, and the suggested next step. Batch
+  summary examples also include the originating scenario name. Treat these as
+  leads for dynamic pages: cite hidden JSON/text values only after a matching
+  `browser_network_read` result produces network `SourceAccess:` evidence.
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.
@@ -342,7 +352,7 @@ Summary records aggregate all scenario records from the same process:
   `loop_guard_examples`,
   `source_access_results`, `source_access_verified`,
   `source_access_discovery_only`, `source_access_network`,
-  `source_access_examples`,
+  `source_access_examples`, `browser_network_examples`,
   `memory_updates`, `memory_update_add`, `memory_update_replace`,
   `memory_update_remove`, `memory_update_examples`,
   `session_search_calls`, `session_search_results`,
@@ -376,8 +386,8 @@ Summary records aggregate all scenario records from the same process:
   `runtime_error_hints`, `runtime_error_examples`.
 - Bounded diagnostic examples: summary-level `tool_repair_examples`,
   `tool_failure_examples`, `loop_guard_examples`, `runtime_error_examples`,
-  `source_access_examples`, `memory_update_examples`,
-  `session_search_examples`, `tool_truncation_examples`,
+  `source_access_examples`, `browser_network_examples`,
+  `memory_update_examples`, `session_search_examples`, `tool_truncation_examples`,
   `context_compaction_examples`, `loop_decision_examples`, and `plan_examples`
   include their originating scenario so long-run batch failures can be routed
   directly to the right trace/timeline.
