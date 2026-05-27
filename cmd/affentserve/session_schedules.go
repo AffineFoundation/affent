@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,9 @@ const (
 	maxSessionSchedules          = 128
 	maxSessionSchedulePrompt     = 8000
 	minSessionScheduleRepeat     = 60 * time.Second
+	sessionScheduleSweepInterval = 30 * time.Second
+	sessionScheduleRetryDelay    = time.Minute
+	maxSessionScheduleErrorChars = 240
 )
 
 type sessionSchedule struct {
@@ -73,6 +77,12 @@ type sessionScheduleDeleteResponse struct {
 	Summary    *sessionSchedulesSummary `json:"summary,omitempty"`
 }
 
+type sessionScheduleRun struct {
+	SessionID  string
+	ScheduleID string
+	Prompt     string
+}
+
 func handleSessionSchedules(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
 	if pool == nil {
 		writeJSONError(w, http.StatusNotFound, "session not found", nil)
@@ -105,6 +115,8 @@ func handleSessionScheduleDelete(pool *SessionPool, sessionID, scheduleID string
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid schedule id", err, "bad_request")
 		return
 	}
+	pool.schedulesMu.Lock()
+	defer pool.schedulesMu.Unlock()
 	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, sessionID))
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "read session schedules", err)
@@ -200,6 +212,8 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		return
 	}
 	path := sessionSchedulesPath(pool, sessionID)
+	pool.schedulesMu.Lock()
+	defer pool.schedulesMu.Unlock()
 	file, found, err := readSessionSchedulesFile(path)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "read session schedules", err)
@@ -513,4 +527,216 @@ func previewSessionSchedulePrompt(prompt string) string {
 	}
 	runes := []rune(preview)
 	return string(runes[:max]) + "..."
+}
+
+func (p *SessionPool) scheduleLoop() {
+	defer close(p.scheduleDone)
+	t := time.NewTicker(sessionScheduleSweepInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-p.scheduleStop:
+			return
+		case <-t.C:
+			p.runDueSessionSchedulesOnce(time.Now().UTC())
+		}
+	}
+}
+
+func (p *SessionPool) runDueSessionSchedulesOnce(now time.Time) int {
+	if p == nil || p.IsShuttingDown() {
+		return 0
+	}
+	sessionIDs, err := p.sessionIDsWithSchedules()
+	if err != nil {
+		p.logger.Warn().Err(err).Msg("session schedule scan")
+		return 0
+	}
+	runs := 0
+	for _, sessionID := range sessionIDs {
+		if p.IsShuttingDown() {
+			return runs
+		}
+		if s := activeSessionByID(p, sessionID); s != nil && s.isActiveTurn() {
+			continue
+		}
+		run, ok, err := p.claimNextDueSessionSchedule(sessionID, now)
+		if err != nil {
+			p.logger.Warn().Err(err).Str("session_id", sessionID).Msg("claim session schedule")
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if err := p.executeClaimedSessionSchedule(now, run); err != nil {
+			p.logger.Warn().Err(err).Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Msg("execute session schedule")
+			continue
+		}
+		runs++
+	}
+	return runs
+}
+
+func (p *SessionPool) sessionIDsWithSchedules() ([]string, error) {
+	entries, err := os.ReadDir(p.sessionRootPath())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		id := entry.Name()
+		if err := agent.ValidateSessionID(id); err != nil {
+			continue
+		}
+		if _, err := os.Lstat(filepath.Join(p.sessionDirPath(id), sessionSchedulesFileName)); err == nil {
+			ids = append(ids, id)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	}
+	sort.Strings(ids)
+	return ids, nil
+}
+
+func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Time) (sessionScheduleRun, bool, error) {
+	p.schedulesMu.Lock()
+	defer p.schedulesMu.Unlock()
+	path := sessionSchedulesPath(p, sessionID)
+	file, found, err := readSessionSchedulesFile(path)
+	if err != nil || !found {
+		return sessionScheduleRun{}, false, err
+	}
+	nowStr := now.UTC().Format(time.RFC3339)
+	for i := range file.Schedules {
+		schedule := &file.Schedules[i]
+		if !schedule.Enabled || !sessionScheduleDue(*schedule, now) {
+			continue
+		}
+		run := sessionScheduleRun{
+			SessionID:  sessionID,
+			ScheduleID: schedule.ID,
+			Prompt:     schedule.Prompt,
+		}
+		schedule.LastError = ""
+		schedule.UpdatedAt = nowStr
+		if schedule.RepeatIntervalSeconds > 0 {
+			schedule.NextRunAt = nextSessionScheduleRunAt(schedule.NextRunAt, schedule.RepeatIntervalSeconds, now).Format(time.RFC3339)
+		} else {
+			schedule.Enabled = false
+		}
+		if err := writeSessionSchedulesFile(path, file); err != nil {
+			return sessionScheduleRun{}, false, err
+		}
+		return run, true, nil
+	}
+	return sessionScheduleRun{}, false, nil
+}
+
+func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionScheduleRun) error {
+	sess, err := p.GetOrCreate(run.SessionID)
+	if err != nil {
+		_ = p.recordSessionScheduleFailure(run, now, err)
+		return err
+	}
+	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{})
+	if err != nil {
+		_ = p.recordSessionScheduleFailure(run, now, err)
+		return err
+	}
+	if err := p.recordSessionScheduleSuccess(run, now, turnID); err != nil {
+		return err
+	}
+	p.logger.Info().Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Str("turn_id", turnID).Msg("session schedule fired")
+	return nil
+}
+
+func (p *SessionPool) recordSessionScheduleSuccess(run sessionScheduleRun, now time.Time, turnID string) error {
+	p.schedulesMu.Lock()
+	defer p.schedulesMu.Unlock()
+	path := sessionSchedulesPath(p, run.SessionID)
+	file, found, err := readSessionSchedulesFile(path)
+	if err != nil || !found {
+		return err
+	}
+	nowStr := now.UTC().Format(time.RFC3339)
+	for i := range file.Schedules {
+		schedule := &file.Schedules[i]
+		if schedule.ID != run.ScheduleID {
+			continue
+		}
+		schedule.LastRunAt = nowStr
+		schedule.LastTurnID = turnID
+		schedule.LastError = ""
+		schedule.RunCount++
+		schedule.UpdatedAt = nowStr
+		return writeSessionSchedulesFile(path, file)
+	}
+	return nil
+}
+
+func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now time.Time, cause error) error {
+	p.schedulesMu.Lock()
+	defer p.schedulesMu.Unlock()
+	path := sessionSchedulesPath(p, run.SessionID)
+	file, found, err := readSessionSchedulesFile(path)
+	if err != nil || !found {
+		return err
+	}
+	nowStr := now.UTC().Format(time.RFC3339)
+	retryAt := now.UTC().Add(sessionScheduleRetryDelay).Format(time.RFC3339)
+	for i := range file.Schedules {
+		schedule := &file.Schedules[i]
+		if schedule.ID != run.ScheduleID {
+			continue
+		}
+		schedule.Enabled = true
+		schedule.NextRunAt = retryAt
+		schedule.LastError = previewSessionScheduleError(cause)
+		schedule.UpdatedAt = nowStr
+		return writeSessionSchedulesFile(path, file)
+	}
+	return nil
+}
+
+func sessionScheduleDue(schedule sessionSchedule, now time.Time) bool {
+	next, err := parseSessionScheduleTime(schedule.NextRunAt)
+	if err != nil {
+		return false
+	}
+	return !next.After(now.UTC())
+}
+
+func nextSessionScheduleRunAt(current string, repeatSeconds int64, now time.Time) time.Time {
+	interval := time.Duration(repeatSeconds) * time.Second
+	if interval < minSessionScheduleRepeat {
+		interval = minSessionScheduleRepeat
+	}
+	next, err := parseSessionScheduleTime(current)
+	if err != nil {
+		return now.UTC().Add(interval)
+	}
+	next = next.Add(interval)
+	if next.After(now.UTC()) {
+		return next.UTC()
+	}
+	missed := int64(now.UTC().Sub(next)/interval) + 1
+	return next.Add(time.Duration(missed) * interval).UTC()
+}
+
+func previewSessionScheduleError(err error) string {
+	if err == nil {
+		return ""
+	}
+	preview := strings.Join(strings.Fields(err.Error()), " ")
+	if len([]rune(preview)) <= maxSessionScheduleErrorChars {
+		return preview
+	}
+	runes := []rune(preview)
+	return string(runes[:maxSessionScheduleErrorChars]) + "..."
 }

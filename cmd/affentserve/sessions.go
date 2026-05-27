@@ -139,6 +139,11 @@ type SessionPool struct {
 	gcStop chan struct{}
 	gcDone chan struct{}
 
+	// scheduleStop signals the durable session schedule runner to exit.
+	scheduleStop chan struct{}
+	scheduleDone chan struct{}
+	schedulesMu  sync.Mutex
+
 	// retention controls the disk-level GC of durable session dirs.
 	// Zero = disabled (the empty SessionRetention config). retentionStop
 	// / retentionDone gate the sweeper goroutine.
@@ -174,13 +179,15 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 		return nil, err
 	}
 	pool := &SessionPool{
-		cfg:       cfg,
-		logger:    logger,
-		idleTTL:   ttl,
-		sessions:  map[string]*Session{},
-		gcStop:    make(chan struct{}),
-		gcDone:    make(chan struct{}),
-		retention: retention,
+		cfg:          cfg,
+		logger:       logger,
+		idleTTL:      ttl,
+		sessions:     map[string]*Session{},
+		gcStop:       make(chan struct{}),
+		gcDone:       make(chan struct{}),
+		scheduleStop: make(chan struct{}),
+		scheduleDone: make(chan struct{}),
+		retention:    retention,
 	}
 	if cfg.BrowserCacheDir != "" {
 		cacheTTL, err := cfg.BrowserCacheTTLDuration()
@@ -214,6 +221,11 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 		})
 	}
 	go pool.gcLoop()
+	if !cfg.EvalMode {
+		go pool.scheduleLoop()
+	} else {
+		close(pool.scheduleDone)
+	}
 	if pool.retention > 0 {
 		pool.retentionStop = make(chan struct{})
 		pool.retentionDone = make(chan struct{})
@@ -1367,6 +1379,8 @@ func (p *SessionPool) Shutdown() {
 
 		close(p.gcStop)
 		<-p.gcDone
+		close(p.scheduleStop)
+		<-p.scheduleDone
 		if p.retentionStop != nil {
 			close(p.retentionStop)
 			<-p.retentionDone
