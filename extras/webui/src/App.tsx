@@ -747,17 +747,13 @@ export function App() {
 
   function handleUseLoopProtocolDraft() {
     const goal = selectedLoopState?.initial_goal_preview?.trim() || selectedSessionTitle || "this long-running session";
+    const status = selectedLoopState?.status || selectedSession?.loop_protocol?.status;
+    const calibrationAnswers = selectedLoopState?.calibration_answers ?? selectedSession?.loop_protocol?.state?.calibration_answers ?? 0;
+    const calibrationPreview = selectedLoopState?.last_calibration_answer_preview || selectedSession?.loop_protocol?.state?.last_calibration_answer_preview;
     setComposerDraft({
       id: Date.now(),
       source: "starter",
-      content: [
-        `Review and update LOOP.md for: ${goal}`,
-        "",
-        "Read the current LOOP.md with loop_protocol action=read.",
-        "Ask one concise calibration question before changing the protocol unless the user's requested change is already explicit.",
-        "Use loop_protocol action=update_draft for draft protocols, or complete_activation only after the user answers and the protocol is fully supplemented.",
-        "For a running protocol, update only durable rules, current situation, recovery anchors, or stop conditions that materially improve long-run behavior.",
-      ].join("\n"),
+      content: webLoopProtocolDraftPrompt(goal, status, calibrationAnswers, calibrationPreview),
     });
     setComposerFocusSignal((current) => current + 1);
   }
@@ -1399,6 +1395,35 @@ function webLoopActivationPrompt(goal: string): string {
     "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
     "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
   ].join("\n");
+}
+
+function webLoopProtocolDraftPrompt(goal: string, status?: string, calibrationAnswers = 0, calibrationPreview?: string): string {
+  const normalizedStatus = status?.trim().toLowerCase();
+  const lines = [
+    `Review and update LOOP.md for: ${goal}`,
+    "",
+    "Read the current LOOP.md with loop_protocol action=read.",
+  ];
+  if (normalizedStatus === "draft" && calibrationAnswers > 0) {
+    lines.push(
+      "A calibration answer is already recorded for this draft. Do not ask the same calibration question again unless a critical activation field is still missing.",
+    );
+    if (calibrationPreview?.trim()) {
+      lines.push(`Recorded calibration preview: ${calibrationPreview.trim()}`);
+    }
+    lines.push(
+      "Use the answer to supplement Current Situation, stop conditions, durable rules, self-attack checks, and recovery anchors.",
+      "If activation is now safe, set metadata status: running and call loop_protocol action=complete_activation with the full LOOP.md.",
+      "If activation is still unsafe, use loop_protocol action=update_draft and ask exactly one focused missing-field question.",
+    );
+    return lines.join("\n");
+  }
+  lines.push(
+    "Ask one concise calibration question before changing the protocol unless the user's requested change is already explicit.",
+    "Use loop_protocol action=update_draft for draft protocols, or complete_activation only after the user answers and the protocol is fully supplemented.",
+    "For a running protocol, update only durable rules, current situation, recovery anchors, or stop conditions that materially improve long-run behavior.",
+  );
+  return lines.join("\n");
 }
 
 function webScheduledCheckInPrompt(sessionTitle: string): string {

@@ -644,6 +644,74 @@ describe("App", () => {
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("activate after your answer");
   });
 
+  it("continues draft loop setup from recorded calibration without asking again", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "loop-draft-answer",
+              active: true,
+              durable: true,
+              topic_user_message: "long running subnet analysis",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+              has_loop_protocol: true,
+              loop_protocol: {
+                path: ".affent/loops/loop-draft-answer/LOOP.md",
+                status: "draft",
+                bytes: 512,
+                preview: "Draft loop protocol",
+                state: {
+                  version: 1,
+                  loop_id: "loop-draft-answer",
+                  status: "draft",
+                  initial_goal_preview: "long running subnet analysis",
+                  calibration_answers: 1,
+                  last_calibration_answer_preview: "Stop when taostats evidence or source confidence is weak.",
+                },
+              },
+              loop_state: {
+                version: 1,
+                loop_id: "loop-draft-answer",
+                status: "draft",
+                initial_goal_preview: "long running subnet analysis",
+                calibration_answers: 1,
+                last_calibration_answer_preview: "Stop when taostats evidence or source confidence is weak.",
+              },
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-draft-answer/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "loop-draft-answer", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/loop-draft-answer/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Activation review");
+    await user.click(within(panel).getByRole("button", { name: "Continue setup in chat" }));
+
+    const draft = (screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value;
+    expect(draft).toContain("A calibration answer is already recorded");
+    expect(draft).toContain("Stop when taostats evidence or source confidence is weak.");
+    expect(draft).toContain("metadata status: running");
+    expect(draft).toContain("loop_protocol action=complete_activation");
+    expect(draft).toContain("ask exactly one focused missing-field question");
+    expect(draft).not.toContain("Ask one concise calibration question before changing the protocol");
+  });
+
   it("shows and disables the selected session loop protocol", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
