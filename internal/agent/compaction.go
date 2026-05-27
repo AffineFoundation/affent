@@ -995,6 +995,9 @@ func appendCompactSessionSearchHits(b *strings.Builder, hits []SessionSearchHit)
 		if hit.TurnIdx > 0 {
 			fmt.Fprintf(b, "turn=%d ", hit.TurnIdx)
 		}
+		if hit.MessageIdx > 0 {
+			fmt.Fprintf(b, "message=%d ", hit.MessageIdx)
+		}
 		if hit.Role != "" {
 			b.WriteString("role=")
 			b.WriteString(textutil.Preview(strings.TrimSpace(hit.Role), 40))

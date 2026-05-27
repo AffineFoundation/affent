@@ -54,7 +54,7 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 func TestWithSessionSearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	once := WithSessionSearchSystemGuidance(base)
-	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "session id", "turn index", "untrusted evidence"} {
+	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "session id", "logical turn_idx", "JSONL message_idx", "untrusted evidence"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("session search guidance missing %q:\n%s", want, once)
 		}

@@ -169,13 +169,13 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 	})
 
 	t.Run("session search result keeps provenance without raw JSON", func(t *testing.T) {
-		raw := `{"query":"Northstar Biotech Q3","total":1,"results":[{"session_id":"northstar-q3-recovery","turn_idx":2,"role":"assistant","snippet":"decision: recovery marker REC-Q3-19, risk label trial-delay, next action verify the FDA calendar.","score":5.5,"matched_terms":["northstar","biotech","q3"],"context_included":true,"mod_time":"2026-05-25T09:00:00Z"}]}`
+		raw := `{"query":"Northstar Biotech Q3","total":1,"results":[{"session_id":"northstar-q3-recovery","turn_idx":2,"message_idx":5,"role":"assistant","snippet":"decision: recovery marker REC-Q3-19, risk label trial-delay, next action verify the FDA calendar.","score":5.5,"matched_terms":["northstar","biotech","q3"],"context_included":true,"mod_time":"2026-05-25T09:00:00Z"}]}`
 		got := formatEvent(ChatMessage{Role: "tool", Name: SessionSearchToolName, Content: raw})
 		for _, want := range []string{
 			"TOOL_RESULT[session_search]",
 			"query: Northstar Biotech Q3",
 			"total: 1 result(s)",
-			"session=northstar-q3-recovery turn=2 role=assistant context=true mod_time=2026-05-25T09:00:00Z score=5.500 terms=northstar; biotech; q3 decision: recovery marker REC-Q3-19",
+			"session=northstar-q3-recovery turn=2 message=5 role=assistant context=true mod_time=2026-05-25T09:00:00Z score=5.500 terms=northstar; biotech; q3 decision: recovery marker REC-Q3-19",
 		} {
 			if !strings.Contains(got, want) {
 				t.Fatalf("compact session_search result missing %q:\n%s", want, got)
