@@ -1299,7 +1299,12 @@ describe("App", () => {
         planCalls += 1;
         return jsonResponse({
           session_id: "s1",
-          plan: { steps: [{ step: "Collect evidence", status: "in_progress" }, { step: "Write summary", status: "pending" }] },
+          plan: {
+            steps: [
+              { text: "Collect evidence", status: "in_progress", evidence: ["docs/source.md"], note: "Verify the current behavior." },
+              { text: "Write summary", status: "pending" },
+            ],
+          },
           summary: {
             label: "Plan",
             total_steps: 2,
@@ -1366,6 +1371,11 @@ describe("App", () => {
 
     await waitFor(() => expect(planCalls).toBe(1));
     expect(await screen.findByTestId("chat-context-details")).toHaveTextContent("Plan 0/2 · step 1 active");
+    const planPanel = await screen.findByTestId("session-plan-panel");
+    expect(planPanel).toHaveTextContent("0/2 complete");
+    expect(planPanel).toHaveTextContent("Collect evidence");
+    expect(planPanel).toHaveTextContent("Write summary");
+    expect(planPanel).toHaveTextContent("docs/source.md");
   });
 
   it("moves tool Next guidance into the composer draft", async () => {

@@ -27,6 +27,7 @@ import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
+import { SessionPlanPanel } from "./components/SessionPlanPanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
@@ -77,6 +78,13 @@ type RuntimeStatsState =
   | { state: "ready"; stats: ServerStatsResponse }
   | { state: "error"; error: string };
 
+type PlanState =
+  | { state: "idle" }
+  | { state: "empty" }
+  | { state: "loading" }
+  | { state: "ready"; plan: unknown; summary?: SessionPlanSummary }
+  | { state: "error"; error: string; summary?: SessionPlanSummary };
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -105,6 +113,7 @@ export function App() {
   const [memoryState, setMemoryState] = useState<MemoryState>({ state: "idle" });
   const [runtimeStatsState, setRuntimeStatsState] = useState<RuntimeStatsState>({ state: "idle" });
   const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
+  const [planState, setPlanState] = useState<PlanState>({ state: "idle" });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -116,6 +125,8 @@ export function App() {
   const streamClosedRef = useRef(false);
   const streamSessionIdRef = useRef<string | undefined>(undefined);
   const nextGuidanceReceiptId = useRef(0);
+  const planFetchKeyRef = useRef("");
+  const planFetchInFlightKeyRef = useRef("");
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
   const sessionsRef = useRef(sessions);
   useEffect(() => {
@@ -160,6 +171,9 @@ export function App() {
     [session.turns],
   );
   const planSummary = livePlanSummary ?? selectedSession?.plan_summary;
+  const planPanelSummary = planState.state === "ready" || planState.state === "error"
+    ? planState.summary ?? planSummary
+    : planSummary;
   const capabilityView = useMemo(
     () => buildRuntimeCapabilityView(selectedSession?.capabilities, { selectedSessionId }),
     [selectedSession?.capabilities, selectedSessionId],
@@ -172,10 +186,10 @@ export function App() {
       pendingTask: pendingMessage?.kind === "task" ? pendingMessage.text : undefined,
       pendingGuidance: pendingMessage?.kind === "guidance" ? pendingMessage.text : undefined,
       sessionTitle: selectedSessionTitle,
-      planSummary,
+      planSummary: planPanelSummary,
       contextSummary: selectedSession?.context,
     }),
-    [pendingMessage, planSummary, selectedSession?.context, selectedSessionId, selectedSessionTitle, session, workflow],
+    [pendingMessage, planPanelSummary, selectedSession?.context, selectedSessionId, selectedSessionTitle, session, workflow],
   );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
   const showSessionNav = !demoActive && sessions.length > 0;
@@ -293,15 +307,35 @@ export function App() {
 
   useEffect(() => {
     setLivePlanSummary(undefined);
+    setPlanState({ state: "idle" });
+    planFetchKeyRef.current = "";
+    planFetchInFlightKeyRef.current = "";
   }, [selectedSessionId]);
 
   useEffect(() => {
-    if (demoActive || !selectedSessionId || planMutationCount <= 0) return;
+    if (demoActive || !selectedSessionId) {
+      setPlanState({ state: "idle" });
+      return;
+    }
+    const fallbackSummary = selectedSession?.plan_summary;
+    const hasPlanHint = planMutationCount > 0 || !!selectedSession?.has_plan || !!fallbackSummary;
+    if (!hasPlanHint) {
+      setPlanState({ state: "empty" });
+      planFetchKeyRef.current = "";
+      planFetchInFlightKeyRef.current = "";
+      return;
+    }
+    const fetchKey = `${selectedSessionId}:${planMutationCount}`;
+    if (planFetchKeyRef.current === fetchKey || planFetchInFlightKeyRef.current === fetchKey) return;
+    planFetchInFlightKeyRef.current = fetchKey;
     const ac = new AbortController();
+    setPlanState({ state: "loading" });
     getSessionPlan(client, selectedSessionId, ac.signal)
       .then((resp) => {
+        planFetchKeyRef.current = fetchKey;
         const nextSummary = resp.summary;
         setLivePlanSummary(nextSummary);
+        setPlanState({ state: "ready", plan: resp.plan, summary: nextSummary });
         setSessions((current) => {
           let changed = false;
           const next = current.map((item) => {
@@ -315,7 +349,9 @@ export function App() {
       .catch((err) => {
         if (isAbortError(err)) return;
         if (err instanceof ApiError && err.status === 404) {
+          planFetchKeyRef.current = fetchKey;
           setLivePlanSummary(undefined);
+          setPlanState({ state: "empty" });
           setSessions((current) => {
             let changed = false;
             const next = current.map((item) => {
@@ -325,10 +361,15 @@ export function App() {
             });
             return changed ? next : current;
           });
+          return;
         }
+        setPlanState({ state: "error", error: formatError(err), summary: fallbackSummary });
+      })
+      .finally(() => {
+        if (planFetchInFlightKeyRef.current === fetchKey) planFetchInFlightKeyRef.current = "";
       });
     return () => ac.abort();
-  }, [client, demoActive, planMutationCount, selectedSessionId]);
+  }, [client, demoActive, planMutationCount, selectedSession?.has_plan, selectedSession?.plan_summary?.label, selectedSessionId]);
 
   const handleReadSkill = useCallback(
     async (name: string): Promise<SessionSkillInfo> => {
@@ -883,6 +924,12 @@ export function App() {
             {showSurfaceContext ? (
               <div className="surface-context">
                 {showChatContext ? <ChatContextBar overview={overview} /> : null}
+                <SessionPlanPanel
+                  summary={planPanelSummary}
+                  plan={planState.state === "ready" ? planState.plan : undefined}
+                  loading={planState.state === "loading"}
+                  error={planState.state === "error" ? planState.error : undefined}
+                />
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}
               </div>
             ) : null}
