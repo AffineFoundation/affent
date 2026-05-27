@@ -1429,11 +1429,7 @@ func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts agent.TurnOptions) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	createdProtocol, err := s.ensureLoopProtocolInitializedWithCreated(text)
-	if err != nil {
-		return "", err
-	}
-	if !createdProtocol && opts.UserSource == "" {
+	if opts.UserSource == "" {
 		s.recordLoopProtocolCalibrationAnswerIfReady(text)
 	}
 	s.activeTurns.Add(1)

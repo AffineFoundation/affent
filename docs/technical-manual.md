@@ -705,11 +705,14 @@ Affent stores durable state as inspectable files:
   `affentctl --loop-protocol`, `affentctl chat` `/loop on [goal]`, and
   `POST /v1/sessions/{id}/loop-protocol` with `{"activate":true}` initialize a
   draft protocol template when the file is missing; existing files are honored
-  without rewriting them. A draft protocol is not treated as an active loop and
-  is not fed into ordinary turns. The activation turn must make the model
-  understand the user's intent, supplement the protocol with a compact current
-  situation snapshot, stop conditions, failure modes, recovery anchors, and any
-  durable memory lookup/update rules that belong in the rules section, then set metadata
+  without rewriting them. `affentserve` does not create this draft for ordinary
+  chat messages; chat-driven setup must go through the `loop_protocol`
+  `start_setup` action so loop state only appears after explicit user intent.
+  A draft protocol is not treated as an active loop and is not fed into ordinary
+  turns. The activation turn must make the model understand the user's intent,
+  supplement the protocol with a compact current situation snapshot, stop
+  conditions, failure modes, recovery anchors, and any durable memory
+  lookup/update rules that belong in the rules section, then set metadata
   `status: running`; only then does the runtime record
   `loop.protocol_activate` and start active loop feeds. Active protocols use a
   low-noise feed policy: the first three feeds and every sixth feed use a

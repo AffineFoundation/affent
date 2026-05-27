@@ -1822,9 +1822,34 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	}
 	prompt := messages[0].Content
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
+		!strings.Contains(prompt, "action=start_setup") ||
 		!strings.Contains(prompt, "at least one concise calibration question") ||
 		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("system prompt missing loop protocol guidance:\n%s", prompt)
+	}
+}
+
+func TestSessionSendUserDoesNotImplicitlyCreateLoopProtocol(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-explicit-start")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.SendUser(ctx, "ordinary chat that does not request loop"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("SendUser canceled err = %v, want context.Canceled", err)
+	}
+	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "loop-explicit-start")); err != nil || found {
+		t.Fatalf("ordinary SendUser created LOOP.md found=%v err=%v", found, err)
+	}
+	if _, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-explicit-start")); err != nil || found {
+		t.Fatalf("ordinary SendUser created loop state found=%v err=%v", found, err)
+	}
+	if _, ok := s.registry.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol tool should remain available for chat-driven start_setup")
 	}
 }
 
