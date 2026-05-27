@@ -102,60 +102,61 @@ type SessionSearchRequirement struct {
 }
 
 type BatchScenario struct {
-	Name                                  string
-	Suites                                []string
-	Prompt                                string
-	Prompts                               []string
-	SessionID                             string
-	ExecutePlan                           bool
-	EnableMemory                          bool
-	Files                                 map[string]string
-	VerifyCommand                         string
-	VerifierTimeout                       time.Duration
-	ExpectedSkill                         string
-	ForbiddenCommands                     []string
-	RequiredCommands                      []string
-	RequiredCommandCounts                 map[string]int
-	RequiredToolCounts                    map[string]int
-	RequiredToolFailureKindCounts         map[string]int
-	RequiredToolStatsAtLeast              map[string]int
-	RequiredLoopDecisionKinds             map[string]int
-	RequiredLoopDecisionResults           map[string]int
-	RequiredLoopDecisionMatches           []LoopDecisionRequirement
-	RequiredLoopProtocolFeeds             int
-	RequiredLoopProtocolCalibrations      int
-	RequiredLoopProtocolFeedModes         map[string]int
-	RequiredLoopProtocolFeedMatches       []LoopProtocolFeedRequirement
-	RequireLoopProtocolFullAfterCompact   bool
-	RequiredSourceAccess                  []SourceAccessRequirement
-	RequiredSessionSearch                 []SessionSearchRequirement
-	RequiredContextCompactions            int
-	RequiredReactiveCompactions           int
-	RequiredCompactionRemovedMsgs         int
-	RequiredContextSummaryText            []string
-	RequiredContextLoopProtocolAnchorText []string
-	RequiredCommandBeforeTool             []CommandToolOrderRequirement
-	RequiredCommandAfterTool              []CommandToolOrderRequirement
-	RequiredTools                         []string
-	ForbiddenTools                        []string
-	RequiredFocusedTaskCounts             map[string]int
-	RequiredSubagentModeCounts            map[string]int
-	RequireNoDelegationErrors             bool
-	RequireNoPlanErrors                   bool
-	RequiredFinalText                     []string
-	ForbiddenFinalText                    []string
-	RequiredToolResultText                map[string][]string
-	RequiredToolArgContains               []ToolArgContainsRequirement
-	RequiredTruncatedResults              []string
-	RequiredResultArtifacts               []string
-	RequiredToolOrder                     []ToolOrderRequirement
-	ProtectedFiles                        []string
-	ForbiddenFileSubstrings               map[string][]string
-	MaxParentToolCalls                    int
-	MaxSuccessfulToolCallsByTool          map[string]int
-	MaxTurns                              int
-	CompactTrigger                        int
-	CompactKeepLast                       int
+	Name                                    string
+	Suites                                  []string
+	Prompt                                  string
+	Prompts                                 []string
+	SessionID                               string
+	ExecutePlan                             bool
+	EnableMemory                            bool
+	Files                                   map[string]string
+	VerifyCommand                           string
+	VerifierTimeout                         time.Duration
+	ExpectedSkill                           string
+	ForbiddenCommands                       []string
+	RequiredCommands                        []string
+	RequiredCommandCounts                   map[string]int
+	RequiredToolCounts                      map[string]int
+	RequiredToolFailureKindCounts           map[string]int
+	RequiredToolStatsAtLeast                map[string]int
+	RequiredLoopDecisionKinds               map[string]int
+	RequiredLoopDecisionResults             map[string]int
+	RequiredLoopDecisionMatches             []LoopDecisionRequirement
+	RequiredLoopProtocolFeeds               int
+	RequiredLoopProtocolCalibrationRequests int
+	RequiredLoopProtocolCalibrations        int
+	RequiredLoopProtocolFeedModes           map[string]int
+	RequiredLoopProtocolFeedMatches         []LoopProtocolFeedRequirement
+	RequireLoopProtocolFullAfterCompact     bool
+	RequiredSourceAccess                    []SourceAccessRequirement
+	RequiredSessionSearch                   []SessionSearchRequirement
+	RequiredContextCompactions              int
+	RequiredReactiveCompactions             int
+	RequiredCompactionRemovedMsgs           int
+	RequiredContextSummaryText              []string
+	RequiredContextLoopProtocolAnchorText   []string
+	RequiredCommandBeforeTool               []CommandToolOrderRequirement
+	RequiredCommandAfterTool                []CommandToolOrderRequirement
+	RequiredTools                           []string
+	ForbiddenTools                          []string
+	RequiredFocusedTaskCounts               map[string]int
+	RequiredSubagentModeCounts              map[string]int
+	RequireNoDelegationErrors               bool
+	RequireNoPlanErrors                     bool
+	RequiredFinalText                       []string
+	ForbiddenFinalText                      []string
+	RequiredToolResultText                  map[string][]string
+	RequiredToolArgContains                 []ToolArgContainsRequirement
+	RequiredTruncatedResults                []string
+	RequiredResultArtifacts                 []string
+	RequiredToolOrder                       []ToolOrderRequirement
+	ProtectedFiles                          []string
+	ForbiddenFileSubstrings                 map[string][]string
+	MaxParentToolCalls                      int
+	MaxSuccessfulToolCallsByTool            map[string]int
+	MaxTurns                                int
+	CompactTrigger                          int
+	CompactKeepLast                         int
 }
 
 type BatchRunner struct {
@@ -184,49 +185,50 @@ type BatchRunner struct {
 }
 
 type BatchResult struct {
-	BatchScenario            string
-	Workspace                string
-	TracePath                string
-	DebugManifestPath        string
-	TimelinePath             string
-	FinalTextPath            string
-	StdoutPath               string
-	StderrPath               string
-	AffentctlCommand         []string
-	RunExitCode              int
-	OK                       bool
-	Expectations             *DebugScenarioExpectations
-	Failures                 []string
-	Duration                 time.Duration
-	FinalText                string
-	TraceSchemaVersion       int
-	TraceEvents              int
-	TraceEventTypes          map[string]int
-	TurnEndReason            string
-	ToolCalls                int
-	ToolStats                ToolRuntimeStats
-	RuntimeErrorByKind       map[string]int
-	RuntimeErrorExamples     map[string][]RuntimeErrorExample
-	LoopDecisionStats        LoopDecisionStats
-	LoopProtocolFeeds        LoopProtocolFeedStats
-	LoopProtocolCalibrations LoopProtocolCalibrationStats
-	ContextCompactions       ContextCompactionStats
-	ToolRepairExamples       []ToolRepairExample
-	ToolFailureExamples      map[string][]ToolFailureExample
-	LoopGuardExamples        []LoopGuardExample
-	SourceAccessExamples     []SourceAccessExample
-	BrowserNetworkExamples   []BrowserNetworkSearchExample
-	MemoryUpdateExamples     []MemoryUpdateExample
-	SessionSearchExamples    []SessionSearchExample
-	PlanExamples             []PlanExample
-	ToolTruncationExamples   []ToolTruncationExample
-	ToolTruncation           ToolTruncationStats
-	Usage                    Usage
-	Verifier                 VerifierResult
-	WorkspaceRemoved         bool
-	CleanupError             string
-	TraceDeltas              bool
-	ChildTranscripts         []DebugTranscriptRef
+	BatchScenario                   string
+	Workspace                       string
+	TracePath                       string
+	DebugManifestPath               string
+	TimelinePath                    string
+	FinalTextPath                   string
+	StdoutPath                      string
+	StderrPath                      string
+	AffentctlCommand                []string
+	RunExitCode                     int
+	OK                              bool
+	Expectations                    *DebugScenarioExpectations
+	Failures                        []string
+	Duration                        time.Duration
+	FinalText                       string
+	TraceSchemaVersion              int
+	TraceEvents                     int
+	TraceEventTypes                 map[string]int
+	TurnEndReason                   string
+	ToolCalls                       int
+	ToolStats                       ToolRuntimeStats
+	RuntimeErrorByKind              map[string]int
+	RuntimeErrorExamples            map[string][]RuntimeErrorExample
+	LoopDecisionStats               LoopDecisionStats
+	LoopProtocolFeeds               LoopProtocolFeedStats
+	LoopProtocolCalibrationRequests LoopProtocolCalibrationStats
+	LoopProtocolCalibrations        LoopProtocolCalibrationStats
+	ContextCompactions              ContextCompactionStats
+	ToolRepairExamples              []ToolRepairExample
+	ToolFailureExamples             map[string][]ToolFailureExample
+	LoopGuardExamples               []LoopGuardExample
+	SourceAccessExamples            []SourceAccessExample
+	BrowserNetworkExamples          []BrowserNetworkSearchExample
+	MemoryUpdateExamples            []MemoryUpdateExample
+	SessionSearchExamples           []SessionSearchExample
+	PlanExamples                    []PlanExample
+	ToolTruncationExamples          []ToolTruncationExample
+	ToolTruncation                  ToolTruncationStats
+	Usage                           Usage
+	Verifier                        VerifierResult
+	WorkspaceRemoved                bool
+	CleanupError                    string
+	TraceDeltas                     bool
+	ChildTranscripts                []DebugTranscriptRef
 	// Delegation aggregates focused-task / subagent calls observed
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
@@ -244,97 +246,99 @@ type BatchResult struct {
 }
 
 type DebugManifest struct {
-	SchemaVersion                    int                           `json:"schema_version"`
-	Scenario                         string                        `json:"scenario"`
-	OK                               bool                          `json:"ok"`
-	Workspace                        string                        `json:"workspace"`
-	TracePath                        string                        `json:"trace_path"`
-	TimelinePath                     string                        `json:"timeline_path,omitempty"`
-	FinalTextPath                    string                        `json:"final_text_path,omitempty"`
-	StdoutPath                       string                        `json:"stdout_path,omitempty"`
-	StderrPath                       string                        `json:"stderr_path,omitempty"`
-	AffentctlCommand                 []string                      `json:"affentctl_command,omitempty"`
-	RunExitCode                      int                           `json:"run_exit_code"`
-	ConversationDir                  string                        `json:"conversation_dir,omitempty"`
-	ArtifactDir                      string                        `json:"artifact_dir,omitempty"`
-	TraceDeltas                      bool                          `json:"trace_deltas,omitempty"`
-	Prompt                           string                        `json:"prompt"`
-	Prompts                          []string                      `json:"prompts,omitempty"`
-	Expectations                     DebugScenarioExpectations     `json:"expectations,omitempty"`
-	ExpectationCapabilityNames       []string                      `json:"expectation_capability_names,omitempty"`
-	ExpectationCapabilityOutcome     string                        `json:"expectation_capability_outcome,omitempty"`
-	ExpectationCapabilityPassedNames []string                      `json:"expectation_capability_passed_names,omitempty"`
-	ExpectationCapabilityFailedNames []string                      `json:"expectation_capability_failed_names,omitempty"`
-	Failures                         []string                      `json:"failures,omitempty"`
-	DebugBrief                       *DebugBrief                   `json:"debug_brief,omitempty"`
-	ToolRepairExamples               []ToolRepairExample           `json:"tool_repair_examples,omitempty"`
-	LoopGuardExamples                []LoopGuardExample            `json:"loop_guard_examples,omitempty"`
-	LoopProtocolFeedExamples         []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
-	LoopProtocolCalibrationExamples  []LoopProtocolCalibration     `json:"loop_protocol_calibration_examples,omitempty"`
-	SourceAccessExamples             []SourceAccessExample         `json:"source_access_examples,omitempty"`
-	BrowserNetworkExamples           []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
-	MemoryUpdateExamples             []MemoryUpdateExample         `json:"memory_update_examples,omitempty"`
-	SessionSearchExamples            []SessionSearchExample        `json:"session_search_examples,omitempty"`
-	PlanExamples                     []PlanExample                 `json:"plan_examples,omitempty"`
-	ToolTruncationExamples           []ToolTruncationExample       `json:"tool_truncation_examples,omitempty"`
-	ContextCompactionExamples        []ContextCompaction           `json:"context_compaction_examples,omitempty"`
-	ChildTranscripts                 []DebugTranscriptRef          `json:"child_transcripts,omitempty"`
-	Metrics                          DebugMetrics                  `json:"metrics"`
-	RuntimeSurface                   *sse.RuntimeSurfacePayload    `json:"runtime_surface,omitempty"`
-	GeneratedAt                      string                        `json:"generated_at"`
+	SchemaVersion                          int                           `json:"schema_version"`
+	Scenario                               string                        `json:"scenario"`
+	OK                                     bool                          `json:"ok"`
+	Workspace                              string                        `json:"workspace"`
+	TracePath                              string                        `json:"trace_path"`
+	TimelinePath                           string                        `json:"timeline_path,omitempty"`
+	FinalTextPath                          string                        `json:"final_text_path,omitempty"`
+	StdoutPath                             string                        `json:"stdout_path,omitempty"`
+	StderrPath                             string                        `json:"stderr_path,omitempty"`
+	AffentctlCommand                       []string                      `json:"affentctl_command,omitempty"`
+	RunExitCode                            int                           `json:"run_exit_code"`
+	ConversationDir                        string                        `json:"conversation_dir,omitempty"`
+	ArtifactDir                            string                        `json:"artifact_dir,omitempty"`
+	TraceDeltas                            bool                          `json:"trace_deltas,omitempty"`
+	Prompt                                 string                        `json:"prompt"`
+	Prompts                                []string                      `json:"prompts,omitempty"`
+	Expectations                           DebugScenarioExpectations     `json:"expectations,omitempty"`
+	ExpectationCapabilityNames             []string                      `json:"expectation_capability_names,omitempty"`
+	ExpectationCapabilityOutcome           string                        `json:"expectation_capability_outcome,omitempty"`
+	ExpectationCapabilityPassedNames       []string                      `json:"expectation_capability_passed_names,omitempty"`
+	ExpectationCapabilityFailedNames       []string                      `json:"expectation_capability_failed_names,omitempty"`
+	Failures                               []string                      `json:"failures,omitempty"`
+	DebugBrief                             *DebugBrief                   `json:"debug_brief,omitempty"`
+	ToolRepairExamples                     []ToolRepairExample           `json:"tool_repair_examples,omitempty"`
+	LoopGuardExamples                      []LoopGuardExample            `json:"loop_guard_examples,omitempty"`
+	LoopProtocolFeedExamples               []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
+	LoopProtocolCalibrationRequestExamples []LoopProtocolCalibration     `json:"loop_protocol_calibration_request_examples,omitempty"`
+	LoopProtocolCalibrationExamples        []LoopProtocolCalibration     `json:"loop_protocol_calibration_examples,omitempty"`
+	SourceAccessExamples                   []SourceAccessExample         `json:"source_access_examples,omitempty"`
+	BrowserNetworkExamples                 []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
+	MemoryUpdateExamples                   []MemoryUpdateExample         `json:"memory_update_examples,omitempty"`
+	SessionSearchExamples                  []SessionSearchExample        `json:"session_search_examples,omitempty"`
+	PlanExamples                           []PlanExample                 `json:"plan_examples,omitempty"`
+	ToolTruncationExamples                 []ToolTruncationExample       `json:"tool_truncation_examples,omitempty"`
+	ContextCompactionExamples              []ContextCompaction           `json:"context_compaction_examples,omitempty"`
+	ChildTranscripts                       []DebugTranscriptRef          `json:"child_transcripts,omitempty"`
+	Metrics                                DebugMetrics                  `json:"metrics"`
+	RuntimeSurface                         *sse.RuntimeSurfacePayload    `json:"runtime_surface,omitempty"`
+	GeneratedAt                            string                        `json:"generated_at"`
 }
 
 type DebugScenarioExpectations struct {
-	CheckNames                            []string                           `json:"check_names,omitempty"`
-	Suites                                []string                           `json:"suites,omitempty"`
-	SessionID                             string                             `json:"session_id,omitempty"`
-	ExecutePlan                           bool                               `json:"execute_plan,omitempty"`
-	EnableMemory                          bool                               `json:"enable_memory,omitempty"`
-	VerifyCommand                         string                             `json:"verify_command,omitempty"`
-	ExpectedSkill                         string                             `json:"expected_skill,omitempty"`
-	RequiredTools                         []string                           `json:"required_tools,omitempty"`
-	ForbiddenTools                        []string                           `json:"forbidden_tools,omitempty"`
-	RequiredCommands                      []string                           `json:"required_commands,omitempty"`
-	ForbiddenCommands                     []string                           `json:"forbidden_commands,omitempty"`
-	RequiredCommandCounts                 map[string]int                     `json:"required_command_counts,omitempty"`
-	RequiredToolCounts                    map[string]int                     `json:"required_tool_counts,omitempty"`
-	RequiredToolFailureKindCounts         map[string]int                     `json:"required_tool_failure_kind_counts,omitempty"`
-	RequiredToolStatsAtLeast              map[string]int                     `json:"required_tool_stats_at_least,omitempty"`
-	RequiredLoopDecisionKinds             map[string]int                     `json:"required_loop_decision_kinds,omitempty"`
-	RequiredLoopDecisionResults           map[string]int                     `json:"required_loop_decision_results,omitempty"`
-	RequiredLoopDecisionMatches           []DebugLoopDecisionRequirement     `json:"required_loop_decision_matches,omitempty"`
-	RequiredLoopProtocolFeeds             int                                `json:"required_loop_protocol_feeds,omitempty"`
-	RequiredLoopProtocolCalibrations      int                                `json:"required_loop_protocol_calibrations,omitempty"`
-	RequiredLoopProtocolFeedModes         map[string]int                     `json:"required_loop_protocol_feed_modes,omitempty"`
-	RequiredLoopProtocolFeedMatches       []DebugLoopProtocolFeedRequirement `json:"required_loop_protocol_feed_matches,omitempty"`
-	RequireLoopProtocolFullAfterCompact   bool                               `json:"require_loop_protocol_full_after_compaction,omitempty"`
-	RequiredToolResultText                map[string][]string                `json:"required_tool_result_text,omitempty"`
-	RequiredToolArgContains               []DebugToolArgContainsRequirement  `json:"required_tool_arg_contains,omitempty"`
-	RequiredSourceAccess                  []DebugSourceAccessRequirement     `json:"required_source_access,omitempty"`
-	RequiredSessionSearch                 []DebugSessionSearchRequirement    `json:"required_session_search,omitempty"`
-	RequiredCommandBeforeTool             []DebugCommandToolOrderRequirement `json:"required_command_before_tool,omitempty"`
-	RequiredCommandAfterTool              []DebugCommandToolOrderRequirement `json:"required_command_after_tool,omitempty"`
-	RequiredToolOrder                     []DebugToolOrderRequirement        `json:"required_tool_order,omitempty"`
-	RequiredFocusedTaskCounts             map[string]int                     `json:"required_focused_task_counts,omitempty"`
-	RequiredSubagentModeCounts            map[string]int                     `json:"required_subagent_mode_counts,omitempty"`
-	RequireNoDelegationErrors             bool                               `json:"require_no_delegation_errors,omitempty"`
-	RequireNoPlanErrors                   bool                               `json:"require_no_plan_errors,omitempty"`
-	RequiredFinalText                     []string                           `json:"required_final_text,omitempty"`
-	ForbiddenFinalText                    []string                           `json:"forbidden_final_text,omitempty"`
-	RequiredTruncatedResults              []string                           `json:"required_truncated_results,omitempty"`
-	RequiredResultArtifacts               []string                           `json:"required_result_artifacts,omitempty"`
-	RequiredContextCompactions            int                                `json:"required_context_compactions,omitempty"`
-	RequiredReactiveCompactions           int                                `json:"required_reactive_context_compactions,omitempty"`
-	RequiredCompactionRemovedMsgs         int                                `json:"required_compaction_removed_messages,omitempty"`
-	RequiredContextSummaryText            []string                           `json:"required_context_summary_text,omitempty"`
-	RequiredContextLoopProtocolAnchorText []string                           `json:"required_context_loop_protocol_anchor_text,omitempty"`
-	ProtectedFiles                        []string                           `json:"protected_files,omitempty"`
-	ForbiddenFileSubstrings               map[string][]string                `json:"forbidden_file_substrings,omitempty"`
-	MaxParentToolCalls                    int                                `json:"max_parent_tool_calls,omitempty"`
-	MaxSuccessfulToolCallsByTool          map[string]int                     `json:"max_successful_tool_calls_by_tool,omitempty"`
-	MaxTurns                              int                                `json:"max_turns,omitempty"`
-	CompactTrigger                        int                                `json:"compact_trigger,omitempty"`
-	CompactKeepLast                       int                                `json:"compact_keep_last,omitempty"`
+	CheckNames                              []string                           `json:"check_names,omitempty"`
+	Suites                                  []string                           `json:"suites,omitempty"`
+	SessionID                               string                             `json:"session_id,omitempty"`
+	ExecutePlan                             bool                               `json:"execute_plan,omitempty"`
+	EnableMemory                            bool                               `json:"enable_memory,omitempty"`
+	VerifyCommand                           string                             `json:"verify_command,omitempty"`
+	ExpectedSkill                           string                             `json:"expected_skill,omitempty"`
+	RequiredTools                           []string                           `json:"required_tools,omitempty"`
+	ForbiddenTools                          []string                           `json:"forbidden_tools,omitempty"`
+	RequiredCommands                        []string                           `json:"required_commands,omitempty"`
+	ForbiddenCommands                       []string                           `json:"forbidden_commands,omitempty"`
+	RequiredCommandCounts                   map[string]int                     `json:"required_command_counts,omitempty"`
+	RequiredToolCounts                      map[string]int                     `json:"required_tool_counts,omitempty"`
+	RequiredToolFailureKindCounts           map[string]int                     `json:"required_tool_failure_kind_counts,omitempty"`
+	RequiredToolStatsAtLeast                map[string]int                     `json:"required_tool_stats_at_least,omitempty"`
+	RequiredLoopDecisionKinds               map[string]int                     `json:"required_loop_decision_kinds,omitempty"`
+	RequiredLoopDecisionResults             map[string]int                     `json:"required_loop_decision_results,omitempty"`
+	RequiredLoopDecisionMatches             []DebugLoopDecisionRequirement     `json:"required_loop_decision_matches,omitempty"`
+	RequiredLoopProtocolFeeds               int                                `json:"required_loop_protocol_feeds,omitempty"`
+	RequiredLoopProtocolCalibrationRequests int                                `json:"required_loop_protocol_calibration_requests,omitempty"`
+	RequiredLoopProtocolCalibrations        int                                `json:"required_loop_protocol_calibrations,omitempty"`
+	RequiredLoopProtocolFeedModes           map[string]int                     `json:"required_loop_protocol_feed_modes,omitempty"`
+	RequiredLoopProtocolFeedMatches         []DebugLoopProtocolFeedRequirement `json:"required_loop_protocol_feed_matches,omitempty"`
+	RequireLoopProtocolFullAfterCompact     bool                               `json:"require_loop_protocol_full_after_compaction,omitempty"`
+	RequiredToolResultText                  map[string][]string                `json:"required_tool_result_text,omitempty"`
+	RequiredToolArgContains                 []DebugToolArgContainsRequirement  `json:"required_tool_arg_contains,omitempty"`
+	RequiredSourceAccess                    []DebugSourceAccessRequirement     `json:"required_source_access,omitempty"`
+	RequiredSessionSearch                   []DebugSessionSearchRequirement    `json:"required_session_search,omitempty"`
+	RequiredCommandBeforeTool               []DebugCommandToolOrderRequirement `json:"required_command_before_tool,omitempty"`
+	RequiredCommandAfterTool                []DebugCommandToolOrderRequirement `json:"required_command_after_tool,omitempty"`
+	RequiredToolOrder                       []DebugToolOrderRequirement        `json:"required_tool_order,omitempty"`
+	RequiredFocusedTaskCounts               map[string]int                     `json:"required_focused_task_counts,omitempty"`
+	RequiredSubagentModeCounts              map[string]int                     `json:"required_subagent_mode_counts,omitempty"`
+	RequireNoDelegationErrors               bool                               `json:"require_no_delegation_errors,omitempty"`
+	RequireNoPlanErrors                     bool                               `json:"require_no_plan_errors,omitempty"`
+	RequiredFinalText                       []string                           `json:"required_final_text,omitempty"`
+	ForbiddenFinalText                      []string                           `json:"forbidden_final_text,omitempty"`
+	RequiredTruncatedResults                []string                           `json:"required_truncated_results,omitempty"`
+	RequiredResultArtifacts                 []string                           `json:"required_result_artifacts,omitempty"`
+	RequiredContextCompactions              int                                `json:"required_context_compactions,omitempty"`
+	RequiredReactiveCompactions             int                                `json:"required_reactive_context_compactions,omitempty"`
+	RequiredCompactionRemovedMsgs           int                                `json:"required_compaction_removed_messages,omitempty"`
+	RequiredContextSummaryText              []string                           `json:"required_context_summary_text,omitempty"`
+	RequiredContextLoopProtocolAnchorText   []string                           `json:"required_context_loop_protocol_anchor_text,omitempty"`
+	ProtectedFiles                          []string                           `json:"protected_files,omitempty"`
+	ForbiddenFileSubstrings                 map[string][]string                `json:"forbidden_file_substrings,omitempty"`
+	MaxParentToolCalls                      int                                `json:"max_parent_tool_calls,omitempty"`
+	MaxSuccessfulToolCallsByTool            map[string]int                     `json:"max_successful_tool_calls_by_tool,omitempty"`
+	MaxTurns                                int                                `json:"max_turns,omitempty"`
+	CompactTrigger                          int                                `json:"compact_trigger,omitempty"`
+	CompactKeepLast                         int                                `json:"compact_keep_last,omitempty"`
 }
 
 // ExpectationCapabilityNames derives broad capability families from a
@@ -372,6 +376,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["context_compaction"] = true
 	}
 	if exp.RequiredLoopProtocolFeeds > 0 ||
+		exp.RequiredLoopProtocolCalibrationRequests > 0 ||
 		exp.RequiredLoopProtocolCalibrations > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
@@ -618,49 +623,50 @@ type DebugTranscriptRef struct {
 }
 
 type DebugMetrics struct {
-	TurnEndReason                string         `json:"turn_end_reason,omitempty"`
-	ToolCalls                    int            `json:"tool_calls"`
-	ToolErrors                   int            `json:"tool_errors"`
-	ToolArgsRepaired             int            `json:"tool_args_repaired"`
-	ToolNameCanonicalized        int            `json:"tool_name_canonicalized"`
-	ToolRepairCalls              int            `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded          int            `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed             int            `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes              int            `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind             map[string]int `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind            map[string]int `json:"tool_failure_by_kind,omitempty"`
-	LoopGuardInterventions       int            `json:"loop_guard_interventions"`
-	ForcedNoTools                int            `json:"forced_no_tools"`
-	LoopProtocolFeeds            int            `json:"loop_protocol_feeds,omitempty"`
-	LoopProtocolFeedByMode       map[string]int `json:"loop_protocol_feed_by_mode,omitempty"`
-	LatestLoopProtocolFeedNumber int            `json:"latest_loop_protocol_feed_number,omitempty"`
-	LatestLoopProtocolFeedMode   string         `json:"latest_loop_protocol_feed_mode,omitempty"`
-	LoopProtocolCalibrations     int            `json:"loop_protocol_calibrations,omitempty"`
-	SourceAccessResults          int            `json:"source_access_results"`
-	SourceAccessVerified         int            `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly    int            `json:"source_access_discovery_only"`
-	SourceAccessNetwork          int            `json:"source_access_network"`
-	SourceAccessDynamicPartial   int            `json:"source_access_dynamic_partial"`
-	MemoryUpdates                int            `json:"memory_updates"`
-	MemoryUpdateAdd              int            `json:"memory_update_add,omitempty"`
-	MemoryUpdateReplace          int            `json:"memory_update_replace,omitempty"`
-	MemoryUpdateRemove           int            `json:"memory_update_remove,omitempty"`
-	SessionSearchCalls           int            `json:"session_search_calls,omitempty"`
-	SessionSearchResults         int            `json:"session_search_results,omitempty"`
-	SessionSearchContextHits     int            `json:"session_search_context_hits,omitempty"`
-	SessionSearchMatchedTerms    int            `json:"session_search_matched_terms,omitempty"`
-	ContextCompactions           int            `json:"context_compactions"`
-	ReactiveContextCompactions   int            `json:"reactive_context_compactions"`
-	ContextCompactionRemoved     int            `json:"context_compaction_removed_messages"`
-	ContextCompactionSummary     int            `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionMissing     int            `json:"context_compaction_summary_missing,omitempty"`
-	ContextCompactionEmpty       int            `json:"context_compaction_summary_empty,omitempty"`
-	ToolContextTruncated         int            `json:"tool_context_truncated,omitempty"`
-	ToolContextOmittedBytes      int            `json:"tool_context_omitted_bytes,omitempty"`
-	InputTokens                  int            `json:"input_tokens"`
-	OutputTokens                 int            `json:"output_tokens"`
-	TraceEvents                  int            `json:"trace_events,omitempty"`
-	TraceEventTypes              map[string]int `json:"trace_event_types,omitempty"`
+	TurnEndReason                   string         `json:"turn_end_reason,omitempty"`
+	ToolCalls                       int            `json:"tool_calls"`
+	ToolErrors                      int            `json:"tool_errors"`
+	ToolArgsRepaired                int            `json:"tool_args_repaired"`
+	ToolNameCanonicalized           int            `json:"tool_name_canonicalized"`
+	ToolRepairCalls                 int            `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded             int            `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed                int            `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes                 int            `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind                map[string]int `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind               map[string]int `json:"tool_failure_by_kind,omitempty"`
+	LoopGuardInterventions          int            `json:"loop_guard_interventions"`
+	ForcedNoTools                   int            `json:"forced_no_tools"`
+	LoopProtocolFeeds               int            `json:"loop_protocol_feeds,omitempty"`
+	LoopProtocolFeedByMode          map[string]int `json:"loop_protocol_feed_by_mode,omitempty"`
+	LatestLoopProtocolFeedNumber    int            `json:"latest_loop_protocol_feed_number,omitempty"`
+	LatestLoopProtocolFeedMode      string         `json:"latest_loop_protocol_feed_mode,omitempty"`
+	LoopProtocolCalibrationRequests int            `json:"loop_protocol_calibration_requests,omitempty"`
+	LoopProtocolCalibrations        int            `json:"loop_protocol_calibrations,omitempty"`
+	SourceAccessResults             int            `json:"source_access_results"`
+	SourceAccessVerified            int            `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly       int            `json:"source_access_discovery_only"`
+	SourceAccessNetwork             int            `json:"source_access_network"`
+	SourceAccessDynamicPartial      int            `json:"source_access_dynamic_partial"`
+	MemoryUpdates                   int            `json:"memory_updates"`
+	MemoryUpdateAdd                 int            `json:"memory_update_add,omitempty"`
+	MemoryUpdateReplace             int            `json:"memory_update_replace,omitempty"`
+	MemoryUpdateRemove              int            `json:"memory_update_remove,omitempty"`
+	SessionSearchCalls              int            `json:"session_search_calls,omitempty"`
+	SessionSearchResults            int            `json:"session_search_results,omitempty"`
+	SessionSearchContextHits        int            `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms       int            `json:"session_search_matched_terms,omitempty"`
+	ContextCompactions              int            `json:"context_compactions"`
+	ReactiveContextCompactions      int            `json:"reactive_context_compactions"`
+	ContextCompactionRemoved        int            `json:"context_compaction_removed_messages"`
+	ContextCompactionSummary        int            `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionMissing        int            `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionEmpty          int            `json:"context_compaction_summary_empty,omitempty"`
+	ToolContextTruncated            int            `json:"tool_context_truncated,omitempty"`
+	ToolContextOmittedBytes         int            `json:"tool_context_omitted_bytes,omitempty"`
+	InputTokens                     int            `json:"input_tokens"`
+	OutputTokens                    int            `json:"output_tokens"`
+	TraceEvents                     int            `json:"trace_events,omitempty"`
+	TraceEventTypes                 map[string]int `json:"trace_event_types,omitempty"`
 }
 
 type VerifierResult struct {
@@ -887,6 +893,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
 		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
+		res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
 		res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
@@ -983,86 +990,88 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
 	expectationCapabilities := ExpectationCapabilityNames(expectations)
 	manifest := DebugManifest{
-		SchemaVersion:                    1,
-		Scenario:                         res.BatchScenario,
-		OK:                               res.OK,
-		Workspace:                        res.Workspace,
-		TracePath:                        res.TracePath,
-		TimelinePath:                     timelinePath,
-		FinalTextPath:                    finalTextPath,
-		StdoutPath:                       stdoutPath,
-		StderrPath:                       stderrPath,
-		AffentctlCommand:                 append([]string(nil), res.AffentctlCommand...),
-		RunExitCode:                      res.RunExitCode,
-		ConversationDir:                  filepath.Join(res.Workspace, ".affentctl"),
-		ArtifactDir:                      filepath.Join(res.Workspace, ".affent", "artifacts"),
-		TraceDeltas:                      res.TraceDeltas,
-		Prompt:                           batchScenarioPromptDisplay(scenario),
-		Prompts:                          append([]string(nil), scenario.Prompts...),
-		Expectations:                     expectations,
-		ExpectationCapabilityNames:       expectationCapabilities,
-		ExpectationCapabilityOutcome:     ExpectationCapabilityOutcome(res.OK, expectationCapabilities),
-		ExpectationCapabilityPassedNames: ExpectationCapabilityPassedNames(res.OK, expectationCapabilities),
-		ExpectationCapabilityFailedNames: ExpectationCapabilityFailedNames(res.OK, expectationCapabilities),
-		Failures:                         append([]string(nil), res.Failures...),
-		DebugBrief:                       BuildDebugBrief(*res),
-		ToolRepairExamples:               append([]ToolRepairExample(nil), res.ToolRepairExamples...),
-		LoopGuardExamples:                append([]LoopGuardExample(nil), res.LoopGuardExamples...),
-		LoopProtocolFeedExamples:         append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
-		LoopProtocolCalibrationExamples:  append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrations.Examples...),
-		SourceAccessExamples:             append([]SourceAccessExample(nil), res.SourceAccessExamples...),
-		BrowserNetworkExamples:           append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
-		MemoryUpdateExamples:             append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
-		SessionSearchExamples:            append([]SessionSearchExample(nil), res.SessionSearchExamples...),
-		PlanExamples:                     append([]PlanExample(nil), res.PlanExamples...),
-		ToolTruncationExamples:           append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
-		ContextCompactionExamples:        append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
-		ChildTranscripts:                 append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
-		RuntimeSurface:                   cloneRuntimeSurface(res.RuntimeSurface),
+		SchemaVersion:                          1,
+		Scenario:                               res.BatchScenario,
+		OK:                                     res.OK,
+		Workspace:                              res.Workspace,
+		TracePath:                              res.TracePath,
+		TimelinePath:                           timelinePath,
+		FinalTextPath:                          finalTextPath,
+		StdoutPath:                             stdoutPath,
+		StderrPath:                             stderrPath,
+		AffentctlCommand:                       append([]string(nil), res.AffentctlCommand...),
+		RunExitCode:                            res.RunExitCode,
+		ConversationDir:                        filepath.Join(res.Workspace, ".affentctl"),
+		ArtifactDir:                            filepath.Join(res.Workspace, ".affent", "artifacts"),
+		TraceDeltas:                            res.TraceDeltas,
+		Prompt:                                 batchScenarioPromptDisplay(scenario),
+		Prompts:                                append([]string(nil), scenario.Prompts...),
+		Expectations:                           expectations,
+		ExpectationCapabilityNames:             expectationCapabilities,
+		ExpectationCapabilityOutcome:           ExpectationCapabilityOutcome(res.OK, expectationCapabilities),
+		ExpectationCapabilityPassedNames:       ExpectationCapabilityPassedNames(res.OK, expectationCapabilities),
+		ExpectationCapabilityFailedNames:       ExpectationCapabilityFailedNames(res.OK, expectationCapabilities),
+		Failures:                               append([]string(nil), res.Failures...),
+		DebugBrief:                             BuildDebugBrief(*res),
+		ToolRepairExamples:                     append([]ToolRepairExample(nil), res.ToolRepairExamples...),
+		LoopGuardExamples:                      append([]LoopGuardExample(nil), res.LoopGuardExamples...),
+		LoopProtocolFeedExamples:               append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
+		LoopProtocolCalibrationRequestExamples: append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrationRequests.Examples...),
+		LoopProtocolCalibrationExamples:        append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrations.Examples...),
+		SourceAccessExamples:                   append([]SourceAccessExample(nil), res.SourceAccessExamples...),
+		BrowserNetworkExamples:                 append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
+		MemoryUpdateExamples:                   append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
+		SessionSearchExamples:                  append([]SessionSearchExample(nil), res.SessionSearchExamples...),
+		PlanExamples:                           append([]PlanExample(nil), res.PlanExamples...),
+		ToolTruncationExamples:                 append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
+		ContextCompactionExamples:              append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
+		ChildTranscripts:                       append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
+		RuntimeSurface:                         cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
-			TurnEndReason:                res.TurnEndReason,
-			ToolCalls:                    res.ToolCalls,
-			ToolErrors:                   res.ToolStats.ToolErrors,
-			ToolArgsRepaired:             res.ToolStats.ToolArgsRepaired,
-			ToolNameCanonicalized:        res.ToolStats.ToolNameCanonicalized,
-			ToolRepairCalls:              res.Repair.Calls,
-			ToolRepairSucceeded:          res.Repair.SucceededCalls,
-			ToolRepairFailed:             res.Repair.FailedCalls,
-			ToolRepairNotes:              res.Repair.Notes,
-			ToolRepairByKind:             cloneStringIntMap(res.Repair.ByKind),
-			ToolFailureByKind:            cloneStringIntMap(res.ToolStats.ToolFailureByKind),
-			LoopGuardInterventions:       res.ToolStats.LoopGuardInterventions,
-			ForcedNoTools:                res.ToolStats.ForcedNoTools,
-			LoopProtocolFeeds:            res.LoopProtocolFeeds.Count,
-			LoopProtocolFeedByMode:       cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
-			LatestLoopProtocolFeedNumber: res.LoopProtocolFeeds.Latest.FeedNumber,
-			LatestLoopProtocolFeedMode:   res.LoopProtocolFeeds.Latest.Mode,
-			LoopProtocolCalibrations:     res.LoopProtocolCalibrations.Count,
-			SourceAccessResults:          res.ToolStats.SourceAccessResults,
-			SourceAccessVerified:         res.ToolStats.SourceAccessVerified,
-			SourceAccessDiscoveryOnly:    res.ToolStats.SourceAccessDiscoveryOnly,
-			SourceAccessNetwork:          res.ToolStats.SourceAccessNetwork,
-			SourceAccessDynamicPartial:   res.ToolStats.SourceAccessDynamicPartial,
-			MemoryUpdates:                res.ToolStats.MemoryUpdates,
-			MemoryUpdateAdd:              res.ToolStats.MemoryUpdateAdd,
-			MemoryUpdateReplace:          res.ToolStats.MemoryUpdateReplace,
-			MemoryUpdateRemove:           res.ToolStats.MemoryUpdateRemove,
-			SessionSearchCalls:           res.ToolStats.SessionSearchCalls,
-			SessionSearchResults:         res.ToolStats.SessionSearchResults,
-			SessionSearchContextHits:     res.ToolStats.SessionSearchContextHits,
-			SessionSearchMatchedTerms:    res.ToolStats.SessionSearchMatchedTerms,
-			ContextCompactions:           res.ContextCompactions.Count,
-			ReactiveContextCompactions:   res.ContextCompactions.Reactive,
-			ContextCompactionRemoved:     res.ContextCompactions.RemovedMessages,
-			ContextCompactionSummary:     res.ContextCompactions.SummaryBytes,
-			ContextCompactionMissing:     res.ContextCompactions.SummaryMissing,
-			ContextCompactionEmpty:       res.ContextCompactions.SummaryEmpty,
-			ToolContextTruncated:         res.ToolStats.ToolContextTruncated,
-			ToolContextOmittedBytes:      res.ToolStats.ToolContextOmittedBytes,
-			InputTokens:                  res.Usage.InputTokens,
-			OutputTokens:                 res.Usage.OutputTokens,
-			TraceEvents:                  res.TraceEvents,
-			TraceEventTypes:              cloneStringIntMap(res.TraceEventTypes),
+			TurnEndReason:                   res.TurnEndReason,
+			ToolCalls:                       res.ToolCalls,
+			ToolErrors:                      res.ToolStats.ToolErrors,
+			ToolArgsRepaired:                res.ToolStats.ToolArgsRepaired,
+			ToolNameCanonicalized:           res.ToolStats.ToolNameCanonicalized,
+			ToolRepairCalls:                 res.Repair.Calls,
+			ToolRepairSucceeded:             res.Repair.SucceededCalls,
+			ToolRepairFailed:                res.Repair.FailedCalls,
+			ToolRepairNotes:                 res.Repair.Notes,
+			ToolRepairByKind:                cloneStringIntMap(res.Repair.ByKind),
+			ToolFailureByKind:               cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+			LoopGuardInterventions:          res.ToolStats.LoopGuardInterventions,
+			ForcedNoTools:                   res.ToolStats.ForcedNoTools,
+			LoopProtocolFeeds:               res.LoopProtocolFeeds.Count,
+			LoopProtocolFeedByMode:          cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
+			LatestLoopProtocolFeedNumber:    res.LoopProtocolFeeds.Latest.FeedNumber,
+			LatestLoopProtocolFeedMode:      res.LoopProtocolFeeds.Latest.Mode,
+			LoopProtocolCalibrationRequests: res.LoopProtocolCalibrationRequests.Count,
+			LoopProtocolCalibrations:        res.LoopProtocolCalibrations.Count,
+			SourceAccessResults:             res.ToolStats.SourceAccessResults,
+			SourceAccessVerified:            res.ToolStats.SourceAccessVerified,
+			SourceAccessDiscoveryOnly:       res.ToolStats.SourceAccessDiscoveryOnly,
+			SourceAccessNetwork:             res.ToolStats.SourceAccessNetwork,
+			SourceAccessDynamicPartial:      res.ToolStats.SourceAccessDynamicPartial,
+			MemoryUpdates:                   res.ToolStats.MemoryUpdates,
+			MemoryUpdateAdd:                 res.ToolStats.MemoryUpdateAdd,
+			MemoryUpdateReplace:             res.ToolStats.MemoryUpdateReplace,
+			MemoryUpdateRemove:              res.ToolStats.MemoryUpdateRemove,
+			SessionSearchCalls:              res.ToolStats.SessionSearchCalls,
+			SessionSearchResults:            res.ToolStats.SessionSearchResults,
+			SessionSearchContextHits:        res.ToolStats.SessionSearchContextHits,
+			SessionSearchMatchedTerms:       res.ToolStats.SessionSearchMatchedTerms,
+			ContextCompactions:              res.ContextCompactions.Count,
+			ReactiveContextCompactions:      res.ContextCompactions.Reactive,
+			ContextCompactionRemoved:        res.ContextCompactions.RemovedMessages,
+			ContextCompactionSummary:        res.ContextCompactions.SummaryBytes,
+			ContextCompactionMissing:        res.ContextCompactions.SummaryMissing,
+			ContextCompactionEmpty:          res.ContextCompactions.SummaryEmpty,
+			ToolContextTruncated:            res.ToolStats.ToolContextTruncated,
+			ToolContextOmittedBytes:         res.ToolStats.ToolContextOmittedBytes,
+			InputTokens:                     res.Usage.InputTokens,
+			OutputTokens:                    res.Usage.OutputTokens,
+			TraceEvents:                     res.TraceEvents,
+			TraceEventTypes:                 cloneStringIntMap(res.TraceEventTypes),
 		},
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -1160,56 +1169,57 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		}
 	}
 	return DebugScenarioExpectations{
-		CheckNames:                            checkNames,
-		Suites:                                append([]string(nil), s.Suites...),
-		SessionID:                             strings.TrimSpace(s.SessionID),
-		ExecutePlan:                           s.ExecutePlan,
-		EnableMemory:                          s.EnableMemory,
-		VerifyCommand:                         strings.TrimSpace(s.VerifyCommand),
-		ExpectedSkill:                         strings.TrimSpace(s.ExpectedSkill),
-		RequiredTools:                         append([]string(nil), s.RequiredTools...),
-		ForbiddenTools:                        append([]string(nil), s.ForbiddenTools...),
-		RequiredCommands:                      append([]string(nil), s.RequiredCommands...),
-		ForbiddenCommands:                     append([]string(nil), s.ForbiddenCommands...),
-		RequiredCommandCounts:                 cloneStringIntMap(s.RequiredCommandCounts),
-		RequiredToolCounts:                    cloneStringIntMap(s.RequiredToolCounts),
-		RequiredToolFailureKindCounts:         cloneStringIntMap(s.RequiredToolFailureKindCounts),
-		RequiredToolStatsAtLeast:              cloneStringIntMap(s.RequiredToolStatsAtLeast),
-		RequiredLoopDecisionKinds:             cloneStringIntMap(s.RequiredLoopDecisionKinds),
-		RequiredLoopDecisionResults:           cloneStringIntMap(s.RequiredLoopDecisionResults),
-		RequiredLoopDecisionMatches:           loopReqs,
-		RequiredLoopProtocolFeeds:             s.RequiredLoopProtocolFeeds,
-		RequiredLoopProtocolCalibrations:      s.RequiredLoopProtocolCalibrations,
-		RequiredLoopProtocolFeedModes:         cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
-		RequiredLoopProtocolFeedMatches:       loopFeedReqs,
-		RequireLoopProtocolFullAfterCompact:   s.RequireLoopProtocolFullAfterCompact,
-		RequiredToolResultText:                cloneStringSliceMap(s.RequiredToolResultText),
-		RequiredToolArgContains:               reqArgs,
-		RequiredSourceAccess:                  sourceReqs,
-		RequiredSessionSearch:                 sessionSearchReqs,
-		RequiredCommandBeforeTool:             commandBeforeTool,
-		RequiredCommandAfterTool:              commandAfterTool,
-		RequiredToolOrder:                     toolOrders,
-		RequiredFocusedTaskCounts:             cloneStringIntMap(s.RequiredFocusedTaskCounts),
-		RequiredSubagentModeCounts:            cloneStringIntMap(s.RequiredSubagentModeCounts),
-		RequireNoDelegationErrors:             s.RequireNoDelegationErrors,
-		RequireNoPlanErrors:                   s.RequireNoPlanErrors,
-		RequiredFinalText:                     append([]string(nil), s.RequiredFinalText...),
-		ForbiddenFinalText:                    append([]string(nil), s.ForbiddenFinalText...),
-		RequiredTruncatedResults:              append([]string(nil), s.RequiredTruncatedResults...),
-		RequiredResultArtifacts:               append([]string(nil), s.RequiredResultArtifacts...),
-		RequiredContextCompactions:            s.RequiredContextCompactions,
-		RequiredReactiveCompactions:           s.RequiredReactiveCompactions,
-		RequiredCompactionRemovedMsgs:         s.RequiredCompactionRemovedMsgs,
-		RequiredContextSummaryText:            append([]string(nil), s.RequiredContextSummaryText...),
-		RequiredContextLoopProtocolAnchorText: append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
-		ProtectedFiles:                        append([]string(nil), s.ProtectedFiles...),
-		ForbiddenFileSubstrings:               cloneStringSliceMap(s.ForbiddenFileSubstrings),
-		MaxParentToolCalls:                    s.MaxParentToolCalls,
-		MaxSuccessfulToolCallsByTool:          cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
-		MaxTurns:                              s.MaxTurns,
-		CompactTrigger:                        s.CompactTrigger,
-		CompactKeepLast:                       s.CompactKeepLast,
+		CheckNames:                              checkNames,
+		Suites:                                  append([]string(nil), s.Suites...),
+		SessionID:                               strings.TrimSpace(s.SessionID),
+		ExecutePlan:                             s.ExecutePlan,
+		EnableMemory:                            s.EnableMemory,
+		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
+		ExpectedSkill:                           strings.TrimSpace(s.ExpectedSkill),
+		RequiredTools:                           append([]string(nil), s.RequiredTools...),
+		ForbiddenTools:                          append([]string(nil), s.ForbiddenTools...),
+		RequiredCommands:                        append([]string(nil), s.RequiredCommands...),
+		ForbiddenCommands:                       append([]string(nil), s.ForbiddenCommands...),
+		RequiredCommandCounts:                   cloneStringIntMap(s.RequiredCommandCounts),
+		RequiredToolCounts:                      cloneStringIntMap(s.RequiredToolCounts),
+		RequiredToolFailureKindCounts:           cloneStringIntMap(s.RequiredToolFailureKindCounts),
+		RequiredToolStatsAtLeast:                cloneStringIntMap(s.RequiredToolStatsAtLeast),
+		RequiredLoopDecisionKinds:               cloneStringIntMap(s.RequiredLoopDecisionKinds),
+		RequiredLoopDecisionResults:             cloneStringIntMap(s.RequiredLoopDecisionResults),
+		RequiredLoopDecisionMatches:             loopReqs,
+		RequiredLoopProtocolFeeds:               s.RequiredLoopProtocolFeeds,
+		RequiredLoopProtocolCalibrationRequests: s.RequiredLoopProtocolCalibrationRequests,
+		RequiredLoopProtocolCalibrations:        s.RequiredLoopProtocolCalibrations,
+		RequiredLoopProtocolFeedModes:           cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
+		RequiredLoopProtocolFeedMatches:         loopFeedReqs,
+		RequireLoopProtocolFullAfterCompact:     s.RequireLoopProtocolFullAfterCompact,
+		RequiredToolResultText:                  cloneStringSliceMap(s.RequiredToolResultText),
+		RequiredToolArgContains:                 reqArgs,
+		RequiredSourceAccess:                    sourceReqs,
+		RequiredSessionSearch:                   sessionSearchReqs,
+		RequiredCommandBeforeTool:               commandBeforeTool,
+		RequiredCommandAfterTool:                commandAfterTool,
+		RequiredToolOrder:                       toolOrders,
+		RequiredFocusedTaskCounts:               cloneStringIntMap(s.RequiredFocusedTaskCounts),
+		RequiredSubagentModeCounts:              cloneStringIntMap(s.RequiredSubagentModeCounts),
+		RequireNoDelegationErrors:               s.RequireNoDelegationErrors,
+		RequireNoPlanErrors:                     s.RequireNoPlanErrors,
+		RequiredFinalText:                       append([]string(nil), s.RequiredFinalText...),
+		ForbiddenFinalText:                      append([]string(nil), s.ForbiddenFinalText...),
+		RequiredTruncatedResults:                append([]string(nil), s.RequiredTruncatedResults...),
+		RequiredResultArtifacts:                 append([]string(nil), s.RequiredResultArtifacts...),
+		RequiredContextCompactions:              s.RequiredContextCompactions,
+		RequiredReactiveCompactions:             s.RequiredReactiveCompactions,
+		RequiredCompactionRemovedMsgs:           s.RequiredCompactionRemovedMsgs,
+		RequiredContextSummaryText:              append([]string(nil), s.RequiredContextSummaryText...),
+		RequiredContextLoopProtocolAnchorText:   append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
+		ProtectedFiles:                          append([]string(nil), s.ProtectedFiles...),
+		ForbiddenFileSubstrings:                 cloneStringSliceMap(s.ForbiddenFileSubstrings),
+		MaxParentToolCalls:                      s.MaxParentToolCalls,
+		MaxSuccessfulToolCallsByTool:            cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
+		MaxTurns:                                s.MaxTurns,
+		CompactTrigger:                          s.CompactTrigger,
+		CompactKeepLast:                         s.CompactKeepLast,
 	}
 }
 
@@ -1781,6 +1791,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredLoopProtocolFeeds > 0 {
 		checks = append(checks, LoopProtocolFeedsAtLeast(scenario.RequiredLoopProtocolFeeds))
+	}
+	if scenario.RequiredLoopProtocolCalibrationRequests > 0 {
+		checks = append(checks, LoopProtocolCalibrationRequestsAtLeast(scenario.RequiredLoopProtocolCalibrationRequests))
 	}
 	if scenario.RequiredLoopProtocolCalibrations > 0 {
 		checks = append(checks, LoopProtocolCalibrationsAtLeast(scenario.RequiredLoopProtocolCalibrations))

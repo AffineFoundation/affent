@@ -711,9 +711,23 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 
 func TestLoopProtocolCalibrationCheck(t *testing.T) {
 	trace := Trace{LoopProtocolCalibrations: []LoopProtocolCalibration{
-		{LoopID: "sn120", Status: "draft", CalibrationAnswers: 1, LastCalibrationAnswer: "stop if network evidence is missing", ProtocolPath: ".affent/loops/sn120/LOOP.md", EventSeq: 7},
+		{LoopID: "sn120", Status: "draft", CalibrationQuestions: 1, LastCalibrationQuestion: "What should pause this loop?", CalibrationAnswers: 1, LastCalibrationAnswer: "stop if network evidence is missing", ProtocolPath: ".affent/loops/sn120/LOOP.md", EventSeq: 7},
+	}, LoopProtocolCalibrationRequests: []LoopProtocolCalibration{
+		{LoopID: "sn120", Status: "draft", CalibrationQuestions: 1, LastCalibrationQuestion: "What should pause this loop?", ProtocolPath: ".affent/loops/sn120/LOOP.md", EventSeq: 6},
 	}}
 
+	if res := LoopProtocolCalibrationRequestsAtLeast(1).Eval(trace); !res.Pass {
+		t.Fatalf("expected loop protocol calibration request check to pass: %+v", res)
+	}
+	requests := LoopProtocolCalibrationRequestsAtLeast(2).Eval(trace)
+	if requests.Pass {
+		t.Fatal("expected missing calibration request count to fail")
+	}
+	for _, want := range []string{"loop_protocol_calibration_requests=1", "want >= 2", "sn120", "What should pause"} {
+		if !strings.Contains(requests.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", requests.Detail, want)
+		}
+	}
 	if res := LoopProtocolCalibrationsAtLeast(1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol calibration check to pass: %+v", res)
 	}

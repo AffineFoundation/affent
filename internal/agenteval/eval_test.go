@@ -103,7 +103,8 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
-		`{"type":"loop.protocol_calibration","data":{"loop_id":"longrun","status":"draft","calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":2}}`,
+		`{"type":"loop.protocol_calibration_request","data":{"loop_id":"longrun","status":"draft","calibration_questions":1,"last_calibration_question_preview":"What should pause this loop?","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":2}}`,
+		`{"type":"loop.protocol_calibration","data":{"loop_id":"longrun","status":"draft","calibration_questions":1,"last_calibration_question_preview":"What should pause this loop?","calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":3}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
@@ -214,14 +215,24 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		t.Fatalf("LoopProtocolFeedStats examples = %+v", feeds.Examples)
 	}
 	calibrations := trace.LoopProtocolCalibrationStats(1)
-	if calibrations.Count != 1 || calibrations.Latest.LoopID != "longrun" || calibrations.Latest.CalibrationAnswers != 1 || calibrations.Latest.EventSeq != 2 {
+	if calibrations.Count != 1 || calibrations.Latest.LoopID != "longrun" || calibrations.Latest.CalibrationQuestions != 1 || calibrations.Latest.CalibrationAnswers != 1 || calibrations.Latest.EventSeq != 3 {
 		t.Fatalf("LoopProtocolCalibrationStats = %+v", calibrations)
 	}
 	if len(calibrations.Examples) != 1 ||
 		calibrations.Examples[0].Status != "draft" ||
 		calibrations.Examples[0].ProtocolPath != ".affent/loops/longrun/LOOP.md" ||
+		calibrations.Examples[0].LastCalibrationQuestion != "What should pause this loop?" ||
 		calibrations.Examples[0].LastCalibrationAnswer != "Stop if browser network evidence is missing." {
 		t.Fatalf("LoopProtocolCalibrationStats examples = %+v", calibrations.Examples)
+	}
+	calibrationRequests := trace.LoopProtocolCalibrationRequestStats(1)
+	if calibrationRequests.Count != 1 || calibrationRequests.Latest.LoopID != "longrun" || calibrationRequests.Latest.CalibrationQuestions != 1 || calibrationRequests.Latest.EventSeq != 2 {
+		t.Fatalf("LoopProtocolCalibrationRequestStats = %+v", calibrationRequests)
+	}
+	if len(calibrationRequests.Examples) != 1 ||
+		calibrationRequests.Examples[0].LastCalibrationQuestion != "What should pause this loop?" ||
+		calibrationRequests.Examples[0].ProtocolPath != ".affent/loops/longrun/LOOP.md" {
+		t.Fatalf("LoopProtocolCalibrationRequestStats examples = %+v", calibrationRequests.Examples)
 	}
 	if res := LoopProtocolFullFeedAfterCompaction().Eval(trace); !res.Pass {
 		t.Fatalf("expected full loop protocol feed after compaction: %+v", res)
@@ -495,8 +506,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
-		RequiredLoopProtocolFeeds:        1,
-		RequiredLoopProtocolCalibrations: 1,
+		RequiredLoopProtocolFeeds:               1,
+		RequiredLoopProtocolCalibrationRequests: 1,
+		RequiredLoopProtocolCalibrations:        1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"digest": 1,
 		},
@@ -558,6 +570,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
 		"loop_protocol_feeds_at_least:1",
+		"loop_protocol_calibration_requests_at_least:1",
 		"loop_protocol_calibrations_at_least:1",
 		"loop_protocol_feed_mode_at_least:digest:1",
 		"loop_protocol_feed_match_at_least:digest:market:in_progress:source review:1",
@@ -1572,23 +1585,46 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				SummaryPreview:  "USER_CONTEXT: debug run must preserve browser network evidence.",
 			}},
 		},
+		LoopProtocolCalibrationRequests: LoopProtocolCalibrationStats{
+			Count: 1,
+			Latest: LoopProtocolCalibration{
+				LoopID:                  "debug",
+				Status:                  "draft",
+				CalibrationQuestions:    1,
+				LastCalibrationQuestion: "What should pause this loop?",
+				ProtocolPath:            ".affent/loops/debug/LOOP.md",
+				EventSeq:                2,
+			},
+			Examples: []LoopProtocolCalibration{{
+				LoopID:                  "debug",
+				Status:                  "draft",
+				CalibrationQuestions:    1,
+				LastCalibrationQuestion: "What should pause this loop?",
+				ProtocolPath:            ".affent/loops/debug/LOOP.md",
+				EventSeq:                2,
+			}},
+		},
 		LoopProtocolCalibrations: LoopProtocolCalibrationStats{
 			Count: 1,
 			Latest: LoopProtocolCalibration{
-				LoopID:                "debug",
-				Status:                "draft",
-				CalibrationAnswers:    1,
-				LastCalibrationAnswer: "Stop when browser evidence is weak.",
-				ProtocolPath:          ".affent/loops/debug/LOOP.md",
-				EventSeq:              2,
+				LoopID:                  "debug",
+				Status:                  "draft",
+				CalibrationQuestions:    1,
+				LastCalibrationQuestion: "What should pause this loop?",
+				CalibrationAnswers:      1,
+				LastCalibrationAnswer:   "Stop when browser evidence is weak.",
+				ProtocolPath:            ".affent/loops/debug/LOOP.md",
+				EventSeq:                3,
 			},
 			Examples: []LoopProtocolCalibration{{
-				LoopID:                "debug",
-				Status:                "draft",
-				CalibrationAnswers:    1,
-				LastCalibrationAnswer: "Stop when browser evidence is weak.",
-				ProtocolPath:          ".affent/loops/debug/LOOP.md",
-				EventSeq:              2,
+				LoopID:                  "debug",
+				Status:                  "draft",
+				CalibrationQuestions:    1,
+				LastCalibrationQuestion: "What should pause this loop?",
+				CalibrationAnswers:      1,
+				LastCalibrationAnswer:   "Stop when browser evidence is weak.",
+				ProtocolPath:            ".affent/loops/debug/LOOP.md",
+				EventSeq:                3,
 			}},
 		},
 		Usage: Usage{InputTokens: 100, OutputTokens: 20},
@@ -1759,8 +1795,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
-		RequiredLoopProtocolFeeds:        1,
-		RequiredLoopProtocolCalibrations: 1,
+		RequiredLoopProtocolFeeds:               1,
+		RequiredLoopProtocolCalibrationRequests: 1,
+		RequiredLoopProtocolCalibrations:        1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"digest": 1,
 		},
@@ -1886,6 +1923,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
 		manifest.Expectations.RequiredLoopDecisionMatches[0] != (DebugLoopDecisionRequirement{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"}) ||
 		manifest.Expectations.RequiredLoopProtocolFeeds != 1 ||
+		manifest.Expectations.RequiredLoopProtocolCalibrationRequests != 1 ||
 		manifest.Expectations.RequiredLoopProtocolCalibrations != 1 ||
 		manifest.Expectations.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(manifest.Expectations.RequiredLoopProtocolFeedMatches) != 1 ||
@@ -1940,12 +1978,17 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
 		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
 	}
-	if manifest.Metrics.LoopProtocolCalibrations != 1 ||
+	if manifest.Metrics.LoopProtocolCalibrationRequests != 1 ||
+		len(manifest.LoopProtocolCalibrationRequestExamples) != 1 ||
+		manifest.LoopProtocolCalibrationRequestExamples[0].LoopID != "debug" ||
+		manifest.LoopProtocolCalibrationRequestExamples[0].EventSeq != 2 ||
+		!strings.Contains(manifest.LoopProtocolCalibrationRequestExamples[0].LastCalibrationQuestion, "pause this loop") ||
+		manifest.Metrics.LoopProtocolCalibrations != 1 ||
 		len(manifest.LoopProtocolCalibrationExamples) != 1 ||
 		manifest.LoopProtocolCalibrationExamples[0].LoopID != "debug" ||
-		manifest.LoopProtocolCalibrationExamples[0].EventSeq != 2 ||
+		manifest.LoopProtocolCalibrationExamples[0].EventSeq != 3 ||
 		!strings.Contains(manifest.LoopProtocolCalibrationExamples[0].LastCalibrationAnswer, "browser evidence") {
-		t.Fatalf("manifest loop protocol calibration = metrics:%+v examples:%+v", manifest.Metrics, manifest.LoopProtocolCalibrationExamples)
+		t.Fatalf("manifest loop protocol calibration = metrics:%+v request_examples:%+v answer_examples:%+v", manifest.Metrics, manifest.LoopProtocolCalibrationRequestExamples, manifest.LoopProtocolCalibrationExamples)
 	}
 	if len(manifest.ToolRepairExamples) != 1 ||
 		manifest.ToolRepairExamples[0].ToolIndex != 1 ||
@@ -2079,6 +2122,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.TraceEvents != 5 ||
 		manifest.Metrics.TraceEventTypes["message.delta"] != 2 ||
 		manifest.Metrics.TraceEventTypes["tool.result"] != 1 ||
+		manifest.Metrics.LoopProtocolCalibrationRequests != 1 ||
 		manifest.Metrics.LoopProtocolCalibrations != 1 {
 		t.Fatalf("manifest metrics = %+v", manifest.Metrics)
 	}
@@ -2088,7 +2132,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 loop_calibrations=1 tokens=100/20",
+		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 loop_calibrations=1 loop_calibration_requests=1 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"## Tool Repair",
@@ -2130,6 +2174,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_loop_decision_kinds: `evidence_quality=1`",
 		"required_loop_decision_results: `defer=1`",
 		"required_loop_protocol_feeds: `1`",
+		"required_loop_protocol_calibration_requests: `1`",
 		"required_loop_protocol_calibrations: `1`",
 		"required_loop_protocol_feed_modes: `digest=1`",
 		"required_loop_protocol_full_after_compaction: `true`",

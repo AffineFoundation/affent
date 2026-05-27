@@ -162,6 +162,9 @@ func timelineMetricsSummary(res BatchResult) string {
 	if res.LoopProtocolCalibrations.Count > 0 {
 		parts = append(parts, fmt.Sprintf("loop_calibrations=%d", res.LoopProtocolCalibrations.Count))
 	}
+	if res.LoopProtocolCalibrationRequests.Count > 0 {
+		parts = append(parts, fmt.Sprintf("loop_calibration_requests=%d", res.LoopProtocolCalibrationRequests.Count))
+	}
 	parts = append(parts, fmt.Sprintf("tokens=%d/%d", res.Usage.InputTokens, res.Usage.OutputTokens))
 	return strings.Join(parts, " ")
 }
@@ -340,6 +343,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "required_loop_decision_results", exp.RequiredLoopDecisionResults)
 	if exp.RequiredLoopProtocolFeeds > 0 {
 		fmt.Fprintf(b, "- required_loop_protocol_feeds: `%d`\n", exp.RequiredLoopProtocolFeeds)
+	}
+	if exp.RequiredLoopProtocolCalibrationRequests > 0 {
+		fmt.Fprintf(b, "- required_loop_protocol_calibration_requests: `%d`\n", exp.RequiredLoopProtocolCalibrationRequests)
 	}
 	if exp.RequiredLoopProtocolCalibrations > 0 {
 		fmt.Fprintf(b, "- required_loop_protocol_calibrations: `%d`\n", exp.RequiredLoopProtocolCalibrations)
@@ -523,6 +529,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredLoopDecisionResults) > 0 ||
 		len(exp.RequiredLoopDecisionMatches) > 0 ||
 		exp.RequiredLoopProtocolFeeds > 0 ||
+		exp.RequiredLoopProtocolCalibrationRequests > 0 ||
 		exp.RequiredLoopProtocolCalibrations > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||

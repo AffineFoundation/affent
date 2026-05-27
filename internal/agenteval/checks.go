@@ -486,6 +486,22 @@ func LoopProtocolCalibrationsAtLeast(min int) Check {
 	}
 }
 
+func LoopProtocolCalibrationRequestsAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_protocol_calibration_requests_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopProtocolCalibrationRequestStats(5)
+			if stats.Count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("loop_protocol_calibration_requests=%d examples=%v", stats.Count, loopProtocolCalibrationExamples(stats.Examples, 3))}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("loop_protocol_calibration_requests=%d, want >= %d; observed=%v", stats.Count, min, loopProtocolCalibrationExamples(t.LoopProtocolCalibrationRequests, 5)),
+			}
+		},
+	}
+}
+
 func LoopProtocolFeedModeAtLeast(mode string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("loop_protocol_feed_mode_at_least:%s:%d", mode, min),
@@ -961,10 +977,18 @@ func formatLoopProtocolCalibrationExample(calibration LoopProtocolCalibration) s
 	parts := []string{
 		"loop_id=" + calibration.LoopID,
 		"status=" + calibration.Status,
-		fmt.Sprintf("answers=%d", calibration.CalibrationAnswers),
+	}
+	if calibration.CalibrationQuestions > 0 {
+		parts = append(parts, fmt.Sprintf("questions=%d", calibration.CalibrationQuestions))
+	}
+	if calibration.CalibrationAnswers > 0 {
+		parts = append(parts, fmt.Sprintf("answers=%d", calibration.CalibrationAnswers))
 	}
 	if calibration.ProtocolPath != "" {
 		parts = append(parts, "path="+calibration.ProtocolPath)
+	}
+	if calibration.LastCalibrationQuestion != "" {
+		parts = append(parts, "question="+previewSubstr(calibration.LastCalibrationQuestion, 100))
 	}
 	if calibration.LastCalibrationAnswer != "" {
 		parts = append(parts, "answer="+previewSubstr(calibration.LastCalibrationAnswer, 100))
