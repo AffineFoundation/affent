@@ -677,6 +677,19 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	if !p.cfg.EvalMode {
+		if p.cfg.EnableLoopProtocol {
+			if _, _, _, err := loopstate.EnsureProtocolTemplate(loopProtocolPath, loopstate.ProtocolTemplateOptions{
+				LoopID:       id,
+				OwnerSession: id,
+				Workspace:    workspace,
+			}); err != nil {
+				_ = os.RemoveAll(workspace)
+				if browser != nil {
+					_ = browser.Close()
+				}
+				return nil, fmt.Errorf("loop protocol: %w", err)
+			}
+		}
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}

@@ -172,6 +172,13 @@ describe("sessionList view model", () => {
             last_plan_label: "plan:1/3:active",
             last_plan_step_index: 2,
             last_plan_step_status: "in_progress",
+            last_turn_end_reason: "completed",
+            memory_update_events: 1,
+            last_memory_update_action: "replace",
+            last_memory_update_location: "memory:markets",
+            loop_decisions: 1,
+            last_decision_kind: "evidence_quality",
+            last_decision: "defer",
             event_count: 2,
             last_event_type: "loop.protocol_update",
             last_event_summary: "Updated LOOP.md",
@@ -180,7 +187,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running, 2 updates, 5 feeds, plan:1/3:active step 2 in_progress, Updated LOOP.md");
+    expect(rows[0].metrics).toContain("Loop running, 2 updates, 5 feeds, plan:1/3:active step 2 in_progress, memory replace memory:markets, decision evidence_quality:defer, last turn completed, Updated LOOP.md");
     expect(rows[0].chips).toContain("loop");
     expect(rows[0].searchText).toContain("loop running");
   });

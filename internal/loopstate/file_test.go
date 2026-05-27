@@ -157,6 +157,60 @@ Keep market evidence cited.`
 	}
 }
 
+func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "longrun")
+	created, state, event, err := EnsureProtocolTemplate(path, ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "session-a",
+		Goal:         "Analyze a JS-heavy market dashboard with durable evidence.",
+		Workspace:    "/workspace/affent",
+	})
+	if err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if !created {
+		t.Fatal("expected protocol to be created")
+	}
+	if state.LoopID != "longrun" || state.OwnerSession != "session-a" || state.Status != "running" || state.ProtocolUpdates != 1 || state.LastEventType != "loop.protocol_init" {
+		t.Fatalf("state = %+v", state)
+	}
+	if event.Type != "loop.protocol_init" || event.Path != ProtocolRelPath("longrun") {
+		t.Fatalf("event = %+v", event)
+	}
+	content, found, err := ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, want := range []string{
+		"# Loop Protocol: longrun",
+		"- loop_id: longrun",
+		"- owner_session: session-a",
+		"Analyze a JS-heavy market dashboard with durable evidence.",
+		"plan/step state remains authoritative",
+		"state.json and events.jsonl",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("template missing %q:\n%s", want, content)
+		}
+	}
+	events, found, err := ReadRecentEvents(EventsPath(dir, "longrun"), 5)
+	if err != nil || !found || len(events) != 1 {
+		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(events), err)
+	}
+	if events[0].Type != "loop.protocol_init" {
+		t.Fatalf("events[0] = %+v", events[0])
+	}
+
+	created, state, event, err = EnsureProtocolTemplate(path, ProtocolTemplateOptions{LoopID: "longrun", OwnerSession: "other"})
+	if err != nil {
+		t.Fatalf("second EnsureProtocolTemplate: %v", err)
+	}
+	if created || event.Type != "" || state.OwnerSession != "session-a" {
+		t.Fatalf("second ensure should not overwrite existing protocol: created=%v state=%+v event=%+v", created, state, event)
+	}
+}
+
 func TestStatePersistsAtomicallyAndSummaryPrefersState(t *testing.T) {
 	dir := t.TempDir()
 	loopDir := ProtocolDir(dir, "market-run")

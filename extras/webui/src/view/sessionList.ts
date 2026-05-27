@@ -630,11 +630,25 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   const plan = state?.last_plan_label?.trim();
   const planStepIndex = state?.last_plan_step_index;
   const planStepStatus = state?.last_plan_step_status?.trim();
+  const memoryUpdates = state?.memory_update_events;
+  const lastMemoryAction = state?.last_memory_update_action?.trim();
+  const lastMemoryLocation = state?.last_memory_update_location?.trim();
+  const decisions = state?.loop_decisions;
+  const lastDecisionKind = state?.last_decision_kind?.trim();
+  const lastDecision = state?.last_decision?.trim();
+  const turnReason = state?.last_turn_end_reason?.trim();
   const eventSummary = state?.last_event_summary?.trim();
   const parts = [status ? `Loop ${status}` : "Loop protocol"];
   if (updates && updates > 0) parts.push(`${updates} ${updates === 1 ? "update" : "updates"}`);
   if (feeds && feeds > 0) parts.push(`${feeds} ${feeds === 1 ? "feed" : "feeds"}`);
   if (plan) parts.push(planStepIndex ? `${plan} step ${planStepIndex}${planStepStatus ? ` ${planStepStatus}` : ""}` : plan);
+  if (memoryUpdates && memoryUpdates > 0) {
+    parts.push(lastMemoryAction && lastMemoryLocation ? `memory ${lastMemoryAction} ${lastMemoryLocation}` : `${memoryUpdates} memory ${memoryUpdates === 1 ? "update" : "updates"}`);
+  }
+  if (decisions && decisions > 0) {
+    parts.push(lastDecisionKind && lastDecision ? `decision ${lastDecisionKind}:${lastDecision}` : `${decisions} ${decisions === 1 ? "decision" : "decisions"}`);
+  }
+  if (turnReason) parts.push(`last turn ${turnReason}`);
   if (eventSummary) parts.push(eventSummary);
   return parts.join(", ");
 }

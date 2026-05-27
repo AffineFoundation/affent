@@ -106,6 +106,11 @@ type commonFlags struct {
 	sessionID    string // explicit; empty means "use --continue or new"
 	continueLast bool   // pick most recent session under workspace
 
+	// loopProtocol activates a per-session LOOP.md for long-running
+	// work. Existing protocol files are always honored; this flag
+	// creates the default template when the file is missing.
+	loopProtocol bool
+
 	mcpConfigPath string // path to MCP server config JSON (optional)
 
 	// executor selects the shell-tool backend.
@@ -175,6 +180,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt (env: AFFENTCTL_PROJECT_CONTEXT)")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
+	fs.BoolVar(&c.loopProtocol, "loop-protocol", false, "create/use a per-session LOOP.md protocol for long-running recovery and self-maintenance (env: AFFENTCTL_LOOP_PROTOCOL)")
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", "", "path to MCP server config JSON ({\"servers\":[{...}]}) (env: AFFENTCTL_MCP_CONFIG)")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected. (env: AFFENTCTL_COMPACT_TRIGGER)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting (env: AFFENTCTL_COMPACT_KEEP_LAST)")
@@ -299,6 +305,7 @@ var flagEnvSources = map[string]string{
 	"top-p":              "AFFENTCTL_TOP_P",
 	"max-tokens":         "AFFENTCTL_MAX_TOKENS",
 	"seed":               "AFFENTCTL_SEED",
+	"loop-protocol":      "AFFENTCTL_LOOP_PROTOCOL",
 }
 
 func configPrecedenceEnvSources() map[string]string {
@@ -356,10 +363,11 @@ type fileConfig struct {
 		Trigger  *int `json:"trigger"`
 		KeepLast *int `json:"keep_last"`
 	} `json:"compact"`
-	SessionID *string `json:"session_id"`
-	Continue  *bool   `json:"continue"`
-	MCPConfig *string `json:"mcp_config"`
-	Executor  *string `json:"executor"`
+	SessionID    *string `json:"session_id"`
+	Continue     *bool   `json:"continue"`
+	LoopProtocol *bool   `json:"loop_protocol"`
+	MCPConfig    *string `json:"mcp_config"`
+	Executor     *string `json:"executor"`
 	// Subagent is the affentctl-native key. EnableSubagent mirrors
 	// affentserve's config spelling so shared config templates can
 	// use the same name in both binaries.
@@ -571,6 +579,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	}
 	setString("session-id", &c.sessionID, cfg.SessionID)
 	setBool("continue", &c.continueLast, cfg.Continue)
+	setBool("loop-protocol", &c.loopProtocol, cfg.LoopProtocol)
 	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
 	setString("executor", &c.executor, cfg.Executor)
 	setBool("subagent", &c.subagentEnabled, cfg.Subagent)
@@ -698,6 +707,9 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setBoolStrict("project-context", "AFFENTCTL_PROJECT_CONTEXT", &c.projectContext); err != nil {
+		return err
+	}
+	if err := setBoolStrict("loop-protocol", "AFFENTCTL_LOOP_PROTOCOL", &c.loopProtocol); err != nil {
 		return err
 	}
 	setString("workspace", "AFFENTCTL_WORKSPACE", &c.workspace)
@@ -1486,6 +1498,18 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	loopProtocolPath := loopstate.ProtocolPath(workspace, sid)
+	if c.loopProtocol {
+		if created, _, _, err := loopstate.EnsureProtocolTemplate(loopProtocolPath, loopstate.ProtocolTemplateOptions{
+			LoopID:       sid,
+			OwnerSession: sid,
+			Workspace:    workspace,
+		}); err != nil {
+			log.Error().Err(err).Msg("loop protocol")
+			return nil, exitRuntime
+		} else if created {
+			log.Info().Str("session_id", sid).Str("path", loopstate.ProtocolRelPath(sid)).Msg("loop protocol initialized")
+		}
+	}
 	if affentctlLoopProtocolAvailable(loopProtocolPath) {
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)

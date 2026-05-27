@@ -1272,6 +1272,61 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	}
 }
 
+func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "longrun-init"
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--session-id", sessionID,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--loop-protocol",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
+	if b.loop.LoopProtocolPath != protocolPath {
+		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, protocolPath)
+	}
+	content, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, want := range []string{
+		"# Loop Protocol: longrun-init",
+		"- loop_id: longrun-init",
+		"North Star",
+		"Self-Attack",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("initialized protocol missing %q:\n%s", want, content)
+		}
+	}
+	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.LastEventType != "loop.protocol_init" || state.ProtocolUpdates != 1 {
+		t.Fatalf("state = %+v", state)
+	}
+	got := b.loop.SkillProvider("continue")
+	if !strings.Contains(got, "AFFENT LOOP PROTOCOL:") || !strings.Contains(got, "protocol_path=.affent/loops/longrun-init/LOOP.md") {
+		t.Fatalf("initialized loop protocol should be injected:\n%s", got)
+	}
+}
+
 func TestSetupLoop_EvalModeAllowsSessionSearchWithoutWorkspaceBuiltins(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -1649,7 +1704,7 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "2"
 		} else if name == "focused-tasks" {
 			want = "true"
-		} else if name == "web" || name == "web-search" || name == "browser" || name == "browser-screenshot" {
+		} else if name == "web" || name == "web-search" || name == "browser" || name == "browser-screenshot" || name == "loop-protocol" {
 			want = "false"
 		}
 		if got != want {

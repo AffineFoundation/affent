@@ -702,10 +702,13 @@ Affent stores durable state as inspectable files:
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
 - `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.
-  When present, both `affentctl` and `affentserve` inject it with a low-noise
-  feed policy: the first three feeds and every sixth feed use a bounded full
-  copy, while intervening feeds use a smaller digest focused on metadata,
-  north-star, memory, rules, self-checks, stop/recovery, and plan/step anchors.
+  `affentctl --loop-protocol` and `affentserve` with
+  `enable_loop_protocol=true` initialize a default protocol template when the
+  file is missing; existing files are honored without rewriting them. When
+  present, both runtimes inject it with a low-noise feed policy: the first
+  three feeds and every sixth feed use a bounded full copy, while intervening
+  feeds use a smaller digest focused on metadata, north-star, memory, rules,
+  self-checks, stop/recovery, and plan/step anchors.
   A successful context compaction marks the loop state so the next feed is
   forced back to full even if the normal cadence would have used a digest.
   Feed metadata also includes compact runtime checkpoints from `state.json`,
@@ -729,7 +732,9 @@ Affent stores durable state as inspectable files:
   loop-decision count and the latest gate decision, including kind, trigger,
   decision, confidence, reason, and required action. The latest loop event is
   mirrored so restart/resume code and WebUI do not have to parse Markdown or
-  replay the full trace for common status panels. Feed count is durable, so
+  replay the full trace for common status panels. WebUI session rows surface
+  recent memory updates, loop decisions, and last-turn checkpoint state from
+  these fields. Feed count is durable, so
   reopening a session continues the
   full/digest cadence instead of restarting from the first full feeds. Session
   list/detail responses expose this as `loop_state`, including after `LOOP.md`

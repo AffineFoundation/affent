@@ -154,6 +154,11 @@ type Config struct {
 	// EvalAllTools enables the full serve tool surface under EvalMode.
 	EvalAllTools bool `json:"eval_all_tools"`
 
+	// EnableLoopProtocol creates a per-session LOOP.md when a session
+	// starts and feeds it back into future turns. Existing LOOP.md files
+	// are still honored when this is false.
+	EnableLoopProtocol bool `json:"enable_loop_protocol"`
+
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
 	// through to agent runtime's builtin.
 	SystemPrompt string `json:"system_prompt"`
@@ -384,6 +389,7 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
 		{"AFFENTSERVE_EVAL_MODE", &c.EvalMode},
 		{"AFFENTSERVE_EVAL_ALL_TOOLS", &c.EvalAllTools},
+		{"AFFENTSERVE_LOOP_PROTOCOL", &c.EnableLoopProtocol},
 		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},
 		{"AFFENTSERVE_FOCUSED_TASKS", &c.EnableFocusedTasks},
 	} {

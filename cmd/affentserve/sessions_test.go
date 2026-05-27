@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
@@ -1767,6 +1768,45 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("loop protocol skill provider missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-init")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	path := sessionLoopProtocolPath(pool, "loop-init")
+	if s.loop.LoopProtocolPath != path {
+		t.Fatalf("LoopProtocolPath = %q, want %q", s.loop.LoopProtocolPath, path)
+	}
+	content, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, want := range []string{
+		"# Loop Protocol: loop-init",
+		"- loop_id: loop-init",
+		"North Star",
+		"Evidence And Recovery Index",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("initialized protocol missing %q:\n%s", want, content)
+		}
+	}
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-init"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.LastEventType != "loop.protocol_init" || state.ProtocolUpdates != 1 {
+		t.Fatalf("state = %+v", state)
+	}
+	got := s.loop.SkillProvider("continue")
+	if !strings.Contains(got, "AFFENT LOOP PROTOCOL:") || !strings.Contains(got, "protocol_path=.affent/loops/loop-init/LOOP.md") {
+		t.Fatalf("initialized loop protocol skill provider missing feed:\n%s", got)
 	}
 }
 
