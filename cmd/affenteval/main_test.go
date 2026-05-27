@@ -3837,6 +3837,9 @@ func TestToolFailureKindHintIncludesWebSearchRecovery(t *testing.T) {
 		{kind: "tool_policy_first_tool", want: "required first tool"},
 		{kind: "tool_policy_repeat", want: "prior result"},
 		{kind: "tool_policy_active", want: "structured evidence"},
+		{kind: "loop_protocol_activation_status", want: "metadata status was running"},
+		{kind: "loop_protocol_activation_invalid", want: "keep Current Situation compact"},
+		{kind: "loop_protocol_activation_unready", want: "no user calibration answer"},
 	} {
 		t.Run(c.kind, func(t *testing.T) {
 			if got := toolFailureKindHint(c.kind); !strings.Contains(got, c.want) {

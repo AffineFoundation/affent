@@ -2264,6 +2264,12 @@ func toolFailureKindHint(kind string) string {
 		return "runtime policy blocked a repeated workflow/delegation tool call; use the prior result instead of spawning another child"
 	case "tool_policy_active":
 		return "runtime policy blocked parent-side exploration after a successful workflow result; answer from the prior structured evidence"
+	case "loop_protocol_activation_status":
+		return "loop_protocol complete_activation was attempted before LOOP.md metadata status was running; keep the protocol draft, ask/record calibration as needed, then retry with status: running"
+	case "loop_protocol_activation_invalid":
+		return "loop_protocol activation failed validation; fill unresolved LOOP.md fields, keep Current Situation compact, and retry only after the protocol is complete"
+	case "loop_protocol_activation_unready":
+		return "loop_protocol activation was blocked because no user calibration answer is recorded; ask one concise calibration question and wait before retrying activation"
 	case "http_error", "network_error":
 		return "web_fetch hit a transport or HTTP failure; inspect status/detail in the tool result and switch sources if it repeats"
 	default:
