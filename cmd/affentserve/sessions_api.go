@@ -1807,14 +1807,14 @@ func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) 
 
 func recoveryHintFromMemorySearchMissResult(text string) string {
 	text = strings.TrimSpace(text)
-	if text == "" || !strings.HasPrefix(text, "{") || !strings.Contains(text, `"topics"`) || !strings.Contains(text, "no entries matched") {
+	if text == "" || !strings.HasPrefix(text, "{") || !strings.Contains(text, "no entries matched") {
 		return ""
 	}
 	var resp memory.MemoryResponse
 	if err := json.Unmarshal([]byte(text), &resp); err != nil {
 		return ""
 	}
-	if !resp.OK || len(resp.Results) > 0 || len(resp.Topics) == 0 || !strings.Contains(resp.Message, "no entries matched") {
+	if !resp.OK || len(resp.Results) > 0 || !strings.Contains(resp.Message, "no entries matched") {
 		return ""
 	}
 	parts := []string{"memory search found no direct hits"}
@@ -1835,6 +1835,18 @@ func recoveryHintFromMemorySearchMissResult(text string) string {
 		parts = append(parts, "retry action=search with a specific topic such as "+topicNames[0])
 		if len(topicNames) > 1 {
 			parts = append(parts, "available topics: "+strings.Join(topicNames, ", "))
+		}
+	}
+	if len(topicNames) == 0 {
+		switch resp.Target {
+		case memory.TargetMemory:
+			parts = append(parts, "no topic anchors returned")
+			parts = append(parts, "retry action=list for topic discovery or use session_search for transcript recall")
+		case memory.TargetUser:
+			parts = append(parts, "no user-memory anchors returned")
+			parts = append(parts, "confirm the preference is saved or use session_search for prior wording")
+		default:
+			parts = append(parts, "retry with action=list or a more specific target/topic before assuming memory is empty")
 		}
 	}
 	return recoveryHintFromText(strings.Join(parts, "; "))
