@@ -42,7 +42,8 @@ Shared metadata fields:
   thresholds are still written as ordinary gate fields, and explicitly supplied
   gate flags override profile defaults.
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
-  `min_runtime_surface_rate`, `min_trace_event_rate`,
+  `min_loop_protocol_feed_rate`, `min_runtime_surface_rate`,
+  `min_trace_event_rate`,
   `min_source_network_rate`,
   `min_source_access_verified_rate`,
   `min_expectation_capability_pass_rate`,
@@ -351,7 +352,8 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`, `avg_duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
-  `memory_update_rate`, `runtime_surface_rate`, `trace_event_rate`,
+  `memory_update_rate`, `loop_protocol_feed_rate`, `runtime_surface_rate`,
+  `trace_event_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
   `loop_guard_intervention_rate` when tool calls were observed,
   `focused_task_error_rate` when focused-task calls were observed,
@@ -420,10 +422,13 @@ Summary records aggregate all scenario records from the same process:
   `loop_protocol_feed_examples`, and `plan_examples` include their originating
   scenario so long-run batch failures can be routed directly to the right
   trace/timeline.
-- Loop protocol feed totals: `loop_protocol_feeds`,
-  `loop_protocol_feed_by_mode`, and `loop_protocol_feed_examples`, useful for
-  checking whether a long-run scenario kept its per-session protocol state in
-  attention after compaction or multi-turn drift.
+- Loop protocol feed totals: `loop_protocol_feed_scenarios`,
+  `loop_protocol_feeds`, `loop_protocol_feed_by_mode`, and
+  `loop_protocol_feed_examples`, useful for checking whether a long-run
+  scenario kept its per-session protocol state in attention after compaction or
+  multi-turn drift. `loop_protocol_feed_rate` is scenario coverage, not raw
+  feed count divided by scenario count, so repeated feeds in one scenario do
+  not hide scenarios that never received their protocol.
 - Context pressure totals: `context_compactions`,
   `context_compactions_reactive`, `context_compaction_removed_messages`,
   `context_compaction_summary_bytes`, `context_compaction_summary_missing`, and

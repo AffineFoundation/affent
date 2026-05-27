@@ -839,8 +839,8 @@ thresholds. Text summaries print a `QUALITY_GATES` line when any gate is
 enabled, including failed gate names and thresholds; JSONL records copy the
 enabled thresholds into metadata so result files preserve their pass/fail
 conditions. Use `--quality-profile longrun` for general long-run regression
-runs; it includes minimum trace-event, memory-update, session-search
-context-hit, scenario-level session-recall debug tag, and missing
+runs; it includes minimum trace-event, memory-update, loop-protocol feed,
+session-search context-hit, scenario-level session-recall debug tag, and missing
 truncation-artifact gates, plus a scenario-level failed tool-repair gate, so
 observability, shared memory, tool recovery, loop-guard no-tool fallback, and
 cross-session recovery regressions fail the batch. Use
@@ -857,15 +857,16 @@ include `quality_gates_passed` when any gate is enabled and
 CI or model-comparison failures without stderr.
 The default text summary also prints the key normalized rates used for long-run
 debugging, including pass/completion, average scenario duration, memory update
-coverage, runtime-surface coverage, tool errors, focused-task/subagent errors,
-plan errors, repair success, verifier pass rate,
+coverage, loop-protocol feed coverage, runtime-surface coverage, tool errors,
+focused-task/subagent errors, plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
 context compactions, reactive context compactions, aggregate and per-family
 expected-capability pass rates, messages removed by compaction, compaction
 summary size, missing/empty compaction summaries, session-search matched terms
 per call, average tool calls, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
-`--min-memory-update-rate`, `--min-runtime-surface-rate`,
+`--min-memory-update-rate`, `--min-loop-protocol-feed-rate`,
+`--min-runtime-surface-rate`, `--min-trace-event-rate`,
 `--min-source-network-rate`,
 `--min-source-access-verified-rate`,
 `--min-expectation-capability-pass-rate`,

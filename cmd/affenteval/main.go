@@ -140,6 +140,7 @@ func run(args []string) int {
 			MinPassRate:                          fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:                    fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:                  fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
+			MinLoopProtocolFeedRate:              fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
 			MinRuntimeSurfaceRate:                fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
 			MinTraceEventRate:                    fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
 			MinSourceNetworkRate:                 fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
@@ -337,6 +338,7 @@ type qualityGateConfig struct {
 	MinPassRate                          *float64
 	MinCompletionRate                    *float64
 	MinMemoryUpdateRate                  *float64
+	MinLoopProtocolFeedRate              *float64
 	MinRuntimeSurfaceRate                *float64
 	MinTraceEventRate                    *float64
 	MinSourceNetworkRate                 *float64
@@ -385,6 +387,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinPassRate:                          float64Ptr(0.80),
 				MinCompletionRate:                    float64Ptr(0.90),
 				MinMemoryUpdateRate:                  float64Ptr(0.10),
+				MinLoopProtocolFeedRate:              float64Ptr(0.05),
 				MinExpectationCapabilityPassRate:     float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate: float64Ptr(0.50),
 				MinSessionSearchContextHitRate:       float64Ptr(0.75),
@@ -479,6 +482,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-pass-rate", g.MinPassRate)
 	add("min-completion-rate", g.MinCompletionRate)
 	add("min-memory-update-rate", g.MinMemoryUpdateRate)
+	add("min-loop-protocol-feed-rate", g.MinLoopProtocolFeedRate)
 	add("min-runtime-surface-rate", g.MinRuntimeSurfaceRate)
 	add("min-trace-event-rate", g.MinTraceEventRate)
 	add("min-source-network-rate", g.MinSourceNetworkRate)
@@ -540,6 +544,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-pass-rate", &g.MinPassRate, profileConfig.MinPassRate)
 	apply("min-completion-rate", &g.MinCompletionRate, profileConfig.MinCompletionRate)
 	apply("min-memory-update-rate", &g.MinMemoryUpdateRate, profileConfig.MinMemoryUpdateRate)
+	apply("min-loop-protocol-feed-rate", &g.MinLoopProtocolFeedRate, profileConfig.MinLoopProtocolFeedRate)
 	apply("min-runtime-surface-rate", &g.MinRuntimeSurfaceRate, profileConfig.MinRuntimeSurfaceRate)
 	apply("min-trace-event-rate", &g.MinTraceEventRate, profileConfig.MinTraceEventRate)
 	apply("min-source-network-rate", &g.MinSourceNetworkRate, profileConfig.MinSourceNetworkRate)
@@ -642,6 +647,7 @@ type batchSummary struct {
 	LoopDecisionByKind                   map[string]int
 	LoopDecisionByDecision               map[string]int
 	LoopDecisionExamples                 []agenteval.LoopDecision
+	LoopProtocolFeedScenarios            int
 	LoopProtocolFeeds                    int
 	LoopProtocolFeedByMode               map[string]int
 	LoopProtocolFeedExamples             []agenteval.LoopProtocolFeed
@@ -818,6 +824,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.LoopDecisionByDecision[k] += v
 	}
 	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	if res.LoopProtocolFeeds.Count > 0 {
+		s.LoopProtocolFeedScenarios++
+	}
 	s.LoopProtocolFeeds += res.LoopProtocolFeeds.Count
 	for k, v := range res.LoopProtocolFeeds.ByMode {
 		if s.LoopProtocolFeedByMode == nil {
@@ -1169,10 +1178,11 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,loop_protocol_feed:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
 		formatPercent(batchRatio(s.MemoryUpdates, s.Total)),
+		formatPercent(batchRatio(s.LoopProtocolFeedScenarios, s.Total)),
 		formatPercent(batchRatio(s.RuntimeSurfaceScenarios, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolErrors, s.ToolCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls)),
@@ -1254,7 +1264,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 	}
 	if s.LoopProtocolFeeds > 0 {
-		fmt.Fprintf(w, " loop_protocol_feeds=%d", s.LoopProtocolFeeds)
+		fmt.Fprintf(w, " loop_protocol_feed_scenarios=%d loop_protocol_feeds=%d", s.LoopProtocolFeedScenarios, s.LoopProtocolFeeds)
 		if len(s.LoopProtocolFeedByMode) > 0 {
 			fmt.Fprintf(w, " loop_protocol_feed_modes=%s", formatStringIntCounts(s.LoopProtocolFeedByMode))
 		}
@@ -1531,6 +1541,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-pass-rate", g.MinPassRate, true},
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
+		{"--min-loop-protocol-feed-rate", g.MinLoopProtocolFeedRate, true},
 		{"--min-runtime-surface-rate", g.MinRuntimeSurfaceRate, true},
 		{"--min-trace-event-rate", g.MinTraceEventRate, true},
 		{"--min-source-network-rate", g.MinSourceNetworkRate, true},
@@ -1626,6 +1637,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
+	checkMin("loop_protocol_feed_rate", batchRatio(s.LoopProtocolFeedScenarios, s.Total), g.MinLoopProtocolFeedRate, s.Total > 0)
 	checkMin("runtime_surface_rate", batchRatio(s.RuntimeSurfaceScenarios, s.Total), g.MinRuntimeSurfaceRate, s.Total > 0)
 	checkMin("trace_event_rate", batchRatio(s.TraceEventScenarios, s.Total), g.MinTraceEventRate, s.Total > 0)
 	checkMin("source_network_rate", batchRatio(s.SourceAccessNetwork, s.SourceAccessResults), g.MinSourceNetworkRate, s.SourceAccessResults > 0)
@@ -2283,6 +2295,7 @@ type evalJSONLMetadata struct {
 	MinPassRate                          *float64           `json:"min_pass_rate,omitempty"`
 	MinCompletionRate                    *float64           `json:"min_completion_rate,omitempty"`
 	MinMemoryUpdateRate                  *float64           `json:"min_memory_update_rate,omitempty"`
+	MinLoopProtocolFeedRate              *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
 	MinRuntimeSurfaceRate                *float64           `json:"min_runtime_surface_rate,omitempty"`
 	MinTraceEventRate                    *float64           `json:"min_trace_event_rate,omitempty"`
 	MinSourceNetworkRate                 *float64           `json:"min_source_network_rate,omitempty"`
@@ -2348,6 +2361,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinPassRate:                          enabledQualityGateValue(gates.MinPassRate),
 		MinCompletionRate:                    enabledQualityGateValue(gates.MinCompletionRate),
 		MinMemoryUpdateRate:                  enabledQualityGateValue(gates.MinMemoryUpdateRate),
+		MinLoopProtocolFeedRate:              enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
 		MinRuntimeSurfaceRate:                enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
 		MinTraceEventRate:                    enabledQualityGateValue(gates.MinTraceEventRate),
 		MinSourceNetworkRate:                 enabledQualityGateValue(gates.MinSourceNetworkRate),
@@ -2543,6 +2557,7 @@ type batchSummaryRecord struct {
 	PassRate                             float64                                          `json:"pass_rate"`
 	CompletionRate                       float64                                          `json:"completion_rate"`
 	MemoryUpdateRate                     float64                                          `json:"memory_update_rate"`
+	LoopProtocolFeedRate                 float64                                          `json:"loop_protocol_feed_rate"`
 	ToolErrorRate                        *float64                                         `json:"tool_error_rate,omitempty"`
 	FocusedTaskErrorRate                 *float64                                         `json:"focused_task_error_rate,omitempty"`
 	SubagentErrorRate                    *float64                                         `json:"subagent_error_rate,omitempty"`
@@ -2593,6 +2608,7 @@ type batchSummaryRecord struct {
 	LoopDecisionByKind                   map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision               map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples                 []agenteval.LoopDecision                         `json:"loop_decision_examples,omitempty"`
+	LoopProtocolFeedScenarios            int                                              `json:"loop_protocol_feed_scenarios,omitempty"`
 	LoopProtocolFeeds                    int                                              `json:"loop_protocol_feeds,omitempty"`
 	LoopProtocolFeedByMode               map[string]int                                   `json:"loop_protocol_feed_by_mode,omitempty"`
 	LoopProtocolFeedExamples             []agenteval.LoopProtocolFeed                     `json:"loop_protocol_feed_examples,omitempty"`
@@ -2911,6 +2927,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		PassRate:                             batchRatio(s.Passed, s.Total),
 		CompletionRate:                       batchRatio(s.EndCompleted, s.Total),
 		MemoryUpdateRate:                     batchRatio(s.MemoryUpdates, s.Total),
+		LoopProtocolFeedRate:                 batchRatio(s.LoopProtocolFeedScenarios, s.Total),
 		ToolErrorRate:                        batchOptionalRatio(s.ToolErrors, s.ToolCalls),
 		FocusedTaskErrorRate:                 batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls),
 		SubagentErrorRate:                    batchOptionalRatio(s.SubagentErrors, s.SubagentCalls),
@@ -2961,6 +2978,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		LoopDecisionByKind:                   cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:               cloneStringIntMap(s.LoopDecisionByDecision),
 		LoopDecisionExamples:                 cloneLoopDecisionExamples(s.LoopDecisionExamples),
+		LoopProtocolFeedScenarios:            s.LoopProtocolFeedScenarios,
 		LoopProtocolFeeds:                    s.LoopProtocolFeeds,
 		LoopProtocolFeedByMode:               cloneStringIntMap(s.LoopProtocolFeedByMode),
 		LoopProtocolFeedExamples:             cloneLoopProtocolFeedExamples(s.LoopProtocolFeedExamples),
@@ -3066,6 +3084,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 	return meta.MinPassRate != nil ||
 		meta.MinCompletionRate != nil ||
 		meta.MinMemoryUpdateRate != nil ||
+		meta.MinLoopProtocolFeedRate != nil ||
 		meta.MinRuntimeSurfaceRate != nil ||
 		meta.MinTraceEventRate != nil ||
 		meta.MinSourceNetworkRate != nil ||
