@@ -19,6 +19,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	agent "github.com/affinefoundation/affent/internal/agent"
 )
 
 const (
@@ -28,6 +30,7 @@ const (
 	accountSSHKeyMaxFileBytes     = 128 * 1024
 	accountSettingsMaxEnvVars     = 128
 	accountSettingsMaxEnvValueLen = 32 * 1024
+	accountAccessPromptMaxEnvVars = 12
 )
 
 var accountEnvNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -243,6 +246,66 @@ func (p *SessionPool) accountSecretValues() []string {
 		add(privatePath)
 	}
 	return out
+}
+
+func (p *SessionPool) accountAccessSystemBlock() string {
+	settings, _, err := readAccountSettingsFile(p)
+	if err != nil {
+		return ""
+	}
+	names := make([]string, 0, len(settings.Env))
+	for _, entry := range settings.Env {
+		name := strings.TrimSpace(entry.Name)
+		if name != "" && strings.TrimSpace(entry.Value) != "" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	ssh, err := readAccountSSHKeyInfo(p)
+	if err != nil {
+		ssh = accountSSHKeyInfo{}
+	}
+	if len(names) == 0 && !ssh.Exists {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("AFFENT ACCOUNT ACCESS:\n")
+	b.WriteString("Use these account-level access settings when relevant for cloning private repositories, installing dependencies, or opening PRs. Values, key paths, and command bodies are secrets; do not print them.\n")
+	if len(names) > 0 {
+		visible := names
+		if len(visible) > accountAccessPromptMaxEnvVars {
+			visible = visible[:accountAccessPromptMaxEnvVars]
+		}
+		b.WriteString("- Configured environment variables available to shell commands: ")
+		b.WriteString(strings.Join(visible, ", "))
+		if omitted := len(names) - len(visible); omitted > 0 {
+			fmt.Fprintf(&b, " (+%d more)", omitted)
+		}
+		b.WriteString(".\n")
+	}
+	if ssh.Exists {
+		if ssh.PublicKey != "" {
+			b.WriteString("- SSH public key is configured for Git host access; use SSH remotes when appropriate. GIT_SSH_COMMAND is injected automatically unless a custom value is configured.\n")
+		} else {
+			b.WriteString("- An SSH private key exists, but its public key is unavailable; ask the user to fix the key before relying on SSH remotes.\n")
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func (p *SessionPool) withAccountAccessSkillProvider(next agent.SkillProvider) agent.SkillProvider {
+	return func(userText string) string {
+		blocks := make([]string, 0, 2)
+		if block := strings.TrimSpace(p.accountAccessSystemBlock()); block != "" {
+			blocks = append(blocks, block)
+		}
+		if next != nil {
+			if block := strings.TrimSpace(next(userText)); block != "" {
+				blocks = append(blocks, block)
+			}
+		}
+		return strings.Join(blocks, "\n\n")
+	}
 }
 
 func setAccountEnv(pool *SessionPool, rawName, value string) error {

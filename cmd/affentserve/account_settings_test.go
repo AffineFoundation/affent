@@ -130,6 +130,17 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	if !stringSliceContains(secrets, gitSSHCommand) || !stringSliceContains(secrets, privatePath) {
 		t.Fatalf("account secret values = %+v, want generated GIT_SSH_COMMAND and private key path", secrets)
 	}
+	block := pool.accountAccessSystemBlock()
+	for _, want := range []string{"AFFENT ACCOUNT ACCESS:", "SSH public key is configured"} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("account access block missing %q:\n%s", want, block)
+		}
+	}
+	for _, leaked := range []string{gitSSHCommand, privatePath, first.SSH.PublicKey} {
+		if strings.Contains(block, leaked) {
+			t.Fatalf("account access block leaked sensitive detail %q:\n%s", leaked, block)
+		}
+	}
 }
 
 func TestAccountSettingsEnvOverridesGeneratedGitSSHCommand(t *testing.T) {
@@ -144,6 +155,28 @@ func TestAccountSettingsEnvOverridesGeneratedGitSSHCommand(t *testing.T) {
 	pairs := pool.accountEnvPairs()
 	if got := findEnvPairValue(pairs, "GIT_SSH_COMMAND"); got != "ssh -i /custom/key" {
 		t.Fatalf("GIT_SSH_COMMAND = %q from %+v, want custom override", got, pairs)
+	}
+}
+
+func TestAccountAccessSkillProviderListsNamesWithoutValues(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	provider := pool.withAccountAccessSkillProvider(func(string) string {
+		return "NEXT BLOCK"
+	})
+	if got := provider("before settings"); got != "NEXT BLOCK" {
+		t.Fatalf("provider before settings = %q, want next block only", got)
+	}
+	if err := setAccountEnv(pool, "GITHUB_TOKEN", "ghp_dynamic_secret"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+	got := provider("clone private repo")
+	for _, want := range []string{"AFFENT ACCOUNT ACCESS:", "GITHUB_TOKEN", "NEXT BLOCK"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("provider block missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "ghp_dynamic_secret") {
+		t.Fatalf("provider block leaked env value:\n%s", got)
 	}
 }
 
