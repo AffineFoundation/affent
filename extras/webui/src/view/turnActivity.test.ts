@@ -550,11 +550,12 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity?.evidencePreview).toEqual([
-      { label: "Network Source", value: "https://taostats.io/api/subnets/120", displayValue: "taostats.io/api/subnets · from taostats.io/subnets/120 · ref n1 · http 200 · application/json" },
-      { label: "Partial Source", value: "https://taostats.io/subnets/120", displayValue: "taostats.io/subnets/120" },
+      { label: "Network Source", value: "https://taostats.io/api/subnets/120", displayValue: "taostats.io/api/subnets · from taostats.io/subnets/120 · ref n1 · http 200 · application/json · preview {\"price\":\"0.06342 T\"}" },
+      { label: "Partial Source", value: "https://taostats.io/subnets/120", displayValue: "taostats.io/subnets/120 · preview PAGE TEXT: Market Cap" },
     ]);
     expect(activity?.evidenceAction?.draft).toContain("- Network Source taostats.io/api/subnets · from taostats.io/subnets/120");
-    expect(activity?.evidenceAction?.draft).toContain("- Partial Source taostats.io/subnets/120");
+    expect(activity?.evidenceAction?.draft).toContain("preview {\"price\":\"0.06342 T\"}");
+    expect(activity?.evidenceAction?.draft).toContain("- Partial Source taostats.io/subnets/120 · preview PAGE TEXT: Market Cap");
   });
 
   it("surfaces browser network searches with current page context", () => {

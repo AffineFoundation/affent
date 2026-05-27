@@ -951,6 +951,7 @@ function sourceEvidenceDisplayValue(sourceAccess: NonNullable<ReturnType<typeof 
     sourceAccess.httpStatus ? `http ${sourceAccess.httpStatus}` : undefined,
     sourceAccess.contentType,
     sourceAccess.jsonPath,
+    sourceAccess.resultPreview ? `preview ${summarize(sourceAccess.resultPreview, 96)}` : undefined,
   ].filter(Boolean).join(" · ");
 }
 
