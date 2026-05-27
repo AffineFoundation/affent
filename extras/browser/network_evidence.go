@@ -624,11 +624,11 @@ func selectNetworkJSONPath(body []byte, jsonPath string) ([]byte, error) {
 		if step.key != nil {
 			obj, ok := current.(map[string]any)
 			if !ok {
-				return nil, networkJSONPathNotFound(jsonPath, step.raw)
+				return nil, networkJSONPathNotFound(jsonPath, step.raw, body)
 			}
 			next, ok := obj[*step.key]
 			if !ok {
-				return nil, networkJSONPathNotFound(jsonPath, step.raw)
+				return nil, networkJSONPathNotFound(jsonPath, step.raw, body)
 			}
 			current = next
 			continue
@@ -636,7 +636,7 @@ func selectNetworkJSONPath(body []byte, jsonPath string) ([]byte, error) {
 		if step.index != nil {
 			arr, ok := current.([]any)
 			if !ok || *step.index < 0 || *step.index >= len(arr) {
-				return nil, networkJSONPathNotFound(jsonPath, step.raw)
+				return nil, networkJSONPathNotFound(jsonPath, step.raw, body)
 			}
 			current = arr[*step.index]
 		}
@@ -648,8 +648,16 @@ func selectNetworkJSONPath(body []byte, jsonPath string) ([]byte, error) {
 	return selected, nil
 }
 
-func networkJSONPathNotFound(jsonPath, step string) error {
-	return fmt.Errorf("json_path %q was not found at %q in the captured network response\nFailure: kind=not_found\nNext: call browser_network with a distinctive key/value query, inspect the preview, retry with a valid JSON subtree path, or read without json_path", jsonPath, step)
+func networkJSONPathNotFound(jsonPath, step string, body []byte) error {
+	hints := networkJSONPathHints(body, jsonPath)
+	if len(hints) == 0 {
+		hints = networkJSONPathHints(body, "")
+	}
+	hintLine := ""
+	if len(hints) > 0 {
+		hintLine = "\nCandidate JSON paths: " + strings.Join(hints, "; ")
+	}
+	return fmt.Errorf("json_path %q was not found at %q in the captured network response%s\nFailure: kind=not_found\nNext: retry browser_network_read with one candidate JSON path above, call browser_network with a distinctive key/value query, or read without json_path", jsonPath, step, hintLine)
 }
 
 func networkJSONPathHints(body []byte, query string) []string {

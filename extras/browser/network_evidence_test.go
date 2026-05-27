@@ -275,14 +275,14 @@ func TestNetworkEvidenceReadJSONPathExtractsSubtree(t *testing.T) {
 func TestNetworkEvidenceReadJSONPathGuidesMissingPath(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://metrics.example/dashboard", proto.NetworkResourceTypeDocument)
-	log.Add("https://metrics.example/api/current", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"items":[]}`))
+	log.Add("https://metrics.example/api/current", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"items":[{"market_cap":"201.04K T","volume_24h":"5.1K T"}]}`))
 	s := &Session{network: log}
 
 	_, err := NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","json_path":"items[0].price"}`))
 	if err == nil {
 		t.Fatal("missing json_path should error")
 	}
-	for _, want := range []string{"json_path", "Failure: kind=not_found", "read without json_path"} {
+	for _, want := range []string{"json_path", "Failure: kind=not_found", "Candidate JSON paths:", "$.items[0].market_cap", "retry browser_network_read with one candidate JSON path"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("missing-path error missing %q: %v", want, err)
 		}
