@@ -88,6 +88,21 @@ describe("Composer", () => {
       />,
     );
 
+    expect(screen.queryByTestId("composer-automation")).toBeNull();
+
+    rerender(
+      <Composer
+        disabled={false}
+        busy={false}
+        hasSession
+        automationAvailable
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        onStartLoop={onStartLoop}
+        onScheduleCheckIn={onScheduleCheckIn}
+      />,
+    );
+
     expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
     expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Set up loop" })).toBeNull();

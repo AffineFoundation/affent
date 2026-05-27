@@ -1636,6 +1636,7 @@ export function App() {
               onScheduleLoopTick={() => handleCreateSchedule("loop")}
               onScheduleCheckIn={() => handleCreateSchedule("checkin")}
               onScheduleDaily={() => handleCreateSchedule("daily")}
+              automationAvailable={showAutomationContext}
               automationBusy={scheduleBusy}
               onCancel={handleCancel}
             />

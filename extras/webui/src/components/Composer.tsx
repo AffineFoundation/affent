@@ -32,6 +32,7 @@ export function Composer({
   onScheduleLoopTick,
   onScheduleCheckIn,
   onScheduleDaily,
+  automationAvailable = false,
   automationBusy,
   onCancel,
 }: {
@@ -49,6 +50,7 @@ export function Composer({
   onScheduleLoopTick?: () => Promise<void> | void;
   onScheduleCheckIn?: () => Promise<void> | void;
   onScheduleDaily?: () => Promise<void> | void;
+  automationAvailable?: boolean;
   automationBusy?: "loop" | "checkin" | "daily";
   onCancel: () => Promise<void>;
 }) {
@@ -198,8 +200,9 @@ export function Composer({
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
   const hasLoopAutomation = !!onStartLoop && hasContent;
-  const hasScheduleLoopTick = hasSession && !!onScheduleLoopTick && !hasLoopAutomation;
-  const hasScheduleAutomation = hasSession && !!(hasScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
+  const canShowScheduleAutomation = hasSession && automationAvailable;
+  const hasScheduleLoopTick = canShowScheduleAutomation && !!onScheduleLoopTick && !hasLoopAutomation;
+  const hasScheduleAutomation = canShowScheduleAutomation && !!(hasScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
   const hasAvailableAutomation = hasLoopAutomation || hasScheduleAutomation;
   const placeholder = "Message Affent...";
   const primaryLabel = primaryActionLabel({
@@ -291,7 +294,7 @@ export function Composer({
                   Set up loop
                 </button>
               ) : null}
-              {hasSession && onScheduleCheckIn ? (
+              {canShowScheduleAutomation && onScheduleCheckIn ? (
                 <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleCheckIn)}>
                   {automationBusy === "checkin" ? "Scheduling" : "Check in 1h"}
                 </button>
@@ -301,7 +304,7 @@ export function Composer({
                   {automationBusy === "loop" ? "Scheduling" : "Loop every 30m"}
                 </button>
               ) : null}
-              {hasSession && onScheduleDaily ? (
+              {canShowScheduleAutomation && onScheduleDaily ? (
                 <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleDaily)}>
                   {automationBusy === "daily" ? "Scheduling" : "Daily check-in"}
                 </button>

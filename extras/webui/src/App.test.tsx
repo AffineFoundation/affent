@@ -439,7 +439,8 @@ describe("App", () => {
     await userEvent.clear(input);
     await userEvent.type(input, "help me install a skill from github");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("inspect a skill source");
+    expect(screen.getByTestId("composer-task-hint")).not.toHaveTextContent("propose_install");
     await userEvent.click(screen.getByLabelText("Workbench"));
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("2 entries");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
@@ -914,7 +915,7 @@ describe("App", () => {
               has_artifacts: false,
               has_memory: false,
               has_runtime_skills: false,
-              has_schedules: false,
+              has_schedules: true,
             },
           ],
           has_more: false,
@@ -1036,7 +1037,7 @@ describe("App", () => {
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Check in 1h: long running subnet analysis");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("ask the user one concise question");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("timers");
 
     await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "PATCH" })));
@@ -1166,7 +1167,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("autonomous long-run tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("timers");
   });
 
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
@@ -1662,6 +1663,43 @@ describe("App", () => {
     expect(screen.queryByText("Memory on")).toBeNull();
     expect(screen.queryByText("Listen 0.0.0.0:7777")).toBeNull();
     expect(screen.queryByTestId("profile-dialog")).toBeNull();
+  });
+
+  it("keeps idle chats free of composer automation controls", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "idle-chat",
+              active: true,
+              durable: true,
+              topic_user_message: "review the repo",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+              has_loop_protocol: false,
+              has_schedules: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/idle-chat/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "idle-chat", events: completedTurn, next_after: 11, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/idle-chat/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByText("There are two files.")).toBeVisible();
+    expect(screen.queryByTestId("composer-automation")).toBeNull();
   });
 
   it("loads runtime diagnostics inside Workbench without changing the top strip", async () => {
@@ -2317,7 +2355,8 @@ describe("App", () => {
     await waitFor(() => expect(memoryCalls).toBeGreaterThanOrEqual(2));
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Alpha Coast market reports use marker MEM-STOCK-73.");
     const row = screen.getByRole("button", { name: /remember market policy/ });
-    expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory");
+    expect(within(row).queryByTestId("session-chips")).toBeNull();
+    expect(row).not.toHaveTextContent("Memory");
   });
 
   it("refreshes visible plan state after a live plan update", async () => {
