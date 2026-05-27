@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { SessionSkillInfo, SessionSkillInstallRequest } from "../api/sessions";
 import { formatByteCount } from "../view/byteFormat";
 import { CopyButton } from "./CopyButton";
+import { panelErrorSummary } from "./panelErrorSummary";
 
 interface SkillBodyState {
   loading?: boolean;
@@ -50,7 +51,7 @@ export function SessionSkillsPanel({
   const summaryDetail = loading
     ? "Fetching reusable workflows."
     : error
-      ? "Open for route, proxy, or build details."
+      ? panelErrorSummary("Skills API", error)
       : runtimeCount > 0
         ? `${runtimeCount} custom · ${allSkills.length - runtimeCount} built in${activationCoverage(allSkills)}`
         : `Built-in workflows ready${activationCoverage(allSkills)}`;

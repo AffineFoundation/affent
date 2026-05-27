@@ -1,5 +1,6 @@
 import type { ServerAggregateStats, ServerStatsResponse, StatsRuntimeSnapshot, StatsToolSnapshot } from "../api/stats";
 import { formatByteCount } from "../view/byteFormat";
+import { panelErrorSummary } from "./panelErrorSummary";
 
 export function RuntimeStatsPanel({
   stats,
@@ -13,7 +14,7 @@ export function RuntimeStatsPanel({
   defaultOpen?: boolean;
 }) {
   const summary = loading ? "Loading runtime" : error ? "Runtime unavailable" : runtimeSummary(stats);
-  const detail = loading ? "Reading server diagnostics." : error ? "Open for route, proxy, or build details." : runtimeDetail(stats);
+  const detail = loading ? "Reading server diagnostics." : error ? panelErrorSummary("Stats API", error) : runtimeDetail(stats);
   const metrics = stats ? runtimeMetrics(stats) : [];
 
   return (

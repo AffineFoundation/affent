@@ -89,12 +89,12 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
   });
 
-  it("keeps long API diagnostics out of the collapsed summary", () => {
-    const diagnostic = "API route /v1/stats returned the WebUI app shell. The affentserve build may not expose this route.";
+  it("surfaces a compact API diagnostic in the collapsed summary", () => {
+    const diagnostic = "API route /v1/stats returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
     render(<RuntimeStatsPanel error={diagnostic} />);
 
     const summary = within(screen.getByTestId("runtime-stats-panel")).getByText("Runtime unavailable").closest("summary");
-    expect(summary).toHaveTextContent("Open for route, proxy, or build details.");
-    expect(summary).not.toHaveTextContent("returned the WebUI app shell");
+    expect(summary).toHaveTextContent("Stats API failed: API route /v1/stats returned the WebUI app shell.");
+    expect(summary).not.toHaveTextContent("Use the current affentserve build");
   });
 });

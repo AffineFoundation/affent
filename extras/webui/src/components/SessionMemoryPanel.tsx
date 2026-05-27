@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionMemoryBucket, SessionMemoryResponse } from "../api/sessions";
 import { CopyButton } from "./CopyButton";
+import { panelErrorSummary } from "./panelErrorSummary";
 
 export function SessionMemoryPanel({
   memory,
@@ -48,7 +49,7 @@ export function SessionMemoryPanel({
     : loading
       ? "Reading durable buckets."
       : error
-        ? "Open for route, proxy, or build details."
+        ? panelErrorSummary("Memory API", error)
         : memory?.has_memory
           ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";

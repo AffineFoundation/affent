@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
 import { CopyButton } from "./CopyButton";
+import { panelErrorSummary } from "./panelErrorSummary";
 
 export function AccountSettingsPanel({
   settings,
@@ -30,7 +31,7 @@ export function AccountSettingsPanel({
   const hasPublicKey = !!ssh?.public_key;
   const title = loading ? "Loading" : error ? "Unavailable" : `${envCount} env${envCount === 1 ? "" : "s"}`;
   const detail = error
-    ? "Open for route, proxy, or build details."
+    ? panelErrorSummary("Settings API", error)
     : hasPublicKey ? "SSH public key ready" : ssh?.exists ? "SSH key found; public key unavailable" : "Generate an SSH key before cloning private repos";
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 
