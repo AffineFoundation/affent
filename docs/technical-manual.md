@@ -452,8 +452,9 @@ transcript recall is tracked with
 terms per call. Eval debug manifests, timelines, and JSONL records also include
 bounded `session_search_examples` with the query, matched session, turn,
 physical message index when available, matched terms, context flag, and compact
-snippet preview, so poor
-resume/recovery runs can be debugged without opening the full transcript. Each
+snippet preview. A user-request hit can carry the adjacent assistant answer so
+resume/debug runs show the prior outcome, not just the old question, which lets
+poor resume/recovery runs be debugged without opening the full transcript. Each
 `tool.result` can expose
 `failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
 useful recovery path from a run that simply accumulated failed retrievals,

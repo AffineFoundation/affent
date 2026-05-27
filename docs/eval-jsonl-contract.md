@@ -251,8 +251,9 @@ Scenario records describe one eval case:
   `session_search` responses. Each sample includes tool index, call id, query,
   total result count, matched session id, logical turn index, physical
   `message_idx` when available, role, score, matched terms, context-included
-  flag, and a compact snippet/message preview. Summary records include the
-  originating scenario.
+  flag, and a compact snippet/message preview. User-request hits can include
+  the adjacent assistant answer so recovery evals can inspect the prior
+  outcome. Summary records include the originating scenario.
 - `memory_update_examples`: optional bounded per-scenario examples of confirmed
   durable memory mutations. Each sample includes the tool index, call id,
   action, target/topic location, and compact previous/next previews when

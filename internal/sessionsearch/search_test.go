@@ -165,6 +165,40 @@ func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	}
 }
 
+func TestSearchUserHitCarriesAdjacentAssistantAnswer(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "subnet-120", []testMessage{
+		{Role: "user", Content: "Analyze Bittensor subnet 120 roadmap and owner evidence"},
+		{Role: "assistant", Content: "Final finding: continue from marker RESUME-MARKER-X and the JSON evidence trail."},
+	})
+	writeSessionLog(t, dir, "question-only", []testMessage{
+		{Role: "user", Content: "Analyze Bittensor subnet 120 roadmap"},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "Bittensor subnet 120 roadmap owner", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected user request hit with adjacent assistant answer")
+	}
+	if hits[0].SessionID != "subnet-120" || hits[0].Role != "user" {
+		t.Fatalf("adjacent answer should rank first as the matched user request, got %+v", hits)
+	}
+	if hits[0].TurnIdx != 1 || hits[0].MessageIdx != 1 {
+		t.Fatalf("user hit indexes = turn %d message %d, want logical turn 1 and message line 1", hits[0].TurnIdx, hits[0].MessageIdx)
+	}
+	if !hits[0].ContextIncluded {
+		t.Fatalf("user hit should mark adjacent assistant context_included: %+v", hits[0])
+	}
+	for _, want := range []string{"user: Analyze Bittensor subnet 120", "assistant: Final finding", "RESUME-MARKER-X"} {
+		if !strings.Contains(hits[0].Snippet, want) {
+			t.Fatalf("adjacent answer snippet missing %q:\n%+v", want, hits[0])
+		}
+	}
+	requireMatchedTerms(t, hits[0].MatchedTerms, "bittensor", "subnet", "120", "roadmap", "owner")
+}
+
 func TestSearchMatchesChineseWithoutSpaces(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "stock-cn", []testMessage{

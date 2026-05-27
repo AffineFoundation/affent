@@ -173,6 +173,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 	messageIdx := 0
 	turnIdx := 0
 	var prev searchableMessage
+	var pendingUser *pendingUserHit
 	for {
 		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
 		if errors.Is(err, io.EOF) {
@@ -185,7 +186,15 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			return nil, err
 		}
 		messageIdx++
+		flushPendingUser := func() {
+			if pendingUser == nil {
+				return
+			}
+			fileHits = appendBoundedHits(fileHits, pendingUser.hit, maxPerSession)
+			pendingUser = nil
+		}
 		if overLimit {
+			flushPendingUser()
 			prev = searchableMessage{}
 			continue
 		}
@@ -194,12 +203,17 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			Content string `json:"content"`
 		}
 		if err := json.Unmarshal(line, &m); err != nil {
+			flushPendingUser()
 			prev = searchableMessage{}
 			continue
 		}
 		if m.Role != "user" && m.Role != "assistant" {
+			flushPendingUser()
 			prev = searchableMessage{}
 			continue
+		}
+		if pendingUser != nil && m.Role != "assistant" {
+			flushPendingUser()
 		}
 		if m.Role == "user" {
 			turnIdx++
@@ -210,6 +224,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		}
 		content := strings.TrimSpace(m.Content)
 		if content == "" {
+			flushPendingUser()
 			prev = searchableMessage{}
 			continue
 		}
@@ -219,9 +234,13 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		}, prev, terms)
 		prev = searchableMessage{role: m.Role, content: content}
 		if score <= 0 {
+			if pendingUser != nil && m.Role == "assistant" {
+				pendingUser.hit = pendingUser.withNextAssistant(content, terms)
+				flushPendingUser()
+			}
 			continue
 		}
-		fileHits = appendBoundedHits(fileHits, Hit{
+		hit := Hit{
 			SessionID:       sid,
 			TurnIdx:         hitTurnIdx,
 			MessageIdx:      messageIdx,
@@ -231,13 +250,46 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			MatchedTerms:    append([]string(nil), matchedTerms...),
 			ContextIncluded: contextIncluded,
 			ModTime:         mtime,
-		}, maxPerSession)
+		}
+		if m.Role == "user" {
+			pendingUser = &pendingUserHit{hit: hit, content: content}
+			continue
+		}
+		if pendingUser != nil && contextIncluded {
+			pendingUser = nil
+		}
+		if pendingUser != nil && !contextIncluded {
+			pendingUser.hit = pendingUser.withNextAssistant(content, terms)
+			flushPendingUser()
+		}
+		fileHits = appendBoundedHits(fileHits, hit, maxPerSession)
+	}
+	if pendingUser != nil {
+		fileHits = appendBoundedHits(fileHits, pendingUser.hit, maxPerSession)
 	}
 	sortHits(fileHits)
 	if maxPerSession > 0 && len(fileHits) > maxPerSession {
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
+}
+
+type pendingUserHit struct {
+	hit     Hit
+	content string
+}
+
+func (p pendingUserHit) withNextAssistant(assistantContent string, terms []string) Hit {
+	combined := "user: " + p.content + "\nassistant: " + assistantContent
+	score, matchedTerms := scoreContentDetails(combined, terms)
+	hit := p.hit
+	if score > 0 {
+		hit.Score = score
+		hit.MatchedTerms = append([]string(nil), matchedTerms...)
+	}
+	hit.Snippet = SnippetAround(combined, terms)
+	hit.ContextIncluded = true
+	return hit
 }
 
 type searchableMessage struct {
