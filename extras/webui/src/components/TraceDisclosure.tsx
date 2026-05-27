@@ -7,11 +7,13 @@ export function TraceDisclosure({
   events,
   className,
   label = "Raw trace",
+  onOpenArtifact,
   children,
 }: {
   events: readonly NormalizedEvent[];
   className: string;
   label?: string;
+  onOpenArtifact?: (path: string) => void;
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -28,7 +30,7 @@ export function TraceDisclosure({
       {open ? (
         <>
           {children}
-          <EventTrace events={events} />
+          <EventTrace events={events} onOpenArtifact={onOpenArtifact} />
         </>
       ) : null}
     </details>

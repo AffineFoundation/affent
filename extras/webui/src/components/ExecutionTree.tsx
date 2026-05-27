@@ -370,7 +370,7 @@ function NodeDetails({
             </>
           ) : null}
           {events.length ? (
-            <TraceDisclosure events={events} className="nested-raw" />
+            <TraceDisclosure events={events} className="nested-raw" onOpenArtifact={onOpenArtifact} />
           ) : null}
         </DetailSection>
       ) : null}

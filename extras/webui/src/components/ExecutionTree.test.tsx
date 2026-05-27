@@ -1,6 +1,7 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { normalizeEvents } from "../normalize/normalizeEvent";
 import type { TurnState } from "../store/sessionState";
 import { ExecutionTree } from "./ExecutionTree";
 
@@ -37,6 +38,34 @@ describe("ExecutionTree", () => {
     expect(screen.getByText("000001-c2.txt (8 KiB, 1 MiB omitted)")).toBeInTheDocument();
     expect(screen.getByText("output file")).toBeInTheDocument();
     expect(screen.getByText("Status done · Exit 0 · File 000001-c2.txt (8 KiB, 1 MiB omitted) · +1 more")).toBeInTheDocument();
+  });
+
+  it("opens artifact files from nested raw trace rows", async () => {
+    const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
+    const events = normalizeEvents([
+      {
+        id: 5,
+        type: "tool.result",
+        data: {
+          turn_id: "t2",
+          call_id: "c2",
+          exit_code: 0,
+          result_summary: "Saved full command output",
+          result_truncated: true,
+          result_artifact_path: ".affent/artifacts/tool-results/000001-c2.txt",
+        },
+      },
+    ]);
+
+    render(<ExecutionTree turn={artifactTurn()} events={events} sessionId="s1" onOpenArtifact={onOpenArtifact} />);
+
+    await user.click(screen.getByRole("button", { name: /Command cat report\.txt/ }));
+    await user.click(screen.getByText("Raw trace"));
+    await user.click(screen.getByText("Action finished"));
+    await user.click(within(screen.getByTestId("event-trace")).getByRole("button", { name: "Open artifact" }));
+
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c2.txt");
   });
 
   it("keeps the output file visible in the action summary when duration would otherwise crowd it out", async () => {

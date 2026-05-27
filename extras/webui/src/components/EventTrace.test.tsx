@@ -70,6 +70,31 @@ describe("EventTrace", () => {
     expect(screen.queryByText("tool.result")).not.toBeInTheDocument();
   });
 
+  it("opens tool result artifacts from expanded trace rows", async () => {
+    const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
+    const events = normalizeEvents([
+      {
+        id: 5,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: "Saved full command output",
+          result_truncated: true,
+          result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+        },
+      },
+    ]);
+
+    render(<EventTrace events={events} onOpenArtifact={onOpenArtifact} />);
+
+    await user.click(screen.getByText("Action finished"));
+    await user.click(screen.getByRole("button", { name: "Open artifact" }));
+
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");
+  });
+
   it("surfaces structured tool failure kinds in result rows", () => {
     const events = normalizeEvents([
       {

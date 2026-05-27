@@ -3,7 +3,7 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import { buildEventTraceModel, streamSummary, type EventTraceItem } from "../view/eventTrace";
 import { CopyButton } from "./CopyButton";
 
-export function EventTrace({ events }: { events: readonly NormalizedEvent[] }) {
+export function EventTrace({ events, onOpenArtifact }: { events: readonly NormalizedEvent[]; onOpenArtifact?: (path: string) => void }) {
   const model = buildEventTraceModel(events);
 
   return (
@@ -18,7 +18,7 @@ export function EventTrace({ events }: { events: readonly NormalizedEvent[] }) {
       {model.items.map((item) => {
         if (item.kind === "deltaGroup") return renderDeltaGroup(item);
         if (item.kind === "eventGroup") return renderEventGroup(item);
-        return renderEvent(item);
+        return renderEvent(item, onOpenArtifact);
       })}
     </div>
   );
@@ -61,7 +61,8 @@ function renderMetadata(events: readonly NormalizedEvent[]) {
   );
 }
 
-function renderEvent(item: Extract<EventTraceItem, { kind: "event" }>) {
+function renderEvent(item: Extract<EventTraceItem, { kind: "event" }>, onOpenArtifact?: (path: string) => void) {
+  const artifactPath = artifactPathForEvent(item.event);
   return (
     <EventDisclosure
       key={`${item.event.id}-${item.event.type}`}
@@ -83,6 +84,11 @@ function renderEvent(item: Extract<EventTraceItem, { kind: "event" }>) {
     >
       <div className="event-body">
         <div className="event-actions">
+          {artifactPath && onOpenArtifact ? (
+            <button type="button" className="event-action" onClick={() => onOpenArtifact(artifactPath)}>
+              Open artifact
+            </button>
+          ) : null}
           <CopyButton label="Copy event" value={JSON.stringify(item.event.raw, null, 2)} className="event-action" />
         </div>
         <pre className="code">{JSON.stringify(item.event.raw, null, 2)}</pre>
@@ -199,6 +205,12 @@ function schemaVersion(event: NormalizedEvent): number | undefined {
     ? (event.data as { schema_version?: unknown }).schema_version
     : undefined;
   return typeof value === "number" ? value : undefined;
+}
+
+function artifactPathForEvent(event: NormalizedEvent): string | undefined {
+  if (!event.data || typeof event.data !== "object") return undefined;
+  const value = (event.data as { result_artifact_path?: unknown }).result_artifact_path;
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 function copyHistoryText(events: readonly NormalizedEvent[]): string {
