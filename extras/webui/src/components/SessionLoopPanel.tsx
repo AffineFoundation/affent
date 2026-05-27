@@ -77,6 +77,7 @@ export function SessionLoopPanel({
   const feeds = state?.protocol_feeds ?? 0;
   const updates = state?.protocol_updates ?? 0;
   const event = compact(state?.last_event_summary);
+  const memory = loopMemoryUpdate(state);
   const disabled = status === "disabled";
   const draft = status === "draft";
   const title = disabled ? "Disabled" : statusLabel(status);
@@ -96,6 +97,7 @@ export function SessionLoopPanel({
           {path ? <LoopField label="File" value={path} mono /> : null}
           {feeds > 0 ? <LoopField label="Feeds" value={String(feeds)} /> : null}
           {updates > 0 ? <LoopField label="Updates" value={String(updates)} /> : null}
+          {memory ? <LoopField label="Memory" value={memory} /> : null}
           {compact(state?.last_decision_kind) ? (
             <LoopField label="Decision" value={[state?.last_decision_kind, state?.last_decision].filter(Boolean).join(":")} />
           ) : null}
@@ -181,6 +183,31 @@ function LoopField({ label, value, mono = false }: { label: string; value: strin
       {mono ? <code>{value}</code> : <strong>{value}</strong>}
     </div>
   );
+}
+
+function loopMemoryUpdate(state?: SessionLoopState): string | undefined {
+  if (!state) return undefined;
+  const action = compact(state.last_memory_update_action);
+  const location = compact(state.last_memory_update_location) || memoryLocation(state);
+  const preview = compact(state.last_memory_update_preview) || compact(state.last_memory_update_next_preview) || compact(state.last_memory_update_previous_preview);
+  const parts = [action ? memoryActionLabel(action) : undefined, location, preview].filter(Boolean);
+  if (parts.length > 0) return parts.join(" · ");
+  const count = state.memory_update_events ?? 0;
+  return count > 0 ? `${count} memory ${count === 1 ? "update" : "updates"}` : undefined;
+}
+
+function memoryLocation(state: SessionLoopState): string | undefined {
+  const target = compact(state.last_memory_update_target);
+  const topic = compact(state.last_memory_update_topic);
+  if (target && topic) return `${target}:${topic}`;
+  return target || topic;
+}
+
+function memoryActionLabel(action: string): string {
+  if (action === "add") return "Added";
+  if (action === "replace") return "Replaced";
+  if (action === "remove") return "Removed";
+  return action;
 }
 
 function loopDetail({
