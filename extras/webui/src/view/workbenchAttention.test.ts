@@ -12,7 +12,7 @@ describe("buildWorkbenchAttention", () => {
       files: files(),
       changes: changes({ changed: 2 }),
       run: run({ failed: 1 }),
-    })).toEqual({ label: "1 failed command", detail: "View run", tone: "error" });
+    })).toEqual({ label: "1 failed command", detail: "View run", tone: "error", target: "run" });
   });
 
   it("uses recovery when there is no failed Workbench surface", () => {
@@ -21,7 +21,7 @@ describe("buildWorkbenchAttention", () => {
       files: files({ available: 1 }),
       changes: changes({ changed: 2 }),
       run: run(),
-    })).toEqual({ label: "Recovery hint", detail: "rerun tests", tone: "warning" });
+    })).toEqual({ label: "Recovery hint", detail: "rerun tests", tone: "warning", target: "context" });
   });
 
   it("uses changed files as the lowest attention badge and ignores read-only files", () => {
@@ -30,7 +30,7 @@ describe("buildWorkbenchAttention", () => {
       files: files({ available: 2 }),
       changes: changes({ changed: 3 }),
       run: run(),
-    })).toEqual({ label: "3 changed files", detail: "Review changes", tone: "attention" });
+    })).toEqual({ label: "3 changed files", detail: "Review changes", tone: "attention", target: "changes" });
 
     expect(buildWorkbenchAttention({
       overview: overview(),

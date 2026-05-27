@@ -1348,15 +1348,24 @@ export function App() {
                 {sessionFiles.items.length > 0 ? (
                   <SessionFilesPanel
                     files={sessionFiles}
+                    defaultOpen={workbenchAttention?.target === "files"}
                     onOpenArtifact={(path) => void handleOpenArtifact(path)}
                     onUseAsDraft={handleUseAsDraft}
                   />
                 ) : null}
                 {sessionChanges.files.length > 0 ? (
-                  <SessionChangesPanel changes={sessionChanges} onUseAsDraft={handleUseAsDraft} />
+                  <SessionChangesPanel
+                    changes={sessionChanges}
+                    defaultOpen={workbenchAttention?.target === "changes"}
+                    onUseAsDraft={handleUseAsDraft}
+                  />
                 ) : null}
                 {sessionRun.commands.length > 0 ? (
-                  <SessionRunPanel run={sessionRun} onUseAsDraft={handleUseAsDraft} />
+                  <SessionRunPanel
+                    run={sessionRun}
+                    defaultOpen={workbenchAttention?.target === "run"}
+                    onUseAsDraft={handleUseAsDraft}
+                  />
                 ) : null}
                 <RuntimeStatsPanel
                   stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}

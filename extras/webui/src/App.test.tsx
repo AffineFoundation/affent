@@ -1788,9 +1788,8 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
 
     const changes = await screen.findByTestId("session-changes-panel");
-    expect(changes).not.toHaveAttribute("open");
+    expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
-    await user.click(within(changes).getByText("Changes"));
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Adjust" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using changed file");
@@ -1954,9 +1953,8 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
 
     const run = await screen.findByTestId("session-run-panel");
-    expect(run).not.toHaveAttribute("open");
+    expect(run).toHaveAttribute("open");
     expect(run).toHaveTextContent("1 failed command");
-    await user.click(within(run).getByText("Run"));
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
