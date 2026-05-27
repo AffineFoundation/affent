@@ -341,6 +341,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 	turnIdx := 0
 	var prev searchableMessage
 	var pendingUser *pendingUserHit
+	var latestMetaHit Hit
 	for {
 		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
 		if errors.Is(err, io.EOF) {
@@ -395,6 +396,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			prev = searchableMessage{}
 			continue
 		}
+		latestMetaHit = recentAnchorHitForMessage(sid, m.Role, content, prev, hitTurnIdx, messageIdx, mtime)
 		score, snippetContent, matchedTerms, contextIncluded := scoreSearchableMessage(searchableMessage{
 			role:    m.Role,
 			content: content,
@@ -434,11 +436,36 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 	if pendingUser != nil {
 		fileHits = appendBoundedHits(fileHits, pendingUser.hit, maxPerSession)
 	}
+	if len(fileHits) == 0 {
+		if idScore, matchedTerms := scoreContentDetails(sid, terms); idScore > 0 && latestMetaHit.Snippet != "" {
+			latestMetaHit.Score = idScore
+			latestMetaHit.MatchedTerms = append([]string(nil), matchedTerms...)
+			fileHits = appendBoundedHits(fileHits, latestMetaHit, maxPerSession)
+		}
+	}
 	sortHits(fileHits)
 	if maxPerSession > 0 && len(fileHits) > maxPerSession {
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
+}
+
+func recentAnchorHitForMessage(sid, role, content string, prev searchableMessage, turnIdx, messageIdx int, mtime string) Hit {
+	snippet := content
+	contextIncluded := false
+	if role == "assistant" && prev.role == "user" && strings.TrimSpace(prev.content) != "" {
+		snippet = "user: " + prev.content + "\nassistant: " + content
+		contextIncluded = true
+	}
+	return Hit{
+		SessionID:       sid,
+		TurnIdx:         turnIdx,
+		MessageIdx:      messageIdx,
+		Role:            role,
+		Snippet:         TruncateSnippet(snippet, snippetLen),
+		ContextIncluded: contextIncluded,
+		ModTime:         mtime,
+	}
 }
 
 type pendingUserHit struct {

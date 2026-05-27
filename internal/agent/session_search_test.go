@@ -170,6 +170,33 @@ func TestSessionSearchTool_NoResultsIncludesRecentSessionAnchors(t *testing.T) {
 	}
 }
 
+func TestSessionSearchTool_RetryWithRecentSessionIDFindsAnchor(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "past-stock",
+		ChatMessage{Role: "user", Content: "Review the latest risk packet"},
+		ChatMessage{Role: "assistant", Content: "final marker HIST-STOCK-44"},
+	)
+
+	tool := sessionSearchTool(dir, "current")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"past-stock"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp SessionSearchResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out)
+	}
+	if resp.Total != 1 || len(resp.Results) != 1 {
+		t.Fatalf("expected one session-id retry hit, got %+v", resp)
+	}
+	if resp.Results[0].SessionID != "past-stock" ||
+		!strings.Contains(resp.Results[0].Snippet, "HIST-STOCK-44") ||
+		len(resp.RecentSessions) != 0 ||
+		resp.Message != "" {
+		t.Fatalf("unexpected session-id retry response: %+v", resp)
+	}
+}
+
 // TestSessionSearchTool_BadArgs pins JSON-decode failure surfacing
 // as an error (not silently swallowed).
 func TestSessionSearchTool_BadArgs(t *testing.T) {

@@ -207,6 +207,38 @@ func TestRecentSessionsCapsAndCompactsPreviews(t *testing.T) {
 	}
 }
 
+func TestSearchCanRecoverBySessionIDAnchor(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "market-alpha", []testMessage{
+		{Role: "user", Content: "Review the latest risk packet"},
+		{Role: "assistant", Content: "final marker HIST-STOCK-44 with inventory-drag risk"},
+	})
+	writeSessionLog(t, dir, "current", []testMessage{
+		{Role: "user", Content: "market-alpha should not leak from current session"},
+	})
+
+	hits, err := Search(context.Background(), dir, "current", "market-alpha", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("expected one session-id anchor hit, got %+v", hits)
+	}
+	hit := hits[0]
+	if hit.SessionID != "market-alpha" || hit.Role != "assistant" {
+		t.Fatalf("unexpected session-id hit: %+v", hit)
+	}
+	if hit.TurnIdx != 1 || hit.MessageIdx != 2 || !hit.ContextIncluded {
+		t.Fatalf("session-id anchor should preserve latest adjacent context, got %+v", hit)
+	}
+	requireMatchedTerms(t, hit.MatchedTerms, "market", "alpha")
+	for _, want := range []string{"Review the latest risk packet", "HIST-STOCK-44", "inventory-drag"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("session-id anchor snippet missing %q:\n%+v", want, hit)
+		}
+	}
+}
+
 func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "market-alpha", []testMessage{
