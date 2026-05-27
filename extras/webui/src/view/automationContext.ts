@@ -141,10 +141,10 @@ function scheduleAutomationDetail(
   if (error) return error;
   if (summary?.next_run_at) return `Next ${formatScheduleTime(summary.next_run_at)}${compact(summary.next_prompt_preview) ? ` · ${compact(summary.next_prompt_preview)}` : ""}`;
   const enabled = Math.max(summary?.enabled ?? 0, visibleSchedules.filter((schedule) => schedule.enabled).length);
-  if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} enabled; open Timers to inspect the next run.`;
+  if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} enabled; open Automation to inspect the next run.`;
   const count = Math.max(summary?.count ?? 0, visibleSchedules.length);
   if (count > 0) return `${count} timer${count === 1 ? "" : "s"} paused; resume before the next needed check-in or delete it.`;
-  if (session?.has_schedules) return "Open Timers to load saved schedule details.";
+  if (session?.has_schedules) return "Open Automation to load saved schedule details.";
   return undefined;
 }
 

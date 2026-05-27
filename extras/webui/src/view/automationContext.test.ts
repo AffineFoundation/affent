@@ -100,4 +100,50 @@ describe("automationContext view model", () => {
       detail: "2 timers paused; resume before the next needed check-in or delete it.",
     });
   });
+
+  it("keeps timer next-run guidance under the unified Automation entry", () => {
+    expect(buildAutomationContext(
+      {
+        id: "s1",
+        active: true,
+        durable: true,
+        has_conversation: true,
+        has_events: true,
+        has_artifacts: false,
+        has_memory: false,
+        has_runtime_skills: false,
+        has_schedules: true,
+        schedules: {
+          count: 1,
+          enabled: 1,
+        },
+      },
+      undefined,
+      { state: "idle" },
+      { state: "idle" },
+    )).toEqual({
+      title: "1 timer active",
+      detail: "1 timer enabled; open Automation to inspect the next run.",
+    });
+
+    expect(buildAutomationContext(
+      {
+        id: "s1",
+        active: true,
+        durable: true,
+        has_conversation: true,
+        has_events: true,
+        has_artifacts: false,
+        has_memory: false,
+        has_runtime_skills: false,
+        has_schedules: true,
+      },
+      undefined,
+      { state: "idle" },
+      { state: "idle" },
+    )).toEqual({
+      title: "Timers available",
+      detail: "Open Automation to load saved schedule details.",
+    });
+  });
 });
