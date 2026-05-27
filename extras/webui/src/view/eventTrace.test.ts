@@ -656,6 +656,7 @@ describe("eventTrace view model", () => {
   });
 
   it("surfaces browser scroll telemetry on tool result rows", () => {
+    const nextHint = "scrolling did not move the page; use browser_network/browser_network_read for hidden XHR/fetch data.";
     const items = buildEventTraceItems(normalizeEvents([
       {
         id: 1,
@@ -676,7 +677,7 @@ describe("eventTrace view model", () => {
             "PAGE TEXT:",
             "Market Cap",
             "SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
-            "Next: scrolling did not move the page; use browser_network/browser_network_read for hidden XHR/fetch data.",
+            `Next: ${nextHint}`,
           ].join("\n"),
           result_truncated: false,
         },
@@ -691,11 +692,52 @@ describe("eventTrace view model", () => {
           "browser_scroll",
           "18 ms",
           "scroll down no movement at bottom y 1200/1200",
+          `next ${streamSummary(nextHint)}`,
           "partial source",
           "https://taostats.io/subnets/120",
           "preview PAGE TEXT: Market Cap",
         ],
         badges: ["dynamic_partial", "scroll no movement", "scroll bottom"],
+      },
+    });
+  });
+
+  it("surfaces browser network ref guidance before read evidence exists", () => {
+    const resultSummary = [
+      "BROWSER_NETWORK: status=matches page_url=https://taostats.io/subnets/120 query=\"market cap\" refs=n2",
+      "ref n2 url=https://api.taostats.io/subnets/120 preview={\"price\":\"0.06342 T\"}",
+      "Next: call browser_network_read with the most relevant ref and json_path before citing values.",
+    ].join("\n");
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "browser_network" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 22,
+          result_summary: resultSummary,
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action finished",
+        meta: [
+          "browser_network",
+          "22 ms",
+          "next call browser_network_read with the most relevant ref and json_path before citing values.",
+          streamSummary(resultSummary),
+        ],
+        badges: [],
       },
     });
   });

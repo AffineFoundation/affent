@@ -514,7 +514,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
   const resultText = readString(event.data, "result_summary") ?? fullResultText;
-  const nextHint = typeof exitCode === "number" && exitCode !== 0 ? toolResultNextHint(event) : undefined;
+  const nextHint = shouldSurfaceToolResultNextHint(tool, exitCode, sourceAccess) ? toolResultNextHint(event) : undefined;
   const loopGuard = loopGuardMeta(event, fullResultText || resultText);
   const scrollTelemetry = tool === "browser_scroll" ? browserScrollTelemetryMeta(fullResultText) : undefined;
   const resultPreview = sessionSearchPayload
@@ -560,6 +560,16 @@ function toolResultNextHint(event: NormalizedEvent): string | undefined {
   const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
   const next = match?.[1]?.trim();
   return next || undefined;
+}
+
+function shouldSurfaceToolResultNextHint(
+  tool: string | undefined,
+  exitCode: number | undefined,
+  sourceAccess: ReturnType<typeof describeSourceAccess>,
+): boolean {
+  if (typeof exitCode === "number" && exitCode !== 0) return true;
+  if (tool === "browser_network" || tool === "browser_scroll") return true;
+  return sourceAccess?.status === "dynamic_partial" || sourceAccess?.status === "discovery_only";
 }
 
 function loopGuardMeta(event: NormalizedEvent, resultText: string): string[] {
