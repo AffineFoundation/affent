@@ -372,7 +372,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"remove":  res.ToolStats.MemoryUpdateRemove,
 		}, tags...)
 	}
-	if res.ToolStats.MemorySearchCalls > 0 || res.ToolStats.MemorySearchMisses > 0 || len(res.MemorySearchMissExamples) > 0 {
+	if res.ToolStats.MemorySearchMisses > 0 || len(res.MemorySearchMissExamples) > 0 {
 		topics := 0
 		for _, ex := range res.MemorySearchMissExamples {
 			topics += ex.TopicCount
