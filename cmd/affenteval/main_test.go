@@ -366,6 +366,40 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 			wantErr: "plan-edit missing edit_file, plan",
 		},
 		{
+			name:   "memory stats imply memory tool",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true},
+			scenario: agenteval.BatchScenario{
+				Name:                     "memory-stats",
+				RequiredToolStatsAtLeast: map[string]int{"memory_updates": 1},
+			},
+			wantErr: "memory-stats missing memory",
+		},
+		{
+			name:   "runtime memory satisfies memory stats",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeMemory: true},
+			scenario: agenteval.BatchScenario{
+				Name:                     "memory-stats",
+				RequiredToolStatsAtLeast: map[string]int{"memory_update_add": 1},
+			},
+		},
+		{
+			name:   "source access stats require a web or browser surface",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "readonly_workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:                     "source-stats",
+				RequiredToolStatsAtLeast: map[string]int{"source_access_verified": 1},
+			},
+			wantErr: "source-stats missing source_access",
+		},
+		{
+			name:   "individual web tool satisfies source access stats",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "web_fetch"},
+			scenario: agenteval.BatchScenario{
+				Name:                     "source-stats",
+				RequiredToolStatsAtLeast: map[string]int{"source_access_results": 1},
+			},
+		},
+		{
 			name:   "tool order and argument requirements are validated before run",
 			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "read_file"},
 			scenario: agenteval.BatchScenario{

@@ -4008,6 +4008,9 @@ func enabledRuntimeToolSet(runtimeTools string, runtimeAllTools, runtimeMemory, 
 		for _, name := range names {
 			if strings.TrimSpace(name) != "" {
 				enabled[name] = true
+				if name == "web_fetch" || name == "web_search" || strings.HasPrefix(name, "browser_") {
+					enabled["source_access"] = true
+				}
 			}
 		}
 	}
@@ -4066,6 +4069,11 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 	for tool := range scenario.RequiredToolCounts {
 		add(tool)
 	}
+	for stat := range scenario.RequiredToolStatsAtLeast {
+		for _, tool := range runtimeToolsForRequiredStat(stat) {
+			add(tool)
+		}
+	}
 	for tool := range scenario.RequiredToolResultText {
 		add(tool)
 	}
@@ -4112,6 +4120,26 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+func runtimeToolsForRequiredStat(stat string) []string {
+	stat = strings.TrimSpace(stat)
+	switch {
+	case stat == "memory_updates" || strings.HasPrefix(stat, "memory_update_"):
+		return []string{agent.MemoryToolName}
+	case strings.HasPrefix(stat, "session_search_"):
+		return []string{agent.SessionSearchToolName}
+	case strings.HasPrefix(stat, "source_access_"):
+		return []string{"source_access"}
+	case strings.Contains(stat, "focused_task"):
+		return []string{agent.FocusedTaskToolName}
+	case strings.Contains(stat, "subagent"):
+		return []string{agent.SubagentToolName}
+	case strings.Contains(stat, "plan"):
+		return []string{agent.PlanToolName}
+	default:
+		return nil
+	}
 }
 
 func evalWorkspaceToolNames() []string {
