@@ -942,10 +942,10 @@ func latestRecoveryHintFromConversationFile(path string) (string, error) {
 		}
 		line = bytes.TrimRight(line, "\r\n")
 		var msg agent.ChatMessage
-		if err := json.Unmarshal(line, &msg); err != nil || msg.Role != "tool" {
+		if err := json.Unmarshal(line, &msg); err != nil {
 			continue
 		}
-		if hint := recoveryHintFromToolResult("", msg.Content); hint != "" {
+		if hint := recoveryHintFromConversationMessage(msg); hint != "" {
 			latest = hint
 		}
 	}
@@ -1176,7 +1176,20 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		}
 		line = bytes.TrimRight(line, "\r\n")
 		var ev sse.Event
-		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeToolResult {
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		if ev.Type == sse.TypeConversationRepaired {
+			var p sse.ConversationRepairedPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if hint := recoveryHintFromText(p.Next); hint != "" {
+				latest = hint
+			}
+			continue
+		}
+		if ev.Type != sse.TypeToolResult {
 			continue
 		}
 		var p sse.ToolResultPayload
@@ -1194,6 +1207,20 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 	return latest, nil
 }
 
+func recoveryHintFromConversationMessage(msg agent.ChatMessage) string {
+	switch msg.Role {
+	case "tool":
+		return recoveryHintFromToolResult("", msg.Content)
+	case "user":
+		if !strings.Contains(msg.Content, "Failure: kind=resume_") {
+			return ""
+		}
+		return recoveryHintFromToolResult("", msg.Content)
+	default:
+		return ""
+	}
+}
+
 func recoveryHintFromToolResult(summary, result string) string {
 	text := summary
 	if result != "" && result != summary {
@@ -1206,7 +1233,11 @@ func recoveryHintFromToolResult(summary, result string) string {
 	if len(match) < 2 {
 		return ""
 	}
-	return textutil.Preview(strings.Join(strings.Fields(match[1]), " "), maxSessionRecoveryHintChars)
+	return recoveryHintFromText(match[1])
+}
+
+func recoveryHintFromText(text string) string {
+	return textutil.Preview(strings.Join(strings.Fields(text), " "), maxSessionRecoveryHintChars)
 }
 
 func contextCompactSummaryState(summaryPresent bool, summaryBytes int, summaryPreview string, summaryPresentKnown bool) string {

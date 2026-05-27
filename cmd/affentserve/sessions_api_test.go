@@ -394,6 +394,64 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromConversation(t *testing.
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromConversationRepairNote(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "resume-duplicate-repair")
+	dir := pool.sessionDirPath("resume-duplicate-repair")
+
+	if err := os.WriteFile(filepath.Join(dir, "conversation.jsonl"), []byte(
+		`{"role":"system","content":"base"}`+"\n"+
+			`{"role":"user","content":"continue recovered task"}`+"\n"+
+			`{"role":"user","content":"Recovered invalid tool result during resume.\nFailure: kind=resume_duplicate_tool_result\nNext: use the first matching tool result already in this conversation; do not replay the duplicate unless its evidence is still essential.\nToolCallID: c2\nTool: read_file\nRecoveredPreview: duplicate content"}`+"\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "resume-duplicate-repair")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "use the first matching tool result already in this conversation; do not replay the duplicate unless its evidence is still essential." {
+		t.Fatalf("latest_recovery_hint = %q, want duplicate repair hint", summary.LatestRecoveryHint)
+	}
+}
+
+func TestSummarizeDurableSessionRestoresRecoveryHintFromConversationRepairedEvent(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "resume-repair-event")
+	dir := pool.sessionDirPath("resume-repair-event")
+
+	toolRecovery := "file missing\nNext: inspect the workspace before retrying\nFailure: kind=not_found"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t1", CallID: "c1", ExitCode: 1, ResultSummary: toolRecovery, Result: toolRecovery})+
+			sessionEventLine(t, sse.TypeConversationRepaired, sse.ConversationRepairedPayload{
+				SessionID:             "resume-repair-event",
+				DuplicateToolResults:  2,
+				UnexpectedToolResults: 1,
+				FailureKind:           "resume_duplicate_tool_result",
+				Next:                  "use the first matching tool result already in this conversation; do not replay the duplicate unless its evidence is still essential.",
+			}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "resume-repair-event")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "use the first matching tool result already in this conversation; do not replay the duplicate unless its evidence is still essential." {
+		t.Fatalf("latest_recovery_hint = %q, want conversation.repaired hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
 	got := mergeSessionSummaries(
 		sessionSummary{
