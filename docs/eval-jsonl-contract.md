@@ -222,11 +222,11 @@ Scenario records describe one eval case:
 - `source_access_examples`: optional bounded examples of normalized
   `SourceAccess:` evidence. Each sample includes tool index, call id, tool
   name, evidence status (`verified`, `network`, `dynamic_partial`, or
-  `discovery_only`), accessed/requested URLs, URL field, source method, and
-  JSON path when present. Browser network reads also include the captured
-  response `ref` when the `SourceAccess:` header carried one. Batch summary
-  examples also include the originating scenario name so a failed live-web
-  evidence chain can be traced directly.
+  `discovery_only`), accessed/requested URLs, URL field, source method, HTTP
+  status, content type, and JSON path when present. Browser network reads also
+  include the captured response `ref` when the `SourceAccess:` header carried
+  one. Batch summary examples also include the originating scenario name so a
+  failed live-web evidence chain can be traced directly.
 - `browser_network_examples`: optional bounded examples of `browser_network`
   searches. These are diagnostic refs/checks, not citable factual evidence.
   Each sample includes tool index, call id, current page URL, query, status

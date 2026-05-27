@@ -15,6 +15,8 @@ type Info struct {
 	SourceMethod                string
 	JSONPath                    string
 	Ref                         string
+	HTTPStatus                  string
+	ContentType                 string
 }
 
 // ParseLine extracts the accessed/requested URLs from a SourceAccess line.
@@ -49,6 +51,10 @@ func ParseLine(line string) Info {
 			info.SourceMethod = strings.TrimSpace(strings.TrimPrefix(field, "source_method="))
 		case strings.HasPrefix(field, "ref="):
 			info.Ref = strings.TrimSpace(strings.TrimPrefix(field, "ref="))
+		case strings.HasPrefix(field, "status="):
+			info.HTTPStatus = strings.TrimSpace(strings.TrimPrefix(field, "status="))
+		case strings.HasPrefix(field, "content_type="):
+			info.ContentType = strings.TrimSpace(strings.TrimPrefix(field, "content_type="))
 		}
 	}
 	return info

@@ -1489,7 +1489,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			CallID:     "call-2",
 			Tool:       "browser_network_read",
 			Args:       map[string]any{"ref": "n1", "json_path": "$.price"},
-			Result:     "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; source_method=network_xhr_fetch\nJSON_PATH: $.price\n\"0.06342 T\"",
+			Result:     "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\nJSON_PATH: $.price\n\"0.06342 T\"",
 			ExitCode:   0,
 			DurationMS: 12,
 		}, {
@@ -1783,6 +1783,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.SourceAccessExamples[1].RequestedURL != "https://taostats.io/subnets/120" ||
 		manifest.SourceAccessExamples[1].JSONPath != "$.price" ||
 		manifest.SourceAccessExamples[1].Ref != "n1" ||
+		manifest.SourceAccessExamples[1].HTTPStatus != "200" ||
+		manifest.SourceAccessExamples[1].ContentType != "application/json" ||
 		manifest.SourceAccessExamples[2].Status != "discovery_only" {
 		t.Fatalf("manifest source access examples = %+v", manifest.SourceAccessExamples)
 	}
@@ -1961,7 +1963,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"`message.delta`: `2`",
 		"## Source Evidence",
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
-		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` ref=`n1` source_method=`network_xhr_fetch` json_path=`$.price`",
+		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` ref=`n1` source_method=`network_xhr_fetch` http_status=`200` content_type=`application/json` json_path=`$.price`",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
 		"## Browser Network Searches",
 		"tool#8 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`call-8` requires_read=`true` citable=`false`",

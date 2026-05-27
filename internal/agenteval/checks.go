@@ -614,6 +614,12 @@ func sourceAccessExampleSummary(ex SourceAccessExample) string {
 	if ex.SourceMethod != "" {
 		parts = append(parts, "method="+ex.SourceMethod)
 	}
+	if ex.HTTPStatus != "" {
+		parts = append(parts, "http_status="+ex.HTTPStatus)
+	}
+	if ex.ContentType != "" {
+		parts = append(parts, "content_type="+ex.ContentType)
+	}
 	if ex.JSONPath != "" {
 		parts = append(parts, "json_path="+ex.JSONPath)
 	}

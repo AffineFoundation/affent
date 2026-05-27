@@ -9,6 +9,8 @@ export interface SourceAccessInfo {
   sourceMethod?: string;
   jsonPath?: string;
   ref?: string;
+  httpStatus?: string;
+  contentType?: string;
   status: SourceEvidenceStatus;
 }
 
@@ -27,6 +29,8 @@ export function describeSourceAccess(result: string | undefined): SourceAccessIn
     sourceMethod: fields.source_method,
     jsonPath: firstJSONPathLine(result),
     ref: fields.ref,
+    httpStatus: fields.status,
+    contentType: fields.content_type,
     status: "verified",
   };
   info.status = sourceEvidenceStatus(info, result ?? "");

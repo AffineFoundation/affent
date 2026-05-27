@@ -47,7 +47,7 @@ func TestFirstInfoFromResult(t *testing.T) {
 }
 
 func TestParseLineNetworkSource(t *testing.T) {
-	info := ParseLine("SourceAccess: browser_network_url=https://example.com/api/data; ref=n1; source_method=network_xhr_fetch")
+	info := ParseLine("SourceAccess: browser_network_url=https://example.com/api/data; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch")
 	if got, want := info.URLField, "browser_network_url"; got != want {
 		t.Fatalf("URLField = %q, want %q", got, want)
 	}
@@ -56,6 +56,12 @@ func TestParseLineNetworkSource(t *testing.T) {
 	}
 	if got, want := info.Ref, "n1"; got != want {
 		t.Fatalf("Ref = %q, want %q", got, want)
+	}
+	if got, want := info.HTTPStatus, "200"; got != want {
+		t.Fatalf("HTTPStatus = %q, want %q", got, want)
+	}
+	if got, want := info.ContentType, "application/json"; got != want {
+		t.Fatalf("ContentType = %q, want %q", got, want)
 	}
 	if !info.IsNetworkSource() {
 		t.Fatal("IsNetworkSource = false, want true")

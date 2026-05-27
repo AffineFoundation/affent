@@ -806,6 +806,8 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			URL:          "https://metrics.example/api.json",
 			RequestedURL: "https://metrics.example/dashboard",
 			SourceMethod: "network_xhr_fetch",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
 			JSONPath:     "$.price",
 		}},
 		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
@@ -923,7 +925,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 result=repeated failed input | Next: stop retrying this URL`,
-		"source_access_example: status=network tool=browser_network_read call_id=source-print-1 url=https://metrics.example/api.json requested=https://metrics.example/dashboard method=network_xhr_fetch json_path=$.price",
+		"source_access_example: status=network tool=browser_network_read call_id=source-print-1 url=https://metrics.example/api.json requested=https://metrics.example/dashboard method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price",
 		`browser_network_example: status=no_matches call_id=browser-network-print-1 page=https://metrics.example/dashboard query="market_cap" not_citable=true next="adjust query or read available network refs before citing values"`,
 		`memory_update_example: action=replace target=memory location=memory:markets call_id=memory-print-1 topic=markets previous="old dashboard rule" next="prefer browser_network_read evidence"`,
 		"hint[llm_timeout]",
@@ -1690,6 +1692,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			URL:          "https://metrics.example/api.json",
 			URLField:     "browser_network_url",
 			SourceMethod: "network_xhr_fetch",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
 			JSONPath:     "$.price",
 		}},
 		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
@@ -2030,6 +2034,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		sourceAccessExample["tool"] != "browser_network_read" ||
 		sourceAccessExample["status"] != "network" ||
 		sourceAccessExample["json_path"] != "$.price" ||
+		sourceAccessExample["http_status"] != "200" ||
+		sourceAccessExample["content_type"] != "application/json" ||
 		!strings.Contains(fmt.Sprint(sourceAccessExample["url"]), "metrics.example") {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
 	}
@@ -2671,13 +2677,15 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		SourceAccessNetwork:        2,
 		SourceAccessDynamicPartial: 1,
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
-			Scenario:  "taostats-rendered",
-			ToolIndex: 2,
-			CallID:    "summary-source-1",
-			Tool:      "browser_network_read",
-			Status:    "network",
-			URL:       "https://metrics.example/api.json",
-			JSONPath:  "$.price",
+			Scenario:    "taostats-rendered",
+			ToolIndex:   2,
+			CallID:      "summary-source-1",
+			Tool:        "browser_network_read",
+			Status:      "network",
+			URL:         "https://metrics.example/api.json",
+			HTTPStatus:  "200",
+			ContentType: "application/json",
+			JSONPath:    "$.price",
 		}},
 		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
 			Scenario:          "taostats-rendered",
@@ -3034,6 +3042,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sourceAccessExample["scenario"] != "taostats-rendered" ||
 		sourceAccessExample["call_id"] != "summary-source-1" ||
 		sourceAccessExample["status"] != "network" ||
+		sourceAccessExample["http_status"] != "200" ||
+		sourceAccessExample["content_type"] != "application/json" ||
 		sourceAccessExample["json_path"] != "$.price" {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
 	}

@@ -893,6 +893,12 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 		if entry.Info.SourceMethod != "" {
 			fmt.Fprintf(b, " source_method=`%s`", entry.Info.SourceMethod)
 		}
+		if entry.Info.HTTPStatus != "" {
+			fmt.Fprintf(b, " http_status=`%s`", entry.Info.HTTPStatus)
+		}
+		if entry.Info.ContentType != "" {
+			fmt.Fprintf(b, " content_type=`%s`", entry.Info.ContentType)
+		}
 		if entry.Info.JSONPath != "" {
 			fmt.Fprintf(b, " json_path=`%s`", entry.Info.JSONPath)
 		}

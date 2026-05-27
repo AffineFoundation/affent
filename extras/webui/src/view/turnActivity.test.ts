@@ -535,8 +535,8 @@ describe("buildTurnActivity", () => {
           call_id: "c2",
           exit_code: 0,
           duration_ms: 30,
-          result_summary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; source_method=network_xhr_fetch",
-          result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
+          result_summary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch",
+          result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
           result_truncated: false,
           result_bytes: 140,
           result_omitted_bytes: 0,
@@ -550,7 +550,7 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity?.evidencePreview).toEqual([
-      { label: "Network Source", value: "https://taostats.io/api/subnets/120", displayValue: "taostats.io/api/subnets · from taostats.io/subnets/120 · ref n1" },
+      { label: "Network Source", value: "https://taostats.io/api/subnets/120", displayValue: "taostats.io/api/subnets · from taostats.io/subnets/120 · ref n1 · http 200 · application/json" },
       { label: "Partial Source", value: "https://taostats.io/subnets/120", displayValue: "taostats.io/subnets/120" },
     ]);
     expect(activity?.evidenceAction?.draft).toContain("- Network Source taostats.io/api/subnets · from taostats.io/subnets/120");

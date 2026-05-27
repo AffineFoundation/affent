@@ -390,6 +390,8 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     sourceAccess ? sourceAccess.accessedUrl : resultPreview ? streamSummary(resultPreview) : undefined,
     sourceAccess?.requestedUrl && sourceAccess.requestedUrl !== sourceAccess.accessedUrl ? `from ${sourceAccess.requestedUrl}` : undefined,
     sourceAccess?.ref ? `ref ${sourceAccess.ref}` : undefined,
+    sourceAccess?.httpStatus ? `http ${sourceAccess.httpStatus}` : undefined,
+    sourceAccess?.contentType,
     sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
     artifactPath
       ? `artifact ${artifactDisplayLabel({

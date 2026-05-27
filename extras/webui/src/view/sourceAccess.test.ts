@@ -10,11 +10,13 @@ describe("describeSourceAccess", () => {
     });
     expect(partial ? sourceEvidenceLabel(partial) : "").toBe("partial source");
 
-    expect(describeSourceAccess("SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].price\n\"0.06342 T\"")).toMatchObject({
+    expect(describeSourceAccess("SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].price\n\"0.06342 T\"")).toMatchObject({
       status: "network",
       accessedUrl: "https://taostats.io/api/subnets/120",
       requestedUrl: "https://taostats.io/subnets/120",
       ref: "n1",
+      httpStatus: "200",
+      contentType: "application/json",
       jsonPath: "$.data.items[0].price",
     });
 

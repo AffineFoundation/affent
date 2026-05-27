@@ -234,7 +234,8 @@ diagnostics.
   browser XHR/fetch evidence (`browser_network_url` or
   `source_method=network_xhr_fetch`). Browser network reads may also carry a
   `ref=...` field linking the source evidence back to a prior
-  `browser_network` result.
+  `browser_network` result, plus optional response diagnostics such as
+  `status=200` and `content_type=application/json`.
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.

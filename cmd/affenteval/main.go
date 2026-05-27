@@ -1788,6 +1788,12 @@ func printSourceAccessExampleLines(w io.Writer, examples []agenteval.SourceAcces
 		if ex.SourceMethod != "" {
 			fmt.Fprintf(w, " method=%s", ex.SourceMethod)
 		}
+		if ex.HTTPStatus != "" {
+			fmt.Fprintf(w, " http_status=%s", ex.HTTPStatus)
+		}
+		if ex.ContentType != "" {
+			fmt.Fprintf(w, " content_type=%s", ex.ContentType)
+		}
 		if ex.JSONPath != "" {
 			fmt.Fprintf(w, " json_path=%s", ex.JSONPath)
 		}
