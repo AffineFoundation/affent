@@ -82,6 +82,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
+		`{"type":"loop.protocol_feed","data":{"turn_id":"t2","loop_id":"longrun","status":"running","mode":"full","feed_number":5,"protocol_feeds":5,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
 		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
@@ -181,11 +182,14 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		t.Fatalf("LoopDecisionStats examples = %+v", loopDecisions.Examples)
 	}
 	feeds := trace.LoopProtocolFeedStats(1)
-	if feeds.Count != 1 || feeds.ByMode["digest"] != 1 || feeds.Latest.FeedNumber != 4 || feeds.Latest.ProtocolPath != ".affent/loops/longrun/LOOP.md" || feeds.Latest.PlanLabel != "plan:1/3:active" || feeds.Latest.PlanCurrentStepIndex != 2 {
+	if feeds.Count != 2 || feeds.ByMode["digest"] != 1 || feeds.ByMode["full"] != 1 || feeds.Latest.FeedNumber != 5 || feeds.Latest.Mode != "full" || feeds.Latest.ProtocolPath != ".affent/loops/longrun/LOOP.md" || feeds.Latest.PlanLabel != "plan:1/3:active" || feeds.Latest.PlanCurrentStepIndex != 2 {
 		t.Fatalf("LoopProtocolFeedStats = %+v", feeds)
 	}
 	if len(feeds.Examples) != 1 || feeds.Examples[0].LoopID != "longrun" || feeds.Examples[0].Mode != "digest" || feeds.Examples[0].PlanCurrentStep != "verify browser network evidence" {
 		t.Fatalf("LoopProtocolFeedStats examples = %+v", feeds.Examples)
+	}
+	if res := LoopProtocolFullFeedAfterCompaction().Eval(trace); !res.Pass {
+		t.Fatalf("expected full loop protocol feed after compaction: %+v", res)
 	}
 	compactions := trace.ContextCompactionStats(1)
 	if compactions.Count != 1 || compactions.Reactive != 1 || compactions.Proactive != 0 || compactions.RemovedMessages != 32 || compactions.SummaryBytes != 2048 {
@@ -460,6 +464,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{Mode: "digest", PlanLabelContains: "market", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "source review"},
 		},
+		RequireLoopProtocolFullAfterCompact: true,
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"},
 		},
@@ -516,6 +521,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_protocol_feeds_at_least:1",
 		"loop_protocol_feed_mode_at_least:digest:1",
 		"loop_protocol_feed_match_at_least:digest:market:in_progress:source review:1",
+		"loop_protocol_full_feed_after_compaction",
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
 		"context_compactions_at_least:1",
@@ -1664,6 +1670,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence"},
 		},
+		RequireLoopProtocolFullAfterCompact: true,
 		RequiredToolResultText: map[string][]string{
 			"browser_network_read": {"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"},
 		},
@@ -1785,6 +1792,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(manifest.Expectations.RequiredLoopProtocolFeedMatches) != 1 ||
 		manifest.Expectations.RequiredLoopProtocolFeedMatches[0] != (DebugLoopProtocolFeedRequirement{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence"}) ||
+		!manifest.Expectations.RequireLoopProtocolFullAfterCompact ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"}) ||
 		len(manifest.Expectations.RequiredToolOrder) != 1 ||
 		manifest.Expectations.RequiredToolOrder[0] != (DebugToolOrderRequirement{Earlier: "web_fetch", Later: "browser_network_read"}) ||
@@ -2016,6 +2024,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_loop_decision_results: `defer=1`",
 		"required_loop_protocol_feeds: `1`",
 		"required_loop_protocol_feed_modes: `digest=1`",
+		"required_loop_protocol_full_after_compaction: `true`",
 		"required_focused_task_counts: `research=1`",
 		"required_subagent_mode_counts: `review=1`",
 		"required_no_errors: `delegation plan`",

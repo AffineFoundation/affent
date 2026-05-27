@@ -253,6 +253,44 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 	return false, nil
 }
 
+func appendTraceEventRef(t *Trace, typ string, data json.RawMessage, turnID string) {
+	ref, ok := traceEventRefFromPayload(typ, data, turnID)
+	if !ok {
+		return
+	}
+	ref.Index = len(t.EventOrder) + 1
+	t.EventOrder = append(t.EventOrder, ref)
+}
+
+func traceEventRefFromPayload(typ string, data json.RawMessage, turnID string) (TraceEventRef, bool) {
+	switch typ {
+	case sse.TypeLoopProtocolFeed:
+		var p sse.LoopProtocolFeedPayload
+		if err := json.Unmarshal(data, &p); err != nil || !traceEventMatchesTurn(p.TurnID, turnID) {
+			return TraceEventRef{}, false
+		}
+		return TraceEventRef{
+			Type:             typ,
+			TurnID:           p.TurnID,
+			LoopProtocolMode: p.Mode,
+			LoopProtocolPath: p.ProtocolPath,
+		}, true
+	case sse.TypeContextCompact:
+		var p sse.ContextCompactPayload
+		if err := json.Unmarshal(data, &p); err != nil || !traceEventMatchesTurn(p.TurnID, turnID) {
+			return TraceEventRef{}, false
+		}
+		return TraceEventRef{
+			Type:            typ,
+			TurnID:          p.TurnID,
+			ContextReason:   p.Reason,
+			ContextReactive: p.Reactive,
+		}, true
+	default:
+		return TraceEventRef{}, false
+	}
+}
+
 func toolResultFailureKinds(tool string, p sse.ToolResultPayload) []string {
 	var kinds []string
 	if p.FailureKind != "" {

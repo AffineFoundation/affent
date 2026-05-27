@@ -662,6 +662,10 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
 		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence"},
 		{Mode: "full", FeedNumber: 2, PlanLabel: "SN120 research", PlanCurrentStepStatus: "pending", PlanCurrentStep: "write final cited analysis"},
+	}, EventOrder: []TraceEventRef{
+		{Index: 1, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "digest", LoopProtocolPath: ".affent/loops/sn120/LOOP.md"},
+		{Index: 2, Type: sse.TypeContextCompact, ContextReason: "threshold"},
+		{Index: 3, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "full", LoopProtocolPath: ".affent/loops/sn120/LOOP.md"},
 	}}
 
 	stats := trace.LoopProtocolFeedStats(1)
@@ -680,6 +684,9 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 	if res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "in_progress", "network evidence", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol feed checkpoint match to pass: %+v", res)
 	}
+	if res := LoopProtocolFullFeedAfterCompaction().Eval(trace); !res.Pass {
+		t.Fatalf("expected post-compaction full feed check to pass: %+v", res)
+	}
 	res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "completed", "network evidence", 1).Eval(trace)
 	if res.Pass {
 		t.Fatal("expected mismatched plan status to fail")
@@ -688,6 +695,17 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail %q missing %q", res.Detail, want)
 		}
+	}
+	res = LoopProtocolFullFeedAfterCompaction().Eval(Trace{EventOrder: []TraceEventRef{
+		{Index: 1, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "full"},
+		{Index: 2, Type: sse.TypeContextCompact, ContextReason: "context_overflow", ContextReactive: true},
+		{Index: 3, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "digest"},
+	}})
+	if res.Pass {
+		t.Fatal("expected missing post-compaction full feed check to fail")
+	}
+	if !strings.Contains(res.Detail, "expected a full") || !strings.Contains(res.Detail, "context.compacted") {
+		t.Fatalf("failure detail should explain event order: %s", res.Detail)
 	}
 }
 

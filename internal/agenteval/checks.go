@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // ToolCalled passes when the agent invoked the named tool at least
@@ -531,6 +533,38 @@ func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus
 					planCurrentStep,
 					loopProtocolFeedExamples(t.LoopProtocolFeeds, 5),
 				),
+			}
+		},
+	}
+}
+
+func LoopProtocolFullFeedAfterCompaction() Check {
+	return Check{
+		Name: "loop_protocol_full_feed_after_compaction",
+		Eval: func(t Trace) CheckResult {
+			seenCompaction := false
+			compactionIndex := 0
+			var observed []string
+			for _, ev := range t.EventOrder {
+				switch ev.Type {
+				case sse.TypeContextCompact:
+					seenCompaction = true
+					compactionIndex = ev.Index
+					if len(observed) < 6 {
+						observed = append(observed, fmt.Sprintf("#%d context.compacted reason=%s reactive=%v", ev.Index, ev.ContextReason, ev.ContextReactive))
+					}
+				case sse.TypeLoopProtocolFeed:
+					if len(observed) < 6 {
+						observed = append(observed, fmt.Sprintf("#%d loop.protocol_feed mode=%s path=%s", ev.Index, ev.LoopProtocolMode, ev.LoopProtocolPath))
+					}
+					if seenCompaction && ev.LoopProtocolMode == "full" {
+						return CheckResult{Pass: true, Detail: fmt.Sprintf("full feed index=%d after compaction index=%d", ev.Index, compactionIndex)}
+					}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected a full loop.protocol_feed after context.compacted; event_order=%v", observed),
 			}
 		},
 	}

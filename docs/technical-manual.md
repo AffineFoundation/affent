@@ -791,6 +791,10 @@ Long-run eval scenarios can assert required anchor substrings through
 `required_context_loop_protocol_anchor_text`, which catches regressions where
 ordinary compaction still fires but loses the per-session `LOOP.md` recovery
 pointer.
+They can also require `require_loop_protocol_full_after_compaction`, which
+uses trace event order to verify that a full protocol feed happened after a
+`context.compacted` event instead of merely occurring somewhere in the same
+run.
 Eval debug manifests index the retained child transcript paths and sizes under
 `child_transcripts`, and timelines include a `Child Transcripts` section, so
 operators can jump to isolated child work without pushing transcript contents

@@ -124,6 +124,7 @@ type BatchScenario struct {
 	RequiredLoopProtocolFeeds             int
 	RequiredLoopProtocolFeedModes         map[string]int
 	RequiredLoopProtocolFeedMatches       []LoopProtocolFeedRequirement
+	RequireLoopProtocolFullAfterCompact   bool
 	RequiredSourceAccess                  []SourceAccessRequirement
 	RequiredSessionSearch                 []SessionSearchRequirement
 	RequiredContextCompactions            int
@@ -300,6 +301,7 @@ type DebugScenarioExpectations struct {
 	RequiredLoopProtocolFeeds             int                                `json:"required_loop_protocol_feeds,omitempty"`
 	RequiredLoopProtocolFeedModes         map[string]int                     `json:"required_loop_protocol_feed_modes,omitempty"`
 	RequiredLoopProtocolFeedMatches       []DebugLoopProtocolFeedRequirement `json:"required_loop_protocol_feed_matches,omitempty"`
+	RequireLoopProtocolFullAfterCompact   bool                               `json:"require_loop_protocol_full_after_compaction,omitempty"`
 	RequiredToolResultText                map[string][]string                `json:"required_tool_result_text,omitempty"`
 	RequiredToolArgContains               []DebugToolArgContainsRequirement  `json:"required_tool_arg_contains,omitempty"`
 	RequiredSourceAccess                  []DebugSourceAccessRequirement     `json:"required_source_access,omitempty"`
@@ -365,7 +367,8 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if exp.RequiredLoopProtocolFeeds > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
-		len(exp.RequiredLoopProtocolFeedMatches) > 0 {
+		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
+		exp.RequireLoopProtocolFullAfterCompact {
 		caps["loop_protocol"] = true
 		for _, req := range exp.RequiredLoopProtocolFeedMatches {
 			if req.PlanLabelContains != "" || req.PlanCurrentStepStatus != "" || req.PlanCurrentStep != "" {
@@ -1162,6 +1165,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopProtocolFeeds:             s.RequiredLoopProtocolFeeds,
 		RequiredLoopProtocolFeedModes:         cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
 		RequiredLoopProtocolFeedMatches:       loopFeedReqs,
+		RequireLoopProtocolFullAfterCompact:   s.RequireLoopProtocolFullAfterCompact,
 		RequiredToolResultText:                cloneStringSliceMap(s.RequiredToolResultText),
 		RequiredToolArgContains:               reqArgs,
 		RequiredSourceAccess:                  sourceReqs,
@@ -1658,6 +1662,7 @@ func ParseTraceFile(path string) (Trace, error) {
 		if _, err := applyTraceEvent(&trace, pending, ev.Type, ev.Data, ""); err != nil {
 			return trace, fmt.Errorf("trace %s line %d: %w", path, lineNo, err)
 		}
+		appendTraceEventRef(&trace, ev.Type, ev.Data, "")
 	}
 	return trace, nil
 }
@@ -1737,6 +1742,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 			min = 1
 		}
 		checks = append(checks, LoopProtocolFeedMatchAtLeast(req.Mode, req.PlanLabelContains, req.PlanCurrentStepStatus, req.PlanCurrentStep, min))
+	}
+	if scenario.RequireLoopProtocolFullAfterCompact {
+		checks = append(checks, LoopProtocolFullFeedAfterCompaction())
 	}
 	for _, req := range scenario.RequiredSourceAccess {
 		min := req.Min

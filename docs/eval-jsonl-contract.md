@@ -101,8 +101,10 @@ Scenario records describe one eval case:
   loop-decision requirements, loop protocol feed and active plan checkpoint
   requirements, context-compaction requirements, optional
   `required_context_loop_protocol_anchor_text` checks for post-compaction
-  `LOOP.md` recovery anchors, plan/delegation constraints, protected files,
-  and related max-turn/compaction settings. This
+  `LOOP.md` recovery anchors, optional
+  `require_loop_protocol_full_after_compaction` sequence checks,
+  plan/delegation constraints, protected files, and related
+  max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
 - `expectation_capability_names`, `expectation_capability_outcome`,

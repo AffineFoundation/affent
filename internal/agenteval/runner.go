@@ -250,6 +250,8 @@ func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s S
 			done, err := applyTraceEvent(&t, pending, ev.Type, ev.Data, turnID)
 			if err != nil {
 				t.LoopErrors = append(t.LoopErrors, err.Error())
+			} else {
+				appendTraceEventRef(&t, ev.Type, ev.Data, turnID)
 			}
 			if done {
 				return t

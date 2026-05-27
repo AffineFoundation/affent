@@ -153,6 +153,10 @@ type Trace struct {
 	// rolling compactor. The full user-visible trace remains in events.jsonl;
 	// these entries let long-run evals assert that context pressure was handled.
 	ContextCompactions []ContextCompaction
+	// EventOrder preserves a compact chronological index for trace assertions
+	// that depend on sequencing across event families, such as confirming a
+	// full LOOP.md feed occurred after context compaction.
+	EventOrder []TraceEventRef
 	// RuntimeSurfaces records the effective tool/runtime surface at turn
 	// start. This lets eval/debug tooling explain missing web/browser/memory
 	// behavior without inferring availability from later tool calls.
@@ -470,6 +474,16 @@ type LoopProtocolFeed struct {
 	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
 	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
 	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
+}
+
+type TraceEventRef struct {
+	Index            int    `json:"index"`
+	Type             string `json:"type"`
+	TurnID           string `json:"turn_id,omitempty"`
+	LoopProtocolMode string `json:"loop_protocol_mode,omitempty"`
+	LoopProtocolPath string `json:"loop_protocol_path,omitempty"`
+	ContextReason    string `json:"context_reason,omitempty"`
+	ContextReactive  bool   `json:"context_reactive,omitempty"`
 }
 
 type LoopProtocolFeedStats struct {
