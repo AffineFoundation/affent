@@ -794,7 +794,7 @@ func TestHandleSessionLoopProtocolUpdate_WritesDurableProtocolWithoutReopeningSe
 
 Keep API-created loop state durable.`
 
-	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop/loop-protocol", strings.NewReader(`{"protocol":`+strconv.Quote(protocol)+`}`))
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop/loop-protocol", strings.NewReader(`{"protocol":`+strconv.Quote(protocol)+`,"reason":"initial long-run protocol","sections_changed":["Metadata","North Star"]}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusOK {
@@ -813,12 +813,29 @@ Keep API-created loop state durable.`
 	if resp.Summary == nil || resp.Summary.Status != "running" || resp.Summary.Path != loopstate.ProtocolRelPath("api-loop") {
 		t.Fatalf("summary = %+v", resp.Summary)
 	}
+	if resp.State == nil || resp.State.LoopID != "api-loop" || resp.State.Status != "running" || resp.State.ProtocolUpdates != 1 || resp.State.EventCount != 1 {
+		t.Fatalf("state = %+v", resp.State)
+	}
+	if len(resp.Events) != 1 || resp.Events[0].Type != "loop.protocol_update" || resp.Events[0].Reason != "initial long-run protocol" || resp.Events[0].Seq != 1 {
+		t.Fatalf("events = %+v", resp.Events)
+	}
 	raw, err := os.ReadFile(sessionLoopProtocolPath(pool, "api-loop"))
 	if err != nil {
 		t.Fatalf("read written protocol: %v", err)
 	}
 	if string(raw) != protocol+"\n" {
 		t.Fatalf("written protocol = %q", string(raw))
+	}
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "api-loop"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.LastEventType != "loop.protocol_update" || state.LastEventSummary == "" {
+		t.Fatalf("persisted state = %+v", state)
+	}
+	events, found, err := loopstate.ReadRecentEvents(sessionLoopEventsPath(pool, "api-loop"), 10)
+	if err != nil || !found || len(events) != 1 {
+		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(events), err)
 	}
 }
 
@@ -830,6 +847,7 @@ func TestHandleSessionLoopProtocolUpdate_RejectsBlankAndUnknownFields(t *testing
 	}{
 		{name: "blank", body: `{"protocol":" \n\t"}`},
 		{name: "unknown", body: `{"protocol":"# Loop","extra":true}`},
+		{name: "multiple", body: `{"protocol":"# Loop"} {"protocol":"# Other"}`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -868,8 +886,21 @@ func TestHandleSessionLoopProtocolDelete_RemovesDurableProtocolWithoutReopeningS
 	if resp.SessionID != "clear-loop" || !resp.Cleared {
 		t.Fatalf("delete response = %+v, want cleared clear-loop", resp)
 	}
+	if resp.State == nil || resp.State.Status != "disabled" || resp.State.LastEventType != "loop.protocol_delete" {
+		t.Fatalf("delete state = %+v", resp.State)
+	}
+	if len(resp.Events) != 1 || resp.Events[0].Type != "loop.protocol_delete" {
+		t.Fatalf("delete events = %+v", resp.Events)
+	}
 	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("loop protocol path after delete err = %v, want not exists", err)
+	}
+	summary, found, err := summarizeDurableSession(pool, "clear-loop")
+	if err != nil || !found {
+		t.Fatalf("summarize after delete found=%v err=%v", found, err)
+	}
+	if summary.HasLoopProtocol || !summary.HasLoopState || summary.LoopState == nil || summary.LoopState.Status != "disabled" {
+		t.Fatalf("loop state should remain visible after protocol delete: %+v", summary)
 	}
 
 	r = httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-loop/loop-protocol", nil)
@@ -883,6 +914,50 @@ func TestHandleSessionLoopProtocolDelete_RemovesDurableProtocolWithoutReopeningS
 	}
 	if resp.Cleared {
 		t.Fatalf("second delete response = %+v, want cleared=false", resp)
+	}
+	if resp.State == nil || resp.State.Status != "disabled" || resp.State.EventCount != 2 {
+		t.Fatalf("second delete state = %+v", resp.State)
+	}
+}
+
+func TestReadSessionLoopProtocolReturnsStateAndRecentEvents(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	protocol := `# Loop
+
+- status: paused`
+	req := sessionLoopProtocolUpdateRequest{Protocol: protocol, Reason: "first"}
+	if _, _, _, _, err := writeSessionLoopProtocol(pool, "loop-read", req); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	req.Reason = "second"
+	if _, _, _, _, err := writeSessionLoopProtocol(pool, "loop-read", req); err != nil {
+		t.Fatalf("second write: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/loop-read/loop-protocol", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil || resp.State.ProtocolUpdates != 2 || resp.State.EventCount != 2 || resp.State.Status != "paused" {
+		t.Fatalf("state = %+v", resp.State)
+	}
+	if len(resp.Events) != 2 || resp.Events[0].Reason != "first" || resp.Events[1].Reason != "second" {
+		t.Fatalf("events = %+v", resp.Events)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-read")
+	if err != nil || !found {
+		t.Fatalf("summarizeDurableSession found=%v err=%v", found, err)
+	}
+	if !summary.HasLoopProtocol || summary.LoopProtocol == nil || summary.LoopProtocol.State == nil || summary.LoopProtocol.State.EventCount != 2 {
+		t.Fatalf("durable loop summary = %+v", summary.LoopProtocol)
 	}
 }
 

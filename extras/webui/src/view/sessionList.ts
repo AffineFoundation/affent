@@ -622,9 +622,15 @@ function sessionPlanMetric(plan: SessionPlanSummary | undefined): string | undef
 }
 
 function sessionLoopProtocolMetric(session: SessionSummary): string | undefined {
-  if (!session.has_loop_protocol) return undefined;
-  const status = session.loop_protocol?.status?.trim();
-  return status ? `Loop ${status}` : "Loop protocol";
+  if (!session.has_loop_protocol && !session.has_loop_state) return undefined;
+  const state = session.loop_protocol?.state ?? session.loop_state;
+  const status = session.loop_protocol?.status?.trim() ?? state?.status?.trim();
+  const updates = state?.protocol_updates;
+  const eventSummary = state?.last_event_summary?.trim();
+  const parts = [status ? `Loop ${status}` : "Loop protocol"];
+  if (updates && updates > 0) parts.push(`${updates} ${updates === 1 ? "update" : "updates"}`);
+  if (eventSummary) parts.push(eventSummary);
+  return parts.join(", ");
 }
 
 function planStatusLabel(plan: SessionPlanSummary): string {
@@ -643,7 +649,7 @@ function featureChips(session: SessionSummary): string[] {
   if (session.has_artifacts) chips.push("files");
   if (session.has_memory) chips.push("memory");
   if (session.has_plan) chips.push("plan");
-  if (session.has_loop_protocol) chips.push("loop");
+  if (session.has_loop_protocol || session.has_loop_state) chips.push("loop");
   if (session.has_runtime_skills) chips.push("skills");
   return chips;
 }

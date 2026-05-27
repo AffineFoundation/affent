@@ -163,13 +163,43 @@ describe("sessionList view model", () => {
           status: "running",
           bytes: 512,
           preview: "Keep long-run state recoverable.",
+          state: {
+            version: 1,
+            status: "running",
+            protocol_updates: 2,
+            event_count: 2,
+            last_event_type: "loop.protocol_update",
+            last_event_summary: "Updated LOOP.md",
+          },
         },
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running");
+    expect(rows[0].metrics).toContain("Loop running, 2 updates, Updated LOOP.md");
     expect(rows[0].chips).toContain("loop");
     expect(rows[0].searchText).toContain("loop running");
+  });
+
+  it("keeps loop state visible after the protocol file is disabled", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "disabled-loop",
+        durable: true,
+        has_loop_state: true,
+        loop_state: {
+          version: 1,
+          status: "disabled",
+          protocol_updates: 1,
+          event_count: 2,
+          last_event_type: "loop.protocol_delete",
+          last_event_summary: "Disabled LOOP.md",
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Loop disabled, 1 update, Disabled LOOP.md");
+    expect(rows[0].chips).toContain("loop");
+    expect(rows[0].searchText).toContain("loop disabled");
   });
 
   it("surfaces high context pressure in row stats and search", () => {

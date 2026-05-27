@@ -706,6 +706,14 @@ Affent stores durable state as inspectable files:
   exposes its summary through session list/detail responses. Use
   `POST /v1/sessions/{id}/loop-protocol` with `{"protocol":"..."}` to create
   or replace it without reopening the session; use `DELETE` to disable it.
+- `.affent/loops/<session_id>/state.json`: machine-readable loop lifecycle
+  state. It records owner, status, protocol update count, and the latest loop
+  event so restart/resume code and WebUI do not have to parse Markdown. Session
+  list/detail responses expose this as `loop_state`, including after `LOOP.md`
+  is disabled.
+- `.affent/loops/<session_id>/events.jsonl`: bounded loop audit events such as
+  protocol updates and deletes. `GET /v1/sessions/{id}/loop-protocol` returns
+  recent events alongside the protocol for operator visibility.
 - Runtime skill files: installed skill bodies and manifests.
 - Memory files: topic-bucketed workspace or user memory.
 - Transcript files: child-task and subagent conversations.

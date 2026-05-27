@@ -68,6 +68,8 @@ type sessionSummary struct {
 	PlanSummary        *sessionPlanSummary              `json:"plan_summary,omitempty"`
 	HasLoopProtocol    bool                             `json:"has_loop_protocol"`
 	LoopProtocol       *sessionLoopProtocolSummary      `json:"loop_protocol,omitempty"`
+	HasLoopState       bool                             `json:"has_loop_state"`
+	LoopState          *loopstate.State                 `json:"loop_state,omitempty"`
 	HasArtifacts       bool                             `json:"has_artifacts"`
 	HasMemory          bool                             `json:"has_memory"`
 	HasRuntimeSkills   bool                             `json:"has_runtime_skills"`
@@ -478,6 +480,13 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			summary.LoopProtocol = &lp
 		}
 	}
+	if s.loopProtocolPath != "" {
+		statePath := filepath.Join(filepath.Dir(s.loopProtocolPath), loopstate.StateFileName)
+		if state, found, err := loopstate.ReadState(statePath); err == nil && found {
+			summary.HasLoopState = true
+			summary.LoopState = &state
+		}
+	}
 	if compactions := contextCompactionSummaryFromRuntimeStats(runtime); compactions != nil {
 		summary.ContextCompactions = compactions
 	}
@@ -661,6 +670,22 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if summary.HasLoopProtocol && loopProtocolMod.After(newest) {
 		newest = loopProtocolMod
 	}
+	var loopStateMod time.Time
+	loopStatePath := sessionLoopStatePath(pool, id)
+	if exists, loopStateMod, err = durableRegularFileModTime(loopStatePath); err != nil {
+		return sessionSummary{}, false, err
+	}
+	if exists {
+		if state, found, err := loopstate.ReadState(loopStatePath); err != nil {
+			return sessionSummary{}, false, err
+		} else if found {
+			summary.HasLoopState = true
+			summary.LoopState = &state
+		}
+	}
+	if summary.HasLoopState && loopStateMod.After(newest) {
+		newest = loopStateMod
+	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
@@ -715,6 +740,10 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.HasLoopProtocol = a.HasLoopProtocol || b.HasLoopProtocol
 	if b.LoopProtocol != nil {
 		a.LoopProtocol = b.LoopProtocol
+	}
+	a.HasLoopState = a.HasLoopState || b.HasLoopState
+	if b.LoopState != nil {
+		a.LoopState = b.LoopState
 	}
 	a.HasArtifacts = a.HasArtifacts || b.HasArtifacts
 	a.HasMemory = a.HasMemory || b.HasMemory

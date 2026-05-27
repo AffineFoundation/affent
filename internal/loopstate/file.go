@@ -15,6 +15,8 @@ import (
 
 const (
 	ProtocolFileName = "LOOP.md"
+	StateFileName    = "state.json"
+	EventsFileName   = "events.jsonl"
 	MaxProtocolBytes = 64 * 1024
 )
 
@@ -26,6 +28,7 @@ type Summary struct {
 	UpdatedAt    string `json:"updated_at,omitempty"`
 	Bytes        int    `json:"bytes"`
 	Preview      string `json:"preview,omitempty"`
+	State        *State `json:"state,omitempty"`
 }
 
 func ProtocolDir(sessionDir, loopID string) string {
@@ -34,6 +37,14 @@ func ProtocolDir(sessionDir, loopID string) string {
 
 func ProtocolPath(sessionDir, loopID string) string {
 	return filepath.Join(ProtocolDir(sessionDir, loopID), ProtocolFileName)
+}
+
+func StatePath(sessionDir, loopID string) string {
+	return filepath.Join(ProtocolDir(sessionDir, loopID), StateFileName)
+}
+
+func EventsPath(sessionDir, loopID string) string {
+	return filepath.Join(ProtocolDir(sessionDir, loopID), EventsFileName)
 }
 
 func ProtocolRelPath(loopID string) string {
@@ -190,6 +201,23 @@ func SummarizeFile(path, relPath string) (Summary, bool, error) {
 			summary.OwnerSession = value
 		case "status":
 			summary.Status = value
+		}
+	}
+	if state, found, err := ReadState(filepath.Join(filepath.Dir(path), StateFileName)); err != nil {
+		return Summary{}, false, err
+	} else if found {
+		summary.State = &state
+		if state.LoopID != "" {
+			summary.LoopID = state.LoopID
+		}
+		if state.OwnerSession != "" {
+			summary.OwnerSession = state.OwnerSession
+		}
+		if state.Status != "" {
+			summary.Status = state.Status
+		}
+		if state.UpdatedAt != "" {
+			summary.UpdatedAt = state.UpdatedAt
 		}
 	}
 	return summary, true, nil

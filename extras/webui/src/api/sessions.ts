@@ -105,21 +105,54 @@ export interface SessionLoopProtocolSummary {
   updated_at?: string;
   bytes: number;
   preview?: string;
+  state?: SessionLoopState;
+}
+
+export interface SessionLoopState {
+  version: number;
+  loop_id?: string;
+  owner_session?: string;
+  status?: string;
+  protocol_path?: string;
+  created_at?: string;
+  updated_at?: string;
+  last_protocol_update_at?: string;
+  protocol_updates?: number;
+  event_count?: number;
+  last_event_type?: string;
+  last_event_summary?: string;
+  last_event_at?: string;
+}
+
+export interface SessionLoopEvent {
+  seq: number;
+  time: string;
+  type: string;
+  summary?: string;
+  sections_changed?: string[];
+  reason?: string;
+  path?: string;
 }
 
 export interface SessionLoopProtocolResponse {
   session_id: string;
   protocol: string;
   summary?: SessionLoopProtocolSummary;
+  state?: SessionLoopState;
+  events?: SessionLoopEvent[];
 }
 
 export interface SessionLoopProtocolUpdateRequest {
   protocol: string;
+  reason?: string;
+  sections_changed?: string[];
 }
 
 export interface SessionLoopProtocolDeleteResponse {
   session_id: string;
   cleared: boolean;
+  state?: SessionLoopState;
+  events?: SessionLoopEvent[];
 }
 
 export interface SessionSkillInfo {
@@ -242,6 +275,8 @@ export interface SessionSummary {
   has_artifacts: boolean;
   has_loop_protocol?: boolean;
   loop_protocol?: SessionLoopProtocolSummary;
+  has_loop_state?: boolean;
+  loop_state?: SessionLoopState;
   has_memory: boolean;
   has_runtime_skills: boolean;
   context?: SessionContextSummary;
