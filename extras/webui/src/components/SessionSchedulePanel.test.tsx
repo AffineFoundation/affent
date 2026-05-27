@@ -150,4 +150,13 @@ describe("SessionSchedulePanel", () => {
 
     expect(screen.getByTestId("session-schedule-panel")).not.toHaveAttribute("open");
   });
+
+  it("can render inside the unified automation surface without a nested disclosure", () => {
+    render(<SessionSchedulePanel summary={{ count: 0, enabled: 0 }} embedded />);
+
+    const panel = screen.getByTestId("session-schedule-panel");
+    expect(panel.tagName).toBe("SECTION");
+    expect(panel).toHaveTextContent("Create a follow-up only when this chat needs one");
+    expect(panel).not.toHaveAttribute("open");
+  });
 });

@@ -18,6 +18,15 @@ describe("SessionLoopPanel", () => {
     expect(screen.getByTestId("session-loop-panel")).not.toHaveAttribute("open");
   });
 
+  it("can render inside the unified automation surface without a nested disclosure", () => {
+    render(<SessionLoopPanel defaultGoal="long running subnet analysis" embedded />);
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel.tagName).toBe("SECTION");
+    expect(panel).toHaveTextContent("Set up long-running work only when this chat needs it");
+    expect(panel).not.toHaveAttribute("open");
+  });
+
   it("puts the pending calibration question next to the chat action", () => {
     render(
       <SessionLoopPanel

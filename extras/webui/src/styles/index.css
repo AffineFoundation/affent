@@ -1053,6 +1053,20 @@ body {
   background: rgba(248, 250, 252, 0.52);
 }
 
+.session-automation-section {
+  margin-bottom: 0;
+  background: rgba(255, 255, 255, 0.64);
+}
+
+.session-automation-section-header {
+  grid-template-columns: auto auto minmax(0, 1fr);
+  cursor: default;
+}
+
+.session-automation-section-header::after {
+  display: none;
+}
+
 .session-loop-panel[open],
 .session-schedule-panel[open] {
   background: rgba(255, 255, 255, 0.72);
@@ -1549,6 +1563,14 @@ body {
 
   .session-loop-next-action {
     justify-self: start;
+  }
+
+  .session-schedule-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .session-schedule-actions {
+    justify-content: flex-start;
   }
 }
 
@@ -7625,7 +7647,8 @@ html[data-theme="dark"] .workbench-attention[data-tone="error"] {
 
 html[data-theme="dark"] .session-files-item,
 html[data-theme="dark"] .session-changes-item,
-html[data-theme="dark"] .session-run-item {
+html[data-theme="dark"] .session-run-item,
+html[data-theme="dark"] .session-schedule-item {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(17, 20, 24, 0.68);
 }

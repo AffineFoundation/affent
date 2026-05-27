@@ -1465,6 +1465,7 @@ export function App() {
                     <div className="session-plan-body session-automation-body">
                       {showLoopContext ? (
                         <SessionLoopPanel
+                          embedded
                           summary={selectedSession?.loop_protocol}
                           state={selectedLoopState}
                           disabling={loopProtocolBusy}
@@ -1482,6 +1483,7 @@ export function App() {
                       ) : null}
                       {showScheduleContext ? (
                         <SessionSchedulePanel
+                          embedded
                           summary={selectedSession?.schedules}
                           schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
                           busy={scheduleBusy}

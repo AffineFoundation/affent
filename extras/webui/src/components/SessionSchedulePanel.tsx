@@ -1,4 +1,5 @@
 import type { SessionSchedule, SessionSchedulesSummary } from "../api/sessions";
+import { SessionPanelFrame } from "./SessionPanelFrame";
 
 export function SessionSchedulePanel({
   summary,
@@ -6,6 +7,7 @@ export function SessionSchedulePanel({
   busy,
   disabled = false,
   defaultOpen = false,
+  embedded = false,
   loading = false,
   error,
   deletingId,
@@ -23,6 +25,7 @@ export function SessionSchedulePanel({
   busy?: "loop" | "checkin" | "daily";
   disabled?: boolean;
   defaultOpen?: boolean;
+  embedded?: boolean;
   loading?: boolean;
   error?: string;
   deletingId?: string;
@@ -49,12 +52,15 @@ export function SessionSchedulePanel({
     : next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "Create a follow-up only when this chat needs one";
 
   return (
-    <details className="session-plan-panel session-schedule-panel" data-testid="session-schedule-panel" {...(defaultOpen ? { open: true } : {})}>
-      <summary className="session-plan-summary">
-        <span className="session-plan-kicker">Timers</span>
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </summary>
+    <SessionPanelFrame
+      className="session-plan-panel session-schedule-panel"
+      testId="session-schedule-panel"
+      embedded={embedded}
+      defaultOpen={defaultOpen}
+      kicker="Timers"
+      title={title}
+      detail={detail}
+    >
       <div className="session-plan-body session-schedule-body">
         {count > 0 || pendingLoopTimers > 0 || lastError ? (
           <>
@@ -151,7 +157,7 @@ export function SessionSchedulePanel({
           ) : null}
         </div>
       </div>
-    </details>
+    </SessionPanelFrame>
   );
 }
 

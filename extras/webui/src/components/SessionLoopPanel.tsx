@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { SessionLoopEvent, SessionLoopProtocolSummary, SessionLoopState } from "../api/sessions";
 import { CopyButton } from "./CopyButton";
+import { SessionPanelFrame } from "./SessionPanelFrame";
 
 export function SessionLoopPanel({
   summary,
@@ -12,6 +13,7 @@ export function SessionLoopPanel({
   protocolError,
   defaultGoal,
   defaultOpen = false,
+  embedded = false,
   starting = false,
   onDisable,
   onStart,
@@ -27,6 +29,7 @@ export function SessionLoopPanel({
   protocolError?: string;
   defaultGoal?: string;
   defaultOpen?: boolean;
+  embedded?: boolean;
   starting?: boolean;
   onDisable?: () => Promise<void> | void;
   onStart?: (goal: string) => Promise<void> | void;
@@ -41,12 +44,15 @@ export function SessionLoopPanel({
   if (!summary && !state) {
     const goal = compact(setupGoal);
     return (
-      <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" {...(defaultOpen ? { open: true } : {})}>
-        <summary className="session-plan-summary">
-          <span className="session-plan-kicker">Loop</span>
-          <strong>Off</strong>
-          <span>Set up long-running work only when this chat needs it</span>
-        </summary>
+      <SessionPanelFrame
+        className="session-plan-panel session-loop-panel"
+        testId="session-loop-panel"
+        embedded={embedded}
+        defaultOpen={defaultOpen}
+        kicker="Loop"
+        title="Off"
+        detail="Set up long-running work only when this chat needs it"
+      >
         <div className="session-plan-body session-loop-body">
           <form
             className="session-loop-setup"
@@ -72,7 +78,7 @@ export function SessionLoopPanel({
             </p>
           </form>
         </div>
-      </details>
+      </SessionPanelFrame>
     );
   }
 
@@ -97,12 +103,15 @@ export function SessionLoopPanel({
     : loopDetail({ goal, feeds, updates, event });
 
   return (
-    <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" {...(defaultOpen ? { open: true } : {})}>
-      <summary className="session-plan-summary">
-        <span className="session-plan-kicker">Loop</span>
-        <strong>{title}</strong>
-        <span>{detail}</span>
-      </summary>
+    <SessionPanelFrame
+      className="session-plan-panel session-loop-panel"
+      testId="session-loop-panel"
+      embedded={embedded}
+      defaultOpen={defaultOpen}
+      kicker="Loop"
+      title={title}
+      detail={detail}
+    >
       <div className="session-plan-body session-loop-body">
         <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
         <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
@@ -151,7 +160,7 @@ export function SessionLoopPanel({
           ) : null}
         </div>
       </div>
-    </details>
+    </SessionPanelFrame>
   );
 }
 
