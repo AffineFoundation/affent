@@ -1389,7 +1389,7 @@ export function App() {
 
   const secondaryWorkbenchPanels = [
     { key: "runtime", label: "Runtime", direct: shouldShowWorkbenchRuntimePanel(runtimeStatsState), render: renderRuntimeStatsPanel },
-    { key: "access", label: "Access", direct: shouldShowWorkbenchAccessPanel(accountSettingsState), render: renderAccountSettingsPanel },
+    { key: "access", label: "Access setup", direct: shouldShowWorkbenchAccessPanel(accountSettingsState), render: renderAccountSettingsPanel },
     { key: "memory", label: "Memory", direct: shouldShowWorkbenchMemoryPanel(memoryState, selectedSession?.latest_memory_update), render: renderMemoryPanel },
     { key: "skills", label: "Skills", direct: shouldShowWorkbenchSkillsPanel(skillsState), render: renderSkillsPanel },
   ];
@@ -1522,9 +1522,9 @@ export function App() {
                 {hiddenWorkbenchPanels.length > 0 ? (
                   <details className="session-skills-panel workbench-more-panel" data-testid="workbench-more-panel">
                     <summary className="session-skills-summary">
-                      <span className="session-skills-kicker">Quiet</span>
-                      <strong>No current alerts</strong>
-                      <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(", ")}</span>
+                      <span className="session-skills-kicker">On demand</span>
+                      <strong>Open when needed</strong>
+                      <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(" · ")}</span>
                     </summary>
                     <div className="session-skills-body workbench-more-body">
                       {hiddenWorkbenchPanels.map((panel) => (
