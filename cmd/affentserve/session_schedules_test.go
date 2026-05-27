@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -13,6 +16,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
 	createDurableSessionDir(t, pool, "due-one")
+	writeLoopProtocolStatusFixture(t, pool, "due-one", "running")
 	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
 	writeScheduleFixture(t, pool, "due-one", sessionSchedule{
 		ID:        "sched_due",
@@ -44,6 +48,48 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
 	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.ScheduleKind != sessionScheduleKindLoopTick || userMessage.Text != "Scheduled check-in for session: due-one" {
 		t.Fatalf("user.message = %+v, want schedule metadata", userMessage)
+	}
+}
+
+func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickUntilProtocolRuns(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "draft-loop")
+	writeLoopProtocolStatusFixture(t, pool, "draft-loop", "draft")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "draft-loop", sessionSchedule{
+		ID:                    "sched_loop",
+		Kind:                  sessionScheduleKindLoopTick,
+		Prompt:                "Scheduled loop tick for session: draft-loop",
+		Enabled:               true,
+		NextRunAt:             now.Add(-time.Minute).Format(time.RFC3339),
+		RepeatIntervalSeconds: 1800,
+		CreatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
+	}
+	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "draft-loop"))
+	if err != nil || !found {
+		t.Fatalf("read schedules found=%v err=%v", found, err)
+	}
+	schedule := file.Schedules[0]
+	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" {
+		t.Fatalf("schedule = %+v, want paused without a run", schedule)
+	}
+	if !strings.Contains(schedule.LastError, "LOOP.md not running") {
+		t.Fatalf("last_error = %q, want calibration guidance", schedule.LastError)
+	}
+	history, err := readSessionHistory(pool.sessionDirPath("draft-loop"), "draft-loop", -1, 100)
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	for _, ev := range history.Events {
+		if ev.Type == sse.TypeUserMessage {
+			t.Fatalf("unexpected scheduled user.message while LOOP.md is draft: %+v", ev)
+		}
 	}
 }
 
@@ -122,6 +168,16 @@ func writeScheduleFixture(t *testing.T, pool *SessionPool, sessionID string, sch
 		Schedules: schedules,
 	}); err != nil {
 		t.Fatalf("write schedules: %v", err)
+	}
+}
+
+func writeLoopProtocolStatusFixture(t *testing.T, pool *SessionPool, sessionID string, status string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(sessionLoopProtocolPath(pool, sessionID)), 0o755); err != nil {
+		t.Fatalf("mkdir loop protocol dir: %v", err)
+	}
+	if err := loopstate.WriteProtocol(sessionLoopProtocolPath(pool, sessionID), "# Loop Protocol\n\n## 0. Metadata\n\n- status: "+status+"\n"); err != nil {
+		t.Fatalf("write loop protocol: %v", err)
 	}
 }
 

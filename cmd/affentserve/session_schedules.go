@@ -17,6 +17,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
 const (
@@ -742,6 +743,15 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 		if !schedule.Enabled || !sessionScheduleDue(*schedule, now) {
 			continue
 		}
+		if schedule.Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(p, sessionID) {
+			schedule.Enabled = false
+			schedule.LastError = "LOOP.md not running; answer calibration and activate the loop protocol before resuming this timer"
+			schedule.UpdatedAt = nowStr
+			if err := writeSessionSchedulesFile(path, file); err != nil {
+				return sessionScheduleRun{}, false, err
+			}
+			continue
+		}
 		run := sessionScheduleRun{
 			SessionID:    sessionID,
 			ScheduleID:   schedule.ID,
@@ -761,6 +771,13 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 		return run, true, nil
 	}
 	return sessionScheduleRun{}, false, nil
+}
+
+func sessionLoopProtocolRunning(pool *SessionPool, sessionID string) bool {
+	if pool == nil {
+		return false
+	}
+	return loopstate.ProtocolStatusFromFile(sessionLoopProtocolPath(pool, sessionID)) == "running"
 }
 
 func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionScheduleRun) error {
