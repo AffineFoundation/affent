@@ -1272,6 +1272,59 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	}
 }
 
+func TestSetupLoop_DoesNotInjectDraftLoopProtocolWithoutState(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "draft-loop"
+	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
+	if err := os.MkdirAll(filepath.Dir(protocolPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(protocolPath, []byte(`# Loop Protocol
+
+## 0. Metadata
+
+- status: draft
+
+## 1. North Star
+
+Pending user calibration.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--session-id", sessionID,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if b.loop.LoopProtocolPath != protocolPath {
+		t.Fatalf("LoopProtocolPath = %q, want draft path for loop_protocol tool access %q", b.loop.LoopProtocolPath, protocolPath)
+	}
+	if b.loopProtocolSkillInstalled {
+		t.Fatal("draft LOOP.md without state must not install active loop protocol feeds")
+	}
+	if b.loop.SkillProvider != nil {
+		if got := b.loop.SkillProvider("continue"); strings.Contains(got, "AFFENT LOOP PROTOCOL:") {
+			t.Fatalf("draft LOOP.md without state was injected:\n%s", got)
+		}
+	}
+}
+
 func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
 	workspace := t.TempDir()
 	sessionID := "longrun-init"

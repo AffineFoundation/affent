@@ -715,7 +715,8 @@ Affent stores durable state as inspectable files:
   chat messages; chat-driven setup must go through the `loop_protocol`
   `start_setup` action so loop state only appears after explicit user intent.
   A draft protocol is not treated as an active loop and is not fed into ordinary
-  turns. The activation turn must make the model understand the user's intent,
+  turns, even if its sidecar `state.json` is missing after manual file edits or
+  partial recovery. The activation turn must make the model understand the user's intent,
   supplement the protocol with a compact current situation snapshot, stop
   conditions, failure modes, recovery anchors, and any durable memory
   lookup/update rules that belong in the rules section, then set metadata

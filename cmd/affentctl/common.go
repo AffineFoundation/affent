@@ -1577,6 +1577,9 @@ func affentctlLoopProtocolAvailable(path string) bool {
 	if err != nil || !found || strings.TrimSpace(content) == "" {
 		return false
 	}
+	if status := loopstate.ProtocolStatus(content); status != "" && status != "running" {
+		return false
+	}
 	state, stateFound, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
 	if err != nil || !stateFound {
 		return true

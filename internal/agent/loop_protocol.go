@@ -69,6 +69,9 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 	if content == "" {
 		return ""
 	}
+	if status := loopstate.ProtocolStatus(content); status != "" && status != "running" {
+		return ""
+	}
 	if !loopProtocolActive(protocolPath) {
 		return ""
 	}
