@@ -203,6 +203,7 @@ func ValidateProtocolActivation(protocol string) error {
 		"## 3. Evolution Protocol",
 		"## 4. Self-Attack",
 		"## 5. Rules",
+		"## 6. Plan/Step Pointers",
 		"## 7. Evidence And Recovery Index",
 	}
 	for _, section := range required {
@@ -228,8 +229,11 @@ func ValidateProtocolActivationReady(protocolPath string) error {
 	if err != nil {
 		return err
 	}
-	if !found || state.CalibrationAnswers <= 0 {
-		return errors.New("LOOP.md activation requires a user calibration answer after draft setup")
+	if !found || state.CalibrationQuestions <= 0 || state.CalibrationAnswers <= 0 {
+		return errors.New("LOOP.md activation requires a recorded calibration question and user answer after draft setup")
+	}
+	if state.CalibrationAnswers < state.CalibrationQuestions {
+		return errors.New("LOOP.md activation requires an answer for each recorded calibration question")
 	}
 	return nil
 }

@@ -305,6 +305,35 @@ func TestValidateProtocolActivationRejectsUnresolvedTemplatePlaceholders(t *test
 	}
 }
 
+func TestValidateProtocolActivationRequiresPlanPointers(t *testing.T) {
+	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "running",
+	})
+	for _, replacement := range [][2]string{
+		{"- hard constraints:", "- hard constraints: keep evidence cited"},
+		{"- known evidence:", "- known evidence: user confirmed long-run market objective"},
+		{"- current risk or blocker:", "- current risk or blocker: live web evidence can be stale"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	section, ok := protocolSectionBody(protocol, "## 6. Plan/Step Pointers")
+	if !ok {
+		t.Fatal("template missing Plan/Step Pointers section")
+	}
+	protocol = strings.Replace(protocol, "## 6. Plan/Step Pointers\n\n"+section+"\n\n", "", 1)
+
+	err := ValidateProtocolActivation(protocol)
+	if err == nil || !strings.Contains(err.Error(), "Plan/Step Pointers") {
+		t.Fatalf("ValidateProtocolActivation missing plan pointers err = %v", err)
+	}
+}
+
 func TestValidateProtocolActivationRejectsOversizedCurrentSituation(t *testing.T) {
 	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
 		LoopID:       "longrun",
@@ -371,6 +400,36 @@ func TestRecordProtocolCalibrationQuestionAndAnswer(t *testing.T) {
 		!strings.Contains(state.LastCalibrationAnswer, "source quality") ||
 		event.Type != "loop.protocol_calibration" {
 		t.Fatalf("answer state=%+v event=%+v", state, event)
+	}
+}
+
+func TestValidateProtocolActivationReadyRequiresAllCalibrationAnswers(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "longrun")
+	if _, _, _, err := EnsureProtocolTemplate(path, ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "session-a",
+		Goal:         "Run a durable loop setup.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion first: %v", err)
+	}
+	if _, _, err := RecordProtocolCalibrationAnswer(path, "Pause if source quality is weak."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	if err := ValidateProtocolActivationReady(path); err != nil {
+		t.Fatalf("ValidateProtocolActivationReady after one answered question: %v", err)
+	}
+	if _, _, err := RecordProtocolCalibrationQuestion(path, "What memory policy should this loop follow?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion second: %v", err)
+	}
+
+	err := ValidateProtocolActivationReady(path)
+	if err == nil || !strings.Contains(err.Error(), "answer for each recorded calibration question") {
+		t.Fatalf("ValidateProtocolActivationReady with unanswered follow-up err = %v", err)
 	}
 }
 

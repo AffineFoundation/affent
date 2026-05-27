@@ -801,7 +801,9 @@ Affent stores durable state as inspectable files:
   narrow `loop_protocol` tool. It can initialize a chat-driven draft with
   `start_setup`, read the draft, write bounded draft updates, or call
   `complete_activation` with the full supplemented protocol;
-  `complete_activation` requires metadata `status: running` and records
+  `complete_activation` requires metadata `status: running` plus a recorded
+  calibration question/answer pair, and each recorded follow-up calibration
+  question must be answered before activation. It records
   `loop.protocol_activate`. This lets ordinary chat requests and WebUI buttons
   share the same calibration-first setup path, and avoids asking the model to
   edit server-managed session state through ordinary workspace file tools.

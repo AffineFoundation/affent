@@ -74,6 +74,9 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	protocol = strings.Replace(protocol, "- important artifacts:", "- important artifacts: none yet", 1)
 	protocol = strings.Replace(protocol, "- important trace spans:", "- important trace spans: loop activation draft", 1)
 	protocol = strings.Replace(protocol, "- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state before continuing", 1)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
 	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak; remember source rules in LOOP.md."); err != nil {
 		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
 	}
@@ -126,7 +129,7 @@ func TestLoopProtocolToolRejectsActivationBeforeCalibrationAnswer(t *testing.T) 
 		"protocol": protocol,
 		"reason":   "premature activation",
 	})))
-	if err == nil || !strings.Contains(err.Error(), "requires a user calibration answer") || !strings.Contains(err.Error(), "ask one concise calibration question") {
+	if err == nil || !strings.Contains(err.Error(), "requires a recorded calibration question and user answer") || !strings.Contains(err.Error(), "ask one concise calibration question") {
 		t.Fatalf("complete_activation without calibration err = %v", err)
 	}
 	if !strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_unready") {
@@ -196,6 +199,9 @@ func TestLoopProtocolToolRejectsOversizedCurrentSituationWithFailureKind(t *test
 		"- next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing\n- overflow: "+strings.Repeat("status ", loopstate.MaxCurrentSituationChars/len("status ")+30),
 		1,
 	)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
 	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak."); err != nil {
 		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
 	}

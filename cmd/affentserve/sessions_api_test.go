@@ -1592,7 +1592,7 @@ func TestHandleSessionLoopProtocolUpdate_RejectsActivationBeforeCalibrationAnswe
 	if got := w.Result().StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "requires a user calibration answer") {
+	if !strings.Contains(w.Body.String(), "requires a recorded calibration question and user answer") {
 		t.Fatalf("response missing calibration readiness error: %s", w.Body.String())
 	}
 	stillDraft, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "api-loop-uncalibrated"))

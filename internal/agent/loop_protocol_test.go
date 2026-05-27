@@ -138,7 +138,7 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatalf("decode tool.result: %v", err)
 				}
-				if p.ExitCode != 0 && strings.Contains(p.Result, "requires a user calibration answer") {
+				if p.ExitCode != 0 && strings.Contains(p.Result, "requires a recorded calibration question and user answer") {
 					sawActivationError = true
 				}
 			case sse.TypeLoopCalibrationRequest:
