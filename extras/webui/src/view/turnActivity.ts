@@ -862,11 +862,13 @@ function browserNetworkEvidence(node: ExecutionTreeNode): TurnActivityEvidence |
   const value = page || query || "browser_network";
   const matchLabel = browserNetworkMatchLabel(result);
   const refs = browserNetworkRefs(result);
+  const previews = browserNetworkPreviews(result);
   const displayParts = [
     page ? readableUrl(page) : undefined,
     query ? query.replace(/^"|"$/g, "") : undefined,
     matchLabel,
     refs.length > 0 ? `refs ${refs.slice(0, 3).join(", ")}` : undefined,
+    previews.length > 0 ? `preview ${previews.slice(0, 2).map((preview) => summarize(preview, 56)).join(" | ")}` : undefined,
     browserNetworkEvidenceCaution(matchLabel),
   ].filter((part): part is string => !!part);
   return {
@@ -892,6 +894,16 @@ function browserNetworkRefs(result: string): string[] {
     if (match?.[1] && !refs.includes(match[1])) refs.push(match[1]);
   }
   return refs;
+}
+
+function browserNetworkPreviews(result: string): string[] {
+  const previews: string[] = [];
+  for (const line of result.split(/\r?\n/)) {
+    const match = line.trim().match(/^preview:\s*(.+)$/i);
+    const value = match?.[1]?.trim();
+    if (value && !previews.includes(value)) previews.push(value);
+  }
+  return previews;
 }
 
 function browserNetworkEvidenceCaution(matchLabel: string | undefined): string | undefined {

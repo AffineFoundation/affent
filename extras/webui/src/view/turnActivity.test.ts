@@ -663,11 +663,11 @@ describe("buildTurnActivity", () => {
       {
         label: "Network refs",
         value: "https://taostats.io/subnets/120",
-        displayValue: "taostats.io/subnets/120 · validators · matches · refs n7 · read before citing",
+        displayValue: "taostats.io/subnets/120 · validators · matches · refs n7 · preview {\"validators\":42} · read before citing",
       },
     ]);
     expect(activity?.evidenceAction?.draft).toBe(
-      "Use this evidence in the next step:\n- Network refs taostats.io/subnets/120 · validators · matches · refs n7 · read before citing (call browser_network_read before citing values)",
+      "Use this evidence in the next step:\n- Network refs taostats.io/subnets/120 · validators · matches · refs n7 · preview {\"validators\":42} · read before citing (call browser_network_read before citing values)",
     );
   });
 
