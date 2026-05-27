@@ -1,4 +1,4 @@
-import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
+import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSchedulesSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
 import { conversationTopicFromTurns } from "./continuationPrompt";
@@ -473,6 +473,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (planMetric) metrics.push(planMetric);
   const loopMetric = sessionLoopProtocolMetric(session);
   if (loopMetric) metrics.push(loopMetric);
+  const scheduleMetric = sessionScheduleMetric(session.schedules);
+  if (scheduleMetric) metrics.push(scheduleMetric);
   return metrics;
 }
 
@@ -672,6 +674,13 @@ function loopDecisionMetricResult(kind: string, decision: string): string {
   return `${kind}:${decision}`;
 }
 
+function sessionScheduleMetric(summary: SessionSchedulesSummary | undefined): string | undefined {
+  if (!summary || summary.count <= 0) return undefined;
+  const parts = [`Timer ${summary.enabled}/${summary.count}`];
+  if (summary.next_run_at) parts.push(`next ${formatTimestamp(summary.next_run_at)}`);
+  return parts.join(", ");
+}
+
 function planStatusLabel(plan: SessionPlanSummary): string {
   const status = plan.current_step_status?.trim();
   if (status === "in_progress") return "active";
@@ -689,6 +698,7 @@ function featureChips(session: SessionSummary): string[] {
   if (session.has_memory) chips.push("memory");
   if (session.has_plan) chips.push("plan");
   if (session.has_loop_protocol || session.has_loop_state) chips.push("loop");
+  if (session.has_schedules) chips.push("timers");
   if (session.has_runtime_skills) chips.push("skills");
   return chips;
 }

@@ -3,6 +3,7 @@ import "./styles/index.css";
 import { ApiClient, ApiError } from "./api/client";
 import {
   cancelSessionTurn,
+  createSessionSchedule,
   createSession,
   deleteSessionLoopProtocol,
   deleteSession,
@@ -18,6 +19,7 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
+  type SessionSchedulesResponse,
   type SessionLoopProtocolDeleteResponse,
   type SessionLoopProtocolResponse,
   type SessionMemoryResponse,
@@ -34,6 +36,7 @@ import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
+import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
@@ -119,6 +122,7 @@ export function App() {
   const [actionBusy, setActionBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [loopProtocolBusy, setLoopProtocolBusy] = useState(false);
+  const [scheduleBusy, setScheduleBusy] = useState<"checkin" | "daily" | undefined>();
   const [deletingSessionId, setDeletingSessionId] = useState<string | undefined>();
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
@@ -195,6 +199,7 @@ export function App() {
     ? loopProtocolState
     : { state: "idle" as const };
   const showLoopContext = !demoActive && !!selectedSessionId && (selectedSession?.has_loop_protocol || selectedSession?.has_loop_state || !!selectedSession?.loop_protocol || !!selectedSession?.loop_state);
+  const showScheduleContext = !demoActive && !!selectedSessionId;
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
   const memoryUpdateCount = useMemo(
     () => session.turns.reduce((sum, turn) => sum + memoryUpdatesForTurn(turn).length, 0),
@@ -238,7 +243,7 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const showSurfaceContext = showChatContext || showWorkflowStatus || showLoopContext;
+  const showSurfaceContext = showChatContext || showWorkflowStatus || showLoopContext || showScheduleContext;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -648,6 +653,7 @@ export function App() {
     setActionBusy(false);
     setCancelBusy(false);
     setLoopProtocolBusy(false);
+    setScheduleBusy(undefined);
     setComposerDraft(undefined);
     setComposerFocusSignal((current) => current + 1);
     setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
@@ -673,6 +679,7 @@ export function App() {
         setActionBusy(false);
         setCancelBusy(false);
         setLoopProtocolBusy(false);
+        setScheduleBusy(undefined);
         setLoopProtocolState({ state: "idle" });
       }
       setStatus({ state: "connected", label: "Ready", detail: "Chat deleted" });
@@ -815,6 +822,28 @@ export function App() {
     }
   }
 
+  async function handleCreateSchedule(kind: "checkin" | "daily") {
+    if (!selectedSessionId || scheduleBusy) return;
+    const sessionId = selectedSessionId;
+    const daily = kind === "daily";
+    const next = new Date(Date.now() + (daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000));
+    setScheduleBusy(kind);
+    try {
+      const resp = await createSessionSchedule(client, sessionId, {
+        prompt: webScheduledCheckInPrompt(selectedSessionTitle ?? sessionId),
+        next_run_at: toRfc3339Seconds(next),
+        repeat_interval_seconds: daily ? 24 * 60 * 60 : undefined,
+        enabled: true,
+      });
+      markSessionSchedules(sessionId, resp);
+      setStatus({ state: "connected", label: "Ready", detail: daily ? "Daily check-in scheduled" : "Check-in scheduled" });
+    } catch (err) {
+      setStatus({ state: "error", label: "Schedule failed", detail: formatError(err) });
+    } finally {
+      setScheduleBusy(undefined);
+    }
+  }
+
   function releaseSettledTurn(nextSession: SessionState, pendingText?: string) {
     if (nextSession.status === "running") return;
     const accepted = pendingText
@@ -913,6 +942,19 @@ export function App() {
         loop_protocol: undefined,
         has_loop_state: !!loopProtocol.state,
         loop_state: loopProtocol.state,
+      };
+    }));
+  }
+
+  function markSessionSchedules(sessionId: string, resp: SessionSchedulesResponse) {
+    setSessions((current) => current.map((item) => {
+      if (item.id !== sessionId) return item;
+      const hasSchedules = (resp.summary?.count ?? resp.schedules.length) > 0;
+      return {
+        ...item,
+        durable: true,
+        has_schedules: hasSchedules,
+        schedules: hasSchedules ? resp.summary : undefined,
       };
     }));
   }
@@ -1130,6 +1172,14 @@ export function App() {
                     onUseAsDraft={handleUseLoopProtocolDraft}
                   />
                 ) : null}
+                {showScheduleContext ? (
+                  <SessionSchedulePanel
+                    summary={selectedSession?.schedules}
+                    busy={scheduleBusy}
+                    onScheduleCheckIn={() => handleCreateSchedule("checkin")}
+                    onScheduleDaily={() => handleCreateSchedule("daily")}
+                  />
+                ) : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}
               </div>
             ) : null}
@@ -1203,6 +1253,21 @@ function webLoopActivationPrompt(goal: string): string {
     "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
     "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
   ].join("\n");
+}
+
+function webScheduledCheckInPrompt(sessionTitle: string): string {
+  return [
+    `Scheduled check-in for session: ${sessionTitle}`,
+    "",
+    "Before continuing work, ask the user one concise question to confirm current intent, constraints, and whether LOOP.md should change.",
+    "If LOOP.md exists, read it with loop_protocol action=read before proposing protocol changes.",
+    "Update LOOP.md only after the user answers or when the active loop protocol already gives explicit authority.",
+    "Keep concrete task steps in plan state rather than duplicating a todo list into LOOP.md.",
+  ].join("\n");
+}
+
+function toRfc3339Seconds(value: Date): string {
+  return new Date(Math.ceil(value.getTime() / 1000) * 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
 function isPlanMutationAction(value: unknown): boolean {

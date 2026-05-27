@@ -1004,6 +1004,17 @@ body {
   gap: 6px;
 }
 
+.session-schedule-body {
+  gap: 9px;
+}
+
+.session-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
 .danger-action {
   color: var(--c-error);
 }

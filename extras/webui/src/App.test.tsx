@@ -661,6 +661,77 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Disable loop" })).toBeNull();
   });
 
+  it("schedules a session check-in from the automation panel", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "timer-control",
+              active: true,
+              durable: true,
+              topic_user_message: "long running subnet analysis",
+              has_conversation: false,
+              has_events: false,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+              has_schedules: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/timer-control/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "timer-control", events: [], next_after: -1, has_more: false });
+      }
+      if (url === "/v1/sessions/timer-control/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/timer-control/schedules" && init?.method === "POST") {
+        return jsonResponse({
+          session_id: "timer-control",
+          schedules: [
+            {
+              id: "sched_1",
+              prompt: "Scheduled check-in for session: long running subnet analysis",
+              enabled: true,
+              next_run_at: "2026-05-27T14:30:00Z",
+              created_at: "2026-05-27T13:30:00Z",
+              updated_at: "2026-05-27T13:30:00Z",
+            },
+          ],
+          summary: {
+            count: 1,
+            enabled: 1,
+            next_run_at: "2026-05-27T14:30:00Z",
+            next_schedule_id: "sched_1",
+            next_prompt_preview: "Scheduled check-in for session: long running subnet analysis",
+          },
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-schedule-panel");
+    expect(panel).toHaveTextContent("Timers");
+    await user.click(within(panel).getByRole("button", { name: "1h check-in" }));
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.objectContaining({ method: "POST" })));
+    const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/schedules");
+    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { prompt: string; next_run_at: string; enabled: boolean };
+    expect(body.prompt).toContain("Scheduled check-in for session: long running subnet analysis");
+    expect(body.prompt).toContain("ask the user one concise question");
+    expect(body.prompt).toContain("loop_protocol action=read");
+    expect(body.enabled).toBe(true);
+    expect(body.next_run_at).toMatch(/Z$/);
+    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
+  });
+
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
