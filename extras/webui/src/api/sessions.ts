@@ -120,6 +120,9 @@ export interface SessionLoopState {
   initial_plan_label?: string;
   last_protocol_update_at?: string;
   protocol_updates?: number;
+  calibration_questions?: number;
+  last_calibration_question_at?: string;
+  last_calibration_question_preview?: string;
   calibration_answers?: number;
   last_calibration_answer_at?: string;
   last_calibration_answer_preview?: string;

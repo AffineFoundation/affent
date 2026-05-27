@@ -26,6 +26,8 @@ describe("SessionLoopPanel", () => {
           loop_id: "loop-draft",
           status: "draft",
           initial_goal_preview: "long running market check",
+          calibration_questions: 1,
+          last_calibration_question_preview: "What should pause this loop?",
           calibration_answers: 1,
           last_calibration_answer_preview: "Stop when source evidence is weak.",
         }}
@@ -38,6 +40,8 @@ describe("SessionLoopPanel", () => {
     expect(panel).toHaveTextContent("Calibration recorded; ready for activation review");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("A calibration answer is recorded");
+    expect(panel).toHaveTextContent("Setup question");
+    expect(panel).toHaveTextContent("What should pause this loop?");
     expect(panel).toHaveTextContent("Calibration");
     expect(panel).toHaveTextContent("1 calibration answer");
     expect(panel).toHaveTextContent("Stop when source evidence is weak.");
@@ -127,20 +131,27 @@ describe("SessionLoopPanel", () => {
           {
             seq: 2,
             time: "2026-05-27T10:05:00Z",
+            type: "loop.protocol_calibration_request",
+            summary: "Asked loop calibration question",
+            calibration_preview: "What should pause this loop?",
+          },
+          {
+            seq: 3,
+            time: "2026-05-27T10:06:00Z",
             type: "loop.protocol_calibration",
             summary: "Recorded loop calibration answer",
             calibration_preview: "Pause when evidence is weak.",
           },
           {
-            seq: 3,
-            time: "2026-05-27T10:06:00Z",
+            seq: 4,
+            time: "2026-05-27T10:07:00Z",
             type: "loop.protocol_update",
             summary: "Updated LOOP.md",
             sections_changed: ["Current Situation", "Rules"],
             reason: "user clarified stop condition",
           },
           {
-            seq: 4,
+            seq: 5,
             time: "2026-05-27T10:10:00Z",
             type: "context.compacted",
             summary: "Context compacted; force next LOOP.md full feed",
@@ -159,6 +170,8 @@ describe("SessionLoopPanel", () => {
     expect(events).toHaveTextContent("Current Situation, Rules");
     expect(events).toHaveTextContent("Recorded loop calibration answer");
     expect(events).toHaveTextContent("Pause when evidence is weak.");
+    expect(events).toHaveTextContent("Asked loop calibration question");
+    expect(events).toHaveTextContent("What should pause this loop?");
     const text = events.textContent ?? "";
     expect(text.indexOf("Context compacted")).toBeLessThan(text.indexOf("Initialized LOOP.md"));
   });

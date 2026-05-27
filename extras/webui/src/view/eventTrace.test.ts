@@ -57,18 +57,32 @@ describe("eventTrace view model", () => {
       },
       {
         id: 4,
-        type: "loop.protocol_calibration",
+        type: "loop.protocol_calibration_request",
         data: {
           loop_id: "longrun",
           status: "draft",
-          calibration_answers: 1,
-          last_calibration_answer_preview: "Stop when source evidence is weak.",
+          calibration_questions: 1,
+          last_calibration_question_preview: "What stop condition should pause this loop?",
           protocol_path: ".affent/loops/longrun/LOOP.md",
           event_seq: 2,
         },
       },
       {
         id: 5,
+        type: "loop.protocol_calibration",
+        data: {
+          loop_id: "longrun",
+          status: "draft",
+          calibration_questions: 1,
+          last_calibration_question_preview: "What stop condition should pause this loop?",
+          calibration_answers: 1,
+          last_calibration_answer_preview: "Stop when source evidence is weak.",
+          protocol_path: ".affent/loops/longrun/LOOP.md",
+          event_seq: 3,
+        },
+      },
+      {
+        id: 6,
         type: "runtime.surface",
         data: {
           turn_id: "t1",
@@ -79,7 +93,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 6,
+        id: 7,
         type: "loop.decision",
         data: {
           turn_id: "t1",
@@ -91,7 +105,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 7,
+        id: 8,
         type: "context.compacted",
         data: {
           turn_id: "t1",
@@ -106,7 +120,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 8,
+        id: 9,
         type: "turn.end",
         data: {
           turn_id: "t1",
@@ -126,11 +140,11 @@ describe("eventTrace view model", () => {
         },
       },
     ]));
-    const [request, result, feed, calibration, surface, decision, compacted, finished] = model.items;
+    const [request, result, feed, question, calibration, surface, decision, compacted, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(8);
+    expect(model.items).toHaveLength(9);
     expect(request).toMatchObject({
       kind: "event",
       display: {
@@ -163,11 +177,19 @@ describe("eventTrace view model", () => {
         badges: ["digest", "running"],
       },
     });
+    expect(question).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop calibration asked",
+        meta: ["longrun", "question 1", "What stop condition should pause this loop?", "event 2", ".affent/loops/longrun/LOOP.md"],
+        badges: ["draft"],
+      },
+    });
     expect(calibration).toMatchObject({
       kind: "event",
       display: {
         label: "Loop calibration recorded",
-        meta: ["longrun", "calibration 1", "Stop when source evidence is weak.", "event 2", ".affent/loops/longrun/LOOP.md"],
+        meta: ["longrun", "calibration 1", "Stop when source evidence is weak.", "event 3", ".affent/loops/longrun/LOOP.md"],
         badges: ["draft"],
       },
     });

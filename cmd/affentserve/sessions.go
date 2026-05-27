@@ -1035,6 +1035,20 @@ func (s *Session) fanout() {
 			}
 			s.touch()
 			s.observeForStats(ev)
+			var mirroredEvent *sse.Event
+			if ev.Type == sse.TypeMessageDone {
+				if mirrored, ok := s.recordLoopProtocolCalibrationQuestionIfReady(ev); ok {
+					mirrored.ID = s.nextEventLine
+					s.nextEventLine++
+					if s.trace != nil {
+						if err := s.trace.Write(mirrored); err != nil {
+							s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("event log write")
+						}
+					}
+					s.touch()
+					mirroredEvent = &mirrored
+				}
+			}
 			if ev.Type == sse.TypeTurnEnd {
 				s.endTurn()
 			}
@@ -1047,6 +1061,12 @@ func (s *Session) fanout() {
 					// the loop. SSE clients see this as a missing
 					// event id and reconnect with Last-Event-ID for
 					// replay once that feature lands.
+				}
+				if mirroredEvent != nil {
+					select {
+					case ch <- *mirroredEvent:
+					default:
+					}
 				}
 			}
 			s.subsMu.Unlock()
@@ -1467,7 +1487,14 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 		return
 	}
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(s.loopProtocolPath), loopstate.StateFileName))
-	if err != nil || !found || state.Status != "draft" || state.CalibrationAnswers > 0 {
+	if err != nil || !found || state.Status != "draft" {
+		return
+	}
+	if state.CalibrationQuestions > 0 {
+		if state.CalibrationAnswers >= state.CalibrationQuestions {
+			return
+		}
+	} else if state.CalibrationAnswers > 0 {
 		return
 	}
 	if !conversationHasLoopCalibrationQuestion(s.conv.Snapshot()) {
@@ -1479,13 +1506,57 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 		return
 	}
 	s.publishSessionEvent(sse.TypeLoopCalibration, sse.LoopProtocolCalibrationPayload{
-		LoopID:                state.LoopID,
-		Status:                state.Status,
-		CalibrationAnswers:    state.CalibrationAnswers,
-		LastCalibrationAnswer: state.LastCalibrationAnswer,
-		ProtocolPath:          loopstate.ProtocolRelPath(s.ID),
-		EventSeq:              event.Seq,
+		LoopID:                  state.LoopID,
+		Status:                  state.Status,
+		CalibrationQuestions:    state.CalibrationQuestions,
+		LastCalibrationQuestion: state.LastCalibrationQuestion,
+		CalibrationAnswers:      state.CalibrationAnswers,
+		LastCalibrationAnswer:   state.LastCalibrationAnswer,
+		ProtocolPath:            loopstate.ProtocolRelPath(s.ID),
+		EventSeq:                event.Seq,
 	})
+}
+
+func (s *Session) recordLoopProtocolCalibrationQuestionIfReady(ev sse.Event) (sse.Event, bool) {
+	if s == nil || strings.TrimSpace(s.loopProtocolPath) == "" {
+		return sse.Event{}, false
+	}
+	var payload sse.MessageDonePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		return sse.Event{}, false
+	}
+	question := strings.TrimSpace(payload.Text)
+	if !looksLikeLoopCalibrationQuestion(question) {
+		return sse.Event{}, false
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(s.loopProtocolPath), loopstate.StateFileName))
+	if err != nil || !found || state.Status != "draft" {
+		return sse.Event{}, false
+	}
+	preview := loopstate.ProtocolCalibrationPreview(question)
+	if state.LastCalibrationQuestion == preview {
+		return sse.Event{}, false
+	}
+	state, event, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, question)
+	if err != nil {
+		s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration question")
+		return sse.Event{}, false
+	}
+	mirrored, err := sse.NewEvent(sse.TypeLoopCalibrationRequest, sse.LoopProtocolCalibrationPayload{
+		LoopID:                  state.LoopID,
+		Status:                  state.Status,
+		CalibrationQuestions:    state.CalibrationQuestions,
+		LastCalibrationQuestion: state.LastCalibrationQuestion,
+		CalibrationAnswers:      state.CalibrationAnswers,
+		LastCalibrationAnswer:   state.LastCalibrationAnswer,
+		ProtocolPath:            loopstate.ProtocolRelPath(s.ID),
+		EventSeq:                event.Seq,
+	})
+	if err != nil {
+		s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("encode loop protocol calibration question")
+		return sse.Event{}, false
+	}
+	return mirrored, true
 }
 
 func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {

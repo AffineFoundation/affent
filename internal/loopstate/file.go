@@ -365,6 +365,42 @@ func RecordProtocolActivation(protocolPath, reason string) (State, Event, error)
 	return state, event, nil
 }
 
+func RecordProtocolCalibrationQuestion(protocolPath, question string) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	preview := ProtocolCalibrationPreview(question)
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:        "loop.protocol_calibration_request",
+		Summary:     "Asked loop calibration question",
+		Reason:      "assistant requested loop setup calibration",
+		Path:        ProtocolRelPath(loopID),
+		Time:        formatTime(now),
+		Calibration: preview,
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.CalibrationQuestions++
+	state.LastCalibrationQuestionAt = event.Time
+	state.LastCalibrationQuestion = preview
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
 func RecordProtocolCalibrationAnswer(protocolPath, answer string) (State, Event, error) {
 	loopDir := filepath.Dir(protocolPath)
 	loopID := filepath.Base(loopDir)
@@ -375,7 +411,7 @@ func RecordProtocolCalibrationAnswer(protocolPath, answer string) (State, Event,
 		return State{}, Event{}, err
 	}
 	state = normalizeStateForProtocol(state, found, loopID, now)
-	preview := protocolCalibrationPreview(answer)
+	preview := ProtocolCalibrationPreview(answer)
 	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
 		Type:        "loop.protocol_calibration",
 		Summary:     "Recorded loop calibration answer",
@@ -440,7 +476,7 @@ func RecordProtocolUpdate(protocolPath, reason string, sectionsChanged []string)
 	return state, event, nil
 }
 
-func protocolCalibrationPreview(answer string) string {
+func ProtocolCalibrationPreview(answer string) string {
 	answer = strings.Join(strings.Fields(strings.TrimSpace(answer)), " ")
 	const max = 240
 	if len([]byte(answer)) <= max {

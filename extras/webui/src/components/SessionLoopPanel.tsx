@@ -85,13 +85,15 @@ export function SessionLoopPanel({
   const event = compact(state?.last_event_summary);
   const memory = loopMemoryUpdate(state);
   const compaction = loopCompaction(state);
+  const calibrationQuestion = loopCalibrationQuestion(state);
   const calibration = loopCalibration(state);
+  const calibrationQuestions = state?.calibration_questions ?? 0;
   const calibrationAnswers = state?.calibration_answers ?? 0;
   const disabled = status === "disabled";
   const draft = status === "draft";
   const title = disabled ? "Disabled" : statusLabel(status);
   const detail = draft
-    ? calibrationAnswers > 0 ? "Calibration recorded; ready for activation review" : "Waiting for calibration answer"
+    ? calibrationAnswers > 0 ? "Calibration recorded; ready for activation review" : calibrationQuestions > 0 ? "Waiting for your calibration answer" : "Waiting for Affent to ask calibration"
     : loopDetail({ goal, feeds, updates, event });
 
   return (
@@ -109,6 +111,7 @@ export function SessionLoopPanel({
           {path ? <LoopField label="File" value={path} mono /> : null}
           {feeds > 0 ? <LoopField label="Feeds" value={String(feeds)} /> : null}
           {updates > 0 ? <LoopField label="Updates" value={String(updates)} /> : null}
+          {calibrationQuestion ? <LoopField label="Setup question" value={calibrationQuestion} /> : null}
           {calibration ? <LoopField label="Calibration" value={calibration} /> : null}
           {memory ? <LoopField label="Memory" value={memory} /> : null}
           {compaction ? <LoopField label="Compaction" value={compaction} /> : null}
@@ -219,6 +222,7 @@ function loopEventDetail(event: SessionLoopEvent): string | undefined {
 function loopEventLabel(type: string): string {
   if (type === "loop.protocol_init") return "Initialized LOOP.md";
   if (type === "loop.protocol_update") return "Updated LOOP.md";
+  if (type === "loop.protocol_calibration_request") return "Asked loop calibration question";
   if (type === "loop.protocol_calibration") return "Recorded calibration answer";
   if (type === "loop.protocol_activate") return "Activated LOOP.md";
   if (type === "loop.protocol_disable") return "Disabled LOOP.md";
@@ -298,6 +302,15 @@ function loopCalibration(state?: SessionLoopState): string | undefined {
   const preview = compact(state.last_calibration_answer_preview);
   if (count <= 0 && !preview) return undefined;
   const parts = [count > 0 ? `${count} calibration ${count === 1 ? "answer" : "answers"}` : undefined, preview].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function loopCalibrationQuestion(state?: SessionLoopState): string | undefined {
+  if (!state) return undefined;
+  const count = state.calibration_questions ?? 0;
+  const preview = compact(state.last_calibration_question_preview);
+  if (count <= 0 && !preview) return undefined;
+  const parts = [count > 0 ? `${count} setup ${count === 1 ? "question" : "questions"}` : undefined, preview].filter(Boolean);
   return parts.join(" · ");
 }
 

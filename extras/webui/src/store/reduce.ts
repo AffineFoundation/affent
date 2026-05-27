@@ -245,6 +245,9 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         loopProtocolFeeds: [...next.loopProtocolFeeds, { ...p, eventId: ev.id }],
       };
     }
+    case EventType.LoopProtocolCalibrationRequest:
+    case EventType.LoopProtocolCalibration:
+      return state;
     case EventType.LoopDecision: {
       const p = ev.data as LoopDecisionPayload;
       const next = p.turn_id

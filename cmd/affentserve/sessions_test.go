@@ -1900,6 +1900,7 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 	}
 	deadline := time.After(10 * time.Second)
 	sawSetupToolResult := false
+	sawCalibrationQuestion := false
 	for {
 		select {
 		case ev := <-ch:
@@ -1912,6 +1913,16 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 				if p.CallID == "setup1" && strings.Contains(p.Result, "initialized LOOP.md draft status=draft") {
 					sawSetupToolResult = true
 				}
+			case sse.TypeLoopCalibrationRequest:
+				var p sse.LoopProtocolCalibrationPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop calibration request: %v", err)
+				}
+				if p.CalibrationQuestions == 1 &&
+					p.ProtocolPath == loopstate.ProtocolRelPath("chat-loop-setup") &&
+					strings.Contains(p.LastCalibrationQuestion, "stop condition") {
+					sawCalibrationQuestion = true
+				}
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -1922,6 +1933,9 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 				}
 				if !sawSetupToolResult {
 					t.Fatal("turn ended without successful start_setup tool result")
+				}
+				if !sawCalibrationQuestion {
+					t.Fatal("turn ended without mirrored loop calibration question")
 				}
 				assertChatLoopSetupDraft(t, pool, s)
 				return
@@ -1945,8 +1959,11 @@ func assertChatLoopSetupDraft(t *testing.T, pool *SessionPool, s *Session) {
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
-	if state.Status != "draft" || state.CalibrationAnswers != 0 || state.ProtocolUpdates != 1 {
+	if state.Status != "draft" || state.CalibrationQuestions != 1 || state.CalibrationAnswers != 0 || state.ProtocolUpdates != 1 {
 		t.Fatalf("chat setup state = %+v", state)
+	}
+	if !strings.Contains(state.LastCalibrationQuestion, "stop condition") {
+		t.Fatalf("chat setup missing calibration question preview: %+v", state)
 	}
 	messages := s.conv.Snapshot()
 	if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].Content, "What stop condition should pause") {

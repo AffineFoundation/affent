@@ -262,6 +262,43 @@ func TestValidateProtocolActivationRejectsUnresolvedTemplatePlaceholders(t *test
 	}
 }
 
+func TestRecordProtocolCalibrationQuestionAndAnswer(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "longrun")
+	if _, _, _, err := EnsureProtocolTemplate(path, ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "session-a",
+		Goal:         "Run a durable loop setup.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+
+	state, event, err := RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?")
+	if err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.LastEventType != "loop.protocol_calibration_request" ||
+		!strings.Contains(state.LastCalibrationQuestion, "stop condition") ||
+		event.Type != "loop.protocol_calibration_request" ||
+		event.Calibration != state.LastCalibrationQuestion {
+		t.Fatalf("question state=%+v event=%+v", state, event)
+	}
+
+	state, event, err = RecordProtocolCalibrationAnswer(path, "Pause if source quality is weak.")
+	if err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		state.LastEventType != "loop.protocol_calibration" ||
+		!strings.Contains(state.LastCalibrationAnswer, "source quality") ||
+		event.Type != "loop.protocol_calibration" {
+		t.Fatalf("answer state=%+v event=%+v", state, event)
+	}
+}
+
 func TestStatePersistsAtomicallyAndSummaryPrefersState(t *testing.T) {
 	dir := t.TempDir()
 	loopDir := ProtocolDir(dir, "market-run")

@@ -9,23 +9,24 @@ package sse
 // ".end" for stream-completion events — readers misread it as a boundary
 // and fail to wait for the next message.* / tool.* / etc. events.
 const (
-	TypeTraceMeta        = "trace.meta"
-	TypeTurnStart        = "turn.start"
-	TypeUserMessage      = "user.message"
-	TypeRuntimeSurface   = "runtime.surface"
-	TypeMessageDelta     = "message.delta"
-	TypeMessageDone      = "message.done"
-	TypeThinkingDelta    = "thinking.delta"
-	TypeThinkingDone     = "thinking.done"
-	TypeToolRequest      = "tool.request"
-	TypeToolResult       = "tool.result"
-	TypeUsage            = "usage"
-	TypeTurnEnd          = "turn.end"
-	TypeLoopProtocolFeed = "loop.protocol_feed"
-	TypeLoopCalibration  = "loop.protocol_calibration"
-	TypeLoopDecision     = "loop.decision"
-	TypeContextCompact   = "context.compacted"
-	TypeError            = "error"
+	TypeTraceMeta              = "trace.meta"
+	TypeTurnStart              = "turn.start"
+	TypeUserMessage            = "user.message"
+	TypeRuntimeSurface         = "runtime.surface"
+	TypeMessageDelta           = "message.delta"
+	TypeMessageDone            = "message.done"
+	TypeThinkingDelta          = "thinking.delta"
+	TypeThinkingDone           = "thinking.done"
+	TypeToolRequest            = "tool.request"
+	TypeToolResult             = "tool.result"
+	TypeUsage                  = "usage"
+	TypeTurnEnd                = "turn.end"
+	TypeLoopProtocolFeed       = "loop.protocol_feed"
+	TypeLoopCalibrationRequest = "loop.protocol_calibration_request"
+	TypeLoopCalibration        = "loop.protocol_calibration"
+	TypeLoopDecision           = "loop.decision"
+	TypeContextCompact         = "context.compacted"
+	TypeError                  = "error"
 )
 
 const TraceSchemaVersion = 1
@@ -278,16 +279,18 @@ type LoopProtocolFeedPayload struct {
 	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
 }
 
-// LoopProtocolCalibrationPayload records that a user answer was accepted as
-// the calibration required before a draft LOOP.md can be activated. It mirrors
-// the sidecar loop event into the normal session trace/SSE stream.
+// LoopProtocolCalibrationPayload mirrors draft LOOP.md calibration questions
+// and accepted user answers from the sidecar loop event log into the normal
+// session trace/SSE stream.
 type LoopProtocolCalibrationPayload struct {
-	LoopID                string `json:"loop_id,omitempty"`
-	Status                string `json:"status,omitempty"`
-	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
-	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
-	ProtocolPath          string `json:"protocol_path,omitempty"`
-	EventSeq              int    `json:"event_seq,omitempty"`
+	LoopID                  string `json:"loop_id,omitempty"`
+	Status                  string `json:"status,omitempty"`
+	CalibrationQuestions    int    `json:"calibration_questions,omitempty"`
+	LastCalibrationQuestion string `json:"last_calibration_question_preview,omitempty"`
+	CalibrationAnswers      int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer   string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath            string `json:"protocol_path,omitempty"`
+	EventSeq                int    `json:"event_seq,omitempty"`
 }
 
 // LoopDecisionPayload records one short protocol decision made outside the

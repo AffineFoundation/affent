@@ -374,6 +374,37 @@ describe("reduce — robustness", () => {
     expect(s.turns[0].contextCompactions).toEqual(s.contextCompactions);
   });
 
+  it("accepts loop calibration events without counting them as unknown", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "loop.protocol_calibration_request",
+        data: {
+          loop_id: "longrun",
+          status: "draft",
+          calibration_questions: 1,
+          last_calibration_question_preview: "What should pause this loop?",
+        },
+      },
+      {
+        id: 2,
+        type: "loop.protocol_calibration",
+        data: {
+          loop_id: "longrun",
+          status: "draft",
+          calibration_questions: 1,
+          calibration_answers: 1,
+          last_calibration_answer_preview: "Pause on weak evidence.",
+        },
+      },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    expect(s.unknownEventCount).toBe(0);
+    expect(s.turns).toHaveLength(1);
+  });
+
   it("counts unknown event types without crashing or dropping turns", () => {
     const s = reduceRawEvents([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },
