@@ -1377,6 +1377,56 @@ func longRunMultiTaskSessionRecoveryScenario() BatchScenario {
 	}
 }
 
+func longRunCrashMissingToolResultResumeScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-crash-missing-tool-result-resume",
+		Suites:    []string{longRunSuite},
+		SessionID: "resume-missing-tool-result",
+		Prompt:    "继续这个刚从崩溃恢复的 session。不要调用任何工具；只根据已恢复的对话上下文回答 recovery marker、已确认的证据文件，并原样包含短语 \"do not assume the tool succeeded\" 和 \"safe to repeat\" 来说明缺失 tool result 的处理原则。",
+		Files: map[string]string{
+			".affentctl/resume-missing-tool-result.jsonl": `{"role":"user","content":"原始任务: 汇总长期任务恢复 marker RECOVER-TOOL-19。已确认证据来自 current/recovery.md；另一个 web_fetch 调用在崩溃前未落盘。"}
+{"role":"assistant","content":"","tool_calls":[{"id":"call-read-current","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"current/recovery.md\"}"}},{"id":"call-web-crashed","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://example.invalid/recovery\"}"}}]}
+{"role":"tool","tool_call_id":"call-read-current","name":"read_file","content":"current/recovery.md confirms marker RECOVER-TOOL-19 and recovery status crash-window-safe. Missing web evidence must not be treated as successful."}
+`,
+			"current/recovery.md": "Authoritative recovery marker: RECOVER-TOOL-19. Evidence file: current/recovery.md. Missing web_fetch results are unknown until safely repeated.\n",
+		},
+		RequiredFinalText: []string{
+			"RECOVER-TOOL-19",
+			"current/recovery.md",
+			"do not assume the tool succeeded",
+			"safe to repeat",
+		},
+		ForbiddenFinalText: []string{
+			"web_fetch succeeded",
+			"RECOVER-OLD",
+			"WEB-STALE-00",
+		},
+		ForbiddenTools: []string{
+			"read_file",
+			"shell",
+			"web_fetch",
+			"web_search",
+			"browser_navigate",
+			"browser_snapshot",
+			"browser_find",
+			"browser_network",
+			"browser_network_read",
+			"session_search",
+			"memory",
+			"plan",
+			"run_task",
+			"subagent_run",
+			"write_file",
+			"edit_file",
+		},
+		ProtectedFiles: []string{
+			".affentctl/resume-missing-tool-result.jsonl",
+			"current/recovery.md",
+		},
+		MaxTurns: 4,
+	}
+}
+
 func longRunContextCompactionRetentionScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-context-compaction-retention",

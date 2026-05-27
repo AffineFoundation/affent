@@ -1025,8 +1025,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 12 {
-		t.Fatalf("long-run suite size = %d, want 12", len(scenarios))
+	if len(scenarios) != 13 {
+		t.Fatalf("long-run suite size = %d, want 13", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1205,6 +1205,30 @@ func TestSelectLongRunSuite(t *testing.T) {
 		}
 	}
 	assertSessionSearchDiagnosticsRequiredForTerms(t, multiTaskRecovery, []string{`"northstar"`, `"biotech"`})
+
+	crashResume, ok := seen["longrun-crash-missing-tool-result-resume"]
+	if !ok {
+		t.Fatalf("long-run suite missing crash missing-tool-result resume scenario")
+	}
+	if crashResume.SessionID != "resume-missing-tool-result" {
+		t.Fatalf("crash resume SessionID = %q, want resume-missing-tool-result", crashResume.SessionID)
+	}
+	if _, ok := crashResume.Files[".affentctl/resume-missing-tool-result.jsonl"]; !ok {
+		t.Fatalf("crash resume scenario missing seeded broken conversation")
+	}
+	for _, want := range []string{"RECOVER-TOOL-19", "current/recovery.md", "do not assume the tool succeeded", "safe to repeat"} {
+		if !stringSliceContains(crashResume.RequiredFinalText, want) {
+			t.Fatalf("crash resume RequiredFinalText = %#v, want %q", crashResume.RequiredFinalText, want)
+		}
+	}
+	for _, forbidden := range []string{"read_file", "web_fetch", "browser_network_read", "session_search", "memory", "plan"} {
+		if !stringSliceContains(crashResume.ForbiddenTools, forbidden) {
+			t.Fatalf("crash resume ForbiddenTools = %#v, want %q", crashResume.ForbiddenTools, forbidden)
+		}
+	}
+	if !stringSliceContains(crashResume.ProtectedFiles, ".affentctl/resume-missing-tool-result.jsonl") {
+		t.Fatalf("crash resume ProtectedFiles = %#v, want seeded conversation protected", crashResume.ProtectedFiles)
+	}
 
 	compactionRetention, ok := seen["longrun-context-compaction-retention"]
 	if !ok {

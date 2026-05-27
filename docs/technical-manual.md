@@ -911,7 +911,8 @@ Current built-in suites:
 - `long-run`: deterministic complex tasks for longer practical runs, currently
   covering stock synthesis, Bittensor subnet research, code implementation with
   PR-style reporting, focused-task recovery, research-checkpoint visibility,
-  and multi-session task recovery.
+  multi-session task recovery, and crash-window resume after a missing tool
+  result is repaired.
   The stock and subnet scenarios require reading the explicit evidence files,
   so a run cannot pass by answering only from prompt wording or stale archive
   files. The PR-style coding scenario requires reading the implementation file
