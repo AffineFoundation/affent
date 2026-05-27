@@ -40,13 +40,13 @@ export function buildWorkbenchAttention({
   if (workspace?.issue) return { label: withAction("Workspace mismatch", "View workspace"), detail: workspace.issue, tone: "warning", target: "workspace" };
 
   const failedCommands = run.commands.filter((command) => command.status === "failed").length;
-  if (failedCommands > 0) return { label: withAction(failedCommandLabel(failedCommands), "View run"), detail: "Open command output and recovery actions.", tone: "error", target: "run" };
+  if (failedCommands > 0) return { label: withAction(failedCommandLabel(failedCommands), "View run"), detail: commandAttentionDetail(run.commands, "failed"), tone: "error", target: "run" };
 
   const failedChanges = changes.files.filter((file) => file.status === "failed").length;
-  if (failedChanges > 0) return { label: withAction(fileIssueLabel(failedChanges), "Review changes"), detail: "Open failed change evidence.", tone: "error", target: "changes" };
+  if (failedChanges > 0) return { label: withAction(fileIssueLabel(failedChanges), "Review changes"), detail: changedFileAttentionDetail(changes.files, "failed"), tone: "error", target: "changes" };
 
   const failedFiles = files.items.filter((item) => item.status === "failed").length;
-  if (failedFiles > 0) return { label: withAction(fileIssueLabel(failedFiles), "Review files"), detail: "Open failed file evidence.", tone: "error", target: "files" };
+  if (failedFiles > 0) return { label: withAction(fileIssueLabel(failedFiles), "Review files"), detail: fileAttentionDetail(files.items, "failed"), tone: "error", target: "files" };
 
   const recovery = overview.metrics.find((metric) => metric.label === "Recovery" && metric.value.trim());
   if (recovery) return { label: withAction("Recovery hint", "View context"), detail: recovery.value, tone: "warning", target: "context" };
@@ -55,16 +55,16 @@ export function buildWorkbenchAttention({
   if (automationAttention) return automationAttention;
 
   const runningCommands = run.commands.filter((command) => command.status === "running").length;
-  if (runningCommands > 0) return { label: withAction(runningCommandLabel(runningCommands), "View run"), detail: "Open live command status.", tone: "warning", target: "run" };
+  if (runningCommands > 0) return { label: withAction(runningCommandLabel(runningCommands), "View run"), detail: commandAttentionDetail(run.commands, "running"), tone: "warning", target: "run" };
 
   const pendingChanges = changes.files.filter((file) => file.status === "running").length;
-  if (pendingChanges > 0) return { label: withAction(pendingChangeLabel(pendingChanges), "Review changes"), detail: "Open pending change evidence.", tone: "warning", target: "changes" };
+  if (pendingChanges > 0) return { label: withAction(pendingChangeLabel(pendingChanges), "Review changes"), detail: changedFileAttentionDetail(changes.files, "running"), tone: "warning", target: "changes" };
 
   const pendingFiles = files.items.filter((item) => item.status === "running").length;
-  if (pendingFiles > 0) return { label: withAction(pendingFileLabel(pendingFiles), "Review files"), detail: "Open pending file evidence.", tone: "warning", target: "files" };
+  if (pendingFiles > 0) return { label: withAction(pendingFileLabel(pendingFiles), "Review files"), detail: fileAttentionDetail(files.items, "running"), tone: "warning", target: "files" };
 
   const changedFiles = changes.files.filter((file) => file.status === "changed").length;
-  if (changedFiles > 0) return { label: withAction(changedFileLabel(changedFiles), "Review diff"), detail: "Open changed file evidence.", tone: "attention", target: "changes" };
+  if (changedFiles > 0) return { label: withAction(changedFileLabel(changedFiles), "Review diff"), detail: changedFileAttentionDetail(changes.files, "changed"), tone: "attention", target: "changes" };
 
   return undefined;
 }
@@ -84,6 +84,27 @@ function automationWorkbenchAttention(automation: { title: string; detail: strin
 
 function withAction(fact: string, action: string): string {
   return `${fact} · ${action}`;
+}
+
+function commandAttentionDetail(commands: SessionRunView["commands"], status: SessionRunView["commands"][number]["status"]): string {
+  const command = commands.find((item) => item.status === status);
+  if (!command) return status === "running" ? "Command is still running." : "Open command output and recovery actions.";
+  const parts = [command.command, command.detail, command.next ? `Next: ${command.next}` : undefined].filter((item): item is string => !!item?.trim());
+  return summarize(parts.join(" · "), 120);
+}
+
+function changedFileAttentionDetail(files: SessionChangesView["files"], status: SessionChangesView["files"][number]["status"]): string {
+  const file = files.find((item) => item.status === status);
+  if (!file) return status === "running" ? "Pending change evidence." : status === "failed" ? "Failed change evidence." : "Changed file evidence.";
+  const parts = [file.path, file.detail].filter((item): item is string => !!item?.trim());
+  return summarize(parts.join(" · "), 120);
+}
+
+function fileAttentionDetail(files: SessionFilesView["items"], status: SessionFilesView["items"][number]["status"]): string {
+  const file = files.find((item) => item.status === status);
+  if (!file) return status === "running" ? "Pending file evidence." : "Failed file evidence.";
+  const parts = [file.path, file.detail, file.next ? `Next: ${file.next}` : undefined].filter((item): item is string => !!item?.trim());
+  return summarize(parts.join(" · "), 120);
 }
 
 function currentIssueFact(value: string, label: string, detail: string): string {

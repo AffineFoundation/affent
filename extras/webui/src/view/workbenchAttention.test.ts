@@ -47,8 +47,13 @@ describe("buildWorkbenchAttention", () => {
       overview: overview({ metrics: [{ label: "Recovery", value: "rerun tests", tone: "warning" }] }),
       files: files(),
       changes: changes({ changed: 2 }),
-      run: run({ failed: 1 }),
-    })).toEqual({ label: "1 failed command · View run", detail: "Open command output and recovery actions.", tone: "error", target: "run" });
+      run: run({ failed: 1, failedDetail: "checkout spec failed", failedNext: "update payment route then rerun" }),
+    })).toEqual({
+      label: "1 failed command · View run",
+      detail: "npm test 0 · checkout spec failed · Next: update payment route then rerun",
+      tone: "error",
+      target: "run",
+    });
   });
 
   it("uses recovery when there is no failed Workbench surface", () => {
@@ -85,9 +90,14 @@ describe("buildWorkbenchAttention", () => {
     expect(buildWorkbenchAttention({
       overview: overview(),
       files: files({ available: 2 }),
-      changes: changes({ changed: 3 }),
+      changes: changes({ changed: 3, changedDetail: "Updated payment route" }),
       run: run(),
-    })).toEqual({ label: "3 changed files · Review diff", detail: "Open changed file evidence.", tone: "attention", target: "changes" });
+    })).toEqual({
+      label: "3 changed files · Review diff",
+      detail: "src/changed-0.ts · Updated payment route",
+      tone: "attention",
+      target: "changes",
+    });
 
     expect(buildWorkbenchAttention({
       overview: overview(),
@@ -133,24 +143,60 @@ function overview(overrides: Partial<SessionOverview> = {}): SessionOverview {
   };
 }
 
-function files(counts: { available?: number; failed?: number; running?: number } = {}): SessionFilesView {
+function files(counts: { available?: number; failed?: number; running?: number; failedDetail?: string; runningDetail?: string; next?: string } = {}): SessionFilesView {
   return {
     items: [
       ...Array.from({ length: counts.available ?? 0 }, (_, index) => ({ path: `src/read-${index}.ts`, actions: ["read" as const], status: "available" as const, turnNumber: 1, actionCount: 1 })),
-      ...Array.from({ length: counts.failed ?? 0 }, (_, index) => ({ path: `src/missing-${index}.ts`, actions: ["read" as const], status: "failed" as const, turnNumber: 1, actionCount: 1 })),
-      ...Array.from({ length: counts.running ?? 0 }, (_, index) => ({ path: `src/running-${index}.ts`, actions: ["read" as const], status: "running" as const, turnNumber: 1, actionCount: 1 })),
+      ...Array.from({ length: counts.failed ?? 0 }, (_, index) => ({
+        path: `src/missing-${index}.ts`,
+        actions: ["read" as const],
+        status: "failed" as const,
+        turnNumber: 1,
+        actionCount: 1,
+        detail: counts.failedDetail,
+        next: counts.next,
+      })),
+      ...Array.from({ length: counts.running ?? 0 }, (_, index) => ({
+        path: `src/running-${index}.ts`,
+        actions: ["read" as const],
+        status: "running" as const,
+        turnNumber: 1,
+        actionCount: 1,
+        detail: counts.runningDetail,
+      })),
     ],
     summary: "Files",
     detail: "Files",
   };
 }
 
-function changes(counts: { changed?: number; failed?: number; running?: number } = {}): SessionChangesView {
+function changes(counts: { changed?: number; failed?: number; running?: number; changedDetail?: string; failedDetail?: string; runningDetail?: string } = {}): SessionChangesView {
   return {
     files: [
-      ...Array.from({ length: counts.changed ?? 0 }, (_, index) => ({ path: `src/changed-${index}.ts`, operation: "edit" as const, status: "changed" as const, turnNumber: 1, actionCount: 1 })),
-      ...Array.from({ length: counts.failed ?? 0 }, (_, index) => ({ path: `src/failed-${index}.ts`, operation: "edit" as const, status: "failed" as const, turnNumber: 1, actionCount: 1 })),
-      ...Array.from({ length: counts.running ?? 0 }, (_, index) => ({ path: `src/running-${index}.ts`, operation: "edit" as const, status: "running" as const, turnNumber: 1, actionCount: 1 })),
+      ...Array.from({ length: counts.changed ?? 0 }, (_, index) => ({
+        path: `src/changed-${index}.ts`,
+        operation: "edit" as const,
+        status: "changed" as const,
+        turnNumber: 1,
+        actionCount: 1,
+        detail: counts.changedDetail,
+      })),
+      ...Array.from({ length: counts.failed ?? 0 }, (_, index) => ({
+        path: `src/failed-${index}.ts`,
+        operation: "edit" as const,
+        status: "failed" as const,
+        turnNumber: 1,
+        actionCount: 1,
+        detail: counts.failedDetail,
+      })),
+      ...Array.from({ length: counts.running ?? 0 }, (_, index) => ({
+        path: `src/running-${index}.ts`,
+        operation: "edit" as const,
+        status: "running" as const,
+        turnNumber: 1,
+        actionCount: 1,
+        detail: counts.runningDetail,
+      })),
     ],
     summary: "Changes",
     detail: "Changes",
