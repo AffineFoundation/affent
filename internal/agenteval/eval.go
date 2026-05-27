@@ -183,48 +183,49 @@ type BatchRunner struct {
 }
 
 type BatchResult struct {
-	BatchScenario          string
-	Workspace              string
-	TracePath              string
-	DebugManifestPath      string
-	TimelinePath           string
-	FinalTextPath          string
-	StdoutPath             string
-	StderrPath             string
-	AffentctlCommand       []string
-	RunExitCode            int
-	OK                     bool
-	Expectations           *DebugScenarioExpectations
-	Failures               []string
-	Duration               time.Duration
-	FinalText              string
-	TraceSchemaVersion     int
-	TraceEvents            int
-	TraceEventTypes        map[string]int
-	TurnEndReason          string
-	ToolCalls              int
-	ToolStats              ToolRuntimeStats
-	RuntimeErrorByKind     map[string]int
-	RuntimeErrorExamples   map[string][]RuntimeErrorExample
-	LoopDecisionStats      LoopDecisionStats
-	LoopProtocolFeeds      LoopProtocolFeedStats
-	ContextCompactions     ContextCompactionStats
-	ToolRepairExamples     []ToolRepairExample
-	ToolFailureExamples    map[string][]ToolFailureExample
-	LoopGuardExamples      []LoopGuardExample
-	SourceAccessExamples   []SourceAccessExample
-	BrowserNetworkExamples []BrowserNetworkSearchExample
-	MemoryUpdateExamples   []MemoryUpdateExample
-	SessionSearchExamples  []SessionSearchExample
-	PlanExamples           []PlanExample
-	ToolTruncationExamples []ToolTruncationExample
-	ToolTruncation         ToolTruncationStats
-	Usage                  Usage
-	Verifier               VerifierResult
-	WorkspaceRemoved       bool
-	CleanupError           string
-	TraceDeltas            bool
-	ChildTranscripts       []DebugTranscriptRef
+	BatchScenario            string
+	Workspace                string
+	TracePath                string
+	DebugManifestPath        string
+	TimelinePath             string
+	FinalTextPath            string
+	StdoutPath               string
+	StderrPath               string
+	AffentctlCommand         []string
+	RunExitCode              int
+	OK                       bool
+	Expectations             *DebugScenarioExpectations
+	Failures                 []string
+	Duration                 time.Duration
+	FinalText                string
+	TraceSchemaVersion       int
+	TraceEvents              int
+	TraceEventTypes          map[string]int
+	TurnEndReason            string
+	ToolCalls                int
+	ToolStats                ToolRuntimeStats
+	RuntimeErrorByKind       map[string]int
+	RuntimeErrorExamples     map[string][]RuntimeErrorExample
+	LoopDecisionStats        LoopDecisionStats
+	LoopProtocolFeeds        LoopProtocolFeedStats
+	LoopProtocolCalibrations LoopProtocolCalibrationStats
+	ContextCompactions       ContextCompactionStats
+	ToolRepairExamples       []ToolRepairExample
+	ToolFailureExamples      map[string][]ToolFailureExample
+	LoopGuardExamples        []LoopGuardExample
+	SourceAccessExamples     []SourceAccessExample
+	BrowserNetworkExamples   []BrowserNetworkSearchExample
+	MemoryUpdateExamples     []MemoryUpdateExample
+	SessionSearchExamples    []SessionSearchExample
+	PlanExamples             []PlanExample
+	ToolTruncationExamples   []ToolTruncationExample
+	ToolTruncation           ToolTruncationStats
+	Usage                    Usage
+	Verifier                 VerifierResult
+	WorkspaceRemoved         bool
+	CleanupError             string
+	TraceDeltas              bool
+	ChildTranscripts         []DebugTranscriptRef
 	// Delegation aggregates focused-task / subagent calls observed
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
@@ -268,6 +269,7 @@ type DebugManifest struct {
 	ToolRepairExamples               []ToolRepairExample           `json:"tool_repair_examples,omitempty"`
 	LoopGuardExamples                []LoopGuardExample            `json:"loop_guard_examples,omitempty"`
 	LoopProtocolFeedExamples         []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
+	LoopProtocolCalibrationExamples  []LoopProtocolCalibration     `json:"loop_protocol_calibration_examples,omitempty"`
 	SourceAccessExamples             []SourceAccessExample         `json:"source_access_examples,omitempty"`
 	BrowserNetworkExamples           []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
 	MemoryUpdateExamples             []MemoryUpdateExample         `json:"memory_update_examples,omitempty"`
@@ -630,6 +632,7 @@ type DebugMetrics struct {
 	LoopProtocolFeedByMode       map[string]int `json:"loop_protocol_feed_by_mode,omitempty"`
 	LatestLoopProtocolFeedNumber int            `json:"latest_loop_protocol_feed_number,omitempty"`
 	LatestLoopProtocolFeedMode   string         `json:"latest_loop_protocol_feed_mode,omitempty"`
+	LoopProtocolCalibrations     int            `json:"loop_protocol_calibrations,omitempty"`
 	SourceAccessResults          int            `json:"source_access_results"`
 	SourceAccessVerified         int            `json:"source_access_verified"`
 	SourceAccessDiscoveryOnly    int            `json:"source_access_discovery_only"`
@@ -881,6 +884,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
 		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
+		res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
@@ -1002,6 +1006,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ToolRepairExamples:               append([]ToolRepairExample(nil), res.ToolRepairExamples...),
 		LoopGuardExamples:                append([]LoopGuardExample(nil), res.LoopGuardExamples...),
 		LoopProtocolFeedExamples:         append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
+		LoopProtocolCalibrationExamples:  append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrations.Examples...),
 		SourceAccessExamples:             append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		BrowserNetworkExamples:           append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
 		MemoryUpdateExamples:             append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
@@ -1029,6 +1034,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			LoopProtocolFeedByMode:       cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
 			LatestLoopProtocolFeedNumber: res.LoopProtocolFeeds.Latest.FeedNumber,
 			LatestLoopProtocolFeedMode:   res.LoopProtocolFeeds.Latest.Mode,
+			LoopProtocolCalibrations:     res.LoopProtocolCalibrations.Count,
 			SourceAccessResults:          res.ToolStats.SourceAccessResults,
 			SourceAccessVerified:         res.ToolStats.SourceAccessVerified,
 			SourceAccessDiscoveryOnly:    res.ToolStats.SourceAccessDiscoveryOnly,

@@ -245,6 +245,13 @@ Scenario records describe one eval case:
   these fields to verify that long-running loop sessions actually refreshed
   `LOOP.md` without overfeeding the model context, and that each feed preserved
   a pointer back to the authoritative plan state.
+- `loop_protocol_calibrations`: optional count of accepted user calibration
+  answers for draft `LOOP.md` activation.
+- `loop_protocol_calibration_examples`: optional bounded examples of mirrored
+  calibration events. Each sample includes loop id, status, calibration answer
+  count/latest answer preview, protocol path, and the sidecar loop event
+  sequence. Use these fields to verify that setup progressed before waiting
+  for a later protocol feed.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.
@@ -436,9 +443,10 @@ Summary records aggregate all scenario records from the same process:
   `source_access_examples`, `browser_network_examples`,
   `memory_update_examples`, `session_search_examples`, `tool_truncation_examples`,
   `context_compaction_examples`, `loop_decision_examples`,
-  `loop_protocol_feed_examples`, and `plan_examples` include their originating
-  scenario so long-run batch failures can be routed directly to the right
-  trace/timeline. Context compaction examples may include
+  `loop_protocol_feed_examples`, `loop_protocol_calibration_examples`, and
+  `plan_examples` include their originating scenario so long-run batch failures
+  can be routed directly to the right trace/timeline. Context compaction
+  examples may include
   `loop_protocol_anchor` when the compacted summary preserved a per-session
   `LOOP.md` recovery pointer.
 - Loop protocol feed totals: `loop_protocol_feed_scenarios`,

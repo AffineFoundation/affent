@@ -219,6 +219,19 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			PlanCurrentStepStatus: p.PlanCurrentStepStatus,
 			PlanCurrentStep:       p.PlanCurrentStep,
 		})
+	case sse.TypeLoopCalibration:
+		var p sse.LoopProtocolCalibrationPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		t.LoopProtocolCalibrations = append(t.LoopProtocolCalibrations, LoopProtocolCalibration{
+			LoopID:                p.LoopID,
+			Status:                p.Status,
+			CalibrationAnswers:    p.CalibrationAnswers,
+			LastCalibrationAnswer: p.LastCalibrationAnswer,
+			ProtocolPath:          p.ProtocolPath,
+			EventSeq:              p.EventSeq,
+		})
 	case sse.TypeContextCompact:
 		var p sse.ContextCompactPayload
 		if err := json.Unmarshal(data, &p); err != nil {

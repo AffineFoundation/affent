@@ -149,6 +149,10 @@ type Trace struct {
 	// events let long-run evals measure protocol feed cadence and full/digest
 	// context pressure without reading sidecar loop files.
 	LoopProtocolFeeds []LoopProtocolFeed
+	// LoopProtocolCalibrations records accepted user calibration answers for
+	// draft LOOP.md activation. These events prove setup progress even before
+	// a later protocol feed exposes calibration counters.
+	LoopProtocolCalibrations []LoopProtocolCalibration
 	// ContextCompactions records model-context rewrites produced by the
 	// rolling compactor. The full user-visible trace remains in events.jsonl;
 	// these entries let long-run evals assert that context pressure was handled.
@@ -481,6 +485,16 @@ type LoopProtocolFeed struct {
 	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
 }
 
+type LoopProtocolCalibration struct {
+	Scenario              string `json:"scenario,omitempty"`
+	LoopID                string `json:"loop_id,omitempty"`
+	Status                string `json:"status,omitempty"`
+	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath          string `json:"protocol_path,omitempty"`
+	EventSeq              int    `json:"event_seq,omitempty"`
+}
+
 type TraceEventRef struct {
 	Index            int    `json:"index"`
 	Type             string `json:"type"`
@@ -496,6 +510,12 @@ type LoopProtocolFeedStats struct {
 	ByMode   map[string]int
 	Latest   LoopProtocolFeed
 	Examples []LoopProtocolFeed
+}
+
+type LoopProtocolCalibrationStats struct {
+	Count    int
+	Latest   LoopProtocolCalibration
+	Examples []LoopProtocolCalibration
 }
 
 type ContextCompaction struct {
@@ -1217,6 +1237,26 @@ func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
 			PlanCurrentStepIndex:  feed.PlanCurrentStepIndex,
 			PlanCurrentStepStatus: feed.PlanCurrentStepStatus,
 			PlanCurrentStep:       feed.PlanCurrentStep,
+		})
+	}
+	return stats
+}
+
+func (t Trace) LoopProtocolCalibrationStats(maxExamples int) LoopProtocolCalibrationStats {
+	stats := LoopProtocolCalibrationStats{}
+	for _, calibration := range t.LoopProtocolCalibrations {
+		stats.Count++
+		stats.Latest = calibration
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, LoopProtocolCalibration{
+			LoopID:                calibration.LoopID,
+			Status:                calibration.Status,
+			CalibrationAnswers:    calibration.CalibrationAnswers,
+			LastCalibrationAnswer: calibration.LastCalibrationAnswer,
+			ProtocolPath:          calibration.ProtocolPath,
+			EventSeq:              calibration.EventSeq,
 		})
 	}
 	return stats

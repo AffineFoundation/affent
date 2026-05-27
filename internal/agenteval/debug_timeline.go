@@ -159,6 +159,9 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ContextCompactions.SummaryEmpty,
 		))
 	}
+	if res.LoopProtocolCalibrations.Count > 0 {
+		parts = append(parts, fmt.Sprintf("loop_calibrations=%d", res.LoopProtocolCalibrations.Count))
+	}
 	parts = append(parts, fmt.Sprintf("tokens=%d/%d", res.Usage.InputTokens, res.Usage.OutputTokens))
 	return strings.Join(parts, " ")
 }

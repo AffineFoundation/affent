@@ -103,6 +103,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
+		`{"type":"loop.protocol_calibration","data":{"loop_id":"longrun","status":"draft","calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":2}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
@@ -211,6 +212,16 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if len(feeds.Examples) != 1 || feeds.Examples[0].LoopID != "longrun" || feeds.Examples[0].Mode != "digest" || feeds.Examples[0].CalibrationAnswers != 1 || feeds.Examples[0].LastCalibrationAnswer != "Stop if browser network evidence is missing." || feeds.Examples[0].PlanCurrentStep != "verify browser network evidence" {
 		t.Fatalf("LoopProtocolFeedStats examples = %+v", feeds.Examples)
+	}
+	calibrations := trace.LoopProtocolCalibrationStats(1)
+	if calibrations.Count != 1 || calibrations.Latest.LoopID != "longrun" || calibrations.Latest.CalibrationAnswers != 1 || calibrations.Latest.EventSeq != 2 {
+		t.Fatalf("LoopProtocolCalibrationStats = %+v", calibrations)
+	}
+	if len(calibrations.Examples) != 1 ||
+		calibrations.Examples[0].Status != "draft" ||
+		calibrations.Examples[0].ProtocolPath != ".affent/loops/longrun/LOOP.md" ||
+		calibrations.Examples[0].LastCalibrationAnswer != "Stop if browser network evidence is missing." {
+		t.Fatalf("LoopProtocolCalibrationStats examples = %+v", calibrations.Examples)
 	}
 	if res := LoopProtocolFullFeedAfterCompaction().Eval(trace); !res.Pass {
 		t.Fatalf("expected full loop protocol feed after compaction: %+v", res)
@@ -1559,6 +1570,25 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				SummaryPreview:  "USER_CONTEXT: debug run must preserve browser network evidence.",
 			}},
 		},
+		LoopProtocolCalibrations: LoopProtocolCalibrationStats{
+			Count: 1,
+			Latest: LoopProtocolCalibration{
+				LoopID:                "debug",
+				Status:                "draft",
+				CalibrationAnswers:    1,
+				LastCalibrationAnswer: "Stop when browser evidence is weak.",
+				ProtocolPath:          ".affent/loops/debug/LOOP.md",
+				EventSeq:              2,
+			},
+			Examples: []LoopProtocolCalibration{{
+				LoopID:                "debug",
+				Status:                "draft",
+				CalibrationAnswers:    1,
+				LastCalibrationAnswer: "Stop when browser evidence is weak.",
+				ProtocolPath:          ".affent/loops/debug/LOOP.md",
+				EventSeq:              2,
+			}},
+		},
 		Usage: Usage{InputTokens: 100, OutputTokens: 20},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
 			TurnID:    "turn-debug",
@@ -1906,6 +1936,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
 		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
 	}
+	if manifest.Metrics.LoopProtocolCalibrations != 1 ||
+		len(manifest.LoopProtocolCalibrationExamples) != 1 ||
+		manifest.LoopProtocolCalibrationExamples[0].LoopID != "debug" ||
+		manifest.LoopProtocolCalibrationExamples[0].EventSeq != 2 ||
+		!strings.Contains(manifest.LoopProtocolCalibrationExamples[0].LastCalibrationAnswer, "browser evidence") {
+		t.Fatalf("manifest loop protocol calibration = metrics:%+v examples:%+v", manifest.Metrics, manifest.LoopProtocolCalibrationExamples)
+	}
 	if len(manifest.ToolRepairExamples) != 1 ||
 		manifest.ToolRepairExamples[0].ToolIndex != 1 ||
 		manifest.ToolRepairExamples[0].Tool != "web_fetch" ||
@@ -2037,7 +2074,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.OutputTokens != 20 ||
 		manifest.Metrics.TraceEvents != 5 ||
 		manifest.Metrics.TraceEventTypes["message.delta"] != 2 ||
-		manifest.Metrics.TraceEventTypes["tool.result"] != 1 {
+		manifest.Metrics.TraceEventTypes["tool.result"] != 1 ||
+		manifest.Metrics.LoopProtocolCalibrations != 1 {
 		t.Fatalf("manifest metrics = %+v", manifest.Metrics)
 	}
 	timeline, err := os.ReadFile(res.TimelinePath)
@@ -2046,7 +2084,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 tokens=100/20",
+		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 loop_calibrations=1 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"## Tool Repair",
