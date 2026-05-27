@@ -710,6 +710,9 @@ type batchSummary struct {
 	ToolResultsTruncated                 int
 	ToolResultsOmittedBytes              int
 	ToolResultArtifacts                  int
+	ToolResultMissingArtifacts           int
+	ToolContextArtifacts                 int
+	ToolContextMissingArtifacts          int
 	ToolTruncationExamples               []agenteval.ToolTruncationExample
 	VerifierRuns                         int
 	VerifierPassed                       int
@@ -900,13 +903,16 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SessionSearchMatchedTerms += res.ToolStats.SessionSearchMatchedTerms
 	s.SessionSearchExamples = appendSessionSearchExamples(s.SessionSearchExamples, res.SessionSearchExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
-	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
-	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
+	s.ToolContextTruncated += max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated)
+	s.ToolContextOmittedBytes += max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes)
 	s.ToolArgsTruncated += res.ToolTruncation.ArgsTruncated
 	s.ToolArgsOmittedBytes += res.ToolTruncation.ArgsOmittedBytes
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
 	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
 	s.ToolResultArtifacts += res.ToolTruncation.ResultArtifacts
+	s.ToolResultMissingArtifacts += toolResultMissingArtifacts(res.ToolTruncation)
+	s.ToolContextArtifacts += res.ToolTruncation.ContextArtifacts
+	s.ToolContextMissingArtifacts += res.ToolTruncation.ContextMissingArtifacts
 	s.ToolTruncationExamples = appendToolTruncationExamples(s.ToolTruncationExamples, res.ToolTruncationExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	if res.Verifier.Ran {
 		s.VerifierRuns++
@@ -1184,7 +1190,12 @@ func batchResultExpectationCapabilityFailedNames(res agenteval.BatchResult, name
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s avg_duration_ms=%.0f tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d",
+	resultMissingArtifacts := s.ToolResultMissingArtifacts
+	if resultMissingArtifacts == 0 && s.ToolResultsTruncated > s.ToolResultArtifacts {
+		resultMissingArtifacts = s.ToolResultsTruncated - s.ToolResultArtifacts
+	}
+	missingArtifacts := resultMissingArtifacts + s.ToolContextMissingArtifacts
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s avg_duration_ms=%.0f tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d,ctx_artifacts:%d,missing_artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -1200,6 +1211,8 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolArgsTruncated,
 		s.ToolResultsTruncated,
 		s.ToolResultArtifacts,
+		s.ToolContextArtifacts,
+		missingArtifacts,
 		s.ToolArgsOmittedBytes,
 		s.ToolResultsOmittedBytes,
 		s.VerifierRuns,
@@ -1340,7 +1353,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		fmt.Fprintf(w, " trace_event_scenarios=%d,rate=%s", s.TraceEventScenarios, formatPercent(batchRatio(s.TraceEventScenarios, s.Total)))
 	}
 	if hasBatchToolContextTruncation(s) {
-		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
+		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d,artifacts=%d,missing_artifacts=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes, s.ToolContextArtifacts, s.ToolContextMissingArtifacts)
 	}
 	if len(s.DebugBriefByTag) > 0 {
 		fmt.Fprintf(w, " debug_brief=%s", formatStringIntCounts(s.DebugBriefByTag))
@@ -2653,6 +2666,9 @@ type batchResultRecord struct {
 	ToolResultsTruncated             int                                        `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes          int                                        `json:"tool_results_omitted_bytes"`
 	ToolResultArtifacts              int                                        `json:"tool_result_artifacts"`
+	ToolResultMissingArtifacts       int                                        `json:"tool_result_missing_artifacts,omitempty"`
+	ToolContextArtifacts             int                                        `json:"tool_context_artifacts,omitempty"`
+	ToolContextMissingArtifacts      int                                        `json:"tool_context_missing_artifacts,omitempty"`
 	ToolTruncationExamples           []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
 	VerifierCommand                  string                                     `json:"verifier_command,omitempty"`
 	VerifierRan                      bool                                       `json:"verifier_ran"`
@@ -2803,6 +2819,9 @@ type batchSummaryRecord struct {
 	ToolResultsTruncated                 int                                              `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes              int                                              `json:"tool_results_omitted_bytes"`
 	ToolResultArtifacts                  int                                              `json:"tool_result_artifacts"`
+	ToolResultMissingArtifacts           int                                              `json:"tool_result_missing_artifacts,omitempty"`
+	ToolContextArtifacts                 int                                              `json:"tool_context_artifacts,omitempty"`
+	ToolContextMissingArtifacts          int                                              `json:"tool_context_missing_artifacts,omitempty"`
 	ToolTruncationExamples               []agenteval.ToolTruncationExample                `json:"tool_truncation_examples,omitempty"`
 	VerifierRuns                         int                                              `json:"verifier_runs"`
 	VerifierPassed                       int                                              `json:"verifier_passed"`
@@ -2961,13 +2980,16 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SessionSearchMatchedTerms:        res.ToolStats.SessionSearchMatchedTerms,
 		SessionSearchExamples:            cloneSessionSearchExamples(res.SessionSearchExamples),
 		ToolDurationMS:                   res.ToolStats.ToolDurationMS,
-		ToolContextTruncated:             res.ToolStats.ToolContextTruncated,
-		ToolContextOmittedBytes:          res.ToolStats.ToolContextOmittedBytes,
+		ToolContextTruncated:             max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated),
+		ToolContextOmittedBytes:          max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes),
 		ToolArgsTruncated:                res.ToolTruncation.ArgsTruncated,
 		ToolArgsOmittedBytes:             res.ToolTruncation.ArgsOmittedBytes,
 		ToolResultsTruncated:             res.ToolTruncation.ResultsTruncated,
 		ToolResultsOmittedBytes:          res.ToolTruncation.ResultsOmittedBytes,
 		ToolResultArtifacts:              res.ToolTruncation.ResultArtifacts,
+		ToolResultMissingArtifacts:       toolResultMissingArtifacts(res.ToolTruncation),
+		ToolContextArtifacts:             res.ToolTruncation.ContextArtifacts,
+		ToolContextMissingArtifacts:      res.ToolTruncation.ContextMissingArtifacts,
 		ToolTruncationExamples:           cloneToolTruncationExamples(res.ToolTruncationExamples),
 		VerifierCommand:                  res.Verifier.Command,
 		VerifierRan:                      res.Verifier.Ran,
@@ -3192,6 +3214,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolResultsTruncated:                 s.ToolResultsTruncated,
 		ToolResultsOmittedBytes:              s.ToolResultsOmittedBytes,
 		ToolResultArtifacts:                  s.ToolResultArtifacts,
+		ToolResultMissingArtifacts:           s.ToolResultMissingArtifacts,
+		ToolContextArtifacts:                 s.ToolContextArtifacts,
+		ToolContextMissingArtifacts:          s.ToolContextMissingArtifacts,
 		ToolTruncationExamples:               cloneToolTruncationExamples(s.ToolTruncationExamples),
 		VerifierRuns:                         s.VerifierRuns,
 		VerifierPassed:                       s.VerifierPassed,
@@ -3871,16 +3896,24 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		res.Usage.OutputTokens,
 	)
 	if hasToolTruncation(res.ToolTruncation) {
-		fmt.Fprintf(w, " trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d",
+		missingArtifacts := toolResultMissingArtifacts(res.ToolTruncation) + res.ToolTruncation.ContextMissingArtifacts
+		fmt.Fprintf(w, " trunc=args:%d,results:%d,artifacts:%d,ctx_artifacts:%d,missing_artifacts:%d omitted=%d/%d",
 			res.ToolTruncation.ArgsTruncated,
 			res.ToolTruncation.ResultsTruncated,
 			res.ToolTruncation.ResultArtifacts,
+			res.ToolTruncation.ContextArtifacts,
+			missingArtifacts,
 			res.ToolTruncation.ArgsOmittedBytes,
 			res.ToolTruncation.ResultsOmittedBytes,
 		)
 	}
-	if hasToolContextTruncation(res.ToolStats) {
-		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", res.ToolStats.ToolContextTruncated, res.ToolStats.ToolContextOmittedBytes)
+	if hasToolContextTruncation(res.ToolStats) || res.ToolTruncation.ContextTruncated > 0 || res.ToolTruncation.ContextOmittedBytes > 0 {
+		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d,artifacts=%d,missing_artifacts=%d",
+			max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated),
+			max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes),
+			res.ToolTruncation.ContextArtifacts,
+			res.ToolTruncation.ContextMissingArtifacts,
+		)
 	}
 	if res.Repair.HasAny() {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", res.Repair.Calls, res.Repair.SucceededCalls, res.Repair.FailedCalls)
@@ -4014,6 +4047,16 @@ func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {
 
 func hasToolContextTruncation(stats agenteval.ToolRuntimeStats) bool {
 	return stats.ToolContextTruncated > 0 || stats.ToolContextOmittedBytes > 0
+}
+
+func toolResultMissingArtifacts(stats agenteval.ToolTruncationStats) int {
+	if stats.ResultMissingArtifacts > 0 {
+		return stats.ResultMissingArtifacts
+	}
+	if stats.ResultsTruncated > stats.ResultArtifacts {
+		return stats.ResultsTruncated - stats.ResultArtifacts
+	}
+	return 0
 }
 
 func hasSourceAccessStats(stats agenteval.ToolRuntimeStats) bool {

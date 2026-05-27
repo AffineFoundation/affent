@@ -371,6 +371,12 @@ Scenario records describe one eval case:
 - `tool_results_truncated`: count of event-capped tool results.
 - `tool_results_omitted_bytes`: omitted result bytes across tool events.
 - `tool_result_artifacts`: count of tool result artifact references.
+- `tool_result_missing_artifacts`: event-capped tool results without a saved
+  full-output artifact.
+- `tool_context_artifacts`: model-context-truncated tool results with a saved
+  full-output artifact.
+- `tool_context_missing_artifacts`: model-context-truncated tool results without
+  a saved full-output artifact.
 - `focused_task_calls`: optional number of delegated `run_task` calls.
 - `focused_task_by_type`: optional map of focused task `task_type` to call
   count.
@@ -462,8 +468,9 @@ Summary records aggregate all scenario records from the same process:
   `tool_context_truncated`, `tool_context_omitted_bytes`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,
-  `tool_result_artifacts`, plus `tool_truncation_examples`, the first bounded
-  samples across the batch.
+  `tool_result_artifacts`, `tool_result_missing_artifacts`,
+  `tool_context_artifacts`, `tool_context_missing_artifacts`, plus
+  `tool_truncation_examples`, the first bounded samples across the batch.
 - Delegation totals: `focused_task_calls`, `focused_task_by_type`,
   `focused_task_errors`, `focused_task_error_rate`, `subagent_calls`,
   `subagent_by_mode`, `subagent_errors`, and `subagent_error_rate`. These

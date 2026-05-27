@@ -1075,6 +1075,9 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ResultsTruncated:    1,
 			ResultsOmittedBytes: 4096,
 			ResultArtifacts:     1,
+			ContextTruncated:    3,
+			ContextOmittedBytes: 9216,
+			ContextArtifacts:    1,
 		},
 		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
 			ToolIndex:              1,
@@ -1139,7 +1142,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -1542,6 +1545,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ResultsTruncated:    2,
 			ResultsOmittedBytes: 2048,
 			ResultArtifacts:     1,
+			ContextTruncated:    2,
+			ContextOmittedBytes: 4096,
+			ContextArtifacts:    1,
 		},
 		Plan: agenteval.PlanStats{
 			Calls:    2,
@@ -1571,11 +1577,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 
 	var out bytes.Buffer
 	printBatchSummary(&out, summary)
-	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms avg_duration_ms=175 tools=5 errors=1 repaired=3 canonicalized=2 loop_guard=3 forced_no_tools=1 tool_ms=50 trunc=args:1,results:2,artifacts:1 omitted=128/2048 verifier=run:2,passed:1,failed:1,truncated:1,omitted:2048 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms avg_duration_ms=175 tools=5 errors=1 repaired=3 canonicalized=2 loop_guard=3 forced_no_tools=1 tool_ms=50 trunc=args:1,results:2,artifacts:1,ctx_artifacts:1,missing_artifacts:1 omitted=128/2048 verifier=run:2,passed:1,failed:1,truncated:1,omitted:2048 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
-	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120") {
+	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120,artifacts=1,missing_artifacts=0") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,loop_protocol_feed:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
@@ -2110,11 +2116,15 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			}},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
-			ArgsTruncated:       2,
-			ArgsOmittedBytes:    1024,
-			ResultsTruncated:    1,
-			ResultsOmittedBytes: 8192,
-			ResultArtifacts:     1,
+			ArgsTruncated:           2,
+			ArgsOmittedBytes:        1024,
+			ResultsTruncated:        1,
+			ResultsOmittedBytes:     8192,
+			ResultArtifacts:         1,
+			ContextTruncated:        2,
+			ContextOmittedBytes:     6144,
+			ContextArtifacts:        1,
+			ContextMissingArtifacts: 1,
 		},
 		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
 			ToolIndex:           1,
@@ -2228,6 +2238,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_results_truncated":              float64(1),
 		"tool_results_omitted_bytes":          float64(8192),
 		"tool_result_artifacts":               float64(1),
+		"tool_context_artifacts":              float64(1),
+		"tool_context_missing_artifacts":      float64(1),
 		"verifier_command":                    "go test ./...",
 		"verifier_ran":                        true,
 		"verifier_ok":                         false,
@@ -3208,14 +3220,16 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			MatchedTerms:    []string{"alpha", "coast"},
 			ContextIncluded: true,
 		}},
-		ToolDurationMS:          120,
-		ToolContextTruncated:    4,
-		ToolContextOmittedBytes: 12288,
-		ToolArgsTruncated:       1,
-		ToolArgsOmittedBytes:    256,
-		ToolResultsTruncated:    2,
-		ToolResultsOmittedBytes: 4096,
-		ToolResultArtifacts:     2,
+		ToolDurationMS:              120,
+		ToolContextTruncated:        4,
+		ToolContextOmittedBytes:     12288,
+		ToolArgsTruncated:           1,
+		ToolArgsOmittedBytes:        256,
+		ToolResultsTruncated:        2,
+		ToolResultsOmittedBytes:     4096,
+		ToolResultArtifacts:         2,
+		ToolContextArtifacts:        1,
+		ToolContextMissingArtifacts: 1,
 		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
 			Scenario:           "taostats-rendered",
 			ToolIndex:          4,
@@ -3373,6 +3387,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_results_truncated":                 float64(2),
 		"tool_results_omitted_bytes":             float64(4096),
 		"tool_result_artifacts":                  float64(2),
+		"tool_context_artifacts":                 float64(1),
+		"tool_context_missing_artifacts":         float64(1),
 		"context_compaction_summary_missing":     float64(1),
 		"context_compaction_summary_empty":       float64(1),
 		"context_injections":                     float64(3),
