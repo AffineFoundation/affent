@@ -658,6 +658,39 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolFeedChecks(t *testing.T) {
+	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
+		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence"},
+		{Mode: "full", FeedNumber: 2, PlanLabel: "SN120 research", PlanCurrentStepStatus: "pending", PlanCurrentStep: "write final cited analysis"},
+	}}
+
+	stats := trace.LoopProtocolFeedStats(1)
+	if stats.Count != 2 || stats.ByMode["digest"] != 1 || stats.ByMode["full"] != 1 || stats.Latest.FeedNumber != 2 {
+		t.Fatalf("LoopProtocolFeedStats = %+v", stats)
+	}
+	if len(stats.Examples) != 1 || stats.Examples[0].PlanCurrentStep != "collect rendered page and network evidence" {
+		t.Fatalf("LoopProtocolFeedStats examples = %+v", stats.Examples)
+	}
+	if res := LoopProtocolFeedsAtLeast(2).Eval(trace); !res.Pass {
+		t.Fatalf("expected loop protocol feed count check to pass: %+v", res)
+	}
+	if res := LoopProtocolFeedModeAtLeast("full", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected loop protocol feed mode check to pass: %+v", res)
+	}
+	if res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "in_progress", "network evidence", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected loop protocol feed checkpoint match to pass: %+v", res)
+	}
+	res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "completed", "network evidence", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected mismatched plan status to fail")
+	}
+	for _, want := range []string{"matched=0", `mode="digest"`, `plan_current_step_status="completed"`, "collect rendered page"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", res.Detail, want)
+		}
+	}
+}
+
 func TestContextCompactionChecks(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
 		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs."},

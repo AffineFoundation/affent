@@ -452,6 +452,90 @@ func LoopDecisionMatchAtLeast(kind, decision, trigger string, min int) Check {
 	}
 }
 
+func LoopProtocolFeedsAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_protocol_feeds_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopProtocolFeedStats(0)
+			if stats.Count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("loop_protocol_feeds=%d", stats.Count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("loop_protocol_feeds=%d, want >= %d", stats.Count, min),
+			}
+		},
+	}
+}
+
+func LoopProtocolFeedModeAtLeast(mode string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_protocol_feed_mode_at_least:%s:%d", mode, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopProtocolFeedStats(0)
+			got := stats.ByMode[mode]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", mode, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; loop_protocol_feed_modes=%v", mode, got, min, stats.ByMode),
+			}
+		},
+	}
+}
+
+func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus, planCurrentStep string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf(
+			"loop_protocol_feed_match_at_least:%s:%s:%s:%s:%d",
+			checkNamePart(mode),
+			checkNamePart(planLabelContains),
+			checkNamePart(planCurrentStepStatus),
+			checkNamePart(planCurrentStep),
+			min,
+		),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var examples []string
+			for _, feed := range t.LoopProtocolFeeds {
+				if mode != "" && feed.Mode != mode {
+					continue
+				}
+				if planLabelContains != "" && !strings.Contains(feed.PlanLabel, planLabelContains) {
+					continue
+				}
+				if planCurrentStepStatus != "" && feed.PlanCurrentStepStatus != planCurrentStepStatus {
+					continue
+				}
+				if planCurrentStep != "" && !strings.Contains(feed.PlanCurrentStep, planCurrentStep) {
+					continue
+				}
+				count++
+				if len(examples) < 3 {
+					examples = append(examples, formatLoopProtocolFeedExample(feed))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched=%d examples=%v", count, examples)}
+			}
+			return CheckResult{
+				Pass: false,
+				Detail: fmt.Sprintf(
+					"matched=%d, want >= %d for mode=%q plan_label_contains=%q plan_current_step_status=%q plan_current_step=%q; observed=%v",
+					count,
+					min,
+					mode,
+					planLabelContains,
+					planCurrentStepStatus,
+					planCurrentStep,
+					loopProtocolFeedExamples(t.LoopProtocolFeeds, 5),
+				),
+			}
+		},
+	}
+}
+
 func ContextCompactionsAtLeast(min int) Check {
 	return Check{
 		Name: fmt.Sprintf("context_compactions_at_least:%d", min),
@@ -751,6 +835,45 @@ func formatLoopDecisionExample(d LoopDecision) string {
 		parts = append(parts, "trigger="+d.Trigger)
 	}
 	return strings.Join(parts, " ")
+}
+
+func loopProtocolFeedExamples(feeds []LoopProtocolFeed, max int) []string {
+	if max <= 0 || len(feeds) == 0 {
+		return nil
+	}
+	examples := make([]string, 0, min(max, len(feeds)))
+	for i, feed := range feeds {
+		if i >= max {
+			break
+		}
+		examples = append(examples, formatLoopProtocolFeedExample(feed))
+	}
+	return examples
+}
+
+func formatLoopProtocolFeedExample(feed LoopProtocolFeed) string {
+	parts := []string{
+		"mode=" + feed.Mode,
+		fmt.Sprintf("feed_number=%d", feed.FeedNumber),
+	}
+	if feed.PlanLabel != "" {
+		parts = append(parts, "plan_label="+previewSubstr(feed.PlanLabel, 80))
+	}
+	if feed.PlanCurrentStepStatus != "" {
+		parts = append(parts, "plan_current_step_status="+feed.PlanCurrentStepStatus)
+	}
+	if feed.PlanCurrentStep != "" {
+		parts = append(parts, "plan_current_step="+previewSubstr(feed.PlanCurrentStep, 100))
+	}
+	return strings.Join(parts, " ")
+}
+
+func checkNamePart(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "*"
+	}
+	return previewSubstr(s, 24)
 }
 
 func FocusedTaskCalledAtLeast(taskType string, min int) Check {

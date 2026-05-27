@@ -335,6 +335,10 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "required_tool_stats_at_least", exp.RequiredToolStatsAtLeast)
 	writeTimelineCountsLine(b, "required_loop_decision_kinds", exp.RequiredLoopDecisionKinds)
 	writeTimelineCountsLine(b, "required_loop_decision_results", exp.RequiredLoopDecisionResults)
+	if exp.RequiredLoopProtocolFeeds > 0 {
+		fmt.Fprintf(b, "- required_loop_protocol_feeds: `%d`\n", exp.RequiredLoopProtocolFeeds)
+	}
+	writeTimelineCountsLine(b, "required_loop_protocol_feed_modes", exp.RequiredLoopProtocolFeedModes)
 	writeTimelineCountsLine(b, "required_focused_task_counts", exp.RequiredFocusedTaskCounts)
 	writeTimelineCountsLine(b, "required_subagent_mode_counts", exp.RequiredSubagentModeCounts)
 	if exp.RequireNoDelegationErrors || exp.RequireNoPlanErrors {
@@ -365,6 +369,29 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			}
 			parts = append(parts, fmt.Sprintf("min=%d", min))
 			fmt.Fprintf(b, "- required_loop_decision: `%s`\n", strings.Join(parts, " "))
+		}
+	}
+	if len(exp.RequiredLoopProtocolFeedMatches) > 0 {
+		for _, req := range exp.RequiredLoopProtocolFeedMatches {
+			min := req.Min
+			if min <= 0 {
+				min = 1
+			}
+			var parts []string
+			if req.Mode != "" {
+				parts = append(parts, fmt.Sprintf("mode=%s", req.Mode))
+			}
+			if req.PlanLabelContains != "" {
+				parts = append(parts, fmt.Sprintf("plan_label_contains=%s", timelineInline(req.PlanLabelContains, 160)))
+			}
+			if req.PlanCurrentStepStatus != "" {
+				parts = append(parts, fmt.Sprintf("plan_current_step_status=%s", req.PlanCurrentStepStatus))
+			}
+			if req.PlanCurrentStep != "" {
+				parts = append(parts, fmt.Sprintf("plan_current_step=%s", timelineInline(req.PlanCurrentStep, 160)))
+			}
+			parts = append(parts, fmt.Sprintf("min=%d", min))
+			fmt.Fprintf(b, "- required_loop_protocol_feed: `%s`\n", strings.Join(parts, " "))
 		}
 	}
 	writeTimelineStringSliceMap(b, "required_tool_result_text", exp.RequiredToolResultText)
@@ -485,6 +512,9 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredLoopDecisionKinds) > 0 ||
 		len(exp.RequiredLoopDecisionResults) > 0 ||
 		len(exp.RequiredLoopDecisionMatches) > 0 ||
+		exp.RequiredLoopProtocolFeeds > 0 ||
+		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
+		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
 		len(exp.RequiredFocusedTaskCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
 		exp.RequireNoDelegationErrors ||

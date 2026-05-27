@@ -97,8 +97,9 @@ Scenario records describe one eval case:
   keys are replaced with `<redacted>`.
 - `expectations`: optional structured copy of the scenario's declarative checks,
   including required/forbidden tools, tool counts, source-access requirements,
-  loop-decision requirements, context-compaction requirements, plan/delegation
-  constraints, protected files, and related max-turn/compaction settings. This
+  loop-decision requirements, loop protocol feed and active plan checkpoint
+  requirements, context-compaction requirements, plan/delegation constraints,
+  protected files, and related max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
 - `expectation_capability_names`, `expectation_capability_outcome`,
@@ -439,7 +440,8 @@ Summary records aggregate all scenario records from the same process:
   counts declared source-access statuses such as `network` or `verified`; and
   `expectation_capabilities` counts broad required capability families such as
   `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,
-  `delegation`, `plan`, `context_compaction`, `verifier`, and `mcp`.
+  `delegation`, `plan`, `loop_protocol`, `context_compaction`, `verifier`,
+  and `mcp`.
   `expectation_capability_passed`, `expectation_capability_failed`, and
   `expectation_capability_pass_rate` split those declared capability families
   by scenario outcome. These are declaration/outcome counters, not observed

@@ -452,6 +452,13 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"digest": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "digest", PlanLabelContains: "market", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "source review"},
+		},
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"},
 		},
@@ -505,6 +512,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
+		"loop_protocol_feeds_at_least:1",
+		"loop_protocol_feed_mode_at_least:digest:1",
+		"loop_protocol_feed_match_at_least:digest:market:in_progress:source review:1",
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
 		"context_compactions_at_least:1",
@@ -1619,6 +1629,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"digest": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence"},
+		},
 		RequiredToolResultText: map[string][]string{
 			"browser_network_read": {"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"},
 		},
@@ -1702,7 +1719,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
 	}
-	wantCapabilities := []string{"browser", "context_compaction", "delegation", "memory", "plan", "session_search", "source_access", "web", "workspace"}
+	wantCapabilities := []string{"browser", "context_compaction", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
 		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
@@ -1732,6 +1749,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredLoopDecisionResults["defer"] != 1 ||
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
 		manifest.Expectations.RequiredLoopDecisionMatches[0] != (DebugLoopDecisionRequirement{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"}) ||
+		manifest.Expectations.RequiredLoopProtocolFeeds != 1 ||
+		manifest.Expectations.RequiredLoopProtocolFeedModes["digest"] != 1 ||
+		len(manifest.Expectations.RequiredLoopProtocolFeedMatches) != 1 ||
+		manifest.Expectations.RequiredLoopProtocolFeedMatches[0] != (DebugLoopProtocolFeedRequirement{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence"}) ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"}) ||
 		len(manifest.Expectations.RequiredToolOrder) != 1 ||
 		manifest.Expectations.RequiredToolOrder[0] != (DebugToolOrderRequirement{Earlier: "web_fetch", Later: "browser_network_read"}) ||
@@ -1946,7 +1967,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
-		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `memory`, `plan`, `session_search`, `source_access`, `web`, `workspace` outcome=`failed`",
+		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
 		"checks: `turn_ended_cleanly`",
@@ -1960,10 +1981,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tool_stats_at_least: `memory_updates=2,source_access_dynamic_partial=1,source_access_network=1`",
 		"required_loop_decision_kinds: `evidence_quality=1`",
 		"required_loop_decision_results: `defer=1`",
+		"required_loop_protocol_feeds: `1`",
+		"required_loop_protocol_feed_modes: `digest=1`",
 		"required_focused_task_counts: `research=1`",
 		"required_subagent_mode_counts: `review=1`",
 		"required_no_errors: `delegation plan`",
 		"required_loop_decision: `kind=evidence_quality decision=defer trigger=source_access_dynamic_partial min=1`",
+		"required_loop_protocol_feed: `mode=digest plan_label_contains=debug plan_current_step_status=in_progress plan_current_step=browser network evidence min=1`",
 		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `requested_url=`, `source_method=network_xhr_fetch`",
 		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api requested_url_contains=taostats.io/subnets/120 source_method=network_xhr_fetch json_path=$.price min=1`",
 		"required_session_search: `query_contains=Alpha Coast session=market-alpha snippet_contains=history marker terms=alpha,coast context=true turn=4 min=1`",

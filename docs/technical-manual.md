@@ -925,14 +925,15 @@ reason, and suggested next step are visible before opening full traces. The debu
 manifest, timeline, and JSONL scenario record also include structured
 `expectations` plus derived expected capability names/outcome, so
 batch-analysis scripts can group failures by required tools, evidence checks,
-plan/delegation constraints, and context-compaction requirements without
-reimplementing capability inference.
+loop protocol feed checkpoints, plan/delegation constraints, and
+context-compaction requirements without reimplementing capability inference.
 Text and JSONL summary records aggregate those declarations as expectation
 coverage counters, including suites, required tools, required source-access
 statuses, and broad capabilities such as memory, browser, delegation, plan,
-and context compaction. They also split expected capabilities into passed and
-failed counts so long-run reports can show whether regressions cluster around
-memory, browser/web evidence, delegation, plan, or context compaction. Text and
+loop protocol, and context compaction. They also split expected capabilities
+into passed and failed counts so long-run reports can show whether regressions
+cluster around memory, browser/web evidence, delegation, plan, loop protocol,
+or context compaction. Text and
 JSONL summaries also include an aggregate expected-capability pass rate for CI
 and model/provider comparison dashboards, plus bounded failed-scenario examples
 per failure kind and expected capability so operators can jump from a
