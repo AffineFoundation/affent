@@ -1312,6 +1312,9 @@ func renderTimelineSessionSearch(b *strings.Builder, trace *Trace) {
 		if ex.SessionID != "" {
 			fmt.Fprintf(b, " session=`%s`", ex.SessionID)
 		}
+		if ex.RecentSessionID != "" {
+			fmt.Fprintf(b, " recent_session=`%s`", ex.RecentSessionID)
+		}
 		if ex.TurnIdx > 0 {
 			fmt.Fprintf(b, " turn=`%d`", ex.TurnIdx)
 		}
@@ -1336,6 +1339,15 @@ func renderTimelineSessionSearch(b *strings.Builder, trace *Trace) {
 		b.WriteByte('\n')
 		if ex.SnippetPreview != "" {
 			fmt.Fprintf(b, "   snippet: %s\n", timelineInline(ex.SnippetPreview, timelineMemoryPreviewBytes))
+		}
+		if ex.RecentUserPreview != "" {
+			fmt.Fprintf(b, "   recent_user: %s\n", timelineInline(ex.RecentUserPreview, timelineMemoryPreviewBytes))
+		}
+		if ex.RecentAssistantPreview != "" {
+			fmt.Fprintf(b, "   recent_assistant: %s\n", timelineInline(ex.RecentAssistantPreview, timelineMemoryPreviewBytes))
+		}
+		if ex.RecentPlanPreview != "" {
+			fmt.Fprintf(b, "   recent_plan: %s\n", timelineInline(ex.RecentPlanPreview, timelineMemoryPreviewBytes))
 		}
 		if ex.Message != "" {
 			fmt.Fprintf(b, "   message: %s\n", timelineInline(ex.Message, timelineMemoryPreviewBytes))

@@ -1508,6 +1508,9 @@ func recoveryHintFromSessionSearchResult(text string) string {
 	if preview == "" {
 		preview = strings.TrimSpace(recent.LatestAssistant)
 	}
+	if preview == "" {
+		preview = strings.TrimSpace(recent.Plan)
+	}
 	if preview != "" {
 		parts = append(parts, "preview: "+preview)
 	}

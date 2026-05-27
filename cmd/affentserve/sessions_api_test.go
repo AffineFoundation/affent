@@ -720,6 +720,19 @@ func TestRecoveryHintFromConversationSessionSearchRecentAnchors(t *testing.T) {
 	}
 }
 
+func TestRecoveryHintFromConversationSessionSearchRecentPlanAnchor(t *testing.T) {
+	result := `{"query":"missing marker","total":0,"results":[],"recent_sessions":[{"session_id":"recent-plan","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Continue Bittensor subnet 120 validator inventory"}]}`
+	got := recoveryHintFromConversationMessage(agent.ChatMessage{
+		Role:    "tool",
+		Content: result,
+	})
+	for _, want := range []string{"session recall found no direct hits", "retry from recent session recent-plan", "current_step", "Bittens"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation recovery hint missing %q: %q", want, got)
+		}
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromMemorySearchTopicAnchors(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

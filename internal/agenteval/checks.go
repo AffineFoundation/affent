@@ -1106,6 +1106,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	if ex.SessionID != "" {
 		parts = append(parts, "session="+ex.SessionID)
 	}
+	if ex.RecentSessionID != "" {
+		parts = append(parts, "recent_session="+ex.RecentSessionID)
+	}
 	if ex.TurnIdx > 0 {
 		parts = append(parts, fmt.Sprintf("turn=%d", ex.TurnIdx))
 	}
@@ -1123,6 +1126,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	}
 	if ex.SnippetPreview != "" {
 		parts = append(parts, "snippet="+previewSubstr(ex.SnippetPreview, 100))
+	}
+	if ex.RecentPlanPreview != "" {
+		parts = append(parts, "recent_plan="+previewSubstr(ex.RecentPlanPreview, 100))
 	}
 	return strings.Join(parts, " ")
 }

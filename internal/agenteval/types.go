@@ -510,6 +510,7 @@ type SessionSearchExample struct {
 	SnippetPreview         string   `json:"snippet_preview,omitempty"`
 	RecentUserPreview      string   `json:"recent_user_preview,omitempty"`
 	RecentAssistantPreview string   `json:"recent_assistant_preview,omitempty"`
+	RecentPlanPreview      string   `json:"recent_plan_preview,omitempty"`
 	Message                string   `json:"message,omitempty"`
 }
 
@@ -953,6 +954,7 @@ func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
 					RecentModTime:          compactOneLine(recent.ModTime, 80),
 					RecentUserPreview:      compactOneLine(recent.LatestUser, 180),
 					RecentAssistantPreview: compactOneLine(recent.LatestAssistant, 180),
+					RecentPlanPreview:      compactOneLine(recent.Plan, 180),
 					Message:                compactOneLine(resp.Message, 220),
 				})
 			}

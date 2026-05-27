@@ -472,8 +472,9 @@ show the prior outcome, not just the old question, which lets poor
 resume/recovery runs be debugged without opening the full transcript. When
 transcript recall has no lexical hits,
 `session_search` may also return a small `recent_sessions` list with session
-ids, modification times, and compact latest user/assistant previews so the
-agent can retry with better anchors instead of guessing unseen history.
+ids, modification times, compact latest user/assistant previews, and compact
+plan previews so the agent can retry with better anchors instead of guessing
+unseen history.
 Session ids themselves are searchable anchors; retrying with a recent
 `session_id` returns the latest compact user/assistant context from that
 session when ordinary transcript terms do not match. Each

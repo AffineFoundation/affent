@@ -213,6 +213,45 @@ func TestRecentSessionsSummarizesRecentLogs(t *testing.T) {
 	}
 }
 
+func TestRecentSessionsIncludesPlanAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableSessionLog(t, dir, "plan-heavy", []testMessage{
+		{Role: "user", Content: "Resume the long-run research task"},
+	})
+	writeDurablePlan(t, dir, "plan-heavy", `{"version":1,"steps":[{"text":"Collect public docs","status":"completed"},{"text":"Continue Bittensor subnet 120 validator inventory review","status":"in_progress"}]}`)
+	writeDurablePlan(t, dir, "plan-only", `{"version":1,"steps":[{"text":"Recover Northstar Biotech Q3 risk memo","status":"in_progress"}]}`)
+	writeDurablePlan(t, dir, "current", `{"version":1,"steps":[{"text":"current plan should be hidden","status":"in_progress"}]}`)
+
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	olderTime := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "plan-only", "plan.json"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "plan-heavy", "plan.json"), olderTime, olderTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "plan-heavy", "conversation.jsonl"), olderTime, olderTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("expected two recent plan anchors, got %+v", recent)
+	}
+	if recent[0].SessionID != "plan-only" || recent[0].LatestUser != "" || !strings.Contains(recent[0].Plan, "Northstar Biotech Q3") {
+		t.Fatalf("plan-only recent anchor = %+v, want plan preview without conversation", recent[0])
+	}
+	if recent[1].SessionID != "plan-heavy" || !strings.Contains(recent[1].LatestUser, "long-run research") || !strings.Contains(recent[1].Plan, "Bittensor subnet 120 validator") {
+		t.Fatalf("plan-heavy recent anchor = %+v, want conversation and plan previews", recent[1])
+	}
+	if strings.Contains(fmt.Sprint(recent), "current plan should be hidden") {
+		t.Fatalf("current session plan leaked into recent anchors: %+v", recent)
+	}
+}
+
 func TestRecentSessionsCapsAndCompactsPreviews(t *testing.T) {
 	dir := t.TempDir()
 	long := strings.Repeat("Alpha\t\n", 80)

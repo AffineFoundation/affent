@@ -31,7 +31,7 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 		Tool:     "session_search",
 		CallID:   "search-empty",
 		ExitCode: 0,
-		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
+		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
 	}}}
 
 	examples := trace.SessionSearchExamples(5)
@@ -45,6 +45,7 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 		examples[0].RecentModTime != "2026-05-27T12:00:00Z" ||
 		!strings.Contains(examples[0].RecentUserPreview, "Alpha Coast") ||
 		!strings.Contains(examples[0].RecentAssistantPreview, "HIST-STOCK-44") ||
+		!strings.Contains(examples[0].RecentPlanPreview, "Recheck Alpha Coast risk") ||
 		!strings.Contains(examples[0].Message, "retry") {
 		t.Fatalf("unexpected recent anchor example: %+v", examples[0])
 	}

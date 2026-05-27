@@ -33,12 +33,14 @@ type Hit struct {
 }
 
 // RecentSession is a bounded no-match recovery hint. It gives the agent a few
-// fresh transcript anchors without returning full historical conversations.
+// fresh transcript/task-state anchors without returning full historical
+// conversations.
 type RecentSession struct {
 	SessionID       string `json:"session_id"`
 	ModTime         string `json:"mod_time,omitempty"`
 	LatestUser      string `json:"latest_user,omitempty"`
 	LatestAssistant string `json:"latest_assistant,omitempty"`
+	Plan            string `json:"plan,omitempty"`
 }
 
 // Response is the session_search tool return shape.
@@ -167,6 +169,7 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 type sessionLogCandidate struct {
 	sessionID string
 	path      string
+	planPath  string
 	modTime   time.Time
 }
 
@@ -202,12 +205,26 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				if sid == currentSessionID || entryIsSymlink(ent) {
 					continue
 				}
-				path := filepath.Join(sessionsDir, sid, "conversation.jsonl")
-				info, ok := regularFileInfo(path)
-				if !ok {
+				conversationPath := filepath.Join(sessionsDir, sid, "conversation.jsonl")
+				planPath := filepath.Join(sessionsDir, sid, "plan.json")
+				conversationInfo, hasConversation := regularFileInfo(conversationPath)
+				planInfo, hasPlan := regularFileInfo(planPath)
+				if !hasConversation && !hasPlan {
 					continue
 				}
-				candidates = append(candidates, sessionLogCandidate{sessionID: sid, path: path, modTime: info.ModTime()})
+				modTime := time.Time{}
+				if hasConversation {
+					modTime = conversationInfo.ModTime()
+				}
+				if hasPlan && (modTime.IsZero() || planInfo.ModTime().After(modTime)) {
+					modTime = planInfo.ModTime()
+				}
+				candidates = append(candidates, sessionLogCandidate{
+					sessionID: sid,
+					path:      conversationPath,
+					planPath:  planPath,
+					modTime:   modTime,
+				})
 				continue
 			}
 			if !strings.HasSuffix(ent.Name(), ".jsonl") || entryIsSymlink(ent) {
@@ -261,55 +278,73 @@ func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (Recent
 	if err := ctx.Err(); err != nil {
 		return RecentSession{}, false, err
 	}
-	if _, ok := regularFileInfo(cand.path); !ok {
-		return RecentSession{}, false, errors.New("session log must be a regular file")
-	}
-	f, err := os.Open(cand.path)
-	if err != nil {
-		return RecentSession{}, false, err
-	}
-	defer f.Close()
-	reader := bufio.NewReaderSize(f, 64*1024)
 	summary := RecentSession{
 		SessionID: cand.sessionID,
 		ModTime:   cand.modTime.UTC().Format(time.RFC3339),
 	}
-	for {
-		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return RecentSession{}, false, err
-		}
-		if err := ctx.Err(); err != nil {
-			return RecentSession{}, false, err
-		}
-		if overLimit {
-			continue
-		}
-		var m struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		}
-		if err := json.Unmarshal(line, &m); err != nil {
-			continue
-		}
-		preview := recentSessionPreview(m.Content)
-		if preview == "" {
-			continue
-		}
-		switch m.Role {
-		case "user":
-			summary.LatestUser = preview
-		case "assistant":
-			summary.LatestAssistant = preview
+	if cand.path != "" {
+		if _, ok := regularFileInfo(cand.path); !ok {
+			if cand.planPath == "" {
+				return RecentSession{}, false, errors.New("session log must be a regular file")
+			}
+		} else {
+			f, err := os.Open(cand.path)
+			if err != nil {
+				return RecentSession{}, false, err
+			}
+			defer f.Close()
+			reader := bufio.NewReaderSize(f, 64*1024)
+			for {
+				line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				if err != nil {
+					return RecentSession{}, false, err
+				}
+				if err := ctx.Err(); err != nil {
+					return RecentSession{}, false, err
+				}
+				if overLimit {
+					continue
+				}
+				var m struct {
+					Role    string `json:"role"`
+					Content string `json:"content"`
+				}
+				if err := json.Unmarshal(line, &m); err != nil {
+					continue
+				}
+				preview := recentSessionPreview(m.Content)
+				if preview == "" {
+					continue
+				}
+				switch m.Role {
+				case "user":
+					summary.LatestUser = preview
+				case "assistant":
+					summary.LatestAssistant = preview
+				}
+			}
 		}
 	}
-	if summary.LatestUser == "" && summary.LatestAssistant == "" {
+	if cand.planPath != "" {
+		if plan := recentPlanPreview(cand.planPath); plan != "" {
+			summary.Plan = plan
+		}
+	}
+	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" {
 		return RecentSession{}, false, nil
 	}
 	return summary, true, nil
+}
+
+func recentPlanPreview(path string) string {
+	summary, found := planstate.SummarizeFile(path)
+	if !found || summary.Error || summary.Label == planstate.LabelMissing || summary.Label == planstate.LabelEmpty || summary.Label == planstate.LabelError {
+		return ""
+	}
+	return recentSessionPreview(planSearchContent(summary))
 }
 
 func recentSessionPreview(s string) string {

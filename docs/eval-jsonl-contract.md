@@ -335,8 +335,9 @@ Scenario records describe one eval case:
   `message_idx` when available, role, score, matched terms, context-included
   flag, and a compact snippet/message preview. User-request hits can include
   the adjacent assistant answer so recovery evals can inspect the prior
-  outcome. No-hit examples can include recent-session anchor previews for the
-  retry path. Summary records include the originating scenario.
+  outcome. No-hit examples can include recent-session user, assistant, and
+  plan anchor previews for the retry path. Summary records include the
+  originating scenario.
 - `memory_update_examples`: optional bounded per-scenario examples of confirmed
   durable memory mutations. Each sample includes the tool index, call id,
   action, target/topic location, and compact previous/next previews when
