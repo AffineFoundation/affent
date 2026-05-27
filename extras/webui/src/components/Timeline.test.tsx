@@ -74,7 +74,7 @@ describe("Timeline", () => {
     expect(heads[0]).not.toHaveTextContent("Message 1");
     expect(heads[0]).toHaveTextContent("list the files");
     expect(heads[0]).toHaveTextContent("Done");
-    expect(heads[0]).toHaveTextContent("1 action");
+    expect(heads[0]).not.toHaveTextContent("1 action");
     expect(heads[0]).toHaveTextContent("12ms");
     expect(heads[0]).not.toHaveTextContent("138 tokens");
     expect(heads[1]).not.toHaveTextContent("Message 2");
@@ -259,7 +259,7 @@ describe("Timeline", () => {
     renderTimeline(resultTruncated);
 
     expect(screen.getByTestId("turn-head")).toHaveTextContent("cat big.log");
-    expect(screen.getByTestId("turn-head")).toHaveTextContent("1 action");
+    expect(screen.getByTestId("turn-head")).not.toHaveTextContent("1 action");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("1 file");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("88ms");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("+2 more");

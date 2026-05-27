@@ -1165,14 +1165,26 @@ function summarizeHeaderMetrics(
   items: readonly WorkSummaryItem[],
 ): { text: string; tone?: WorkSummaryItem["tone"] } | undefined {
   const parts: string[] = [];
-  if (actionLabel) parts.push(actionLabel);
-  parts.push(...meta.filter(Boolean));
-  if (items.length > 0) parts.push(`+${items.length} more`);
+  const concreteAction = actionLabel && !isPlainActionCount(actionLabel) ? actionLabel : undefined;
+  const usefulMeta = meta.filter((item) => item && !isPlainActionCount(item));
+  if (concreteAction) parts.push(concreteAction);
+  parts.push(...usefulMeta);
+  if (items.length > 0) {
+    if (parts.length > 0) {
+      parts.push(`+${items.length} more`);
+    } else {
+      parts.push(...items.map((item) => item.label));
+    }
+  }
   if (parts.length === 0) return undefined;
   return {
     text: parts.join(" · "),
     tone: workSummaryTone(items),
   };
+}
+
+function isPlainActionCount(value: string): boolean {
+  return /^\d+ actions?$/.test(value.trim());
 }
 
 function summarizeBoundaryMeta(meta: readonly string[], visibleCount: number): string | undefined {
