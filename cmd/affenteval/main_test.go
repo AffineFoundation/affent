@@ -49,6 +49,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-trace-event-rate=0.900",
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
+		"max-debug-brief-tag-rate=browser_network:unread_refs=0.000",
 		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
@@ -657,6 +658,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxAvgContextSummaryEmpty == nil || *webGates.MaxAvgContextSummaryEmpty != 0 ||
 		webGates.MaxAvgToolCalls == nil || *webGates.MaxAvgToolCalls != 18 ||
 		webGates.MaxAvgDurationMS == nil || *webGates.MaxAvgDurationMS != 240000 ||
+		webGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
@@ -681,6 +683,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		t.Fatalf("apply web-evidence profile with debug tag overrides: %v", err)
 	}
 	if overrideGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != -1 ||
+		overrideGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
 		overrideGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		overrideGates.MaxDebugBriefTagRates["recall:no_context"] != 0.25 {
 		t.Fatalf("debug brief tag gates not merged: %+v", overrideGates.MaxDebugBriefTagRates)

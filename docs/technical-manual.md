@@ -813,7 +813,9 @@ observability, shared memory, tool recovery, loop-guard no-tool fallback, and
 cross-session recovery regressions fail the batch. Use
 `--quality-profile web-evidence` for live/current web evidence runs; it also
 fails scenario-level debug brief tags such as dynamic source evidence without
-network-backed reads or without an explicit evidence-quality defer decision.
+network-backed reads, browser network refs that were not followed by
+`browser_network_read`, or dynamic gaps without an explicit evidence-quality
+defer decision.
 Explicit `--max-debug-brief-tag-rate tag=rate` flags merge with profile
 defaults and can disable one profile tag with `tag=-1`. Other explicit gate
 flags override the profile defaults. JSONL summary records also
