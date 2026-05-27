@@ -1412,6 +1412,13 @@ func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 		RequiredTraceEventCounts: map[string]int{
 			"conversation.repaired": 1,
 		},
+		RequiredConversationRepairStatsAtLeast: map[string]int{
+			"events":               1,
+			"missing_tool_results": 1,
+		},
+		RequiredConversationRepairKinds: map[string]int{
+			"resume_missing_tool_result": 1,
+		},
 		ForbiddenTools: []string{
 			"read_file",
 			"shell",
@@ -1476,6 +1483,14 @@ func longRunCrashDuplicateToolResultResumeScenario() BatchScenario {
 		},
 		RequiredTraceEventCounts: map[string]int{
 			"conversation.repaired": 1,
+		},
+		RequiredConversationRepairStatsAtLeast: map[string]int{
+			"events":                  1,
+			"duplicate_tool_results":  2,
+			"unexpected_tool_results": 1,
+		},
+		RequiredConversationRepairKinds: map[string]int{
+			"resume_duplicate_tool_result": 1,
 		},
 		ForbiddenTools: []string{
 			"read_file",

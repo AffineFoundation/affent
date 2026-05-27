@@ -122,6 +122,8 @@ type BatchScenario struct {
 	RequiredToolFailureKindCounts           map[string]int
 	RequiredToolStatsAtLeast                map[string]int
 	RequiredTraceEventCounts                map[string]int
+	RequiredConversationRepairStatsAtLeast  map[string]int
+	RequiredConversationRepairKinds         map[string]int
 	RequiredLoopDecisionKinds               map[string]int
 	RequiredLoopDecisionResults             map[string]int
 	RequiredLoopDecisionMatches             []LoopDecisionRequirement
@@ -323,6 +325,8 @@ type DebugScenarioExpectations struct {
 	RequiredToolFailureKindCounts           map[string]int                     `json:"required_tool_failure_kind_counts,omitempty"`
 	RequiredToolStatsAtLeast                map[string]int                     `json:"required_tool_stats_at_least,omitempty"`
 	RequiredTraceEventCounts                map[string]int                     `json:"required_trace_event_counts,omitempty"`
+	RequiredConversationRepairStatsAtLeast  map[string]int                     `json:"required_conversation_repair_stats_at_least,omitempty"`
+	RequiredConversationRepairKinds         map[string]int                     `json:"required_conversation_repair_kinds,omitempty"`
 	RequiredLoopDecisionKinds               map[string]int                     `json:"required_loop_decision_kinds,omitempty"`
 	RequiredLoopDecisionResults             map[string]int                     `json:"required_loop_decision_results,omitempty"`
 	RequiredLoopDecisionMatches             []DebugLoopDecisionRequirement     `json:"required_loop_decision_matches,omitempty"`
@@ -423,6 +427,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if len(exp.RequiredTraceEventCounts) > 0 {
 		caps["trace"] = true
+	}
+	if len(exp.RequiredConversationRepairStatsAtLeast) > 0 || len(exp.RequiredConversationRepairKinds) > 0 {
+		caps["trace"] = true
+		caps["session"] = true
 	}
 	for range exp.RequiredCommandBeforeTool {
 		caps["workspace"] = true
@@ -1346,6 +1354,8 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredToolFailureKindCounts:           cloneStringIntMap(s.RequiredToolFailureKindCounts),
 		RequiredToolStatsAtLeast:                cloneStringIntMap(s.RequiredToolStatsAtLeast),
 		RequiredTraceEventCounts:                cloneStringIntMap(s.RequiredTraceEventCounts),
+		RequiredConversationRepairStatsAtLeast:  cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
+		RequiredConversationRepairKinds:         cloneStringIntMap(s.RequiredConversationRepairKinds),
 		RequiredLoopDecisionKinds:               cloneStringIntMap(s.RequiredLoopDecisionKinds),
 		RequiredLoopDecisionResults:             cloneStringIntMap(s.RequiredLoopDecisionResults),
 		RequiredLoopDecisionMatches:             loopReqs,
@@ -1960,6 +1970,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, eventType := range sortedStringMapKeys(scenario.RequiredTraceEventCounts) {
 		checks = append(checks, TraceEventCountAtLeast(eventType, scenario.RequiredTraceEventCounts[eventType]))
+	}
+	for _, field := range sortedStringMapKeys(scenario.RequiredConversationRepairStatsAtLeast) {
+		checks = append(checks, ConversationRepairStatsAtLeast(field, scenario.RequiredConversationRepairStatsAtLeast[field]))
+	}
+	for _, kind := range sortedStringMapKeys(scenario.RequiredConversationRepairKinds) {
+		checks = append(checks, ConversationRepairKindAtLeast(kind, scenario.RequiredConversationRepairKinds[kind]))
 	}
 	for _, kind := range sortedStringMapKeys(scenario.RequiredLoopDecisionKinds) {
 		checks = append(checks, LoopDecisionKindAtLeast(kind, scenario.RequiredLoopDecisionKinds[kind]))

@@ -78,6 +78,98 @@ func TraceEventCountAtLeast(eventType string, min int) Check {
 	}
 }
 
+func ConversationRepairStatsAtLeast(field string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("conversation_repair_stats_at_least:%s:%d", field, min),
+		Eval: func(t Trace) CheckResult {
+			got, ok := conversationRepairStatsField(t.ConversationRepairs, field)
+			if !ok {
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("unknown conversation repair stats field %q", field)}
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", field, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; repairs=%v", field, got, min, conversationRepairSummaryForCheck(t.ConversationRepairs)),
+			}
+		},
+	}
+}
+
+func ConversationRepairKindAtLeast(kind string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("conversation_repair_kind_at_least:%s:%d", kind, min),
+		Eval: func(t Trace) CheckResult {
+			counts := conversationRepairKindCounts(t.ConversationRepairs)
+			got := counts[kind]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", kind, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; repair_kinds=%v", kind, got, min, counts),
+			}
+		},
+	}
+}
+
+func conversationRepairStatsField(repairs []sse.ConversationRepairedPayload, field string) (int, bool) {
+	field = strings.TrimSpace(field)
+	switch field {
+	case "events":
+		return len(repairs), true
+	case "missing_tool_results":
+		total := 0
+		for _, repair := range repairs {
+			total += repair.MissingToolResults
+		}
+		return total, true
+	case "duplicate_tool_results":
+		total := 0
+		for _, repair := range repairs {
+			total += repair.DuplicateToolResults
+		}
+		return total, true
+	case "unexpected_tool_results":
+		total := 0
+		for _, repair := range repairs {
+			total += repair.UnexpectedToolResults
+		}
+		return total, true
+	default:
+		return 0, false
+	}
+}
+
+func conversationRepairKindCounts(repairs []sse.ConversationRepairedPayload) map[string]int {
+	counts := map[string]int{}
+	for _, repair := range repairs {
+		kind := strings.TrimSpace(repair.FailureKind)
+		if kind == "" {
+			kind = "unknown"
+		}
+		counts[kind]++
+	}
+	return counts
+}
+
+func conversationRepairSummaryForCheck(repairs []sse.ConversationRepairedPayload) string {
+	if len(repairs) == 0 {
+		return "none"
+	}
+	var parts []string
+	for _, field := range []string{"events", "missing_tool_results", "duplicate_tool_results", "unexpected_tool_results"} {
+		if got, ok := conversationRepairStatsField(repairs, field); ok && got > 0 {
+			parts = append(parts, fmt.Sprintf("%s=%d", field, got))
+		}
+	}
+	if len(parts) == 0 {
+		return "events=0"
+	}
+	return strings.Join(parts, ",")
+}
+
 // ToolArgContainsAtLeast passes when at least min calls to toolName have an
 // argument field whose string representation contains substr. It gives
 // disambiguator-preservation evals a named, diagnostic check instead of hiding

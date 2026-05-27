@@ -1245,6 +1245,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if crashResume.RequiredTraceEventCounts["conversation.repaired"] != 1 {
 		t.Fatalf("crash resume RequiredTraceEventCounts = %#v, want conversation.repaired=1", crashResume.RequiredTraceEventCounts)
 	}
+	if crashResume.RequiredConversationRepairStatsAtLeast["events"] != 1 ||
+		crashResume.RequiredConversationRepairStatsAtLeast["missing_tool_results"] != 1 ||
+		crashResume.RequiredConversationRepairKinds["resume_missing_tool_result"] != 1 {
+		t.Fatalf("crash resume conversation repair requirements = stats:%#v kinds:%#v", crashResume.RequiredConversationRepairStatsAtLeast, crashResume.RequiredConversationRepairKinds)
+	}
 	if stringSliceContains(crashResume.ProtectedFiles, ".affentctl/resume-missing-tool-result.jsonl") {
 		t.Fatalf("crash resume conversation must not be protected because repair rewrites it: %#v", crashResume.ProtectedFiles)
 	}
@@ -1277,6 +1282,12 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if duplicateResume.RequiredTraceEventCounts["conversation.repaired"] != 1 {
 		t.Fatalf("duplicate resume RequiredTraceEventCounts = %#v, want conversation.repaired=1", duplicateResume.RequiredTraceEventCounts)
+	}
+	if duplicateResume.RequiredConversationRepairStatsAtLeast["events"] != 1 ||
+		duplicateResume.RequiredConversationRepairStatsAtLeast["duplicate_tool_results"] != 2 ||
+		duplicateResume.RequiredConversationRepairStatsAtLeast["unexpected_tool_results"] != 1 ||
+		duplicateResume.RequiredConversationRepairKinds["resume_duplicate_tool_result"] != 1 {
+		t.Fatalf("duplicate resume conversation repair requirements = stats:%#v kinds:%#v", duplicateResume.RequiredConversationRepairStatsAtLeast, duplicateResume.RequiredConversationRepairKinds)
 	}
 	if stringSliceContains(duplicateResume.ProtectedFiles, ".affentctl/resume-duplicate-tool-result.jsonl") {
 		t.Fatalf("duplicate resume conversation must not be protected because repair rewrites it: %#v", duplicateResume.ProtectedFiles)

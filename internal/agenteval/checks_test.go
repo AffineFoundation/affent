@@ -507,6 +507,45 @@ func TestTraceEventCountAtLeast(t *testing.T) {
 	}
 }
 
+func TestConversationRepairChecks(t *testing.T) {
+	trace := Trace{ConversationRepairs: []sse.ConversationRepairedPayload{
+		{
+			FailureKind:           "resume_duplicate_tool_result",
+			DuplicateToolResults:  2,
+			UnexpectedToolResults: 1,
+		},
+		{
+			FailureKind:        "resume_missing_tool_result",
+			MissingToolResults: 1,
+		},
+	}}
+	for _, tc := range []struct {
+		field string
+		min   int
+	}{
+		{field: "events", min: 2},
+		{field: "missing_tool_results", min: 1},
+		{field: "duplicate_tool_results", min: 2},
+		{field: "unexpected_tool_results", min: 1},
+	} {
+		if res := ConversationRepairStatsAtLeast(tc.field, tc.min).Eval(trace); !res.Pass {
+			t.Fatalf("expected %s check to pass: %+v", tc.field, res)
+		}
+	}
+	if res := ConversationRepairKindAtLeast("resume_duplicate_tool_result", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected duplicate repair kind check to pass: %+v", res)
+	}
+	if res := ConversationRepairStatsAtLeast("duplicate_tool_results", 3).Eval(trace); res.Pass || !strings.Contains(res.Detail, "duplicate_tool_results=2") {
+		t.Fatalf("expected duplicate count check to fail with detail, got %+v", res)
+	}
+	if res := ConversationRepairKindAtLeast("resume_unexpected_tool_result", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "repair_kinds") {
+		t.Fatalf("expected missing repair kind check to fail with detail, got %+v", res)
+	}
+	if res := ConversationRepairStatsAtLeast("unknown", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "unknown") {
+		t.Fatalf("expected unknown field check to fail, got %+v", res)
+	}
+}
+
 func TestToolRepairKindAtLeast(t *testing.T) {
 	t.Run("uses runtime repair stats", func(t *testing.T) {
 		trace := Trace{ToolStats: ToolRuntimeStats{

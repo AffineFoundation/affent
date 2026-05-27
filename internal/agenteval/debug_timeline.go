@@ -393,6 +393,8 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "required_tool_failure_kind_counts", exp.RequiredToolFailureKindCounts)
 	writeTimelineCountsLine(b, "required_tool_stats_at_least", exp.RequiredToolStatsAtLeast)
 	writeTimelineCountsLine(b, "required_trace_event_counts", exp.RequiredTraceEventCounts)
+	writeTimelineCountsLine(b, "required_conversation_repair_stats_at_least", exp.RequiredConversationRepairStatsAtLeast)
+	writeTimelineCountsLine(b, "required_conversation_repair_kinds", exp.RequiredConversationRepairKinds)
 	writeTimelineCountsLine(b, "required_loop_decision_kinds", exp.RequiredLoopDecisionKinds)
 	writeTimelineCountsLine(b, "required_loop_decision_results", exp.RequiredLoopDecisionResults)
 	if exp.RequiredLoopProtocolFeeds > 0 {
@@ -584,6 +586,8 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredToolFailureKindCounts) > 0 ||
 		len(exp.RequiredToolStatsAtLeast) > 0 ||
 		len(exp.RequiredTraceEventCounts) > 0 ||
+		len(exp.RequiredConversationRepairStatsAtLeast) > 0 ||
+		len(exp.RequiredConversationRepairKinds) > 0 ||
 		len(exp.RequiredLoopDecisionKinds) > 0 ||
 		len(exp.RequiredLoopDecisionResults) > 0 ||
 		len(exp.RequiredLoopDecisionMatches) > 0 ||

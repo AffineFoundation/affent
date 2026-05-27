@@ -928,8 +928,10 @@ Current built-in suites:
   substrings; the crash-window resume scenarios use these to prove
   `conversation.repaired` was emitted and `conversation.jsonl` was repaired
   with structured recovery placeholders/notes instead of only checking the final
-  answer. Eval debug manifests and timelines surface conversation repair
-  examples with the repaired count, failure kind, and next-step guidance.
+  answer. They also assert the `conversation.repaired` payload counters, such
+  as missing, duplicate, and unexpected tool-result repairs. Eval debug
+  manifests and timelines surface conversation repair examples with the
+  repaired count, failure kind, and next-step guidance.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
