@@ -654,6 +654,7 @@ type batchSummary struct {
 	SourceAccessNetwork                  int
 	SourceAccessDynamicPartial           int
 	SourceAccessExamples                 []agenteval.SourceAccessExample
+	BrowserNetworkExamples               []agenteval.BrowserNetworkSearchExample
 	MemoryUpdates                        int
 	MemoryUpdateAdd                      int
 	MemoryUpdateReplace                  int
@@ -826,6 +827,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
 	s.SourceAccessDynamicPartial += res.ToolStats.SourceAccessDynamicPartial
 	s.SourceAccessExamples = appendSourceAccessExamples(s.SourceAccessExamples, res.SourceAccessExamples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.BrowserNetworkExamples = appendBrowserNetworkExamples(s.BrowserNetworkExamples, res.BrowserNetworkExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.MemoryUpdates += res.ToolStats.MemoryUpdates
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
@@ -2342,6 +2344,7 @@ type batchResultRecord struct {
 	SourceAccessNetwork              int                                        `json:"source_access_network"`
 	SourceAccessDynamicPartial       int                                        `json:"source_access_dynamic_partial"`
 	SourceAccessExamples             []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
+	BrowserNetworkExamples           []agenteval.BrowserNetworkSearchExample    `json:"browser_network_examples,omitempty"`
 	MemoryUpdates                    int                                        `json:"memory_updates"`
 	MemoryUpdateAdd                  int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace              int                                        `json:"memory_update_replace"`
@@ -2474,6 +2477,7 @@ type batchSummaryRecord struct {
 	SourceAccessNetwork                  int                                              `json:"source_access_network"`
 	SourceAccessDynamicPartial           int                                              `json:"source_access_dynamic_partial"`
 	SourceAccessExamples                 []agenteval.SourceAccessExample                  `json:"source_access_examples,omitempty"`
+	BrowserNetworkExamples               []agenteval.BrowserNetworkSearchExample          `json:"browser_network_examples,omitempty"`
 	MemoryUpdates                        int                                              `json:"memory_updates"`
 	MemoryUpdateAdd                      int                                              `json:"memory_update_add"`
 	MemoryUpdateReplace                  int                                              `json:"memory_update_replace"`
@@ -2628,6 +2632,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SourceAccessNetwork:              res.ToolStats.SourceAccessNetwork,
 		SourceAccessDynamicPartial:       res.ToolStats.SourceAccessDynamicPartial,
 		SourceAccessExamples:             cloneSourceAccessExamples(res.SourceAccessExamples),
+		BrowserNetworkExamples:           cloneBrowserNetworkExamples(res.BrowserNetworkExamples),
 		MemoryUpdates:                    res.ToolStats.MemoryUpdates,
 		MemoryUpdateAdd:                  res.ToolStats.MemoryUpdateAdd,
 		MemoryUpdateReplace:              res.ToolStats.MemoryUpdateReplace,
@@ -2834,6 +2839,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SourceAccessNetwork:                  s.SourceAccessNetwork,
 		SourceAccessDynamicPartial:           s.SourceAccessDynamicPartial,
 		SourceAccessExamples:                 cloneSourceAccessExamples(s.SourceAccessExamples),
+		BrowserNetworkExamples:               cloneBrowserNetworkExamples(s.BrowserNetworkExamples),
 		MemoryUpdates:                        s.MemoryUpdates,
 		MemoryUpdateAdd:                      s.MemoryUpdateAdd,
 		MemoryUpdateReplace:                  s.MemoryUpdateReplace,
@@ -3091,6 +3097,20 @@ func cloneSourceAccessExamples(in []agenteval.SourceAccessExample) []agenteval.S
 	return append([]agenteval.SourceAccessExample(nil), in...)
 }
 
+func cloneBrowserNetworkExamples(in []agenteval.BrowserNetworkSearchExample) []agenteval.BrowserNetworkSearchExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]agenteval.BrowserNetworkSearchExample, 0, len(in))
+	for _, ex := range in {
+		if len(ex.Refs) > 0 {
+			ex.Refs = append([]string(nil), ex.Refs...)
+		}
+		out = append(out, ex)
+	}
+	return out
+}
+
 func cloneMemoryUpdateExamples(in []agenteval.MemoryUpdateExample) []agenteval.MemoryUpdateExample {
 	if len(in) == 0 {
 		return nil
@@ -3208,6 +3228,25 @@ func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, scenar
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendBrowserNetworkExamples(dst, src []agenteval.BrowserNetworkSearchExample, scenario string, limit int) []agenteval.BrowserNetworkSearchExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if len(ex.Refs) > 0 {
+			ex.Refs = append([]string(nil), ex.Refs...)
 		}
 		if ex.Scenario == "" {
 			ex.Scenario = scenario

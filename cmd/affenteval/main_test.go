@@ -1095,6 +1095,17 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
 		}},
+		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
+			ToolIndex:         2,
+			CallID:            "browser-network-1",
+			CurrentPageURL:    "https://metrics.example/dashboard",
+			Query:             "price",
+			Status:            "matches",
+			Refs:              []string{"n1"},
+			RequiresRead:      true,
+			NotCitable:        true,
+			SuggestedNextStep: "call browser_network_read before citing values",
+		}},
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
 			ToolIndex:   2,
 			CallID:      "memory-1",
@@ -1279,7 +1290,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
@@ -1421,6 +1432,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		summary.SourceAccessExamples[0].CallID != "source-1" ||
 		summary.SourceAccessExamples[0].Scenario != "sample" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
+	}
+	if len(summary.BrowserNetworkExamples) != 1 ||
+		summary.BrowserNetworkExamples[0].CallID != "browser-network-1" ||
+		summary.BrowserNetworkExamples[0].Scenario != "sample" ||
+		!reflect.DeepEqual(summary.BrowserNetworkExamples[0].Refs, []string{"n1"}) {
+		t.Fatalf("BrowserNetworkExamples = %#v", summary.BrowserNetworkExamples)
 	}
 	if len(summary.MemoryUpdateExamples) != 1 ||
 		summary.MemoryUpdateExamples[0].CallID != "memory-1" ||
@@ -1658,6 +1675,17 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			URLField:     "browser_network_url",
 			SourceMethod: "network_xhr_fetch",
 			JSONPath:     "$.price",
+		}},
+		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
+			ToolIndex:         3,
+			CallID:            "network-jsonl-1",
+			CurrentPageURL:    "https://taostats.io/subnets/120",
+			Query:             "market_cap",
+			Status:            "matches",
+			Refs:              []string{"n1"},
+			RequiresRead:      true,
+			NotCitable:        true,
+			SuggestedNextStep: "call browser_network_read before citing values",
 		}},
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
 			ToolIndex: 3,
@@ -1966,6 +1994,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		!jsonArrayContainsString(debugBrief["tags"], "runtime_error:llm_incomplete_stream") ||
 		!jsonArrayContainsString(debugBrief["tags"], "loop_guard") ||
 		!jsonArrayContainsString(debugBrief["tags"], "source_network") ||
+		!jsonArrayContainsString(debugBrief["tags"], "browser_network:refs") ||
 		!jsonArrayContainsString(debugBrief["tags"], "memory_update:add") ||
 		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
 		!jsonArrayContainsString(debugBrief["tags"], "context_compaction:reactive") ||
@@ -1987,6 +2016,22 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		sourceAccessExample["json_path"] != "$.price" ||
 		!strings.Contains(fmt.Sprint(sourceAccessExample["url"]), "metrics.example") {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
+	}
+	browserNetworkExamples, ok := got["browser_network_examples"].([]any)
+	if !ok || len(browserNetworkExamples) != 1 {
+		t.Fatalf("browser_network_examples = %#v\njson=%s", got["browser_network_examples"], out.String())
+	}
+	browserNetworkExample, ok := browserNetworkExamples[0].(map[string]any)
+	if !ok ||
+		browserNetworkExample["call_id"] != "network-jsonl-1" ||
+		browserNetworkExample["current_page_url"] != "https://taostats.io/subnets/120" ||
+		browserNetworkExample["query"] != "market_cap" ||
+		browserNetworkExample["status"] != "matches" ||
+		browserNetworkExample["requires_read"] != true ||
+		browserNetworkExample["not_citable"] != true ||
+		!jsonArrayContainsString(browserNetworkExample["refs"], "n1") ||
+		!strings.Contains(fmt.Sprint(browserNetworkExample["suggested_next_step"]), "browser_network_read") {
+		t.Fatalf("browser_network_example = %#v\njson=%s", browserNetworkExamples[0], out.String())
 	}
 	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)
 	if !ok || len(memoryUpdateExamples) != 1 {
@@ -2598,6 +2643,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
 		}},
+		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
+			Scenario:          "taostats-rendered",
+			ToolIndex:         3,
+			CallID:            "summary-network-1",
+			CurrentPageURL:    "https://taostats.io/subnets/120",
+			Query:             "market_cap",
+			Status:            "matches",
+			Refs:              []string{"n1"},
+			RequiresRead:      true,
+			NotCitable:        true,
+			SuggestedNextStep: "call browser_network_read before citing values",
+		}},
 		MemoryUpdates:   1,
 		MemoryUpdateAdd: 1,
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
@@ -2943,6 +3000,20 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sourceAccessExample["status"] != "network" ||
 		sourceAccessExample["json_path"] != "$.price" {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
+	}
+	browserNetworkExamples, ok := got["browser_network_examples"].([]any)
+	if !ok || len(browserNetworkExamples) != 1 {
+		t.Fatalf("browser_network_examples = %#v\njson=%s", got["browser_network_examples"], out.String())
+	}
+	browserNetworkExample, ok := browserNetworkExamples[0].(map[string]any)
+	if !ok ||
+		browserNetworkExample["scenario"] != "taostats-rendered" ||
+		browserNetworkExample["call_id"] != "summary-network-1" ||
+		browserNetworkExample["current_page_url"] != "https://taostats.io/subnets/120" ||
+		browserNetworkExample["status"] != "matches" ||
+		browserNetworkExample["requires_read"] != true ||
+		!jsonArrayContainsString(browserNetworkExample["refs"], "n1") {
+		t.Fatalf("browser_network_example = %#v\njson=%s", browserNetworkExamples[0], out.String())
 	}
 	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)
 	if !ok || len(memoryUpdateExamples) != 1 {
