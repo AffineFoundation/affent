@@ -842,12 +842,16 @@ func TestListFilesToolBlankPathDefaultsToWorkspaceRoot(t *testing.T) {
 type recordingExec struct {
 	gotArgv []string
 	gotOpts executor.ExecOptions
+	result  executor.ExecResult
 }
 
 func (r *recordingExec) SessionID() string { return "test" }
 func (r *recordingExec) Exec(_ context.Context, cmd []string, opts executor.ExecOptions) (executor.ExecResult, error) {
 	r.gotArgv = append([]string(nil), cmd...)
 	r.gotOpts = opts
+	if r.result.Stdout != "" || r.result.Stderr != "" || r.result.ExitCode != 0 {
+		return r.result, nil
+	}
 	return executor.ExecResult{ExitCode: 0, Stdout: "ok"}, nil
 }
 
@@ -912,6 +916,36 @@ func TestShellTool_OutputCaptureIsBounded(t *testing.T) {
 	}
 	if rec.gotOpts.MaxOutputBytes != maxShellOutputBytes {
 		t.Fatalf("max output bytes = %d, want %d", rec.gotOpts.MaxOutputBytes, maxShellOutputBytes)
+	}
+}
+
+func TestShellTool_RedactsSecretValuesFromOutput(t *testing.T) {
+	const secret = "ghp_super_secret_token"
+	rec := &recordingExec{
+		result: executor.ExecResult{
+			ExitCode: 0,
+			Stdout:   "token=" + secret + " short=short",
+			Stderr:   "stderr repeats " + secret,
+		},
+	}
+	tool := shellTool(BuiltinDeps{
+		Executor: rec,
+		SecretValuesProvider: func() []string {
+			return []string{secret, "short"}
+		},
+	})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"printenv GITHUB_TOKEN"}`))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(out, secret) {
+		t.Fatalf("shell output leaked secret:\n%s", out)
+	}
+	if !strings.Contains(out, "short=short") {
+		t.Fatalf("short non-secret value should remain visible:\n%s", out)
+	}
+	if got := strings.Count(out, "[REDACTED:account-secret]"); got != 2 {
+		t.Fatalf("redaction count = %d, want 2 in output:\n%s", got, out)
 	}
 }
 

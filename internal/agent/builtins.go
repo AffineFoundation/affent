@@ -92,6 +92,11 @@ type BuiltinDeps struct {
 	// benchmark/eval runtimes where reusable workflow injection and
 	// runtime installation must not affect the tool surface.
 	DisableSkill bool
+	// SecretValuesProvider returns account/runtime secret values that
+	// must not be echoed back through shell tool results. Redaction runs
+	// before SSE publication, conversation persistence, and tool-result
+	// artifact writes.
+	SecretValuesProvider func() []string
 }
 
 // defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
@@ -110,6 +115,7 @@ const (
 	maxShellOutputBytes    = 256 * 1024
 	maxShellCommandBytes   = 16 * 1024
 	maxShellCwdBytes       = 4096
+	minSecretRedactBytes   = 8
 )
 
 // RegisterBuiltins registers shell + file tools on the registry, the
@@ -526,7 +532,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 			// model can see partial output from a timed-out / killed
 			// command. The Loop's dispatch wraps a non-nil err alongside
 			// res into "Error: <err>\n<res>" — exactly what we want.
-			out := formatShellOutput(res)
+			out := redactSecretValues(formatShellOutput(res), deps.SecretValuesProvider)
 			if shellCommandNotFound(res) {
 				out += "\nNext: command not found. Check the executable name, run `which <command>` or inspect PATH, then retry with an installed tool."
 			}
@@ -610,6 +616,34 @@ func formatShellOutput(res executor.ExecResult) string {
 	}
 	fmt.Fprintf(&b, "\n[exit %d]", res.ExitCode)
 	return b.String()
+}
+
+func redactSecretValues(text string, provider func() []string) string {
+	if text == "" || provider == nil {
+		return text
+	}
+	secrets := provider()
+	if len(secrets) == 0 {
+		return text
+	}
+	values := make([]string, 0, len(secrets))
+	seen := map[string]bool{}
+	for _, secret := range secrets {
+		secret = strings.TrimSpace(secret)
+		if len(secret) < minSecretRedactBytes || seen[secret] {
+			continue
+		}
+		seen[secret] = true
+		values = append(values, secret)
+	}
+	sort.Slice(values, func(i, j int) bool {
+		return len(values[i]) > len(values[j])
+	})
+	out := text
+	for _, secret := range values {
+		out = strings.ReplaceAll(out, secret, "[REDACTED:account-secret]")
+	}
+	return out
 }
 
 // ---- file ops (operate on the host bind mount, never via docker exec --

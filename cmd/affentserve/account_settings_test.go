@@ -33,6 +33,9 @@ func TestAccountSettingsEnvSetListDeleteWithoutValueLeak(t *testing.T) {
 	if got := pool.accountEnvPairs(); len(got) != 1 || got[0] != "GITHUB_TOKEN=ghp_secret" {
 		t.Fatalf("account env pairs = %+v", got)
 	}
+	if got := pool.accountSecretValues(); len(got) != 1 || got[0] != "ghp_secret" {
+		t.Fatalf("account secret values = %+v, want the stored secret for redaction", got)
+	}
 
 	r = httptest.NewRequest(http.MethodGet, "/v1/settings", nil)
 	w = httptest.NewRecorder()

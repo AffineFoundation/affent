@@ -533,8 +533,9 @@ type SubagentDeps struct {
 	// Core agent code stays dependency-free; callers that opt into
 	// heavier extras wire them here.
 	RegisterChildTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
-	Log                zerolog.Logger
-	PerCallTimeout     time.Duration
+	Log                  zerolog.Logger
+	PerCallTimeout       time.Duration
+	SecretValuesProvider func() []string
 
 	// ModeRegistry overrides the built-in subagent operating modes.
 	// nil → DefaultSubagentModeRegistry() applies (explore, review,
@@ -610,7 +611,11 @@ func RegisterSubagent(r *Registry, deps SubagentDeps) {
 // asserted without spinning up a real subagent run.
 func buildSubagentRegistry(deps SubagentDeps) *Registry {
 	reg := NewRegistry()
-	bd := BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}
+	bd := BuiltinDeps{
+		Executor:             deps.Executor,
+		HostWorkspaceDir:     deps.HostWorkspaceDir,
+		SecretValuesProvider: deps.SecretValuesProvider,
+	}
 	reg.Add(skillTool(builtinSkillProviderRegistry, "", nil))
 	reg.Add(subagentReadFileTool(bd))
 	reg.Add(fileContextTool(bd))

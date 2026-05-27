@@ -175,8 +175,9 @@ type FocusedTaskDeps struct {
 	ParentSessionID   string
 	TranscriptDir     string
 	ProjectContextDir string
-	Log               zerolog.Logger
-	PerCallTimeout    time.Duration
+	Log                  zerolog.Logger
+	PerCallTimeout       time.Duration
+	SecretValuesProvider func() []string
 
 	// ProfileRegistry overrides the built-in profile set. nil → the
 	// package default applies. An empty (non-nil) registry falls back
@@ -464,7 +465,11 @@ func runFocusedTask(ctx context.Context, deps FocusedTaskDeps, profile FocusedTa
 // focused-task children may never recursively delegate.
 func buildFocusedTaskRegistry(ctx context.Context, deps FocusedTaskDeps, profile FocusedTaskProfile) (*Registry, func(), error) {
 	reg := NewRegistry()
-	bd := BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}
+	bd := BuiltinDeps{
+		Executor:             deps.Executor,
+		HostWorkspaceDir:     deps.HostWorkspaceDir,
+		SecretValuesProvider: deps.SecretValuesProvider,
+	}
 	reg.Add(skillTool(builtinSkillProviderRegistry, "", nil))
 
 	if profile.Tools.AllowReadFile {

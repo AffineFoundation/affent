@@ -216,6 +216,22 @@ func (p *SessionPool) accountEnvPairs() []string {
 	return out
 }
 
+func (p *SessionPool) accountSecretValues() []string {
+	settings, _, err := readAccountSettingsFile(p)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(settings.Env))
+	for _, entry := range settings.Env {
+		value := strings.TrimSpace(entry.Value)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return out
+}
+
 func setAccountEnv(pool *SessionPool, rawName, value string) error {
 	name, err := normalizeAccountEnvName(rawName)
 	if err != nil {

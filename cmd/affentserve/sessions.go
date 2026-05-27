@@ -546,15 +546,16 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			loopProtocolToolPath = loopProtocolPath
 		}
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
-			Executor:         localExec,
-			HostWorkspaceDir: workspace,
-			Memory:           memStore,
-			SessionsDir:      p.sessionRootPath(),
-			SessionID:        id,
-			PlanPath:         planPath,
-			LoopProtocolPath: loopProtocolToolPath,
-			SkillRegistry:    skillReg,
-			SkillDir:         accountSkillInstallDir,
+			Executor:             localExec,
+			HostWorkspaceDir:     workspace,
+			Memory:               memStore,
+			SessionsDir:          p.sessionRootPath(),
+			SessionID:            id,
+			PlanPath:             planPath,
+			LoopProtocolPath:     loopProtocolToolPath,
+			SkillRegistry:        skillReg,
+			SkillDir:             accountSkillInstallDir,
+			SecretValuesProvider: p.accountSecretValues,
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
@@ -614,28 +615,30 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if p.cfg.EnableSubagent {
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
-			LLM:                llm,
-			Executor:           childExec,
-			HostWorkspaceDir:   workspace,
-			Memory:             memStore,
-			SessionsDir:        p.sessionRootPath(),
-			ParentSessionID:    id,
-			TranscriptDir:      filepath.Join(sessionDir, "subagents", id),
-			RegisterChildTools: p.subagentChildToolRegistrar(workspace),
-			Log:                p.logger.With().Str("session_id", id).Logger(),
-			MaxDepth:           p.cfg.SubagentMaxDepth,
+			LLM:                  llm,
+			Executor:             childExec,
+			HostWorkspaceDir:     workspace,
+			Memory:               memStore,
+			SessionsDir:          p.sessionRootPath(),
+			ParentSessionID:      id,
+			TranscriptDir:        filepath.Join(sessionDir, "subagents", id),
+			RegisterChildTools:   p.subagentChildToolRegistrar(workspace),
+			Log:                  p.logger.With().Str("session_id", id).Logger(),
+			MaxDepth:             p.cfg.SubagentMaxDepth,
+			SecretValuesProvider: p.accountSecretValues,
 		})
 	}
 	if p.cfg.EnableFocusedTasks {
 		agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
-			LLM:              llm,
-			Executor:         childExec,
-			HostWorkspaceDir: workspace,
-			Memory:           memStore,
-			SessionsDir:      p.sessionRootPath(),
-			ParentSessionID:  id,
-			TranscriptDir:    filepath.Join(sessionDir, "focused-tasks", id),
-			Log:              p.logger.With().Str("session_id", id).Logger(),
+			LLM:                  llm,
+			Executor:             childExec,
+			HostWorkspaceDir:     workspace,
+			Memory:               memStore,
+			SessionsDir:          p.sessionRootPath(),
+			ParentSessionID:      id,
+			TranscriptDir:        filepath.Join(sessionDir, "focused-tasks", id),
+			Log:                  p.logger.With().Str("session_id", id).Logger(),
+			SecretValuesProvider: p.accountSecretValues,
 			// Research profile needs external lookup tools; these hooks
 			// are nil unless the deployment has opted into web/browser, so
 			// availableProfiles() drops research cleanly when neither is on.
