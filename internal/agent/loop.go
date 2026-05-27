@@ -757,7 +757,7 @@ func (l *Loop) SendUserWithOptions(ctx context.Context, text string, opts TurnOp
 	l.cancelFn = cancel
 	l.mu.Unlock()
 
-	if err := l.appendUserMessage(turnID, text); err != nil {
+	if err := l.appendUserMessage(turnID, text, opts); err != nil {
 		l.takeTurn()
 		cancel()
 		return "", err
@@ -790,9 +790,14 @@ func (l *Loop) appendActiveSkills(turnID, userText string) error {
 	return nil
 }
 
-func (l *Loop) appendUserMessage(turnID, text string) error {
+func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
 	if err := l.appendActiveSkills(turnID, text); err != nil {
 		return err
+	}
+	if block := l.researchCheckpointSkillBlock(text, opts); block != "" {
+		if err := l.Conv.Append(ChatMessage{Role: "system", Content: block}); err != nil {
+			return err
+		}
 	}
 	return l.Conv.Append(ChatMessage{Role: "user", Content: text})
 }
@@ -830,6 +835,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	// the full conversation, not just assistant output.
 	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText})
 	l.publishRuntimeSurface(turnID, opts)
+	if payload, ok := l.researchCheckpointDecision(userText, opts); ok {
+		payload.TurnID = turnID
+		l.publishLoopDecision(payload)
+	}
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
@@ -1373,6 +1382,132 @@ func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, o
 	}); err != nil {
 		l.Log.Warn().Err(err).Msg("record loop turn checkpoint failed")
 	}
+}
+
+const researchCheckpointSkillMarker = "AFFENT RESEARCH CHECKPOINT:"
+
+func (l *Loop) researchCheckpointSkillBlock(userText string, opts TurnOptions) string {
+	payload, ok := l.researchCheckpointDecision(userText, opts)
+	if !ok {
+		return ""
+	}
+	action := payload.RequiredAction
+	if action == "" {
+		action = "Before changing long-run runtime, loop, memory, browser, or eval direction, gather bounded external evidence or explicitly state that the current tool surface cannot do that."
+	}
+	return researchCheckpointSkillMarker + "\n" +
+		"This active loop turn may affect durable Affent direction or long-run protocol behavior. " +
+		"Do a bounded external calibration before committing to route changes, prompt/protocol changes, or broad architecture conclusions. " +
+		action + " Keep the output compact and close the loop by updating the plan, durable rules, protocol, or eval requirements only when the evidence changes the route."
+}
+
+func (l *Loop) researchCheckpointDecision(userText string, opts TurnOptions) (sse.LoopDecisionPayload, bool) {
+	if !l.activeLoopProtocolAvailable() {
+		return sse.LoopDecisionPayload{}, false
+	}
+	trigger := researchCheckpointTrigger(userText)
+	if trigger == "" {
+		return sse.LoopDecisionPayload{}, false
+	}
+	surface := l.researchCheckpointSurface(opts)
+	visible := true
+	return sse.LoopDecisionPayload{
+		DecisionID:     "research-checkpoint-" + trigger,
+		Kind:           "research_checkpoint",
+		Trigger:        trigger,
+		Decision:       "trigger",
+		Confidence:     "medium",
+		Reason:         "The active loop request touches high-impact long-run agent/runtime direction and includes external-calibration signals.",
+		RequiredAction: researchCheckpointRequiredAction(surface),
+		VisibleInUI:    &visible,
+	}, true
+}
+
+type researchCheckpointSurface struct {
+	FocusedTasks bool
+	Web          bool
+	Browser      bool
+}
+
+func (l *Loop) researchCheckpointSurface(opts TurnOptions) researchCheckpointSurface {
+	tools := l.toolsForTurn(opts)
+	if tools == nil {
+		return researchCheckpointSurface{}
+	}
+	var surface researchCheckpointSurface
+	if _, ok := tools.Get(FocusedTaskToolName); ok {
+		surface.FocusedTasks = true
+	}
+	for _, name := range []string{"web_fetch", "web_search"} {
+		if _, ok := tools.Get(name); ok {
+			surface.Web = true
+			break
+		}
+	}
+	for _, name := range []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read"} {
+		if _, ok := tools.Get(name); ok {
+			surface.Browser = true
+			break
+		}
+	}
+	return surface
+}
+
+func researchCheckpointRequiredAction(surface researchCheckpointSurface) string {
+	switch {
+	case surface.FocusedTasks && (surface.Web || surface.Browser):
+		return "Use a focused research task or a narrow web/browser pass to compare current assumptions against mainstream implementations, papers, or project docs before changing durable direction."
+	case surface.Web || surface.Browser:
+		return "Use the available web/browser tools for a narrow external calibration before changing durable direction."
+	case surface.FocusedTasks:
+		return "Use a focused review/research task if it has enough local evidence; otherwise state that external research tools are unavailable before changing durable direction."
+	default:
+		return "External research tools are unavailable on this turn; state the evidence gap and treat any broad architecture conclusion as an internal review, not an externally calibrated result."
+	}
+}
+
+func researchCheckpointTrigger(userText string) string {
+	lower := strings.ToLower(strings.TrimSpace(userText))
+	if lower == "" {
+		return ""
+	}
+	if !containsAny(lower, researchCheckpointExternalSignals) {
+		return ""
+	}
+	if !containsAny(lower, researchCheckpointHighImpactSignals) {
+		return ""
+	}
+	if containsAny(lower, []string{"闭门造车", "自我审查", "global", "全局", "research", "研究"}) {
+		return "external_calibration_requested"
+	}
+	return "high_impact_design_review"
+}
+
+var researchCheckpointExternalSignals = []string{
+	"主流", "前沿", "论文", "开源", "竞品", "外部", "研究", "调研", "闭门造车", "自我审查",
+	"mainstream", "frontier", "paper", "papers", "open source", "external", "research", "benchmark",
+	"claude code", "codex", "hermes", "langgraph", "autogen", "agents sdk",
+}
+
+var researchCheckpointHighImpactSignals = []string{
+	"agent", "loop", "protocol", "memory", "记忆", "subagent", "plan", "eval", "评测",
+	"runtime", "架构", "协议", "长期", "long-run", "longrun", "持久", "压缩", "恢复",
+	"browser", "web", "工具", "tool", "自演进", "self-improv", "self evol",
+}
+
+func (l *Loop) activeLoopProtocolAvailable() bool {
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return false
+	}
+	content, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		return false
+	}
+	if status := loopstate.ProtocolStatus(content); status != "" && status != "running" {
+		return false
+	}
+	return loopProtocolActive(path)
 }
 
 func (l *Loop) loopProtocolID() string {

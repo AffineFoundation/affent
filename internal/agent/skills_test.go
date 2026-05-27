@@ -842,7 +842,7 @@ func TestLoopAppendUserMessageInjectsActiveSkillBeforeUser(t *testing.T) {
 		Conv:          conv,
 		SkillProvider: BuiltinSkillProvider,
 	}
-	if err := loop.appendUserMessage("turn_skill", "访问 https://example.com 并读取页面标题"); err != nil {
+	if err := loop.appendUserMessage("turn_skill", "访问 https://example.com 并读取页面标题", TurnOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	msgs := conv.Snapshot()

@@ -721,6 +721,16 @@ Affent stores durable state as inspectable files:
   Feed metadata also includes compact runtime checkpoints from `state.json`,
   including the latest turn end, memory update, and loop decision, so the model
   can recover recent durable changes without replaying the full trace.
+  When an active loop turn asks for high-impact runtime, protocol, memory,
+  browser, eval, or agent-design changes and the request also asks for
+  mainstream/frontier/external calibration, the runtime adds a compact
+  `AFFENT RESEARCH CHECKPOINT` reminder before the user message and emits a
+  visible `loop.decision` with `kind=research_checkpoint`. This is a bounded
+  route-check signal, not a second controller agent: the model should use the
+  available focused-task, web, or browser surface for a narrow external
+  comparison, or explicitly record that external research tools are unavailable,
+  then close the loop through plan/rule/protocol/eval changes only when the
+  evidence changes direction.
   When `affentserve` loop protocol support is enabled, the model also sees the
   narrow `loop_protocol` tool. It can read the draft, write bounded draft
   updates, or call `complete_activation` with the full supplemented protocol;

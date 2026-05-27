@@ -112,6 +112,11 @@ Scenario records describe one eval case:
   max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
+  Loop-decision checks can assert route-control events such as
+  `evidence_quality=defer/source_access_dynamic_partial` or
+  `research_checkpoint=trigger/external_calibration_requested`, which lets
+  long-run evals prove that the runtime surfaced a needed external-calibration
+  checkpoint instead of relying on an invisible prompt nudge.
 - `expectation_capability_names`, `expectation_capability_outcome`,
   `expectation_capability_passed_names`, and
   `expectation_capability_failed_names`: optional scenario-level derived

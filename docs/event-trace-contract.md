@@ -291,6 +291,28 @@ loop context pressure
 without separately reading loop files. Plan checkpoint fields are recovery
 pointers only; the persisted plan state remains the step authority.
 
+### `loop.decision`
+
+- `turn_id`: optional runtime turn id.
+- `loop_id`: optional loop identity.
+- `decision_id`: stable short id for the decision class.
+- `kind`: decision family, such as `evidence_quality` or
+  `research_checkpoint`.
+- `trigger`: compact trigger label, such as `source_access_dynamic_partial` or
+  `external_calibration_requested`.
+- `decision`: compact outcome, such as `defer` or `trigger`.
+- `confidence`: optional confidence label.
+- `reason`: bounded human-readable reason.
+- `required_action`: bounded next action visible to users and evals.
+- `visible_in_ui`: optional boolean; missing means visible.
+
+`research_checkpoint` is emitted only for active loop turns where the user
+request combines high-impact Affent/runtime/protocol design changes with
+external-calibration signals. The paired model-context reminder asks the agent
+to do a bounded research/review pass through the currently enabled
+focused-task, web, or browser tools, or to state that the surface cannot support
+external calibration. It does not start a separate controller agent.
+
 ### `error`
 
 - `turn_id`: runtime turn id.

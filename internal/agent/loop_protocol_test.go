@@ -1,11 +1,15 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
@@ -35,6 +39,118 @@ func TestWithLoopProtocolSkillProviderInjectsWhenFileExists(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("loop protocol provider missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestRunTurn_EmitsResearchCheckpointForHighImpactLoopReview(t *testing.T) {
+	firstBody := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		select {
+		case firstBody <- body:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"will calibrate before changing the loop route\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	tmp := t.TempDir()
+	protocolPath := filepath.Join(tmp, ".affent", "loops", "research-loop", "LOOP.md")
+	if err := loopstate.WriteProtocol(protocolPath, "# Loop\n\n## 1. North Star\n\nKeep Affent grounded in evidence."); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := OpenConversationAt(filepath.Join(tmp, "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:   FocusedTaskToolName,
+		Schema: json.RawMessage(`{"type":"object","properties":{}}`),
+	})
+	reg.Add(&Tool{
+		Name:   "web_fetch",
+		Schema: json.RawMessage(`{"type":"object","properties":{}}`),
+	})
+	events := make(chan sse.Event, 32)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		LoopProtocolPath: protocolPath, MaxTurnSteps: 2, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "请从全局角度结合主流 agent 和论文研究 loop 协议是否合理"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawDecision := false
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				sawDecision = true
+				if p.Kind != "research_checkpoint" || p.Decision != "trigger" || p.Trigger != "external_calibration_requested" {
+					t.Fatalf("unexpected research checkpoint decision: %+v", p)
+				}
+				if p.VisibleInUI == nil || !*p.VisibleInUI {
+					t.Fatalf("research checkpoint should be visible in UI: %+v", p)
+				}
+				if !strings.Contains(p.RequiredAction, "focused research task") || !strings.Contains(p.RequiredAction, "web/browser") {
+					t.Fatalf("required action should reflect available research surface: %+v", p)
+				}
+			case sse.TypeTurnEnd:
+				if !sawDecision {
+					t.Fatal("expected research checkpoint decision before turn.end")
+				}
+				var body string
+				select {
+				case body = <-firstBody:
+				default:
+					t.Fatal("missing captured LLM request body")
+				}
+				if !strings.Contains(body, researchCheckpointSkillMarker) ||
+					!strings.Contains(body, "bounded external calibration") {
+					t.Fatalf("LLM request missing research checkpoint guidance:\n%s", body)
+				}
+				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !found || state.LastDecisionKind != "research_checkpoint" || state.LastDecision != "trigger" {
+					t.Fatalf("loop state missing persisted research checkpoint: found=%v state=%+v", found, state)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestResearchCheckpointSkipsDraftLoopProtocol(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := filepath.Join(tmp, ".affent", "loops", "draft-loop", "LOOP.md")
+	if err := loopstate.WriteProtocol(protocolPath, "# Loop\n\n## 0. Metadata\n\n- status: draft\n\n## 1. North Star\n\nKeep route changes researched."); err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{LoopProtocolPath: protocolPath, Tools: NewRegistry()}
+	if _, ok := loop.researchCheckpointDecision("请结合主流 agent 研究 loop 协议是否合理", TurnOptions{}); ok {
+		t.Fatal("draft LOOP.md must not emit research checkpoints")
 	}
 }
 
@@ -341,7 +457,7 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 		Events:        events,
 		SkillProvider: WithLoopProtocolSkillProviderWithCheckpoint(path, checkpoint, nil),
 	}
-	if err := loop.appendUserMessage("turn_loop_feed", "continue"); err != nil {
+	if err := loop.appendUserMessage("turn_loop_feed", "continue", TurnOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	select {
