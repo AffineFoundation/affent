@@ -1919,6 +1919,9 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 		if ex.TurnIdx > 0 {
 			fmt.Fprintf(w, " turn=%d", ex.TurnIdx)
 		}
+		if ex.MessageIdx > 0 {
+			fmt.Fprintf(w, " message=%d", ex.MessageIdx)
+		}
 		if len(ex.MatchedTerms) > 0 {
 			fmt.Fprintf(w, " terms=%s", strings.Join(ex.MatchedTerms, ","))
 		}

@@ -1144,6 +1144,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Total:           2,
 			SessionID:       "market-alpha",
 			TurnIdx:         4,
+			MessageIdx:      8,
 			MatchedTerms:    []string{"alpha", "coast"},
 			ContextIncluded: true,
 		}},
@@ -1343,7 +1344,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "terms_per_call:2.00") {
 		t.Fatalf("summary output missing session search matched terms per call:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `session_search_example: scenario=sample query="Alpha Coast" total=2 session=market-alpha turn=4 terms=alpha,coast context=true`) {
+	if !strings.Contains(out.String(), `session_search_example: scenario=sample query="Alpha Coast" total=2 session=market-alpha turn=4 message=8 terms=alpha,coast context=true`) {
 		t.Fatalf("summary output missing session search example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
@@ -1730,6 +1731,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			Total:           2,
 			SessionID:       "market-alpha",
 			TurnIdx:         4,
+			MessageIdx:      8,
 			Role:            "assistant",
 			Score:           2.5,
 			MatchedTerms:    []string{"alpha", "coast"},
@@ -2083,6 +2085,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		sessionSearchExample["query"] != "Alpha Coast" ||
 		sessionSearchExample["session_id"] != "market-alpha" ||
 		sessionSearchExample["turn_idx"] != float64(4) ||
+		sessionSearchExample["message_idx"] != float64(8) ||
 		sessionSearchExample["context_included"] != true ||
 		!jsonArrayContainsString(sessionSearchExample["matched_terms"], "coast") ||
 		!strings.Contains(fmt.Sprint(sessionSearchExample["snippet_preview"]), "risk label") {
@@ -2730,6 +2733,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			Total:           2,
 			SessionID:       "market-alpha",
 			TurnIdx:         4,
+			MessageIdx:      8,
 			MatchedTerms:    []string{"alpha", "coast"},
 			ContextIncluded: true,
 		}},
@@ -3091,6 +3095,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sessionSearchExample["call_id"] != "summary-search-1" ||
 		sessionSearchExample["query"] != "Alpha Coast" ||
 		sessionSearchExample["session_id"] != "market-alpha" ||
+		sessionSearchExample["message_idx"] != float64(8) ||
 		sessionSearchExample["context_included"] != true ||
 		!jsonArrayContainsString(sessionSearchExample["matched_terms"], "coast") {
 		t.Fatalf("session_search_example = %#v\njson=%s", sessionSearchExamples[0], out.String())

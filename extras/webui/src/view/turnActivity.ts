@@ -834,6 +834,7 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
     const sessionId = stringField(candidate, "session_id");
     if (!sessionId) continue;
     const turnIndex = numberField(candidate, "turn_idx");
+    const messageIndex = numberField(candidate, "message_idx");
     const matchedTerms = stringArrayField(candidate, "matched_terms").slice(0, 3);
     const contextIncluded = booleanField(candidate, "context_included");
     const total = numberField(payload, "total") ?? results.length;
@@ -843,6 +844,7 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
       total > 1 ? `${total} hits` : undefined,
       sessionId,
       turnIndex == null ? undefined : `turn ${turnIndex}`,
+      messageIndex == null ? undefined : `message ${messageIndex}`,
       matchedTerms.length > 0 ? matchedTerms.join(", ") : undefined,
       contextIncluded ? "context" : undefined,
       extra > 0 ? `+${extra} more` : undefined,

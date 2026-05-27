@@ -371,6 +371,7 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
     `${total} history ${pluralize("hit", total)}`,
     readString(first, "session_id"),
     readNumber(first, "turn_idx") != null ? `turn ${readNumber(first, "turn_idx")}` : undefined,
+    readNumber(first, "message_idx") != null ? `message ${readNumber(first, "message_idx")}` : undefined,
     matchedTerms.length > 0 ? `matched ${matchedTerms.join(", ")}` : undefined,
     readBoolean(first, "context_included") ? "context" : undefined,
     extra > 0 ? `${extra} more` : undefined,

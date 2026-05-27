@@ -176,6 +176,7 @@ describe("eventTrace view model", () => {
               {
                 session_id: "market-alpha",
                 turn_idx: 2,
+                message_idx: 4,
                 role: "assistant",
                 snippet: "user: Alpha Coast\nassistant: inventory-drag",
                 score: 4.4,
@@ -198,6 +199,7 @@ describe("eventTrace view model", () => {
           "2 history hits",
           "market-alpha",
           "turn 2",
+          "message 4",
           "matched alpha, coast, inventory",
           "adjacent context",
           "1 more history hit",

@@ -440,6 +440,7 @@ function sessionSearchMeta(payload: Record<string, unknown>): string[] {
     typeof total === "number" ? `${total} history hit${total === 1 ? "" : "s"}` : undefined,
     first ? readString(first, "session_id") : undefined,
     first && typeof readNumber(first, "turn_idx") === "number" ? `turn ${readNumber(first, "turn_idx")}` : undefined,
+    first && typeof readNumber(first, "message_idx") === "number" ? `message ${readNumber(first, "message_idx")}` : undefined,
     matchedTerms.length > 0 ? `matched ${matchedTerms.slice(0, 8).join(", ")}` : undefined,
     first && readBoolean(first, "context_included") ? "adjacent context" : undefined,
     extra > 0 ? `${extra} more history hit${extra === 1 ? "" : "s"}` : undefined,

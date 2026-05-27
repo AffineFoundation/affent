@@ -710,6 +710,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	if ex.TurnIdx > 0 {
 		parts = append(parts, fmt.Sprintf("turn=%d", ex.TurnIdx))
 	}
+	if ex.MessageIdx > 0 {
+		parts = append(parts, fmt.Sprintf("message=%d", ex.MessageIdx))
+	}
 	if ex.ContextIncluded {
 		parts = append(parts, "context=true")
 	}

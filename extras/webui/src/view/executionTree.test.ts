@@ -130,6 +130,7 @@ describe("buildExecutionTree", () => {
               {
                 session_id: "market-alpha",
                 turn_idx: 4,
+                message_idx: 8,
                 matched_terms: ["alpha", "coast"],
                 context_included: true,
               },
@@ -141,6 +142,6 @@ describe("buildExecutionTree", () => {
 
     expect(search.label).toBe("Search");
     expect(search.title).toBe("Search history Alpha Coast marker");
-    expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · matched alpha, coast · context · 1 more");
+    expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · message 8 · matched alpha, coast · context · 1 more");
   });
 });

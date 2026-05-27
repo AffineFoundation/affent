@@ -1032,6 +1032,9 @@ func renderTimelineSessionSearch(b *strings.Builder, trace *Trace) {
 		if ex.TurnIdx > 0 {
 			fmt.Fprintf(b, " turn=`%d`", ex.TurnIdx)
 		}
+		if ex.MessageIdx > 0 {
+			fmt.Fprintf(b, " message=`%d`", ex.MessageIdx)
+		}
 		if ex.Role != "" {
 			fmt.Fprintf(b, " role=`%s`", ex.Role)
 		}

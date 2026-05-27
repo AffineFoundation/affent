@@ -1534,7 +1534,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			CallID:   "call-6",
 			Tool:     "session_search",
 			Args:     map[string]any{"query": "Alpha Coast", "top_k": 3},
-			Result:   `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","turn_idx":4,"role":"assistant","snippet":"history marker ALPHA-COAST risk label elevated","score":2.5,"matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","turn_idx":2,"role":"user","snippet":"older Alpha note without the current risk label","score":1,"matched_terms":["alpha"],"context_included":false}]}`,
+			Result:   `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","turn_idx":4,"message_idx":8,"role":"assistant","snippet":"history marker ALPHA-COAST risk label elevated","score":2.5,"matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","turn_idx":2,"message_idx":3,"role":"user","snippet":"older Alpha note without the current risk label","score":1,"matched_terms":["alpha"],"context_included":false}]}`,
 			ExitCode: 0,
 		}, {
 			TurnID: "turn-debug",
@@ -1827,6 +1827,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.SessionSearchExamples[0].Query != "Alpha Coast" ||
 		manifest.SessionSearchExamples[0].SessionID != "market-alpha" ||
 		manifest.SessionSearchExamples[0].TurnIdx != 4 ||
+		manifest.SessionSearchExamples[0].MessageIdx != 8 ||
 		!manifest.SessionSearchExamples[0].ContextIncluded ||
 		!reflect.DeepEqual(manifest.SessionSearchExamples[0].MatchedTerms, []string{"alpha", "coast"}) ||
 		!strings.Contains(manifest.SessionSearchExamples[0].SnippetPreview, "history marker") {
@@ -1985,7 +1986,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"tool#5 action=`add` location=`memory:research` call_id=`call-5`",
 		"Record network evidence gaps explicitly.",
 		"## Session Search",
-		"tool#6 query=`Alpha Coast` total=`2` session=`market-alpha` turn=`4` role=`assistant` terms=`alpha,coast` context=`true` call_id=`call-6`",
+		"tool#6 query=`Alpha Coast` total=`2` session=`market-alpha` turn=`4` message=`8` role=`assistant` terms=`alpha,coast` context=`true` call_id=`call-6`",
 		"snippet: history marker ALPHA-COAST risk label elevated",
 		"## Tool Truncation",
 		"tool#1 `web_fetch` call_id=`call-1`",
