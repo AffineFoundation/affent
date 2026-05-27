@@ -165,6 +165,7 @@ func run(args []string) int {
 			MaxForcedNoToolsRate:                  fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
 			MaxLoopGuardInterventionRate:          fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
 			MaxPlanErrorRate:                      fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
+			MaxMemorySearchMissRate:               fs.Float64("max-memory-search-miss-rate", -1, "optional quality gate: maximum memory search miss rate per memory search call, 0..1"),
 			MaxSourceDiscoveryOnlyRate:            fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
 			MaxSourceDynamicPartialRate:           fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
 			MaxSubagentErrorRate:                  fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
@@ -366,6 +367,7 @@ type qualityGateConfig struct {
 	MaxForcedNoToolsRate                  *float64
 	MaxLoopGuardInterventionRate          *float64
 	MaxPlanErrorRate                      *float64
+	MaxMemorySearchMissRate               *float64
 	MaxSourceDiscoveryOnlyRate            *float64
 	MaxSourceDynamicPartialRate           *float64
 	MaxSubagentErrorRate                  *float64
@@ -520,6 +522,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-forced-no-tools-rate", g.MaxForcedNoToolsRate)
 	add("max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate)
 	add("max-plan-error-rate", g.MaxPlanErrorRate)
+	add("max-memory-search-miss-rate", g.MaxMemorySearchMissRate)
 	add("max-source-discovery-only-rate", g.MaxSourceDiscoveryOnlyRate)
 	add("max-source-dynamic-partial-rate", g.MaxSourceDynamicPartialRate)
 	add("max-subagent-error-rate", g.MaxSubagentErrorRate)
@@ -585,6 +588,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-forced-no-tools-rate", &g.MaxForcedNoToolsRate, profileConfig.MaxForcedNoToolsRate)
 	apply("max-loop-guard-intervention-rate", &g.MaxLoopGuardInterventionRate, profileConfig.MaxLoopGuardInterventionRate)
 	apply("max-plan-error-rate", &g.MaxPlanErrorRate, profileConfig.MaxPlanErrorRate)
+	apply("max-memory-search-miss-rate", &g.MaxMemorySearchMissRate, profileConfig.MaxMemorySearchMissRate)
 	apply("max-source-discovery-only-rate", &g.MaxSourceDiscoveryOnlyRate, profileConfig.MaxSourceDiscoveryOnlyRate)
 	apply("max-source-dynamic-partial-rate", &g.MaxSourceDynamicPartialRate, profileConfig.MaxSourceDynamicPartialRate)
 	apply("max-subagent-error-rate", &g.MaxSubagentErrorRate, profileConfig.MaxSubagentErrorRate)
@@ -1707,6 +1711,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-forced-no-tools-rate", g.MaxForcedNoToolsRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
 		{"--max-plan-error-rate", g.MaxPlanErrorRate, true},
+		{"--max-memory-search-miss-rate", g.MaxMemorySearchMissRate, true},
 		{"--max-source-discovery-only-rate", g.MaxSourceDiscoveryOnlyRate, true},
 		{"--max-source-dynamic-partial-rate", g.MaxSourceDynamicPartialRate, true},
 		{"--max-subagent-error-rate", g.MaxSubagentErrorRate, true},
@@ -1807,6 +1812,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("forced_no_tools_rate", batchRatio(s.ForcedNoTools, s.ToolCalls), g.MaxForcedNoToolsRate, s.ToolCalls > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
 	checkMax("plan_error_rate", batchRatio(s.PlanErrors, s.PlanCalls), g.MaxPlanErrorRate, s.PlanCalls > 0)
+	checkMax("memory_search_miss_rate", batchRatio(s.MemorySearchMisses, s.MemorySearchCalls), g.MaxMemorySearchMissRate, s.MemorySearchCalls > 0)
 	checkMax("source_discovery_only_rate", batchRatio(s.SourceAccessDiscoveryOnly, s.SourceAccessResults), g.MaxSourceDiscoveryOnlyRate, s.SourceAccessResults > 0)
 	checkMax("source_dynamic_partial_rate", batchRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults), g.MaxSourceDynamicPartialRate, s.SourceAccessResults > 0)
 	checkMax("subagent_error_rate", batchRatio(s.SubagentErrors, s.SubagentCalls), g.MaxSubagentErrorRate, s.SubagentCalls > 0)
@@ -2609,6 +2615,7 @@ type evalJSONLMetadata struct {
 	MaxForcedNoToolsRate                  *float64           `json:"max_forced_no_tools_rate,omitempty"`
 	MaxLoopGuardInterventionRate          *float64           `json:"max_loop_guard_intervention_rate,omitempty"`
 	MaxPlanErrorRate                      *float64           `json:"max_plan_error_rate,omitempty"`
+	MaxMemorySearchMissRate               *float64           `json:"max_memory_search_miss_rate,omitempty"`
 	MaxSourceDiscoveryOnlyRate            *float64           `json:"max_source_discovery_only_rate,omitempty"`
 	MaxSourceDynamicPartialRate           *float64           `json:"max_source_dynamic_partial_rate,omitempty"`
 	MaxSubagentErrorRate                  *float64           `json:"max_subagent_error_rate,omitempty"`
@@ -2678,6 +2685,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxForcedNoToolsRate:                  enabledQualityGateValue(gates.MaxForcedNoToolsRate),
 		MaxLoopGuardInterventionRate:          enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
 		MaxPlanErrorRate:                      enabledQualityGateValue(gates.MaxPlanErrorRate),
+		MaxMemorySearchMissRate:               enabledQualityGateValue(gates.MaxMemorySearchMissRate),
 		MaxSourceDiscoveryOnlyRate:            enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
 		MaxSourceDynamicPartialRate:           enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
 		MaxSubagentErrorRate:                  enabledQualityGateValue(gates.MaxSubagentErrorRate),
@@ -3486,6 +3494,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxForcedNoToolsRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||
 		meta.MaxPlanErrorRate != nil ||
+		meta.MaxMemorySearchMissRate != nil ||
 		meta.MaxSourceDiscoveryOnlyRate != nil ||
 		meta.MaxSourceDynamicPartialRate != nil ||
 		meta.MaxSubagentErrorRate != nil ||

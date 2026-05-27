@@ -53,6 +53,7 @@ Shared metadata fields:
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
   `max_focused_task_error_rate`, `max_forced_no_tools_rate`,
   `max_loop_guard_intervention_rate`, `max_plan_error_rate`,
+  `max_memory_search_miss_rate`,
   `max_source_discovery_only_rate`,
   `max_source_dynamic_partial_rate`, `max_subagent_error_rate`,
   `max_tool_error_rate`,
