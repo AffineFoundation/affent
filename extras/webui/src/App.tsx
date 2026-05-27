@@ -1358,10 +1358,12 @@ function webLoopActivationPrompt(goal: string): string {
     `Set up loop for: ${goal}`,
     "",
     "Loop protocol activation is pending, not active yet.",
+    "This setup path may have been started from chat or the WebUI; both require the same calibration-first activation flow.",
     "Understand the user's real long-run intent before enabling the loop.",
     "Use loop_protocol action=read to inspect the draft LOOP.md.",
     "Ask the user at least one concise calibration question before activation, even when the initial goal seems clear.",
     "If the goal, stop conditions, memory policy, or recovery expectations are still unclear, ask at most two concise questions and keep status: draft.",
+    "After asking, wait for the user's answer; do not continue autonomous work or claim the loop is running while LOOP.md is still draft.",
     "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
     "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
   ].join("\n");

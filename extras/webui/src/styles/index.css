@@ -936,6 +936,43 @@ body {
   gap: 10px;
 }
 
+.session-loop-callout {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(217, 224, 232, 0.82);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(248, 250, 252, 0.78);
+  padding: 8px 9px;
+}
+
+.session-loop-callout strong {
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.session-loop-callout span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.session-loop-callout.draft,
+.session-loop-callout.off {
+  border-color: rgba(194, 120, 3, 0.28);
+  background: rgba(255, 247, 237, 0.72);
+}
+
+.session-loop-callout.running {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(236, 253, 245, 0.68);
+}
+
+.session-loop-callout.disabled {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(254, 242, 242, 0.64);
+}
+
 .session-loop-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -6927,6 +6964,7 @@ html[data-theme="dark"] .mobile-session-launcher,
 html[data-theme="dark"] .runtime-status-bar,
 html[data-theme="dark"] .session-plan-panel,
 html[data-theme="dark"] .session-plan-step,
+html[data-theme="dark"] .session-loop-callout,
 html[data-theme="dark"] .session-loop-field,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
@@ -6967,6 +7005,22 @@ html[data-theme="dark"] .surface-context {
 html[data-theme="dark"] .session-plan-step[data-status="in_progress"] {
   border-color: rgba(45, 212, 191, 0.36);
   background: rgba(20, 184, 166, 0.12);
+}
+
+html[data-theme="dark"] .session-loop-callout.draft,
+html[data-theme="dark"] .session-loop-callout.off {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(120, 53, 15, 0.16);
+}
+
+html[data-theme="dark"] .session-loop-callout.running {
+  border-color: rgba(16, 185, 129, 0.28);
+  background: rgba(6, 95, 70, 0.16);
+}
+
+html[data-theme="dark"] .session-loop-callout.disabled {
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(127, 29, 29, 0.15);
 }
 
 html[data-theme="dark"] .session-plan-step[data-status="blocked"] {

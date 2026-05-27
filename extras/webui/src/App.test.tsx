@@ -556,8 +556,10 @@ describe("App", () => {
     const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/messages");
     const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
     expect(sent.content).toContain("Loop protocol activation is pending");
+    expect(sent.content).toContain("chat or the WebUI");
     expect(sent.content).toContain("loop_protocol action=read");
     expect(sent.content).toContain("Ask the user at least one concise calibration question");
+    expect(sent.content).toContain("wait for the user's answer");
     expect(sent.content).toContain("complete_activation");
     expect(sent.content).toContain("Current Situation");
     expect(await screen.findByTestId("session-list")).toHaveTextContent("Loop draft");
@@ -611,6 +613,8 @@ describe("App", () => {
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Off");
     expect(panel).toHaveTextContent("Draft first");
+    expect(panel).toHaveTextContent("Draft setup");
+    expect(panel).toHaveTextContent("asks before it begins running");
     expect(within(panel).getByLabelText("Goal")).toHaveValue("long running subnet analysis");
     await user.click(within(panel).getByRole("button", { name: "Set up loop" }));
 
@@ -622,6 +626,8 @@ describe("App", () => {
     expect(sent.content).toContain("Ask the user at least one concise calibration question");
     expect(sent.content).toContain("complete_activation");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Draft");
+    expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("Setup pending");
+    expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("activate after your answer");
   });
 
   it("shows and disables the selected session loop protocol", async () => {
@@ -705,6 +711,7 @@ describe("App", () => {
 
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Running");
+    expect(panel).toHaveTextContent("Running protocol");
     expect(panel).toHaveTextContent("watch market evidence for several days");
     expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");
 

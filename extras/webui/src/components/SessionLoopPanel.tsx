@@ -41,9 +41,10 @@ export function SessionLoopPanel({
         <summary className="session-plan-summary">
           <span className="session-plan-kicker">Loop</span>
           <strong>Off</strong>
-          <span>Draft first · asks before activation</span>
+          <span>Draft first · calibration required</span>
         </summary>
         <div className="session-plan-body session-loop-body">
+          <LoopStatusCallout status="off" />
           <form
             className="session-loop-setup"
             onSubmit={(event) => {
@@ -77,8 +78,9 @@ export function SessionLoopPanel({
   const updates = state?.protocol_updates ?? 0;
   const event = compact(state?.last_event_summary);
   const disabled = status === "disabled";
+  const draft = status === "draft";
   const title = disabled ? "Disabled" : statusLabel(status);
-  const detail = loopDetail({ goal, feeds, updates, event });
+  const detail = draft ? "Waiting for calibration answer" : loopDetail({ goal, feeds, updates, event });
 
   return (
     <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" open={!disabled}>
@@ -88,6 +90,7 @@ export function SessionLoopPanel({
         <span>{detail}</span>
       </summary>
       <div className="session-plan-body session-loop-body">
+        <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} />
         <div className="session-loop-grid">
           {goal ? <LoopField label="Goal" value={goal} /> : null}
           {path ? <LoopField label="File" value={path} mono /> : null}
@@ -128,6 +131,47 @@ export function SessionLoopPanel({
       </div>
     </details>
   );
+}
+
+function LoopStatusCallout({ status }: { status: "off" | "draft" | "running" | "disabled" | "unknown" }) {
+  const copy = loopStatusCopy(status);
+  return (
+    <div className={`session-loop-callout ${status}`} data-testid="session-loop-callout">
+      <strong>{copy.title}</strong>
+      <span>{copy.detail}</span>
+    </div>
+  );
+}
+
+function loopStatusCopy(status: "off" | "draft" | "running" | "disabled" | "unknown") {
+  if (status === "draft") {
+    return {
+      title: "Setup pending",
+      detail: "Affent must ask, update LOOP.md, then activate after your answer.",
+    };
+  }
+  if (status === "running") {
+    return {
+      title: "Running protocol",
+      detail: "LOOP.md is active and will be fed into future long-run turns.",
+    };
+  }
+  if (status === "disabled") {
+    return {
+      title: "Loop disabled",
+      detail: "This session will not receive LOOP.md guidance until setup runs again.",
+    };
+  }
+  if (status === "off") {
+    return {
+      title: "Draft setup",
+      detail: "Starting creates LOOP.md first; Affent asks before it begins running.",
+    };
+  }
+  return {
+    title: "Loop state",
+    detail: "Review LOOP.md before continuing long-run work.",
+  };
 }
 
 function LoopField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {

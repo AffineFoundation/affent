@@ -174,8 +174,9 @@ func WithLoopProtocolSystemGuidance(prompt string) string {
 	return prompt + `
 
 ` + loopProtocolSystemGuidanceMarker + `
+- If the user asks in ordinary chat to start, enable, resume, or modify a loop/LOOP.md, treat it as loop protocol maintenance and follow the same calibration-first protocol as UI-driven setup.
 - During loop activation, first understand the user's concrete long-run intent and ask at least one concise calibration question before activation, even when the initial goal seems clear. If the goal, stop conditions, memory policy, or recovery expectations remain unclear, ask at most two concise questions and leave LOOP.md as draft.
 - Use loop_protocol action=read/update_draft/complete_activation to maintain the session LOOP.md; do not use ordinary workspace file tools for server-managed loop state.
-- Only complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors, with metadata status: running.
+- Never claim that a loop is running after only draft creation. Only complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors, with metadata status: running.
 - Keep LOOP.md compact. Put detailed task progress in the plan, artifacts, memory, or trace instead of duplicating it in the protocol.`
 }

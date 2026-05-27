@@ -138,7 +138,9 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 	}
 	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
+		!strings.Contains(prompt, "ordinary chat") ||
 		!strings.Contains(prompt, "at least one concise calibration question") ||
+		!strings.Contains(prompt, "Never claim that a loop is running") ||
 		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("prompt missing loop protocol guidance:\n%s", prompt)
 	}
