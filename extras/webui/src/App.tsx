@@ -1318,6 +1318,14 @@ export function App() {
               <div className="workbench-panel" data-testid="workbench-panel">
                 <div className="workbench-panel-head">
                   <strong>Workbench</strong>
+                  <button
+                    type="button"
+                    className="workbench-close"
+                    aria-label="Close Workbench"
+                    onClick={() => setWorkbenchOpen(false)}
+                  >
+                    Close
+                  </button>
                   <span>Current context first; diagnostics, config, memory, and skills stay available below.</span>
                 </div>
                 <WorkbenchContextPanel
@@ -1328,7 +1336,11 @@ export function App() {
                   defaultOpen
                 />
                 {sessionFiles.items.length > 0 ? (
-                  <SessionFilesPanel files={sessionFiles} onUseAsDraft={handleUseAsDraft} />
+                  <SessionFilesPanel
+                    files={sessionFiles}
+                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                    onUseAsDraft={handleUseAsDraft}
+                  />
                 ) : null}
                 {sessionChanges.files.length > 0 ? (
                   <SessionChangesPanel changes={sessionChanges} onUseAsDraft={handleUseAsDraft} />

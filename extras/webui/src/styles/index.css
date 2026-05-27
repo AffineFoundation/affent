@@ -319,7 +319,9 @@ body {
 
 .workbench-panel-head {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px;
+  align-items: start;
 }
 
 .workbench-panel-head strong {
@@ -328,8 +330,30 @@ body {
 }
 
 .workbench-panel-head span {
+  grid-column: 1 / -1;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.workbench-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  border: 1px solid rgba(45, 212, 191, 0.34);
+  border-radius: var(--radius-sm);
+  background: rgba(240, 253, 250, 0.74);
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workbench-close:hover,
+.workbench-close:focus-visible {
+  border-color: rgba(20, 184, 166, 0.54);
+  background: rgba(204, 251, 241, 0.66);
+  outline: none;
 }
 
 .workbench-panel .session-skills-panel {
@@ -498,6 +522,14 @@ body {
   font-size: 11.5px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.session-files-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
 }
 
 .header-new-chat {
@@ -7489,6 +7521,7 @@ html[data-theme="dark"] .theme-switch,
 html[data-theme="dark"] .mobile-chrome-toggle,
 html[data-theme="dark"] .mobile-chrome-restore,
 html[data-theme="dark"] .workbench-menu > summary,
+html[data-theme="dark"] .workbench-close,
 html[data-theme="dark"] .workbench-panel,
 html[data-theme="dark"] .connection-pill,
 html[data-theme="dark"] .header-new-chat,
@@ -8455,6 +8488,7 @@ html[data-theme="dark"] ::selection {
   .session-run-item {
     grid-template-columns: minmax(0, 1fr);
   }
+  .session-files-actions,
   .session-files-item .ghost-action,
   .session-changes-item .ghost-action,
   .session-run-item .ghost-action {

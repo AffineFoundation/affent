@@ -1728,6 +1728,8 @@ describe("App", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs");
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
+    await user.click(screen.getByRole("button", { name: "Close Workbench" }));
+    expect(screen.queryByTestId("workbench-panel")).toBeNull();
   });
 
   it("surfaces changed files inside Workbench without adding default Chat noise", async () => {
@@ -1845,6 +1847,16 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/files-1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/files-1/artifacts/.affent/artifacts/tool-results/read.txt?offset=0&limit=65536") {
+        return new Response("checkout route handler", {
+          status: 200,
+          headers: {
+            "X-Affent-Artifact-Path": ".affent/artifacts/tool-results/read.txt",
+            "X-Affent-Artifact-Bytes": "22",
+            "X-Affent-Artifact-Offset": "0",
+          },
+        });
+      }
       if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
       if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
       if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
@@ -1866,6 +1878,8 @@ describe("App", () => {
     await user.click(within(files).getByText("Files"));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open preview" }));
+    expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use" })[0]);
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file evidence");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file path in the next step: src/payments.ts");

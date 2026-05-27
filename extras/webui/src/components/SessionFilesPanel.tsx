@@ -4,10 +4,12 @@ import type { SessionFileEvidence, SessionFilesView } from "../view/sessionFiles
 export function SessionFilesPanel({
   files,
   defaultOpen = false,
+  onOpenArtifact,
   onUseAsDraft,
 }: {
   files: SessionFilesView;
   defaultOpen?: boolean;
+  onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
   return (
@@ -29,11 +31,18 @@ export function SessionFilesPanel({
                   {item.next ? <small>Next: {item.next}</small> : null}
                   {item.artifactPath ? <small>Evidence artifact: {item.artifactPath}</small> : null}
                 </div>
-                {onUseAsDraft ? (
-                  <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileDraft(item), "file_evidence")}>
-                    Use
-                  </button>
-                ) : null}
+                <span className="session-files-actions">
+                  {item.artifactPath && onOpenArtifact ? (
+                    <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
+                      Open preview
+                    </button>
+                  ) : null}
+                  {onUseAsDraft ? (
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileDraft(item), "file_evidence")}>
+                      Use
+                    </button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ol>

@@ -7,8 +7,9 @@ import type { SessionFilesView } from "../view/sessionFiles";
 describe("SessionFilesPanel", () => {
   it("renders file evidence and creates a path draft", async () => {
     const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
-    render(<SessionFilesPanel defaultOpen files={files} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-files-panel");
     expect(panel).toHaveAttribute("open");
@@ -18,6 +19,9 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Next: rerun checkout tests");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+
+    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open preview" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use" })[0]);
 
