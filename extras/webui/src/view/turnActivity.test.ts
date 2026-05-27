@@ -705,7 +705,7 @@ describe("buildTurnActivity", () => {
                 turn_idx: 4,
                 message_idx: 8,
                 role: "assistant",
-                snippet: "history marker HIST-STOCK-44 and inventory-drag risk",
+                snippet: "user: Alpha Coast\nassistant: history marker HIST-STOCK-44 and inventory-drag risk",
                 matched_terms: ["alpha", "coast"],
                 context_included: true,
               },
@@ -729,7 +729,7 @@ describe("buildTurnActivity", () => {
                 turn_idx: 4,
                 message_idx: 8,
                 role: "assistant",
-                snippet: "history marker HIST-STOCK-44 and inventory-drag risk",
+                snippet: "user: Alpha Coast\nassistant: history marker HIST-STOCK-44 and inventory-drag risk",
                 matched_terms: ["alpha", "coast"],
                 context_included: true,
               },
@@ -756,17 +756,17 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity?.evidencePreview).toEqual([
-      { label: "History", value: "market-alpha:turn-4", displayValue: "2 hits · market-alpha · turn 4 · message 8 · alpha, coast · context · +1 more" },
+      { label: "History", value: "market-alpha:turn-4", displayValue: "2 hits · market-alpha · turn 4 · message 8 · alpha, coast · context · snippet user: Alpha Coast assistant: history marker HIST-STOCK-44 and inventory-drag risk · +1 more" },
     ]);
     expect(activity?.brief.rows).toContainEqual({
       id: "evidence",
       label: "Sources",
       evidence: [
-        { label: "History", value: "market-alpha:turn-4", displayValue: "2 hits · market-alpha · turn 4 · message 8 · alpha, coast · context · +1 more" },
+        { label: "History", value: "market-alpha:turn-4", displayValue: "2 hits · market-alpha · turn 4 · message 8 · alpha, coast · context · snippet user: Alpha Coast assistant: history marker HIST-STOCK-44 and inventory-drag risk · +1 more" },
       ],
       action: {
         label: "Use sources",
-        draft: "Use this evidence in the next step:\n- History 2 hits · market-alpha · turn 4 · message 8 · alpha, coast · context · +1 more",
+        draft: "Use this evidence in the next step:\n- History 2 hits · market-alpha · turn 4 · message 8 · alpha, coast · context · snippet user: Alpha Coast assistant: history marker HIST-STOCK-44 and inventory-drag risk · +1 more",
         source: "evidence",
       },
     });

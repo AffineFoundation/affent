@@ -202,6 +202,7 @@ describe("eventTrace view model", () => {
           "message 4",
           "matched alpha, coast, inventory",
           "adjacent context",
+          "snippet user: Alpha Coast assistant: inventory-drag",
           "1 more history hit",
         ],
       },

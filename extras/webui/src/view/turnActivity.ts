@@ -837,6 +837,7 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
     const messageIndex = numberField(candidate, "message_idx");
     const matchedTerms = stringArrayField(candidate, "matched_terms").slice(0, 3);
     const contextIncluded = booleanField(candidate, "context_included");
+    const snippet = stringField(candidate, "snippet");
     const total = numberField(payload, "total") ?? results.length;
     const extra = Math.max(0, total - 1);
     const value = [sessionId, turnIndex == null ? undefined : `turn-${turnIndex}`].filter(Boolean).join(":");
@@ -847,6 +848,7 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
       messageIndex == null ? undefined : `message ${messageIndex}`,
       matchedTerms.length > 0 ? matchedTerms.join(", ") : undefined,
       contextIncluded ? "context" : undefined,
+      snippet ? `snippet ${summarize(snippet, 96)}` : undefined,
       extra > 0 ? `+${extra} more` : undefined,
     ].filter(Boolean).join(" · ");
     return { label: "History", value, displayValue };

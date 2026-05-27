@@ -467,6 +467,7 @@ function sessionSearchMeta(payload: Record<string, unknown>): string[] {
   const results = readObjectArray(payload, "results");
   const first = results[0];
   const matchedTerms = first ? readStringArray(first, "matched_terms") : [];
+  const snippet = first ? readString(first, "snippet") : undefined;
   const visibleTotal = total ?? results.length;
   const extra = Math.max(0, visibleTotal - 1);
   return compact([
@@ -476,6 +477,7 @@ function sessionSearchMeta(payload: Record<string, unknown>): string[] {
     first && typeof readNumber(first, "message_idx") === "number" ? `message ${readNumber(first, "message_idx")}` : undefined,
     matchedTerms.length > 0 ? `matched ${matchedTerms.slice(0, 8).join(", ")}` : undefined,
     first && readBoolean(first, "context_included") ? "adjacent context" : undefined,
+    snippet ? `snippet ${streamSummary(snippet)}` : undefined,
     extra > 0 ? `${extra} more history hit${extra === 1 ? "" : "s"}` : undefined,
   ]);
 }

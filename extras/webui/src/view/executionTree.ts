@@ -378,6 +378,7 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
 
   const first = results[0];
   const matchedTerms = readStringList(first, "matched_terms").slice(0, 4);
+  const snippet = readString(first, "snippet");
   const extra = Math.max(0, total - 1);
   const parts = [
     `${total} history ${pluralize("hit", total)}`,
@@ -386,6 +387,7 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
     readNumber(first, "message_idx") != null ? `message ${readNumber(first, "message_idx")}` : undefined,
     matchedTerms.length > 0 ? `matched ${matchedTerms.join(", ")}` : undefined,
     readBoolean(first, "context_included") ? "context" : undefined,
+    snippet ? `snippet ${compactLine(snippet, 96)}` : undefined,
     extra > 0 ? `${extra} more` : undefined,
   ].filter((part): part is string => !!part);
   return compactLine(parts.join(" · "), 132);
