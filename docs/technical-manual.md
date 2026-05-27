@@ -725,9 +725,9 @@ Affent stores durable state as inspectable files:
   low-noise feed policy: the first three feeds and every sixth feed use a
   bounded full copy, while intervening feeds use a smaller digest focused on
   metadata, north-star, current situation, rules, self-checks, stop/recovery, and
-  plan/step anchors.
-  A successful context compaction marks the loop state so the next feed is
-  forced back to full even if the normal cadence would have used a digest.
+  plan/step anchors. Activation, running-protocol maintenance, and successful
+  context compaction mark the loop state so the next feed is forced back to full
+  even if the normal cadence would have used a digest.
   Feed metadata also includes compact runtime checkpoints from `state.json`,
   including the latest calibration answer, turn end, memory update, and loop
   decision, so the model can recover recent durable changes without replaying

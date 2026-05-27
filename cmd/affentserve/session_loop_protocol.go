@@ -406,6 +406,9 @@ func recordSessionLoopProtocolEvent(pool *SessionPool, sessionID string, ev loop
 	if written.Type == "loop.protocol_update" {
 		state.LastProtocolUpdateAt = state.UpdatedAt
 		state.ProtocolUpdates++
+		if state.Status == "" || state.Status == "running" {
+			state.NeedsFullProtocolFeed = true
+		}
 	}
 	state.EventCount = written.Seq
 	state.LastEventType = written.Type

@@ -220,7 +220,7 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RecordProtocolActivation: %v", err)
 	}
-	if state.Status != "running" || state.LastEventType != "loop.protocol_activate" || event.Type != "loop.protocol_activate" || event.Reason != "agent supplemented protocol" {
+	if state.Status != "running" || !state.NeedsFullProtocolFeed || state.LastEventType != "loop.protocol_activate" || event.Type != "loop.protocol_activate" || event.Reason != "agent supplemented protocol" {
 		t.Fatalf("activated state=%+v event=%+v", state, event)
 	}
 
@@ -230,6 +230,34 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	}
 	if created || event.Type != "" || state.OwnerSession != "session-a" {
 		t.Fatalf("second ensure should not overwrite existing protocol: created=%v state=%+v event=%+v", created, state, event)
+	}
+}
+
+func TestRecordProtocolUpdateForcesFullFeedForRunningProtocol(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "running-update")
+	if err := WriteProtocol(path, "# Loop Protocol\n\n## 0. Metadata\n\n- status: running\n\n## 1. North Star\n\nKeep new rules visible."); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := RecordProtocolFeed(path, "full"); err != nil {
+		t.Fatalf("RecordProtocolFeed: %v", err)
+	}
+	if _, _, err := RecordProtocolFeed(path, "digest"); err != nil {
+		t.Fatalf("RecordProtocolFeed: %v", err)
+	}
+	state, event, err := RecordProtocolUpdate(path, "rules changed", []string{"Rules"})
+	if err != nil {
+		t.Fatalf("RecordProtocolUpdate: %v", err)
+	}
+	if !state.NeedsFullProtocolFeed || state.LastEventType != "loop.protocol_update" || event.Type != "loop.protocol_update" {
+		t.Fatalf("running protocol update should force next full feed: state=%+v event=%+v", state, event)
+	}
+	state, event, err = RecordProtocolFeed(path, "full")
+	if err != nil {
+		t.Fatalf("RecordProtocolFeed after update: %v", err)
+	}
+	if state.NeedsFullProtocolFeed || state.LastProtocolFeedMode != "full" || event.FeedNumber != 3 {
+		t.Fatalf("full feed should clear force flag: state=%+v event=%+v", state, event)
 	}
 }
 

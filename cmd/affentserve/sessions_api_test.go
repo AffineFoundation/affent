@@ -1175,6 +1175,9 @@ Maintain active loop recovery anchors.`
 	if resp.Summary == nil || resp.Summary.Status != "running" || resp.State == nil || resp.State.Status != "running" {
 		t.Fatalf("response = %+v, want running protocol maintenance", resp)
 	}
+	if !resp.State.NeedsFullProtocolFeed {
+		t.Fatalf("running protocol maintenance should force next full feed: state=%+v", resp.State)
+	}
 	if !strings.Contains(resp.Protocol, "Maintain active loop recovery anchors.") {
 		t.Fatalf("protocol not updated:\n%s", resp.Protocol)
 	}

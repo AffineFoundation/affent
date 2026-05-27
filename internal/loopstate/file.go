@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	ProtocolFileName        = "LOOP.md"
-	StateFileName           = "state.json"
-	EventsFileName          = "events.jsonl"
-	MaxProtocolBytes        = 64 * 1024
+	ProtocolFileName         = "LOOP.md"
+	StateFileName            = "state.json"
+	EventsFileName           = "events.jsonl"
+	MaxProtocolBytes         = 64 * 1024
 	MaxCurrentSituationChars = 1200
 )
 
@@ -376,6 +376,7 @@ func RecordProtocolActivation(protocolPath, reason string) (State, Event, error)
 		return State{}, Event{}, err
 	}
 	state.Status = "running"
+	state.NeedsFullProtocolFeed = true
 	state.LastProtocolUpdateAt = event.Time
 	state.ProtocolUpdates++
 	state.UpdatedAt = event.Time
@@ -486,6 +487,9 @@ func RecordProtocolUpdate(protocolPath, reason string, sectionsChanged []string)
 	}
 	if status != "" {
 		state.Status = status
+	}
+	if status == "" || status == "running" {
+		state.NeedsFullProtocolFeed = true
 	}
 	state.LastProtocolUpdateAt = event.Time
 	state.ProtocolUpdates++
