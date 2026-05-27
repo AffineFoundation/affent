@@ -4,19 +4,18 @@ import { SessionLoopPanel } from "./SessionLoopPanel";
 
 describe("SessionLoopPanel", () => {
   it("shows the calibration-first activation flow before a loop is running", () => {
-    render(<SessionLoopPanel defaultGoal="long running subnet analysis" />);
+    render(<SessionLoopPanel defaultGoal="long running subnet analysis" defaultOpen />);
 
     const panel = screen.getByTestId("session-loop-panel");
-    expect(panel).toHaveTextContent("Draft first");
-    const checklist = screen.getByTestId("session-loop-checklist");
-    expect(checklist).toHaveTextContent("Create draft");
-    expect(checklist).toHaveTextContent("Ask calibration");
-    expect(checklist).toHaveTextContent("Activate after answer");
-    expect(checklist).toHaveTextContent("intent, stop conditions, memory policy");
+    expect(panel).toHaveTextContent("Set up long-running work only when this chat needs it");
     expect(screen.getByRole("button", { name: "Start setup" })).toBeInTheDocument();
-    expect(panel).toHaveTextContent("opens a calibration chat");
-    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Create draft, then answer Affent");
-    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("long running subnet analysis");
+    expect(panel).toHaveTextContent("asks one calibration question");
+  });
+
+  it("keeps loop controls fully folded by default", () => {
+    render(<SessionLoopPanel defaultGoal="long running subnet analysis" />);
+
+    expect(screen.getByTestId("session-loop-panel")).not.toHaveAttribute("open");
   });
 
   it("puts the pending calibration question next to the chat action", () => {
@@ -33,6 +32,7 @@ describe("SessionLoopPanel", () => {
           calibration_answers: 0,
         }}
         onUseAsDraft={() => undefined}
+        defaultOpen
       />,
     );
 
@@ -57,6 +57,7 @@ describe("SessionLoopPanel", () => {
           last_calibration_answer_preview: "Stop when source evidence is weak.",
         }}
         onUseAsDraft={() => undefined}
+        defaultOpen
       />,
     );
 
@@ -96,6 +97,7 @@ describe("SessionLoopPanel", () => {
           last_memory_update_topic: "markets",
           last_memory_update_preview: "Market reports must include MEM-STOCK-73 and source-led confidence.",
         }}
+        defaultOpen
       />,
     );
 
@@ -112,6 +114,7 @@ describe("SessionLoopPanel", () => {
       <SessionLoopPanel
         summary={{ path: ".affent/loops/loop-2/LOOP.md", status: "running", bytes: 256 }}
         state={{ version: 1, loop_id: "loop-2", status: "running", memory_update_events: 2 }}
+        defaultOpen
       />,
     );
 
@@ -130,6 +133,7 @@ describe("SessionLoopPanel", () => {
           last_context_compaction_reactive: true,
           last_context_compaction_reason: "context_overflow",
         }}
+        defaultOpen
       />,
     );
 
@@ -185,6 +189,7 @@ describe("SessionLoopPanel", () => {
             reactive: true,
           },
         ]}
+        defaultOpen
       />,
     );
 

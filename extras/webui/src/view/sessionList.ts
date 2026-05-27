@@ -812,6 +812,7 @@ function providedSessionTitle(session: SessionSummary): string | undefined {
   const titles = [session.summary_title, session.generated_title, session.title]
     .map((value) => value?.replace(/\s+/g, " ").trim())
     .filter((value): value is string => Boolean(value))
+    .filter((value) => !isPlaceholderTitle(value))
     .filter((value) => !isInternalRuntimePrompt(value));
   const rawSources = [session.topic_user_message, session.latest_user_message]
     .map((value) => value?.replace(/\s+/g, " ").trim())
@@ -825,8 +826,13 @@ function providedSessionTitle(session: SessionSummary): string | undefined {
 
 function displayUserMessage(value?: string): string | undefined {
   const text = value?.replace(/\s+/g, " ").trim();
-  if (!text || isInternalRuntimePrompt(text)) return undefined;
+  if (!text || isPlaceholderTitle(text) || isInternalRuntimePrompt(text)) return undefined;
   return text;
+}
+
+function isPlaceholderTitle(text: string): boolean {
+  const normalized = normalizeComparableTitle(text).replace(/^[()[\]{}'"“”‘’]+|[()[\]{}'"“”‘’]+$/g, "");
+  return normalized === "empty" || normalized === "untitled" || normalized === "null" || normalized === "undefined";
 }
 
 function isInternalRuntimePrompt(text: string): boolean {

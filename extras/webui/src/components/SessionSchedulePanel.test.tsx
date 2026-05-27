@@ -7,6 +7,7 @@ describe("SessionSchedulePanel", () => {
     render(
       <SessionSchedulePanel
         loopStatus="draft"
+        defaultOpen
         onUpdateSchedule={() => undefined}
         summary={{ count: 1, enabled: 0, enabled_loop_ticks: 0 }}
         schedules={[
@@ -36,6 +37,7 @@ describe("SessionSchedulePanel", () => {
     render(
       <SessionSchedulePanel
         loopStatus="running"
+        defaultOpen
         onUpdateSchedule={() => undefined}
         summary={{ count: 1, enabled: 0, enabled_loop_ticks: 0 }}
         schedules={[
@@ -59,6 +61,7 @@ describe("SessionSchedulePanel", () => {
   it("shows enabled loop ticks as pending until LOOP.md is running", () => {
     render(
       <SessionSchedulePanel
+        defaultOpen
         summary={{
           count: 1,
           enabled: 1,
@@ -99,6 +102,7 @@ describe("SessionSchedulePanel", () => {
     render(
       <SessionSchedulePanel
         loopStatus="running"
+        defaultOpen
         summary={{ count: 1, enabled: 1, pending_loop_ticks: 1, next_prompt_preview: "Scheduled loop tick for session: runtime" }}
         schedules={[
           {
@@ -126,17 +130,24 @@ describe("SessionSchedulePanel", () => {
     render(
       <SessionSchedulePanel
         summary={{ count: 0, enabled: 0 }}
+        defaultOpen
         onScheduleCheckIn={() => undefined}
         onScheduleLoopTick={() => undefined}
         onScheduleDaily={() => undefined}
       />,
     );
 
-    const callout = screen.getByTestId("session-schedule-callout");
-    expect(callout).toHaveTextContent("Calibration first");
-    expect(callout).toHaveTextContent("opens chat");
+    const panel = screen.getByTestId("session-schedule-panel");
+    expect(panel).toHaveTextContent("Off");
+    expect(panel).toHaveTextContent("Create a follow-up only when this chat needs one");
     expect(screen.getByRole("button", { name: "Check in 1h" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Loop every 30m" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Daily check-in" })).toBeInTheDocument();
+  });
+
+  it("keeps timer controls fully folded by default", () => {
+    render(<SessionSchedulePanel summary={{ count: 0, enabled: 0 }} />);
+
+    expect(screen.getByTestId("session-schedule-panel")).not.toHaveAttribute("open");
   });
 });

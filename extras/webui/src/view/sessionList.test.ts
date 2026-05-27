@@ -531,6 +531,23 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("no messages yet");
   });
 
+  it("ignores placeholder API titles such as empty", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "placeholder-title-session",
+        durable: true,
+        title: "(empty)",
+        summary_title: "(empty)",
+        generated_title: "(empty)",
+        has_conversation: true,
+        latest_user_message: "优化 Affent WebUI 的对话页面",
+      }),
+    ]);
+
+    expect(rows[0].title).toBe("Affent WebUI 对话页面");
+    expect(rows[0].title).not.toBe("(empty)");
+  });
+
   it("exposes a compact stats line only when it carries real work context", () => {
     const baseRows = buildSessionRows([
       session({

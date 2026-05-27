@@ -11,6 +11,7 @@ export function SessionLoopPanel({
   loadingProtocol = false,
   protocolError,
   defaultGoal,
+  defaultOpen = false,
   starting = false,
   onDisable,
   onStart,
@@ -25,6 +26,7 @@ export function SessionLoopPanel({
   loadingProtocol?: boolean;
   protocolError?: string;
   defaultGoal?: string;
+  defaultOpen?: boolean;
   starting?: boolean;
   onDisable?: () => Promise<void> | void;
   onStart?: (goal: string) => Promise<void> | void;
@@ -39,16 +41,13 @@ export function SessionLoopPanel({
   if (!summary && !state) {
     const goal = compact(setupGoal);
     return (
-      <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" open>
+      <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" {...(defaultOpen ? { open: true } : {})}>
         <summary className="session-plan-summary">
           <span className="session-plan-kicker">Loop</span>
           <strong>Off</strong>
-          <span>Draft first · calibration required</span>
+          <span>Set up long-running work only when this chat needs it</span>
         </summary>
         <div className="session-plan-body session-loop-body">
-          <LoopStatusCallout status="off" />
-          <LoopActivationChecklist status="off" />
-          <LoopNextStep status="off" goal={goal} />
           <form
             className="session-loop-setup"
             onSubmit={(event) => {
@@ -69,7 +68,7 @@ export function SessionLoopPanel({
               {starting ? "Starting setup" : "Start setup"}
             </button>
             <p className="session-loop-setup-note">
-              Creates a draft LOOP.md and opens a calibration chat before autonomous loop turns can run.
+              Creates a draft LOOP.md and asks one calibration question before any autonomous loop turn can run.
             </p>
           </form>
         </div>
@@ -98,7 +97,7 @@ export function SessionLoopPanel({
     : loopDetail({ goal, feeds, updates, event });
 
   return (
-    <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" open={!disabled}>
+    <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" {...(defaultOpen ? { open: true } : {})}>
       <summary className="session-plan-summary">
         <span className="session-plan-kicker">Loop</span>
         <strong>{title}</strong>

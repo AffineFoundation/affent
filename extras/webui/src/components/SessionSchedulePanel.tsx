@@ -5,6 +5,7 @@ export function SessionSchedulePanel({
   schedules,
   busy,
   disabled = false,
+  defaultOpen = false,
   loading = false,
   error,
   deletingId,
@@ -21,6 +22,7 @@ export function SessionSchedulePanel({
   schedules?: SessionSchedule[];
   busy?: "loop" | "checkin" | "daily";
   disabled?: boolean;
+  defaultOpen?: boolean;
   loading?: boolean;
   error?: string;
   deletingId?: string;
@@ -40,27 +42,31 @@ export function SessionSchedulePanel({
   const lastError = compact(summary?.last_error);
   const pendingLoopTimers = pendingLoopTimerCount(schedules, summary, loopStatus);
   const runningLoop = loopProtocolRunning(loopStatus);
-  const title = pendingLoopTimers > 0 ? `${pendingLoopTimers} pending` : enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "None";
+  const title = pendingLoopTimers > 0 ? `${pendingLoopTimers} pending` : enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "Off";
   const detail = lastError
     ? `${summary?.error_count ?? 1} error${summary?.error_count === 1 ? "" : "s"} · ${lastError}`
     : pendingLoopTimers > 0 ? "Loop timer waits for LOOP.md activation"
-    : next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "No scheduled prompts";
+    : next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "Create a follow-up only when this chat needs one";
 
   return (
-    <details className="session-plan-panel session-schedule-panel" data-testid="session-schedule-panel" open={count === 0 || !!schedules?.length || loading || !!error}>
+    <details className="session-plan-panel session-schedule-panel" data-testid="session-schedule-panel" {...(defaultOpen ? { open: true } : {})}>
       <summary className="session-plan-summary">
         <span className="session-plan-kicker">Timers</span>
         <strong>{title}</strong>
         <span>{detail}</span>
       </summary>
       <div className="session-plan-body session-schedule-body">
-        <ScheduleCallout pendingLoopTimers={pendingLoopTimers} runningLoop={runningLoop} hasActions={!!(onScheduleLoopTick || onScheduleCheckIn || onScheduleDaily)} />
-        <div className="session-schedule-grid">
-          <ScheduleField label="Enabled" value={String(enabled)} />
-          <ScheduleField label="Total" value={String(count)} />
-          {summary?.error_count ? <ScheduleField label="Errors" value={String(summary.error_count)} /> : null}
-          {next ? <ScheduleField label="Next" value={next} /> : null}
-        </div>
+        {count > 0 || pendingLoopTimers > 0 || lastError ? (
+          <>
+            <ScheduleCallout pendingLoopTimers={pendingLoopTimers} runningLoop={runningLoop} hasActions={!!(onScheduleLoopTick || onScheduleCheckIn || onScheduleDaily)} />
+            <div className="session-schedule-grid">
+              <ScheduleField label="Enabled" value={String(enabled)} />
+              <ScheduleField label="Total" value={String(count)} />
+              {summary?.error_count ? <ScheduleField label="Errors" value={String(summary.error_count)} /> : null}
+              {next ? <ScheduleField label="Next" value={next} /> : null}
+            </div>
+          </>
+        ) : null}
         {preview ? <p className="session-loop-preview">{preview}</p> : null}
         {error ? (
           <div className="session-plan-empty error" role="alert">

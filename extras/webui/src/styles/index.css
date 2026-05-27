@@ -749,12 +749,12 @@ body {
 
 .session-plan-panel {
   min-width: 0;
-  margin: 0 0 10px;
+  margin: 0 0 7px;
   overflow: hidden;
-  border: 1px solid rgba(217, 224, 232, 0.8);
-  border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(217, 224, 232, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: none;
   animation: detail-reveal var(--motion-panel) var(--ease-snap);
 }
 
@@ -762,9 +762,9 @@ body {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 12px;
+  gap: 7px;
+  min-height: 31px;
+  padding: 0 10px;
   cursor: pointer;
   list-style: none;
 }
@@ -798,7 +798,7 @@ body {
 
 .session-plan-summary strong {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 750;
   white-space: nowrap;
 }
@@ -806,7 +806,7 @@ body {
 .session-plan-summary span:last-of-type {
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -814,7 +814,17 @@ body {
 .session-plan-body {
   display: grid;
   gap: 8px;
-  padding: 0 10px 10px;
+  padding: 0 9px 9px;
+}
+
+.session-loop-panel,
+.session-schedule-panel {
+  background: rgba(248, 250, 252, 0.52);
+}
+
+.session-loop-panel[open],
+.session-schedule-panel[open] {
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .session-plan-steps {
