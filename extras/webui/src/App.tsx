@@ -59,6 +59,7 @@ import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
 import { SessionFilesPanel } from "./components/SessionFilesPanel";
 import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
+import { SessionWorkspacePanel } from "./components/SessionWorkspacePanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -74,6 +75,7 @@ import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
+import { buildSessionWorkspace } from "./view/sessionWorkspace";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
@@ -288,6 +290,7 @@ export function App() {
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
   const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
+  const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
@@ -298,8 +301,15 @@ export function App() {
     ? automationContextDisplay(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState)
     : undefined;
   const workbenchAttention = useMemo(
-    () => buildWorkbenchAttention({ overview, files: sessionFiles, changes: sessionChanges, run: sessionRun, automation: automationContext }),
-    [automationContext, overview, sessionChanges, sessionFiles, sessionRun],
+    () => buildWorkbenchAttention({
+      overview,
+      files: sessionFiles,
+      changes: sessionChanges,
+      run: sessionRun,
+      workspace: sessionWorkspace,
+      automation: automationContext,
+    }),
+    [automationContext, overview, sessionChanges, sessionFiles, sessionRun, sessionWorkspace],
   );
   const showSurfaceContext = showChatContext || showWorkflowStatus || showAutomationContext;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
@@ -1398,6 +1408,12 @@ export function App() {
                   automationDetail={automationContext?.detail}
                   defaultOpen
                 />
+                {sessionWorkspace.hasData ? (
+                  <SessionWorkspacePanel
+                    workspace={sessionWorkspace}
+                    defaultOpen={workbenchAttention?.target === "workspace"}
+                  />
+                ) : null}
                 {showAutomationContext ? renderAutomationPanel(workbenchAttention?.target === "automation", "workbench-automation-panel") : null}
                 {sessionFiles.items.length > 0 ? (
                   <SessionFilesPanel

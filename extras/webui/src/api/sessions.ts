@@ -404,6 +404,12 @@ export interface SessionSummary {
   durable: boolean;
   created_at?: string;
   last_used_at?: string;
+  workspace_id?: string;
+  workspace_path?: string;
+  workspace_label?: string;
+  default_branch?: string;
+  dirty_state?: string;
+  last_agent_cwd?: string;
   capabilities?: SessionCapabilities;
   latest_user_message?: string;
   topic_user_message?: string;

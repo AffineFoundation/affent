@@ -24,6 +24,27 @@ describe("buildWorkbenchAttention", () => {
     })).toEqual({ label: "Recovery hint", detail: "rerun tests", tone: "warning", target: "context" });
   });
 
+  it("opens workspace when the recorded command cwd is outside the session workspace", () => {
+    expect(buildWorkbenchAttention({
+      overview: overview(),
+      files: files(),
+      changes: changes(),
+      run: run(),
+      workspace: {
+        hasData: true,
+        summary: "Workspace mismatch",
+        detail: "/repo/affent · cwd /tmp",
+        tone: "warning",
+        issue: "Latest command cwd is outside the session workspace.",
+      },
+    })).toEqual({
+      label: "Workspace mismatch",
+      detail: "Latest command cwd is outside the session workspace.",
+      tone: "warning",
+      target: "workspace",
+    });
+  });
+
   it("uses changed files as the lowest attention badge and ignores read-only files", () => {
     expect(buildWorkbenchAttention({
       overview: overview(),
