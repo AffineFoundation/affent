@@ -1094,7 +1094,7 @@ function completedWorkDetail(turn: TurnState): string | undefined {
   const actions = `${count} ${count === 1 ? "action" : "actions"}`;
   if (failed && turn.assistantText.trim()) return `${actions} · ${failed} tool issue${failed === 1 ? "" : "s"}`;
   if (failed) return `${failed} failed of ${actions}`;
-  return `${count} completed ${count === 1 ? "action" : "actions"}`;
+  return undefined;
 }
 
 function latestFailedTool(turn: TurnState): ToolCallState | undefined {

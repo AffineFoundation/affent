@@ -18,7 +18,7 @@ describe("buildTurnActivity", () => {
       digest: {
         label: "Result",
         summary: "README.md main.go",
-        meta: ["1 step", "1 action"],
+        meta: [],
         tone: "success",
       },
     });
@@ -204,7 +204,7 @@ describe("buildTurnActivity", () => {
     expect(activity?.digest).toMatchObject({
       label: "Result",
       summary: "current marker LOOP-42",
-      meta: ["1 step", "1 action", "1 loop feed"],
+      meta: ["1 loop feed"],
     });
     expect(activity?.brief.rows).toContainEqual({
       id: "loop-feed:3",
@@ -342,7 +342,7 @@ describe("buildTurnActivity", () => {
     expect(activity?.digest).toEqual({
       label: "Memory",
       summary: "Saved memory: memory:markets · Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
-      meta: ["1 step", "1 action", "1 memory update"],
+      meta: ["1 memory update"],
       tone: "success",
     });
     expect(activity?.brief.rows).toEqual([
@@ -383,7 +383,7 @@ describe("buildTurnActivity", () => {
     expect(activity?.digest).toEqual({
       label: "Result",
       summary: "WebUI must render trace details as expandable agent structure.",
-      meta: ["2 delegated tasks", "2 actions", "4 evidence"],
+      meta: ["2 delegated tasks", "4 evidence"],
       tone: "success",
     });
     expect(activity?.evidencePreview).toEqual([
@@ -468,7 +468,7 @@ describe("buildTurnActivity", () => {
       digest: {
         label: "Now",
         summary: "Inspect docs for WebUI trace requirements",
-        meta: ["1 delegated task", "1 action"],
+        meta: ["1 delegated task"],
         tone: "running",
       },
     });
@@ -1032,7 +1032,7 @@ describe("buildTurnActivity", () => {
     expect(activity?.digest).toMatchObject({
       label: "Handoff",
       summary: "Checked 1 evidence source across 2 actions; 1 issue carried forward; message 3 continued the task.",
-      meta: ["2 steps", "2 actions", "1 evidence"],
+      meta: ["1 evidence"],
       tone: "muted",
     });
     expect(activity?.evidencePreview).toEqual([

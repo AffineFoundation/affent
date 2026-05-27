@@ -626,16 +626,12 @@ function hasDelegatedWork(nodes: readonly TurnActivityNode[]): boolean {
 
 function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string[] {
   const meta: string[] = [];
-  const actionCount = turn.toolCalls.length;
   const evidenceCount = countEvidence(nodes);
   const artifactLabel = artifactCountLabel(buildTurnArtifacts(turn));
   const delegatedCount = nodes.filter(isDelegatedNode).length;
   if (delegatedCount > 0) {
     meta.push(`${delegatedCount} delegated ${pluralize("task", delegatedCount)}`);
-  } else if (nodes.length > 0 && actionCount <= 3) {
-    meta.push(`${nodes.length} ${pluralize("step", nodes.length)}`);
   }
-  if (actionCount > 0) meta.push(`${actionCount} ${pluralize("action", actionCount)}`);
   if (artifactLabel) meta.push(artifactLabel);
   if (evidenceCount > 0) meta.push(`${evidenceCount} evidence`);
   const decisionCount = visibleLoopDecisions(turn).length;

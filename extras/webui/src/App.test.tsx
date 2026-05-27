@@ -142,10 +142,9 @@ describe("App", () => {
     const context = await screen.findByTestId("chat-context-bar");
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
-    const details = screen.getByTestId("chat-context-details");
-    expect(chatContextMetric(details, "Work 1 action")).toBeVisible();
-    expect(within(details).queryByLabelText("Session metrics: 1 more metric")).toBeNull();
-    expect(details).not.toHaveTextContent("Tokens 138");
+    expect(screen.queryByTestId("chat-context-details")).toBeNull();
+    expect(context).not.toHaveTextContent("Work 1 action");
+    expect(context).not.toHaveTextContent("Tokens 138");
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
     expect(contextText).toContain("Result ready · README.md main.go");
     expect(contextText).not.toContain("Task: list the files");

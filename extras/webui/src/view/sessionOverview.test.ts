@@ -108,8 +108,17 @@ describe("buildSessionOverview", () => {
       { label: "Work", value: "1 action", tone: undefined },
       { label: "Tokens", value: "138" },
     ]);
-    expect(displaySessionOverviewMetrics(overview.metrics)).toEqual([
-      { label: "Work", value: "1 action", tone: undefined },
+    expect(displaySessionOverviewMetrics(overview.metrics)).toEqual([]);
+  });
+
+  it("keeps work metrics visible only when they include evidence, risk, or next-step signal", () => {
+    expect(displaySessionOverviewMetrics([
+      { label: "Work", value: "1 action", tone: "warning" },
+      { label: "Tool issue", value: "1", tone: "warning" },
+      { label: "Work", value: "1 action · 1 source" },
+    ])).toEqual([
+      { label: "Tool issue", value: "1", tone: "warning" },
+      { label: "Work", value: "1 action · 1 source" },
     ]);
   });
 

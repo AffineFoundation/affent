@@ -19,20 +19,16 @@ describe("WorkflowStatus", () => {
 
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("list the files");
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("Result ready");
-    const details = screen.getByTestId("workflow-details");
+    expect(screen.queryByTestId("workflow-details")).toBeNull();
     expect(screen.getByTestId("workflow-status")).not.toHaveAttribute("open");
-    expect(details).not.toBeVisible();
     const summary = screen.getByTestId("workflow-status").querySelector("summary");
     expect(summary).toBeTruthy();
     await user.click(summary!);
     expect(screen.getByTestId("workflow-status")).toHaveAttribute("open");
-    expect(details).toBeVisible();
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("README.md main.go");
-    expect(metric(details, "Work 1 action")).toBeVisible();
-    expect(within(details).queryByText("+1 more")).toBeNull();
-    expect(within(details).queryByLabelText("Work metrics: 1 more metric")).toBeNull();
-    expect(within(details).getByText((_, element) => element?.textContent?.includes("Work 1 action") ?? false, { selector: ".run-detail-line" })).toBeInTheDocument();
-    expect(details).not.toHaveTextContent("Tokens 138");
+    expect(screen.queryByTestId("workflow-details")).toBeNull();
+    expect(screen.getByTestId("workflow-status")).not.toHaveTextContent("Work 1 action");
+    expect(screen.getByTestId("workflow-status")).not.toHaveTextContent("Tokens 138");
     expect(screen.queryByText("Metrics")).toBeNull();
     expect(screen.queryByText("Run details")).toBeNull();
   });
@@ -118,7 +114,7 @@ describe("WorkflowStatus", () => {
     expect(screen.getByTestId("workflow-status")).toHaveAttribute("data-tone", "warning");
     expect(screen.getByTestId("workflow-status").querySelector(".pulse-dot")).toHaveAttribute("data-status", "warning");
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("Result ready");
-    expect(within(screen.getByTestId("workflow-details")).getByText((_, element) => element?.textContent?.includes("Work 1 action") ?? false, { selector: ".run-detail-line" }))
+    expect(within(screen.getByTestId("workflow-details")).getByText((_, element) => element?.textContent?.includes("Tool issue 1") ?? false, { selector: ".run-detail-line" }))
       .toHaveAttribute("data-tone", "warning");
   });
 
@@ -348,7 +344,3 @@ describe("WorkflowStatus", () => {
     );
   });
 });
-
-function metric(root: HTMLElement, text: string): HTMLElement {
-  return within(root).getAllByText((_, element) => element?.textContent?.includes(text) ?? false, { selector: "span" })[0];
-}

@@ -44,10 +44,11 @@ describe("Timeline", () => {
     expect(screen.getByTestId("execution-tree")).toHaveTextContent("List current directory");
     const toolDetails = screen.getByRole("button", { name: /Run summary/ });
     expect(toolDetails).toHaveTextContent("Run summary");
-    expect(toolDetails).toHaveTextContent("1 completed action");
-    expect(toolDetails).toHaveAccessibleName("Run summary · 1 completed action · List files: . · 12ms");
+    expect(toolDetails).not.toHaveTextContent("1 completed action");
+    expect(toolDetails).toHaveAccessibleName("Run summary · List files: . · 12ms");
     const visibleWorkDetails = toolDetails.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    expect(visibleWorkDetails).toContain("Run summary 1 completed action");
+    expect(visibleWorkDetails).toContain("Run summary");
+    expect(visibleWorkDetails).toContain("List files: .");
     expect(visibleWorkDetails).not.toContain("Action details ·");
     expect(screen.getByTestId("turn-head")).not.toHaveTextContent("138 tokens");
     expect(screen.queryByTestId("turn-runtime-meta")).toBeNull();
@@ -1566,8 +1567,8 @@ describe("Timeline", () => {
     expect(firstActivity.textContent?.match(/Continued/g)).toHaveLength(1);
     expect(digest).toHaveTextContent("Handoff");
     expect(digest).toHaveTextContent("Ran 1 action; message 2 continued the task.");
-    expect(digest).toHaveAccessibleName("Handoff · Ran 1 action; message 2 continued the task. · 1 step · 1 action");
-    expect(digest.textContent?.replace(/\s+/g, " ").trim()).toContain("Handoff · Ran 1 action; message 2 continued the task. · 1 step · 1 action");
+    expect(digest).toHaveAccessibleName("Handoff · Ran 1 action; message 2 continued the task.");
+    expect(digest.textContent?.replace(/\s+/g, " ").trim()).toContain("Handoff · Ran 1 action; message 2 continued the task.");
     expect(digest.textContent?.replace(/\s+/g, " ").trim()).not.toContain("HandoffRan");
     expect(digest).not.toHaveTextContent("This message reached the action limit");
     expect(screen.queryByTestId("work-thread")).toBeNull();

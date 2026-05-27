@@ -29,12 +29,17 @@ export interface SessionOverview {
 
 export function displaySessionOverviewMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
   return metrics.filter((metric) => {
+    if (metric.label === "Work" && isPlainActionCount(metric.value)) return false;
     if (metric.tone === "error" || metric.tone === "warning" || metric.tone === "running") return true;
     return !lowSignalMetricLabels.has(metric.label);
   });
 }
 
 const lowSignalMetricLabels = new Set(["Tokens", "Turn tokens", "Chat tokens", "End"]);
+
+function isPlainActionCount(value: string): boolean {
+  return /^\d+ actions?$/.test(value.trim());
+}
 
 export function buildSessionOverview({
   session,
