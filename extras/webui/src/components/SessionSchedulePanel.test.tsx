@@ -139,7 +139,7 @@ describe("SessionSchedulePanel", () => {
 
     const panel = screen.getByTestId("session-schedule-panel");
     expect(panel).toHaveTextContent("Off");
-    expect(panel).toHaveTextContent("Create a follow-up only when this chat needs one");
+    expect(panel).toHaveTextContent("No scheduled follow-ups for this chat.");
     expect(screen.getByRole("button", { name: "Check in 1h" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Loop every 30m" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Daily check-in" })).toBeInTheDocument();
@@ -156,8 +156,19 @@ describe("SessionSchedulePanel", () => {
 
     const panel = screen.getByTestId("session-schedule-panel");
     expect(panel.tagName).toBe("SECTION");
-    expect(panel).toHaveTextContent("Create a follow-up only when this chat needs one");
+    expect(panel).toHaveTextContent("No scheduled follow-ups for this chat.");
     expect(panel).not.toHaveAttribute("open");
+  });
+
+  it("separates unloaded schedule details from an empty timer state", () => {
+    render(<SessionSchedulePanel defaultOpen onLoadSchedules={() => undefined} />);
+
+    const panel = screen.getByTestId("session-schedule-panel");
+    expect(panel).toHaveTextContent("Not loaded");
+    expect(panel).toHaveTextContent("Schedule details not loaded.");
+    expect(screen.getByRole("button", { name: "Load schedule details" })).toBeInTheDocument();
+    expect(panel).not.toHaveTextContent("Off");
+    expect(panel).not.toHaveTextContent("No scheduled follow-ups for this chat.");
   });
 
   it("loads schedule details without presenting Timers as a separate entry", () => {

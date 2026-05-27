@@ -45,11 +45,8 @@ export function SessionSchedulePanel({
   const lastError = compact(summary?.last_error);
   const pendingLoopTimers = pendingLoopTimerCount(schedules, summary, loopStatus);
   const runningLoop = loopProtocolRunning(loopStatus);
-  const title = pendingLoopTimers > 0 ? `${pendingLoopTimers} pending` : enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "Off";
-  const detail = lastError
-    ? `${summary?.error_count ?? 1} error${summary?.error_count === 1 ? "" : "s"} · ${lastError}`
-    : pendingLoopTimers > 0 ? "Loop timer waits for LOOP.md activation"
-    : next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "Create a follow-up only when this chat needs one";
+  const title = schedulePanelTitle(summary, pendingLoopTimers);
+  const detail = schedulePanelDetail(summary, { lastError, pendingLoopTimers, next, preview });
 
   return (
     <SessionPanelFrame
@@ -115,7 +112,7 @@ export function SessionSchedulePanel({
           </ol>
         ) : null}
         <div className="session-loop-actions">
-          {onLoadSchedules && count > 0 ? (
+          {onLoadSchedules && (!summary || count > 0) ? (
             <button
               type="button"
               className="ghost-action"
@@ -207,6 +204,35 @@ function ScheduleField({ label, value }: { label: string; value: string }) {
 function scheduleLoadLabel(loading: boolean, loaded: boolean): string {
   if (loading) return "Loading schedule details";
   return loaded ? "Refresh schedule details" : "Load schedule details";
+}
+
+function schedulePanelTitle(summary: SessionSchedulesSummary | undefined, pendingLoopTimers: number): string {
+  if (!summary) return "Not loaded";
+  if (pendingLoopTimers > 0) return `${pendingLoopTimers} pending`;
+  if (summary.enabled > 0) return `${summary.enabled} active`;
+  if (summary.count > 0) return `${summary.count} paused`;
+  return "Off";
+}
+
+function schedulePanelDetail(
+  summary: SessionSchedulesSummary | undefined,
+  {
+    lastError,
+    pendingLoopTimers,
+    next,
+    preview,
+  }: {
+    lastError?: string;
+    pendingLoopTimers: number;
+    next?: string;
+    preview?: string;
+  },
+): string {
+  if (!summary) return "Schedule details not loaded.";
+  if (lastError) return `${summary.error_count ?? 1} error${summary.error_count === 1 ? "" : "s"} · ${lastError}`;
+  if (pendingLoopTimers > 0) return "Loop timer waits for LOOP.md activation";
+  if (next) return `Next ${next}${preview ? ` · ${preview}` : ""}`;
+  return "No scheduled follow-ups for this chat.";
 }
 
 function scheduleMeta(schedule: SessionSchedule, loopStatus?: string): string {
