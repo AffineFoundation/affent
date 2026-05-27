@@ -45,11 +45,13 @@ type batchFailureExample struct {
 }
 
 type batchConversationRepairExample struct {
-	Scenario           string `json:"scenario"`
-	SessionID          string `json:"session_id,omitempty"`
-	MissingToolResults int    `json:"missing_tool_results,omitempty"`
-	FailureKind        string `json:"failure_kind,omitempty"`
-	Next               string `json:"next,omitempty"`
+	Scenario              string `json:"scenario"`
+	SessionID             string `json:"session_id,omitempty"`
+	MissingToolResults    int    `json:"missing_tool_results,omitempty"`
+	DuplicateToolResults  int    `json:"duplicate_tool_results,omitempty"`
+	UnexpectedToolResults int    `json:"unexpected_tool_results,omitempty"`
+	FailureKind           string `json:"failure_kind,omitempty"`
+	Next                  string `json:"next,omitempty"`
 }
 
 type stringFloatMapFlag map[string]float64
@@ -663,6 +665,8 @@ type batchSummary struct {
 	ToolRepairExamples                   []agenteval.ToolRepairExample
 	ConversationRepairs                  int
 	ConversationRepairMissingToolResults int
+	ConversationRepairDuplicateResults   int
+	ConversationRepairUnexpectedResults  int
 	ConversationRepairByKind             map[string]int
 	ConversationRepairExamples           []batchConversationRepairExample
 	ToolFailureByKind                    map[string]int
@@ -824,6 +828,8 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ConversationRepairs += len(res.ConversationRepairs)
 	for _, repair := range res.ConversationRepairs {
 		s.ConversationRepairMissingToolResults += repair.MissingToolResults
+		s.ConversationRepairDuplicateResults += repair.DuplicateToolResults
+		s.ConversationRepairUnexpectedResults += repair.UnexpectedToolResults
 		kind := strings.TrimSpace(repair.FailureKind)
 		if kind == "" {
 			kind = "unknown"
@@ -1296,6 +1302,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	}
 	if s.ConversationRepairs > 0 {
 		fmt.Fprintf(w, " conversation_repairs=%d,missing_tool_results=%d", s.ConversationRepairs, s.ConversationRepairMissingToolResults)
+		if s.ConversationRepairDuplicateResults > 0 {
+			fmt.Fprintf(w, ",duplicate_tool_results=%d", s.ConversationRepairDuplicateResults)
+		}
+		if s.ConversationRepairUnexpectedResults > 0 {
+			fmt.Fprintf(w, ",unexpected_tool_results=%d", s.ConversationRepairUnexpectedResults)
+		}
 		if len(s.ConversationRepairByKind) > 0 {
 			fmt.Fprintf(w, " conversation_repair_kinds=%s", formatStringIntCounts(s.ConversationRepairByKind))
 		}
@@ -1581,10 +1593,12 @@ func formatDebugBriefTags(tags []string) string {
 	return strings.Join(out, ",")
 }
 
-func conversationRepairSummary(repairs []sse.ConversationRepairedPayload) (count int, missingToolResults int, byKind map[string]int) {
+func conversationRepairSummary(repairs []sse.ConversationRepairedPayload) (count int, missingToolResults int, duplicateToolResults int, unexpectedToolResults int, byKind map[string]int) {
 	count = len(repairs)
 	for _, repair := range repairs {
 		missingToolResults += repair.MissingToolResults
+		duplicateToolResults += repair.DuplicateToolResults
+		unexpectedToolResults += repair.UnexpectedToolResults
 		kind := strings.TrimSpace(repair.FailureKind)
 		if kind == "" {
 			kind = "unknown"
@@ -1594,7 +1608,7 @@ func conversationRepairSummary(repairs []sse.ConversationRepairedPayload) (count
 		}
 		byKind[kind]++
 	}
-	return count, missingToolResults, byKind
+	return count, missingToolResults, duplicateToolResults, unexpectedToolResults, byKind
 }
 
 func batchRatio(numerator, denominator int) float64 {
@@ -1887,6 +1901,12 @@ func printConversationRepairExampleLines(w io.Writer, examples []batchConversati
 			fmt.Fprintf(w, " session=%s", ex.SessionID)
 		}
 		fmt.Fprintf(w, " missing_tool_results=%d", ex.MissingToolResults)
+		if ex.DuplicateToolResults > 0 {
+			fmt.Fprintf(w, " duplicate_tool_results=%d", ex.DuplicateToolResults)
+		}
+		if ex.UnexpectedToolResults > 0 {
+			fmt.Fprintf(w, " unexpected_tool_results=%d", ex.UnexpectedToolResults)
+		}
 		if ex.FailureKind != "" {
 			fmt.Fprintf(w, " kind=%s", ex.FailureKind)
 		}
@@ -2833,6 +2853,8 @@ type batchSummaryRecord struct {
 	ToolRepairExamples                   []agenteval.ToolRepairExample                    `json:"tool_repair_examples,omitempty"`
 	ConversationRepairs                  int                                              `json:"conversation_repairs,omitempty"`
 	ConversationRepairMissingToolResults int                                              `json:"conversation_repair_missing_tool_results,omitempty"`
+	ConversationRepairDuplicateResults   int                                              `json:"conversation_repair_duplicate_tool_results,omitempty"`
+	ConversationRepairUnexpectedResults  int                                              `json:"conversation_repair_unexpected_tool_results,omitempty"`
 	ConversationRepairByKind             map[string]int                                   `json:"conversation_repair_by_kind,omitempty"`
 	ConversationRepairExamples           []batchConversationRepairExample                 `json:"conversation_repair_examples,omitempty"`
 	ToolFailureByKind                    map[string]int                                   `json:"tool_failure_by_kind,omitempty"`
@@ -3233,6 +3255,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolRepairExamples:                   cloneToolRepairExamples(s.ToolRepairExamples),
 		ConversationRepairs:                  s.ConversationRepairs,
 		ConversationRepairMissingToolResults: s.ConversationRepairMissingToolResults,
+		ConversationRepairDuplicateResults:   s.ConversationRepairDuplicateResults,
+		ConversationRepairUnexpectedResults:  s.ConversationRepairUnexpectedResults,
 		ConversationRepairByKind:             cloneStringIntMap(s.ConversationRepairByKind),
 		ConversationRepairExamples:           cloneConversationRepairExamples(s.ConversationRepairExamples),
 		ToolFailureByKind:                    cloneStringIntMap(s.ToolFailureByKind),
@@ -3711,11 +3735,13 @@ func appendConversationRepairExamples(dst []batchConversationRepairExample, src 
 			break
 		}
 		dst = append(dst, batchConversationRepairExample{
-			Scenario:           scenario,
-			SessionID:          repair.SessionID,
-			MissingToolResults: repair.MissingToolResults,
-			FailureKind:        repair.FailureKind,
-			Next:               repair.Next,
+			Scenario:              scenario,
+			SessionID:             repair.SessionID,
+			MissingToolResults:    repair.MissingToolResults,
+			DuplicateToolResults:  repair.DuplicateToolResults,
+			UnexpectedToolResults: repair.UnexpectedToolResults,
+			FailureKind:           repair.FailureKind,
+			Next:                  repair.Next,
 		})
 	}
 	return dst
@@ -4033,8 +4059,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
 	if len(res.ConversationRepairs) > 0 {
-		repairs, missing, byKind := conversationRepairSummary(res.ConversationRepairs)
+		repairs, missing, duplicate, unexpected, byKind := conversationRepairSummary(res.ConversationRepairs)
 		fmt.Fprintf(w, " conversation_repairs=%d,missing_tool_results=%d", repairs, missing)
+		if duplicate > 0 {
+			fmt.Fprintf(w, ",duplicate_tool_results=%d", duplicate)
+		}
+		if unexpected > 0 {
+			fmt.Fprintf(w, ",unexpected_tool_results=%d", unexpected)
+		}
 		if len(byKind) > 0 {
 			fmt.Fprintf(w, " conversation_repair_kinds=%s", formatStringIntCounts(byKind))
 		}

@@ -809,12 +809,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		fanoutDone:       make(chan struct{}),
 	}
 	go s.fanout()
-	if repairStats := conv.RepairStats(); repairStats.MissingToolResults > 0 {
+	if repairStats := conv.RepairStats(); repairStats.HasAny() {
 		s.publishSessionEvent(sse.TypeConversationRepaired, sse.ConversationRepairedPayload{
-			SessionID:          id,
-			MissingToolResults: repairStats.MissingToolResults,
-			FailureKind:        "resume_missing_tool_result",
-			Next:               "do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat.",
+			SessionID:             id,
+			MissingToolResults:    repairStats.MissingToolResults,
+			DuplicateToolResults:  repairStats.DuplicateToolResults,
+			UnexpectedToolResults: repairStats.UnexpectedToolResults,
+			FailureKind:           repairStats.FailureKind(),
+			Next:                  repairStats.RecoveryHint(),
 		})
 	}
 	return s, nil

@@ -808,6 +808,12 @@ func renderTimelineConversationRepairs(b *strings.Builder, trace *Trace) {
 		if repair.MissingToolResults > 0 {
 			parts = append(parts, fmt.Sprintf("missing_tool_results=`%d`", repair.MissingToolResults))
 		}
+		if repair.DuplicateToolResults > 0 {
+			parts = append(parts, fmt.Sprintf("duplicate_tool_results=`%d`", repair.DuplicateToolResults))
+		}
+		if repair.UnexpectedToolResults > 0 {
+			parts = append(parts, fmt.Sprintf("unexpected_tool_results=`%d`", repair.UnexpectedToolResults))
+		}
 		if repair.FailureKind != "" {
 			parts = append(parts, fmt.Sprintf("failure_kind=`%s`", repair.FailureKind))
 		}

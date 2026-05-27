@@ -84,6 +84,12 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			if repair.MissingToolResults > 0 {
 				counts["missing_tool_results"] += repair.MissingToolResults
 			}
+			if repair.DuplicateToolResults > 0 {
+				counts["duplicate_tool_results"] += repair.DuplicateToolResults
+			}
+			if repair.UnexpectedToolResults > 0 {
+				counts["unexpected_tool_results"] += repair.UnexpectedToolResults
+			}
 			if repair.FailureKind != "" {
 				counts["kind:"+repair.FailureKind]++
 				tags = append(tags, "conversation_repair:"+repair.FailureKind)

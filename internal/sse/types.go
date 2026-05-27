@@ -38,10 +38,12 @@ type TraceMetaPayload struct {
 }
 
 type ConversationRepairedPayload struct {
-	SessionID          string `json:"session_id,omitempty"`
-	MissingToolResults int    `json:"missing_tool_results,omitempty"`
-	FailureKind        string `json:"failure_kind,omitempty"`
-	Next               string `json:"next,omitempty"`
+	SessionID             string `json:"session_id,omitempty"`
+	MissingToolResults    int    `json:"missing_tool_results,omitempty"`
+	DuplicateToolResults  int    `json:"duplicate_tool_results,omitempty"`
+	UnexpectedToolResults int    `json:"unexpected_tool_results,omitempty"`
+	FailureKind           string `json:"failure_kind,omitempty"`
+	Next                  string `json:"next,omitempty"`
 }
 
 type TurnStartPayload struct {

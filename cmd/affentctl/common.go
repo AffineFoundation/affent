@@ -1426,12 +1426,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	repairStats := conv.RepairStats()
 	var resumeRepair *sse.ConversationRepairedPayload
-	if repairStats.MissingToolResults > 0 {
+	if repairStats.HasAny() {
 		resumeRepair = &sse.ConversationRepairedPayload{
-			SessionID:          sid,
-			MissingToolResults: repairStats.MissingToolResults,
-			FailureKind:        "resume_missing_tool_result",
-			Next:               "do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat.",
+			SessionID:             sid,
+			MissingToolResults:    repairStats.MissingToolResults,
+			DuplicateToolResults:  repairStats.DuplicateToolResults,
+			UnexpectedToolResults: repairStats.UnexpectedToolResults,
+			FailureKind:           repairStats.FailureKind(),
+			Next:                  repairStats.RecoveryHint(),
 		}
 	}
 

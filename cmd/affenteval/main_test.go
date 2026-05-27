@@ -1282,25 +1282,29 @@ func TestBatchSummaryAggregatesConversationRepairs(t *testing.T) {
 	summary.add(agenteval.BatchResult{
 		BatchScenario: "resume-b",
 		ConversationRepairs: []sse.ConversationRepairedPayload{{
-			SessionID:          "resume-session-b",
-			MissingToolResults: 1,
-			FailureKind:        "resume_missing_tool_result",
-			Next:               "continue from available context",
+			SessionID:            "resume-session-b",
+			MissingToolResults:   1,
+			DuplicateToolResults: 1,
+			FailureKind:          "resume_missing_tool_result",
+			Next:                 "continue from available context",
 		}},
 	})
 	summary.add(agenteval.BatchResult{
 		BatchScenario: "resume-c",
 		ConversationRepairs: []sse.ConversationRepairedPayload{{
-			SessionID:          "resume-session-c",
-			MissingToolResults: 1,
-			FailureKind:        "unknown_repair",
+			SessionID:             "resume-session-c",
+			MissingToolResults:    1,
+			UnexpectedToolResults: 2,
+			FailureKind:           "unknown_repair",
 		}},
 	})
 
 	if summary.ConversationRepairs != 3 ||
 		summary.ConversationRepairMissingToolResults != 4 ||
+		summary.ConversationRepairDuplicateResults != 1 ||
+		summary.ConversationRepairUnexpectedResults != 2 ||
 		!reflect.DeepEqual(summary.ConversationRepairByKind, map[string]int{"resume_missing_tool_result": 2, "unknown_repair": 1}) {
-		t.Fatalf("conversation repair summary = count:%d missing:%d kinds:%#v", summary.ConversationRepairs, summary.ConversationRepairMissingToolResults, summary.ConversationRepairByKind)
+		t.Fatalf("conversation repair summary = count:%d missing:%d duplicate:%d unexpected:%d kinds:%#v", summary.ConversationRepairs, summary.ConversationRepairMissingToolResults, summary.ConversationRepairDuplicateResults, summary.ConversationRepairUnexpectedResults, summary.ConversationRepairByKind)
 	}
 	if len(summary.ConversationRepairExamples) != 2 ||
 		summary.ConversationRepairExamples[0].Scenario != "resume-a" ||
@@ -1312,9 +1316,9 @@ func TestBatchSummaryAggregatesConversationRepairs(t *testing.T) {
 	printBatchSummary(&out, summary)
 	got := out.String()
 	for _, want := range []string{
-		"conversation_repairs=3,missing_tool_results=4 conversation_repair_kinds=resume_missing_tool_result:2,unknown_repair:1",
+		"conversation_repairs=3,missing_tool_results=4,duplicate_tool_results=1,unexpected_tool_results=2 conversation_repair_kinds=resume_missing_tool_result:2,unknown_repair:1",
 		`conversation_repair_example: scenario=resume-a session=resume-session-a missing_tool_results=2 kind=resume_missing_tool_result next="do not assume the tool succeeded; rerun only if essential"`,
-		`conversation_repair_example: scenario=resume-b session=resume-session-b missing_tool_results=1 kind=resume_missing_tool_result next="continue from available context"`,
+		`conversation_repair_example: scenario=resume-b session=resume-session-b missing_tool_results=1 duplicate_tool_results=1 kind=resume_missing_tool_result next="continue from available context"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("summary output missing %q:\n%s", want, got)
@@ -1329,6 +1333,8 @@ func TestBatchSummaryAggregatesConversationRepairs(t *testing.T) {
 	}
 	if record.ConversationRepairs != 3 ||
 		record.ConversationRepairMissingToolResults != 4 ||
+		record.ConversationRepairDuplicateResults != 1 ||
+		record.ConversationRepairUnexpectedResults != 2 ||
 		!reflect.DeepEqual(record.ConversationRepairByKind, map[string]int{"resume_missing_tool_result": 2, "unknown_repair": 1}) ||
 		len(record.ConversationRepairExamples) != 2 {
 		t.Fatalf("summary jsonl conversation repairs = %#v", record)

@@ -319,6 +319,75 @@ func TestOpenConversationAt_RepairsCrashMidTurnToolCalls(t *testing.T) {
 	}
 }
 
+func TestOpenConversationAt_RepairsDuplicateAndUnexpectedToolResults(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	body := `{"role":"system","content":"sys"}
+{"role":"user","content":"go"}
+{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}},{"id":"c2","type":"function","function":{"name":"g","arguments":"{}"}}]}
+{"role":"tool","content":"first c1","tool_call_id":"c1","name":"f"}
+{"role":"tool","content":"duplicate c1 should not remain a tool","tool_call_id":"c1","name":"f"}
+{"role":"tool","content":"unexpected c3 should not remain a tool","tool_call_id":"c3","name":"h"}
+{"role":"tool","content":"first c2","tool_call_id":"c2","name":"g"}
+{"role":"tool","content":"duplicate c2 should not remain a tool","tool_call_id":"c2","name":"g"}
+{"role":"user","content":"next"}
+{"role":"tool","content":"stray tool outside any assistant window","tool_call_id":"stray","name":"z"}
+{"role":"assistant","content":"done"}
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	stats := c.RepairStats()
+	if stats.MissingToolResults != 0 || stats.DuplicateToolResults != 2 || stats.UnexpectedToolResults != 2 {
+		t.Fatalf("RepairStats = %+v, want duplicate=2 unexpected=2", stats)
+	}
+
+	snap := c.Snapshot()
+	if len(snap) != 11 {
+		t.Fatalf("snapshot len after repair = %d, want 11: %+v", len(snap), snap)
+	}
+	if snap[3].Role != "tool" || snap[3].ToolCallID != "c1" || snap[3].Content != "first c1" {
+		t.Fatalf("first valid c1 tool result not preserved: %+v", snap[3])
+	}
+	if snap[4].Role != "tool" || snap[4].ToolCallID != "c2" || snap[4].Content != "first c2" {
+		t.Fatalf("first valid c2 tool result not preserved: %+v", snap[4])
+	}
+	for i, want := range []string{
+		"Failure: kind=resume_duplicate_tool_result",
+		"Failure: kind=resume_unexpected_tool_result",
+		"Failure: kind=resume_duplicate_tool_result",
+	} {
+		msg := snap[5+i]
+		if msg.Role != "user" || !strings.Contains(msg.Content, want) || !strings.Contains(msg.Content, "RecoveredPreview:") {
+			t.Fatalf("repair note %d = %+v, want %q and preview", i, msg, want)
+		}
+	}
+	if snap[8].Role != "user" || snap[8].Content != "next" {
+		t.Fatalf("post-window user message should survive intact: %+v", snap[8])
+	}
+	if snap[9].Role != "user" ||
+		!strings.Contains(snap[9].Content, "Failure: kind=resume_unexpected_tool_result") ||
+		!strings.Contains(snap[9].Content, "stray tool outside any assistant window") {
+		t.Fatalf("stray role=tool should become a user-visible repair note: %+v", snap[9])
+	}
+	if snap[10].Role != "assistant" || snap[10].Content != "done" {
+		t.Fatalf("final assistant message should survive intact: %+v", snap[10])
+	}
+
+	c2, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats := c2.RepairStats(); stats.HasAny() {
+		t.Fatalf("repaired file should reload cleanly, got stats %+v", stats)
+	}
+}
+
 // TestOpenConversationAt_CleanLogIsNotRewritten pins the no-op path:
 // a well-formed JSONL must NOT trigger the repair rewrite. Otherwise
 // every load would touch the file even when nothing's wrong, which
