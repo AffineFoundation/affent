@@ -245,6 +245,56 @@ func TestSummarizeDurableSessionIncludesLatestShellCWD(t *testing.T) {
 	}
 }
 
+func TestSummarizeActiveSessionUsesMainSessionEventsForRecoveryHintAndCWD(t *testing.T) {
+	dir := t.TempDir()
+	conv, err := agent.OpenConversationAt(filepath.Join(dir, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Append(agent.ChatMessage{Role: "user", Content: "continue live dashboard evidence"}); err != nil {
+		t.Fatal(err)
+	}
+	toolRecovery := "BROWSER NETWORK EVIDENCE\n" +
+		"CURRENT_PAGE: https://taostats.io/subnets/120\n" +
+		"query: \"market_cap\"\n" +
+		"EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n" +
+		"MATCHES:\n" +
+		"- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120\n" +
+		"Next: call browser_network_read with the most relevant ref and json_path before citing values.\n"
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "shell-1",
+			Tool:   "shell",
+			Args:   map[string]any{"command": "go test ./...", "cwd": "cmd/affentserve"},
+		})+
+			sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+				TurnID:        "t1",
+				CallID:        "net-1",
+				ResultSummary: toolRecovery,
+				Result:        toolRecovery,
+			}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := summarizeActiveSession(&Session{
+		ID:         "active-main-events",
+		conv:       conv,
+		registry:   agent.NewRegistry(),
+		sessionDir: dir,
+		workspace:  "/tmp/workspace",
+		createdAt:  time.Now(),
+		lastUsed:   time.Now(),
+	}, Config{})
+	if summary.LatestRecoveryHint != "call browser_network_read with the most relevant ref and json_path before citing values." {
+		t.Fatalf("latest_recovery_hint = %q, want main session event tool guidance", summary.LatestRecoveryHint)
+	}
+	if summary.LastAgentCWD != "cmd/affentserve" {
+		t.Fatalf("last_agent_cwd = %q, want main session shell cwd", summary.LastAgentCWD)
+	}
+}
+
 func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
 	got := sessionContextSnapshot(96, Config{CompactTrigger: 120})
 	if got.MessageCount != 96 || got.CompactTrigger != 120 || got.CompactPercent != 80 || got.MessagesUntilCompact != 24 {

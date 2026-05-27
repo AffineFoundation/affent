@@ -45,6 +45,7 @@ type Session struct {
 	skillRegistry    *agent.SkillRegistry
 	events           chan sse.Event
 	browser          *affentbrowser.Session
+	sessionDir       string
 	workspace        string
 	loopProtocolPath string
 	loopProtocolInit bool
@@ -798,6 +799,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		skillRegistry:    skillReg,
 		events:           events,
 		browser:          browser,
+		sessionDir:       sessionDir,
 		workspace:        workspace,
 		loopProtocolPath: loopProtocolPath,
 		loopProtocolInit: p.cfg.EnableLoopProtocol && !p.cfg.EvalMode,

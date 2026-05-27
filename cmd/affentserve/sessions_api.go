@@ -507,12 +507,25 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	if compactions := contextCompactionSummaryFromRuntimeStats(runtime); compactions != nil {
 		summary.ContextCompactions = compactions
 	}
-	if s.loopProtocolPath != "" {
-		eventsPath := filepath.Join(filepath.Dir(s.loopProtocolPath), "events.jsonl")
-		if hint, err := latestRecoveryHintFromEventsFile(eventsPath); err == nil {
+	if s.sessionDir != "" {
+		eventsPath := filepath.Join(s.sessionDir, "events.jsonl")
+		if hint, err := latestRecoveryHintFromEventsFile(eventsPath); err == nil && hint != "" {
 			summary.LatestRecoveryHint = hint
 		}
 		if cwd, hasShell, err := latestShellCWDFromEventsFile(eventsPath); err == nil {
+			if cwd != "" {
+				summary.LastAgentCWD = cwd
+			} else if hasShell {
+				summary.LastAgentCWD = s.workspace
+			}
+		}
+	}
+	if s.loopProtocolPath != "" {
+		eventsPath := filepath.Join(filepath.Dir(s.loopProtocolPath), "events.jsonl")
+		if hint, err := latestRecoveryHintFromEventsFile(eventsPath); err == nil && summary.LatestRecoveryHint == "" {
+			summary.LatestRecoveryHint = hint
+		}
+		if cwd, hasShell, err := latestShellCWDFromEventsFile(eventsPath); err == nil && summary.LastAgentCWD == "" {
 			if cwd != "" {
 				summary.LastAgentCWD = cwd
 			} else if hasShell {
@@ -1333,6 +1346,10 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			setLatest(hint, p.TurnID)
 			continue
 		}
+		if hint := recoveryHintFromBrowserNetworkRefsResult(p.Result); hint != "" {
+			setLatest(hint, p.TurnID)
+			continue
+		}
 		if p.ExitCode == 0 && p.FailureKind == "" && len(p.FailureKinds) == 0 {
 			continue
 		}
@@ -1391,6 +1408,20 @@ func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {
 	default:
 		return ""
 	}
+}
+
+func recoveryHintFromBrowserNetworkRefsResult(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" || !strings.HasPrefix(text, "BROWSER NETWORK EVIDENCE") {
+		return ""
+	}
+	if !strings.Contains(text, "refs_only_not_citable") && !strings.Contains(text, "read_required=true") {
+		return ""
+	}
+	if hint := recoveryHintFromToolResult("", text); hint != "" {
+		return hint
+	}
+	return recoveryHintFromText("browser network returned refs only; call browser_network_read before citing hidden JSON/text values.")
 }
 
 func recoveryHintFromConversationMessage(msg agent.ChatMessage) string {

@@ -601,6 +601,10 @@ The search tokenizer handles common API field shapes such as `market_cap`,
 fields without site-specific scrapers. `browser_network_read` reads a selected ref with
 `SourceAccess: browser_network_url=...; ref=...; status=200;
 content_type=application/json; source_method=network_xhr_fetch`.
+Session summaries treat refs-only `browser_network` output as a recovery state
+even when the tool succeeded: `latest_recovery_hint` tells the operator/model
+to call `browser_network_read` before citing hidden values. This hint is read
+from the active session event log as well as durable session logs after restart.
 Large JSON/text responses are accepted up to the browser response-cache cap and
 then truncated into the evidence log, so a dashboard API response is not
 dropped merely because it is too large to feed back in full. Use this path for
