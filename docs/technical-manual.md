@@ -554,7 +554,9 @@ If the browser lands on a 404 or "page not found" page, the snapshot and
 model does not treat the body as verified evidence.
 Browser sessions also keep a bounded same-site XHR/fetch evidence log.
 `browser_network` searches captured JSON/text responses and returns compact
-refs; `browser_network_read` reads a selected ref with
+refs with the current rendered page context; WebUI activity summaries surface
+that page, query, and match/no-match status so operators can see when a long
+run is cycling through network-evidence searches. `browser_network_read` reads a selected ref with
 `SourceAccess: browser_network_url=...; source_method=network_xhr_fetch`.
 Large JSON/text responses are accepted up to the browser response-cache cap and
 then truncated into the evidence log, so a dashboard API response is not

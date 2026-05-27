@@ -309,6 +309,7 @@ function evidenceHeadlineScore(item: TurnActivityEvidence): number {
   if (item.label === "Searched") return 90;
   if (item.label === "History") return 85;
   if (item.label === "Read") return 80;
+  if (item.label === "Network search") return 75;
   if (item.label === "Changed") return 70;
   if (item.label === "MCP") return 60;
   if (item.label === "Listed") return 50;
@@ -784,7 +785,7 @@ function shouldShowEvidence(node: ExecutionTreeNode): boolean {
 }
 
 function isEvidenceTool(tool: string): boolean {
-  return tool === "web_fetch" || tool === "web_search" || tool === "session_search" || tool === "browser_navigate" || tool === "browser_snapshot" || tool === "browser_find" || tool === "browser_network_read";
+  return tool === "web_fetch" || tool === "web_search" || tool === "session_search" || tool === "browser_navigate" || tool === "browser_snapshot" || tool === "browser_find" || tool === "browser_network" || tool === "browser_network_read";
 }
 
 function collectEvidenceInto(node: ExecutionTreeNode, evidence: TurnActivityEvidence[]) {
@@ -805,6 +806,7 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
     };
   }
   if (node.tool === "session_search") return sessionSearchEvidence(node);
+  if (node.tool === "browser_network") return browserNetworkEvidence(node);
   const url = stringArg(node, "url");
   if (node.tool === "web_fetch" && url) return { label: "Fetched", value: url, displayValue: readableUrl(url) };
   const path = stringArg(node, "path") ?? stringArg(node, "file") ?? stringArg(node, "filename");
@@ -843,6 +845,39 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
     return { label: "History", value, displayValue };
   }
   return undefined;
+}
+
+function browserNetworkEvidence(node: ExecutionTreeNode): TurnActivityEvidence | undefined {
+  const result = node.resultText ?? node.resultSummary ?? "";
+  if (!result.includes("BROWSER NETWORK EVIDENCE")) return undefined;
+  const page = firstPrefixedLineValue(result, "CURRENT_PAGE:");
+  const query = firstPrefixedLineValue(result, "query:");
+  const value = page || query || "browser_network";
+  const displayParts = [
+    page ? readableUrl(page) : undefined,
+    query ? query.replace(/^"|"$/g, "") : undefined,
+    browserNetworkMatchLabel(result),
+  ].filter((part): part is string => !!part);
+  return {
+    label: "Network search",
+    value,
+    displayValue: displayParts.join(" · ") || value,
+  };
+}
+
+function browserNetworkMatchLabel(result: string): string | undefined {
+  for (const line of result.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === "MATCHES: none") return "no matches";
+    if (trimmed === "MATCHES:") return "matches";
+  }
+  return undefined;
+}
+
+function firstPrefixedLineValue(result: string, prefix: string): string | undefined {
+  const line = result.split(/\r?\n/).find((candidate) => candidate.trimStart().startsWith(prefix));
+  const value = line?.trim().slice(prefix.length).trim();
+  return value || undefined;
 }
 
 function parseJsonObject(text?: string): Record<string, unknown> | undefined {
