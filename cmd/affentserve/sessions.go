@@ -677,6 +677,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	if !p.cfg.EvalMode {
+		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	if p.cfg.EnableSubagent {

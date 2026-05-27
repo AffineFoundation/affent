@@ -1487,6 +1487,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	loopProtocolPath := loopstate.ProtocolPath(workspace, sid)
 	if affentctlLoopProtocolAvailable(loopProtocolPath) {
+		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	if caps.Subagent {

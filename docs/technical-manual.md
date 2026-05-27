@@ -706,6 +706,8 @@ Affent stores durable state as inspectable files:
   feed policy: the first three feeds and every sixth feed use a bounded full
   copy, while intervening feeds use a smaller digest focused on metadata,
   north-star, memory, rules, self-checks, stop/recovery, and plan/step anchors.
+  A successful context compaction marks the loop state so the next feed is
+  forced back to full even if the normal cadence would have used a digest.
   `affentctl` resolves the file under the configured workspace and, when a
   persisted `.affentctl/<session_id>.plan.json` exists, includes the current
   plan checkpoint in the feed metadata. Session list/detail responses expose
@@ -714,9 +716,10 @@ Affent stores durable state as inspectable files:
   or replace it without reopening the session; use `DELETE` to disable it.
 - `.affent/loops/<session_id>/state.json`: machine-readable loop lifecycle
   state. It records owner, status, protocol update count, protocol feed count,
-  latest feed mode, the latest active-plan checkpoint observed during a feed,
-  and the latest loop event so restart/resume code and WebUI do not have to
-  parse Markdown. Feed count is durable, so reopening a session continues the
+  latest feed mode, context compaction count, whether the next protocol feed
+  must be full, the latest active-plan checkpoint observed during a feed, and
+  the latest loop event so restart/resume code and WebUI do not have to parse
+  Markdown. Feed count is durable, so reopening a session continues the
   full/digest cadence instead of restarting from the first full feeds. Session
   list/detail responses expose this as `loop_state`, including after `LOOP.md`
   is disabled.

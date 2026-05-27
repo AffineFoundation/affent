@@ -1755,6 +1755,9 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
+	if s.loop.LoopProtocolPath != path {
+		t.Fatalf("LoopProtocolPath = %q, want %q", s.loop.LoopProtocolPath, path)
+	}
 	got := s.loop.SkillProvider("continue")
 	for _, want := range []string{
 		"AFFENT LOOP PROTOCOL:",

@@ -6,10 +6,12 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -702,6 +704,11 @@ func TestLoopMaybeCompactPublishesLoopProtocolAnchor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	loopDir := t.TempDir()
+	protocolPath := filepath.Join(loopDir, "LOOP.md")
+	if err := os.WriteFile(protocolPath, []byte("# Loop\n\n## North Star\n\nRecover after compaction."), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	msgs := []ChatMessage{{Role: "system", Content: "sys"}}
 	for i := 0; i < 20; i++ {
 		role := "user"
@@ -716,8 +723,9 @@ func TestLoopMaybeCompactPublishesLoopProtocolAnchor(t *testing.T) {
 	anchor := `LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 loop_id=longrun status=running plan=plan:1/3:active current=2:in_progress step="verify browser evidence"; reload LOOP.md when needed.`
 	events := make(chan sse.Event, 8)
 	loop := &Loop{
-		Conv:   conv,
-		Events: events,
+		Conv:             conv,
+		Events:           events,
+		LoopProtocolPath: protocolPath,
 		Compactor: &stubCompactor{
 			LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 4},
 			summary:             "earlier work\n" + anchor,
@@ -745,6 +753,13 @@ func TestLoopMaybeCompactPublishesLoopProtocolAnchor(t *testing.T) {
 	}
 	if payload.LoopProtocolAnchor != anchor {
 		t.Fatalf("LoopProtocolAnchor = %q, want %q", payload.LoopProtocolAnchor, anchor)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(loopDir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if !state.NeedsFullProtocolFeed || state.ContextCompactions != 1 || state.LastCompactionReason != "context_overflow" || !state.LastCompactionReactive {
+		t.Fatalf("loop protocol state after compaction = %+v", state)
 	}
 }
 

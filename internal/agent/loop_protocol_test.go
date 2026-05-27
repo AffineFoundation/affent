@@ -131,6 +131,48 @@ Keep long-run work anchored to evidence.
 	}
 }
 
+func TestWithLoopProtocolSkillProviderForcesFullFeedAfterCompaction(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	archive := strings.Repeat("post compaction archive detail ", 120)
+	content := `# Loop Protocol
+
+## North Star
+
+Reload the full protocol after compaction.
+
+## Archive
+
+` + archive
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	provider := WithLoopProtocolSkillProvider(path, nil)
+	for i := 0; i < loopProtocolFullFirstFeeds; i++ {
+		got := provider("continue")
+		if !strings.Contains(got, "feed_mode=full") {
+			t.Fatalf("feed %d should be full:\n%s", i+1, got)
+		}
+	}
+	if _, _, err := loopstate.RecordContextCompaction(path, "context_overflow", true); err != nil {
+		t.Fatalf("RecordContextCompaction: %v", err)
+	}
+	got := provider("continue")
+	if !strings.Contains(got, "feed_mode=full feed_number=4") ||
+		!strings.Contains(got, "context_compactions=1") ||
+		!strings.Contains(got, "last_compaction=context_overflow") ||
+		!strings.Contains(got, "post compaction archive detail post compaction archive detail") {
+		t.Fatalf("post-compaction feed should be full with recovery state:\n%s", got)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(dir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.NeedsFullProtocolFeed || state.LastProtocolFeedMode != "full" || state.ProtocolFeeds != 4 {
+		t.Fatalf("state after recovery feed = %+v", state)
+	}
+}
+
 func TestWithLoopProtocolSkillProviderPersistsFeedCadenceAcrossProviders(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")

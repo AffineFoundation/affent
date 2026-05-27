@@ -69,8 +69,7 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 	if content == "" {
 		return ""
 	}
-	feedNumber := nextLoopProtocolFeedNumber(protocolPath)
-	mode := loopProtocolFeedMode(feedNumber)
+	feedNumber, mode := nextLoopProtocolFeedDecision(protocolPath)
 	planCheckpoint := loopProtocolPlanCheckpoint(checkpointProvider)
 	if _, ev, err := loopstate.RecordProtocolFeedWithCheckpoint(protocolPath, mode, planCheckpoint); err == nil && ev.FeedNumber > 0 {
 		feedNumber = ev.FeedNumber
@@ -114,6 +113,15 @@ func loopProtocolStateLine(protocolPath string) string {
 	if state.LastProtocolFeedMode != "" {
 		parts = append(parts, "last_feed="+state.LastProtocolFeedMode)
 	}
+	if state.NeedsFullProtocolFeed {
+		parts = append(parts, "needs_full_feed=true")
+	}
+	if state.ContextCompactions > 0 {
+		parts = append(parts, fmt.Sprintf("context_compactions=%d", state.ContextCompactions))
+	}
+	if state.LastCompactionReason != "" {
+		parts = append(parts, "last_compaction="+state.LastCompactionReason)
+	}
 	if state.LastPlanLabel != "" {
 		parts = append(parts, "last_plan="+state.LastPlanLabel)
 	}
@@ -126,12 +134,16 @@ func loopProtocolStateLine(protocolPath string) string {
 	return strings.Join(parts, " ") + "\n"
 }
 
-func nextLoopProtocolFeedNumber(protocolPath string) int {
+func nextLoopProtocolFeedDecision(protocolPath string) (int, string) {
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 	if err != nil || !found {
-		return 1
+		return 1, loopProtocolFeedMode(1)
 	}
-	return state.ProtocolFeeds + 1
+	next := state.ProtocolFeeds + 1
+	if state.NeedsFullProtocolFeed {
+		return next, "full"
+	}
+	return next, loopProtocolFeedMode(next)
 }
 
 func loopProtocolPlanCheckpoint(provider LoopProtocolCheckpointProvider) loopstate.PlanCheckpoint {

@@ -19,26 +19,31 @@ const (
 )
 
 type State struct {
-	Version              int    `json:"version"`
-	LoopID               string `json:"loop_id,omitempty"`
-	OwnerSession         string `json:"owner_session,omitempty"`
-	Status               string `json:"status,omitempty"`
-	ProtocolPath         string `json:"protocol_path,omitempty"`
-	CreatedAt            string `json:"created_at,omitempty"`
-	UpdatedAt            string `json:"updated_at,omitempty"`
-	LastProtocolUpdateAt string `json:"last_protocol_update_at,omitempty"`
-	ProtocolUpdates      int    `json:"protocol_updates,omitempty"`
-	ProtocolFeeds        int    `json:"protocol_feeds,omitempty"`
-	LastProtocolFeedAt   string `json:"last_protocol_feed_at,omitempty"`
-	LastProtocolFeedMode string `json:"last_protocol_feed_mode,omitempty"`
-	LastPlanLabel        string `json:"last_plan_label,omitempty"`
-	LastPlanStepIndex    int    `json:"last_plan_step_index,omitempty"`
-	LastPlanStepStatus   string `json:"last_plan_step_status,omitempty"`
-	LastPlanStep         string `json:"last_plan_step,omitempty"`
-	EventCount           int    `json:"event_count,omitempty"`
-	LastEventType        string `json:"last_event_type,omitempty"`
-	LastEventSummary     string `json:"last_event_summary,omitempty"`
-	LastEventAt          string `json:"last_event_at,omitempty"`
+	Version                int    `json:"version"`
+	LoopID                 string `json:"loop_id,omitempty"`
+	OwnerSession           string `json:"owner_session,omitempty"`
+	Status                 string `json:"status,omitempty"`
+	ProtocolPath           string `json:"protocol_path,omitempty"`
+	CreatedAt              string `json:"created_at,omitempty"`
+	UpdatedAt              string `json:"updated_at,omitempty"`
+	LastProtocolUpdateAt   string `json:"last_protocol_update_at,omitempty"`
+	ProtocolUpdates        int    `json:"protocol_updates,omitempty"`
+	ProtocolFeeds          int    `json:"protocol_feeds,omitempty"`
+	LastProtocolFeedAt     string `json:"last_protocol_feed_at,omitempty"`
+	LastProtocolFeedMode   string `json:"last_protocol_feed_mode,omitempty"`
+	NeedsFullProtocolFeed  bool   `json:"needs_full_protocol_feed,omitempty"`
+	LastPlanLabel          string `json:"last_plan_label,omitempty"`
+	LastPlanStepIndex      int    `json:"last_plan_step_index,omitempty"`
+	LastPlanStepStatus     string `json:"last_plan_step_status,omitempty"`
+	LastPlanStep           string `json:"last_plan_step,omitempty"`
+	ContextCompactions     int    `json:"context_compactions,omitempty"`
+	LastCompactionAt       string `json:"last_context_compaction_at,omitempty"`
+	LastCompactionReason   string `json:"last_context_compaction_reason,omitempty"`
+	LastCompactionReactive bool   `json:"last_context_compaction_reactive,omitempty"`
+	EventCount             int    `json:"event_count,omitempty"`
+	LastEventType          string `json:"last_event_type,omitempty"`
+	LastEventSummary       string `json:"last_event_summary,omitempty"`
+	LastEventAt            string `json:"last_event_at,omitempty"`
 }
 
 type Event struct {
@@ -176,6 +181,88 @@ func RecordProtocolFeedWithCheckpoint(protocolPath, mode string, checkpoint Plan
 	if err != nil {
 		return State{}, Event{}, err
 	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	feedNumber := state.ProtocolFeeds + 1
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:           "loop.protocol_feed",
+		Summary:        "Fed LOOP.md " + mode,
+		Reason:         "loop protocol feed policy",
+		Path:           ProtocolRelPath(loopID),
+		Mode:           mode,
+		FeedNumber:     feedNumber,
+		Time:           formatTime(now),
+		PlanLabel:      checkpointLabel(checkpoint),
+		PlanStepIndex:  checkpointStepIndex(checkpoint),
+		PlanStepStatus: checkpointStepStatus(checkpoint),
+		PlanStep:       checkpointStep(checkpoint),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.ProtocolFeeds = feedNumber
+	state.LastProtocolFeedAt = event.Time
+	state.LastProtocolFeedMode = mode
+	if mode == "full" {
+		state.NeedsFullProtocolFeed = false
+	}
+	if checkpoint.Valid {
+		state.LastPlanLabel = strings.TrimSpace(checkpoint.Label)
+		state.LastPlanStepIndex = checkpoint.StepIndex
+		state.LastPlanStepStatus = strings.TrimSpace(checkpoint.StepStatus)
+		state.LastPlanStep = strings.TrimSpace(checkpoint.Step)
+	}
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
+func RecordContextCompaction(protocolPath, reason string, reactive bool) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "context_compaction"
+	}
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:    "context.compacted",
+		Summary: "Context compacted; force next LOOP.md full feed",
+		Reason:  reason,
+		Path:    ProtocolRelPath(loopID),
+		Time:    formatTime(now),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.ContextCompactions++
+	state.LastCompactionAt = event.Time
+	state.LastCompactionReason = reason
+	state.LastCompactionReactive = reactive
+	state.NeedsFullProtocolFeed = true
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
+func normalizeStateForProtocol(state State, found bool, loopID string, now time.Time) State {
 	if !found {
 		state = State{
 			Version:      1,
@@ -201,41 +288,7 @@ func RecordProtocolFeedWithCheckpoint(protocolPath, mode string, checkpoint Plan
 	if state.ProtocolPath == "" {
 		state.ProtocolPath = ProtocolRelPath(loopID)
 	}
-	feedNumber := state.ProtocolFeeds + 1
-	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
-		Type:           "loop.protocol_feed",
-		Summary:        "Fed LOOP.md " + mode,
-		Reason:         "loop protocol feed policy",
-		Path:           ProtocolRelPath(loopID),
-		Mode:           mode,
-		FeedNumber:     feedNumber,
-		Time:           formatTime(now),
-		PlanLabel:      checkpointLabel(checkpoint),
-		PlanStepIndex:  checkpointStepIndex(checkpoint),
-		PlanStepStatus: checkpointStepStatus(checkpoint),
-		PlanStep:       checkpointStep(checkpoint),
-	})
-	if err != nil {
-		return State{}, Event{}, err
-	}
-	state.ProtocolFeeds = feedNumber
-	state.LastProtocolFeedAt = event.Time
-	state.LastProtocolFeedMode = mode
-	if checkpoint.Valid {
-		state.LastPlanLabel = strings.TrimSpace(checkpoint.Label)
-		state.LastPlanStepIndex = checkpoint.StepIndex
-		state.LastPlanStepStatus = strings.TrimSpace(checkpoint.StepStatus)
-		state.LastPlanStep = strings.TrimSpace(checkpoint.Step)
-	}
-	state.UpdatedAt = event.Time
-	state.EventCount = event.Seq
-	state.LastEventType = event.Type
-	state.LastEventSummary = event.Summary
-	state.LastEventAt = event.Time
-	if err := WriteState(statePath, state); err != nil {
-		return State{}, Event{}, err
-	}
-	return state, event, nil
+	return state
 }
 
 func checkpointLabel(checkpoint PlanCheckpoint) string {

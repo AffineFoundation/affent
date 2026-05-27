@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -150,6 +151,10 @@ type Loop struct {
 	// compaction — the conversation grows until the upstream rejects
 	// the request, which becomes a terminal turn.end{reason=error}.
 	Compactor Compactor
+	// LoopProtocolPath points at the per-session LOOP.md when loop protocol
+	// recovery is enabled. After context compaction, the loop marks this state
+	// so the next protocol injection is a full feed instead of a digest.
+	LoopProtocolPath string
 
 	// Memory persists notes across sessions. When set,
 	// EnsureSystemPrompt composes the base prompt with the store's
@@ -2183,12 +2188,33 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 		return false
 	}
 	l.publishContextCompacted(turnID, len(before), len(after), reactive, after)
+	l.markLoopProtocolCompacted(reactive)
 	l.Log.Info().
 		Int("before", len(before)).
 		Int("after", len(after)).
 		Bool("reactive", reactive).
 		Msg("conversation compacted")
 	return true
+}
+
+func (l *Loop) markLoopProtocolCompacted(reactive bool) {
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return
+	}
+	if _, found, err := loopstate.ReadProtocol(path); err != nil {
+		l.Log.Warn().Err(err).Msg("read loop protocol before compaction state failed")
+		return
+	} else if !found {
+		return
+	}
+	reason := "threshold"
+	if reactive {
+		reason = "context_overflow"
+	}
+	if _, _, err := loopstate.RecordContextCompaction(path, reason, reactive); err != nil {
+		l.Log.Warn().Err(err).Msg("record loop protocol compaction state failed")
+	}
 }
 
 func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, msgs []ChatMessage) {

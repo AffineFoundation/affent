@@ -1253,6 +1253,9 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	if b.loop.SkillProvider == nil {
 		t.Fatal("loop protocol file should install a skill provider even in eval mode")
 	}
+	if b.loop.LoopProtocolPath != protocolPath {
+		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, protocolPath)
+	}
 	got := b.loop.SkillProvider("continue")
 	for _, want := range []string{
 		"AFFENT LOOP PROTOCOL:",

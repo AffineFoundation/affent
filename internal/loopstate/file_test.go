@@ -216,6 +216,34 @@ func TestStatePersistsAtomicallyAndSummaryPrefersState(t *testing.T) {
 	}
 }
 
+func TestRecordContextCompactionForcesNextFullProtocolFeed(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := ProtocolPath(dir, "market-run")
+	if err := WriteProtocol(protocolPath, "# Loop\n\n## North Star\n\nRecover after compaction."); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := RecordProtocolFeed(protocolPath, "full"); err != nil {
+		t.Fatalf("RecordProtocolFeed: %v", err)
+	}
+	state, event, err := RecordContextCompaction(protocolPath, "context_overflow", true)
+	if err != nil {
+		t.Fatalf("RecordContextCompaction: %v", err)
+	}
+	if event.Type != "context.compacted" || event.Reason != "context_overflow" || event.Path != ProtocolRelPath("market-run") {
+		t.Fatalf("compaction event = %+v", event)
+	}
+	if !state.NeedsFullProtocolFeed || state.ContextCompactions != 1 || state.LastCompactionReason != "context_overflow" || !state.LastCompactionReactive {
+		t.Fatalf("state after compaction = %+v", state)
+	}
+	state, event, err = RecordProtocolFeed(protocolPath, "full")
+	if err != nil {
+		t.Fatalf("RecordProtocolFeed after compaction: %v", err)
+	}
+	if state.NeedsFullProtocolFeed || state.ProtocolFeeds != 2 || state.LastProtocolFeedMode != "full" || event.FeedNumber != 2 {
+		t.Fatalf("state after full feed = %+v event=%+v", state, event)
+	}
+}
+
 func TestAppendAndReadRecentEventsRejectsUnsafeTargets(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".affent", "loops", "alpha", EventsFileName)
