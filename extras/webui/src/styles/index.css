@@ -4515,6 +4515,20 @@ mark {
   min-width: 0;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .agent-activity-actions[data-visibility="on-demand"] {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+  }
+
+  .agent-activity:hover .agent-activity-actions[data-visibility="on-demand"],
+  .agent-activity:focus-within .agent-activity-actions[data-visibility="on-demand"] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .agent-activity-copy-menu {
   position: relative;
   min-width: 0;

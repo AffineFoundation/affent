@@ -36,6 +36,7 @@ describe("Timeline", () => {
     const activityHead = screen.getByRole("button", { name: "What Affent did" });
     expect(activityHead).toHaveAttribute("aria-expanded", "false");
     expect(activityHead).not.toHaveTextContent("Done");
+    expect(screen.getByTestId("agent-activity").querySelector(".agent-activity-actions")).toHaveAttribute("data-visibility", "on-demand");
     await user.click(activityHead);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Goallist the files");
@@ -963,6 +964,7 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(toolError);
 
+    expect(screen.getByTestId("agent-activity").querySelector(".agent-activity-actions")).toHaveAttribute("data-visibility", "visible");
     await user.click(screen.getByRole("button", { name: "Copy issues" }));
 
     expect(writeText).toHaveBeenCalledTimes(1);

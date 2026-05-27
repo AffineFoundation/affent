@@ -259,6 +259,7 @@ function AgentActivity({
   const issueNodes = activityIssueNodes(activity.nodes);
   const evidenceSummaryLabel = activity.evidenceCount === 1 ? "Source" : "Sources";
   const showStatusLabel = activity.statusLabel !== "Done";
+  const activityActionsVisibility = activity.tone === "success" ? "on-demand" : "visible";
   const seenMotionIds = useRef<Set<string>>(new Set());
   const motionIds = useMemo(() => activityMotionIds(activity), [activity]);
   const newMotionIds = useMemo(
@@ -292,7 +293,7 @@ function AgentActivity({
           {showStatusLabel ? <small>{activity.statusLabel}</small> : null}
           <span className="agent-activity-chevron" aria-hidden="true" />
         </button>
-        <span className="agent-activity-actions">
+        <span className="agent-activity-actions" data-visibility={activityActionsVisibility}>
           {issueNodes.length > 0 ? (
             <CopyButton label="Copy issues" value={activityIssueCopyText(issueNodes)} className="agent-activity-copy-action" />
           ) : null}
