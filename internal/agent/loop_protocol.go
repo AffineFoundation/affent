@@ -1,21 +1,35 @@
 package agent
 
 import (
+	"fmt"
+	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
-const maxActiveLoopProtocolBytes = 12 * 1024
+const (
+	maxActiveLoopProtocolFullBytes   = 12 * 1024
+	maxActiveLoopProtocolDigestBytes = 4 * 1024
+	loopProtocolFullFirstFeeds       = 3
+	loopProtocolFullEveryFeeds       = 6
+)
 
 // WithLoopProtocolSkillProvider injects a session's LOOP.md only when that
 // file exists. Missing protocols are a no-op, so runtimes can wire this once
 // and let explicit loop activation decide whether extra context is spent.
 func WithLoopProtocolSkillProvider(protocolPath string, next SkillProvider) SkillProvider {
+	var mu sync.Mutex
+	feedCount := 0
 	return func(userText string) string {
 		parts := make([]string, 0, 2)
-		if block := activeLoopProtocolSkillBlock(protocolPath); block != "" {
+		mu.Lock()
+		feedCount++
+		feedNumber := feedCount
+		mu.Unlock()
+		if block := activeLoopProtocolSkillBlock(protocolPath, loopProtocolFeedMode(feedNumber), feedNumber); block != "" {
 			parts = append(parts, block)
 		}
 		if next != nil {
@@ -27,7 +41,17 @@ func WithLoopProtocolSkillProvider(protocolPath string, next SkillProvider) Skil
 	}
 }
 
-func activeLoopProtocolSkillBlock(protocolPath string) string {
+func loopProtocolFeedMode(feedNumber int) string {
+	if feedNumber <= loopProtocolFullFirstFeeds {
+		return "full"
+	}
+	if loopProtocolFullEveryFeeds > 0 && feedNumber%loopProtocolFullEveryFeeds == 0 {
+		return "full"
+	}
+	return "digest"
+}
+
+func activeLoopProtocolSkillBlock(protocolPath, mode string, feedNumber int) string {
 	content, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil || !found {
 		return ""
@@ -36,9 +60,123 @@ func activeLoopProtocolSkillBlock(protocolPath string) string {
 	if content == "" {
 		return ""
 	}
+	stateLine := loopProtocolStateLine(protocolPath)
+	body := textutil.Preview(content, maxActiveLoopProtocolFullBytes)
+	if mode == "digest" {
+		body = loopProtocolDigest(content, maxActiveLoopProtocolDigestBytes)
+	}
 	return "AFFENT LOOP PROTOCOL:\n" +
-		"The following is the active long-run loop file for this session. " +
-		"Use it to realign with the north-star, memory indexes, self-checks, and recovery rules before continuing. " +
+		fmt.Sprintf("feed_mode=%s feed_number=%d\n", mode, feedNumber) +
+		stateLine +
+		"The following is the active long-run loop protocol for this session. " +
+		"Use it to realign with the north-star, memory indexes, self-checks, stop conditions, and recovery rules before continuing. " +
+		"Digest mode is intentionally partial to save tokens; do not infer missing details from absence in the digest. " +
 		"Do not treat it as task authority for step status; persisted plan state remains authoritative for steps.\n\n" +
-		textutil.Preview(content, maxActiveLoopProtocolBytes)
+		body
+}
+
+func loopProtocolStateLine(protocolPath string) string {
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		return ""
+	}
+	var parts []string
+	if state.LoopID != "" {
+		parts = append(parts, "loop_id="+state.LoopID)
+	}
+	if state.Status != "" {
+		parts = append(parts, "status="+state.Status)
+	}
+	if state.ProtocolUpdates > 0 {
+		parts = append(parts, fmt.Sprintf("protocol_updates=%d", state.ProtocolUpdates))
+	}
+	if state.LastEventSummary != "" {
+		parts = append(parts, "last_event="+state.LastEventSummary)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " ") + "\n"
+}
+
+func loopProtocolDigest(content string, maxBytes int) string {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+	sections := splitMarkdownSections(content)
+	if len(sections) == 0 {
+		return textutil.Preview(content, maxBytes)
+	}
+	var selected []string
+	for _, section := range sections {
+		if loopProtocolSectionRelevant(section.heading) {
+			selected = append(selected, section.text)
+		}
+	}
+	if len(selected) == 0 {
+		return textutil.Preview(content, maxBytes)
+	}
+	return textutil.Preview(strings.Join(selected, "\n\n"), maxBytes)
+}
+
+type markdownSection struct {
+	heading string
+	text    string
+}
+
+func splitMarkdownSections(content string) []markdownSection {
+	lines := strings.Split(content, "\n")
+	var sections []markdownSection
+	var current []string
+	heading := ""
+	flush := func() {
+		text := strings.TrimSpace(strings.Join(current, "\n"))
+		if text == "" {
+			return
+		}
+		sections = append(sections, markdownSection{heading: heading, text: text})
+	}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "#") {
+			flush()
+			current = []string{line}
+			heading = strings.ToLower(strings.TrimSpace(strings.TrimLeft(trimmed, "#")))
+			continue
+		}
+		current = append(current, line)
+	}
+	flush()
+	return sections
+}
+
+func loopProtocolSectionRelevant(heading string) bool {
+	if heading == "" {
+		return true
+	}
+	keywords := []string{
+		"metadata",
+		"north star",
+		"北极星",
+		"self",
+		"自我",
+		"memory",
+		"记忆",
+		"rule",
+		"规则",
+		"plan",
+		"step",
+		"停止",
+		"stop",
+		"checkpoint",
+		"恢复",
+		"recovery",
+	}
+	for _, keyword := range keywords {
+		if strings.Contains(heading, keyword) {
+			return true
+		}
+	}
+	return false
 }

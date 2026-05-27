@@ -702,8 +702,11 @@ Affent stores durable state as inspectable files:
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
 - `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.
-  When present, affentserve injects a bounded copy before each user turn and
-  exposes its summary through session list/detail responses. Use
+  When present, affentserve injects it with a low-noise feed policy: the first
+  three feeds and every sixth feed use a bounded full copy, while intervening
+  feeds use a smaller digest focused on metadata, north-star, memory, rules,
+  self-checks, stop/recovery, and plan/step anchors. Session list/detail
+  responses expose its summary. Use
   `POST /v1/sessions/{id}/loop-protocol` with `{"protocol":"..."}` to create
   or replace it without reopening the session; use `DELETE` to disable it.
 - `.affent/loops/<session_id>/state.json`: machine-readable loop lifecycle
