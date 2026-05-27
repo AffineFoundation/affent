@@ -52,9 +52,11 @@ export function SessionSkillsPanel({
     ? "Fetching reusable workflows."
     : error
       ? panelErrorSummary("Skills API", error)
+      : allSkills.length === 0
+        ? "No reusable workflows listed."
       : runtimeCount > 0
         ? `${runtimeCount} custom · ${allSkills.length - runtimeCount} built in${activationCoverage(allSkills)}`
-        : `Built-in workflows ready${activationCoverage(allSkills)}`;
+        : `${allSkills.length} built in${activationCoverage(allSkills)}`;
 
   async function loadBody(name: string) {
     if (!onReadSkill || bodyByName[name]?.body || bodyByName[name]?.loading) return;
@@ -213,7 +215,7 @@ export function SessionSkillsPanel({
                   );
                 })
               ) : (
-                <div className="session-skills-empty">No matching skills.</div>
+                <div className="session-skills-empty">{allSkills.length > 0 ? "No matching skills." : "No skills listed."}</div>
               )}
             </div>
           </>

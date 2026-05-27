@@ -80,6 +80,46 @@ describe("SessionSkillsPanel", () => {
     expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
   });
 
+  it("keeps empty skills state factual", async () => {
+    const user = userEvent.setup();
+    render(<SessionSkillsPanel skills={[]} defaultOpen />);
+
+    const panel = screen.getByTestId("session-skills-panel");
+    expect(panel).toHaveTextContent("0 skills");
+    expect(panel).toHaveTextContent("No reusable workflows listed.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills listed.");
+    expect(panel).not.toHaveTextContent("Built-in workflows ready");
+    expect(panel).not.toHaveTextContent("No matching skills.");
+
+    await user.type(screen.getByPlaceholderText("Search title or summary"), "repair");
+
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills listed.");
+  });
+
+  it("separates empty search results from an empty skills list", async () => {
+    const user = userEvent.setup();
+    render(
+      <SessionSkillsPanel
+        defaultOpen
+        skills={[
+          {
+            name: "coding_repair_workflow",
+            description: "Repair code by reproducing failures first.",
+            source: "embed:skill",
+            runtime: false,
+            body_bytes: 96,
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 built in");
+    await user.type(screen.getByPlaceholderText("Search title or summary"), "browser");
+
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No matching skills.");
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("No skills listed.");
+  });
+
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
     const diagnostic = "API route /v1/skills returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
     render(<SessionSkillsPanel error={diagnostic} />);
