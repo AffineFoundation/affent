@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -407,6 +409,79 @@ func TestSession_UsageSnapshot_AccumulatesFromEvents(t *testing.T) {
 			t.Fatalf("UsageSnapshot never reached expected totals: got %+v, want input=300 output=60 turns=2", u)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "seeded-stats")
+	dir := pool.sessionDirPath("seeded-stats")
+	body := sessionEventLine(t, sse.TypeUsage, sse.UsagePayload{TurnID: "t1", InputTokens: 100, OutputTokens: 20}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndMaxTurns,
+			ToolStats: &sse.ToolRuntimeStats{
+				ToolRequests:           2,
+				ToolErrors:             1,
+				LoopGuardInterventions: 1,
+				MemorySearchCalls:      1,
+				ToolFailureByKind:      map[string]int{"no_matches": 1},
+			},
+		}) +
+		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t1", Code: "llm_timeout", FailureKind: "llm_timeout", Recoverable: true}) +
+		sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
+			TurnID:          "t1",
+			BeforeMessages:  80,
+			AfterMessages:   40,
+			RemovedMessages: 40,
+			Reactive:        true,
+			Reason:          "context_overflow",
+			SummaryPresent:  false,
+		})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := pool.GetOrCreate("seeded-stats")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	usage := s.UsageSnapshot()
+	if usage.InputTokens != 100 || usage.OutputTokens != 20 || usage.Turns != 1 {
+		t.Fatalf("seeded usage = %+v, want durable event totals", usage)
+	}
+	tools := s.ToolStatsSnapshot()
+	if tools.ToolRequests != 2 ||
+		tools.ToolErrors != 1 ||
+		tools.LoopGuardInterventions != 1 ||
+		tools.MemorySearchCalls != 1 ||
+		tools.ToolFailureByKind["no_matches"] != 1 {
+		t.Fatalf("seeded tool stats = %+v, want durable event totals", tools)
+	}
+	runtime := s.RuntimeStatsSnapshot()
+	if runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 1 ||
+		runtime.RuntimeErrors != 1 ||
+		runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
+		runtime.ContextCompactions != 1 ||
+		runtime.ContextCompactionsReactive != 1 ||
+		runtime.ContextCompactionRemovedMessages != 40 ||
+		runtime.ContextCompactionLatestReason != "context_overflow" ||
+		runtime.ContextCompactionLatestState != "missing" {
+		t.Fatalf("seeded runtime stats = %+v, want durable event totals", runtime)
+	}
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode stats: %v body=%s", err, w.Body.String())
+	}
+	if resp.Aggregate.InputTokens != 100 ||
+		resp.Aggregate.Tools.ToolFailureByKind["no_matches"] != 1 ||
+		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 {
+		t.Fatalf("seeded aggregate stats = %+v, want durable event totals", resp.Aggregate)
 	}
 }
 

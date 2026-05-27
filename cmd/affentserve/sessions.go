@@ -816,6 +816,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		closedCh:         make(chan struct{}),
 		fanoutDone:       make(chan struct{}),
 	}
+	if err := s.seedStatsFromEventsFile(filepath.Join(sessionDir, "events.jsonl")); err != nil {
+		p.logger.Warn().Err(err).Str("session_id", id).Msg("seed session stats from event log")
+	}
 	go s.fanout()
 	if repairStats := conv.RepairStats(); repairStats.HasAny() {
 		s.publishSessionEvent(sse.TypeConversationRepaired, sse.ConversationRepairedPayload{
@@ -1856,6 +1859,37 @@ func (s *Session) observeForStats(ev sse.Event) {
 	}
 }
 
+func (s *Session) seedStatsFromEventsFile(path string) error {
+	usage, err := usageSummaryFromEventsFile(path)
+	if err != nil {
+		return err
+	}
+	if usage != nil {
+		s.addUsageSnapshot(*usage)
+	}
+	tools, err := toolStatsSummaryFromEventsFile(path)
+	if err != nil {
+		return err
+	}
+	if tools != nil {
+		s.addToolStatsSnapshot(*tools)
+	}
+	runtime, err := runtimeStatsSummaryFromEventsFile(path)
+	if err != nil {
+		return err
+	}
+	if runtime != nil {
+		s.addRuntimeStatsSnapshot(*runtime)
+	}
+	return nil
+}
+
+func (s *Session) addUsageSnapshot(stats UsageSnapshot) {
+	s.inputTokens.Add(positiveInt64(stats.InputTokens))
+	s.outputTokens.Add(positiveInt64(stats.OutputTokens))
+	s.turns.Add(positiveInt64(stats.Turns))
+}
+
 func (s *Session) addTurnEndReason(reason string) {
 	if reason == "" {
 		reason = "unknown"
@@ -1906,6 +1940,36 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	s.runtimeStatsMu.Unlock()
 }
 
+func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
+	s.runtimeErrors.Add(positiveInt64(stats.RuntimeErrors))
+	s.contextCompactions.Add(positiveInt64(stats.ContextCompactions))
+	s.contextCompactionReact.Add(positiveInt64(stats.ContextCompactionsReactive))
+	s.contextCompactionRmMsg.Add(positiveInt64(stats.ContextCompactionRemovedMessages))
+	s.contextCompactionBytes.Add(positiveInt64(stats.ContextCompactionSummaryBytes))
+	s.contextCompactionMiss.Add(positiveInt64(stats.ContextCompactionSummaryMissing))
+	s.contextCompactionEmpty.Add(positiveInt64(stats.ContextCompactionSummaryEmpty))
+
+	s.runtimeStatsMu.Lock()
+	defer s.runtimeStatsMu.Unlock()
+	if len(stats.TurnEndByReason) > 0 {
+		if s.turnEndByReason == nil {
+			s.turnEndByReason = make(map[string]int64, len(stats.TurnEndByReason))
+		}
+		addStringInt64Counts(s.turnEndByReason, stats.TurnEndByReason)
+	}
+	if len(stats.RuntimeErrorByKind) > 0 {
+		if s.runtimeErrorByKind == nil {
+			s.runtimeErrorByKind = make(map[string]int64, len(stats.RuntimeErrorByKind))
+		}
+		addStringInt64Counts(s.runtimeErrorByKind, stats.RuntimeErrorByKind)
+	}
+	if stats.ContextCompactions > 0 || stats.ContextCompactionLatestReason != "" || stats.ContextCompactionLatestState != "" {
+		s.contextCompactionLastReason = stats.ContextCompactionLatestReason
+		s.contextCompactionLastReactive = stats.ContextCompactionLatestReactive
+		s.contextCompactionLastSummaryState = stats.ContextCompactionLatestState
+	}
+}
+
 func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.toolRequests.Add(int64(stats.ToolRequests))
 	s.toolNameCanonicalized.Add(int64(stats.ToolNameCanonicalized))
@@ -1944,6 +2008,53 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	}
 }
 
+func (s *Session) addToolStatsSnapshot(stats ToolStatsSnapshot) {
+	s.toolRequests.Add(positiveInt64(stats.ToolRequests))
+	s.toolNameCanonicalized.Add(positiveInt64(stats.ToolNameCanonicalized))
+	s.toolArgsRepaired.Add(positiveInt64(stats.ToolArgsRepaired))
+	s.toolRepairCalls.Add(positiveInt64(stats.ToolRepairCalls))
+	s.toolRepairSucceeded.Add(positiveInt64(stats.ToolRepairSucceeded))
+	s.toolRepairFailed.Add(positiveInt64(stats.ToolRepairFailed))
+	s.toolRepairNotes.Add(positiveInt64(stats.ToolRepairNotes))
+	s.toolErrors.Add(positiveInt64(stats.ToolErrors))
+	s.toolDurationMS.Add(positiveInt64(stats.ToolDurationMS))
+	s.loopGuardInterventions.Add(positiveInt64(stats.LoopGuardInterventions))
+	s.forcedNoTools.Add(positiveInt64(stats.ForcedNoTools))
+	s.sourceAccessResults.Add(positiveInt64(stats.SourceAccessResults))
+	s.sourceAccessVerified.Add(positiveInt64(stats.SourceAccessVerified))
+	s.sourceAccessDiscovery.Add(positiveInt64(stats.SourceAccessDiscovery))
+	s.sourceAccessNetwork.Add(positiveInt64(stats.SourceAccessNetwork))
+	s.sourceAccessDynamic.Add(positiveInt64(stats.SourceAccessDynamic))
+	s.memoryUpdates.Add(positiveInt64(stats.MemoryUpdates))
+	s.memoryUpdateAdd.Add(positiveInt64(stats.MemoryUpdateAdd))
+	s.memoryUpdateReplace.Add(positiveInt64(stats.MemoryUpdateReplace))
+	s.memoryUpdateRemove.Add(positiveInt64(stats.MemoryUpdateRemove))
+	s.memorySearchCalls.Add(positiveInt64(stats.MemorySearchCalls))
+	s.memorySearchMisses.Add(positiveInt64(stats.MemorySearchMisses))
+	s.sessionSearchCalls.Add(positiveInt64(stats.SessionSearchCalls))
+	s.sessionSearchResults.Add(positiveInt64(stats.SessionSearchResults))
+	s.sessionSearchContext.Add(positiveInt64(stats.SessionSearchContext))
+	s.sessionSearchTerms.Add(positiveInt64(stats.SessionSearchTerms))
+	s.sessionSearchRecent.Add(positiveInt64(stats.SessionSearchRecent))
+	s.toolContextTruncated.Add(positiveInt64(stats.ToolContextTruncated))
+	s.toolContextOmitted.Add(positiveInt64(stats.ToolContextOmitted))
+
+	s.toolRepairMu.Lock()
+	defer s.toolRepairMu.Unlock()
+	if len(stats.ToolRepairByKind) > 0 {
+		if s.toolRepairByKind == nil {
+			s.toolRepairByKind = make(map[string]int64, len(stats.ToolRepairByKind))
+		}
+		addStringInt64Counts(s.toolRepairByKind, stats.ToolRepairByKind)
+	}
+	if len(stats.ToolFailureByKind) > 0 {
+		if s.toolFailureByKind == nil {
+			s.toolFailureByKind = make(map[string]int64, len(stats.ToolFailureByKind))
+		}
+		addStringInt64Counts(s.toolFailureByKind, stats.ToolFailureByKind)
+	}
+}
+
 func (s *Session) addToolRepairKinds(counts map[string]int) {
 	s.toolRepairMu.Lock()
 	defer s.toolRepairMu.Unlock()
@@ -1966,6 +2077,14 @@ func (s *Session) addToolFailureKinds(counts map[string]int) {
 	for kind, count := range counts {
 		if count > 0 {
 			s.toolFailureByKind[kind] += int64(count)
+		}
+	}
+}
+
+func addStringInt64Counts(dst map[string]int64, src map[string]int64) {
+	for key, count := range src {
+		if count > 0 {
+			dst[key] += count
 		}
 	}
 }

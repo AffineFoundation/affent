@@ -680,7 +680,9 @@ Durable-only session summaries also restore token/turn usage from recent
 `error`, and `context.compacted` events. WebUI can still show rough cost,
 tool volume, loop guard interventions, recall misses, source-access quality,
 turn-end reasons, runtime errors, and compaction health after a server restart
-without replaying the full event log.
+without replaying the full event log. When a durable session is reopened as an
+active session, those same recent event-log counters seed the in-memory
+`/v1/stats` counters before new turns are counted.
 
 ## Configuration
 
