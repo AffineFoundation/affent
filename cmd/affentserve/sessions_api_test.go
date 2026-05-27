@@ -19,6 +19,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -805,6 +806,38 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromMemorySearchTopicAnchors
 		if !strings.Contains(summary.LatestRecoveryHint, want) {
 			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
 		}
+	}
+}
+
+func TestSummarizeDurableSessionIncludesCompactMemorySummary(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "memory-summary")
+	dir := pool.sessionDirPath("memory-summary")
+	store := memory.NewFileMemoryStore("")
+	store.MemoryDir = dir
+	store.UserPath = pool.userMemoryPath(dir)
+	if resp, err := store.Add(memory.TargetMemory, "markets", "prefer source-led market reports"); err != nil || !resp.OK {
+		t.Fatalf("add markets memory resp=%+v err=%v", resp, err)
+	}
+	if resp, err := store.Add(memory.TargetMemory, memory.CoreTopic, "always preserve browser network evidence"); err != nil || !resp.OK {
+		t.Fatalf("add core memory resp=%+v err=%v", resp, err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "memory-summary")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasMemory || summary.Memory == nil {
+		t.Fatalf("memory summary missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.Memory.BucketCount != 2 ||
+		summary.Memory.EntryCount != 2 ||
+		summary.Memory.CharsUsed == 0 ||
+		summary.Memory.LatestTarget != "memory" ||
+		summary.Memory.LatestTopic == "" ||
+		summary.Memory.LatestAt == "" {
+		t.Fatalf("memory summary = %+v, want compact bucket totals and latest stamped topic", summary.Memory)
 	}
 }
 
@@ -2295,6 +2328,9 @@ func TestSummarizeDurableSessionSharedUserMemoryDoesNotRefreshSession(t *testing
 	}
 	if !found || !summary.HasMemory {
 		t.Fatalf("shared user memory should mark the session as memory-capable: found=%v summary=%+v", found, summary)
+	}
+	if summary.Memory == nil || !summary.Memory.SharedUserMemory || summary.Memory.BucketCount != 1 || summary.Memory.EntryCount != 1 {
+		t.Fatalf("shared user memory summary = %+v, want one shared user bucket", summary.Memory)
 	}
 	if summary.LastUsedAt != formatTime(oldTime) {
 		t.Fatalf("LastUsedAt = %q, want session-local time %q", summary.LastUsedAt, formatTime(oldTime))

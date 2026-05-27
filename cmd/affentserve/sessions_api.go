@@ -86,6 +86,7 @@ type sessionSummary struct {
 	HasArtifacts       bool                             `json:"has_artifacts"`
 	Artifacts          *sessionArtifactsSummary         `json:"artifacts,omitempty"`
 	HasMemory          bool                             `json:"has_memory"`
+	Memory             *sessionMemorySummary            `json:"memory,omitempty"`
 	HasRuntimeSkills   bool                             `json:"has_runtime_skills"`
 	RuntimeSkillNames  []string                         `json:"runtime_skill_names,omitempty"`
 	Context            *sessionContextSummary           `json:"context,omitempty"`
@@ -121,6 +122,16 @@ type sessionArtifactsSummary struct {
 	TotalBytes    int64  `json:"total_bytes"`
 	LatestPath    string `json:"latest_path,omitempty"`
 	LatestModTime string `json:"latest_mod_time,omitempty"`
+}
+
+type sessionMemorySummary struct {
+	SharedUserMemory bool   `json:"shared_user_memory,omitempty"`
+	BucketCount      int    `json:"bucket_count"`
+	EntryCount       int    `json:"entry_count"`
+	CharsUsed        int    `json:"chars_used"`
+	LatestTarget     string `json:"latest_target,omitempty"`
+	LatestTopic      string `json:"latest_topic,omitempty"`
+	LatestAt         string `json:"latest_at,omitempty"`
 }
 
 type sessionCapabilities struct {
@@ -782,6 +793,8 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
 	userMemoryPath := pool.userMemoryPath(dir)
 	summary.HasMemory = durableMemoryExists(dir, userMemoryPath)
+	summary.Memory = summarizeSessionMemory(pool.cfg.SharedUserMemory, dir, userMemoryPath)
+	summary.HasMemory = summary.HasMemory || summary.Memory != nil
 	if summary.HasArtifacts {
 		_, _ = mergeStat(artifactRoot)
 		if parsed, err := time.Parse(time.RFC3339, summary.Artifacts.LatestModTime); err == nil && parsed.After(newest) {
@@ -853,6 +866,39 @@ func summarizeSessionArtifactsDir(root string) *sessionArtifactsSummary {
 	return &summary
 }
 
+func summarizeSessionMemory(sharedUserMemory bool, sessionDir, userMemoryPath string) *sessionMemorySummary {
+	store := memory.NewFileMemoryStore("")
+	store.MemoryDir = sessionDir
+	store.UserPath = userMemoryPath
+
+	summary := sessionMemorySummary{SharedUserMemory: sharedUserMemory}
+	addTopics := func(target memory.MemoryTarget, resp memory.MemoryResponse) {
+		for _, topic := range resp.Topics {
+			if topic.Entries <= 0 && topic.Chars <= 0 {
+				continue
+			}
+			summary.BucketCount++
+			summary.EntryCount += topic.Entries
+			summary.CharsUsed += topic.Chars
+			if topic.NewestAt != "" && (summary.LatestAt == "" || topic.NewestAt > summary.LatestAt) {
+				summary.LatestAt = topic.NewestAt
+				summary.LatestTarget = string(target)
+				summary.LatestTopic = topic.Topic
+			}
+		}
+	}
+	if resp, err := store.ListTopics(memory.TargetUser); err == nil && resp.OK {
+		addTopics(memory.TargetUser, resp)
+	}
+	if resp, err := store.ListTopics(memory.TargetMemory); err == nil && resp.OK {
+		addTopics(memory.TargetMemory, resp)
+	}
+	if summary.BucketCount == 0 {
+		return nil
+	}
+	return &summary
+}
+
 func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if a.ID == "" {
 		a.ID = b.ID
@@ -873,6 +919,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	}
 	if b.LatestMemoryUpdate != nil {
 		a.LatestMemoryUpdate = b.LatestMemoryUpdate
+	}
+	if b.Memory != nil {
+		a.Memory = b.Memory
 	}
 	if a.SummaryTitle == "" && b.SummaryTitle != "" {
 		a.SummaryTitle = b.SummaryTitle

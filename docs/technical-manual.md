@@ -671,6 +671,9 @@ Session summaries include a compact artifact summary with count, total bytes,
 latest path, and latest mod time. Artifact list responses include path, size,
 mod time, and a bounded compact preview from the start of each artifact so
 operators can choose the right large tool result without opening every file.
+They also include a compact memory summary with shared-user-memory status,
+bucket count, entry count, chars used, and the latest stamped target/topic so
+long-run recovery can decide whether to inspect memory before guessing.
 
 ## Configuration
 
