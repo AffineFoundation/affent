@@ -998,6 +998,8 @@ describe("App", () => {
     expect(body.prompt).toContain("Scheduled check-in for session: long running subnet analysis");
     expect(body.prompt).toContain("ask the user one concise question");
     expect(body.prompt).toContain("loop_protocol action=read");
+    expect(body.prompt).toContain("Current Situation");
+    expect(body.prompt).toContain("1200 characters");
     expect(body.display_text).toBe("Check in 1h: long running subnet analysis");
     expect(body.enabled).toBe(true);
     expect(body.next_run_at).toMatch(/Z$/);
@@ -1009,6 +1011,7 @@ describe("App", () => {
     expect(sent.content).toContain("Ask the user one concise question now");
     expect(sent.content).toContain("ask one focused follow-up in a later turn");
     expect(sent.content).toContain("do not claim the timer is operationally calibrated");
+    expect(sent.content).toContain("Current Situation at or below 1200 characters");
     expect(sent.display_text).toBe("Calibrate check-in timer: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate check-in timer: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("do not claim the timer is operationally calibrated");
@@ -1122,6 +1125,7 @@ describe("App", () => {
     expect(body.prompt).toContain("autonomous long-run tick");
     expect(body.prompt).toContain("loop_protocol action=read");
     expect(body.prompt).toContain("advance at most one compact high-value step");
+    expect(body.prompt).toContain("Current Situation at or below 1200 characters");
     expect(body.display_text).toBe("Loop every 30m: long running runtime improvement");
     expect(body.repeat_interval_seconds).toBe(1800);
     expect(body.enabled).toBe(true);
@@ -1132,6 +1136,7 @@ describe("App", () => {
     expect(sent.content).toContain("Read LOOP.md with loop_protocol action=read");
     expect(sent.content).toContain("Ask the user one concise question now");
     expect(sent.content).toContain("ask one focused follow-up in a later turn");
+    expect(sent.content).toContain("Current Situation at or below 1200 characters");
     expect(sent.display_text).toBe("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Ask the user one concise question now");

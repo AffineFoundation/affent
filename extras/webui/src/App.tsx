@@ -1560,6 +1560,7 @@ function webScheduledCheckInPrompt(sessionTitle: string): string {
     "Before continuing work, ask the user one concise question to confirm current intent, constraints, and whether LOOP.md should change.",
     "If LOOP.md exists, read it with loop_protocol action=read before proposing protocol changes.",
     "Update LOOP.md only after the user answers or when the active loop protocol already gives explicit authority.",
+    "If updating Current Situation, keep it at or below 1200 characters and summarize instead of copying task history.",
     "Keep concrete task steps in plan state rather than duplicating a todo list into LOOP.md.",
   ].join("\n");
 }
@@ -1593,7 +1594,7 @@ function webScheduleCalibrationPrompt(kind: "loop" | "checkin" | "daily", sessio
     "If the answer leaves another critical field missing, ask one focused follow-up in a later turn and keep LOOP.md as draft.",
     "Do not complete activation in this same turn unless the user is already answering an earlier calibration question.",
     "Do not run the scheduled work yet, and do not claim the timer is operationally calibrated until the user answers.",
-    "After the user answers, update LOOP.md only for durable timer policy, current situation, recovery anchors, or stop conditions; keep concrete task steps in plan state.",
+    "After the user answers, update LOOP.md only for durable timer policy, Current Situation at or below 1200 characters, recovery anchors, or stop conditions; keep concrete task steps in plan state.",
   ].join("\n");
 }
 
@@ -1605,7 +1606,7 @@ function webScheduledLoopTickPrompt(sessionTitle: string): string {
     "Read LOOP.md with loop_protocol action=read before continuing.",
     "If LOOP.md is missing, draft, disabled, underspecified, or the user's intent is unclear, ask one concise calibration question and do not continue autonomous work.",
     "If LOOP.md is running, inspect only the minimum needed plan state, memory, recent trace, or artifacts, then advance at most one compact high-value step.",
-    "Prefer evidence-backed progress over broad exploration; update plan state for task progress and update LOOP.md only for durable rules, current situation, recovery anchors, or stop conditions.",
+    "Prefer evidence-backed progress over broad exploration; update plan state for task progress and update LOOP.md only for durable rules, Current Situation at or below 1200 characters, recovery anchors, or stop conditions.",
     "End with a concise status, next trigger expectation, and any blocker that should pause future loop ticks.",
   ].join("\n");
 }
