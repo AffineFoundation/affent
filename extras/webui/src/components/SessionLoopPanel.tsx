@@ -48,6 +48,7 @@ export function SessionLoopPanel({
         <div className="session-plan-body session-loop-body">
           <LoopStatusCallout status="off" />
           <LoopActivationChecklist status="off" />
+          <LoopNextStep status="off" goal={goal} />
           <form
             className="session-loop-setup"
             onSubmit={(event) => {
@@ -106,6 +107,13 @@ export function SessionLoopPanel({
       <div className="session-plan-body session-loop-body">
         <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
         <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
+        <LoopNextStep
+          status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"}
+          goal={goal}
+          calibrationQuestion={calibrationQuestion}
+          calibrationAnswers={calibrationAnswers}
+          onUseAsDraft={onUseAsDraft}
+        />
         <div className="session-loop-grid">
           {goal ? <LoopField label="Goal" value={goal} /> : null}
           {path ? <LoopField label="File" value={path} mono /> : null}
@@ -151,6 +159,93 @@ export function SessionLoopPanel({
       </div>
     </details>
   );
+}
+
+function LoopNextStep({
+  status,
+  goal,
+  calibrationQuestion,
+  calibrationAnswers = 0,
+  onUseAsDraft,
+}: {
+  status: "off" | "draft" | "running" | "disabled" | "unknown";
+  goal?: string;
+  calibrationQuestion?: string;
+  calibrationAnswers?: number;
+  onUseAsDraft?: () => void;
+}) {
+  const copy = loopNextStepCopy(status, goal, calibrationQuestion, calibrationAnswers);
+  if (!copy) return null;
+  const actionLabel = loopNextStepActionLabel(status, calibrationAnswers);
+  return (
+    <div className={`session-loop-next ${status}`} data-testid="session-loop-next">
+      <div className="session-loop-next-main">
+        <span>{copy.kicker}</span>
+        <strong>{copy.title}</strong>
+        <p>{copy.detail}</p>
+      </div>
+      {onUseAsDraft && actionLabel ? (
+        <button type="button" className="secondary-action session-loop-next-action" onClick={onUseAsDraft}>
+          {actionLabel}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function loopNextStepCopy(
+  status: "off" | "draft" | "running" | "disabled" | "unknown",
+  goal?: string,
+  calibrationQuestion?: string,
+  calibrationAnswers = 0,
+) {
+  if (status === "off") {
+    return {
+      kicker: "Next",
+      title: "Create draft, then answer Affent",
+      detail: goal ? `Draft setup will use: ${goal}` : "Start setup creates LOOP.md as a draft and opens chat for calibration.",
+    };
+  }
+  if (status === "draft" && calibrationAnswers <= 0) {
+    return {
+      kicker: "Waiting",
+      title: "Answer the setup question",
+      detail: calibrationQuestion || "Affent still needs one focused answer before LOOP.md can be activated.",
+    };
+  }
+  if (status === "draft") {
+    return {
+      kicker: "Ready",
+      title: "Review and activate in chat",
+      detail: "Use the recorded answer to fill durable intent, stop conditions, recovery anchors, and only then mark LOOP.md running.",
+    };
+  }
+  if (status === "running") {
+    return {
+      kicker: "Active",
+      title: "Loop can receive timers",
+      detail: "Use chat for durable protocol changes; concrete task progress should stay in plan state and trace.",
+    };
+  }
+  if (status === "disabled") {
+    return {
+      kicker: "Stopped",
+      title: "Loop guidance is disabled",
+      detail: "Start setup again when this session needs a maintained LOOP.md.",
+    };
+  }
+  return {
+    kicker: "Check",
+    title: "Review LOOP.md",
+    detail: "Load the protocol before continuing long-running work.",
+  };
+}
+
+function loopNextStepActionLabel(status: "off" | "draft" | "running" | "disabled" | "unknown", calibrationAnswers = 0): string | undefined {
+  if (status === "draft" && calibrationAnswers <= 0) return "Open answer draft";
+  if (status === "draft") return "Review in chat";
+  if (status === "running") return "Update via chat";
+  return undefined;
 }
 
 function LoopActivationChecklist({ status, calibrationAnswers = 0 }: { status: "off" | "draft" | "running" | "disabled" | "unknown"; calibrationAnswers?: number }) {

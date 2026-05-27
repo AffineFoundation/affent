@@ -1046,6 +1046,66 @@ body {
   overflow-wrap: anywhere;
 }
 
+.session-loop-next {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(239, 246, 255, 0.66);
+  padding: 9px 10px;
+}
+
+.session-loop-next.draft,
+.session-loop-next.off {
+  border-color: rgba(194, 120, 3, 0.26);
+  background: rgba(255, 251, 235, 0.72);
+}
+
+.session-loop-next.running {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(236, 253, 245, 0.66);
+}
+
+.session-loop-next.disabled {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(254, 242, 242, 0.62);
+}
+
+.session-loop-next-main {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-loop-next-main span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-loop-next-main strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.session-loop-next-main p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.session-loop-next-action {
+  white-space: nowrap;
+}
+
 .session-loop-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -1196,6 +1256,14 @@ body {
 @media (max-width: 640px) {
   .session-loop-setup {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .session-loop-next {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .session-loop-next-action {
+    justify-self: start;
   }
 }
 
@@ -7154,6 +7222,7 @@ html[data-theme="dark"] .runtime-status-bar,
 html[data-theme="dark"] .session-plan-panel,
 html[data-theme="dark"] .session-plan-step,
 html[data-theme="dark"] .session-loop-callout,
+html[data-theme="dark"] .session-loop-next,
 html[data-theme="dark"] .session-schedule-callout,
 html[data-theme="dark"] .session-loop-field,
 html[data-theme="dark"] .session-loop-events li,
@@ -7200,6 +7269,8 @@ html[data-theme="dark"] .session-plan-step[data-status="in_progress"] {
 
 html[data-theme="dark"] .session-loop-callout.draft,
 html[data-theme="dark"] .session-loop-callout.off,
+html[data-theme="dark"] .session-loop-next.draft,
+html[data-theme="dark"] .session-loop-next.off,
 html[data-theme="dark"] .session-schedule-callout.setup,
 html[data-theme="dark"] .session-schedule-callout.pending {
   border-color: rgba(245, 158, 11, 0.28);
@@ -7207,12 +7278,14 @@ html[data-theme="dark"] .session-schedule-callout.pending {
 }
 
 html[data-theme="dark"] .session-loop-callout.running,
+html[data-theme="dark"] .session-loop-next.running,
 html[data-theme="dark"] .session-schedule-callout.running {
   border-color: rgba(16, 185, 129, 0.28);
   background: rgba(6, 95, 70, 0.16);
 }
 
-html[data-theme="dark"] .session-loop-callout.disabled {
+html[data-theme="dark"] .session-loop-callout.disabled,
+html[data-theme="dark"] .session-loop-next.disabled {
   border-color: rgba(248, 113, 113, 0.24);
   background: rgba(127, 29, 29, 0.15);
 }

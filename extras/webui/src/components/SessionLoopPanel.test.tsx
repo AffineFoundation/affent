@@ -15,6 +15,31 @@ describe("SessionLoopPanel", () => {
     expect(checklist).toHaveTextContent("intent, stop conditions, memory policy");
     expect(screen.getByRole("button", { name: "Start setup" })).toBeInTheDocument();
     expect(panel).toHaveTextContent("opens a calibration chat");
+    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Create draft, then answer Affent");
+    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("long running subnet analysis");
+  });
+
+  it("puts the pending calibration question next to the chat action", () => {
+    render(
+      <SessionLoopPanel
+        summary={{ path: ".affent/loops/loop-draft/LOOP.md", status: "draft", bytes: 128 }}
+        state={{
+          version: 1,
+          loop_id: "loop-draft",
+          status: "draft",
+          initial_goal_preview: "long running market check",
+          calibration_questions: 1,
+          last_calibration_question_preview: "What should pause this loop?",
+          calibration_answers: 0,
+        }}
+        onUseAsDraft={() => undefined}
+      />,
+    );
+
+    const next = screen.getByTestId("session-loop-next");
+    expect(next).toHaveTextContent("Answer the setup question");
+    expect(next).toHaveTextContent("What should pause this loop?");
+    expect(screen.getByRole("button", { name: "Open answer draft" })).toBeInTheDocument();
   });
 
   it("labels draft protocol maintenance as answering setup in chat", () => {
@@ -45,6 +70,8 @@ describe("SessionLoopPanel", () => {
     expect(panel).toHaveTextContent("Calibration");
     expect(panel).toHaveTextContent("1 calibration answer");
     expect(panel).toHaveTextContent("Stop when source evidence is weak.");
+    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Review and activate in chat");
+    expect(screen.getByRole("button", { name: "Review in chat" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue setup in chat" })).toBeInTheDocument();
   });
 
