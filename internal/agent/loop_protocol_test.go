@@ -1,12 +1,14 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestWithLoopProtocolSkillProviderInjectsWhenFileExists(t *testing.T) {
@@ -161,5 +163,45 @@ func TestWithLoopProtocolSkillProviderPersistsFeedCadenceAcrossProviders(t *test
 	}
 	if !strings.Contains(got, "protocol_feeds=5") || !strings.Contains(got, "last_feed=digest") {
 		t.Fatalf("state line should include persisted feed stats:\n%s", got)
+	}
+}
+
+func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nTrace protocol feeds."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 1)
+	loop := &Loop{
+		Conv:          conv,
+		Events:        events,
+		SkillProvider: WithLoopProtocolSkillProvider(path, nil),
+	}
+	if err := loop.appendUserMessage("turn_loop_feed", "continue"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeLoopProtocolFeed {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeLoopProtocolFeed)
+		}
+		var payload sse.LoopProtocolFeedPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload.TurnID != "turn_loop_feed" ||
+			payload.Mode != "full" ||
+			payload.FeedNumber != 1 ||
+			payload.ProtocolFeeds != 1 ||
+			payload.ProtocolPath != ".affent/loops/"+filepath.Base(dir)+"/LOOP.md" {
+			t.Fatalf("payload = %+v", payload)
+		}
+	default:
+		t.Fatal("expected loop.protocol_feed event")
 	}
 }

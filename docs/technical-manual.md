@@ -905,8 +905,8 @@ index for debugging: it links the raw trace, starts with a `Debug Brief` for
 failed or diagnostic-heavy runs, shows the redacted
 `affentctl` command argv, trace event type counts, effective runtime surface,
 tool calls with args/result previews, child transcript refs,
-truncation/artifact pointers, loop decisions, context compactions, and runtime
-errors. Browser network searches are listed separately from `SourceAccess`
+truncation/artifact pointers, loop protocol feeds, loop decisions, context
+compactions, and runtime errors. Browser network searches are listed separately from `SourceAccess`
 evidence: `browser_network` entries are refs/checks only, include compact
 matched-response previews when available, and the timeline requires
 `browser_network_read` source evidence before treating hidden JSON/text values
@@ -1035,9 +1035,9 @@ in [event-trace-contract.md](event-trace-contract.md).
 ## Observability
 
 Affent emits structured events for turn starts, user messages, assistant
-deltas, reasoning deltas, tool requests, tool results, usage, errors, and turn
-endings. Tool request/result events include repair, truncation, artifact, and
-delegation metadata where relevant.
+deltas, reasoning deltas, tool requests, tool results, loop protocol feeds,
+usage, errors, and turn endings. Tool request/result events include repair,
+truncation, artifact, and delegation metadata where relevant.
 
 Trace JSONL files start with a `trace.meta` record carrying the schema version.
 See [event-trace-contract.md](event-trace-contract.md) for the event envelope

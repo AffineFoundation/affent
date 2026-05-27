@@ -3,9 +3,11 @@ package agent
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -65,7 +67,7 @@ func activeLoopProtocolSkillBlock(protocolPath string) string {
 		body = loopProtocolDigest(content, maxActiveLoopProtocolDigestBytes)
 	}
 	return "AFFENT LOOP PROTOCOL:\n" +
-		fmt.Sprintf("feed_mode=%s feed_number=%d\n", mode, feedNumber) +
+		fmt.Sprintf("feed_mode=%s feed_number=%d protocol_path=%s\n", mode, feedNumber, loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))) +
 		stateLine +
 		"The following is the active long-run loop protocol for this session. " +
 		"Use it to realign with the north-star, memory indexes, self-checks, stop conditions, and recovery rules before continuing. " +
@@ -192,4 +194,54 @@ func loopProtocolSectionRelevant(heading string) bool {
 		}
 	}
 	return false
+}
+
+func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFeedPayload, bool) {
+	block = strings.TrimSpace(block)
+	if !strings.HasPrefix(block, "AFFENT LOOP PROTOCOL:") {
+		return sse.LoopProtocolFeedPayload{}, false
+	}
+	payload := sse.LoopProtocolFeedPayload{TurnID: turnID}
+	lines := strings.Split(block, "\n")
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			break
+		}
+		for _, field := range strings.Fields(line) {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok || value == "" {
+				continue
+			}
+			switch key {
+			case "feed_mode":
+				payload.Mode = value
+			case "feed_number":
+				payload.FeedNumber = parsePositiveInt(value)
+			case "protocol_path":
+				payload.ProtocolPath = value
+			case "loop_id":
+				payload.LoopID = value
+			case "status":
+				payload.Status = value
+			case "protocol_feeds":
+				payload.ProtocolFeeds = parsePositiveInt(value)
+			}
+		}
+	}
+	if payload.Mode == "" || payload.FeedNumber <= 0 {
+		return sse.LoopProtocolFeedPayload{}, false
+	}
+	if payload.ProtocolFeeds == 0 {
+		payload.ProtocolFeeds = payload.FeedNumber
+	}
+	return payload, true
+}
+
+func parsePositiveInt(raw string) int {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
 }

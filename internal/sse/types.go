@@ -9,21 +9,22 @@ package sse
 // ".end" for stream-completion events — readers misread it as a boundary
 // and fail to wait for the next message.* / tool.* / etc. events.
 const (
-	TypeTraceMeta      = "trace.meta"
-	TypeTurnStart      = "turn.start"
-	TypeUserMessage    = "user.message"
-	TypeRuntimeSurface = "runtime.surface"
-	TypeMessageDelta   = "message.delta"
-	TypeMessageDone    = "message.done"
-	TypeThinkingDelta  = "thinking.delta"
-	TypeThinkingDone   = "thinking.done"
-	TypeToolRequest    = "tool.request"
-	TypeToolResult     = "tool.result"
-	TypeUsage          = "usage"
-	TypeTurnEnd        = "turn.end"
-	TypeLoopDecision   = "loop.decision"
-	TypeContextCompact = "context.compacted"
-	TypeError          = "error"
+	TypeTraceMeta        = "trace.meta"
+	TypeTurnStart        = "turn.start"
+	TypeUserMessage      = "user.message"
+	TypeRuntimeSurface   = "runtime.surface"
+	TypeMessageDelta     = "message.delta"
+	TypeMessageDone      = "message.done"
+	TypeThinkingDelta    = "thinking.delta"
+	TypeThinkingDone     = "thinking.done"
+	TypeToolRequest      = "tool.request"
+	TypeToolResult       = "tool.result"
+	TypeUsage            = "usage"
+	TypeTurnEnd          = "turn.end"
+	TypeLoopProtocolFeed = "loop.protocol_feed"
+	TypeLoopDecision     = "loop.decision"
+	TypeContextCompact   = "context.compacted"
+	TypeError            = "error"
 )
 
 const TraceSchemaVersion = 1
@@ -250,6 +251,20 @@ type TurnEndPayload struct {
 	TurnID    string            `json:"turn_id"`
 	Reason    string            `json:"reason"`
 	ToolStats *ToolRuntimeStats `json:"tool_stats,omitempty"`
+}
+
+// LoopProtocolFeedPayload records when a session's LOOP.md was injected into
+// model context. The durable loop state owns the cadence; this event mirrors
+// that decision into the normal session trace/SSE stream so WebUI and evals can
+// inspect long-run context pressure without reading sidecar loop files.
+type LoopProtocolFeedPayload struct {
+	TurnID        string `json:"turn_id,omitempty"`
+	LoopID        string `json:"loop_id,omitempty"`
+	Status        string `json:"status,omitempty"`
+	Mode          string `json:"mode"`
+	FeedNumber    int    `json:"feed_number"`
+	ProtocolFeeds int    `json:"protocol_feeds,omitempty"`
+	ProtocolPath  string `json:"protocol_path,omitempty"`
 }
 
 // LoopDecisionPayload records one short protocol decision made outside the

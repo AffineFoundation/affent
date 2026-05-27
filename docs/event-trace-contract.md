@@ -249,6 +249,21 @@ diagnostics.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
   model-context insertion.
 
+### `loop.protocol_feed`
+
+- `turn_id`: optional runtime turn id for the user turn that received the
+  protocol block.
+- `loop_id`: optional loop identity, usually the owning session id.
+- `status`: optional loop lifecycle status from `.affent/loops/<id>/state.json`.
+- `mode`: feed mode, currently `full` or `digest`.
+- `feed_number`: durable per-loop feed sequence number.
+- `protocol_feeds`: optional durable feed count after this feed.
+- `protocol_path`: optional workspace/session-relative protocol path.
+
+This event mirrors the sidecar `.affent/loops/<id>/events.jsonl` feed record
+into the normal session trace/SSE stream, so WebUI, replay, and eval tooling can
+inspect loop context pressure without separately reading loop files.
+
 ### `error`
 
 - `turn_id`: runtime turn id.

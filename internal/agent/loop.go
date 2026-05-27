@@ -749,7 +749,7 @@ func (l *Loop) SendUserWithOptions(ctx context.Context, text string, opts TurnOp
 	l.cancelFn = cancel
 	l.mu.Unlock()
 
-	if err := l.appendUserMessage(text); err != nil {
+	if err := l.appendUserMessage(turnID, text); err != nil {
 		l.takeTurn()
 		cancel()
 		return "", err
@@ -765,7 +765,7 @@ func (l *Loop) SendUserWithOptions(ctx context.Context, text string, opts TurnOp
 	return turnID, nil
 }
 
-func (l *Loop) appendActiveSkills(userText string) error {
+func (l *Loop) appendActiveSkills(turnID, userText string) error {
 	if l.SkillProvider == nil {
 		return nil
 	}
@@ -773,11 +773,17 @@ func (l *Loop) appendActiveSkills(userText string) error {
 	if block == "" {
 		return nil
 	}
-	return l.Conv.Append(ChatMessage{Role: "system", Content: block})
+	if err := l.Conv.Append(ChatMessage{Role: "system", Content: block}); err != nil {
+		return err
+	}
+	if payload, ok := loopProtocolFeedPayloadFromBlock(turnID, block); ok {
+		l.publish(sse.TypeLoopProtocolFeed, payload)
+	}
+	return nil
 }
 
-func (l *Loop) appendUserMessage(text string) error {
-	if err := l.appendActiveSkills(text); err != nil {
+func (l *Loop) appendUserMessage(turnID, text string) error {
+	if err := l.appendActiveSkills(turnID, text); err != nil {
 		return err
 	}
 	return l.Conv.Append(ChatMessage{Role: "user", Content: text})

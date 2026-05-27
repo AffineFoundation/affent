@@ -271,6 +271,8 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       return { label: "Token usage", meta: usageMeta(event, request), badges: [] };
     case EventType.TurnEnd:
       return { label: turnEndLabel(event), meta: turnEndMeta(event, request), badges: [] };
+    case EventType.LoopProtocolFeed:
+      return { label: "Loop protocol fed", meta: loopProtocolFeedMeta(event, request), badges: loopProtocolFeedBadges(event) };
     case EventType.LoopDecision:
       return { label: "Loop decision", meta: loopDecisionMeta(event, request), badges: loopDecisionBadges(event) };
     case EventType.ContextCompacted:
@@ -336,6 +338,25 @@ function loopDecisionMeta(event: NormalizedEvent, turn: string | undefined): str
     readString(event.data, "kind"),
     readString(event.data, "decision"),
     streamSummary(readString(event.data, "reason") ?? readString(event.data, "required_action") ?? ""),
+  ]);
+}
+
+function loopProtocolFeedMeta(event: NormalizedEvent, turn: string | undefined): string[] {
+  const feedNumber = readNumber(event.data, "feed_number");
+  const feeds = readNumber(event.data, "protocol_feeds");
+  return compact([
+    turn,
+    readString(event.data, "loop_id"),
+    feedNumber ? `feed ${feedNumber}` : undefined,
+    feeds && feeds !== feedNumber ? `${feeds} total` : undefined,
+    readString(event.data, "protocol_path"),
+  ]);
+}
+
+function loopProtocolFeedBadges(event: NormalizedEvent): string[] {
+  return compact([
+    readString(event.data, "mode"),
+    readString(event.data, "status"),
   ]);
 }
 

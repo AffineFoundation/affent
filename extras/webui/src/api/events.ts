@@ -22,6 +22,7 @@ export const EventType = {
   ToolResult: "tool.result",
   Usage: "usage",
   TurnEnd: "turn.end",
+  LoopProtocolFeed: "loop.protocol_feed",
   LoopDecision: "loop.decision",
   ContextCompacted: "context.compacted",
   Error: "error",
@@ -210,6 +211,16 @@ export interface TurnEndPayload {
   tool_stats?: ToolRuntimeStats;
 }
 
+export interface LoopProtocolFeedPayload {
+  turn_id?: string;
+  loop_id?: string;
+  status?: string;
+  mode: string;
+  feed_number: number;
+  protocol_feeds?: number;
+  protocol_path?: string;
+}
+
 export interface LoopDecisionPayload {
   turn_id?: string;
   loop_id?: string;
@@ -258,6 +269,7 @@ export interface PayloadByType {
   [EventType.ToolResult]: ToolResultPayload;
   [EventType.Usage]: UsagePayload;
   [EventType.TurnEnd]: TurnEndPayload;
+  [EventType.LoopProtocolFeed]: LoopProtocolFeedPayload;
   [EventType.LoopDecision]: LoopDecisionPayload;
   [EventType.ContextCompacted]: ContextCompactedPayload;
   [EventType.Error]: ErrorPayload;

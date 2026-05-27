@@ -37,6 +37,19 @@ describe("eventTrace view model", () => {
         },
       },
       {
+        id: 3,
+        type: "loop.protocol_feed",
+        data: {
+          turn_id: "t1",
+          loop_id: "longrun",
+          status: "running",
+          mode: "digest",
+          feed_number: 4,
+          protocol_feeds: 4,
+          protocol_path: ".affent/loops/longrun/LOOP.md",
+        },
+      },
+      {
         id: 4,
         type: "runtime.surface",
         data: {
@@ -95,11 +108,11 @@ describe("eventTrace view model", () => {
         },
       },
     ]));
-    const [request, result, surface, decision, compacted, finished] = model.items;
+    const [request, result, feed, surface, decision, compacted, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(6);
+    expect(model.items).toHaveLength(7);
     expect(request).toMatchObject({
       kind: "event",
       display: {
@@ -122,6 +135,14 @@ describe("eventTrace view model", () => {
         label: "Action failed",
         meta: ["read_file", "42 ms", "file missing", "tool context 2 KiB, 1 KiB omitted", "artifact c1.txt (1 KiB, 3 KiB omitted)"],
         badges: ["context trimmed", "truncated", "full output"],
+      },
+    });
+    expect(feed).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop protocol fed",
+        meta: ["Request 1", "longrun", "feed 4", ".affent/loops/longrun/LOOP.md"],
+        badges: ["digest", "running"],
       },
     });
     expect(decision).toMatchObject({
