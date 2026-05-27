@@ -9,6 +9,7 @@ export function SessionSchedulePanel({
   error,
   deletingId,
   updatingId,
+  loopStatus,
   onLoadSchedules,
   onUpdateSchedule,
   onDeleteSchedule,
@@ -24,6 +25,7 @@ export function SessionSchedulePanel({
   error?: string;
   deletingId?: string;
   updatingId?: string;
+  loopStatus?: string;
   onLoadSchedules?: () => Promise<void> | void;
   onUpdateSchedule?: (scheduleId: string, enabled: boolean) => Promise<void> | void;
   onDeleteSchedule?: (scheduleId: string) => Promise<void> | void;
@@ -36,9 +38,11 @@ export function SessionSchedulePanel({
   const next = summary?.next_run_at ? formatScheduleTime(summary.next_run_at) : undefined;
   const preview = compact(summary?.next_prompt_preview);
   const lastError = compact(summary?.last_error);
-  const title = enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "None";
+  const pendingLoopTimers = pendingLoopTimerCount(schedules, summary, loopStatus);
+  const title = pendingLoopTimers > 0 ? `${pendingLoopTimers} pending` : enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "None";
   const detail = lastError
     ? `${summary?.error_count ?? 1} error${summary?.error_count === 1 ? "" : "s"} · ${lastError}`
+    : pendingLoopTimers > 0 ? "Loop timer waits for LOOP.md activation"
     : next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "No scheduled prompts";
 
   return (
@@ -66,9 +70,9 @@ export function SessionSchedulePanel({
             {schedules.map((schedule) => (
               <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
                 <div className="session-schedule-item-main">
-                  <strong>{scheduleKindLabel(schedule.kind)} · {schedule.enabled ? "Active" : "Paused"} · {formatScheduleTime(schedule.next_run_at)}</strong>
+                  <strong>{scheduleKindLabel(schedule.kind)} · {scheduleStatusLabel(schedule, loopStatus)} · {formatScheduleTime(schedule.next_run_at)}</strong>
                   <p>{schedule.prompt}</p>
-                  <small>{scheduleMeta(schedule)}</small>
+                  <small>{scheduleMeta(schedule, loopStatus)}</small>
                 </div>
                 <div className="session-schedule-actions">
                   {onUpdateSchedule ? (
@@ -152,12 +156,36 @@ function ScheduleField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function scheduleMeta(schedule: SessionSchedule): string {
+function scheduleMeta(schedule: SessionSchedule, loopStatus?: string): string {
   const parts: string[] = [schedule.repeat_interval_seconds ? `Repeats every ${formatDuration(schedule.repeat_interval_seconds)}` : "One-time"];
+  if (loopTimerPendingCalibration(schedule, loopStatus)) parts.push("waiting for LOOP.md activation");
   if (schedule.run_count && schedule.run_count > 0) parts.push(`${schedule.run_count} run${schedule.run_count === 1 ? "" : "s"}`);
   if (schedule.last_run_at) parts.push(`last ${formatScheduleTime(schedule.last_run_at)}`);
   if (schedule.last_error) parts.push(`error ${schedule.last_error}`);
   return parts.join(" · ");
+}
+
+function scheduleStatusLabel(schedule: SessionSchedule, loopStatus?: string): string {
+  if (loopTimerPendingCalibration(schedule, loopStatus)) return "Pending calibration";
+  return schedule.enabled ? "Active" : "Paused";
+}
+
+function pendingLoopTimerCount(schedules?: SessionSchedule[], summary?: SessionSchedulesSummary, loopStatus?: string): number {
+  if (loopProtocolRunning(loopStatus)) return 0;
+  const visible = schedules?.filter((schedule) => loopTimerPendingCalibration(schedule, loopStatus)).length ?? 0;
+  if (visible > 0) return visible;
+  if ((summary?.enabled ?? 0) > 0 && summary?.next_schedule_kind === "loop_tick") return summary?.enabled ?? 1;
+  const preview = compact(summary?.next_prompt_preview)?.toLowerCase() ?? "";
+  if ((summary?.enabled ?? 0) > 0 && preview.includes("scheduled loop tick")) return summary?.enabled ?? 1;
+  return 0;
+}
+
+function loopTimerPendingCalibration(schedule: SessionSchedule, loopStatus?: string): boolean {
+  return schedule.kind === "loop_tick" && schedule.enabled && !loopProtocolRunning(loopStatus);
+}
+
+function loopProtocolRunning(loopStatus?: string): boolean {
+  return compact(loopStatus)?.toLowerCase() === "running";
 }
 
 function scheduleKindLabel(kind: SessionSchedule["kind"]): string {

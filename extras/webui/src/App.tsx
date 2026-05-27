@@ -1309,6 +1309,7 @@ export function App() {
                     error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
                     deletingId={deletingScheduleId}
                     updatingId={updatingScheduleId}
+                    loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
                     onLoadSchedules={handleLoadSchedules}
                     onUpdateSchedule={handleUpdateSchedule}
                     onDeleteSchedule={handleDeleteSchedule}
