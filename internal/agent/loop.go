@@ -1290,6 +1290,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		endReason = sse.TurnEndMaxTurns
 	}
 	l.publishEvidenceQualityDecisions(turnID, toolStats)
+	l.recordLoopTurnCheckpoint(turnID, endReason, totalIn, totalOut, toolStats)
 	l.publish(sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: totalIn, OutputTokens: totalOut})
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason, ToolStats: toolRuntimeStatsPtr(toolStats)})
 }
@@ -1301,6 +1302,7 @@ func (l *Loop) publishEvidenceQualityDecisions(turnID string, stats sse.ToolRunt
 	visible := true
 	l.publish(sse.TypeLoopDecision, sse.LoopDecisionPayload{
 		TurnID:         turnID,
+		LoopID:         l.loopProtocolID(),
 		DecisionID:     "evidence-quality-dynamic-partial",
 		Kind:           "evidence_quality",
 		Trigger:        "source_access_dynamic_partial",
@@ -1310,6 +1312,41 @@ func (l *Loop) publishEvidenceQualityDecisions(turnID string, stats sse.ToolRunt
 		RequiredAction: "Read browser network responses or an official API/source before citing dynamic page metrics.",
 		VisibleInUI:    &visible,
 	})
+}
+
+func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, outputTokens int, stats sse.ToolRuntimeStats) {
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return
+	}
+	if _, found, err := loopstate.ReadProtocol(path); err != nil {
+		l.Log.Warn().Err(err).Msg("read loop protocol before turn checkpoint failed")
+		return
+	} else if !found {
+		return
+	}
+	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
+		TurnID:             turnID,
+		EndReason:          endReason,
+		InputTokens:        inputTokens,
+		OutputTokens:       outputTokens,
+		ToolRequests:       stats.ToolRequests,
+		ToolErrors:         stats.ToolErrors,
+		LoopGuards:         stats.LoopGuardInterventions,
+		ForcedNoTools:      stats.ForcedNoTools,
+		MemoryUpdates:      stats.MemoryUpdates,
+		SessionSearchCalls: stats.SessionSearchCalls,
+	}); err != nil {
+		l.Log.Warn().Err(err).Msg("record loop turn checkpoint failed")
+	}
+}
+
+func (l *Loop) loopProtocolID() string {
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return ""
+	}
+	return filepath.Base(filepath.Dir(path))
 }
 
 func (l *Loop) activeFirstToolPolicy(userText string, opts TurnOptions) *FirstToolPolicy {

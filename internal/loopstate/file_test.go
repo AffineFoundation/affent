@@ -244,6 +244,60 @@ func TestRecordContextCompactionForcesNextFullProtocolFeed(t *testing.T) {
 	}
 }
 
+func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := ProtocolPath(dir, "market-run")
+	if err := WriteProtocol(protocolPath, "# Loop\n\n## North Star\n\nKeep checkpoints visible."); err != nil {
+		t.Fatal(err)
+	}
+	state, event, err := RecordTurnCheckpoint(protocolPath, TurnCheckpoint{
+		TurnID:             "turn_123",
+		EndReason:          "completed",
+		InputTokens:        120,
+		OutputTokens:       45,
+		ToolRequests:       3,
+		ToolErrors:         1,
+		LoopGuards:         1,
+		ForcedNoTools:      0,
+		MemoryUpdates:      2,
+		SessionSearchCalls: 1,
+	})
+	if err != nil {
+		t.Fatalf("RecordTurnCheckpoint: %v", err)
+	}
+	if event.Type != "loop.turn_checkpoint" ||
+		event.TurnID != "turn_123" ||
+		event.TurnEndReason != "completed" ||
+		event.InputTokens != 120 ||
+		event.ToolRequests != 3 ||
+		event.LoopGuards != 1 ||
+		event.MemoryUpdates != 2 ||
+		event.SessionSearch != 1 ||
+		event.Path != ProtocolRelPath("market-run") {
+		t.Fatalf("event = %+v", event)
+	}
+	if state.TurnCheckpoints != 1 ||
+		state.LastTurnID != "turn_123" ||
+		state.LastTurnEndReason != "completed" ||
+		state.LastTurnInputTokens != 120 ||
+		state.LastTurnOutputTokens != 45 ||
+		state.LastTurnToolRequests != 3 ||
+		state.LastTurnToolErrors != 1 ||
+		state.LastTurnLoopGuards != 1 ||
+		state.LastTurnMemoryUpdates != 2 ||
+		state.LastTurnSessionSearch != 1 ||
+		state.LastEventType != "loop.turn_checkpoint" {
+		t.Fatalf("state = %+v", state)
+	}
+	events, found, err := ReadRecentEvents(EventsPath(dir, "market-run"), 1)
+	if err != nil || !found || len(events) != 1 {
+		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(events), err)
+	}
+	if events[0].TurnID != "turn_123" || events[0].TurnEndReason != "completed" {
+		t.Fatalf("recent event = %+v", events[0])
+	}
+}
+
 func TestAppendAndReadRecentEventsRejectsUnsafeTargets(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".affent", "loops", "alpha", EventsFileName)

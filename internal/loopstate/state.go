@@ -36,6 +36,18 @@ type State struct {
 	LastPlanStepIndex      int    `json:"last_plan_step_index,omitempty"`
 	LastPlanStepStatus     string `json:"last_plan_step_status,omitempty"`
 	LastPlanStep           string `json:"last_plan_step,omitempty"`
+	TurnCheckpoints        int    `json:"turn_checkpoints,omitempty"`
+	LastTurnID             string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason      string `json:"last_turn_end_reason,omitempty"`
+	LastTurnAt             string `json:"last_turn_at,omitempty"`
+	LastTurnInputTokens    int    `json:"last_turn_input_tokens,omitempty"`
+	LastTurnOutputTokens   int    `json:"last_turn_output_tokens,omitempty"`
+	LastTurnToolRequests   int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnToolErrors     int    `json:"last_turn_tool_errors,omitempty"`
+	LastTurnLoopGuards     int    `json:"last_turn_loop_guards,omitempty"`
+	LastTurnForcedNoTools  int    `json:"last_turn_forced_no_tools,omitempty"`
+	LastTurnMemoryUpdates  int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnSessionSearch  int    `json:"last_turn_session_search_calls,omitempty"`
 	ContextCompactions     int    `json:"context_compactions,omitempty"`
 	LastCompactionAt       string `json:"last_context_compaction_at,omitempty"`
 	LastCompactionReason   string `json:"last_context_compaction_reason,omitempty"`
@@ -60,6 +72,29 @@ type Event struct {
 	PlanStepIndex   int      `json:"plan_step_index,omitempty"`
 	PlanStepStatus  string   `json:"plan_step_status,omitempty"`
 	PlanStep        string   `json:"plan_step,omitempty"`
+	TurnID          string   `json:"turn_id,omitempty"`
+	TurnEndReason   string   `json:"turn_end_reason,omitempty"`
+	InputTokens     int      `json:"input_tokens,omitempty"`
+	OutputTokens    int      `json:"output_tokens,omitempty"`
+	ToolRequests    int      `json:"tool_requests,omitempty"`
+	ToolErrors      int      `json:"tool_errors,omitempty"`
+	LoopGuards      int      `json:"loop_guards,omitempty"`
+	ForcedNoTools   int      `json:"forced_no_tools,omitempty"`
+	MemoryUpdates   int      `json:"memory_updates,omitempty"`
+	SessionSearch   int      `json:"session_search_calls,omitempty"`
+}
+
+type TurnCheckpoint struct {
+	TurnID             string
+	EndReason          string
+	InputTokens        int
+	OutputTokens       int
+	ToolRequests       int
+	ToolErrors         int
+	LoopGuards         int
+	ForcedNoTools      int
+	MemoryUpdates      int
+	SessionSearchCalls int
 }
 
 func ReadState(path string) (State, bool, error) {
@@ -262,6 +297,64 @@ func RecordContextCompaction(protocolPath, reason string, reactive bool) (State,
 	return state, event, nil
 }
 
+func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	checkpoint.TurnID = strings.TrimSpace(checkpoint.TurnID)
+	checkpoint.EndReason = strings.TrimSpace(checkpoint.EndReason)
+	if checkpoint.EndReason == "" {
+		checkpoint.EndReason = "unknown"
+	}
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:          "loop.turn_checkpoint",
+		Summary:       "Turn ended: " + checkpoint.EndReason,
+		Reason:        "turn_end",
+		Path:          ProtocolRelPath(loopID),
+		Time:          formatTime(now),
+		TurnID:        checkpoint.TurnID,
+		TurnEndReason: checkpoint.EndReason,
+		InputTokens:   clampNonNegative(checkpoint.InputTokens),
+		OutputTokens:  clampNonNegative(checkpoint.OutputTokens),
+		ToolRequests:  clampNonNegative(checkpoint.ToolRequests),
+		ToolErrors:    clampNonNegative(checkpoint.ToolErrors),
+		LoopGuards:    clampNonNegative(checkpoint.LoopGuards),
+		ForcedNoTools: clampNonNegative(checkpoint.ForcedNoTools),
+		MemoryUpdates: clampNonNegative(checkpoint.MemoryUpdates),
+		SessionSearch: clampNonNegative(checkpoint.SessionSearchCalls),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.TurnCheckpoints++
+	state.LastTurnID = checkpoint.TurnID
+	state.LastTurnEndReason = checkpoint.EndReason
+	state.LastTurnAt = event.Time
+	state.LastTurnInputTokens = event.InputTokens
+	state.LastTurnOutputTokens = event.OutputTokens
+	state.LastTurnToolRequests = event.ToolRequests
+	state.LastTurnToolErrors = event.ToolErrors
+	state.LastTurnLoopGuards = event.LoopGuards
+	state.LastTurnForcedNoTools = event.ForcedNoTools
+	state.LastTurnMemoryUpdates = event.MemoryUpdates
+	state.LastTurnSessionSearch = event.SessionSearch
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
 func normalizeStateForProtocol(state State, found bool, loopID string, now time.Time) State {
 	if !found {
 		state = State{
@@ -317,6 +410,13 @@ func checkpointStep(checkpoint PlanCheckpoint) string {
 		return ""
 	}
 	return strings.TrimSpace(checkpoint.Step)
+}
+
+func clampNonNegative(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 func AppendEvent(path string, ev Event) (Event, error) {

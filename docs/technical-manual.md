@@ -718,14 +718,19 @@ Affent stores durable state as inspectable files:
   state. It records owner, status, protocol update count, protocol feed count,
   latest feed mode, context compaction count, whether the next protocol feed
   must be full, the latest active-plan checkpoint observed during a feed, and
-  the latest loop event so restart/resume code and WebUI do not have to parse
-  Markdown. Feed count is durable, so reopening a session continues the
+  the latest turn checkpoint: turn id, end reason, token usage, tool/error
+  counts, loop-guard interventions, forced no-tool recoveries, memory updates,
+  and session-search calls. It also records the latest loop event so
+  restart/resume code and WebUI do not have to parse Markdown or replay the
+  full trace for common status panels. Feed count is durable, so reopening a
+  session continues the
   full/digest cadence instead of restarting from the first full feeds. Session
   list/detail responses expose this as `loop_state`, including after `LOOP.md`
   is disabled.
 - `.affent/loops/<session_id>/events.jsonl`: bounded loop audit events such as
-  protocol feeds, updates, and deletes. `GET /v1/sessions/{id}/loop-protocol`
-  returns recent events alongside the protocol for operator visibility.
+  protocol feeds, turn checkpoints, compaction marks, updates, and deletes.
+  `GET /v1/sessions/{id}/loop-protocol` returns recent events alongside the
+  protocol for operator visibility.
 - Runtime skill files: installed skill bodies and manifests.
 - Memory files: topic-bucketed workspace or user memory.
 - Transcript files: child-task and subagent conversations.

@@ -295,3 +295,45 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 		t.Fatal("expected loop.protocol_feed event")
 	}
 }
+
+func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nAudit every long-run turn."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{LoopProtocolPath: path}
+	loop.recordLoopTurnCheckpoint("turn_runtime", sse.TurnEndMaxTurns, 300, 80, sse.ToolRuntimeStats{
+		ToolRequests:           4,
+		ToolErrors:             2,
+		LoopGuardInterventions: 1,
+		ForcedNoTools:          1,
+		MemoryUpdates:          1,
+		SessionSearchCalls:     2,
+	})
+
+	state, found, err := loopstate.ReadState(filepath.Join(dir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.TurnCheckpoints != 1 ||
+		state.LastTurnID != "turn_runtime" ||
+		state.LastTurnEndReason != sse.TurnEndMaxTurns ||
+		state.LastTurnInputTokens != 300 ||
+		state.LastTurnOutputTokens != 80 ||
+		state.LastTurnToolRequests != 4 ||
+		state.LastTurnToolErrors != 2 ||
+		state.LastTurnLoopGuards != 1 ||
+		state.LastTurnForcedNoTools != 1 ||
+		state.LastTurnMemoryUpdates != 1 ||
+		state.LastTurnSessionSearch != 2 {
+		t.Fatalf("state = %+v", state)
+	}
+	events, found, err := loopstate.ReadRecentEvents(filepath.Join(dir, loopstate.EventsFileName), 1)
+	if err != nil || !found || len(events) != 1 {
+		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(events), err)
+	}
+	if events[0].Type != "loop.turn_checkpoint" || events[0].TurnID != "turn_runtime" || events[0].TurnEndReason != sse.TurnEndMaxTurns {
+		t.Fatalf("event = %+v", events[0])
+	}
+}
