@@ -53,6 +53,17 @@ func writeDurableSessionLog(t *testing.T, root, sessionID string, msgs []testMes
 	}
 }
 
+func writeDurablePlan(t *testing.T, root, sessionID, raw string) {
+	t.Helper()
+	dir := filepath.Join(root, sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "plan.json"), []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSearchFindsAndRanksMatches(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "low", []testMessage{
@@ -75,6 +86,33 @@ func TestSearchFindsAndRanksMatches(t *testing.T) {
 	if !strings.Contains(hits[0].Snippet, "postgres") {
 		t.Fatalf("snippet should contain match: %+v", hits[0])
 	}
+}
+
+func TestSearchFindsDurablePlanCurrentStep(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableSessionLog(t, dir, "plan-only-research", []testMessage{
+		{Role: "user", Content: "old unrelated setup"},
+	})
+	writeDurablePlan(t, dir, "plan-only-research", `{"version":1,"steps":[{"text":"Collect source map","status":"completed"},{"text":"Continue Bittensor subnet 120 validator inventory review","status":"in_progress","evidence":["events.jsonl","LOOP.md"]}]}`)
+	writeDurablePlan(t, dir, "current", `{"version":1,"steps":[{"text":"Bittensor subnet 120 current session should be excluded","status":"in_progress"}]}`)
+
+	hits, err := Search(context.Background(), dir, "current", "Bittensor subnet 120 validator inventory", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected durable plan hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != "plan-only-research" || hit.Role != "plan" {
+		t.Fatalf("expected plan hit from past session, got %+v", hit)
+	}
+	for _, want := range []string{"plan_status: plan:1/2:active", "current_step: 2 [in_progress]", "Bittensor subnet 120 validator inventory"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("plan hit snippet missing %q:\n%+v", want, hit)
+		}
+	}
+	requireMatchedTerms(t, hit.MatchedTerms, "bittensor", "subnet", "120", "validator", "inventory")
 }
 
 func TestSearchExcludesCurrentAndSkipsNonConversationRoles(t *testing.T) {

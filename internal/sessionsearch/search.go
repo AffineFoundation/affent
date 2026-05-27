@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -95,19 +97,32 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 				if sid == currentSessionID || entryIsSymlink(ent) {
 					continue
 				}
+				var sessionHits []Hit
 				path := filepath.Join(sessionsDir, sid, "conversation.jsonl")
-				mtime, ok := regularFileModTime(path)
-				if !ok {
-					continue
-				}
-				hits, serr := scoreFile(ctx, path, sid, terms, maxPerSession, mtime)
-				if serr != nil {
-					if ctx.Err() != nil {
-						return nil, ctx.Err()
+				if mtime, ok := regularFileModTime(path); ok {
+					hits, serr := scoreFile(ctx, path, sid, terms, maxPerSession, mtime)
+					if serr != nil {
+						if ctx.Err() != nil {
+							return nil, ctx.Err()
+						}
+					} else {
+						for _, hit := range hits {
+							sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
+						}
 					}
-					continue
 				}
-				for _, hit := range hits {
+				planPath := filepath.Join(sessionsDir, sid, "plan.json")
+				if mtime, ok := regularFileModTime(planPath); ok {
+					hit, ok, serr := scorePlanFile(ctx, planPath, sid, terms, mtime)
+					if serr != nil {
+						if ctx.Err() != nil {
+							return nil, ctx.Err()
+						}
+					} else if ok {
+						sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
+					}
+				}
+				for _, hit := range sessionHits {
 					all = appendBoundedHits(all, hit, topK)
 				}
 				continue
@@ -448,6 +463,71 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
+}
+
+func scorePlanFile(ctx context.Context, path, sid string, terms []string, mtime string) (Hit, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Hit{}, false, err
+	}
+	summary, found := planstate.SummarizeFile(path)
+	if !found || summary.Error || summary.Label == planstate.LabelMissing || summary.Label == planstate.LabelEmpty || summary.Label == planstate.LabelError {
+		return Hit{}, false, nil
+	}
+	content := planSearchContent(summary)
+	score, matchedTerms := scoreContentDetails(content, terms)
+	if score <= 0 {
+		return Hit{}, false, nil
+	}
+	return Hit{
+		SessionID:    sid,
+		Role:         "plan",
+		Snippet:      SnippetAround(content, terms),
+		Score:        score,
+		MatchedTerms: append([]string(nil), matchedTerms...),
+		ModTime:      mtime,
+	}, true, nil
+}
+
+func planSearchContent(summary planstate.Summary) string {
+	var b strings.Builder
+	if summary.Label != "" {
+		b.WriteString("plan_status: ")
+		b.WriteString(summary.Label)
+	}
+	if summary.CurrentStepIndex > 0 || summary.CurrentStep != "" || summary.CurrentStepStatus != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "current_step: %d", summary.CurrentStepIndex)
+		if summary.CurrentStepStatus != "" {
+			fmt.Fprintf(&b, " [%s]", summary.CurrentStepStatus)
+		}
+		if summary.CurrentStep != "" {
+			b.WriteByte(' ')
+			b.WriteString(summary.CurrentStep)
+		}
+	}
+	if summary.LastCompletedStepIndex > 0 || summary.LastCompletedStep != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "last_completed_step: %d", summary.LastCompletedStepIndex)
+		if summary.LastCompletedStep != "" {
+			b.WriteByte(' ')
+			b.WriteString(summary.LastCompletedStep)
+		}
+	}
+	if summary.BlockedStepIndex > 0 || summary.BlockedStep != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "blocked_step: %d", summary.BlockedStepIndex)
+		if summary.BlockedStep != "" {
+			b.WriteByte(' ')
+			b.WriteString(summary.BlockedStep)
+		}
+	}
+	return b.String()
 }
 
 func recentAnchorHitForMessage(sid, role, content string, prev searchableMessage, turnIdx, messageIdx int, mtime string) Hit {

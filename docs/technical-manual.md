@@ -464,10 +464,13 @@ transcript recall is tracked with
 manifests, timelines, and JSONL records also include
 bounded `session_search_examples` with the query, matched session, turn,
 physical message index when available, session log modification time, matched
-terms, context flag, and compact snippet preview. A user-request hit can carry
-the adjacent assistant answer so resume/debug runs show the prior outcome, not
-just the old question, which lets poor resume/recovery runs be debugged without
-opening the full transcript. When transcript recall has no lexical hits,
+terms, context flag, and compact snippet preview. Search also indexes compact
+persisted `plan.json` state as `role=plan`, so a long-run task can be recovered
+from its current step even when that step no longer appears in the transcript.
+A user-request hit can carry the adjacent assistant answer so resume/debug runs
+show the prior outcome, not just the old question, which lets poor
+resume/recovery runs be debugged without opening the full transcript. When
+transcript recall has no lexical hits,
 `session_search` may also return a small `recent_sessions` list with session
 ids, modification times, and compact latest user/assistant previews so the
 agent can retry with better anchors instead of guessing unseen history.
