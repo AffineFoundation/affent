@@ -718,7 +718,11 @@ empty filters are rejected so a typo does not silently widen access.
 
 Affent stores durable state as inspectable files:
 
-- `conversation.jsonl`: conversation records used to resume sessions.
+- `conversation.jsonl`: conversation records used to resume sessions. On load,
+  Affent repairs missing tool-result pairs left by a mid-turn crash with a
+  structured `resume_missing_tool_result` placeholder, keeping strict
+  OpenAI-compatible histories valid while telling the model not to assume the
+  missing tool succeeded.
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
 - `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.

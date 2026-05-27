@@ -289,6 +289,12 @@ func TestOpenConversationAt_RepairsCrashMidTurnToolCalls(t *testing.T) {
 	if !strings.Contains(snap[4].Content, "tool result missing") {
 		t.Errorf("placeholder content should explain the gap; got %q", snap[4].Content)
 	}
+	if !strings.Contains(snap[4].Content, "Failure: kind=resume_missing_tool_result") {
+		t.Errorf("placeholder content should carry a structured failure kind; got %q", snap[4].Content)
+	}
+	if !strings.Contains(snap[4].Content, "do not assume the tool succeeded") {
+		t.Errorf("placeholder content should guide safe recovery; got %q", snap[4].Content)
+	}
 	if snap[5].Role != "user" || snap[5].Content != "next" {
 		t.Errorf("post-window user message should survive intact; got %+v", snap[5])
 	}
