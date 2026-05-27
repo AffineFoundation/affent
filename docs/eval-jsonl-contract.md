@@ -358,9 +358,11 @@ Scenario records describe one eval case:
 - `context_compaction_examples`: optional bounded examples of context
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
-  byte size. Samples may also include `loop_protocol_anchor` when compaction
-  preserved a recoverable `LOOP.md` pointer. Summary records include the
-  originating scenario.
+  byte size. Samples include `summary_present_known` when the source trace
+  explicitly carried `summary_present`, so older traces are not misclassified
+  as missing summaries. Samples may also include `loop_protocol_anchor` when
+  compaction preserved a recoverable `LOOP.md` pointer. Summary records include
+  the originating scenario.
 - `context_compactions`, `context_compactions_reactive`,
   `context_compaction_removed_messages`, `context_compaction_summary_bytes`,
   `context_compaction_summary_missing`, and

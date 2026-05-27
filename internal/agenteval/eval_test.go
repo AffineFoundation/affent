@@ -372,6 +372,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if len(compactions.Examples) != 1 ||
 		compactions.Examples[0].Reason != "context_overflow" ||
 		!compactions.Examples[0].SummaryPresent ||
+		!compactions.Examples[0].SummaryPresentKnown ||
 		!strings.Contains(compactions.Examples[0].SummaryPreview, "market evidence") ||
 		!strings.Contains(compactions.Examples[0].LoopProtocolAnchor, "path=.affent/loops/longrun/LOOP.md") {
 		t.Fatalf("ContextCompactionStats examples = %+v", compactions.Examples)

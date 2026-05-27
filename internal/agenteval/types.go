@@ -623,17 +623,18 @@ type ContextInjectionStats struct {
 }
 
 type ContextCompaction struct {
-	Scenario           string `json:"scenario,omitempty"`
-	TurnID             string `json:"turn_id,omitempty"`
-	BeforeMessages     int    `json:"before_messages"`
-	AfterMessages      int    `json:"after_messages"`
-	RemovedMessages    int    `json:"removed_messages"`
-	Reactive           bool   `json:"reactive"`
-	Reason             string `json:"reason"`
-	SummaryPresent     bool   `json:"summary_present,omitempty"`
-	SummaryBytes       int    `json:"summary_bytes,omitempty"`
-	SummaryPreview     string `json:"summary_preview,omitempty"`
-	LoopProtocolAnchor string `json:"loop_protocol_anchor,omitempty"`
+	Scenario            string `json:"scenario,omitempty"`
+	TurnID              string `json:"turn_id,omitempty"`
+	BeforeMessages      int    `json:"before_messages"`
+	AfterMessages       int    `json:"after_messages"`
+	RemovedMessages     int    `json:"removed_messages"`
+	Reactive            bool   `json:"reactive"`
+	Reason              string `json:"reason"`
+	SummaryPresent      bool   `json:"summary_present,omitempty"`
+	SummaryPresentKnown bool   `json:"summary_present_known,omitempty"`
+	SummaryBytes        int    `json:"summary_bytes,omitempty"`
+	SummaryPreview      string `json:"summary_preview,omitempty"`
+	LoopProtocolAnchor  string `json:"loop_protocol_anchor,omitempty"`
 }
 
 type ContextCompactionStats struct {
@@ -1642,27 +1643,41 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, ContextCompaction{
-			TurnID:             compaction.TurnID,
-			BeforeMessages:     compaction.BeforeMessages,
-			AfterMessages:      compaction.AfterMessages,
-			RemovedMessages:    compaction.RemovedMessages,
-			Reactive:           compaction.Reactive,
-			Reason:             compaction.Reason,
-			SummaryPresent:     compaction.SummaryPresent,
-			SummaryBytes:       compaction.SummaryBytes,
-			SummaryPreview:     compactOneLine(compaction.SummaryPreview, 600),
-			LoopProtocolAnchor: compaction.LoopProtocolAnchor,
+			TurnID:              compaction.TurnID,
+			BeforeMessages:      compaction.BeforeMessages,
+			AfterMessages:       compaction.AfterMessages,
+			RemovedMessages:     compaction.RemovedMessages,
+			Reactive:            compaction.Reactive,
+			Reason:              compaction.Reason,
+			SummaryPresent:      compaction.SummaryPresent,
+			SummaryPresentKnown: compaction.SummaryPresentKnown,
+			SummaryBytes:        compaction.SummaryBytes,
+			SummaryPreview:      compactOneLine(compaction.SummaryPreview, 600),
+			LoopProtocolAnchor:  compaction.LoopProtocolAnchor,
 		})
 	}
 	return stats
 }
 
 func contextCompactionSummaryMissing(compaction ContextCompaction) bool {
-	return !compaction.SummaryPresent && compaction.SummaryBytes == 0 && strings.TrimSpace(compaction.SummaryPreview) == ""
+	return compaction.SummaryPresentKnown && !compaction.SummaryPresent && compaction.SummaryBytes == 0 && strings.TrimSpace(compaction.SummaryPreview) == ""
 }
 
 func contextCompactionSummaryEmpty(compaction ContextCompaction) bool {
-	return compaction.SummaryPresent && compaction.SummaryBytes == 0 && strings.TrimSpace(compaction.SummaryPreview) == ""
+	return compaction.SummaryPresentKnown && compaction.SummaryPresent && compaction.SummaryBytes == 0 && strings.TrimSpace(compaction.SummaryPreview) == ""
+}
+
+func contextCompactionSummaryState(compaction ContextCompaction) string {
+	if compaction.SummaryBytes > 0 || strings.TrimSpace(compaction.SummaryPreview) != "" {
+		return "present"
+	}
+	if !compaction.SummaryPresentKnown {
+		return "unknown"
+	}
+	if !compaction.SummaryPresent {
+		return "missing"
+	}
+	return "empty"
 }
 
 func containsString(values []string, value string) bool {

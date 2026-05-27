@@ -1043,12 +1043,7 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 	}
 	b.WriteString("\n## Context Compactions\n\n")
 	for i, c := range trace.ContextCompactions {
-		summaryState := "present"
-		if contextCompactionSummaryMissing(c) {
-			summaryState = "missing"
-		} else if contextCompactionSummaryEmpty(c) {
-			summaryState = "empty"
-		}
+		summaryState := contextCompactionSummaryState(c)
 		fmt.Fprintf(b, "%d. turn=`%s` reactive=`%t` messages=%d->%d removed=%d summary_state=%s summary_bytes=%d reason=%s\n",
 			i+1,
 			c.TurnID,

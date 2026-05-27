@@ -289,20 +289,25 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		if err := json.Unmarshal(data, &p); err != nil {
 			return false, err
 		}
+		var raw struct {
+			SummaryPresent *bool `json:"summary_present"`
+		}
+		_ = json.Unmarshal(data, &raw)
 		if !traceEventMatchesTurn(p.TurnID, turnID) {
 			return false, nil
 		}
 		t.ContextCompactions = append(t.ContextCompactions, ContextCompaction{
-			TurnID:             p.TurnID,
-			BeforeMessages:     p.BeforeMessages,
-			AfterMessages:      p.AfterMessages,
-			RemovedMessages:    p.RemovedMessages,
-			Reactive:           p.Reactive,
-			Reason:             p.Reason,
-			SummaryPresent:     p.SummaryPresent,
-			SummaryBytes:       p.SummaryBytes,
-			SummaryPreview:     p.SummaryPreview,
-			LoopProtocolAnchor: p.LoopProtocolAnchor,
+			TurnID:              p.TurnID,
+			BeforeMessages:      p.BeforeMessages,
+			AfterMessages:       p.AfterMessages,
+			RemovedMessages:     p.RemovedMessages,
+			Reactive:            p.Reactive,
+			Reason:              p.Reason,
+			SummaryPresent:      p.SummaryPresent,
+			SummaryPresentKnown: raw.SummaryPresent != nil,
+			SummaryBytes:        p.SummaryBytes,
+			SummaryPreview:      p.SummaryPreview,
+			LoopProtocolAnchor:  p.LoopProtocolAnchor,
 		})
 	case sse.TypeError:
 		var p sse.ErrorPayload
