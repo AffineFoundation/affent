@@ -1014,6 +1014,9 @@ func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 	if summary.Tools.ToolFailureByKind["dynamic_shell"] != 1 || summary.Tools.ToolFailureByKind["no_matches"] != 2 {
 		t.Fatalf("tool_failure_by_kind = %+v, want aggregated failure kinds", summary.Tools.ToolFailureByKind)
 	}
+	if !strings.Contains(summary.LatestRecoveryHint, "top tool failure kind=no_matches (2)") {
+		t.Fatalf("latest_recovery_hint = %q, want top tool failure kind", summary.LatestRecoveryHint)
+	}
 }
 
 func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {

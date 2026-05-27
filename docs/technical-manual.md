@@ -674,6 +674,10 @@ context or persisted plan anchors, successful no-hit memory searches that
 returned topic recovery anchors or no memory anchors, context compactions whose
 summary is missing or empty, and, when the event log is missing or incomplete,
 from structured resume repair placeholders and notes in `conversation.jsonl`.
+For `turn.end.reason=max_turns`, the recovery hint includes the dominant
+`tool_failure_by_kind` entry when available, so operators can distinguish
+no-evidence loops, invalid arguments, loop guard blocks, and source failures
+without opening raw trace JSON first.
 Session summaries include a compact artifact summary with count, total bytes,
 latest path, and latest mod time. Artifact list responses include path, size,
 mod time, and a bounded compact preview from the start of each artifact so

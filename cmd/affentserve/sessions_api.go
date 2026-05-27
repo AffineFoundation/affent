@@ -2029,8 +2029,11 @@ func recoveryHintFromErrorPayload(p sse.ErrorPayload) string {
 func recoveryHintFromTurnEnd(p sse.TurnEndPayload, latestTurnID string) string {
 	switch p.Reason {
 	case sse.TurnEndMaxTurns:
-		parts := []string{"turn reached the tool-step budget; change strategy before retrying the same tool loop; continue from gathered evidence"}
+		parts := []string{"turn reached the tool-step budget; change strategy before retrying; continue from evidence"}
 		if p.ToolStats != nil {
+			if kind, count := topToolFailureKind(p.ToolStats.ToolFailureByKind); kind != "" {
+				parts = append(parts, fmt.Sprintf("top tool failure kind=%s (%d)", kind, count))
+			}
 			if p.ToolStats.LoopGuardInterventions > 0 {
 				parts = append(parts, "loop guards fired")
 			}
@@ -2047,6 +2050,22 @@ func recoveryHintFromTurnEnd(p sse.TurnEndPayload, latestTurnID string) string {
 	default:
 		return ""
 	}
+}
+
+func topToolFailureKind(counts map[string]int) (string, int) {
+	var top string
+	var topCount int
+	for kind, count := range counts {
+		kind = strings.TrimSpace(kind)
+		if kind == "" || count <= 0 {
+			continue
+		}
+		if count > topCount || (count == topCount && (top == "" || kind < top)) {
+			top = kind
+			topCount = count
+		}
+	}
+	return top, topCount
 }
 
 func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {
