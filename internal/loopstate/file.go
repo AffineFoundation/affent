@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	ProtocolFileName = "LOOP.md"
-	StateFileName    = "state.json"
-	EventsFileName   = "events.jsonl"
-	MaxProtocolBytes = 64 * 1024
+	ProtocolFileName        = "LOOP.md"
+	StateFileName           = "state.json"
+	EventsFileName          = "events.jsonl"
+	MaxProtocolBytes        = 64 * 1024
+	MaxCurrentSituationChars = 1200
 )
 
 type ProtocolTemplateOptions struct {
@@ -212,6 +213,9 @@ func ValidateProtocolActivation(protocol string) error {
 	if unresolved := unresolvedActivationPlaceholders(protocol); len(unresolved) > 0 {
 		return fmt.Errorf("LOOP.md has unresolved activation placeholder(s): %s", strings.Join(unresolved, ", "))
 	}
+	if n := protocolSectionCharCount(protocol, "## 2. Current Situation"); n > MaxCurrentSituationChars {
+		return fmt.Errorf("LOOP.md Current Situation section is %d characters; keep it at or below %d characters", n, MaxCurrentSituationChars)
+	}
 	return nil
 }
 
@@ -243,6 +247,26 @@ func unresolvedActivationPlaceholders(protocol string) []string {
 		}
 	}
 	return unresolved
+}
+
+func protocolSectionCharCount(protocol, heading string) int {
+	body, ok := protocolSectionBody(protocol, heading)
+	if !ok {
+		return 0
+	}
+	return len([]rune(body))
+}
+
+func protocolSectionBody(protocol, heading string) (string, bool) {
+	start := strings.Index(protocol, heading)
+	if start < 0 {
+		return "", false
+	}
+	body := protocol[start+len(heading):]
+	if next := strings.Index(body, "\n## "); next >= 0 {
+		body = body[:next]
+	}
+	return strings.TrimSpace(body), true
 }
 
 func EnsureProtocolTemplate(path string, opts ProtocolTemplateOptions) (bool, State, Event, error) {

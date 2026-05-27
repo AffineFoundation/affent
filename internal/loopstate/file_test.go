@@ -262,6 +262,38 @@ func TestValidateProtocolActivationRejectsUnresolvedTemplatePlaceholders(t *test
 	}
 }
 
+func TestValidateProtocolActivationRejectsOversizedCurrentSituation(t *testing.T) {
+	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "running",
+	})
+	for _, replacement := range [][2]string{
+		{"- hard constraints:", "- hard constraints: keep evidence cited"},
+		{"- known evidence:", "- known evidence: user confirmed long-run market objective"},
+		{"- current risk or blocker:", "- current risk or blocker: live web evidence can be stale"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	protocol = strings.Replace(
+		protocol,
+		"- next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing",
+		"- next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing\n- overflow: "+strings.Repeat("evidence ", MaxCurrentSituationChars/len("evidence ")+20),
+		1,
+	)
+
+	err := ValidateProtocolActivation(protocol)
+	if err == nil ||
+		!strings.Contains(err.Error(), "Current Situation") ||
+		!strings.Contains(err.Error(), "1200") {
+		t.Fatalf("ValidateProtocolActivation oversized current situation err = %v", err)
+	}
+}
+
 func TestRecordProtocolCalibrationQuestionAndAnswer(t *testing.T) {
 	dir := t.TempDir()
 	path := ProtocolPath(dir, "longrun")
