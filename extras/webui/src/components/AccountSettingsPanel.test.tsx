@@ -85,7 +85,7 @@ describe("AccountSettingsPanel", () => {
     render(<AccountSettingsPanel error={diagnostic} />);
 
     const summary = within(screen.getByTestId("account-settings-panel")).getByText("Unavailable").closest("summary");
-    expect(summary).toHaveTextContent("Settings API failed: API route /v1/settings returned the WebUI app shell.");
+    expect(summary).toHaveTextContent("Access API failed: API route /v1/settings returned the WebUI app shell.");
     expect(summary).not.toHaveTextContent("Use the current affentserve build");
 
     await userEvent.click(screen.getByText("Unavailable"));

@@ -31,7 +31,7 @@ export function AccountSettingsPanel({
   const hasPublicKey = !!ssh?.public_key;
   const title = loading ? "Loading" : error ? "Unavailable" : `${envCount} env${envCount === 1 ? "" : "s"}`;
   const detail = error
-    ? panelErrorSummary("Settings API", error)
+    ? panelErrorSummary("Access API", error)
     : hasPublicKey ? "SSH public key ready" : ssh?.exists ? "SSH key found; public key unavailable" : "Generate an SSH key before cloning private repos";
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 

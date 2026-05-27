@@ -74,4 +74,30 @@ describe("automationContext view model", () => {
       detail: "LOOP.md is active; use chat for durable protocol changes. · 1 timer error: provider unavailable",
     });
   });
+
+  it("gives paused timers an explicit next action", () => {
+    expect(buildAutomationContext(
+      {
+        id: "s1",
+        active: true,
+        durable: true,
+        has_conversation: true,
+        has_events: true,
+        has_artifacts: false,
+        has_memory: false,
+        has_runtime_skills: false,
+        has_schedules: true,
+        schedules: {
+          count: 2,
+          enabled: 0,
+        },
+      },
+      undefined,
+      { state: "idle" },
+      { state: "idle" },
+    )).toEqual({
+      title: "2 timers paused",
+      detail: "2 timers paused; resume before the next needed check-in or delete it.",
+    });
+  });
 });
