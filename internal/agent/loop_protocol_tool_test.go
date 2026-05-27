@@ -34,7 +34,12 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
 	}
 	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	protocol = strings.Replace(protocol, "- hard constraints:", "- hard constraints: keep evidence cited and stop on unresolved user intent", 1)
+	protocol = strings.Replace(protocol, "- known evidence:", "- known evidence: user requested durable market analysis", 1)
 	protocol = strings.Replace(protocol, "- current risk or blocker:", "- current risk or blocker: needs live source verification", 1)
+	protocol = strings.Replace(protocol, "- important artifacts:", "- important artifacts: none yet", 1)
+	protocol = strings.Replace(protocol, "- important trace spans:", "- important trace spans: loop activation draft", 1)
+	protocol = strings.Replace(protocol, "- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state before continuing", 1)
 	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
 		"action":           "complete_activation",
 		"protocol":         protocol,
@@ -53,6 +58,33 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	}
 	if state.Status != "running" || state.LastEventType != "loop.protocol_activate" {
 		t.Fatalf("state = %+v", state)
+	}
+}
+
+func TestLoopProtocolToolRejectsUnresolvedActivationPlaceholders(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	tool := loopProtocolTool(path)
+	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "complete_activation",
+		"protocol": protocol,
+		"reason":   "premature activation",
+	})))
+	if err == nil || !strings.Contains(err.Error(), "unresolved activation placeholder") || !strings.Contains(err.Error(), "keep status=draft") {
+		t.Fatalf("complete_activation unresolved placeholders err = %v", err)
 	}
 }
 
@@ -105,7 +137,9 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		t.Fatal("loop_protocol tool not registered")
 	}
 	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
-	if !strings.Contains(prompt, "Loop protocol maintenance:") || !strings.Contains(prompt, "complete_activation") {
+	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
+		!strings.Contains(prompt, "at least one concise calibration question") ||
+		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("prompt missing loop protocol guidance:\n%s", prompt)
 	}
 }

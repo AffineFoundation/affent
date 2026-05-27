@@ -729,7 +729,7 @@ export function App() {
       markSessionLoopProtocol(targetSessionId, loopProtocol, trimmedGoal);
       await sendSessionMessage(client, targetSessionId, { content: activationPrompt });
       sendInFlightRef.current = false;
-      markSessionLive(targetSessionId, `Start loop: ${trimmedGoal}`);
+      markSessionLive(targetSessionId, `Set up loop: ${trimmedGoal}`);
       const hasOpenStream = streamSessionIdRef.current === targetSessionId && !streamClosedRef.current;
       if (!hasOpenStream) {
         const reconciled = await loadHistory(targetSessionId);
@@ -829,7 +829,7 @@ export function App() {
           has_artifacts: false,
           has_memory: false,
           has_runtime_skills: false,
-          latest_user_message: `Start loop: ${goal}`,
+          latest_user_message: `Set up loop: ${goal}`,
           topic_user_message: goal,
         },
         ...current,
@@ -1100,13 +1100,14 @@ function latestChatMeta(updated: string): string | undefined {
 
 function webLoopActivationPrompt(goal: string): string {
   return [
-    `Start loop for: ${goal}`,
+    `Set up loop for: ${goal}`,
     "",
     "Loop protocol activation is pending, not active yet.",
     "Understand the user's real long-run intent before enabling the loop.",
     "Use loop_protocol action=read to inspect the draft LOOP.md.",
-    "If the goal, stop conditions, memory policy, or recovery expectations are unclear, ask at most two concise questions and keep status: draft.",
-    "If the intent is clear, use loop_protocol action=complete_activation with the full supplemented LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
+    "Ask the user at least one concise calibration question before activation, even when the initial goal seems clear.",
+    "If the goal, stop conditions, memory policy, or recovery expectations are still unclear, ask at most two concise questions and keep status: draft.",
+    "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
     "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
   ].join("\n");
 }

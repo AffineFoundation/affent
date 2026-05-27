@@ -233,6 +233,35 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	}
 }
 
+func TestValidateProtocolActivationRejectsUnresolvedTemplatePlaceholders(t *testing.T) {
+	protocol := strings.Replace(DefaultProtocolTemplate(ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "running",
+	}), "- current risk or blocker:", "- current risk or blocker: needs live source verification", 1)
+
+	err := ValidateProtocolActivation(protocol)
+	if err == nil ||
+		!strings.Contains(err.Error(), "unresolved activation placeholder") ||
+		!strings.Contains(err.Error(), "hard constraints") {
+		t.Fatalf("ValidateProtocolActivation err = %v", err)
+	}
+
+	for _, replacement := range [][2]string{
+		{"- hard constraints:", "- hard constraints: keep evidence cited"},
+		{"- known evidence:", "- known evidence: user confirmed long-run market objective"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	if err := ValidateProtocolActivation(protocol); err != nil {
+		t.Fatalf("ValidateProtocolActivation supplemented protocol err = %v", err)
+	}
+}
+
 func TestStatePersistsAtomicallyAndSummaryPrefersState(t *testing.T) {
 	dir := t.TempDir()
 	loopDir := ProtocolDir(dir, "market-run")

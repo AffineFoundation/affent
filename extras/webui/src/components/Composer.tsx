@@ -267,7 +267,7 @@ export function Composer({
         ) : null}
         {!busy && onStartLoop && content.trim() !== "" ? (
           <button type="button" className="secondary-action" disabled={cancelling} onClick={() => void startLoop()}>
-            Start loop
+            Set up loop
           </button>
         ) : null}
         <button type="button" className="primary-action" disabled={content.trim() === "" || cancelling} onClick={() => void submit()}>

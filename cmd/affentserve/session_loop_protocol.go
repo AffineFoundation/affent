@@ -42,6 +42,21 @@ type sessionLoopProtocolDeleteResponse struct {
 	Events    []loopstate.Event `json:"events,omitempty"`
 }
 
+type sessionLoopProtocolValidationError struct {
+	err error
+}
+
+func (e sessionLoopProtocolValidationError) Error() string {
+	if e.err == nil {
+		return "invalid loop protocol"
+	}
+	return e.err.Error()
+}
+
+func (e sessionLoopProtocolValidationError) Unwrap() error {
+	return e.err
+}
+
 func handleSessionLoopProtocol(pool *SessionPool, sessionID string, w http.ResponseWriter, _ *http.Request) {
 	if pool == nil {
 		writeJSONError(w, http.StatusNotFound, "session not found", nil)
@@ -94,6 +109,11 @@ func handleSessionLoopProtocolUpdate(pool *SessionPool, sessionID string, w http
 	}
 	protocol, summary, state, events, err := writeSessionLoopProtocol(pool, sessionID, req)
 	if err != nil {
+		var validationErr sessionLoopProtocolValidationError
+		if errors.As(err, &validationErr) {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "invalid loop protocol", validationErr.Unwrap(), "bad_request")
+			return
+		}
 		writeJSONError(w, http.StatusInternalServerError, "write session loop protocol", err)
 		return
 	}
@@ -202,7 +222,10 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 	}
 	if req.Activate {
 		if loopstate.ProtocolStatus(req.Protocol) != "running" {
-			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, errors.New("activate requires LOOP.md metadata status: running")
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate requires LOOP.md metadata status: running")}
+		}
+		if err := loopstate.ValidateProtocolActivation(req.Protocol); err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
 		}
 		if _, _, err := loopstate.RecordProtocolActivation(path, req.Reason); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err

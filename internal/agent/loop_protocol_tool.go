@@ -48,7 +48,7 @@ func loopProtocolTool(protocolPath string) *Tool {
     }`, maxLoopProtocolActionBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes))
 	return &Tool{
 		Name:         LoopProtocolToolName,
-		Description:  "Read, update, or complete activation for this session's LOOP.md. Use during loop activation or long-run protocol maintenance. Do not call complete_activation until the user's intent is understood, the protocol is supplemented, and metadata status is running; ask the user concise questions instead when the goal is underspecified.",
+		Description:  "Read, update, or complete activation for this session's LOOP.md. Use during loop activation or long-run protocol maintenance. Do not call complete_activation until the user has answered at least one calibration question, the intent is understood, the protocol is supplemented, and metadata status is running; ask concise questions and keep the protocol as draft when setup is incomplete.",
 		Schema:       schema,
 		CatalogGroup: "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
@@ -103,7 +103,7 @@ func updateLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (strin
 	}
 	status := loopstate.ProtocolStatus(protocol)
 	if status == "running" {
-		return "", errors.New("update_draft cannot activate a loop protocol with status=running\nNext: if the protocol is complete and user intent is clear, call loop_protocol with action=complete_activation; otherwise keep status=draft")
+		return "", errors.New("update_draft cannot activate a loop protocol with status=running\nNext: if the user has answered a calibration question and the protocol is complete, call loop_protocol with action=complete_activation; otherwise keep status=draft")
 	}
 	if status == "" {
 		return "", errors.New("LOOP.md metadata must include a valid status before update_draft\nNext: keep metadata status: draft until the protocol is complete enough to activate")
@@ -133,10 +133,10 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 		}
 	}
 	if loopstate.ProtocolStatus(protocol) != "running" {
-		return "", errors.New("complete_activation requires LOOP.md metadata status: running\nNext: if user intent is still unclear, ask up to two concise questions and leave the protocol in draft; otherwise update the full protocol with status: running and retry")
+		return "", errors.New("complete_activation requires LOOP.md metadata status: running\nNext: ask at least one concise calibration question before activation; if user intent is still unclear, ask up to two concise questions and leave the protocol in draft; otherwise update the full protocol with status: running after the user answers and retry")
 	}
-	if err := requireLoopProtocolActivationSections(protocol); err != nil {
-		return "", err
+	if err := loopstate.ValidateProtocolActivation(protocol); err != nil {
+		return "", fmt.Errorf("%w\nNext: keep status=draft, ask or wait for the needed calibration details, fill the unresolved LOOP.md fields, and retry activation only after the protocol is complete", err)
 	}
 	if strings.TrimSpace(p.Protocol) != "" {
 		if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
@@ -148,23 +148,6 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 		return "", err
 	}
 	return fmt.Sprintf("activated LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol will be fed on future turns", state.Status, event.Seq, state.ProtocolUpdates), nil
-}
-
-func requireLoopProtocolActivationSections(protocol string) error {
-	required := []string{
-		"## 1. North Star",
-		"## 2. Current Situation",
-		"## 3. Evolution Protocol",
-		"## 4. Self-Attack",
-		"## 5. Rules",
-		"## 7. Evidence And Recovery Index",
-	}
-	for _, section := range required {
-		if !strings.Contains(protocol, section) {
-			return fmt.Errorf("LOOP.md is missing required section %q\nNext: keep status=draft, add the missing section, and retry activation only after the protocol is complete", section)
-		}
-	}
-	return nil
 }
 
 func loopIDFromProtocolPath(protocolPath string) string {
@@ -191,8 +174,8 @@ func WithLoopProtocolSystemGuidance(prompt string) string {
 	return prompt + `
 
 ` + loopProtocolSystemGuidanceMarker + `
-- During loop activation, first understand the user's concrete long-run intent. If the goal, stop conditions, memory policy, or recovery expectations are unclear, ask at most two concise questions and leave LOOP.md as draft.
+- During loop activation, first understand the user's concrete long-run intent and ask at least one concise calibration question before activation, even when the initial goal seems clear. If the goal, stop conditions, memory policy, or recovery expectations remain unclear, ask at most two concise questions and leave LOOP.md as draft.
 - Use loop_protocol action=read/update_draft/complete_activation to maintain the session LOOP.md; do not use ordinary workspace file tools for server-managed loop state.
-- Only complete_activation after supplementing the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors, with metadata status: running.
+- Only complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors, with metadata status: running.
 - Keep LOOP.md compact. Put detailed task progress in the plan, artifacts, memory, or trace instead of duplicating it in the protocol.`
 }

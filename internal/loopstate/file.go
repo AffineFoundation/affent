@@ -195,6 +195,45 @@ Keep this section short. Store detailed history in artifacts or trace.
 `)
 }
 
+func ValidateProtocolActivation(protocol string) error {
+	required := []string{
+		"## 1. North Star",
+		"## 2. Current Situation",
+		"## 3. Evolution Protocol",
+		"## 4. Self-Attack",
+		"## 5. Rules",
+		"## 7. Evidence And Recovery Index",
+	}
+	for _, section := range required {
+		if !strings.Contains(protocol, section) {
+			return fmt.Errorf("LOOP.md is missing required section %q", section)
+		}
+	}
+	if unresolved := unresolvedActivationPlaceholders(protocol); len(unresolved) > 0 {
+		return fmt.Errorf("LOOP.md has unresolved activation placeholder(s): %s", strings.Join(unresolved, ", "))
+	}
+	return nil
+}
+
+func unresolvedActivationPlaceholders(protocol string) []string {
+	blankMarkers := map[string]bool{
+		"- hard constraints:":         true,
+		"- known evidence:":           true,
+		"- current risk or blocker:":  true,
+		"- important artifacts:":      true,
+		"- important trace spans:":    true,
+		"- last known recovery note:": true,
+	}
+	var unresolved []string
+	for _, line := range strings.Split(protocol, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if blankMarkers[trimmed] {
+			unresolved = append(unresolved, strings.TrimPrefix(trimmed, "- "))
+		}
+	}
+	return unresolved
+}
+
 func EnsureProtocolTemplate(path string, opts ProtocolTemplateOptions) (bool, State, Event, error) {
 	content, found, err := ReadProtocol(path)
 	if err != nil {

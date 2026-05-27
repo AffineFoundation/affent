@@ -1821,7 +1821,9 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 		t.Fatal("system prompt missing")
 	}
 	prompt := messages[0].Content
-	if !strings.Contains(prompt, "Loop protocol maintenance:") || !strings.Contains(prompt, "complete_activation") {
+	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
+		!strings.Contains(prompt, "at least one concise calibration question") ||
+		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("system prompt missing loop protocol guidance:\n%s", prompt)
 	}
 }

@@ -873,6 +873,27 @@ func TestHandleSessionLoopProtocolUpdate_ActivatesDraftTemplateWithoutReopeningS
 	}
 }
 
+func TestHandleSessionLoopProtocolUpdate_RejectsPrematureActivation(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	protocol := loopstate.DefaultProtocolTemplate(loopstate.ProtocolTemplateOptions{
+		LoopID:       "api-loop-premature",
+		OwnerSession: "api-loop-premature",
+		Goal:         "Understand the user's long-running market analysis intent.",
+		Status:       "running",
+	})
+	body := `{"activate":true,"protocol":` + strconv.Quote(protocol) + `,"reason":"premature"}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop-premature/loop-protocol", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "unresolved activation placeholder") {
+		t.Fatalf("response missing activation readiness error: %s", w.Body.String())
+	}
+}
+
 func TestHandleSessionLoopProtocolUpdate_RejectsBlankAndUnknownFields(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	cases := []struct {

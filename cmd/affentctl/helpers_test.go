@@ -460,6 +460,7 @@ func TestChatLoopSlashOnCreatesDraftAndActivationPrompt(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "Loop protocol activation is pending") ||
 		!strings.Contains(prompt, "status: running") ||
+		!strings.Contains(prompt, "at least one concise calibration question") ||
 		!strings.Contains(prompt, "analyze a JS-heavy market dashboard") {
 		t.Fatalf("activation prompt missing required guidance:\n%s", prompt)
 	}

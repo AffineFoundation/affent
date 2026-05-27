@@ -548,7 +548,7 @@ describe("App", () => {
 
     const input = await screen.findByPlaceholderText("Message Affent...");
     await user.type(input, "analyze market data for several days");
-    await user.click(screen.getByRole("button", { name: "Start loop" }));
+    await user.click(screen.getByRole("button", { name: "Set up loop" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.objectContaining({ method: "POST" })));
     const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/loop-protocol");
@@ -557,6 +557,7 @@ describe("App", () => {
     const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
     expect(sent.content).toContain("Loop protocol activation is pending");
     expect(sent.content).toContain("loop_protocol action=read");
+    expect(sent.content).toContain("Ask the user at least one concise calibration question");
     expect(sent.content).toContain("complete_activation");
     expect(sent.content).toContain("Current Situation");
     expect(await screen.findByTestId("session-list")).toHaveTextContent("Loop draft");
