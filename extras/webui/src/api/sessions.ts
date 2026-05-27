@@ -250,6 +250,8 @@ export interface SessionSchedule {
 export interface SessionSchedulesSummary {
   count: number;
   enabled: number;
+  error_count?: number;
+  last_error?: string;
   next_run_at?: string;
   next_schedule_id?: string;
   next_schedule_kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";

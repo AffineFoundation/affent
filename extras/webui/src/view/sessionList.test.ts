@@ -166,6 +166,28 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("plan 1/3, step 2 active");
   });
 
+  it("surfaces timer errors in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "timer-error-session",
+        durable: true,
+        has_schedules: true,
+        latest_user_message: "run a calibrated loop timer",
+        schedules: {
+          count: 1,
+          enabled: 0,
+          error_count: 1,
+          last_error: "LOOP.md not running; answer calibration and activate the loop protocol before resuming this timer",
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics.some((metric) => metric.startsWith("Timer 0/1, 1 error, last LOOP.md not running"))).toBe(true);
+    expect(rows[0].stats).toContain("Timer 0/1, 1 error");
+    expect(rows[0].chips).toContain("timers");
+    expect(rows[0].searchText).toContain("loop.md not running");
+  });
+
   it("surfaces loop protocol status in row stats and chips", () => {
     const rows = buildSessionRows([
       session({

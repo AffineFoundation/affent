@@ -61,6 +61,8 @@ type sessionSchedulesFile struct {
 type sessionSchedulesSummary struct {
 	Count             int    `json:"count"`
 	Enabled           int    `json:"enabled"`
+	ErrorCount        int    `json:"error_count,omitempty"`
+	LastError         string `json:"last_error,omitempty"`
 	NextRunAt         string `json:"next_run_at,omitempty"`
 	NextScheduleID    string `json:"next_schedule_id,omitempty"`
 	NextScheduleKind  string `json:"next_schedule_kind,omitempty"`
@@ -520,7 +522,14 @@ func summarizeSessionSchedulesFileForDir(sessionDir, sessionID string) *sessionS
 func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSummary {
 	summary := &sessionSchedulesSummary{Count: len(schedules)}
 	var next *sessionSchedule
+	var latestError *sessionSchedule
 	for i := range schedules {
+		if strings.TrimSpace(schedules[i].LastError) != "" {
+			summary.ErrorCount++
+			if latestError == nil || scheduleTimeBefore(latestError.UpdatedAt, schedules[i].UpdatedAt) {
+				latestError = &schedules[i]
+			}
+		}
 		if schedules[i].Enabled {
 			summary.Enabled++
 			if next == nil || scheduleTimeBefore(schedules[i].NextRunAt, next.NextRunAt) {
@@ -533,6 +542,9 @@ func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSum
 		summary.NextScheduleID = next.ID
 		summary.NextScheduleKind = next.Kind
 		summary.NextPromptPreview = previewSessionSchedulePrompt(next.Prompt)
+	}
+	if latestError != nil {
+		summary.LastError = latestError.LastError
 	}
 	return summary
 }

@@ -714,6 +714,8 @@ function loopDecisionMetricResult(kind: string, decision: string): string {
 function sessionScheduleMetric(summary: SessionSchedulesSummary | undefined): string | undefined {
   if (!summary || summary.count <= 0) return undefined;
   const parts = [`Timer ${summary.enabled}/${summary.count}`];
+  if ((summary.error_count ?? 0) > 0) parts.push(`${summary.error_count} error${summary.error_count === 1 ? "" : "s"}`);
+  if (summary.last_error) parts.push(`last ${summarize(summary.last_error, 72)}`);
   if (summary.next_run_at) parts.push(`next ${formatTimestamp(summary.next_run_at)}`);
   return parts.join(", ");
 }

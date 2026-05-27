@@ -671,7 +671,8 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 				Enabled:   false,
 				NextRunAt: now.Add(30 * time.Minute).Format(time.RFC3339),
 				CreatedAt: now.Format(time.RFC3339),
-				UpdatedAt: now.Format(time.RFC3339),
+				UpdatedAt: now.Add(10 * time.Minute).Format(time.RFC3339),
+				LastError: "LOOP.md not running; answer calibration first",
 			},
 		},
 	}
@@ -698,6 +699,9 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	}
 	if summary.Count != 3 || summary.Enabled != 2 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "ask clarifying questions and update LOOP.md" {
 		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
+	}
+	if summary.ErrorCount != 1 || summary.LastError != "LOOP.md not running; answer calibration first" {
+		t.Fatalf("schedule summary = %+v, want latest timer error", summary)
 	}
 }
 

@@ -35,8 +35,11 @@ export function SessionSchedulePanel({
   const enabled = summary?.enabled ?? 0;
   const next = summary?.next_run_at ? formatScheduleTime(summary.next_run_at) : undefined;
   const preview = compact(summary?.next_prompt_preview);
+  const lastError = compact(summary?.last_error);
   const title = enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "None";
-  const detail = next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "No scheduled prompts";
+  const detail = lastError
+    ? `${summary?.error_count ?? 1} error${summary?.error_count === 1 ? "" : "s"} · ${lastError}`
+    : next ? `Next ${next}${preview ? ` · ${preview}` : ""}` : "No scheduled prompts";
 
   return (
     <details className="session-plan-panel session-schedule-panel" data-testid="session-schedule-panel" open={count === 0 || !!schedules?.length || loading || !!error}>
@@ -49,6 +52,7 @@ export function SessionSchedulePanel({
         <div className="session-schedule-grid">
           <ScheduleField label="Enabled" value={String(enabled)} />
           <ScheduleField label="Total" value={String(count)} />
+          {summary?.error_count ? <ScheduleField label="Errors" value={String(summary.error_count)} /> : null}
           {next ? <ScheduleField label="Next" value={next} /> : null}
         </div>
         {preview ? <p className="session-loop-preview">{preview}</p> : null}
