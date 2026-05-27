@@ -2065,6 +2065,9 @@ func printBrowserNetworkExampleLines(w io.Writer, examples []agenteval.BrowserNe
 		if ex.Query != "" {
 			fmt.Fprintf(w, " query=%q", ex.Query)
 		}
+		if ex.EvidenceStatus != "" {
+			fmt.Fprintf(w, " evidence_status=%q", ex.EvidenceStatus)
+		}
 		if len(ex.Refs) > 0 {
 			fmt.Fprintf(w, " refs=%s", strings.Join(ex.Refs, ","))
 		}

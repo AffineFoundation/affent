@@ -1020,6 +1020,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			CurrentPageURL:    "https://metrics.example/dashboard",
 			Query:             "market_cap",
 			Status:            "no_matches",
+			EvidenceStatus:    "refs_only_not_citable; read_required=true",
 			NotCitable:        true,
 			SuggestedNextStep: "adjust query or read available network refs before citing values",
 		}},
@@ -1157,7 +1158,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 guard=repeated failed input next=stop retrying this URL result=repeated failed input | Next: stop retrying this URL`,
 		"source_access_example: status=network tool=browser_network_read call_id=source-print-1 url=https://metrics.example/api.json requested=https://metrics.example/dashboard method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price preview=\"JSON_PATH: $.price \\\"12.34\\\"\"",
-		`browser_network_example: status=no_matches call_id=browser-network-print-1 page=https://metrics.example/dashboard query="market_cap" not_citable=true next="adjust query or read available network refs before citing values"`,
+		`browser_network_example: status=no_matches call_id=browser-network-print-1 page=https://metrics.example/dashboard query="market_cap" evidence_status="refs_only_not_citable; read_required=true" not_citable=true next="adjust query or read available network refs before citing values"`,
 		`memory_update_example: action=replace target=memory location=memory:markets call_id=memory-print-1 topic=markets previous="old dashboard rule" next="prefer browser_network_read evidence"`,
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
@@ -1496,6 +1497,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			CurrentPageURL:    "https://metrics.example/dashboard",
 			Query:             "price",
 			Status:            "matches",
+			EvidenceStatus:    "refs_only_not_citable; read_required=true",
 			Refs:              []string{"n1"},
 			Previews:          []string{`{"price":"12.34"}`},
 			RequiresRead:      true,
@@ -1782,7 +1784,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `browser_scroll_example: scenario=sample status=boundary call_id=browser-scroll-1 url=https://metrics.example/dashboard direction=down movement=none boundary=bottom y=1200->1200/1200 next="use browser_network_read before citing hidden values" preview="SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom"`) {
 		t.Fatalf("summary output missing browser scroll example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" refs=n1 previews="{\"price\":\"12.34\"}" requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
+	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" evidence_status="refs_only_not_citable; read_required=true" refs=n1 previews="{\"price\":\"12.34\"}" requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
 		t.Fatalf("summary output missing browser network example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `memory_update_example: scenario=sample action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
@@ -2144,6 +2146,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			CurrentPageURL:    "https://taostats.io/subnets/120",
 			Query:             "market_cap",
 			Status:            "matches",
+			EvidenceStatus:    "refs_only_not_citable; read_required=true",
 			Refs:              []string{"n1"},
 			Previews:          []string{`{"market_cap":"201.04K T"}`},
 			RequiresRead:      true,
@@ -2561,6 +2564,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		browserNetworkExample["current_page_url"] != "https://taostats.io/subnets/120" ||
 		browserNetworkExample["query"] != "market_cap" ||
 		browserNetworkExample["status"] != "matches" ||
+		browserNetworkExample["evidence_status"] != "refs_only_not_citable; read_required=true" ||
 		browserNetworkExample["requires_read"] != true ||
 		browserNetworkExample["not_citable"] != true ||
 		!jsonArrayContainsString(browserNetworkExample["refs"], "n1") ||
@@ -3343,6 +3347,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			CurrentPageURL:    "https://taostats.io/subnets/120",
 			Query:             "market_cap",
 			Status:            "matches",
+			EvidenceStatus:    "refs_only_not_citable; read_required=true",
 			Refs:              []string{"n1"},
 			Previews:          []string{`{"market_cap":"201.04K T"}`},
 			RequiresRead:      true,

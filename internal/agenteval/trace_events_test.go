@@ -115,6 +115,7 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 		Result: "BROWSER NETWORK EVIDENCE\n" +
 			"CURRENT_PAGE: https://taostats.io/subnets/120\n" +
 			"query: \"market_cap\"\n" +
+			"EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n" +
 			"MATCHES:\n" +
 			"- n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics\n" +
 			"  preview: {\"market_cap\":\"195094\"}\n" +
@@ -127,6 +128,7 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 		Result: "BROWSER NETWORK EVIDENCE\n" +
 			"CURRENT_PAGE: https://taostats.io/subnets/120\n" +
 			"query: \"validators\"\n" +
+			"EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n" +
 			"MATCHES: none\n" +
 			"Next: wait once, then mark hidden fields unverified.\n",
 		ExitCode: 0,
@@ -141,6 +143,7 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 		examples[0].CurrentPageURL != "https://taostats.io/subnets/120" ||
 		examples[0].Query != "market_cap" ||
 		examples[0].Status != "matches" ||
+		examples[0].EvidenceStatus != "refs_only_not_citable; read_required=true" ||
 		!examples[0].RequiresRead ||
 		!examples[0].NotCitable ||
 		!reflect.DeepEqual(examples[0].Refs, []string{"n7"}) ||
@@ -159,7 +162,7 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 	for _, want := range []string{
 		"## Browser Network Searches",
 		"not citable sources",
-		"tool#1 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`net1` requires_read=`true` citable=`false`",
+		"tool#1 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`net1` evidence_status=`refs_only_not_citable; read_required=true` requires_read=`true` citable=`false`",
 		"refs: `n7`",
 		`preview: {"market_cap":"195094"}`,
 		"next: call browser_network_read",

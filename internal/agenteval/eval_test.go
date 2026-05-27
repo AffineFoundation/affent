@@ -1621,7 +1621,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 		networkSearch.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"}) {
 		t.Fatalf("live-web network search RequiredSourceAccess = %#v", networkSearch.RequiredSourceAccess)
 	}
-	for _, want := range []string{"BROWSER NETWORK EVIDENCE", "query:", "Next:", "browser_network_read"} {
+	for _, want := range []string{"BROWSER NETWORK EVIDENCE", "EVIDENCE_STATUS: refs_only_not_citable", "read_required=true", "query:", "Next:", "browser_network_read"} {
 		if !stringSliceContains(networkSearch.RequiredToolResultText["browser_network"], want) {
 			t.Fatalf("live-web network search browser_network result requirements = %#v, want %q", networkSearch.RequiredToolResultText["browser_network"], want)
 		}
@@ -2094,6 +2094,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			Result: "BROWSER NETWORK EVIDENCE\n" +
 				"CURRENT_PAGE: https://taostats.io/subnets/120\n" +
 				"query: \"market_cap\"\n" +
+				"EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n" +
 				"MATCHES:\n" +
 				"- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120\n" +
 				"  preview: {\"price\":\"0.06342 T\"}\n" +
@@ -2395,6 +2396,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.BrowserNetworkExamples[0].ToolIndex != 8 ||
 		manifest.BrowserNetworkExamples[0].CallID != "call-8" ||
 		manifest.BrowserNetworkExamples[0].Status != "matches" ||
+		manifest.BrowserNetworkExamples[0].EvidenceStatus != "refs_only_not_citable; read_required=true" ||
 		manifest.BrowserNetworkExamples[0].Query != "market_cap" ||
 		!manifest.BrowserNetworkExamples[0].RequiresRead ||
 		!manifest.BrowserNetworkExamples[0].NotCitable ||
@@ -2603,7 +2605,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"preview: JSON_PATH: $.price \"0.06342 T\"",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
 		"## Browser Network Searches",
-		"tool#8 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`call-8` requires_read=`true` citable=`false`",
+		"tool#8 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`call-8` evidence_status=`refs_only_not_citable; read_required=true` requires_read=`true` citable=`false`",
 		"refs: `n1`",
 		"## Plan Updates",
 		"tool#7 action=`update` index=`2` status=`completed` progress=`2/3` current=`3:pending` call_id=`call-7`",

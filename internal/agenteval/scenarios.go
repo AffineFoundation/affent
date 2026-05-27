@@ -2336,6 +2336,8 @@ func liveWebTaostatsNetworkSearchReadScenario() BatchScenario {
 		RequiredToolResultText: map[string][]string{
 			"browser_network": {
 				"BROWSER NETWORK EVIDENCE",
+				"EVIDENCE_STATUS: refs_only_not_citable",
+				"read_required=true",
 				"query:",
 				"Next:",
 				"browser_network_read",

@@ -286,13 +286,14 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		raw := "BROWSER NETWORK EVIDENCE\n" +
 			"CURRENT_PAGE: https://taostats.io/subnets/120/statistics\n" +
 			"query: \"market_cap\"\n" +
+			"EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n" +
 			"MATCHES: none\n" +
 			"Failure: kind=no_matches\n" +
 			"Next: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n"
 		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network", Content: raw})
 		for _, want := range []string{
 			"TOOL_RESULT[browser_network]",
-			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"market_cap\" match_status=none failure_kind=no_matches",
+			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"market_cap\" evidence_status=refs_only_not_citable; read_required=true match_status=none failure_kind=no_matches",
 			"Next: wait for the page to load dynamic data",
 			"mark hidden fields unverified",
 		} {
@@ -309,6 +310,7 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		raw := "BROWSER NETWORK EVIDENCE\n" +
 			"CURRENT_PAGE: https://taostats.io/subnets/120/statistics\n" +
 			"query: \"validator market cap\"\n" +
+			"EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n" +
 			"MATCHES:\n" +
 			"- n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics\n" +
 			"  preview: {\"subnet\":\"120\",\"market_cap\":\"195094\",\"validators\":42," + strings.Repeat("\"noise\":\"row\",", 120) + "}\n" +
@@ -317,7 +319,7 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network", Content: raw})
 		for _, want := range []string{
 			"TOOL_RESULT[browser_network]",
-			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"validator market cap\" matches=1",
+			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"validator market cap\" evidence_status=refs_only_not_citable; read_required=true matches=1",
 			"n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics",
 			"preview: {\"subnet\":\"120\",\"market_cap\":\"195094\",\"validators\":42",
 			"json_paths: $.data.market_cap=195094; $.data.validators=42",

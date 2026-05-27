@@ -132,6 +132,7 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	for _, want := range []string{
 		"BROWSER NETWORK EVIDENCE",
 		"CURRENT_PAGE: https://taostats.io/subnets/120",
+		"EVIDENCE_STATUS: refs_only_not_citable; read_required=true",
 		"n1 status=200 resource=xhr content_type=application/json",
 		"market_cap",
 		`json_paths: $.market_cap="201.04K T"`,
@@ -338,6 +339,7 @@ func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
 		t.Fatalf("browser_network no-match should not error: %v", err)
 	}
 	if !strings.Contains(searchOut, "CURRENT_PAGE: https://taostats.io/subnets/120") ||
+		!strings.Contains(searchOut, "EVIDENCE_STATUS: refs_only_not_citable; read_required=true") ||
 		!strings.Contains(searchOut, "MATCHES: none") ||
 		!strings.Contains(searchOut, "Failure: kind=no_matches") ||
 		!strings.Contains(searchOut, "mark hidden fields unverified") {

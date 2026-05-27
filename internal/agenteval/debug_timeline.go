@@ -1204,6 +1204,9 @@ func renderTimelineBrowserNetworkSearches(b *strings.Builder, trace *Trace) {
 		if ex.CallID != "" {
 			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
 		}
+		if ex.EvidenceStatus != "" {
+			fmt.Fprintf(b, " evidence_status=`%s`", timelineInline(ex.EvidenceStatus, 220))
+		}
 		if ex.RequiresRead {
 			fmt.Fprintf(b, " requires_read=`true`")
 		}

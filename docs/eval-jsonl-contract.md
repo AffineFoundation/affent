@@ -306,10 +306,11 @@ Scenario records describe one eval case:
   searches. These are diagnostic refs/checks, not citable factual evidence.
   Each sample includes tool index, call id, current page URL, query, status
   (`matches`, `no_matches`, or `unknown`), bounded network refs, compact
-  `preview:` snippets from matched responses, whether the refs require
-  `browser_network_read`, and the suggested next step. Batch summary examples
-  also include the originating scenario name. Treat these as leads for dynamic
-  pages: cite hidden JSON/text values only after a matching
+  `preview:` snippets from matched responses, the tool-level
+  `refs_only_not_citable`/`read_required=true` status when present, whether the
+  refs require `browser_network_read`, and the suggested next step. Batch
+  summary examples also include the originating scenario name. Treat these as
+  leads for dynamic pages: cite hidden JSON/text values only after a matching
   `browser_network_read` result produces network `SourceAccess:` evidence.
 - `browser_scroll_examples`: optional bounded examples of `browser_scroll`
   telemetry. These are page-position diagnostics, not citable factual

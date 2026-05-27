@@ -482,6 +482,7 @@ type BrowserNetworkSearchExample struct {
 	CurrentPageURL    string   `json:"current_page_url,omitempty"`
 	Query             string   `json:"query,omitempty"`
 	Status            string   `json:"status"`
+	EvidenceStatus    string   `json:"evidence_status,omitempty"`
 	Refs              []string `json:"refs,omitempty"`
 	Previews          []string `json:"previews,omitempty"`
 	RequiresRead      bool     `json:"requires_read,omitempty"`
@@ -1124,6 +1125,8 @@ func browserNetworkSearchExampleForTool(index int, c ToolCall) (BrowserNetworkSe
 		case strings.HasPrefix(trimmed, "query:"):
 			ex.Query = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "query:")), `"`)
 			ex.Query = compactOneLine(ex.Query, 220)
+		case strings.HasPrefix(trimmed, "EVIDENCE_STATUS:"):
+			ex.EvidenceStatus = compactOneLine(strings.TrimSpace(strings.TrimPrefix(trimmed, "EVIDENCE_STATUS:")), 220)
 		case trimmed == "MATCHES: none":
 			ex.Status = "no_matches"
 			ex.NotCitable = true

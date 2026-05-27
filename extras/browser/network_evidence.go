@@ -570,6 +570,7 @@ func formatNetworkSearchResults(query, pageURL string, entries, recent []Network
 	if query != "" {
 		fmt.Fprintf(&b, "query: %q\n", query)
 	}
+	b.WriteString("EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n")
 	if len(entries) == 0 {
 		b.WriteString("MATCHES: none\n")
 		if len(recent) > 0 {

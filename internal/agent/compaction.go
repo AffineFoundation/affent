@@ -550,7 +550,7 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 		jsonPaths string
 	}
 
-	var currentPage, query, next, failureKind string
+	var currentPage, query, evidenceStatus, next, failureKind string
 	noMatches := false
 	inMatches := false
 	var matches []networkMatch
@@ -563,6 +563,8 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 			currentPage = strings.TrimSpace(strings.TrimPrefix(trimmed, "CURRENT_PAGE:"))
 		case strings.HasPrefix(trimmed, "query:"):
 			query = strings.TrimSpace(strings.TrimPrefix(trimmed, "query:"))
+		case strings.HasPrefix(trimmed, "EVIDENCE_STATUS:"):
+			evidenceStatus = strings.TrimSpace(strings.TrimPrefix(trimmed, "EVIDENCE_STATUS:"))
 		case trimmed == "MATCHES: none":
 			noMatches = true
 			inMatches = false
@@ -593,11 +595,17 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 	if query != "" {
 		fmt.Fprintf(&b, " query=%s", textutil.Preview(query, 240))
 	}
+	if evidenceStatus != "" {
+		fmt.Fprintf(&b, " evidence_status=%s", textutil.Preview(evidenceStatus, 240))
+	}
 	switch {
 	case noMatches:
 		b.WriteString(" match_status=none")
 	case len(matches) > 0:
 		fmt.Fprintf(&b, " matches=%d", len(matches))
+	}
+	if evidenceStatus == "" && len(matches) > 0 {
+		b.WriteString(" evidence_status=refs_only_not_citable; read_required=true")
 	}
 	if failureKind != "" {
 		fmt.Fprintf(&b, " failure_kind=%s", failureKind)
