@@ -1758,6 +1758,7 @@ func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, resul
 }
 
 func (l *Loop) publishAndAppendToolResultWithContextMeta(turnID, callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta, contextBudget *toolResultContextBudget, memoryUpdate *sse.MemoryUpdateMeta) int {
+	result = redactSecretValues(result, l.SecretValuesProvider)
 	exit := 0
 	if isErr {
 		exit = 1

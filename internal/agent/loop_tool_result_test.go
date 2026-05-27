@@ -297,6 +297,59 @@ func TestToolResultArtifactStoresFullTruncatedPayload(t *testing.T) {
 	}
 }
 
+func TestToolResultArtifactRedactsSecretValues(t *testing.T) {
+	const secret = "ghp_artifact_secret_token"
+	artifactDir := t.TempDir()
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 8)
+	loop := &Loop{
+		Conv:                         conv,
+		Events:                       events,
+		ToolResultArtifactDir:        artifactDir,
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+		SecretValuesProvider:         func() []string { return []string{secret} },
+	}
+	payload := strings.Repeat("x", MaxToolResultBytesInEvent) + secret + strings.Repeat("y", 4096)
+
+	loop.publishAndAppendToolResultWithContext("t1", "c1", "custom_tool", payload, false, 0, nil, nil)
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type != sse.TypeToolResult {
+				continue
+			}
+			var p sse.ToolResultPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode tool.result: %v", err)
+			}
+			if strings.Contains(p.Result, secret) || strings.Contains(p.ResultSummary, secret) {
+				t.Fatalf("tool.result event leaked secret: %+v", p)
+			}
+			if p.ResultArtifactPath == "" {
+				t.Fatal("expected artifact path for oversized result")
+			}
+			full, err := os.ReadFile(filepath.Join(artifactDir, filepath.Base(p.ResultArtifactPath)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(full), secret) {
+				t.Fatalf("artifact leaked secret")
+			}
+			if !strings.Contains(string(full), "[REDACTED:account-secret]") {
+				t.Fatalf("artifact missing redaction marker")
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for tool.result")
+		}
+	}
+}
+
 func TestToolResult_ResultEventCapKeepsValidUTF8(t *testing.T) {
 	payload := strings.Repeat("你", MaxToolResultBytesInEvent)
 	got := toolResultEventPayload("c1", 0, payload)
