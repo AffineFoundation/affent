@@ -42,7 +42,7 @@ export function RuntimeStatsPanel({
               ))}
             </div>
           ) : (
-            <div className="session-skills-empty" data-testid="runtime-stats-empty">No runtime diagnostics for this chat.</div>
+            <div className="session-skills-empty" data-testid="runtime-stats-empty">No runtime diagnostics need attention.</div>
           )
         ) : null}
       </div>

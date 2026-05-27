@@ -94,7 +94,7 @@ describe("RuntimeStatsPanel", () => {
 
     const panel = screen.getByTestId("runtime-stats-panel");
     expect(panel).toHaveTextContent("qwen-small");
-    expect(panel).toHaveTextContent("No runtime diagnostics for this chat.");
+    expect(panel).toHaveTextContent("No runtime diagnostics need attention.");
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
     expect(panel).not.toHaveTextContent("Mode");
     expect(panel).not.toHaveTextContent("Tools");
