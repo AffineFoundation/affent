@@ -452,6 +452,56 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromConversationRepairedEven
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromVisibleLoopDecision(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-decision-hint")
+	dir := pool.sessionDirPath("loop-decision-hint")
+	hidden := false
+	visible := true
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeLoopDecision, sse.LoopDecisionPayload{
+			TurnID:         "t1",
+			DecisionID:     "hidden",
+			Kind:           "evidence_quality",
+			Decision:       "defer",
+			RequiredAction: "this hidden action should not be surfaced",
+			VisibleInUI:    &hidden,
+		})+
+			sessionEventLine(t, sse.TypeLoopDecision, sse.LoopDecisionPayload{
+				TurnID:         "t1",
+				DecisionID:     "continue",
+				Kind:           "evidence_quality",
+				Decision:       "continue",
+				RequiredAction: "this non-blocking action should not be surfaced",
+				VisibleInUI:    &visible,
+			})+
+			sessionEventLine(t, sse.TypeLoopDecision, sse.LoopDecisionPayload{
+				TurnID:         "t2",
+				DecisionID:     "evidence-quality-dynamic-partial",
+				Kind:           "evidence_quality",
+				Trigger:        "source_access_dynamic_partial",
+				Decision:       "defer",
+				RequiredAction: "Read browser network responses or an official API/source before citing dynamic page metrics.",
+				VisibleInUI:    &visible,
+			}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-decision-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "Read browser network responses or an official API/source before citing dynamic page metrics." {
+		t.Fatalf("latest_recovery_hint = %q, want visible loop decision required action", summary.LatestRecoveryHint)
+	}
+}
+
 func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
 	got := mergeSessionSummaries(
 		sessionSummary{

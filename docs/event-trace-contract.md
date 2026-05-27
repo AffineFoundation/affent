@@ -373,6 +373,10 @@ loop file directly.
 - `required_action`: bounded next action visible to users and evals.
 - `visible_in_ui`: optional boolean; missing means visible.
 
+Session summaries may surface visible `required_action` values from actionable
+decisions such as `defer`, `trigger`, or `request_input` as
+`latest_recovery_hint`.
+
 `research_checkpoint` is emitted only for active loop turns where the user
 request combines high-impact Affent/runtime/protocol design changes with
 external-calibration signals. The paired model-context reminder asks the agent

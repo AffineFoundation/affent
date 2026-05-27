@@ -1189,6 +1189,16 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			}
 			continue
 		}
+		if ev.Type == sse.TypeLoopDecision {
+			var p sse.LoopDecisionPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if hint := recoveryHintFromLoopDecision(p); hint != "" {
+				latest = hint
+			}
+			continue
+		}
 		if ev.Type != sse.TypeToolResult {
 			continue
 		}
@@ -1205,6 +1215,21 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		}
 	}
 	return latest, nil
+}
+
+func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {
+	if p.VisibleInUI != nil && !*p.VisibleInUI {
+		return ""
+	}
+	if strings.TrimSpace(p.RequiredAction) == "" {
+		return ""
+	}
+	switch strings.TrimSpace(p.Decision) {
+	case "defer", "trigger", "stop", "pause", "request_input":
+		return recoveryHintFromText(p.RequiredAction)
+	default:
+		return ""
+	}
 }
 
 func recoveryHintFromConversationMessage(msg agent.ChatMessage) string {
