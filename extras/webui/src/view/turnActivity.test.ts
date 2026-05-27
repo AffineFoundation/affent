@@ -597,9 +597,9 @@ describe("buildTurnActivity", () => {
 
     expect(activity?.evidencePreview).toEqual([
       {
-        label: "Network search",
+        label: "Network check",
         value: "https://taostats.io/subnets/120",
-        displayValue: "taostats.io/subnets/120 · market_cap · no matches",
+        displayValue: "taostats.io/subnets/120 · market_cap · no matches · no citable source",
       },
     ]);
     expect(activity?.brief.rows).toContainEqual({
@@ -607,17 +607,67 @@ describe("buildTurnActivity", () => {
       label: "Sources",
       evidence: [
         {
-          label: "Network search",
+          label: "Network check",
           value: "https://taostats.io/subnets/120",
-          displayValue: "taostats.io/subnets/120 · market_cap · no matches",
+          displayValue: "taostats.io/subnets/120 · market_cap · no matches · no citable source",
         },
       ],
       action: {
         label: "Use sources",
-        draft: "Use this evidence in the next step:\n- Network search taostats.io/subnets/120 · market_cap · no matches",
+        draft: "Use this evidence in the next step:\n- Network check taostats.io/subnets/120 · market_cap · no matches · no citable source (not a citable source)",
         source: "evidence",
       },
     });
+  });
+
+  it("marks browser network matches as refs that must be read before citation", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "find hidden validators" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "browser_network",
+          args: { query: "validators", max_results: 5 },
+          args_truncated: false,
+          args_bytes: 38,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 25,
+          result_summary: "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://taostats.io/subnets/120\nquery: \"validators\"\nMATCHES:\n- n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics",
+          result: "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://taostats.io/subnets/120\nquery: \"validators\"\nMATCHES:\n- n7 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnet/120/metrics\n  preview: {\"validators\":42}\nNext: call browser_network_read with the most relevant ref and json_path before citing values.",
+          result_truncated: false,
+          result_bytes: 330,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.evidencePreview).toEqual([
+      {
+        label: "Network refs",
+        value: "https://taostats.io/subnets/120",
+        displayValue: "taostats.io/subnets/120 · validators · matches · read before citing",
+      },
+    ]);
+    expect(activity?.evidenceAction?.draft).toBe(
+      "Use this evidence in the next step:\n- Network refs taostats.io/subnets/120 · validators · matches · read before citing (call browser_network_read before citing values)",
+    );
   });
 
   it("surfaces session search hits as history evidence", () => {

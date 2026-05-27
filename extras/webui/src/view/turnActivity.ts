@@ -309,7 +309,7 @@ function evidenceHeadlineScore(item: TurnActivityEvidence): number {
   if (item.label === "Searched") return 90;
   if (item.label === "History") return 85;
   if (item.label === "Read") return 80;
-  if (item.label === "Network search") return 75;
+  if (item.label === "Network refs" || item.label === "Network check") return 75;
   if (item.label === "Changed") return 70;
   if (item.label === "MCP") return 60;
   if (item.label === "Listed") return 50;
@@ -853,13 +853,15 @@ function browserNetworkEvidence(node: ExecutionTreeNode): TurnActivityEvidence |
   const page = firstPrefixedLineValue(result, "CURRENT_PAGE:");
   const query = firstPrefixedLineValue(result, "query:");
   const value = page || query || "browser_network";
+  const matchLabel = browserNetworkMatchLabel(result);
   const displayParts = [
     page ? readableUrl(page) : undefined,
     query ? query.replace(/^"|"$/g, "") : undefined,
-    browserNetworkMatchLabel(result),
+    matchLabel,
+    browserNetworkEvidenceCaution(matchLabel),
   ].filter((part): part is string => !!part);
   return {
-    label: "Network search",
+    label: matchLabel === "matches" ? "Network refs" : "Network check",
     value,
     displayValue: displayParts.join(" · ") || value,
   };
@@ -872,6 +874,12 @@ function browserNetworkMatchLabel(result: string): string | undefined {
     if (trimmed === "MATCHES:") return "matches";
   }
   return undefined;
+}
+
+function browserNetworkEvidenceCaution(matchLabel: string | undefined): string | undefined {
+  if (matchLabel === "matches") return "read before citing";
+  if (matchLabel === "no matches") return "no citable source";
+  return "refs only";
 }
 
 function firstPrefixedLineValue(result: string, prefix: string): string | undefined {
@@ -1046,6 +1054,8 @@ function evidenceBriefAction(evidence: readonly TurnActivityEvidence[]): TurnAct
 
 function evidenceDraftValue(item: TurnActivityEvidence, opts: { useRawValue?: boolean } = {}): string {
   const value = opts.useRawValue ? item.value : item.displayValue || item.value;
+  if (item.label === "Network refs") return `${item.label} ${value} (call browser_network_read before citing values)`;
+  if (item.label === "Network check") return `${item.label} ${value} (not a citable source)`;
   return `${item.label} ${value}`;
 }
 
