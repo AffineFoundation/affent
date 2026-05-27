@@ -396,8 +396,9 @@ external calibration. It does not start a separate controller agent.
   `context_overflow`.
 - `recoverable`: whether the turn can continue.
 
-Session summaries may surface recent `error` events and `turn.end` failures
-such as `reason=max_turns` as `latest_recovery_hint`, preserving specific error
+Session summaries may surface recent `error` events, `turn.end` failures such
+as `reason=max_turns`, and successful no-hit `session_search` results with
+recent-session anchors as `latest_recovery_hint`, preserving specific error
 text when it is available.
 
 ## Compatibility Rules

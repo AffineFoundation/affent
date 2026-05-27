@@ -632,8 +632,9 @@ Use `GET /v1/sessions/{id}/events` for live SSE. Reconnect with
 durable event log. Session summaries expose `latest_recovery_hint` from recent
 failed tool events, `conversation.repaired` events, visible `loop.decision`
 required actions, runtime `error` events, `turn.end` budget/runtime failures,
-and, when the event log is missing or incomplete, from structured resume repair
-placeholders and notes in `conversation.jsonl`.
+successful no-hit `session_search` results that returned recent-session
+recovery anchors, and, when the event log is missing or incomplete, from
+structured resume repair placeholders and notes in `conversation.jsonl`.
 Artifact list responses include path, size, mod time, and a bounded compact
 preview from the start of each artifact so operators can choose the right large
 tool result without opening every file.

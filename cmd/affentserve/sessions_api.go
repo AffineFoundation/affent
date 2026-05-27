@@ -1324,6 +1324,10 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		if err := json.Unmarshal(ev.Data, &p); err != nil {
 			continue
 		}
+		if hint := recoveryHintFromSessionSearchResult(p.Result); hint != "" {
+			setLatest(hint, p.TurnID)
+			continue
+		}
 		if p.ExitCode == 0 && p.FailureKind == "" && len(p.FailureKinds) == 0 {
 			continue
 		}
@@ -1399,6 +1403,11 @@ func recoveryHintFromConversationMessage(msg agent.ChatMessage) string {
 }
 
 func recoveryHintFromToolResult(summary, result string) string {
+	for _, candidate := range []string{result, summary} {
+		if hint := recoveryHintFromSessionSearchResult(candidate); hint != "" {
+			return hint
+		}
+	}
 	text := summary
 	if result != "" && result != summary {
 		if text != "" {
@@ -1411,6 +1420,36 @@ func recoveryHintFromToolResult(summary, result string) string {
 		return ""
 	}
 	return recoveryHintFromText(match[1])
+}
+
+func recoveryHintFromSessionSearchResult(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" || !strings.HasPrefix(text, "{") || !strings.Contains(text, `"recent_sessions"`) {
+		return ""
+	}
+	var resp agent.SessionSearchResponse
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		return ""
+	}
+	if resp.Total > 0 || len(resp.Results) > 0 || len(resp.RecentSessions) == 0 {
+		return ""
+	}
+	recent := resp.RecentSessions[0]
+	parts := []string{"session recall found no direct hits"}
+	if len(resp.RecentSessions) > 1 {
+		parts = append(parts, "recent session anchors are available")
+	}
+	if sid := strings.TrimSpace(recent.SessionID); sid != "" {
+		parts = append(parts, "retry from recent session "+sid)
+	}
+	preview := strings.TrimSpace(recent.LatestUser)
+	if preview == "" {
+		preview = strings.TrimSpace(recent.LatestAssistant)
+	}
+	if preview != "" {
+		parts = append(parts, "preview: "+preview)
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
 }
 
 func recoveryHintFromText(text string) string {

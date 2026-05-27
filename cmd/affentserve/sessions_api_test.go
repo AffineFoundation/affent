@@ -582,6 +582,46 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromMaxTurns(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromSessionSearchRecentAnchors(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "recall-miss-anchors")
+	dir := pool.sessionDirPath("recall-miss-anchors")
+
+	result := `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry with fewer or different keywords, include outcome words like passed/final/decision, or use recent_sessions as anchors for a narrower query.","recent_sessions":[{"session_id":"market-alpha","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast stock recovery","latest_assistant":"final marker HIST-STOCK-44"},{"session_id":"subnet-120","latest_user":"Analyze Bittensor subnet 120"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t1", CallID: "search-1", ExitCode: 0, ResultSummary: result, Result: result}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "recall-miss-anchors")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{"session recall found no direct hits", "retry from recent session market-alpha", "Alpha Coast stock recovery"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestRecoveryHintFromConversationSessionSearchRecentAnchors(t *testing.T) {
+	result := `{"query":"missing marker","total":0,"results":[],"recent_sessions":[{"session_id":"recent-a","latest_assistant":"final marker HIST-STOCK-44"}]}`
+	got := recoveryHintFromConversationMessage(agent.ChatMessage{
+		Role:    "tool",
+		Content: result,
+	})
+	for _, want := range []string{"session recall found no direct hits", "retry from recent session recent-a", "HIST-STOCK-44"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation recovery hint missing %q: %q", want, got)
+		}
+	}
+}
+
 func TestSummarizeDurableSessionKeepsSpecificRuntimeErrorRecoveryHint(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
