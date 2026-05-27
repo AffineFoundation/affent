@@ -768,7 +768,9 @@ Current built-in suites:
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
-  enabled.
+  enabled. Browser network evidence scenarios require final answers to preserve
+  both `browser_network_url` and `requested_url`, so operators can distinguish
+  the response actually read from the user-facing page being verified.
 
 Run scenarios:
 

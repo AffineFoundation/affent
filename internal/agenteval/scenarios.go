@@ -1889,6 +1889,7 @@ func liveWebTaostatsDynamicEvidenceScenario() BatchScenario {
 			"Affine",
 			"taostats.io",
 			"browser_network_url",
+			"requested_url",
 			"source_method",
 		},
 		ForbiddenFinalText: []string{
@@ -1954,6 +1955,7 @@ func liveWebTaostatsWebFetchRecoveryScenario() BatchScenario {
 		RequiredFinalText: []string{
 			"web_fetch",
 			"browser_network_url",
+			"requested_url",
 			"source_method",
 		},
 		ForbiddenFinalText: []string{

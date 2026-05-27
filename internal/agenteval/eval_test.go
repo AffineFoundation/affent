@@ -1120,7 +1120,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 			t.Fatalf("live-web browser_network_read result requirements = %#v, want %q", scenario.RequiredToolResultText["browser_network_read"], want)
 		}
 	}
-	for _, want := range []string{"browser_network_url", "source_method"} {
+	for _, want := range []string{"browser_network_url", "requested_url", "source_method"} {
 		if !stringSliceContains(scenario.RequiredFinalText, want) {
 			t.Fatalf("live-web RequiredFinalText = %#v, want %q", scenario.RequiredFinalText, want)
 		}
@@ -1151,7 +1151,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 		recovery.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"}) {
 		t.Fatalf("live-web recovery RequiredSourceAccess = %#v", recovery.RequiredSourceAccess)
 	}
-	for _, want := range []string{"web_fetch", "browser_network_url", "source_method"} {
+	for _, want := range []string{"web_fetch", "browser_network_url", "requested_url", "source_method"} {
 		if !stringSliceContains(recovery.RequiredFinalText, want) {
 			t.Fatalf("live-web recovery RequiredFinalText = %#v, want %q", recovery.RequiredFinalText, want)
 		}
