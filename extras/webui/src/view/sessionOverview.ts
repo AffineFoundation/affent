@@ -153,6 +153,8 @@ function buildMetrics(
   if (contextMetric) metrics.push(contextMetric);
   const settledIssues = latestTurn ? settledToolIssueCount(latestTurn) : 0;
   if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
+  const recoveryMetric = latestTurn ? buildToolRecoveryMetric(latestTurn) : undefined;
+  if (recoveryMetric) metrics.push(recoveryMetric);
   const artifactMetric = buildArtifactMetric(session);
   if (artifactMetric) metrics.push(artifactMetric);
   const loopMetric = buildLoopMetric(session);
@@ -194,6 +196,23 @@ function buildMetrics(
   if (session.unknownEventCount > 0) metrics.push({ label: "Unclassified", value: String(session.unknownEventCount), tone: "warning" });
 
   return metrics;
+}
+
+function buildToolRecoveryMetric(turn: TurnState): SessionOverviewMetric | undefined {
+  for (const call of [...turn.toolCalls].reverse()) {
+    if (call.status !== "error" && (!call.exitCode || call.exitCode === 0)) continue;
+    const next = toolNextHint(call.resultSummary, call.result);
+    if (!next) continue;
+    return { label: "Recovery", value: summarize(next, 72), tone: "warning" };
+  }
+  return undefined;
+}
+
+function toolNextHint(summary?: string, result?: string): string | undefined {
+  const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
+  const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
+  const next = match?.[1]?.trim();
+  return next || undefined;
 }
 
 function buildContextCompactionMetric(session: SessionState): SessionOverviewMetric | undefined {

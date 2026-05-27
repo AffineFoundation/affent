@@ -672,6 +672,44 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces the latest failed tool recovery hint in the overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "read the missing config" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "read_file",
+          args: { path: "config/missing.yaml" },
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 1,
+          result_summary: "file not found\nNext: run rg --files config before retrying\nFailure: kind=not_found",
+          result: "file not found\nNext: run rg --files config before retrying\nFailure: kind=not_found",
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, tool_errors: 1 } } },
+    ]);
+
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toContainEqual({ label: "Issue", value: "1", tone: "error" });
+    expect(overview.metrics).toContainEqual({ label: "Recovery", value: "run rg --files config before retrying", tone: "warning" });
+  });
+
   it("carries source counts into the header when a final report uses earlier tool evidence", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
