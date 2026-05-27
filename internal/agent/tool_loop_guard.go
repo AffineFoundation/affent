@@ -23,6 +23,7 @@ const (
 	browserInteractionHaltThreshold = 5
 	browserFindNoMatchThreshold     = 3
 	browserNetworkNoMatchThreshold  = 3
+	browserScrollNoMoveThreshold    = 2
 
 	loopGuardCallCapKind             = "loop_guard_call_cap"
 	loopGuardHaltedToolKind          = "loop_guard_halted_tool"
@@ -83,6 +84,9 @@ type toolLoopGuard struct {
 	browserFindNoMatchCount    int
 	browserNetworkNoMatchPage  string
 	browserNetworkNoMatchCount int
+	browserScrollNoMovePage    string
+	browserScrollNoMoveDir     string
+	browserScrollNoMoveCount   int
 }
 
 type toolCallKey struct {
@@ -227,6 +231,14 @@ func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, resu
 		}
 		outcomeOK = false
 	}
+	if browserGuard := g.recordBrowserScrollNoMovement(tool, result, isErr); browserGuard != "" {
+		if guardResult != "" {
+			guardResult += "\n\n" + browserGuard
+		} else {
+			guardResult = browserGuard
+		}
+		outcomeOK = false
+	}
 	return guardResult, outcomeOK
 }
 
@@ -330,6 +342,73 @@ func browserNetworkNoNewEvidenceMessage(rawURL string, count int) string {
 	}
 	return withLoopGuardFailureKind(
 		fmt.Sprintf("loop_guard: browser_network returned no captured response matches on %s %d times this turn. Repeating network searches is unlikely to add evidence unless the page loads new XHR/fetch responses.\nNext: inspect the current browser_snapshot once for visible labels, interact with the relevant tab or wait once if data has not loaded, use a known API/text/source endpoint, or mark hidden fields unverified.", source, count),
+		loopGuardNoNewEvidenceKind,
+	)
+}
+
+func (g *toolLoopGuard) recordBrowserScrollNoMovement(tool, result string, isErr bool) string {
+	if g == nil || tool != "browser_scroll" || isErr {
+		return ""
+	}
+	direction, noMovement := browserScrollNoMovement(result)
+	page := sourceaccess.AccessedURLFromResult(result)
+	if page == "" {
+		page = "__unknown_browser_page__"
+	}
+	if !noMovement {
+		if g.browserScrollNoMovePage == page {
+			g.browserScrollNoMoveCount = 0
+			g.browserScrollNoMoveDir = ""
+		}
+		return ""
+	}
+	if g.browserScrollNoMovePage != page || g.browserScrollNoMoveDir != direction {
+		g.browserScrollNoMovePage = page
+		g.browserScrollNoMoveDir = direction
+		g.browserScrollNoMoveCount = 0
+	}
+	g.browserScrollNoMoveCount++
+	if g.browserScrollNoMoveCount < browserScrollNoMoveThreshold {
+		return ""
+	}
+	return browserScrollNoMovementMessage(page, direction, g.browserScrollNoMoveCount)
+}
+
+func browserScrollNoMovement(result string) (string, bool) {
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "SCROLL:") {
+			continue
+		}
+		direction := ""
+		noMovement := false
+		for _, field := range strings.Fields(strings.TrimSpace(strings.TrimPrefix(line, "SCROLL:"))) {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok {
+				continue
+			}
+			switch key {
+			case "direction":
+				direction = value
+			case "movement":
+				noMovement = value == "none"
+			}
+		}
+		return direction, noMovement
+	}
+	return "", false
+}
+
+func browserScrollNoMovementMessage(rawURL, direction string, count int) string {
+	source := "the current rendered page"
+	if rawURL != "" && rawURL != "__unknown_browser_page__" {
+		source = fmt.Sprintf("%q", rawURL)
+	}
+	if direction == "" {
+		direction = "same direction"
+	}
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: browser_scroll produced no page movement on %s %d times this turn while scrolling %s. Repeating boundary scrolls is unlikely to reveal new evidence.\nNext: stop scrolling this page in the same direction; use browser_find/browser_snapshot for visible labels, browser_network/browser_network_read for hidden XHR/fetch data, click a visible tab/pagination control, navigate to a more specific source, or mark the field unavailable.", source, count, direction),
 		loopGuardNoNewEvidenceKind,
 	)
 }

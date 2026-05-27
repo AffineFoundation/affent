@@ -197,6 +197,55 @@ func TestToolLoopGuard_BrowserInteractionSuccessResetsFailureCount(t *testing.T)
 	}
 }
 
+func TestToolLoopGuard_BrowserScrollNoMovement(t *testing.T) {
+	g := newToolLoopGuard()
+	result := strings.Join([]string{
+		"SourceAccess: browser_rendered_url=https://example.com/dashboard; page_text_below=partial_dynamic_page_evidence",
+		"URL: https://example.com/dashboard",
+		"SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+	}, "\n")
+	if guard, ok := g.recordToolResult("browser_scroll", json.RawMessage(`{"direction":"down"}`), result, false); guard != "" || !ok {
+		t.Fatalf("first no-movement scroll should be recorded without immediate guard; guard=%q ok=%v", guard, ok)
+	}
+	guard, ok := g.recordToolResult("browser_scroll", json.RawMessage(`{"direction":"down"}`), result, false)
+	if ok {
+		t.Fatal("second no-movement scroll should count as no new evidence")
+	}
+	for _, want := range []string{
+		"browser_scroll produced no page movement",
+		"https://example.com/dashboard",
+		"scrolling down",
+		"browser_network/browser_network_read",
+		"mark the field unavailable",
+		"Failure: kind=loop_guard_no_new_evidence",
+	} {
+		if !strings.Contains(guard, want) {
+			t.Fatalf("scroll no-movement guard missing %q:\n%s", want, guard)
+		}
+	}
+}
+
+func TestToolLoopGuard_BrowserScrollMovementResetsNoMovement(t *testing.T) {
+	g := newToolLoopGuard()
+	noMove := strings.Join([]string{
+		"SourceAccess: browser_rendered_url=https://example.com/dashboard; page_text_below=verified_page_evidence",
+		"SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+	}, "\n")
+	moved := strings.Join([]string{
+		"SourceAccess: browser_rendered_url=https://example.com/dashboard; page_text_below=verified_page_evidence",
+		"SCROLL: direction=down before_y=0 after_y=600 max_y=1200 movement=moved",
+	}, "\n")
+	if guard, ok := g.recordToolResult("browser_scroll", json.RawMessage(`{"direction":"down"}`), noMove, false); guard != "" || !ok {
+		t.Fatalf("first no-movement scroll should not guard: guard=%q ok=%v", guard, ok)
+	}
+	if guard, ok := g.recordToolResult("browser_scroll", json.RawMessage(`{"direction":"down"}`), moved, false); guard != "" || !ok {
+		t.Fatalf("moving scroll should reset no-movement state: guard=%q ok=%v", guard, ok)
+	}
+	if guard, ok := g.recordToolResult("browser_scroll", json.RawMessage(`{"direction":"down"}`), noMove, false); guard != "" || !ok {
+		t.Fatalf("post-movement no-movement scroll should start fresh: guard=%q ok=%v", guard, ok)
+	}
+}
+
 func TestToolLoopGuard_BlocksRepeatedFailedWebFetchURL(t *testing.T) {
 	g := newToolLoopGuard()
 	args := json.RawMessage(`{"url":"https://blocked.example/metrics"}`)

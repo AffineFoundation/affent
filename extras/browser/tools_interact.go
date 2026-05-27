@@ -332,8 +332,17 @@ func ScrollTool(s *Session) *agent.Tool {
 				return "", ErrNoPage
 			}
 			page := s.withContext(ctx)
-			if _, err := page.Eval(js); err != nil {
+			result, err := page.Eval(browserScrollJS(args.Direction, amount, js))
+			if err != nil {
 				return "", fmt.Errorf("scroll: %w", err)
+			}
+			scrollRaw, err := result.Value.MarshalJSON()
+			if err != nil {
+				return "", fmt.Errorf("re-marshal scroll result: %w", err)
+			}
+			var telemetry browserScrollTelemetry
+			if err := json.Unmarshal(scrollRaw, &telemetry); err != nil {
+				return "", fmt.Errorf("decode scroll result: %w (raw=%s)", err, string(scrollRaw))
 			}
 			// Give lazy-load handlers a beat to fire.
 			time.Sleep(150 * time.Millisecond)
@@ -341,7 +350,72 @@ func ScrollTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("post-scroll snapshot: %w", err)
 			}
-			return formatSnapshotResult(snap)
+			return formatScrollSnapshotResult(snap, telemetry)
 		},
 	}
+}
+
+type browserScrollTelemetry struct {
+	Direction string `json:"direction"`
+	BeforeY   int    `json:"before_y"`
+	AfterY    int    `json:"after_y"`
+	MaxY      int    `json:"max_y"`
+}
+
+func browserScrollJS(direction string, amount int, action string) string {
+	return fmt.Sprintf(`() => {
+  const root = document.scrollingElement || document.documentElement || document.body;
+  const readY = () => Math.round(window.scrollY || (root && root.scrollTop) || 0);
+  const readMaxY = () => Math.max(0, Math.round(((root && root.scrollHeight) || (document.body && document.body.scrollHeight) || 0) - window.innerHeight));
+  const beforeY = readY();
+  (%s)();
+  const afterY = readY();
+  return {direction: %q, before_y: beforeY, after_y: afterY, max_y: readMaxY()};
+}`, action, direction)
+}
+
+func formatScrollSnapshotResult(snap *Snapshot, telemetry browserScrollTelemetry) (string, error) {
+	out, err := formatSnapshotResult(snap)
+	scrollLine := formatScrollTelemetry(telemetry)
+	if scrollLine == "" {
+		return out, err
+	}
+	if out != "" && !strings.HasSuffix(out, "\n") {
+		out += "\n"
+	}
+	out += scrollLine
+	return out, err
+}
+
+func formatScrollTelemetry(t browserScrollTelemetry) string {
+	if t.Direction == "" {
+		return ""
+	}
+	movement := "moved"
+	if absInt(t.AfterY-t.BeforeY) <= 1 {
+		movement = "none"
+	}
+	boundary := ""
+	switch {
+	case t.AfterY <= 1:
+		boundary = "top"
+	case t.MaxY > 0 && t.AfterY >= t.MaxY-1:
+		boundary = "bottom"
+	}
+	line := fmt.Sprintf("SCROLL: direction=%s before_y=%d after_y=%d max_y=%d movement=%s", t.Direction, t.BeforeY, t.AfterY, t.MaxY, movement)
+	if boundary != "" {
+		line += " boundary=" + boundary
+	}
+	line += "\n"
+	if movement == "none" {
+		line += "Next: scrolling did not move the page; use browser_find/browser_snapshot for visible text, browser_network/browser_network_read for hidden XHR/fetch data, interact with a visible pagination/tab control, or mark the field unavailable.\n"
+	}
+	return line
+}
+
+func absInt(v int) int {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
