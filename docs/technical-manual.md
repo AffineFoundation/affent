@@ -459,7 +459,10 @@ physical message index when available, session log modification time, matched
 terms, context flag, and compact snippet preview. A user-request hit can carry
 the adjacent assistant answer so resume/debug runs show the prior outcome, not
 just the old question, which lets poor resume/recovery runs be debugged without
-opening the full transcript. Each
+opening the full transcript. When transcript recall has no lexical hits,
+`session_search` may also return a small `recent_sessions` list with session
+ids, modification times, and compact latest user/assistant previews so the
+agent can retry with better anchors instead of guessing unseen history. Each
 `tool.result` can expose
 `failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
 useful recovery path from a run that simply accumulated failed retrievals,

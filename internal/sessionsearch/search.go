@@ -30,27 +30,40 @@ type Hit struct {
 	ModTime         string   `json:"mod_time,omitempty"`
 }
 
+// RecentSession is a bounded no-match recovery hint. It gives the agent a few
+// fresh transcript anchors without returning full historical conversations.
+type RecentSession struct {
+	SessionID       string `json:"session_id"`
+	ModTime         string `json:"mod_time,omitempty"`
+	LatestUser      string `json:"latest_user,omitempty"`
+	LatestAssistant string `json:"latest_assistant,omitempty"`
+}
+
 // Response is the session_search tool return shape.
 type Response struct {
-	Query   string `json:"query"`
-	Total   int    `json:"total"`
-	Results []Hit  `json:"results"`
-	Message string `json:"message,omitempty"`
+	Query          string          `json:"query"`
+	Total          int             `json:"total"`
+	Results        []Hit           `json:"results"`
+	Message        string          `json:"message,omitempty"`
+	RecentSessions []RecentSession `json:"recent_sessions,omitempty"`
 }
 
 // Search scans sessionsDir/*.jsonl for messages matching query. The
 // current session is excluded. Scoring is lexical term overlap, which
 // is enough for local recall over one workspace's transcript history.
 const (
-	DefaultTopK          = 5
-	MaxTopK              = 20
-	DefaultMaxPerSession = 3
-	MaxPerSession        = 5
-	MaxQueryBytes        = 2048
-	MaxQueryTerms        = 16
+	DefaultTopK           = 5
+	MaxTopK               = 20
+	DefaultMaxPerSession  = 3
+	MaxPerSession         = 5
+	MaxQueryBytes         = 2048
+	MaxQueryTerms         = 16
+	DefaultRecentSessions = 5
+	MaxRecentSessions     = 8
 
-	sessionDirReadBatch    = 128
-	maxSessionLogLineBytes = jsonl.DefaultMaxRecordBytes
+	sessionDirReadBatch       = 128
+	maxSessionLogLineBytes    = jsonl.DefaultMaxRecordBytes
+	recentSessionPreviewBytes = 220
 )
 
 func Search(ctx context.Context, sessionsDir, currentSessionID, query string, topK, maxPerSession int) ([]Hit, error) {
@@ -134,6 +147,160 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 		all = all[:topK]
 	}
 	return all, nil
+}
+
+type sessionLogCandidate struct {
+	sessionID string
+	path      string
+	modTime   time.Time
+}
+
+// RecentSessions returns recent transcript summaries to help recover from a
+// failed lexical search. The current session is excluded.
+func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, limit int) ([]RecentSession, error) {
+	if limit <= 0 {
+		limit = DefaultRecentSessions
+	}
+	if limit > MaxRecentSessions {
+		limit = MaxRecentSessions
+	}
+	dir, err := os.Open(sessionsDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer dir.Close()
+	var candidates []sessionLogCandidate
+	for {
+		entries, rerr := dir.ReadDir(sessionDirReadBatch)
+		if rerr != nil && !errors.Is(rerr, io.EOF) {
+			return nil, rerr
+		}
+		for _, ent := range entries {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if ent.IsDir() {
+				sid := ent.Name()
+				if sid == currentSessionID || entryIsSymlink(ent) {
+					continue
+				}
+				path := filepath.Join(sessionsDir, sid, "conversation.jsonl")
+				info, ok := regularFileInfo(path)
+				if !ok {
+					continue
+				}
+				candidates = append(candidates, sessionLogCandidate{sessionID: sid, path: path, modTime: info.ModTime()})
+				continue
+			}
+			if !strings.HasSuffix(ent.Name(), ".jsonl") || entryIsSymlink(ent) {
+				continue
+			}
+			sid := strings.TrimSuffix(ent.Name(), ".jsonl")
+			if sid == currentSessionID {
+				continue
+			}
+			info, ierr := ent.Info()
+			if ierr != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				continue
+			}
+			candidates = append(candidates, sessionLogCandidate{
+				sessionID: sid,
+				path:      filepath.Join(sessionsDir, ent.Name()),
+				modTime:   info.ModTime(),
+			})
+		}
+		if errors.Is(rerr, io.EOF) {
+			break
+		}
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		if !candidates[i].modTime.Equal(candidates[j].modTime) {
+			return candidates[i].modTime.After(candidates[j].modTime)
+		}
+		return candidates[i].sessionID < candidates[j].sessionID
+	})
+	out := make([]RecentSession, 0, limit)
+	for _, cand := range candidates {
+		if len(out) >= limit {
+			break
+		}
+		summary, ok, err := recentSessionSummary(ctx, cand)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			continue
+		}
+		if !ok {
+			continue
+		}
+		out = append(out, summary)
+	}
+	return out, nil
+}
+
+func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (RecentSession, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return RecentSession{}, false, err
+	}
+	if _, ok := regularFileInfo(cand.path); !ok {
+		return RecentSession{}, false, errors.New("session log must be a regular file")
+	}
+	f, err := os.Open(cand.path)
+	if err != nil {
+		return RecentSession{}, false, err
+	}
+	defer f.Close()
+	reader := bufio.NewReaderSize(f, 64*1024)
+	summary := RecentSession{
+		SessionID: cand.sessionID,
+		ModTime:   cand.modTime.UTC().Format(time.RFC3339),
+	}
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return RecentSession{}, false, err
+		}
+		if err := ctx.Err(); err != nil {
+			return RecentSession{}, false, err
+		}
+		if overLimit {
+			continue
+		}
+		var m struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		}
+		if err := json.Unmarshal(line, &m); err != nil {
+			continue
+		}
+		preview := recentSessionPreview(m.Content)
+		if preview == "" {
+			continue
+		}
+		switch m.Role {
+		case "user":
+			summary.LatestUser = preview
+		case "assistant":
+			summary.LatestAssistant = preview
+		}
+	}
+	if summary.LatestUser == "" && summary.LatestAssistant == "" {
+		return RecentSession{}, false, nil
+	}
+	return summary, true, nil
+}
+
+func recentSessionPreview(s string) string {
+	s = textutil.StripASCIIControls(s)
+	s = textutil.CompactWhitespace(s)
+	return textutil.Preview(s, recentSessionPreviewBytes)
 }
 
 func NormalizeLimits(topK, maxPerSession int) (int, int) {
@@ -314,11 +481,19 @@ func scoreSearchableMessage(cur, prev searchableMessage, terms []string) (float6
 }
 
 func regularFileModTime(path string) (string, bool) {
-	info, err := os.Lstat(path)
-	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+	info, ok := regularFileInfo(path)
+	if !ok {
 		return "", false
 	}
 	return info.ModTime().UTC().Format(time.RFC3339), true
+}
+
+func regularFileInfo(path string) (os.FileInfo, bool) {
+	info, err := os.Lstat(path)
+	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, false
+	}
+	return info, true
 }
 
 func entryIsSymlink(ent os.DirEntry) bool {

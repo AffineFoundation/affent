@@ -132,6 +132,81 @@ func TestSearchReadsAffentserveDurableConversationLogs(t *testing.T) {
 	}
 }
 
+func TestRecentSessionsSummarizesRecentLogs(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableSessionLog(t, dir, "older-durable", []testMessage{
+		{Role: "user", Content: "Analyze Alpha Coast Q2 stock position"},
+		{Role: "assistant", Content: "decision: keep risk label inventory-drag"},
+	})
+	writeSessionLog(t, dir, "newer-flat", []testMessage{
+		{Role: "user", Content: "Resume Bittensor subnet 120 validator research"},
+		{Role: "assistant", Content: "final marker SUBNET-120-CURRENT"},
+	})
+	writeSessionLog(t, dir, "current", []testMessage{
+		{Role: "user", Content: "current in-flight session should be hidden"},
+	})
+	oldTime := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "older-durable", "conversation.jsonl"), oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "newer-flat.jsonl"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("expected two recent session summaries, got %+v", recent)
+	}
+	if recent[0].SessionID != "newer-flat" {
+		t.Fatalf("recent sessions should be sorted by mtime descending, got %+v", recent)
+	}
+	if strings.Contains(fmt.Sprint(recent), "current in-flight") {
+		t.Fatalf("current session must be excluded from recent sessions: %+v", recent)
+	}
+	if !strings.Contains(recent[0].LatestUser, "Bittensor subnet 120") || !strings.Contains(recent[0].LatestAssistant, "SUBNET-120-CURRENT") {
+		t.Fatalf("newer summary missing user/assistant previews: %+v", recent[0])
+	}
+	if !strings.Contains(recent[1].LatestUser, "Alpha Coast") || !strings.Contains(recent[1].LatestAssistant, "inventory-drag") {
+		t.Fatalf("durable summary missing user/assistant previews: %+v", recent[1])
+	}
+}
+
+func TestRecentSessionsCapsAndCompactsPreviews(t *testing.T) {
+	dir := t.TempDir()
+	long := strings.Repeat("Alpha\t\n", 80)
+	for i := 0; i < MaxRecentSessions+3; i++ {
+		sid := fmt.Sprintf("s-%02d", i)
+		writeSessionLog(t, dir, sid, []testMessage{
+			{Role: "user", Content: long + "\x00tail"},
+		})
+		ts := time.Date(2026, 5, 1+i, 12, 0, 0, 0, time.UTC)
+		if err := os.Chtimes(filepath.Join(dir, sid+".jsonl"), ts, ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "", 1<<30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != MaxRecentSessions {
+		t.Fatalf("recent sessions should cap at %d, got %d", MaxRecentSessions, len(recent))
+	}
+	if recent[0].SessionID != "s-10" {
+		t.Fatalf("newest session should be first, got %+v", recent[0])
+	}
+	if strings.ContainsAny(recent[0].LatestUser, "\n\t\x00") {
+		t.Fatalf("preview should strip controls and compact whitespace: %q", recent[0].LatestUser)
+	}
+	if len(recent[0].LatestUser) > recentSessionPreviewBytes+len("...") {
+		t.Fatalf("preview too long: %d bytes", len(recent[0].LatestUser))
+	}
+}
+
 func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "market-alpha", []testMessage{

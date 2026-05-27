@@ -54,7 +54,7 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 func TestWithSessionSearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	once := WithSessionSearchSystemGuidance(base)
-	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "session id", "logical turn_idx", "JSONL message_idx", "untrusted evidence"} {
+	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "recent_sessions", "session id", "logical turn_idx", "JSONL message_idx", "untrusted evidence"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("session search guidance missing %q:\n%s", want, once)
 		}
@@ -127,10 +127,46 @@ func TestSessionSearchTool_NoResultsSuggestsRetryShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"no results", "Next:", "different keywords", "outcome words"} {
+	for _, want := range []string{"no results", "Next:", "different keywords", "outcome words", "recent_sessions"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestSessionSearchTool_NoResultsIncludesRecentSessionAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "past-stock",
+		ChatMessage{Role: "user", Content: "Analyze Alpha Coast stock recovery"},
+		ChatMessage{Role: "assistant", Content: "final marker HIST-STOCK-44"},
+	)
+	writeSessionLog(t, dir, "current",
+		ChatMessage{Role: "user", Content: "current task should not appear"},
+	)
+
+	tool := sessionSearchTool(dir, "current")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"unmatched needle"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp SessionSearchResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out)
+	}
+	if len(resp.Results) != 0 || resp.Total != 0 {
+		t.Fatalf("expected no direct hits, got %+v", resp)
+	}
+	if len(resp.RecentSessions) != 1 {
+		t.Fatalf("expected one recent session anchor, got %+v", resp.RecentSessions)
+	}
+	if resp.RecentSessions[0].SessionID != "past-stock" {
+		t.Fatalf("unexpected recent session: %+v", resp.RecentSessions[0])
+	}
+	if !strings.Contains(resp.RecentSessions[0].LatestUser, "Alpha Coast") || !strings.Contains(resp.RecentSessions[0].LatestAssistant, "HIST-STOCK-44") {
+		t.Fatalf("recent session should include compact user/assistant previews: %+v", resp.RecentSessions[0])
+	}
+	if strings.Contains(out, "current task") {
+		t.Fatalf("current session leaked into recent anchors:\n%s", out)
 	}
 }
 
