@@ -207,7 +207,7 @@ export function Composer({
     hasSession,
     resumeSession,
     draftContext,
-    taskHintActive: Boolean(taskHint),
+    taskHintTone: taskHint?.tone,
   });
 
   if (disabled) {
@@ -378,16 +378,16 @@ function primaryActionLabel({
   hasSession,
   resumeSession,
   draftContext,
-  taskHintActive,
+  taskHintTone,
 }: {
   busy: boolean;
   hasSession: boolean;
   resumeSession: boolean;
   draftContext?: DraftContext;
-  taskHintActive: boolean;
+  taskHintTone?: "ready" | "warning" | "unknown";
 }): string {
   if (busy) return "Send guidance";
-  if (taskHintActive && !draftContext) {
+  if (taskHintTone && taskHintTone !== "ready" && !draftContext) {
     if (resumeSession) return "Resume anyway";
     return hasSession ? "Send anyway" : "Start anyway";
   }

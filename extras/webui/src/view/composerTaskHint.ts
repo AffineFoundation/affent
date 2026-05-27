@@ -206,8 +206,8 @@ function buildCodeDiscoveryHint(runtime?: RuntimeCapabilityView): ComposerTaskHi
 
   if (runtime.chips.some((chip) => chip.group === "Discovery" && chip.label.includes("Symbol index"))) {
     return {
-      label: "Symbol index ready",
-      detail: "Use symbol_context first for declarations and exact symbols, then repo_search for broader workspace text.",
+      label: "Symbol lookup ready",
+      detail: "Exact declarations can be checked before broader workspace search; include symbol or file names if you know them.",
       tone: "ready",
     };
   }
@@ -243,7 +243,7 @@ function buildSkillInstallHint(runtime?: RuntimeCapabilityView): ComposerTaskHin
   if (runtime.chips.some((chip) => chip.group === "Skills" && chip.label === "Skill install")) {
     return {
       label: "Skill install ready",
-      detail: "Use the skill workflow: inspect the source, propose_install, then wait for explicit confirmation before confirm_install.",
+      detail: "Affent can inspect a skill source and ask for confirmation before installing it.",
       tone: "ready",
     };
   }

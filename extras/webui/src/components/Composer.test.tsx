@@ -302,8 +302,11 @@ describe("Composer", () => {
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "ready");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
-    expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("inspect a skill source");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("ask for confirmation");
+    expect(screen.getByTestId("composer-task-hint")).not.toHaveTextContent("propose_install");
+    expect(screen.getByTestId("composer-task-hint")).not.toHaveTextContent("confirm_install");
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
   });
 
   it("loads suggested guidance while a turn is running", () => {
