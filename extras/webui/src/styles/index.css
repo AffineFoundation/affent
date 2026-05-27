@@ -2868,8 +2868,7 @@ body {
 }
 
 .session-row-shell:hover .session-delete-action,
-.session-row-shell:focus-within .session-delete-action,
-.session-row.is-selected + .session-delete-action {
+.session-row-shell:focus-within .session-delete-action {
   opacity: 0.78;
   pointer-events: auto;
 }
