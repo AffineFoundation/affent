@@ -623,9 +623,9 @@ describe("App", () => {
 
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Off");
-    expect(panel).toHaveTextContent("Draft first");
-    expect(panel).toHaveTextContent("Draft setup");
-    expect(panel).toHaveTextContent("asks before it begins running");
+    expect(panel).toHaveTextContent("Set up long-running work only when this chat needs it");
+    expect(panel).toHaveTextContent("Creates a draft LOOP.md");
+    expect(panel).toHaveTextContent("asks one calibration question");
     expect(within(panel).getByLabelText("Long-run goal")).toHaveValue("long running subnet analysis");
     await user.click(within(panel).getByRole("button", { name: "Start setup" }));
 
@@ -1029,7 +1029,8 @@ describe("App", () => {
 
     await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "DELETE" })));
-    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("None");
+    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("Off");
+    expect(screen.getByTestId("session-schedule-panel")).toHaveTextContent("Create a follow-up only when this chat needs one");
     expect(screen.queryByTestId("session-schedule-list")).toBeNull();
   });
 

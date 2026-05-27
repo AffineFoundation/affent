@@ -144,6 +144,10 @@ type SessionPool struct {
 	scheduleDone chan struct{}
 	schedulesMu  sync.Mutex
 
+	// settingsMu serializes account-level settings writes such as
+	// environment variables and generated SSH keys.
+	settingsMu sync.Mutex
+
 	// retention controls the disk-level GC of durable session dirs.
 	// Zero = disabled (the empty SessionRetention config). retentionStop
 	// / retentionDone gate the sweeper goroutine.
@@ -522,6 +526,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	loopProtocolPath := ""
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
+		localExec.EnvProvider = p.accountEnvPairs
 		if workflowToolsEnabled(p.cfg) {
 			sessionSkillDir = agent.DefaultWorkspaceSkillDir(sessionDir)
 			accountSkillInstallDir = accountSkillDir(p)

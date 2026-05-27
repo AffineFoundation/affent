@@ -14,6 +14,10 @@ import (
 //	GET    /                       (embedded WebUI when built with -tags webui)
 //	GET    /v1/models
 //	POST   /v1/chat/completions
+//	GET    /v1/settings
+//	POST   /v1/settings/env
+//	DELETE /v1/settings/env/{name}
+//	POST   /v1/settings/ssh-key
 //	GET    /v1/sessions
 //	POST   /v1/sessions
 //	GET    /v1/skills
@@ -53,6 +57,8 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 
 	mux.Handle("/v1/models", authed(http.HandlerFunc(handleModels(cfg))))
 	mux.Handle("/v1/chat/completions", authed(http.HandlerFunc(handleChatCompletions(cfg, pool))))
+	mux.Handle("/v1/settings", authed(http.HandlerFunc(handleAccountSettings(pool))))
+	mux.Handle("/v1/settings/", authed(http.HandlerFunc(handleAccountSettingsRoutes(pool))))
 	mux.Handle("/v1/skills", authed(http.HandlerFunc(handleAccountSkills(pool))))
 	mux.Handle("/v1/skills/", authed(http.HandlerFunc(handleAccountSkillRoutes(pool))))
 	mux.Handle("/v1/sessions", authed(http.HandlerFunc(handleSessionsCollection(pool))))

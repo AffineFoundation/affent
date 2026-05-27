@@ -1,0 +1,539 @@
+package main
+
+import (
+	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/binary"
+	"encoding/json"
+	"encoding/pem"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"time"
+)
+
+const (
+	accountSettingsFileName       = "settings.json"
+	accountSSHKeyName             = "id_ed25519"
+	accountSettingsMaxFileBytes   = 256 * 1024
+	accountSettingsMaxEnvVars     = 128
+	accountSettingsMaxEnvValueLen = 32 * 1024
+)
+
+var accountEnvNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+type accountSettingsFile struct {
+	Version int               `json:"version"`
+	Env     []accountEnvEntry `json:"env,omitempty"`
+}
+
+type accountEnvEntry struct {
+	Name      string `json:"name"`
+	Value     string `json:"value"`
+	UpdatedAt string `json:"updated_at,omitempty"`
+}
+
+type accountSettingsResponse struct {
+	Env []accountEnvSummary `json:"env"`
+	SSH accountSSHKeyInfo   `json:"ssh"`
+}
+
+type accountEnvSummary struct {
+	Name       string `json:"name"`
+	Configured bool   `json:"configured"`
+	UpdatedAt  string `json:"updated_at,omitempty"`
+}
+
+type accountSSHKeyInfo struct {
+	Exists         bool   `json:"exists"`
+	PublicKey      string `json:"public_key,omitempty"`
+	PublicKeyPath  string `json:"public_key_path,omitempty"`
+	PrivateKeyPath string `json:"private_key_path,omitempty"`
+	Created        bool   `json:"created,omitempty"`
+}
+
+type accountEnvSetRequest struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
+func handleAccountSettings(pool *SessionPool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			settings, err := readAccountSettingsResponse(pool)
+			if err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "read account settings", err)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(settings)
+		default:
+			writeJSONErrorTyped(w, http.StatusNotFound, "not found", nil, "not_found")
+		}
+	}
+}
+
+func handleAccountSettingsRoutes(pool *SessionPool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sub := strings.TrimPrefix(r.URL.Path, "/v1/settings/")
+		switch {
+		case sub == "env" && r.Method == http.MethodPost:
+			handleAccountEnvSet(pool, w, r)
+		case strings.HasPrefix(sub, "env/") && r.Method == http.MethodDelete:
+			handleAccountEnvDelete(pool, strings.TrimPrefix(sub, "env/"), w)
+		case sub == "ssh-key" && r.Method == http.MethodPost:
+			handleAccountSSHKeyEnsure(pool, w)
+		default:
+			writeJSONErrorTyped(w, http.StatusNotFound, "not found", nil, "not_found")
+		}
+	}
+}
+
+func handleAccountEnvSet(pool *SessionPool, w http.ResponseWriter, r *http.Request) {
+	req, err := decodeAccountEnvSetRequest(w, r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid environment variable request", err, "bad_request")
+		return
+	}
+	if err := setAccountEnv(pool, req.Name, req.Value); err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "set environment variable", err, "bad_request")
+		return
+	}
+	settings, err := readAccountSettingsResponse(pool)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read account settings", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(settings)
+}
+
+func handleAccountEnvDelete(pool *SessionPool, rawName string, w http.ResponseWriter) {
+	name, err := normalizeAccountEnvName(rawName)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid environment variable name", err, "bad_request")
+		return
+	}
+	if err := deleteAccountEnv(pool, name); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "delete environment variable", err)
+		return
+	}
+	settings, err := readAccountSettingsResponse(pool)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read account settings", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(settings)
+}
+
+func handleAccountSSHKeyEnsure(pool *SessionPool, w http.ResponseWriter) {
+	key, err := ensureAccountSSHKey(pool)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "ensure ssh key", err)
+		return
+	}
+	settings, err := readAccountSettingsResponse(pool)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read account settings", err)
+		return
+	}
+	settings.SSH.Created = key.Created
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(settings)
+}
+
+func decodeAccountEnvSetRequest(w http.ResponseWriter, r *http.Request) (accountEnvSetRequest, error) {
+	var req accountEnvSetRequest
+	if r.Body == nil || r.Body == http.NoBody {
+		return req, errors.New("request body is required")
+	}
+	defer r.Body.Close()
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, accountSettingsMaxEnvValueLen+4096))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		return req, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return req, errors.New("request body must contain a single JSON object")
+	}
+	return req, nil
+}
+
+func readAccountSettingsResponse(pool *SessionPool) (accountSettingsResponse, error) {
+	settings, _, err := readAccountSettingsFile(pool)
+	if err != nil {
+		return accountSettingsResponse{}, err
+	}
+	env := make([]accountEnvSummary, 0, len(settings.Env))
+	for _, entry := range settings.Env {
+		env = append(env, accountEnvSummary{
+			Name:       entry.Name,
+			Configured: entry.Value != "",
+			UpdatedAt:  entry.UpdatedAt,
+		})
+	}
+	sort.Slice(env, func(i, j int) bool { return env[i].Name < env[j].Name })
+	ssh, err := readAccountSSHKeyInfo(pool)
+	if err != nil {
+		return accountSettingsResponse{}, err
+	}
+	return accountSettingsResponse{Env: env, SSH: ssh}, nil
+}
+
+func (p *SessionPool) accountEnvPairs() []string {
+	settings, _, err := readAccountSettingsFile(p)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(settings.Env))
+	configured := map[string]bool{}
+	for _, entry := range settings.Env {
+		if entry.Name == "" {
+			continue
+		}
+		configured[entry.Name] = true
+		out = append(out, entry.Name+"="+entry.Value)
+	}
+	if !configured["GIT_SSH_COMMAND"] && os.Getenv("GIT_SSH_COMMAND") == "" {
+		if command, ok := accountGitSSHCommand(p); ok {
+			out = append(out, "GIT_SSH_COMMAND="+command)
+		}
+	}
+	return out
+}
+
+func setAccountEnv(pool *SessionPool, rawName, value string) error {
+	name, err := normalizeAccountEnvName(rawName)
+	if err != nil {
+		return err
+	}
+	if len([]byte(value)) > accountSettingsMaxEnvValueLen {
+		return fmt.Errorf("environment variable value exceeds %d bytes", accountSettingsMaxEnvValueLen)
+	}
+	pool.settingsMu.Lock()
+	defer pool.settingsMu.Unlock()
+	settings, _, err := readAccountSettingsFile(pool)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i := range settings.Env {
+		if settings.Env[i].Name != name {
+			continue
+		}
+		settings.Env[i].Value = value
+		settings.Env[i].UpdatedAt = now
+		return writeAccountSettingsFile(pool, settings)
+	}
+	if len(settings.Env) >= accountSettingsMaxEnvVars {
+		return fmt.Errorf("account settings supports at most %d environment variables", accountSettingsMaxEnvVars)
+	}
+	settings.Env = append(settings.Env, accountEnvEntry{Name: name, Value: value, UpdatedAt: now})
+	return writeAccountSettingsFile(pool, settings)
+}
+
+func deleteAccountEnv(pool *SessionPool, name string) error {
+	pool.settingsMu.Lock()
+	defer pool.settingsMu.Unlock()
+	settings, _, err := readAccountSettingsFile(pool)
+	if err != nil {
+		return err
+	}
+	next := settings.Env[:0]
+	for _, entry := range settings.Env {
+		if entry.Name == name {
+			continue
+		}
+		next = append(next, entry)
+	}
+	settings.Env = next
+	return writeAccountSettingsFile(pool, settings)
+}
+
+func normalizeAccountEnvName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return "", errors.New("environment variable name is required")
+	}
+	if !accountEnvNameRE.MatchString(name) {
+		return "", errors.New("environment variable name must match [A-Za-z_][A-Za-z0-9_]*")
+	}
+	return name, nil
+}
+
+func readAccountSettingsFile(pool *SessionPool) (accountSettingsFile, bool, error) {
+	path := accountSettingsPath(pool)
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return accountSettingsFile{Version: 1}, false, nil
+		}
+		return accountSettingsFile{}, false, err
+	}
+	if info.IsDir() {
+		return accountSettingsFile{}, false, errors.New("account settings path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return accountSettingsFile{}, false, errors.New("account settings path must not be a symlink")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return accountSettingsFile{}, false, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, accountSettingsMaxFileBytes+1))
+	if err != nil {
+		return accountSettingsFile{}, false, err
+	}
+	if len(raw) > accountSettingsMaxFileBytes {
+		return accountSettingsFile{}, false, fmt.Errorf("account settings exceeds %d bytes", accountSettingsMaxFileBytes)
+	}
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 {
+		return accountSettingsFile{Version: 1}, false, nil
+	}
+	var settings accountSettingsFile
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return accountSettingsFile{}, false, err
+	}
+	settings = normalizeAccountSettings(settings)
+	return settings, true, nil
+}
+
+func writeAccountSettingsFile(pool *SessionPool, settings accountSettingsFile) error {
+	settings = normalizeAccountSettings(settings)
+	raw, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	if len(raw) > accountSettingsMaxFileBytes {
+		return fmt.Errorf("account settings exceeds %d bytes", accountSettingsMaxFileBytes)
+	}
+	dir := accountSettingsDir(pool)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	path := accountSettingsPath(pool)
+	if info, err := os.Lstat(path); err == nil {
+		if info.IsDir() {
+			return errors.New("account settings path is a directory")
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("account settings path must not be a symlink")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	tmpName := path + ".tmp"
+	if err := os.Remove(tmpName); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	tmp, err := os.OpenFile(tmpName, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.Write(append(raw, '\n')); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	syncAccountDir(dir)
+	return nil
+}
+
+func normalizeAccountSettings(settings accountSettingsFile) accountSettingsFile {
+	settings.Version = 1
+	out := settings.Env[:0]
+	seen := map[string]bool{}
+	for _, entry := range settings.Env {
+		name, err := normalizeAccountEnvName(entry.Name)
+		if err != nil || seen[name] {
+			continue
+		}
+		seen[name] = true
+		entry.Name = name
+		if len([]byte(entry.Value)) > accountSettingsMaxEnvValueLen {
+			entry.Value = entry.Value[:accountSettingsMaxEnvValueLen]
+		}
+		out = append(out, entry)
+	}
+	settings.Env = out
+	return settings
+}
+
+func readAccountSSHKeyInfo(pool *SessionPool) (accountSSHKeyInfo, error) {
+	privatePath, publicPath := accountSSHKeyPaths(pool)
+	pub, err := readAccountPublicKey(publicPath)
+	if err != nil {
+		return accountSSHKeyInfo{}, err
+	}
+	return accountSSHKeyInfo{
+		Exists:         pub != "",
+		PublicKey:      pub,
+		PublicKeyPath:  publicPath,
+		PrivateKeyPath: privatePath,
+	}, nil
+}
+
+func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
+	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if pub, err := readAccountPublicKey(publicPath); err != nil {
+		return accountSSHKeyInfo{}, err
+	} else if pub != "" {
+		return accountSSHKeyInfo{Exists: true, PublicKey: pub, PublicKeyPath: publicPath, PrivateKeyPath: privatePath}, nil
+	}
+	if _, err := os.Lstat(privatePath); err == nil {
+		return accountSSHKeyInfo{}, errors.New("private SSH key already exists but public key is missing; refusing to overwrite")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return accountSSHKeyInfo{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(privatePath), 0o700); err != nil {
+		return accountSSHKeyInfo{}, err
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return accountSSHKeyInfo{}, err
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return accountSSHKeyInfo{}, err
+	}
+	privatePEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	if err := writeNewFile(privatePath, privatePEM, 0o600); err != nil {
+		return accountSSHKeyInfo{}, err
+	}
+	pub := marshalOpenSSHEd25519PublicKey(publicKey, "affentserve")
+	if err := writeNewFile(publicPath, []byte(pub+"\n"), 0o644); err != nil {
+		_ = os.Remove(privatePath)
+		return accountSSHKeyInfo{}, err
+	}
+	syncAccountDir(filepath.Dir(privatePath))
+	return accountSSHKeyInfo{Exists: true, Created: true, PublicKey: pub, PublicKeyPath: publicPath, PrivateKeyPath: privatePath}, nil
+}
+
+func accountGitSSHCommand(pool *SessionPool) (string, bool) {
+	privatePath, publicPath := accountSSHKeyPaths(pool)
+	pub, err := readAccountPublicKey(publicPath)
+	if err != nil || pub == "" {
+		return "", false
+	}
+	info, err := os.Lstat(privatePath)
+	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", false
+	}
+	return "ssh -i " + shellQuote(privatePath) + " -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=accept-new", true
+}
+
+func readAccountPublicKey(path string) (string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	if info.IsDir() {
+		return "", errors.New("ssh public key path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", errors.New("ssh public key path must not be a symlink")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(raw)), nil
+}
+
+func marshalOpenSSHEd25519PublicKey(pub ed25519.PublicKey, comment string) string {
+	const keyType = "ssh-ed25519"
+	var payload bytes.Buffer
+	writeSSHString(&payload, []byte(keyType))
+	writeSSHString(&payload, []byte(pub))
+	out := keyType + " " + base64.StdEncoding.EncodeToString(payload.Bytes())
+	if strings.TrimSpace(comment) != "" {
+		out += " " + strings.TrimSpace(comment)
+	}
+	return out
+}
+
+func writeSSHString(buf *bytes.Buffer, value []byte) {
+	var length [4]byte
+	binary.BigEndian.PutUint32(length[:], uint32(len(value)))
+	buf.Write(length[:])
+	buf.Write(value)
+}
+
+func writeNewFile(path string, content []byte, perm os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, perm)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(content); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(path)
+		return err
+	}
+	return nil
+}
+
+func shellQuote(value string) string {
+	if value == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func syncAccountDir(path string) {
+	if d, err := os.Open(path); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+}
+
+func accountSettingsDir(pool *SessionPool) string {
+	return filepath.Join(pool.sessionRootPath(), ".affentserve")
+}
+
+func accountSettingsPath(pool *SessionPool) string {
+	return filepath.Join(accountSettingsDir(pool), accountSettingsFileName)
+}
+
+func accountSSHKeyPaths(pool *SessionPool) (string, string) {
+	privatePath := filepath.Join(accountSettingsDir(pool), "ssh", accountSSHKeyName)
+	return privatePath, privatePath + ".pub"
+}

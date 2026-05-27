@@ -101,6 +101,21 @@ func TestLocalExecutor_TimeoutSurfacesPartialOutput(t *testing.T) {
 	}
 }
 
+func TestLocalExecutor_LayersExtraEnvAndProvider(t *testing.T) {
+	e := NewLocalExecutor("test", "")
+	e.ExtraEnv = []string{"AFFENT_STATIC=static"}
+	e.EnvProvider = func() []string { return []string{"AFFENT_DYNAMIC=dynamic"} }
+	res, err := e.Exec(context.Background(), []string{"sh", "-c", "printf '%s/%s/%s' \"$AFFENT_STATIC\" \"$AFFENT_DYNAMIC\" \"$AFFENT_CALL\""}, ExecOptions{
+		Env: []string{"AFFENT_CALL=call"},
+	})
+	if err != nil {
+		t.Fatalf("Exec: %v stderr=%s", err, res.Stderr)
+	}
+	if got, want := res.Stdout, "static/dynamic/call"; got != want {
+		t.Fatalf("stdout = %q, want %q", got, want)
+	}
+}
+
 // pathFromEnv returns the PATH value from a slice of KEY=VALUE env
 // entries, or "" if PATH isn't present.
 func pathFromEnv(env []string) string {

@@ -39,6 +39,16 @@ type LocalExecutor struct {
 	// Data-driven so operators don't have to fork the package to add
 	// or remove a candidate dir.
 	ExtraPathDirs []string
+
+	// ExtraEnv is layered onto every spawned command before per-call
+	// opts.Env. Use for account/session level credentials such as
+	// GITHUB_TOKEN. Do not include these values in logs or tool output.
+	ExtraEnv []string
+
+	// EnvProvider, when set, is called at exec time and layered after
+	// ExtraEnv but before opts.Env. This lets long-running server
+	// sessions pick up settings changes without being recreated.
+	EnvProvider func() []string
 }
 
 // DefaultExtraPathDirs returns the candidate set used when
@@ -84,7 +94,11 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 	} else {
 		c.Dir = h.workspaceDir
 	}
-	c.Env = h.augmentPath(append(c.Environ(), opts.Env...))
+	env := append(c.Environ(), h.ExtraEnv...)
+	if h.EnvProvider != nil {
+		env = append(env, h.EnvProvider()...)
+	}
+	c.Env = h.augmentPath(append(env, opts.Env...))
 	if opts.Stdin != nil {
 		c.Stdin = opts.Stdin
 	}

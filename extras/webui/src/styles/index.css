@@ -1169,6 +1169,50 @@ body {
   min-width: 0;
 }
 
+.account-env-form {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
+}
+
+.account-settings-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.account-settings-section > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.account-settings-section > div:first-child strong {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.account-settings-section > div:first-child span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.account-public-key {
+  max-height: 120px;
+}
+
+.account-env-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+}
+
+@media (max-width: 760px) {
+  .account-env-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .session-loop-setup label {
   display: grid;
   gap: 4px;

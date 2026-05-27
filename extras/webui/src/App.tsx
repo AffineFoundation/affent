@@ -34,6 +34,13 @@ import {
   type SessionSummary,
 } from "./api/sessions";
 import { getServerStats, type ServerStatsResponse } from "./api/stats";
+import {
+  deleteAccountEnv,
+  ensureAccountSSHKey,
+  getAccountSettings,
+  setAccountEnv,
+  type AccountSettingsResponse,
+} from "./api/settings";
 import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactViewer";
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
@@ -44,6 +51,7 @@ import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
+import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -91,6 +99,12 @@ type RuntimeStatsState =
   | { state: "loading" }
   | { state: "ready"; stats: ServerStatsResponse }
   | { state: "error"; error: string };
+
+type AccountSettingsState =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "ready"; settings: AccountSettingsResponse }
+  | { state: "error"; error: string; settings?: AccountSettingsResponse };
 
 type PlanState =
   | { state: "idle" }
@@ -140,6 +154,8 @@ export function App() {
   const [skillsState, setSkillsState] = useState<SkillsState>({ state: "idle" });
   const [memoryState, setMemoryState] = useState<MemoryState>({ state: "idle" });
   const [runtimeStatsState, setRuntimeStatsState] = useState<RuntimeStatsState>({ state: "idle" });
+  const [accountSettingsState, setAccountSettingsState] = useState<AccountSettingsState>({ state: "idle" });
+  const [accountSettingsBusy, setAccountSettingsBusy] = useState<"env" | "ssh" | undefined>();
   const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
   const [planState, setPlanState] = useState<PlanState>({ state: "idle" });
   const [loopProtocolState, setLoopProtocolState] = useState<LoopProtocolState>({ state: "idle" });
@@ -314,6 +330,24 @@ export function App() {
 
   useEffect(() => {
     if (demoActive || !settingsOpen) {
+      setAccountSettingsState({ state: "idle" });
+      return;
+    }
+    const ac = new AbortController();
+    setAccountSettingsState({ state: "loading" });
+    getAccountSettings(client, ac.signal)
+      .then((settings) => {
+        setAccountSettingsState({ state: "ready", settings });
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        setAccountSettingsState({ state: "error", error: formatError(err) });
+      });
+    return () => ac.abort();
+  }, [client, demoActive, settingsOpen]);
+
+  useEffect(() => {
+    if (demoActive || !settingsOpen) {
       setSkillsState({ state: "idle" });
       return;
     }
@@ -455,6 +489,68 @@ export function App() {
     },
     [client],
   );
+
+  const handleRefreshAccountSettings = useCallback(async () => {
+    const settings = await getAccountSettings(client);
+    setAccountSettingsState({ state: "ready", settings });
+  }, [client]);
+
+  const handleSetAccountEnv = useCallback(
+    async (name: string, value: string) => {
+      setAccountSettingsBusy("env");
+      try {
+        const settings = await setAccountEnv(client, { name, value });
+        setAccountSettingsState({ state: "ready", settings });
+      } catch (err) {
+        setAccountSettingsState((current) => ({
+          state: "error",
+          error: formatError(err),
+          settings: current.state === "ready" ? current.settings : current.state === "error" ? current.settings : undefined,
+        }));
+        throw err;
+      } finally {
+        setAccountSettingsBusy(undefined);
+      }
+    },
+    [client],
+  );
+
+  const handleDeleteAccountEnv = useCallback(
+    async (name: string) => {
+      setAccountSettingsBusy("env");
+      try {
+        const settings = await deleteAccountEnv(client, name);
+        setAccountSettingsState({ state: "ready", settings });
+      } catch (err) {
+        setAccountSettingsState((current) => ({
+          state: "error",
+          error: formatError(err),
+          settings: current.state === "ready" ? current.settings : current.state === "error" ? current.settings : undefined,
+        }));
+        throw err;
+      } finally {
+        setAccountSettingsBusy(undefined);
+      }
+    },
+    [client],
+  );
+
+  const handleEnsureAccountSSHKey = useCallback(async () => {
+    setAccountSettingsBusy("ssh");
+    try {
+      const settings = await ensureAccountSSHKey(client);
+      setAccountSettingsState({ state: "ready", settings });
+    } catch (err) {
+      setAccountSettingsState((current) => ({
+        state: "error",
+        error: formatError(err),
+        settings: current.state === "ready" ? current.settings : current.state === "error" ? current.settings : undefined,
+      }));
+      throw err;
+    } finally {
+      setAccountSettingsBusy(undefined);
+    }
+  }, [client]);
 
   const loadHistory = useCallback(
     async (sessionId: string, signal?: AbortSignal): Promise<HistoryLoadResult> => {
@@ -1213,6 +1309,17 @@ export function App() {
                 loading={runtimeStatsState.state === "loading"}
                 error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
                 defaultOpen
+              />
+              <AccountSettingsPanel
+                settings={accountSettingsState.state === "ready" ? accountSettingsState.settings : accountSettingsState.state === "error" ? accountSettingsState.settings : undefined}
+                loading={accountSettingsState.state === "loading"}
+                error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
+                busy={accountSettingsBusy}
+                defaultOpen
+                onRefresh={handleRefreshAccountSettings}
+                onSetEnv={handleSetAccountEnv}
+                onDeleteEnv={handleDeleteAccountEnv}
+                onEnsureSSHKey={handleEnsureAccountSSHKey}
               />
               <SessionMemoryPanel
                 memory={memoryState.state === "ready" ? memoryState.memory : undefined}
