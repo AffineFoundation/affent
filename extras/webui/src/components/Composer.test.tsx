@@ -51,6 +51,7 @@ describe("Composer", () => {
     const user = userEvent.setup();
     const onStartLoop = vi.fn().mockResolvedValue(undefined);
     const onScheduleCheckIn = vi.fn().mockResolvedValue(undefined);
+    const onScheduleLoopTick = vi.fn().mockResolvedValue(undefined);
     const { rerender } = render(
       <Composer
         disabled={false}
@@ -60,6 +61,7 @@ describe("Composer", () => {
         onCancel={vi.fn()}
         onStartLoop={onStartLoop}
         onScheduleCheckIn={onScheduleCheckIn}
+        onScheduleLoopTick={onScheduleLoopTick}
       />,
     );
 
@@ -70,6 +72,7 @@ describe("Composer", () => {
     expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
     expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Check in 1h" })).toBeNull();
+    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Loop every 30m" })).toBeNull();
     await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up loop" }));
     expect(onStartLoop).toHaveBeenCalledWith("long running market monitor");
 
@@ -90,6 +93,28 @@ describe("Composer", () => {
     expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Set up loop" })).toBeNull();
     await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Check in 1h" }));
     expect(onScheduleCheckIn).toHaveBeenCalled();
+  });
+
+  it("does not show separate loop setup and loop timer actions for the same draft", async () => {
+    const user = userEvent.setup();
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        hasSession
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        onStartLoop={vi.fn()}
+        onScheduleLoopTick={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "keep improving the web workbench");
+    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
+
+    const automation = screen.getByTestId("composer-automation");
+    expect(within(automation).getByRole("button", { name: "Set up loop" })).toBeVisible();
+    expect(within(automation).queryByRole("button", { name: "Loop every 30m" })).toBeNull();
   });
 
   it("labels saved history follow-ups as resuming the chat", async () => {

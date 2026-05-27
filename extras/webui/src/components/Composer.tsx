@@ -198,7 +198,8 @@ export function Composer({
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
   const hasLoopAutomation = !!onStartLoop && hasContent;
-  const hasScheduleAutomation = hasSession && !!(onScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
+  const hasScheduleLoopTick = hasSession && !!onScheduleLoopTick && !hasLoopAutomation;
+  const hasScheduleAutomation = hasSession && !!(hasScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
   const hasAvailableAutomation = hasLoopAutomation || hasScheduleAutomation;
   const placeholder = "Message Affent...";
   const primaryLabel = primaryActionLabel({
@@ -295,7 +296,7 @@ export function Composer({
                   {automationBusy === "checkin" ? "Scheduling" : "Check in 1h"}
                 </button>
               ) : null}
-              {hasSession && onScheduleLoopTick ? (
+              {hasScheduleLoopTick ? (
                 <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleLoopTick)}>
                   {automationBusy === "loop" ? "Scheduling" : "Loop every 30m"}
                 </button>
