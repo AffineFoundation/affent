@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1851,6 +1854,109 @@ func TestSessionSendUserDoesNotImplicitlyCreateLoopProtocol(t *testing.T) {
 	if _, ok := s.registry.Get(agent.LoopProtocolToolName); !ok {
 		t.Fatal("loop_protocol tool should remain available for chat-driven start_setup")
 	}
+}
+
+func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch calls.Add(1) {
+		case 1:
+			args := `{"action":"start_setup","goal":"Maintain multi-day subnet research with stable recovery context."}`
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"setup1\",\"type\":\"function\",\"function\":{\"name\":\"loop_protocol\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(args))
+		case 2:
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":%s},\"finish_reason\":\"stop\"}]}\n\n", jsonStringLiteral("What stop condition should pause this long-running loop?"))
+		default:
+			t.Errorf("unexpected LLM call %d", calls.Load())
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"unexpected\"},\"finish_reason\":\"stop\"}]}\n\n")
+		}
+	}))
+	defer srv.Close()
+	cfg := Config{
+		Listen:             "127.0.0.1:0",
+		MaxSessions:        4,
+		SessionIdleTTL:     "5m",
+		WorkspaceRoot:      t.TempDir(),
+		MemoryRoot:         t.TempDir(),
+		BaseURL:            srv.URL,
+		APIKey:             "test",
+		Model:              "fake",
+		EnableLoopProtocol: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	s, err := pool.GetOrCreate("chat-loop-setup")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	subID, ch := s.Subscribe(16)
+	defer s.Unsubscribe(subID)
+	turnID, err := s.SendUser(context.Background(), "请开启 loop，长期分析 Bittensor 子网并保持恢复上下文。")
+	if err != nil {
+		t.Fatalf("SendUser: %v", err)
+	}
+	deadline := time.After(10 * time.Second)
+	sawSetupToolResult := false
+	for {
+		select {
+		case ev := <-ch:
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.CallID == "setup1" && strings.Contains(p.Result, "initialized LOOP.md draft status=draft") {
+					sawSetupToolResult = true
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.TurnID != turnID {
+					continue
+				}
+				if !sawSetupToolResult {
+					t.Fatal("turn ended without successful start_setup tool result")
+				}
+				assertChatLoopSetupDraft(t, pool, s)
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for chat loop setup turn.end")
+		}
+	}
+}
+
+func assertChatLoopSetupDraft(t *testing.T, pool *SessionPool, s *Session) {
+	t.Helper()
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "chat-loop-setup"))
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "draft" || !strings.Contains(protocol, "Maintain multi-day subnet research") {
+		t.Fatalf("chat start_setup protocol:\n%s", protocol)
+	}
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "chat-loop-setup"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.Status != "draft" || state.CalibrationAnswers != 0 || state.ProtocolUpdates != 1 {
+		t.Fatalf("chat setup state = %+v", state)
+	}
+	messages := s.conv.Snapshot()
+	if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].Content, "What stop condition should pause") {
+		t.Fatalf("assistant did not ask calibration question; messages=%+v", messages)
+	}
+}
+
+func jsonStringLiteral(s string) string {
+	raw, _ := json.Marshal(s)
+	return string(raw)
 }
 
 func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testing.T) {

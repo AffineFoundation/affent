@@ -154,9 +154,10 @@ type Config struct {
 	// EvalAllTools enables the full serve tool surface under EvalMode.
 	EvalAllTools bool `json:"eval_all_tools"`
 
-	// EnableLoopProtocol creates a per-session LOOP.md when a session
-	// starts and feeds it back into future turns. Existing LOOP.md files
-	// are still honored when this is false.
+	// EnableLoopProtocol exposes explicit LOOP.md setup/maintenance tools
+	// and feeds active protocols into future turns. Ordinary chat does not
+	// create LOOP.md unless the model calls loop_protocol start_setup.
+	// Existing LOOP.md files are still honored when this is false.
 	EnableLoopProtocol bool `json:"enable_loop_protocol"`
 
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
