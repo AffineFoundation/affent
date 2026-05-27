@@ -209,6 +209,41 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("surfaces loop guard guidance on blocked tool result rows", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "web_fetch" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 1,
+          failure_kinds: ["blocked", "loop_guard_repeated_failed_input"],
+          result: "loop_guard: blocked repeated failed call to \"web_fetch\" with the same effective URL after previous Failure kind=blocked.\nNext: do not retry the same failing URL; choose a different source, use another available inspection tool, or answer with clearly marked gaps.\nFailure: kind=loop_guard_repeated_failed_input",
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action failed",
+        meta: [
+          "web_fetch",
+          "loop guard repeated failed input",
+          "guard blocked repeated failed call to \"web_fetch\" with the same effective URL after previous Failure ...",
+          "next do not retry the same failing URL; choose a different source, use another available inspection ...",
+        ],
+        badges: ["blocked", "loop_guard_repeated_failed_input"],
+      },
+    });
+  });
+
   it("surfaces weak context compaction summary states", () => {
     const model = buildEventTraceModel(normalizeEvents([
       {

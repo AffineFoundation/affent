@@ -382,18 +382,21 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const memoryUpdate = tool === "memory" ? memoryUpdateMeta(event) : [];
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
+  const resultText = readString(event.data, "result_summary") ?? readString(event.data, "result") ?? "";
+  const loopGuard = loopGuardMeta(event, resultText);
   const resultPreview = sessionSearchPayload
     ? readString(sessionSearchPayload, "message")
     : memoryUpdate.length > 0
       ? ""
-    : readString(event.data, "result_summary") ?? readString(event.data, "result") ?? "";
+    : resultText;
   return compact([
     tool,
     typeof duration === "number" ? formatDuration(duration) : undefined,
     ...memoryUpdate,
     ...sessionSearch,
+    ...loopGuard,
     sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
-    sourceAccess ? sourceAccess.accessedUrl : resultPreview ? streamSummary(resultPreview) : undefined,
+    sourceAccess ? sourceAccess.accessedUrl : !loopGuard.length && resultPreview ? streamSummary(resultPreview) : undefined,
     sourceAccess?.requestedUrl && sourceAccess.requestedUrl !== sourceAccess.accessedUrl ? `from ${sourceAccess.requestedUrl}` : undefined,
     sourceAccess?.ref ? `ref ${sourceAccess.ref}` : undefined,
     sourceAccess?.httpStatus ? `http ${sourceAccess.httpStatus}` : undefined,
@@ -413,6 +416,32 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
         })}`
       : undefined,
   ]);
+}
+
+function loopGuardMeta(event: NormalizedEvent, resultText: string): string[] {
+  const kinds = eventFailureKinds(event).filter((kind) => kind.startsWith("loop_guard"));
+  if (kinds.length === 0 && !/\bloop_guard:/.test(resultText)) return [];
+  return compact([
+    kinds.length > 0 ? `loop guard ${kinds.map(loopGuardKindLabel).join(", ")}` : "loop guard",
+    loopGuardMessage(resultText),
+    loopGuardNext(resultText),
+  ]);
+}
+
+function loopGuardKindLabel(kind: string): string {
+  return kind.replace(/^loop_guard_?/, "").replace(/_/g, " ");
+}
+
+function loopGuardMessage(text: string): string | undefined {
+  const match = text.match(/\bloop_guard:\s*([\s\S]*?)(?:\nNext:|\nFailure:|$)/);
+  const message = match?.[1]?.trim();
+  return message ? `guard ${streamSummary(message)}` : undefined;
+}
+
+function loopGuardNext(text: string): string | undefined {
+  const match = text.match(/\nNext:\s*([\s\S]*?)(?:\nFailure:|$)/);
+  const next = match?.[1]?.trim();
+  return next ? `next ${streamSummary(next)}` : undefined;
 }
 
 function toolContextMeta(contextBytes?: number, contextOmittedBytes?: number): string | undefined {
