@@ -504,8 +504,14 @@ verification index:
   for the parent to answer. Duplicate parent-side exploration tools are blocked
   with `tool_policy_active`.
 - A repeated `subagent_run` in the same turn is blocked with
-  `tool_policy_repeat`; the parent should use the first report as an evidence
-  index instead.
+  `loop_guard_repeated_call` or `tool_policy_repeat`; the parent should use
+  the first report as an evidence index instead.
+
+Eval delegation metrics count runtime failures and unresolved child reports:
+`subagent_run` `ok:false` counts as a subagent error, and `run_task` `ok:false`
+counts as a focused-task error for non-`verify` task types even when the tool
+transport exit code is zero. `verify` may use `ok:false` for a valid
+"claim falsified" result.
 
 Open gaps are detected conservatively from explicit report sections such as
 `Uncertainties`, `Warnings`, `Limitations`, `Open questions`, or `Gaps`

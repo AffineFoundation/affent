@@ -18,25 +18,31 @@ func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"}},
 			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"}},
 			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}, ExitCode: 1, IsErr: true},
+			{Tool: "run_task", Result: `{"task_type":"explore","ok":false,"warnings":["no_valid_evidence_backed_findings"]}`, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
+			{Tool: "run_task", Result: `{"task_type":"verify","ok":false,"summary":"claim falsified"}`, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "verify"}},
 			{Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "test"}},
+			{Tool: "subagent_run", Result: `{"ok":false,"report":"partial"}`, Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "research"}},
 			{Tool: "read_file"}, // no delegation: must be ignored
 		},
 	}
 	got := tr.DelegationStats()
 
-	if got.FocusedTaskCalls != 3 {
-		t.Errorf("FocusedTaskCalls = %d, want 3", got.FocusedTaskCalls)
+	if got.FocusedTaskCalls != 5 {
+		t.Errorf("FocusedTaskCalls = %d, want 5", got.FocusedTaskCalls)
 	}
-	if got.FocusedTaskErrors != 1 {
-		t.Errorf("FocusedTaskErrors = %d, want 1 (the ExitCode=1 explore call)", got.FocusedTaskErrors)
+	if got.FocusedTaskErrors != 2 {
+		t.Errorf("FocusedTaskErrors = %d, want 2 (exit failure plus non-verify ok=false)", got.FocusedTaskErrors)
 	}
-	if !reflect.DeepEqual(got.FocusedTaskByType, map[string]int{"recall": 2, "explore": 1}) {
+	if !reflect.DeepEqual(got.FocusedTaskByType, map[string]int{"recall": 2, "explore": 2, "verify": 1}) {
 		t.Errorf("FocusedTaskByType = %+v", got.FocusedTaskByType)
 	}
-	if got.SubagentCalls != 1 {
-		t.Errorf("SubagentCalls = %d, want 1", got.SubagentCalls)
+	if got.SubagentCalls != 2 {
+		t.Errorf("SubagentCalls = %d, want 2", got.SubagentCalls)
 	}
-	if !reflect.DeepEqual(got.SubagentByMode, map[string]int{"test": 1}) {
+	if got.SubagentErrors != 1 {
+		t.Errorf("SubagentErrors = %d, want 1 (ok=false partial child report)", got.SubagentErrors)
+	}
+	if !reflect.DeepEqual(got.SubagentByMode, map[string]int{"test": 1, "research": 1}) {
 		t.Errorf("SubagentByMode = %+v", got.SubagentByMode)
 	}
 	if !got.HasAny() {

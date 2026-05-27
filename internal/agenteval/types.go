@@ -1634,11 +1634,9 @@ type DelegationStats struct {
 	// (recall / explore / web_extract / research / verify / review).
 	// Keys with zero counts are not included.
 	FocusedTaskByType map[string]int
-	// FocusedTaskErrors counts run_task calls whose ExitCode != 0.
-	// This includes loop-guard rejections (cap-exceeded) and child
-	// runtime errors; it does NOT include semantic "ok=false" inside
-	// the result JSON because that's a model judgment, not a runtime
-	// failure.
+	// FocusedTaskErrors counts run_task calls that failed at runtime or
+	// returned ok:false for non-verify task types. Verify tasks may use
+	// ok:false to mean "claim falsified", which is a valid outcome.
 	FocusedTaskErrors int
 	// SubagentCalls is the total number of subagent_run tool calls.
 	SubagentCalls int
@@ -1646,7 +1644,9 @@ type DelegationStats struct {
 	// (explore / review / test / research). Keys with zero counts
 	// are not included.
 	SubagentByMode map[string]int
-	// SubagentErrors counts subagent_run calls whose ExitCode != 0.
+	// SubagentErrors counts subagent_run calls that failed at runtime or
+	// returned ok:false, which means the child report is partial or has
+	// unresolved gaps.
 	SubagentErrors int
 }
 
@@ -1669,7 +1669,7 @@ func (t Trace) DelegationStats() DelegationStats {
 		switch c.Delegation.Kind {
 		case agent.DelegationKindFocusedTask:
 			s.FocusedTaskCalls++
-			if c.IsErr || c.ExitCode != 0 {
+			if c.IsErr || c.ExitCode != 0 || focusedTaskResultCountsAsError(c) {
 				s.FocusedTaskErrors++
 			}
 			if tt := c.Delegation.TaskType; tt != "" {
@@ -1680,7 +1680,7 @@ func (t Trace) DelegationStats() DelegationStats {
 			}
 		case agent.DelegationKindSubagent:
 			s.SubagentCalls++
-			if c.IsErr || c.ExitCode != 0 {
+			if c.IsErr || c.ExitCode != 0 || subagentResultCountsAsError(c) {
 				s.SubagentErrors++
 			}
 			if m := c.Delegation.Mode; m != "" {
@@ -1692,6 +1692,37 @@ func (t Trace) DelegationStats() DelegationStats {
 		}
 	}
 	return s
+}
+
+func focusedTaskResultCountsAsError(c ToolCall) bool {
+	if c.Tool != agent.FocusedTaskToolName || strings.TrimSpace(c.Result) == "" {
+		return false
+	}
+	var payload struct {
+		OK       *bool  `json:"ok"`
+		TaskType string `json:"task_type"`
+	}
+	if err := json.Unmarshal([]byte(c.Result), &payload); err != nil || payload.OK == nil || *payload.OK {
+		return false
+	}
+	taskType := strings.TrimSpace(payload.TaskType)
+	if taskType == "" && c.Delegation != nil {
+		taskType = strings.TrimSpace(c.Delegation.TaskType)
+	}
+	return taskType != string(agent.FocusedTaskVerify)
+}
+
+func subagentResultCountsAsError(c ToolCall) bool {
+	if c.Tool != agent.SubagentToolName || strings.TrimSpace(c.Result) == "" {
+		return false
+	}
+	var payload struct {
+		OK *bool `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(c.Result), &payload); err != nil || payload.OK == nil {
+		return false
+	}
+	return !*payload.OK
 }
 
 // Outcome is the result of running one scenario through its checks.
