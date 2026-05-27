@@ -402,6 +402,7 @@ type BrowserNetworkSearchExample struct {
 	Query             string   `json:"query,omitempty"`
 	Status            string   `json:"status"`
 	Refs              []string `json:"refs,omitempty"`
+	Previews          []string `json:"previews,omitempty"`
 	RequiresRead      bool     `json:"requires_read,omitempty"`
 	NotCitable        bool     `json:"not_citable,omitempty"`
 	SuggestedNextStep string   `json:"suggested_next_step,omitempty"`
@@ -815,6 +816,13 @@ func browserNetworkSearchExampleForTool(index int, c ToolCall) (BrowserNetworkSe
 				ref := strings.Fields(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
 				if len(ref) > 0 {
 					ex.Refs = append(ex.Refs, compactOneLine(ref[0], 80))
+				}
+			}
+		case strings.HasPrefix(strings.ToLower(trimmed), "preview:"):
+			if len(ex.Previews) < 4 {
+				preview := compactOneLine(strings.TrimSpace(trimmed[len("preview:"):]), 220)
+				if preview != "" {
+					ex.Previews = append(ex.Previews, preview)
 				}
 			}
 		case strings.HasPrefix(trimmed, "Next:"):

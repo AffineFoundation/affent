@@ -1801,7 +1801,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.BrowserNetworkExamples[0].Query != "market_cap" ||
 		!manifest.BrowserNetworkExamples[0].RequiresRead ||
 		!manifest.BrowserNetworkExamples[0].NotCitable ||
-		!reflect.DeepEqual(manifest.BrowserNetworkExamples[0].Refs, []string{"n1"}) {
+		!reflect.DeepEqual(manifest.BrowserNetworkExamples[0].Refs, []string{"n1"}) ||
+		!reflect.DeepEqual(manifest.BrowserNetworkExamples[0].Previews, []string{`{"price":"0.06342 T"}`}) {
 		t.Fatalf("manifest browser network examples = %+v", manifest.BrowserNetworkExamples)
 	}
 	if len(manifest.LoopGuardExamples) != 1 ||

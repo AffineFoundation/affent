@@ -119,6 +119,7 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 		!examples[0].RequiresRead ||
 		!examples[0].NotCitable ||
 		!reflect.DeepEqual(examples[0].Refs, []string{"n7"}) ||
+		!reflect.DeepEqual(examples[0].Previews, []string{`{"market_cap":"195094"}`}) ||
 		!strings.Contains(examples[0].SuggestedNextStep, "browser_network_read") {
 		t.Fatalf("first browser network example = %+v", examples[0])
 	}
@@ -135,6 +136,7 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 		"not citable sources",
 		"tool#1 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`net1` requires_read=`true` citable=`false`",
 		"refs: `n7`",
+		`preview: {"market_cap":"195094"}`,
 		"next: call browser_network_read",
 		"tool#2 status=`no_matches` query=`validators`",
 	} {

@@ -1134,6 +1134,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Query:             "price",
 			Status:            "matches",
 			Refs:              []string{"n1"},
+			Previews:          []string{`{"price":"12.34"}`},
 			RequiresRead:      true,
 			NotCitable:        true,
 			SuggestedNextStep: "call browser_network_read before citing values",
@@ -1387,7 +1388,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price preview=\"JSON_PATH: $.price \\\"12.34\\\"\"") {
 		t.Fatalf("summary output missing source access example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" refs=n1 requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
+	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" refs=n1 previews="{\"price\":\"12.34\"}" requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
 		t.Fatalf("summary output missing browser network example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `memory_update_example: scenario=sample action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
@@ -1472,7 +1473,8 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if len(summary.BrowserNetworkExamples) != 1 ||
 		summary.BrowserNetworkExamples[0].CallID != "browser-network-1" ||
 		summary.BrowserNetworkExamples[0].Scenario != "sample" ||
-		!reflect.DeepEqual(summary.BrowserNetworkExamples[0].Refs, []string{"n1"}) {
+		!reflect.DeepEqual(summary.BrowserNetworkExamples[0].Refs, []string{"n1"}) ||
+		!reflect.DeepEqual(summary.BrowserNetworkExamples[0].Previews, []string{`{"price":"12.34"}`}) {
 		t.Fatalf("BrowserNetworkExamples = %#v", summary.BrowserNetworkExamples)
 	}
 	if len(summary.MemoryUpdateExamples) != 1 ||
@@ -1722,6 +1724,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			Query:             "market_cap",
 			Status:            "matches",
 			Refs:              []string{"n1"},
+			Previews:          []string{`{"market_cap":"201.04K T"}`},
 			RequiresRead:      true,
 			NotCitable:        true,
 			SuggestedNextStep: "call browser_network_read before citing values",
@@ -2073,6 +2076,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		browserNetworkExample["requires_read"] != true ||
 		browserNetworkExample["not_citable"] != true ||
 		!jsonArrayContainsString(browserNetworkExample["refs"], "n1") ||
+		!jsonArrayContainsString(browserNetworkExample["previews"], `{"market_cap":"201.04K T"}`) ||
 		!strings.Contains(fmt.Sprint(browserNetworkExample["suggested_next_step"]), "browser_network_read") {
 		t.Fatalf("browser_network_example = %#v\njson=%s", browserNetworkExamples[0], out.String())
 	}
@@ -2718,6 +2722,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			Query:             "market_cap",
 			Status:            "matches",
 			Refs:              []string{"n1"},
+			Previews:          []string{`{"market_cap":"201.04K T"}`},
 			RequiresRead:      true,
 			NotCitable:        true,
 			SuggestedNextStep: "call browser_network_read before citing values",
@@ -3083,7 +3088,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		browserNetworkExample["current_page_url"] != "https://taostats.io/subnets/120" ||
 		browserNetworkExample["status"] != "matches" ||
 		browserNetworkExample["requires_read"] != true ||
-		!jsonArrayContainsString(browserNetworkExample["refs"], "n1") {
+		!jsonArrayContainsString(browserNetworkExample["refs"], "n1") ||
+		!jsonArrayContainsString(browserNetworkExample["previews"], `{"market_cap":"201.04K T"}`) {
 		t.Fatalf("browser_network_example = %#v\njson=%s", browserNetworkExamples[0], out.String())
 	}
 	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)

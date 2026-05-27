@@ -940,6 +940,9 @@ func renderTimelineBrowserNetworkSearches(b *strings.Builder, trace *Trace) {
 		if len(ex.Refs) > 0 {
 			fmt.Fprintf(b, "   refs: `%s`\n", strings.Join(ex.Refs, "`, `"))
 		}
+		for _, preview := range ex.Previews {
+			fmt.Fprintf(b, "   preview: %s\n", timelineInline(preview, timelineMemoryPreviewBytes))
+		}
 		if ex.SuggestedNextStep != "" {
 			fmt.Fprintf(b, "   next: %s\n", timelineInline(ex.SuggestedNextStep, timelineMemoryPreviewBytes))
 		}

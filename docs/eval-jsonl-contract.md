@@ -234,10 +234,11 @@ Scenario records describe one eval case:
 - `browser_network_examples`: optional bounded examples of `browser_network`
   searches. These are diagnostic refs/checks, not citable factual evidence.
   Each sample includes tool index, call id, current page URL, query, status
-  (`matches`, `no_matches`, or `unknown`), bounded network refs, whether the
-  refs require `browser_network_read`, and the suggested next step. Batch
-  summary examples also include the originating scenario name. Treat these as
-  leads for dynamic pages: cite hidden JSON/text values only after a matching
+  (`matches`, `no_matches`, or `unknown`), bounded network refs, compact
+  `preview:` snippets from matched responses, whether the refs require
+  `browser_network_read`, and the suggested next step. Batch summary examples
+  also include the originating scenario name. Treat these as leads for dynamic
+  pages: cite hidden JSON/text values only after a matching
   `browser_network_read` result produces network `SourceAccess:` evidence.
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed

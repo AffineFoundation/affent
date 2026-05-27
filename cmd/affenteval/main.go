@@ -1827,6 +1827,9 @@ func printBrowserNetworkExampleLines(w io.Writer, examples []agenteval.BrowserNe
 		if len(ex.Refs) > 0 {
 			fmt.Fprintf(w, " refs=%s", strings.Join(ex.Refs, ","))
 		}
+		if len(ex.Previews) > 0 {
+			fmt.Fprintf(w, " previews=%q", strings.Join(ex.Previews, " | "))
+		}
 		if ex.RequiresRead {
 			fmt.Fprintf(w, " requires_read=true")
 		}
@@ -3159,6 +3162,9 @@ func cloneBrowserNetworkExamples(in []agenteval.BrowserNetworkSearchExample) []a
 		if len(ex.Refs) > 0 {
 			ex.Refs = append([]string(nil), ex.Refs...)
 		}
+		if len(ex.Previews) > 0 {
+			ex.Previews = append([]string(nil), ex.Previews...)
+		}
 		out = append(out, ex)
 	}
 	return out
@@ -3300,6 +3306,9 @@ func appendBrowserNetworkExamples(dst, src []agenteval.BrowserNetworkSearchExamp
 		}
 		if len(ex.Refs) > 0 {
 			ex.Refs = append([]string(nil), ex.Refs...)
+		}
+		if len(ex.Previews) > 0 {
+			ex.Previews = append([]string(nil), ex.Previews...)
 		}
 		if ex.Scenario == "" {
 			ex.Scenario = scenario
