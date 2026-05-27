@@ -94,20 +94,22 @@ describe("SessionLoopPanel", () => {
           {
             seq: 3,
             time: "2026-05-27T10:10:00Z",
-            type: "loop.protocol_activate",
-            summary: "Activated LOOP.md",
-            reason: "calibration answered",
+            type: "context.compacted",
+            summary: "Context compacted; force next LOOP.md full feed",
+            reason: "context_overflow",
+            reactive: true,
           },
         ]}
       />,
     );
 
     const events = screen.getByTestId("session-loop-events");
-    expect(events).toHaveTextContent("Activated LOOP.md");
-    expect(events).toHaveTextContent("calibration answered");
+    expect(events).toHaveTextContent("Context compacted");
+    expect(events).toHaveTextContent("reactive");
+    expect(events).toHaveTextContent("context_overflow");
     expect(events).toHaveTextContent("Updated LOOP.md");
     expect(events).toHaveTextContent("Current Situation, Rules");
     const text = events.textContent ?? "";
-    expect(text.indexOf("Activated LOOP.md")).toBeLessThan(text.indexOf("Initialized LOOP.md"));
+    expect(text.indexOf("Context compacted")).toBeLessThan(text.indexOf("Initialized LOOP.md"));
   });
 });

@@ -177,6 +177,7 @@ export interface SessionLoopEvent {
   reason?: string;
   path?: string;
   mode?: string;
+  reactive?: boolean;
   feed_number?: number;
   plan_label?: string;
   plan_step_index?: number;

@@ -160,6 +160,7 @@ function LoopEvents({ events }: { events: SessionLoopEvent[] }) {
 function loopEventDetail(event: SessionLoopEvent): string | undefined {
   const parts = [
     event.type,
+    event.reactive ? "reactive" : undefined,
     event.reason ? `reason ${event.reason}` : undefined,
     event.sections_changed && event.sections_changed.length > 0 ? `sections ${event.sections_changed.join(", ")}` : undefined,
     event.memory_preview ? `memory ${event.memory_preview}` : undefined,

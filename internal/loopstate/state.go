@@ -88,6 +88,7 @@ type Event struct {
 	Reason          string   `json:"reason,omitempty"`
 	Path            string   `json:"path,omitempty"`
 	Mode            string   `json:"mode,omitempty"`
+	Reactive        bool     `json:"reactive,omitempty"`
 	FeedNumber      int      `json:"feed_number,omitempty"`
 	PlanLabel       string   `json:"plan_label,omitempty"`
 	PlanStepIndex   int      `json:"plan_step_index,omitempty"`
@@ -334,6 +335,7 @@ func RecordContextCompaction(protocolPath, reason string, reactive bool) (State,
 		Reason:  reason,
 		Path:    ProtocolRelPath(loopID),
 		Time:    formatTime(now),
+		Reactive: reactive,
 	})
 	if err != nil {
 		return State{}, Event{}, err

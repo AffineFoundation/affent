@@ -334,7 +334,7 @@ func TestRecordContextCompactionForcesNextFullProtocolFeed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RecordContextCompaction: %v", err)
 	}
-	if event.Type != "context.compacted" || event.Reason != "context_overflow" || event.Path != ProtocolRelPath("market-run") {
+	if event.Type != "context.compacted" || event.Reason != "context_overflow" || event.Path != ProtocolRelPath("market-run") || !event.Reactive {
 		t.Fatalf("compaction event = %+v", event)
 	}
 	if !state.NeedsFullProtocolFeed || state.ContextCompactions != 1 || state.LastCompactionReason != "context_overflow" || !state.LastCompactionReactive {
