@@ -827,7 +827,8 @@ function sourceAccessFromNode(node: ExecutionTreeNode) {
 
 function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | undefined {
   const payload = parseJsonObject(node.resultText) ?? parseJsonObject(node.resultSummary);
-  const results = Array.isArray(payload?.results) ? payload.results : [];
+  if (!payload) return undefined;
+  const results = Array.isArray(payload.results) ? payload.results : [];
   for (const candidate of results) {
     if (!isRecord(candidate)) continue;
     const sessionId = stringField(candidate, "session_id");
@@ -835,12 +836,16 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
     const turnIndex = numberField(candidate, "turn_idx");
     const matchedTerms = stringArrayField(candidate, "matched_terms").slice(0, 3);
     const contextIncluded = booleanField(candidate, "context_included");
+    const total = numberField(payload, "total") ?? results.length;
+    const extra = Math.max(0, total - 1);
     const value = [sessionId, turnIndex == null ? undefined : `turn-${turnIndex}`].filter(Boolean).join(":");
     const displayValue = [
+      total > 1 ? `${total} hits` : undefined,
       sessionId,
       turnIndex == null ? undefined : `turn ${turnIndex}`,
       matchedTerms.length > 0 ? matchedTerms.join(", ") : undefined,
       contextIncluded ? "context" : undefined,
+      extra > 0 ? `+${extra} more` : undefined,
     ].filter(Boolean).join(" · ");
     return { label: "History", value, displayValue };
   }

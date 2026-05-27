@@ -139,6 +139,6 @@ describe("buildExecutionTree", () => {
 
     expect(search.label).toBe("Search");
     expect(search.title).toBe("Search history Alpha Coast marker");
-    expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · matched alpha, coast · context");
+    expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · matched alpha, coast · context · 1 more");
   });
 });

@@ -422,12 +422,15 @@ function sessionSearchMeta(payload: Record<string, unknown>): string[] {
   const results = readObjectArray(payload, "results");
   const first = results[0];
   const matchedTerms = first ? readStringArray(first, "matched_terms") : [];
+  const visibleTotal = total ?? results.length;
+  const extra = Math.max(0, visibleTotal - 1);
   return compact([
     typeof total === "number" ? `${total} history hit${total === 1 ? "" : "s"}` : undefined,
     first ? readString(first, "session_id") : undefined,
     first && typeof readNumber(first, "turn_idx") === "number" ? `turn ${readNumber(first, "turn_idx")}` : undefined,
     matchedTerms.length > 0 ? `matched ${matchedTerms.slice(0, 8).join(", ")}` : undefined,
     first && readBoolean(first, "context_included") ? "adjacent context" : undefined,
+    extra > 0 ? `${extra} more history hit${extra === 1 ? "" : "s"}` : undefined,
   ]);
 }
 

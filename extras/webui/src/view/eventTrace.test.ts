@@ -198,6 +198,7 @@ describe("eventTrace view model", () => {
           "turn 2",
           "matched alpha, coast, inventory",
           "adjacent context",
+          "1 more history hit",
         ],
       },
     });

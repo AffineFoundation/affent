@@ -365,12 +365,14 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
 
   const first = results[0];
   const matchedTerms = readStringList(first, "matched_terms").slice(0, 4);
+  const extra = Math.max(0, total - 1);
   const parts = [
     `${total} history ${pluralize("hit", total)}`,
     readString(first, "session_id"),
     readNumber(first, "turn_idx") != null ? `turn ${readNumber(first, "turn_idx")}` : undefined,
     matchedTerms.length > 0 ? `matched ${matchedTerms.join(", ")}` : undefined,
     readBoolean(first, "context_included") ? "context" : undefined,
+    extra > 0 ? `${extra} more` : undefined,
   ].filter((part): part is string => !!part);
   return compactLine(parts.join(" · "), 132);
 }

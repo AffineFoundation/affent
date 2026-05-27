@@ -697,7 +697,7 @@ describe("buildTurnActivity", () => {
           duration_ms: 24,
           result_summary: JSON.stringify({
             query: "Alpha Coast marker",
-            total: 1,
+            total: 2,
             results: [
               {
                 session_id: "market-alpha",
@@ -707,11 +707,19 @@ describe("buildTurnActivity", () => {
                 matched_terms: ["alpha", "coast"],
                 context_included: true,
               },
+              {
+                session_id: "market-alpha",
+                turn_idx: 2,
+                role: "assistant",
+                snippet: "earlier Alpha Coast planning context",
+                matched_terms: ["alpha"],
+                context_included: false,
+              },
             ],
           }),
           result: JSON.stringify({
             query: "Alpha Coast marker",
-            total: 1,
+            total: 2,
             results: [
               {
                 session_id: "market-alpha",
@@ -720,6 +728,14 @@ describe("buildTurnActivity", () => {
                 snippet: "history marker HIST-STOCK-44 and inventory-drag risk",
                 matched_terms: ["alpha", "coast"],
                 context_included: true,
+              },
+              {
+                session_id: "market-alpha",
+                turn_idx: 2,
+                role: "assistant",
+                snippet: "earlier Alpha Coast planning context",
+                matched_terms: ["alpha"],
+                context_included: false,
               },
             ],
           }),
@@ -735,17 +751,17 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity?.evidencePreview).toEqual([
-      { label: "History", value: "market-alpha:turn-4", displayValue: "market-alpha · turn 4 · alpha, coast · context" },
+      { label: "History", value: "market-alpha:turn-4", displayValue: "2 hits · market-alpha · turn 4 · alpha, coast · context · +1 more" },
     ]);
     expect(activity?.brief.rows).toContainEqual({
       id: "evidence",
       label: "Sources",
       evidence: [
-        { label: "History", value: "market-alpha:turn-4", displayValue: "market-alpha · turn 4 · alpha, coast · context" },
+        { label: "History", value: "market-alpha:turn-4", displayValue: "2 hits · market-alpha · turn 4 · alpha, coast · context · +1 more" },
       ],
       action: {
         label: "Use sources",
-        draft: "Use this evidence in the next step:\n- History market-alpha · turn 4 · alpha, coast · context",
+        draft: "Use this evidence in the next step:\n- History 2 hits · market-alpha · turn 4 · alpha, coast · context · +1 more",
         source: "evidence",
       },
     });
