@@ -372,6 +372,49 @@ describe("eventTrace view model", () => {
     ]);
   });
 
+  it("surfaces confirmed memory update details on tool result rows", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "mem1", tool: "memory", args: { action: "replace", topic: "markets" } },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "mem1",
+          exit_code: 0,
+          result: "{\"ok\":true}",
+          memory_update: {
+            action: "replace",
+            target: "memory",
+            topic: "markets",
+            location: "memory:markets",
+            preview: "old dashboard rule -> prefer browser_network_read evidence",
+            previous_preview: "old dashboard rule",
+            next_preview: "prefer browser_network_read evidence",
+          },
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action finished",
+        meta: [
+          "memory",
+          "Updated memory",
+          "memory:markets",
+          "old dashboard rule -> prefer browser_network_read evidence",
+        ],
+        badges: ["memory replace"],
+      },
+    });
+  });
+
   it("surfaces source evidence status on tool result rows", () => {
     const items = buildEventTraceItems(normalizeEvents([
       {

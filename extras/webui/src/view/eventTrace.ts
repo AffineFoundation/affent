@@ -379,14 +379,18 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const contextBytes = readNumber(event.data, "context_bytes");
   const contextOmittedBytes = readNumber(event.data, "context_omitted_bytes");
   const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
+  const memoryUpdate = tool === "memory" ? memoryUpdateMeta(event) : [];
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
   const resultPreview = sessionSearchPayload
     ? readString(sessionSearchPayload, "message")
+    : memoryUpdate.length > 0
+      ? ""
     : readString(event.data, "result_summary") ?? readString(event.data, "result") ?? "";
   return compact([
     tool,
     typeof duration === "number" ? formatDuration(duration) : undefined,
+    ...memoryUpdate,
     ...sessionSearch,
     sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
     sourceAccess ? sourceAccess.accessedUrl : resultPreview ? streamSummary(resultPreview) : undefined,
@@ -421,13 +425,41 @@ function toolContextMeta(contextBytes?: number, contextOmittedBytes?: number): s
 
 function toolResultBadges(event: NormalizedEvent): string[] {
   const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
+  const memoryAction = memoryUpdateAction(event);
   return compact([
     ...eventFailureKinds(event),
+    memoryAction ? `memory ${memoryAction}` : undefined,
     sourceAccess ? sourceAccess.status : undefined,
     (readNumber(event.data, "context_omitted_bytes") ?? 0) > 0 ? "context trimmed" : undefined,
     readBoolean(event.data, "result_truncated") ? "truncated" : undefined,
     readString(event.data, "result_artifact_path") ? "full output" : undefined,
   ]);
+}
+
+function memoryUpdateMeta(event: NormalizedEvent): string[] {
+  const update = readObject(event.data, "memory_update");
+  if (!update) return [];
+  const action = memoryUpdateAction(event);
+  const location = readString(update, "location");
+  const preview = readString(update, "preview");
+  return compact([
+    action ? memoryUpdateLabel(action) : undefined,
+    location,
+    preview ? streamSummary(preview) : undefined,
+  ]);
+}
+
+function memoryUpdateAction(event: NormalizedEvent): string | undefined {
+  const update = readObject(event.data, "memory_update");
+  const action = readString(update, "action");
+  return action === "add" || action === "replace" || action === "remove" ? action : undefined;
+}
+
+function memoryUpdateLabel(action: string): string {
+  if (action === "add") return "Saved memory";
+  if (action === "replace") return "Updated memory";
+  if (action === "remove") return "Removed memory";
+  return "Memory update";
 }
 
 function sessionSearchMeta(payload: Record<string, unknown>): string[] {
