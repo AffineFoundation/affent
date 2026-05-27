@@ -25,7 +25,7 @@ describe("SessionFilesPanel", () => {
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
-    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open preview" }));
+    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file" })[0]);

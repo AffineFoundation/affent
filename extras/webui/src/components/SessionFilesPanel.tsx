@@ -36,7 +36,7 @@ export function SessionFilesPanel({
                   <CopyButton label="Copy path" value={item.path} className="ghost-action" />
                   {item.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
-                      Open preview
+                      Open evidence
                     </button>
                   ) : null}
                   {onUseAsDraft ? (
