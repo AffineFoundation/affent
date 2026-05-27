@@ -49,6 +49,15 @@ type State struct {
 	LastTurnForcedNoTools  int    `json:"last_turn_forced_no_tools,omitempty"`
 	LastTurnMemoryUpdates  int    `json:"last_turn_memory_updates,omitempty"`
 	LastTurnSessionSearch  int    `json:"last_turn_session_search_calls,omitempty"`
+	MemoryUpdateEvents     int    `json:"memory_update_events,omitempty"`
+	LastMemoryUpdateAction string `json:"last_memory_update_action,omitempty"`
+	LastMemoryUpdateTarget string `json:"last_memory_update_target,omitempty"`
+	LastMemoryUpdateTopic  string `json:"last_memory_update_topic,omitempty"`
+	LastMemoryUpdateLoc    string `json:"last_memory_update_location,omitempty"`
+	LastMemoryUpdatePrev   string `json:"last_memory_update_previous_preview,omitempty"`
+	LastMemoryUpdateNext   string `json:"last_memory_update_next_preview,omitempty"`
+	LastMemoryUpdate       string `json:"last_memory_update_preview,omitempty"`
+	LastMemoryUpdateAt     string `json:"last_memory_update_at,omitempty"`
 	LoopDecisions          int    `json:"loop_decisions,omitempty"`
 	LastDecisionID         string `json:"last_decision_id,omitempty"`
 	LastDecisionKind       string `json:"last_decision_kind,omitempty"`
@@ -98,6 +107,14 @@ type Event struct {
 	Decision        string   `json:"decision,omitempty"`
 	Confidence      string   `json:"confidence,omitempty"`
 	RequiredAction  string   `json:"required_action,omitempty"`
+	CallID          string   `json:"call_id,omitempty"`
+	MemoryAction    string   `json:"memory_action,omitempty"`
+	MemoryTarget    string   `json:"memory_target,omitempty"`
+	MemoryTopic     string   `json:"memory_topic,omitempty"`
+	MemoryLocation  string   `json:"memory_location,omitempty"`
+	MemoryPreview   string   `json:"memory_preview,omitempty"`
+	PreviousPreview string   `json:"previous_preview,omitempty"`
+	NextPreview     string   `json:"next_preview,omitempty"`
 }
 
 type DecisionCheckpoint struct {
@@ -121,6 +138,18 @@ type TurnCheckpoint struct {
 	ForcedNoTools      int
 	MemoryUpdates      int
 	SessionSearchCalls int
+}
+
+type MemoryUpdateCheckpoint struct {
+	TurnID          string
+	CallID          string
+	Action          string
+	Target          string
+	Topic           string
+	Location        string
+	Preview         string
+	PreviousPreview string
+	NextPreview     string
 }
 
 func ReadState(path string) (State, bool, error) {
@@ -381,6 +410,59 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 	return state, event, nil
 }
 
+func RecordMemoryUpdate(protocolPath string, checkpoint MemoryUpdateCheckpoint) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	checkpoint = normalizeMemoryUpdateCheckpoint(checkpoint)
+	if checkpoint.Action == "" || checkpoint.Location == "" {
+		return State{}, Event{}, errors.New("memory update requires action and location")
+	}
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:            "loop.memory_update",
+		Summary:         "Memory " + checkpoint.Action + ": " + checkpoint.Location,
+		Reason:          "memory_tool_update",
+		Path:            ProtocolRelPath(loopID),
+		Time:            formatTime(now),
+		TurnID:          checkpoint.TurnID,
+		CallID:          checkpoint.CallID,
+		MemoryAction:    checkpoint.Action,
+		MemoryTarget:    checkpoint.Target,
+		MemoryTopic:     checkpoint.Topic,
+		MemoryLocation:  checkpoint.Location,
+		MemoryPreview:   checkpoint.Preview,
+		PreviousPreview: checkpoint.PreviousPreview,
+		NextPreview:     checkpoint.NextPreview,
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.MemoryUpdateEvents++
+	state.LastMemoryUpdateAction = checkpoint.Action
+	state.LastMemoryUpdateTarget = checkpoint.Target
+	state.LastMemoryUpdateTopic = checkpoint.Topic
+	state.LastMemoryUpdateLoc = checkpoint.Location
+	state.LastMemoryUpdatePrev = checkpoint.PreviousPreview
+	state.LastMemoryUpdateNext = checkpoint.NextPreview
+	state.LastMemoryUpdate = checkpoint.Preview
+	state.LastMemoryUpdateAt = event.Time
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
 func RecordDecision(protocolPath string, checkpoint DecisionCheckpoint) (State, Event, error) {
 	loopDir := filepath.Dir(protocolPath)
 	loopID := filepath.Base(loopDir)
@@ -504,6 +586,20 @@ func normalizeDecisionCheckpoint(in DecisionCheckpoint) DecisionCheckpoint {
 		Confidence:     trimEventText(in.Confidence, 80),
 		Reason:         trimEventText(in.Reason, maxDecisionText),
 		RequiredAction: trimEventText(in.RequiredAction, maxDecisionText),
+	}
+}
+
+func normalizeMemoryUpdateCheckpoint(in MemoryUpdateCheckpoint) MemoryUpdateCheckpoint {
+	return MemoryUpdateCheckpoint{
+		TurnID:          trimEventText(in.TurnID, 160),
+		CallID:          trimEventText(in.CallID, 160),
+		Action:          trimEventText(in.Action, 80),
+		Target:          trimEventText(in.Target, 80),
+		Topic:           trimEventText(in.Topic, 160),
+		Location:        trimEventText(in.Location, 240),
+		Preview:         trimEventText(in.Preview, maxDecisionText),
+		PreviousPreview: trimEventText(in.PreviousPreview, maxDecisionText),
+		NextPreview:     trimEventText(in.NextPreview, maxDecisionText),
 	}
 }
 

@@ -720,18 +720,21 @@ Affent stores durable state as inspectable files:
   must be full, the latest active-plan checkpoint observed during a feed, and
   the latest turn checkpoint: turn id, end reason, token usage, tool/error
   counts, loop-guard interventions, forced no-tool recoveries, memory updates,
-  and session-search calls. It also records loop-decision count and the latest
-  gate decision, including kind, trigger, decision, confidence, reason, and
-  required action. The latest loop event is mirrored so restart/resume code and
-  WebUI do not have to parse Markdown or replay the full trace for common
-  status panels. Feed count is durable, so reopening a session continues the
+  and session-search calls. Confirmed memory mutations are also mirrored as a
+  latest memory-update checkpoint with action, target, topic, location,
+  previous/next previews, and a compact display preview. It also records
+  loop-decision count and the latest gate decision, including kind, trigger,
+  decision, confidence, reason, and required action. The latest loop event is
+  mirrored so restart/resume code and WebUI do not have to parse Markdown or
+  replay the full trace for common status panels. Feed count is durable, so
+  reopening a session continues the
   full/digest cadence instead of restarting from the first full feeds. Session
   list/detail responses expose this as `loop_state`, including after `LOOP.md`
   is disabled.
 - `.affent/loops/<session_id>/events.jsonl`: bounded loop audit events such as
-  protocol feeds, loop decisions, turn checkpoints, compaction marks, updates,
-  and deletes. `GET /v1/sessions/{id}/loop-protocol` returns recent events
-  alongside the protocol for operator visibility.
+  protocol feeds, memory updates, loop decisions, turn checkpoints, compaction
+  marks, updates, and deletes. `GET /v1/sessions/{id}/loop-protocol` returns
+  recent events alongside the protocol for operator visibility.
 - Runtime skill files: installed skill bodies and manifests.
 - Memory files: topic-bucketed workspace or user memory.
 - Transcript files: child-task and subagent conversations.

@@ -1617,6 +1617,7 @@ func (l *Loop) publishAndAppendToolResultWithContextMeta(turnID, callID, name, r
 	if memoryUpdate != nil {
 		payload.MemoryUpdate = memoryUpdate
 	}
+	l.recordLoopMemoryUpdate(turnID, callID, memoryUpdate)
 	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name), payload.ResultArtifactPath)
 	payload.ContextBytes = len(content)
 	payload.ContextOmittedBytes = omitted
@@ -1635,6 +1636,35 @@ func (l *Loop) publishAndAppendToolResultWithContextMeta(turnID, callID, name, r
 		l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 	}
 	return omitted
+}
+
+func (l *Loop) recordLoopMemoryUpdate(turnID, callID string, update *sse.MemoryUpdateMeta) {
+	if update == nil {
+		return
+	}
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return
+	}
+	if _, found, err := loopstate.ReadProtocol(path); err != nil {
+		l.Log.Warn().Err(err).Msg("read loop protocol before memory update checkpoint failed")
+		return
+	} else if !found {
+		return
+	}
+	if _, _, err := loopstate.RecordMemoryUpdate(path, loopstate.MemoryUpdateCheckpoint{
+		TurnID:          turnID,
+		CallID:          callID,
+		Action:          update.Action,
+		Target:          update.Target,
+		Topic:           update.Topic,
+		Location:        update.Location,
+		Preview:         update.Preview,
+		PreviousPreview: update.PreviousPreview,
+		NextPreview:     update.NextPreview,
+	}); err != nil {
+		l.Log.Warn().Err(err).Msg("record loop memory update checkpoint failed")
+	}
 }
 
 func estimateContextTokens(text string) int {

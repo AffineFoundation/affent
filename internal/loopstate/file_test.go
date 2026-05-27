@@ -343,6 +343,54 @@ func TestRecordDecisionUpdatesStateAndEvents(t *testing.T) {
 	}
 }
 
+func TestRecordMemoryUpdateUpdatesStateAndEvents(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := ProtocolPath(dir, "market-run")
+	if err := WriteProtocol(protocolPath, "# Loop\n\n## Memory\n\nPersist memory updates."); err != nil {
+		t.Fatal(err)
+	}
+	state, event, err := RecordMemoryUpdate(protocolPath, MemoryUpdateCheckpoint{
+		TurnID:          "turn_mem",
+		CallID:          "memory-1",
+		Action:          "replace",
+		Target:          "memory",
+		Topic:           "markets",
+		Location:        "memory:markets",
+		Preview:         "old dashboard rule -> prefer browser network evidence",
+		PreviousPreview: "old dashboard rule",
+		NextPreview:     "prefer browser network evidence",
+	})
+	if err != nil {
+		t.Fatalf("RecordMemoryUpdate: %v", err)
+	}
+	if event.Type != "loop.memory_update" ||
+		event.TurnID != "turn_mem" ||
+		event.CallID != "memory-1" ||
+		event.MemoryAction != "replace" ||
+		event.MemoryTarget != "memory" ||
+		event.MemoryTopic != "markets" ||
+		event.MemoryLocation != "memory:markets" ||
+		event.MemoryPreview != "old dashboard rule -> prefer browser network evidence" ||
+		event.PreviousPreview != "old dashboard rule" ||
+		event.NextPreview != "prefer browser network evidence" {
+		t.Fatalf("event = %+v", event)
+	}
+	if state.MemoryUpdateEvents != 1 ||
+		state.LastMemoryUpdateAction != "replace" ||
+		state.LastMemoryUpdateTarget != "memory" ||
+		state.LastMemoryUpdateTopic != "markets" ||
+		state.LastMemoryUpdateLoc != "memory:markets" ||
+		state.LastMemoryUpdate != "old dashboard rule -> prefer browser network evidence" ||
+		state.LastMemoryUpdatePrev != "old dashboard rule" ||
+		state.LastMemoryUpdateNext != "prefer browser network evidence" ||
+		state.LastEventType != "loop.memory_update" {
+		t.Fatalf("state = %+v", state)
+	}
+	if _, _, err := RecordMemoryUpdate(protocolPath, MemoryUpdateCheckpoint{Action: "add"}); err == nil || !strings.Contains(err.Error(), "requires action and location") {
+		t.Fatalf("missing location err = %v", err)
+	}
+}
+
 func TestAppendAndReadRecentEventsRejectsUnsafeTargets(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".affent", "loops", "alpha", EventsFileName)

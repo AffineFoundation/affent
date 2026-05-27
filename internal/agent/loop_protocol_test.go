@@ -392,3 +392,45 @@ func TestPublishLoopDecisionPersistsSidecarDecision(t *testing.T) {
 		t.Fatalf("sidecar event = %+v", sidecar[0])
 	}
 }
+
+func TestRecordLoopMemoryUpdatePersistsSidecarUpdate(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## Memory\n\nAudit memory updates."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{LoopProtocolPath: path}
+	loop.recordLoopMemoryUpdate("turn_mem", "memory-1", &sse.MemoryUpdateMeta{
+		Action:          "add",
+		Target:          "memory",
+		Topic:           "markets",
+		Location:        "memory:markets",
+		Preview:         "prefer browser_network_read for dynamic dashboards",
+		NextPreview:     "prefer browser_network_read for dynamic dashboards",
+		PreviousPreview: "",
+	})
+
+	state, found, err := loopstate.ReadState(filepath.Join(dir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.MemoryUpdateEvents != 1 ||
+		state.LastMemoryUpdateAction != "add" ||
+		state.LastMemoryUpdateLoc != "memory:markets" ||
+		state.LastMemoryUpdate != "prefer browser_network_read for dynamic dashboards" ||
+		state.LastMemoryUpdateNext != "prefer browser_network_read for dynamic dashboards" {
+		t.Fatalf("state = %+v", state)
+	}
+	sidecar, found, err := loopstate.ReadRecentEvents(filepath.Join(dir, loopstate.EventsFileName), 1)
+	if err != nil || !found || len(sidecar) != 1 {
+		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(sidecar), err)
+	}
+	if sidecar[0].Type != "loop.memory_update" ||
+		sidecar[0].TurnID != "turn_mem" ||
+		sidecar[0].CallID != "memory-1" ||
+		sidecar[0].MemoryAction != "add" ||
+		sidecar[0].MemoryLocation != "memory:markets" ||
+		sidecar[0].NextPreview != "prefer browser_network_read for dynamic dashboards" {
+		t.Fatalf("sidecar event = %+v", sidecar[0])
+	}
+}
