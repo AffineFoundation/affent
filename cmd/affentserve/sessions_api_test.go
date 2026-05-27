@@ -16,6 +16,7 @@ import (
 	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -700,6 +701,76 @@ func TestHandleSessionPlan_Returns404WhenNoPlan(t *testing.T) {
 	createDurableSessionDir(t, pool, "no-plan")
 
 	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/no-plan/plan", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
+func TestHandleSessionLoopProtocol_ReadsDurableProtocolWithoutReopeningSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "looped")
+	protocolPath := sessionLoopProtocolPath(pool, "looped")
+	if err := os.MkdirAll(filepath.Dir(protocolPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	protocol := `# Loop Protocol: Loop Test
+
+## 0. Metadata
+
+- loop_id: looped
+- owner_session: looped
+- status: running
+
+## 1. North Star
+
+Keep long-run evidence recoverable.`
+	if err := os.WriteFile(protocolPath, []byte(protocol+"\n"), 0o644); err != nil {
+		t.Fatalf("write loop protocol: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/looped/loop-protocol", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "looped") != nil {
+		t.Fatal("GET loop-protocol must not reopen an inactive durable session")
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.SessionID != "looped" || !strings.Contains(resp.Protocol, "Keep long-run evidence recoverable.") {
+		t.Fatalf("response = %+v", resp)
+	}
+	if resp.Summary == nil ||
+		resp.Summary.Path != loopstate.ProtocolRelPath("looped") ||
+		resp.Summary.LoopID != "looped" ||
+		resp.Summary.OwnerSession != "looped" ||
+		resp.Summary.Status != "running" ||
+		resp.Summary.UpdatedAt == "" ||
+		!strings.Contains(resp.Summary.Preview, "Keep long-run evidence recoverable.") {
+		t.Fatalf("summary = %+v", resp.Summary)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "looped")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasLoopProtocol || summary.LoopProtocol == nil || summary.LoopProtocol.Status != "running" {
+		t.Fatalf("durable summary = %+v", summary)
+	}
+}
+
+func TestHandleSessionLoopProtocol_Returns404WhenMissing(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "no-loop")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/no-loop/loop-protocol", nil)
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusNotFound {

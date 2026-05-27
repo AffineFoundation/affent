@@ -21,6 +21,7 @@ import (
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
@@ -36,20 +37,21 @@ type Session struct {
 
 	mu sync.Mutex
 
-	loop          *agent.Loop
-	conv          *agent.Conversation
-	llm           *agent.LLMClient
-	registry      *agent.Registry
-	skillRegistry *agent.SkillRegistry
-	events        chan sse.Event
-	browser       *affentbrowser.Session
-	workspace     string
-	createdAt     time.Time
-	lastUsed      time.Time
-	trace         *eventlog.Recorder
-	traceFile     *os.File
-	nextEventLine int64
-	activeTurns   atomic.Int64
+	loop             *agent.Loop
+	conv             *agent.Conversation
+	llm              *agent.LLMClient
+	registry         *agent.Registry
+	skillRegistry    *agent.SkillRegistry
+	events           chan sse.Event
+	browser          *affentbrowser.Session
+	workspace        string
+	loopProtocolPath string
+	createdAt        time.Time
+	lastUsed         time.Time
+	trace            *eventlog.Recorder
+	traceFile        *os.File
+	nextEventLine    int64
+	activeTurns      atomic.Int64
 
 	// Per-session lifetime token counters, accumulated in fanout as
 	// sse.TypeUsage events flow through. Atomic so the /v1/stats
@@ -537,6 +539,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// exposed but still want durable per-user notes.
 		agent.RegisterMemoryOnly(reg, memStore)
 	}
+	loopProtocolPath := loopstate.ProtocolPath(sessionDir, id)
 	if workflowToolsEnabled(p.cfg) {
 		if _, ok := reg.Get(agent.SessionSearchToolName); !ok {
 			agent.RegisterSessionSearchOnly(reg, p.sessionRootPath(), id)
@@ -672,6 +675,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
+	if !p.cfg.EvalMode {
+		loop.SkillProvider = agent.WithLoopProtocolSkillProvider(loopProtocolPath, loop.SkillProvider)
+	}
 	if p.cfg.EnableSubagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
@@ -741,23 +747,24 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 
 	s := &Session{
-		ID:            id,
-		loop:          loop,
-		conv:          conv,
-		llm:           llm,
-		registry:      reg,
-		skillRegistry: skillReg,
-		events:        events,
-		browser:       browser,
-		workspace:     workspace,
-		createdAt:     time.Now(),
-		lastUsed:      time.Now(),
-		trace:         trace,
-		traceFile:     traceFile,
-		nextEventLine: nextEventLine,
-		subs:          map[int]chan sse.Event{},
-		closedCh:      make(chan struct{}),
-		fanoutDone:    make(chan struct{}),
+		ID:               id,
+		loop:             loop,
+		conv:             conv,
+		llm:              llm,
+		registry:         reg,
+		skillRegistry:    skillReg,
+		events:           events,
+		browser:          browser,
+		workspace:        workspace,
+		loopProtocolPath: loopProtocolPath,
+		createdAt:        time.Now(),
+		lastUsed:         time.Now(),
+		trace:            trace,
+		traceFile:        traceFile,
+		nextEventLine:    nextEventLine,
+		subs:             map[int]chan sse.Event{},
+		closedCh:         make(chan struct{}),
+		fanoutDone:       make(chan struct{}),
 	}
 	go s.fanout()
 	return s, nil

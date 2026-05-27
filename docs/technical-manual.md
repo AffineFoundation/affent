@@ -581,6 +581,7 @@ Session endpoints:
 - `GET /v1/sessions/{id}/history`
 - `GET /v1/sessions/{id}/plan`
 - `DELETE /v1/sessions/{id}/plan`
+- `GET /v1/sessions/{id}/loop-protocol`
 - `GET /v1/sessions/{id}/tools`
 - `GET /v1/sessions/{id}/transcripts`
 - `GET /v1/sessions/{id}/transcripts/{path}`
@@ -698,6 +699,9 @@ Affent stores durable state as inspectable files:
 - `conversation.jsonl`: conversation records used to resume sessions.
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
+- `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.
+  When present, affentserve injects a bounded copy before each user turn and
+  exposes its summary through session list/detail responses.
 - Runtime skill files: installed skill bodies and manifests.
 - Memory files: topic-bucketed workspace or user memory.
 - Transcript files: child-task and subagent conversations.

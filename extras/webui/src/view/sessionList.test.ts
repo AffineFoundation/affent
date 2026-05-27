@@ -150,6 +150,28 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("plan 1/3, step 2 active");
   });
 
+  it("surfaces loop protocol status in row stats and chips", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "loop-session",
+        durable: true,
+        has_loop_protocol: true,
+        loop_protocol: {
+          path: ".affent/loops/loop-session/LOOP.md",
+          loop_id: "loop-session",
+          owner_session: "loop-session",
+          status: "running",
+          bytes: 512,
+          preview: "Keep long-run state recoverable.",
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Loop running");
+    expect(rows[0].chips).toContain("loop");
+    expect(rows[0].searchText).toContain("loop running");
+  });
+
   it("surfaces high context pressure in row stats and search", () => {
     const rows = buildSessionRows([
       session({

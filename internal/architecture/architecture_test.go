@@ -41,7 +41,7 @@ const modulePath = "github.com/affinefoundation/affent"
 //
 //	leaves      - jsonl, netguard, sourceaccess, sse, textutil,
 //	              toolfailure, toolrepair, websource, workspaceignore
-//	leaf-deps   - gosymbols, memory, metrictext, planstate,
+//	leaf-deps   - gosymbols, loopstate, memory, metrictext, planstate,
 //	              projectcontext, sessionsearch
 //	exec        - executor
 //	wire        - eventlog, mcp                              (mcp -> agent adapter — see note)
@@ -79,6 +79,9 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/textutil": true,
 	},
 	"internal/metrictext": {
+		"internal/textutil": true,
+	},
+	"internal/loopstate": {
 		"internal/textutil": true,
 	},
 	"internal/planstate": {
@@ -123,6 +126,7 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/executor":        true,
 		"internal/gosymbols":       true,
 		"internal/jsonl":           true,
+		"internal/loopstate":       true,
 		"internal/memory":          true,
 		"internal/metrictext":      true,
 		"internal/mcp":             true,

@@ -17,6 +17,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
@@ -65,6 +66,8 @@ type sessionSummary struct {
 	HasEvents          bool                             `json:"has_events"`
 	HasPlan            bool                             `json:"has_plan"`
 	PlanSummary        *sessionPlanSummary              `json:"plan_summary,omitempty"`
+	HasLoopProtocol    bool                             `json:"has_loop_protocol"`
+	LoopProtocol       *sessionLoopProtocolSummary      `json:"loop_protocol,omitempty"`
 	HasArtifacts       bool                             `json:"has_artifacts"`
 	HasMemory          bool                             `json:"has_memory"`
 	HasRuntimeSkills   bool                             `json:"has_runtime_skills"`
@@ -469,6 +472,12 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Runtime:           &runtime,
 		Browser:           &browser,
 	}
+	if s.loopProtocolPath != "" {
+		if lp, found, err := loopstate.SummarizeFile(s.loopProtocolPath, loopstate.ProtocolRelPath(s.ID)); err == nil && found {
+			summary.HasLoopProtocol = true
+			summary.LoopProtocol = &lp
+		}
+	}
 	if compactions := contextCompactionSummaryFromRuntimeStats(runtime); compactions != nil {
 		summary.ContextCompactions = compactions
 	}
@@ -640,6 +649,18 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if summary.HasPlan && planMod.After(newest) {
 		newest = planMod
 	}
+	var loopProtocolMod time.Time
+	loopProtocolPath := sessionLoopProtocolPath(pool, id)
+	if exists, loopProtocolMod, err = durableRegularFileModTime(loopProtocolPath); err != nil {
+		return sessionSummary{}, false, err
+	}
+	if exists {
+		summary.LoopProtocol = summarizeSessionLoopProtocolFile(pool, id)
+		summary.HasLoopProtocol = summary.LoopProtocol != nil
+	}
+	if summary.HasLoopProtocol && loopProtocolMod.After(newest) {
+		newest = loopProtocolMod
+	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
@@ -690,6 +711,10 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.HasPlan = a.HasPlan || b.HasPlan
 	if b.PlanSummary != nil {
 		a.PlanSummary = b.PlanSummary
+	}
+	a.HasLoopProtocol = a.HasLoopProtocol || b.HasLoopProtocol
+	if b.LoopProtocol != nil {
+		a.LoopProtocol = b.LoopProtocol
 	}
 	a.HasArtifacts = a.HasArtifacts || b.HasArtifacts
 	a.HasMemory = a.HasMemory || b.HasMemory

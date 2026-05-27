@@ -460,6 +460,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (compactionMetric) metrics.push(compactionMetric);
   const planMetric = sessionPlanMetric(session.plan_summary);
   if (planMetric) metrics.push(planMetric);
+  const loopMetric = sessionLoopProtocolMetric(session);
+  if (loopMetric) metrics.push(loopMetric);
   return metrics;
 }
 
@@ -619,6 +621,12 @@ function sessionPlanMetric(plan: SessionPlanSummary | undefined): string | undef
   return parts.join(", ");
 }
 
+function sessionLoopProtocolMetric(session: SessionSummary): string | undefined {
+  if (!session.has_loop_protocol) return undefined;
+  const status = session.loop_protocol?.status?.trim();
+  return status ? `Loop ${status}` : "Loop protocol";
+}
+
 function planStatusLabel(plan: SessionPlanSummary): string {
   const status = plan.current_step_status?.trim();
   if (status === "in_progress") return "active";
@@ -635,6 +643,7 @@ function featureChips(session: SessionSummary): string[] {
   if (session.has_artifacts) chips.push("files");
   if (session.has_memory) chips.push("memory");
   if (session.has_plan) chips.push("plan");
+  if (session.has_loop_protocol) chips.push("loop");
   if (session.has_runtime_skills) chips.push("skills");
   return chips;
 }

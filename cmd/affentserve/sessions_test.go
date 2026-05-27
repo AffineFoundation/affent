@@ -1739,6 +1739,34 @@ func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
 	}
 }
 
+func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-protocol")
+	path := sessionLoopProtocolPath(pool, "loop-protocol")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nKeep long-run state recoverable."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := pool.GetOrCreate("loop-protocol")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	got := s.loop.SkillProvider("continue")
+	for _, want := range []string{
+		"AFFENT LOOP PROTOCOL:",
+		"Keep long-run state recoverable.",
+		"persisted plan state remains authoritative",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("loop protocol skill provider missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

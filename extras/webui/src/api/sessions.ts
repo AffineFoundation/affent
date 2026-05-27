@@ -1,7 +1,8 @@
 // Faithful TypeScript mirror of cmd/affentserve/sessions_api.go and the
 // snapshot types in sessions.go. Source of truth for the session-control
 // surface: GET/POST /v1/sessions, GET/DELETE /v1/sessions/{id},
-// plus account-level skill settings at /v1/skills.
+// GET /v1/sessions/{id}/loop-protocol, plus account-level skill settings
+// at /v1/skills.
 //
 // Kept in parity with the Go json tags; the parity guard covers this too.
 
@@ -94,6 +95,22 @@ export interface SessionPlanResponse {
   session_id: string;
   plan: unknown;
   summary?: SessionPlanSummary;
+}
+
+export interface SessionLoopProtocolSummary {
+  path?: string;
+  loop_id?: string;
+  owner_session?: string;
+  status?: string;
+  updated_at?: string;
+  bytes: number;
+  preview?: string;
+}
+
+export interface SessionLoopProtocolResponse {
+  session_id: string;
+  protocol: string;
+  summary?: SessionLoopProtocolSummary;
 }
 
 export interface SessionSkillInfo {
@@ -214,6 +231,8 @@ export interface SessionSummary {
   has_conversation: boolean;
   has_events: boolean;
   has_artifacts: boolean;
+  has_loop_protocol?: boolean;
+  loop_protocol?: SessionLoopProtocolSummary;
   has_memory: boolean;
   has_runtime_skills: boolean;
   context?: SessionContextSummary;
@@ -306,6 +325,17 @@ export function getSessionPlan(
   signal?: AbortSignal,
 ): Promise<SessionPlanResponse> {
   return client.json<SessionPlanResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/plan`, { signal });
+}
+
+export function getSessionLoopProtocol(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionLoopProtocolResponse> {
+  return client.json<SessionLoopProtocolResponse>(
+    `/v1/sessions/${encodeURIComponent(sessionId)}/loop-protocol`,
+    { signal },
+  );
 }
 
 export function listSkills(
