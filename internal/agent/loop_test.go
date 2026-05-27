@@ -158,7 +158,7 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true, BrowserNetwork: true}
 	once := WithExternalResearchSystemGuidance(base, surface)
-	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "browser_network", "browser_network_read", "same-site XHR/fetch", "sibling API subdomains", "app.example.com -> api.example.com", "network_evidence_capture_pending", "browser_snapshot once more if the capture is still settling", "repeated scrolling", "dynamic dashboards", "field-label queries", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "Do not repeat browser_find with only the entity name", "If the current page already shows the target entity in a visible list or row", "exact row label, ticker, or id", "Dashboard text can interleave global header metrics", "label/value adjacency", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "open 1-3 high-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "actual fetched_url/browser_rendered_url", "requested_url only records what you asked for", "browser_find no-match only means", "current rendered page text", "Do not say a field was unavailable", "PAGE TEXT", "discovered/unverified", "API/text/export endpoints"} {
+	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "browser_network", "browser_network_read", "same-site XHR/fetch", "sibling API subdomains", "app.example.com -> api.example.com", "network_evidence_capture_pending", "browser_snapshot once more if the capture is still settling", "repeated scrolling", "dynamic dashboards", "field-label queries", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "Do not repeat browser_find with only the entity name", "If the current page already shows the target entity in a visible list or row", "exact row label, ticker, or id", "Dashboard text can interleave global header metrics", "label/value adjacency", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "open 1-3 high-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "actual fetched_url/browser_rendered_url", "requested_url only records what you asked for", "preserve ref=...", "browser_find no-match only means", "current rendered page text", "Do not say a field was unavailable", "PAGE TEXT", "discovered/unverified", "API/text/export endpoints"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}
@@ -215,6 +215,7 @@ func TestFinalNoToolsPromptsRequireEvidenceRescan(t *testing.T) {
 			"before declaring any field unavailable",
 			"Discovery-only pages (search results, 404/not-found pages",
 			"actual fetched_url/browser_rendered_url",
+			"preserve ref=...",
 			"requested_url and discovered links as unverified",
 			"Do not infer project maturity, scale, ranking quality",
 		} {
@@ -289,6 +290,34 @@ func TestFinalEvidenceDigestExtractsRecentVerifiedMetrics(t *testing.T) {
 	}
 	if strings.Contains(got, "page_text_below=not_found_page_discovery_only") || strings.Contains(got, "use the navigation links to reach /docs or /subnets") {
 		t.Fatalf("digest should skip discovery-only 404 pages:\n%s", got)
+	}
+}
+
+func TestFinalEvidenceDigestPreservesNetworkRef(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role: "tool",
+			Name: "browser_network_read",
+			Content: "SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n3; status=200; content_type=application/json; source_method=network_xhr_fetch\n" +
+				"JSON_PATH: $.data.market_cap\n" +
+				"BODY_BYTES: 28\n" +
+				"{\"market_cap\":\"201.04K T\"}",
+		},
+	}
+	got := finalEvidenceDigest(msgs)
+	for _, want := range []string{
+		"browser_network_read",
+		"browser_network_url=https://api.taostats.io/subnets/120",
+		"ref=n3",
+		"Network ref: n3",
+		"Requested URL only: https://taostats.io/subnets/120",
+		"browser_network_read returns a SourceAccess line; preserve ref=...",
+		"market_cap",
+		"201.04K T",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
 	}
 }
 
