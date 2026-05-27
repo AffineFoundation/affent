@@ -3,6 +3,33 @@ import { describe, expect, it } from "vitest";
 import { SessionLoopPanel } from "./SessionLoopPanel";
 
 describe("SessionLoopPanel", () => {
+  it("shows the calibration-first activation flow before a loop is running", () => {
+    render(<SessionLoopPanel defaultGoal="long running subnet analysis" />);
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Draft first");
+    const checklist = screen.getByTestId("session-loop-checklist");
+    expect(checklist).toHaveTextContent("Create draft");
+    expect(checklist).toHaveTextContent("Ask calibration");
+    expect(checklist).toHaveTextContent("Activate after answer");
+    expect(checklist).toHaveTextContent("intent, stop conditions, memory policy");
+  });
+
+  it("labels draft protocol maintenance as answering setup in chat", () => {
+    render(
+      <SessionLoopPanel
+        summary={{ path: ".affent/loops/loop-draft/LOOP.md", status: "draft", bytes: 128 }}
+        state={{ version: 1, loop_id: "loop-draft", status: "draft", initial_goal_preview: "long running market check" }}
+        onUseAsDraft={() => undefined}
+      />,
+    );
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Setup pending");
+    expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
+    expect(screen.getByRole("button", { name: "Answer setup in chat" })).toBeInTheDocument();
+  });
+
   it("surfaces the latest loop memory update as recovery context", () => {
     render(
       <SessionLoopPanel

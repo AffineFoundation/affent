@@ -47,6 +47,7 @@ export function SessionLoopPanel({
         </summary>
         <div className="session-plan-body session-loop-body">
           <LoopStatusCallout status="off" />
+          <LoopActivationChecklist status="off" />
           <form
             className="session-loop-setup"
             onSubmit={(event) => {
@@ -95,6 +96,7 @@ export function SessionLoopPanel({
       </summary>
       <div className="session-plan-body session-loop-body">
         <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} />
+        <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} />
         <div className="session-loop-grid">
           {goal ? <LoopField label="Goal" value={goal} /> : null}
           {path ? <LoopField label="File" value={path} mono /> : null}
@@ -126,7 +128,7 @@ export function SessionLoopPanel({
           {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
           {onUseAsDraft && !disabled ? (
             <button type="button" className="ghost-action" onClick={onUseAsDraft}>
-              Update via chat
+              {draft ? "Answer setup in chat" : "Update via chat"}
             </button>
           ) : null}
           {!disabled && onDisable ? (
@@ -138,6 +140,40 @@ export function SessionLoopPanel({
       </div>
     </details>
   );
+}
+
+function LoopActivationChecklist({ status }: { status: "off" | "draft" | "running" | "disabled" | "unknown" }) {
+  const steps = loopActivationSteps(status);
+  if (steps.length === 0) return null;
+  return (
+    <ol className="session-loop-checklist" data-testid="session-loop-checklist" aria-label="Loop activation flow">
+      {steps.map((step) => (
+        <li key={step.label} data-state={step.state}>
+          <span aria-hidden="true">{step.icon}</span>
+          <div>
+            <strong>{step.label}</strong>
+            <small>{step.detail}</small>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function loopActivationSteps(status: "off" | "draft" | "running" | "disabled" | "unknown") {
+  if (status === "disabled") return [];
+  if (status === "running") {
+    return [
+      { label: "Protocol active", detail: "Future loop turns receive LOOP.md with recovery context.", state: "done", icon: "OK" },
+      { label: "Maintain only durable changes", detail: "Task progress stays in plan state; LOOP.md stays compact.", state: "active", icon: "!" },
+    ];
+  }
+  const draft = status === "draft";
+  return [
+    { label: "Create draft", detail: draft ? "LOOP.md exists but is not running yet." : "Set up LOOP.md before autonomous work starts.", state: draft ? "done" : "active", icon: draft ? "OK" : "1" },
+    { label: "Ask calibration", detail: "Affent asks for intent, stop conditions, memory policy, and recovery expectations.", state: draft ? "active" : "pending", icon: draft ? "!" : "2" },
+    { label: "Activate after answer", detail: "Only then can the model complete_activation and future timers run.", state: "pending", icon: "3" },
+  ];
 }
 
 function LoopEvents({ events }: { events: SessionLoopEvent[] }) {

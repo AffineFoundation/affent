@@ -559,6 +559,7 @@ describe("App", () => {
     expect(sent.content).toContain("chat or the WebUI");
     expect(sent.content).toContain("loop_protocol action=read");
     expect(sent.content).toContain("Ask the user at least one concise calibration question");
+    expect(sent.content).toContain("Do not complete activation in the same turn");
     expect(sent.content).toContain("wait for the user's answer");
     expect(sent.content).toContain("complete_activation");
     expect(sent.content).toContain("Current Situation");
@@ -624,6 +625,7 @@ describe("App", () => {
     const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/messages");
     const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
     expect(sent.content).toContain("Ask the user at least one concise calibration question");
+    expect(sent.content).toContain("Do not complete activation in the same turn");
     expect(sent.content).toContain("complete_activation");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Draft");
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("Setup pending");
