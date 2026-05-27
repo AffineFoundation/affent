@@ -51,6 +51,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
 		"max-debug-brief-tag-rate=browser_network:unread_refs=0.000",
+		"max-debug-brief-tag-rate=browser_scroll:stuck_without_network=0.000",
 		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
@@ -505,7 +506,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextCompactionSummaryEmpty:   1,
 		ExpectationCapabilities:         map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:       map[string]int{"browser": 1, "memory": 1},
-		DebugBriefByTag:                 map[string]int{"source_dynamic_without_network": 1},
+		DebugBriefByTag:                 map[string]int{"browser_scroll:stuck_without_network": 1, "source_dynamic_without_network": 1},
 	}
 	failures := qualityGateFailures(summary, qualityGateConfig{
 		MinPassRate:                          ptr(0.75),
@@ -542,7 +543,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgToolCalls:                      ptr(2),
 		MaxAvgDurationMS:                     ptr(1000),
 		MaxAvgTotalTokens:                    ptr(40),
-		MaxDebugBriefTagRates:                map[string]float64{"source_dynamic_without_network": 0},
+		MaxDebugBriefTagRates:                map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -557,6 +558,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"avg_tool_calls 2.500 > max 2.000",
 		"avg_total_tokens 55.000 > max 40.000",
 		"completion_rate 0.500 < min 0.750",
+		"debug_brief_tag_rate[browser_scroll:stuck_without_network] 0.500 > max 0.000",
 		"debug_brief_tag_rate[source_dynamic_without_network] 0.500 > max 0.000",
 		"expectation_capability_pass_rate[browser] 0.500 < min 0.750",
 		"expectation_capability_pass_rate[web] 0.000 < min 0.750",
@@ -775,6 +777,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxAvgToolCalls == nil || *webGates.MaxAvgToolCalls != 18 ||
 		webGates.MaxAvgDurationMS == nil || *webGates.MaxAvgDurationMS != 240000 ||
 		webGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
+		webGates.MaxDebugBriefTagRates["browser_scroll:stuck_without_network"] != 0 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
@@ -801,6 +804,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	}
 	if overrideGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != -1 ||
 		overrideGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
+		overrideGates.MaxDebugBriefTagRates["browser_scroll:stuck_without_network"] != 0 ||
 		overrideGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		overrideGates.MaxDebugBriefTagRates["recall:no_context"] != 0.25 {
 		t.Fatalf("debug brief tag gates not merged: %+v", overrideGates.MaxDebugBriefTagRates)
