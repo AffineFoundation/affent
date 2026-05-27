@@ -13,6 +13,7 @@ const (
 	TypeTurnStart              = "turn.start"
 	TypeUserMessage            = "user.message"
 	TypeRuntimeSurface         = "runtime.surface"
+	TypeContextInjected        = "context.injected"
 	TypeMessageDelta           = "message.delta"
 	TypeMessageDone            = "message.done"
 	TypeThinkingDelta          = "thinking.delta"
@@ -90,6 +91,19 @@ type RuntimeCapabilities struct {
 	FocusedTasks   bool     `json:"focused_tasks,omitempty"`
 	Skill          bool     `json:"skill,omitempty"`
 	MCP            bool     `json:"mcp,omitempty"`
+}
+
+// ContextInjectedPayload records a bounded, redacted summary of hidden system
+// context appended for this turn. It lets trace consumers understand prompt
+// pressure and dynamic guidance without exposing the full prompt block.
+type ContextInjectedPayload struct {
+	TurnID          string `json:"turn_id"`
+	Source          string `json:"source"`
+	Title           string `json:"title"`
+	Summary         string `json:"summary,omitempty"`
+	Preview         string `json:"preview,omitempty"`
+	Bytes           int    `json:"bytes,omitempty"`
+	EstimatedTokens int    `json:"estimated_tokens,omitempty"`
 }
 
 type MessageDeltaPayload struct {

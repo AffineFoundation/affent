@@ -83,6 +83,34 @@ describe("reduce — user display text", () => {
   });
 });
 
+describe("reduce — context injections", () => {
+  it("attaches pre-turn injected context to the matching turn", () => {
+    const s = reduceRawEvents([
+      {
+        id: 1,
+        type: "context.injected",
+        data: {
+          turn_id: "t1",
+          source: "account_access",
+          title: "Account access context injected",
+          summary: "Account hints were made available.",
+          preview: "GITHUB_TOKEN",
+          bytes: 120,
+          estimated_tokens: 30,
+        },
+      },
+      { id: 2, type: "turn.start", data: { turn_id: "t1" } },
+    ]);
+
+    expect(s.contextInjections).toHaveLength(1);
+    expect(s.turns[0].contextInjections?.[0]).toMatchObject({
+      eventId: 1,
+      source: "account_access",
+      preview: "GITHUB_TOKEN",
+    });
+  });
+});
+
 describe("reduce — tool error", () => {
   it("marks the tool call as error and preserves the Next: hint", () => {
     const s = reduceRawEvents(toolError);

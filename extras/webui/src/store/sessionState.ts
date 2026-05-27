@@ -1,4 +1,4 @@
-import type { ContextCompactedPayload, DelegationMeta, LoopDecisionPayload, LoopProtocolFeedPayload, MemoryUpdateMeta, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
+import type { ContextCompactedPayload, ContextInjectedPayload, DelegationMeta, LoopDecisionPayload, LoopProtocolFeedPayload, MemoryUpdateMeta, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 
 // The structured view of a session that the reducer builds from the
@@ -69,6 +69,10 @@ export interface ContextCompactionState extends ContextCompactedPayload {
   eventId: number;
 }
 
+export interface ContextInjectionState extends ContextInjectedPayload {
+  eventId: number;
+}
+
 export interface TurnState {
   id: string;
   status: TurnStatus;
@@ -83,6 +87,7 @@ export interface TurnState {
   loopProtocolFeeds?: LoopProtocolFeedState[];
   loopDecisions?: LoopDecisionState[];
   contextCompactions?: ContextCompactionState[];
+  contextInjections?: ContextInjectionState[];
   usage?: TurnUsage;
   toolStats?: ToolRuntimeStats;
   endReason?: string;
@@ -102,6 +107,8 @@ export interface SessionState {
   loopDecisions: LoopDecisionState[];
   /** Context compactions that rewrote model history while preserving trace replay. */
   contextCompactions: ContextCompactionState[];
+  /** Hidden system-context injections summarized for prompt observability. */
+  contextInjections: ContextInjectionState[];
   /** Events whose type this build doesn't know — kept visible, never fatal. */
   unknownEventCount: number;
 }
@@ -115,6 +122,7 @@ export function initialSessionState(): SessionState {
     loopProtocolFeeds: [],
     loopDecisions: [],
     contextCompactions: [],
+    contextInjections: [],
     unknownEventCount: 0,
   };
 }

@@ -260,6 +260,8 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       };
     case EventType.RuntimeSurface:
       return { label: "Runtime surface", meta: runtimeSurfaceMeta(event, request), badges: runtimeSurfaceBadges(event) };
+    case EventType.ContextInjected:
+      return { label: readString(event.data, "title") ?? "Context injected", meta: contextInjectedMeta(event, request), badges: contextInjectedBadges(event) };
     case EventType.MessageDone:
       return {
         label: "Assistant answer saved",
@@ -347,6 +349,25 @@ function runtimeSurfaceBadges(event: NormalizedEvent): string[] {
     readBoolean(caps, "subagent") ? "subagent" : undefined,
     readBoolean(caps, "focused_tasks") ? "focused tasks" : undefined,
     readBoolean(caps, "builtins") ? "workspace tools" : workspaceTools.length > 0 ? `workspace: ${workspaceTools.join(", ")}` : undefined,
+  ]);
+}
+
+function contextInjectedMeta(event: NormalizedEvent, turn: string | undefined): string[] {
+  const bytes = readNumber(event.data, "bytes");
+  const tokens = readNumber(event.data, "estimated_tokens");
+  return compact([
+    turn,
+    readString(event.data, "source"),
+    readString(event.data, "summary"),
+    readString(event.data, "preview") ? streamSummary(readString(event.data, "preview") ?? "") : undefined,
+    typeof tokens === "number" && tokens > 0 ? `~${tokens} tokens` : undefined,
+    typeof bytes === "number" && bytes > 0 ? formatByteCount(bytes) : undefined,
+  ]);
+}
+
+function contextInjectedBadges(event: NormalizedEvent): string[] {
+  return compact([
+    readString(event.data, "source"),
   ]);
 }
 

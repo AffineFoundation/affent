@@ -158,6 +158,19 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     });
   }
 
+  const contextInjection = latestContextInjection(turn);
+  if (contextInjection) {
+    items.push({
+      id: `${turn.id}:context-injected:${contextInjection.eventId}`,
+      kind: "reasoning",
+      label: "Context",
+      title: contextInjection.title || "Context injected",
+      detail: summarize(contextInjection.preview || contextInjection.summary || "", 180),
+      meta: contextInjectionMeta(contextInjection),
+      tone: "muted",
+    });
+  }
+
   const compaction = latestContextCompaction(turn);
   if (compaction) {
     items.push({
@@ -252,6 +265,16 @@ function buildBrief(
       action: decision.required_action
         ? { label: loopDecisionActionLabel(decision), draft: `Continue: ${decision.required_action}`, source: "tool_guidance" }
         : undefined,
+    });
+  }
+
+  const contextInjection = latestContextInjection(turn);
+  if (contextInjection) {
+    rows.push({
+      id: `context-injected:${contextInjection.eventId}`,
+      label: "Context",
+      value: contextInjectionBrief(contextInjection),
+      tone: "muted",
     });
   }
 
@@ -619,6 +642,8 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   if (evidenceCount > 0) meta.push(`${evidenceCount} evidence`);
   const decisionCount = visibleLoopDecisions(turn).length;
   if (decisionCount > 0) meta.push(`${decisionCount} ${pluralize("decision", decisionCount)}`);
+  const injectionCount = turn.contextInjections?.length ?? 0;
+  if (injectionCount > 0) meta.push(`${injectionCount} context ${pluralize("injection", injectionCount)}`);
   const compactionCount = turn.contextCompactions?.length ?? 0;
   if (compactionCount > 0) meta.push(`${compactionCount} ${pluralize("compaction", compactionCount)}`);
   const loopFeedCount = turn.loopProtocolFeeds?.length ?? 0;
@@ -677,6 +702,28 @@ function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleL
 
 function latestContextCompaction(turn: TurnState) {
   return turn.contextCompactions?.at(-1);
+}
+
+function latestContextInjection(turn: TurnState) {
+  return turn.contextInjections?.at(-1);
+}
+
+function contextInjectionMeta(injection: NonNullable<ReturnType<typeof latestContextInjection>>): string | undefined {
+  const parts = [
+    injection.source,
+    injection.estimated_tokens && injection.estimated_tokens > 0 ? `~${injection.estimated_tokens} tokens` : undefined,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
+function contextInjectionBrief(injection: NonNullable<ReturnType<typeof latestContextInjection>>): string {
+  const parts = [
+    injection.title || "context injected",
+    injection.summary,
+    injection.preview,
+    injection.estimated_tokens && injection.estimated_tokens > 0 ? `~${injection.estimated_tokens} tokens` : undefined,
+  ].filter(Boolean);
+  return summarize(parts.join(" · "), 180);
 }
 
 function latestLoopProtocolFeed(turn: TurnState) {

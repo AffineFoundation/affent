@@ -14,6 +14,7 @@ export const EventType = {
   TurnStart: "turn.start",
   UserMessage: "user.message",
   RuntimeSurface: "runtime.surface",
+  ContextInjected: "context.injected",
   MessageDelta: "message.delta",
   MessageDone: "message.done",
   ThinkingDelta: "thinking.delta",
@@ -93,6 +94,16 @@ export interface RuntimeCapabilities {
   focused_tasks?: boolean;
   skill?: boolean;
   mcp?: boolean;
+}
+
+export interface ContextInjectedPayload {
+  turn_id: string;
+  source: string;
+  title: string;
+  summary?: string;
+  preview?: string;
+  bytes?: number;
+  estimated_tokens?: number;
 }
 
 export interface DelegationMeta {
@@ -285,6 +296,7 @@ export interface PayloadByType {
   [EventType.TurnStart]: TurnStartPayload;
   [EventType.UserMessage]: UserMessagePayload;
   [EventType.RuntimeSurface]: RuntimeSurfacePayload;
+  [EventType.ContextInjected]: ContextInjectedPayload;
   [EventType.MessageDelta]: MessageDeltaPayload;
   [EventType.MessageDone]: MessageDonePayload;
   [EventType.ThinkingDelta]: ThinkingDeltaPayload;

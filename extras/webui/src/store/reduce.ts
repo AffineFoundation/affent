@@ -2,6 +2,7 @@ import {
   EventType,
   TurnEndReason,
   type ContextCompactedPayload,
+  type ContextInjectedPayload,
   type ErrorPayload,
   type LoopDecisionPayload,
   type LoopProtocolFeedPayload,
@@ -116,6 +117,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         loopProtocolFeeds: [],
         loopDecisions: [],
         contextCompactions: [],
+        contextInjections: state.contextInjections.filter((item) => item.turn_id === p.turn_id),
       };
       return { ...state, turns: [...state.turns, turn], status: "running" };
     }
@@ -126,6 +128,20 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
     case EventType.RuntimeSurface: {
       const p = ev.data as RuntimeSurfacePayload;
       return updateTurn(state, p.turn_id, (t) => ({ ...t, runtimeSurface: p }));
+    }
+    case EventType.ContextInjected: {
+      const p = ev.data as ContextInjectedPayload;
+      const item = { ...p, eventId: ev.id };
+      const next = p.turn_id
+        ? updateTurn(state, p.turn_id, (t) => ({
+            ...t,
+            contextInjections: [...(t.contextInjections ?? []), item],
+          }))
+        : state;
+      return {
+        ...next,
+        contextInjections: [...next.contextInjections, item],
+      };
     }
     case EventType.ThinkingDelta: {
       const p = ev.data as ThinkingDeltaPayload;

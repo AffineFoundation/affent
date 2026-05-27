@@ -800,10 +800,168 @@ func (l *Loop) appendActiveSkills(turnID, userText string) error {
 	if err := l.Conv.Append(ChatMessage{Role: "system", Content: block}); err != nil {
 		return err
 	}
-	if payload, ok := loopProtocolFeedPayloadFromBlock(turnID, block); ok {
-		l.publish(sse.TypeLoopProtocolFeed, payload)
+	sections := contextInjectedSections(block)
+	l.publishContextInjectedSections(turnID, sections)
+	for _, section := range sections {
+		if payload, ok := loopProtocolFeedPayloadFromBlock(turnID, section); ok {
+			l.publish(sse.TypeLoopProtocolFeed, payload)
+		}
 	}
 	return nil
+}
+
+func (l *Loop) publishContextInjected(turnID, block string) {
+	l.publishContextInjectedSections(turnID, contextInjectedSections(block))
+}
+
+func (l *Loop) publishContextInjectedSections(turnID string, sections []string) {
+	for _, section := range sections {
+		payload, ok := contextInjectedPayload(turnID, section, l.SecretValuesProvider)
+		if !ok {
+			continue
+		}
+		l.publish(sse.TypeContextInjected, payload)
+	}
+}
+
+func contextInjectedSections(block string) []string {
+	block = strings.TrimSpace(block)
+	if block == "" {
+		return nil
+	}
+	lines := strings.Split(block, "\n")
+	var sections []string
+	var current []string
+	flush := func() {
+		if len(current) == 0 {
+			return
+		}
+		if section := strings.TrimSpace(strings.Join(current, "\n")); section != "" {
+			sections = append(sections, section)
+		}
+		current = nil
+	}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "AFFENT ") && strings.Contains(trimmed, ":") {
+			flush()
+		}
+		current = append(current, line)
+	}
+	flush()
+	return sections
+}
+
+func contextInjectedPayload(turnID, section string, secrets func() []string) (sse.ContextInjectedPayload, bool) {
+	section = strings.TrimSpace(redactSecretValues(section, secrets))
+	if section == "" {
+		return sse.ContextInjectedPayload{}, false
+	}
+	source, title, summary, preview, emit := describeContextInjectedSection(section)
+	if !emit {
+		return sse.ContextInjectedPayload{}, false
+	}
+	if preview == "" {
+		preview = safeContextInjectedPreview(section)
+	}
+	return sse.ContextInjectedPayload{
+		TurnID:          turnID,
+		Source:          source,
+		Title:           title,
+		Summary:         summary,
+		Preview:         textutil.Preview(preview, 360),
+		Bytes:           len([]byte(section)),
+		EstimatedTokens: estimateContextTokens(section),
+	}, true
+}
+
+func describeContextInjectedSection(section string) (source, title, summary, preview string, emit bool) {
+	first := firstNonEmptyLine(section)
+	switch {
+	case strings.HasPrefix(first, "AFFENT LOOP PROTOCOL:"):
+		return "", "", "", "", false
+	case strings.HasPrefix(first, "AFFENT ACCOUNT ACCESS:"):
+		return "account_access", "Account access context injected", "Account-level environment and SSH access hints were made available for this turn.", accountAccessContextPreview(section), true
+	case strings.HasPrefix(first, "AFFENT ACTIVE PLAN:"):
+		return "active_plan", "Active plan context injected", activePlanContextSummary(section), activePlanContextPreview(section), true
+	case strings.HasPrefix(first, "AFFENT ACTIVE SKILL:"):
+		name := strings.TrimSpace(strings.TrimPrefix(first, "AFFENT ACTIVE SKILL:"))
+		if name == "" {
+			name = "skill"
+		}
+		return "skill", "Active skill injected", "Activated skill: " + name + ".", first, true
+	default:
+		if first == "" {
+			first = "Dynamic system context"
+		}
+		return "skill_provider", "System context injected", "A dynamic system context block was injected for this turn.", first, true
+	}
+}
+
+func firstNonEmptyLine(text string) string {
+	for _, line := range strings.Split(text, "\n") {
+		if trimmed := strings.TrimSpace(line); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func safeContextInjectedPreview(section string) string {
+	lines := strings.Split(section, "\n")
+	kept := make([]string, 0, 3)
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		kept = append(kept, trimmed)
+		if len(kept) >= 3 {
+			break
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+func accountAccessContextPreview(section string) string {
+	lines := strings.Split(section, "\n")
+	var kept []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "- Configured environment variables") ||
+			strings.HasPrefix(trimmed, "- SSH public key") ||
+			strings.HasPrefix(trimmed, "- An SSH private key") {
+			kept = append(kept, trimmed)
+		}
+	}
+	return strings.Join(kept, " ")
+}
+
+func activePlanContextSummary(section string) string {
+	for _, line := range strings.Split(section, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Current step:") {
+			return trimmed
+		}
+	}
+	return "The persisted plan was injected so the turn can continue from unfinished steps."
+}
+
+func activePlanContextPreview(section string) string {
+	lines := strings.Split(section, "\n")
+	var kept []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "Completed steps:") ||
+			strings.HasPrefix(trimmed, "Current step:") ||
+			strings.HasPrefix(trimmed, "- [") {
+			kept = append(kept, trimmed)
+		}
+		if len(kept) >= 4 {
+			break
+		}
+	}
+	return strings.Join(kept, " ")
 }
 
 func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
