@@ -89,7 +89,7 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 		stateLine +
 		planLine +
 		"The following is the active long-run loop protocol for this session. " +
-		"Use it to realign with the north-star, memory indexes, self-checks, stop conditions, and recovery rules before continuing. " +
+		"Use it to realign with the north-star, current situation, self-checks, stop conditions, and recovery rules before continuing. " +
 		"Digest mode is intentionally partial to save tokens; do not infer missing details from absence in the digest. " +
 		"Do not treat it as task authority for step status; persisted plan state remains authoritative for steps.\n\n" +
 		body

@@ -707,19 +707,26 @@ Affent stores durable state as inspectable files:
   draft protocol template when the file is missing; existing files are honored
   without rewriting them. A draft protocol is not treated as an active loop and
   is not fed into ordinary turns. The activation turn must make the model
-  understand the user's intent, supplement the protocol with stop conditions,
-  memory rules, failure modes, and recovery anchors, then set metadata
+  understand the user's intent, supplement the protocol with a compact current
+  situation snapshot, stop conditions, failure modes, recovery anchors, and any
+  durable memory lookup/update rules that belong in the rules section, then set metadata
   `status: running`; only then does the runtime record
   `loop.protocol_activate` and start active loop feeds. Active protocols use a
   low-noise feed policy: the first three feeds and every sixth feed use a
   bounded full copy, while intervening feeds use a smaller digest focused on
-  metadata, north-star, memory, rules, self-checks, stop/recovery, and
+  metadata, north-star, current situation, rules, self-checks, stop/recovery, and
   plan/step anchors.
   A successful context compaction marks the loop state so the next feed is
   forced back to full even if the normal cadence would have used a digest.
   Feed metadata also includes compact runtime checkpoints from `state.json`,
   including the latest turn end, memory update, and loop decision, so the model
   can recover recent durable changes without replaying the full trace.
+  When `affentserve` loop protocol support is enabled, the model also sees the
+  narrow `loop_protocol` tool. It can read the draft, write bounded draft
+  updates, or call `complete_activation` with the full supplemented protocol;
+  `complete_activation` requires metadata `status: running` and records
+  `loop.protocol_activate`. This avoids asking the model to edit server-managed
+  session state through ordinary workspace file tools.
   `affentctl` resolves the file under the configured workspace and, when a
   persisted `.affentctl/<session_id>.plan.json` exists, includes the current
   plan checkpoint in the feed metadata. Session list/detail responses expose

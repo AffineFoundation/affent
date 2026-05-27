@@ -503,6 +503,66 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
 
+  it("starts loop activation as a draft before sending the refinement turn", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({ sessions: [], has_more: false });
+      }
+      if (url === "/v1/sessions" && init?.method === "POST") {
+        return jsonResponse({
+          session: {
+            id: "loop-1",
+            active: true,
+            durable: true,
+            has_conversation: false,
+            has_events: false,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        });
+      }
+      if (url === "/v1/sessions/loop-1/loop-protocol" && init?.method === "POST") {
+        return jsonResponse({
+          session_id: "loop-1",
+          protocol: "# Loop Protocol\n\n- status: draft",
+          summary: { path: ".affent/loops/loop-1/LOOP.md", status: "draft", bytes: 32 },
+          state: { version: 1, loop_id: "loop-1", status: "draft", initial_goal_preview: "analyze market data for several days" },
+          events: [],
+        });
+      }
+      if (url === "/v1/sessions/loop-1/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "loop-1", turn_id: "t1" });
+      }
+      if (url === "/v1/sessions/loop-1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "loop-1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/loop-1/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText("Message Affent...");
+    await user.type(input, "analyze market data for several days");
+    await user.click(screen.getByRole("button", { name: "Start loop" }));
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.objectContaining({ method: "POST" })));
+    const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/loop-protocol");
+    expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "analyze market data for several days" }));
+    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/messages");
+    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
+    expect(sent.content).toContain("Loop protocol activation is pending");
+    expect(sent.content).toContain("loop_protocol action=read");
+    expect(sent.content).toContain("complete_activation");
+    expect(sent.content).toContain("Current Situation");
+    expect(await screen.findByTestId("session-list")).toHaveTextContent("Loop draft");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("analyze market data");
+  });
+
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {

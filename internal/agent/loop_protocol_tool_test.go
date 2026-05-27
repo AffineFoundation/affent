@@ -1,0 +1,120 @@
+package agent
+
+import (
+	"context"
+	"encoding/json"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/affinefoundation/affent/internal/loopstate"
+)
+
+func TestLoopProtocolToolCompletesActivation(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	read, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read"}`))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(read, "status=draft") || !strings.Contains(read, "Current Situation") {
+		t.Fatalf("read result missing draft/current situation:\n%s", read)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	protocol = strings.Replace(protocol, "- current risk or blocker:", "- current risk or blocker: needs live source verification", 1)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":           "complete_activation",
+		"protocol":         protocol,
+		"reason":           "user intent understood",
+		"sections_changed": []string{"Current Situation", "Rules"},
+	})))
+	if err != nil {
+		t.Fatalf("complete_activation: %v", err)
+	}
+	if !strings.Contains(out, "activated LOOP.md status=running") {
+		t.Fatalf("activation output = %q", out)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.Status != "running" || state.LastEventType != "loop.protocol_activate" {
+		t.Fatalf("state = %+v", state)
+	}
+}
+
+func TestLoopProtocolToolDraftUpdateDoesNotActivate(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "draft")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID: "draft",
+		Goal:   "Understand the user before enabling loop.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, _, _ := loopstate.ReadProtocol(path)
+	protocol = strings.Replace(protocol, "- current risk or blocker:", "- current risk or blocker: missing stop condition", 1)
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":           "update_draft",
+		"protocol":         protocol,
+		"reason":           "need user clarification",
+		"sections_changed": []string{"Current Situation"},
+	})))
+	if err != nil {
+		t.Fatalf("update_draft: %v", err)
+	}
+	if !strings.Contains(out, "updated LOOP.md draft status=draft") {
+		t.Fatalf("draft update output = %q", out)
+	}
+	state, _, _ := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if state.Status != "draft" || state.LastEventType != "loop.protocol_update" {
+		t.Fatalf("state = %+v", state)
+	}
+	running := strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "update_draft",
+		"protocol": running,
+	})))
+	if err == nil || !strings.Contains(err.Error(), "cannot activate") {
+		t.Fatalf("update_draft running err = %v", err)
+	}
+}
+
+func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
+	reg := NewRegistry()
+	RegisterBuiltins(reg, BuiltinDeps{
+		HostWorkspaceDir: t.TempDir(),
+		LoopProtocolPath: loopstate.ProtocolPath(t.TempDir(), "loop"),
+	})
+	if _, ok := reg.Get(LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol tool not registered")
+	}
+	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
+	if !strings.Contains(prompt, "Loop protocol maintenance:") || !strings.Contains(prompt, "complete_activation") {
+		t.Fatalf("prompt missing loop protocol guidance:\n%s", prompt)
+	}
+}
+
+func mustMarshalJSON(t *testing.T, v any) string {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
+}

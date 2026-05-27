@@ -507,6 +507,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	sessionSkillDir := ""
 	accountSkillInstallDir := ""
 	planPath := ""
+	loopProtocolPath := ""
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
 		if workflowToolsEnabled(p.cfg) {
@@ -522,6 +523,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		if workflowToolsEnabled(p.cfg) {
 			planPath = filepath.Join(sessionDir, "plan.json")
 		}
+		loopProtocolPath = loopstate.ProtocolPath(sessionDir, id)
+		loopProtocolToolPath := ""
+		if p.cfg.EnableLoopProtocol && !p.cfg.EvalMode {
+			loopProtocolToolPath = loopProtocolPath
+		}
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 			Executor:         localExec,
 			HostWorkspaceDir: workspace,
@@ -529,6 +535,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			SessionsDir:      p.sessionRootPath(),
 			SessionID:        id,
 			PlanPath:         planPath,
+			LoopProtocolPath: loopProtocolToolPath,
 			SkillRegistry:    skillReg,
 			SkillDir:         accountSkillInstallDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
@@ -542,7 +549,12 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// exposed but still want durable per-user notes.
 		agent.RegisterMemoryOnly(reg, memStore)
 	}
-	loopProtocolPath := loopstate.ProtocolPath(sessionDir, id)
+	if loopProtocolPath == "" {
+		loopProtocolPath = loopstate.ProtocolPath(sessionDir, id)
+	}
+	if p.cfg.EnableLoopProtocol && !p.cfg.EvalMode {
+		agent.RegisterLoopProtocolOnly(reg, loopProtocolPath)
+	}
 	if workflowToolsEnabled(p.cfg) {
 		if _, ok := reg.Get(agent.SessionSearchToolName); !ok {
 			agent.RegisterSessionSearchOnly(reg, p.sessionRootPath(), id)

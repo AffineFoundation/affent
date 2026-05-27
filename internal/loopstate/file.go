@@ -119,14 +119,24 @@ Operational stop conditions:
 
 ` + stopBlock + `
 
-## 2. Evolution Protocol
+## 2. Current Situation
+
+Keep this section short: at most 8 bullets or about 1200 characters. It is the compact global snapshot used after long runs, compaction, or session recovery.
+
+- current intent: ` + goal + `
+- hard constraints:
+- known evidence:
+- current risk or blocker:
+- next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing
+
+## 3. Evolution Protocol
 
 The model may maintain this file, but every update must be compact and justified.
 
 1. Preserve the north star unless the user explicitly changes it.
 2. Merge similar rules and remove stale rules that no longer trigger.
 3. Move detailed history to trace, artifacts, memory, or plan state instead of growing this file.
-4. If context is thin after compaction, reload this protocol, memory indexes, plan state, and recent trace pointers before guessing.
+4. If context is thin after compaction, reload this protocol, memory search/list, plan state, and recent trace pointers before guessing.
 5. Record only durable lessons, recovery anchors, and decision rules that should survive many turns.
 
 Latest protocol update:
@@ -134,22 +144,6 @@ Latest protocol update:
 - time: ` + formatTime(createdAt) + `
 - change: initialized default loop protocol
 - reason: loop protocol activation
-
-## 3. Memory Index
-
-Memory locations:
-
-- user memory: shared user preferences and stable cross-session facts
-- project memory: workspace-level durable facts and decisions
-- loop memory: this file plus .affent/loops/<loop_id>/state.json and events.jsonl
-- session trace: conversation and event JSONL for replay
-- artifacts: durable outputs, tool-result payloads, reports, and evidence files
-
-Check memory when:
-
-1. Resuming after compaction, process restart, or a long delay.
-2. The task depends on facts, preferences, prior decisions, or earlier evidence that are not visible in the current context.
-3. A repeated failure suggests an old rule, source, or artifact may already explain the fix.
 
 ## 4. Self-Attack
 
@@ -168,6 +162,8 @@ Durable rules:
 1. Prefer verified primary evidence for live web facts; rendered pages and network responses are often better than raw HTML on JS-heavy sites.
 2. After editing code, run the narrowest meaningful tests first, then broaden when the blast radius justifies it.
 3. If a tool result is blocked or low quality, change strategy before retrying the same failed input.
+4. Use memory for stable preferences, decisions, and lessons; do not copy memory contents into LOOP.md unless they are part of the current situation or a durable rule.
+5. After compaction, restart, or a long delay, check plan state, recent trace, memory search/list, and this protocol before guessing.
 
 Candidate rules:
 
@@ -191,8 +187,8 @@ Initialization plan checkpoint:
 
 Keep this section short. Store detailed history in artifacts or trace.
 
-- latest checkpoint: state.json
-- recent loop events: events.jsonl
+- loop state: state.json and events.jsonl
+- memory lookup: use the memory tool or memory files only for stable facts and lessons
 - important artifacts:
 - important trace spans:
 - last known recovery note:
@@ -306,6 +302,45 @@ func RecordProtocolActivation(protocolPath, reason string) (State, Event, error)
 		return State{}, Event{}, err
 	}
 	state.Status = "running"
+	state.LastProtocolUpdateAt = event.Time
+	state.ProtocolUpdates++
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
+func RecordProtocolUpdate(protocolPath, reason string, sectionsChanged []string) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	status := ProtocolStatusFromFile(protocolPath)
+	reason = strings.TrimSpace(reason)
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:            "loop.protocol_update",
+		Summary:         "Updated LOOP.md",
+		Reason:          reason,
+		Path:            ProtocolRelPath(loopID),
+		Time:            formatTime(now),
+		SectionsChanged: sanitizeEventSections(sectionsChanged),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	if status != "" {
+		state.Status = status
+	}
 	state.LastProtocolUpdateAt = event.Time
 	state.ProtocolUpdates++
 	state.UpdatedAt = event.Time
@@ -491,6 +526,25 @@ func SummarizeFile(path, relPath string) (Summary, bool, error) {
 	return summary, true, nil
 }
 
+func ProtocolStatus(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		key, value, ok := parseMetadataLine(line)
+		if !ok || key != "status" {
+			continue
+		}
+		return templateStatus(value)
+	}
+	return ""
+}
+
+func ProtocolStatusFromFile(path string) string {
+	content, found, err := ReadProtocol(path)
+	if err != nil || !found {
+		return ""
+	}
+	return ProtocolStatus(content)
+}
+
 func parseMetadataLine(line string) (string, string, bool) {
 	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
 	key, value, ok := strings.Cut(line, ":")
@@ -503,6 +557,23 @@ func parseMetadataLine(line string) (string, string, bool) {
 		return "", "", false
 	}
 	return key, value, true
+}
+
+func sanitizeEventSections(in []string) []string {
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, item := range in {
+		item = templateLine(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		out = append(out, item)
+		if len(out) >= 16 {
+			break
+		}
+	}
+	return out
 }
 
 func templateLine(s string) string {

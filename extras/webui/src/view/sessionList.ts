@@ -133,9 +133,9 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState | undefi
     : session
       ? currentSessionPreview(session, title, detail)
       : row.preview;
-  const stats = session ? summarizeSessionStats(currentSessionMetrics(session)) : row.stats;
-  const metrics = session ? currentSessionMetrics(session) : row.metrics;
-  const searchMetrics = session ? currentSessionSearchMetrics(session) : row.metrics;
+  const metrics = session ? mergeCurrentDurableMetrics(currentSessionMetrics(session), row.metrics) : row.metrics;
+  const stats = session ? summarizeSessionStats(metrics) : row.stats;
+  const searchMetrics = session ? mergeCurrentDurableMetrics(currentSessionSearchMetrics(session), row.metrics) : row.metrics;
   const chips = session ? mergeChips(row.chips, currentSessionChips(session)) : row.chips;
   const status = pending ? "Live" : session ? currentSessionStatus(session, row.status) : row.status;
   const userSearchText = session?.turns.map((turn) => turn.userText).join(" ") ?? "";
@@ -157,6 +157,17 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState | undefi
     chips,
     searchText,
   };
+}
+
+function mergeCurrentDurableMetrics(current: string[], durable: string[]): string[] {
+  const out = [...current];
+  const seen = new Set(out);
+  for (const metric of durable) {
+    if (!metric.startsWith("Loop ") || seen.has(metric)) continue;
+    out.push(metric);
+    seen.add(metric);
+  }
+  return out;
 }
 
 function currentSessionTitle(row: SessionRowView, session: SessionState | undefined, pending?: string): string {

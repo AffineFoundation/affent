@@ -28,6 +28,7 @@ export function Composer({
   disabledReason,
   runtimeCapabilities,
   onSubmit,
+  onStartLoop,
   onCancel,
 }: {
   disabled: boolean;
@@ -40,6 +41,7 @@ export function Composer({
   disabledReason?: string;
   runtimeCapabilities?: RuntimeCapabilityView;
   onSubmit: (content: string) => Promise<void>;
+  onStartLoop?: (goal: string) => Promise<void>;
   onCancel: () => Promise<void>;
 }) {
   const [content, setContent] = useState("");
@@ -80,6 +82,18 @@ export function Composer({
     if (!trimmed || disabled || cancelling) return;
     try {
       await onSubmit(trimmed);
+      setContent("");
+      setDraftContext(undefined);
+    } catch {
+      textareaRef.current?.focus();
+    }
+  }
+
+  async function startLoop() {
+    const trimmed = content.trim();
+    if (!trimmed || disabled || busy || cancelling || !onStartLoop) return;
+    try {
+      await onStartLoop(trimmed);
       setContent("");
       setDraftContext(undefined);
     } catch {
@@ -249,6 +263,11 @@ export function Composer({
         {busy ? (
           <button type="button" className="secondary-action" disabled={cancelling} onClick={() => void onCancel()}>
             {cancelling ? "Stopping" : "Stop"}
+          </button>
+        ) : null}
+        {!busy && onStartLoop && content.trim() !== "" ? (
+          <button type="button" className="secondary-action" disabled={cancelling} onClick={() => void startLoop()}>
+            Start loop
           </button>
         ) : null}
         <button type="button" className="primary-action" disabled={content.trim() === "" || cancelling} onClick={() => void submit()}>

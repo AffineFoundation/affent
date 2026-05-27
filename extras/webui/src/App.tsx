@@ -15,6 +15,8 @@ import {
   readSkill,
   sendSessionMessage,
   streamSessionEvents,
+  updateSessionLoopProtocol,
+  type SessionLoopProtocolResponse,
   type SessionMemoryResponse,
   type SessionPlanSummary,
   type SessionSkillInfo,
@@ -703,6 +705,49 @@ export function App() {
     }
   }
 
+  async function handleStartLoop(goal: string) {
+    const trimmedGoal = goal.trim();
+    if (!trimmedGoal) return;
+    let targetSessionId = selectedSessionId;
+    const activationPrompt = webLoopActivationPrompt(trimmedGoal);
+    sendInFlightRef.current = true;
+    sendFailedRef.current = false;
+    setPendingMessage({ text: activationPrompt, kind: "task" });
+    setActionBusy(true);
+    try {
+      if (!targetSessionId) {
+        const created = await createSession(client);
+        targetSessionId = created.session.id;
+        setSessions((current) => [created.session, ...current.filter((s) => s.id !== created.session.id)]);
+        setSelectedSessionId(targetSessionId);
+        setSession(initialSessionState());
+      }
+      const loopProtocol = await updateSessionLoopProtocol(client, targetSessionId, {
+        activate: true,
+        goal: trimmedGoal,
+      });
+      markSessionLoopProtocol(targetSessionId, loopProtocol, trimmedGoal);
+      await sendSessionMessage(client, targetSessionId, { content: activationPrompt });
+      sendInFlightRef.current = false;
+      markSessionLive(targetSessionId, `Start loop: ${trimmedGoal}`);
+      const hasOpenStream = streamSessionIdRef.current === targetSessionId && !streamClosedRef.current;
+      if (!hasOpenStream) {
+        const reconciled = await loadHistory(targetSessionId);
+        releaseSettledTurn(reconciled.session, activationPrompt);
+        setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
+      } else {
+        setStatus((current) => ({ ...current, state: "live", label: "Running" }));
+      }
+    } catch (err) {
+      sendInFlightRef.current = false;
+      sendFailedRef.current = true;
+      setStatus({ state: "error", label: "Loop start failed", detail: formatError(err) });
+      setPendingMessage(undefined);
+      setActionBusy(false);
+      throw err;
+    }
+  }
+
   function releaseSettledTurn(nextSession: SessionState, pendingText?: string) {
     if (nextSession.status === "running") return;
     const accepted = pendingText
@@ -747,6 +792,45 @@ export function App() {
           has_runtime_skills: false,
           latest_user_message: latestUserMessage,
           topic_user_message: latestUserMessage,
+        },
+        ...current,
+      ];
+    });
+  }
+
+  function markSessionLoopProtocol(sessionId: string, loopProtocol: SessionLoopProtocolResponse, goal: string) {
+    setSessions((current) => {
+      let found = false;
+      const next = current.map((item) => {
+        if (item.id !== sessionId) return item;
+        found = true;
+        return {
+          ...item,
+          durable: true,
+          has_loop_protocol: true,
+          has_loop_state: !!loopProtocol.state,
+          loop_protocol: loopProtocol.summary,
+          loop_state: loopProtocol.state,
+        };
+      });
+      if (found) return next;
+      return [
+        {
+          id: sessionId,
+          active: true,
+          durable: true,
+          has_conversation: false,
+          has_events: false,
+          has_plan: false,
+          has_loop_protocol: true,
+          loop_protocol: loopProtocol.summary,
+          has_loop_state: !!loopProtocol.state,
+          loop_state: loopProtocol.state,
+          has_artifacts: false,
+          has_memory: false,
+          has_runtime_skills: false,
+          latest_user_message: `Start loop: ${goal}`,
+          topic_user_message: goal,
         },
         ...current,
       ];
@@ -989,6 +1073,7 @@ export function App() {
               focusSignal={composerFocusSignal}
               runtimeCapabilities={capabilityView}
               onSubmit={handleSend}
+              onStartLoop={handleStartLoop}
               onCancel={handleCancel}
             />
           </section>
@@ -1011,6 +1096,19 @@ function initialTheme(): ThemeMode {
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
+}
+
+function webLoopActivationPrompt(goal: string): string {
+  return [
+    `Start loop for: ${goal}`,
+    "",
+    "Loop protocol activation is pending, not active yet.",
+    "Understand the user's real long-run intent before enabling the loop.",
+    "Use loop_protocol action=read to inspect the draft LOOP.md.",
+    "If the goal, stop conditions, memory policy, or recovery expectations are unclear, ask at most two concise questions and keep status: draft.",
+    "If the intent is clear, use loop_protocol action=complete_activation with the full supplemented LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
+    "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
+  ].join("\n");
 }
 
 function isPlanMutationAction(value: unknown): boolean {

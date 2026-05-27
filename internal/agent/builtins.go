@@ -60,6 +60,9 @@ type BuiltinDeps struct {
 	// PlanPath is the JSON file used by the `plan` tool for the
 	// current session's task state. Empty disables the tool.
 	PlanPath string
+	// LoopProtocolPath is the current session's LOOP.md path. Empty
+	// disables the narrow loop_protocol maintenance tool.
+	LoopProtocolPath string
 	// Shell is the command prefix the shell tool wraps the user's
 	// command in. Default is `["sh", "-c"]` — POSIX-portable across
 	// alpine / busybox / debian / centos containers. Gateways with a
@@ -139,6 +142,9 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	RegisterSessionSearchOnly(r, deps.SessionsDir, deps.SessionID)
 	if deps.PlanPath != "" {
 		r.Add(planTool(deps.PlanPath))
+	}
+	if deps.LoopProtocolPath != "" {
+		r.Add(loopProtocolTool(deps.LoopProtocolPath))
 	}
 }
 

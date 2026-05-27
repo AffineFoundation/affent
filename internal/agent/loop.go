@@ -650,6 +650,9 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	if hasRegisteredTool(reg, PlanToolName) {
 		prompt = WithPlanSystemGuidance(prompt)
 	}
+	if hasRegisteredTool(reg, LoopProtocolToolName) {
+		prompt = WithLoopProtocolSystemGuidance(prompt)
+	}
 	return prompt
 }
 

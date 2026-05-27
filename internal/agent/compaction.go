@@ -390,7 +390,7 @@ func loopProtocolSummaryAnchorFromText(text string) string {
 	if payload.PlanCurrentStep != "" {
 		parts = append(parts, fmt.Sprintf("step=%q", textutil.Preview(payload.PlanCurrentStep, compactPlanStepMaxText)))
 	}
-	return loopProtocolSummaryPrefix + " " + strings.Join(parts, " ") + "; reload LOOP.md when north-star, rules, memory indexes, or recovery protocol details are needed after compaction."
+	return loopProtocolSummaryPrefix + " " + strings.Join(parts, " ") + "; reload LOOP.md when north-star, current situation, rules, or recovery protocol details are needed after compaction."
 }
 
 // formatEvent renders one ChatMessage in a compact textual form for the

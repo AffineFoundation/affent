@@ -1813,6 +1813,17 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	if strings.Contains(got, "AFFENT LOOP PROTOCOL:") {
 		t.Fatalf("draft loop protocol must not be injected as active feed:\n%s", got)
 	}
+	if _, ok := s.registry.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol tool should be available to complete draft activation")
+	}
+	messages := s.conv.Snapshot()
+	if len(messages) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	prompt := messages[0].Content
+	if !strings.Contains(prompt, "Loop protocol maintenance:") || !strings.Contains(prompt, "complete_activation") {
+		t.Fatalf("system prompt missing loop protocol guidance:\n%s", prompt)
+	}
 }
 
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {

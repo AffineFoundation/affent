@@ -588,7 +588,7 @@ Your job is to understand the user's real intention for this long-running loop, 
 
 Required activation criteria:
 1. Understand and summarize the user's underlying intent in the North Star section.
-2. Add practical stop conditions, memory lookup rules, likely failure modes, and recovery anchors.
+2. Add a compact Current Situation snapshot, practical stop conditions, likely failure modes, recovery anchors, and memory lookup/update rules only as durable rules when needed.
 3. Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.
 4. If information is missing, ask at most two specific questions and leave metadata status as draft.
 5. Only when the protocol is sufficiently supplemented, edit LOOP.md metadata to status: running.
