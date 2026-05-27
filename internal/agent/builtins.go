@@ -536,7 +536,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 			if shellCommandNotFound(res) {
 				out += "\nNext: command not found. Check the executable name, run `which <command>` or inspect PATH, then retry with an installed tool."
 			}
-			return out, err
+			return out, redactSecretError(err, deps.SecretValuesProvider)
 		},
 	}
 }
@@ -644,6 +644,17 @@ func redactSecretValues(text string, provider func() []string) string {
 		out = strings.ReplaceAll(out, secret, "[REDACTED:account-secret]")
 	}
 	return out
+}
+
+func redactSecretError(err error, provider func() []string) error {
+	if err == nil || provider == nil {
+		return err
+	}
+	msg := redactSecretValues(err.Error(), provider)
+	if msg == err.Error() {
+		return err
+	}
+	return errors.New(msg)
 }
 
 // ---- file ops (operate on the host bind mount, never via docker exec --

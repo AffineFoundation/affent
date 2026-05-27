@@ -843,6 +843,7 @@ type recordingExec struct {
 	gotArgv []string
 	gotOpts executor.ExecOptions
 	result  executor.ExecResult
+	err     error
 }
 
 func (r *recordingExec) SessionID() string { return "test" }
@@ -850,9 +851,9 @@ func (r *recordingExec) Exec(_ context.Context, cmd []string, opts executor.Exec
 	r.gotArgv = append([]string(nil), cmd...)
 	r.gotOpts = opts
 	if r.result.Stdout != "" || r.result.Stderr != "" || r.result.ExitCode != 0 {
-		return r.result, nil
+		return r.result, r.err
 	}
-	return executor.ExecResult{ExitCode: 0, Stdout: "ok"}, nil
+	return executor.ExecResult{ExitCode: 0, Stdout: "ok"}, r.err
 }
 
 type commandNotFoundExec struct{}
@@ -946,6 +947,37 @@ func TestShellTool_RedactsSecretValuesFromOutput(t *testing.T) {
 	}
 	if got := strings.Count(out, "[REDACTED:account-secret]"); got != 2 {
 		t.Fatalf("redaction count = %d, want 2 in output:\n%s", got, out)
+	}
+}
+
+func TestShellTool_RedactsSecretValuesFromError(t *testing.T) {
+	const secret = "ghp_error_secret_token"
+	rec := &recordingExec{
+		result: executor.ExecResult{
+			ExitCode: -1,
+			Stdout:   "partial " + secret,
+			Stderr:   "stderr " + secret,
+		},
+		err: errors.New("executor failed with " + secret),
+	}
+	tool := shellTool(BuiltinDeps{
+		Executor: rec,
+		SecretValuesProvider: func() []string {
+			return []string{secret}
+		},
+	})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"printenv GITHUB_TOKEN"}`))
+	if err == nil {
+		t.Fatal("expected executor error")
+	}
+	if strings.Contains(out, secret) {
+		t.Fatalf("shell output leaked secret:\n%s", out)
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("shell error leaked secret: %v", err)
+	}
+	if got := strings.Count(out+"\n"+err.Error(), "[REDACTED:account-secret]"); got != 3 {
+		t.Fatalf("redaction count = %d, want 3 in output+error:\nout=%s\nerr=%v", got, out, err)
 	}
 }
 
