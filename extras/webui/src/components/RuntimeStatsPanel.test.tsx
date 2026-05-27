@@ -89,6 +89,36 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
   });
 
+  it("shows browser policy blocks that promote Runtime into Workbench", () => {
+    render(
+      <RuntimeStatsPanel
+        defaultOpen
+        stats={{
+          model: "qwen-small",
+          active_sessions: 0,
+          running_turns: 0,
+          aggregate: {
+            blocked_by_type: 2,
+            blocked_by_domain: 1,
+            domain_relaxations: 1,
+            cache_hit: 0,
+            cache_miss: 0,
+            network_fetch: 0,
+            input_tokens: 0,
+            output_tokens: 0,
+            turns: 0,
+            tools: { tool_requests: 0, tool_errors: 0 },
+            runtime: { runtime_errors: 0 },
+          },
+        }}
+      />,
+    );
+
+    const grid = screen.getByTestId("runtime-stats-grid");
+    expect(grid).toHaveTextContent("Browser1 domain blocks · 2 type blocks · 1 relaxations");
+    expect(within(grid).getByText("Browser").closest(".session-tools-runtime-chip")).toHaveAttribute("data-tone", "warning");
+  });
+
   it("surfaces a compact API diagnostic in the collapsed summary", () => {
     const diagnostic = "API route /v1/stats returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
     render(<RuntimeStatsPanel error={diagnostic} />);

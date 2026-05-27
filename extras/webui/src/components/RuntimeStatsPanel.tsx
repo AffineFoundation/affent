@@ -205,10 +205,18 @@ function errorMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot):
 }
 
 function browserMetric(aggregate?: ServerAggregateStats): RuntimeMetric | undefined {
-  if (!aggregate || aggregate.network_fetch <= 0) return undefined;
-  const parts = [`${aggregate.network_fetch} fetches`];
+  if (!aggregate) return undefined;
+  const blockedByType = aggregate.blocked_by_type ?? 0;
+  const blockedByDomain = aggregate.blocked_by_domain ?? 0;
+  const relaxations = aggregate.domain_relaxations ?? 0;
+  if (aggregate.network_fetch <= 0 && blockedByType <= 0 && blockedByDomain <= 0 && relaxations <= 0) return undefined;
+  const parts: string[] = [];
+  if (aggregate.network_fetch > 0) parts.push(`${aggregate.network_fetch} fetches`);
   if (aggregate.cache_hit > 0 || aggregate.cache_miss > 0) parts.push(`${aggregate.cache_hit}/${aggregate.cache_hit + aggregate.cache_miss} cache`);
-  return { label: "Browser", value: parts.join(" · "), tone: "muted" };
+  if (blockedByDomain > 0) parts.push(`${blockedByDomain} domain blocks`);
+  if (blockedByType > 0) parts.push(`${blockedByType} type blocks`);
+  if (relaxations > 0) parts.push(`${relaxations} relaxations`);
+  return { label: "Browser", value: parts.join(" · "), tone: blockedByType > 0 || blockedByDomain > 0 || relaxations > 0 ? "warning" : "muted" };
 }
 
 function formatCount(value: number): string {
