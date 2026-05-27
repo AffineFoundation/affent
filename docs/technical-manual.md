@@ -898,7 +898,9 @@ Current built-in suites:
   from the user-facing page being verified and audit response quality. They
   require `browser_network_read` but do not require an extra `browser_network`
   search when a rendered snapshot already exposes the relevant captured network
-  ref.
+  ref. One network-discovery scenario does require `browser_network` before
+  `browser_network_read`, covering the case where a JavaScript page exposes only
+  shell text and the agent must first find the most relevant captured response.
 
 Run scenarios:
 

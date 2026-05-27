@@ -1264,8 +1264,8 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 3 {
-		t.Fatalf("live-web suite size = %d, want 3", len(scenarios))
+	if len(scenarios) != 4 {
+		t.Fatalf("live-web suite size = %d, want 4", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1383,6 +1383,56 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	for _, want := range []string{"browser_scroll", "browser_network_url", "requested_url", "ref=", "status=", "content_type=", "source_method", "未验证"} {
 		if !stringSliceContains(scrollRecovery.RequiredFinalText, want) {
 			t.Fatalf("live-web scroll recovery RequiredFinalText = %#v, want %q", scrollRecovery.RequiredFinalText, want)
+		}
+	}
+
+	networkSearch, ok := seen["live-web-taostats-network-search-read"]
+	if !ok {
+		t.Fatalf("live-web suite missing network search/read scenario")
+	}
+	for _, want := range []string{"browser_navigate", "browser_network", "browser_network_read"} {
+		if !stringSliceContains(networkSearch.RequiredTools, want) {
+			t.Fatalf("live-web network search RequiredTools = %#v, want %q", networkSearch.RequiredTools, want)
+		}
+	}
+	if networkSearch.RequiredToolCounts["browser_network"] != 1 || networkSearch.RequiredToolCounts["browser_network_read"] != 1 {
+		t.Fatalf("live-web network search tool counts = %#v, want browser_network/browser_network_read once", networkSearch.RequiredToolCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
+		{Tool: "browser_network", Arg: "query", Substring: "market_cap"},
+	} {
+		if !toolArgRequirementContains(networkSearch.RequiredToolArgContains, want) {
+			t.Fatalf("live-web network search RequiredToolArgContains = %#v, want %#v", networkSearch.RequiredToolArgContains, want)
+		}
+	}
+	if len(networkSearch.RequiredToolOrder) != 2 ||
+		networkSearch.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "browser_navigate", Later: "browser_network"}) ||
+		networkSearch.RequiredToolOrder[1] != (ToolOrderRequirement{Earlier: "browser_network", Later: "browser_network_read"}) {
+		t.Fatalf("live-web network search tool order = %#v", networkSearch.RequiredToolOrder)
+	}
+	for _, field := range []string{"source_access_results", "source_access_verified", "source_access_network"} {
+		if networkSearch.RequiredToolStatsAtLeast[field] != 1 {
+			t.Fatalf("live-web network search source access requirements = %#v, want %s=1", networkSearch.RequiredToolStatsAtLeast, field)
+		}
+	}
+	if len(networkSearch.RequiredSourceAccess) != 1 ||
+		networkSearch.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"}) {
+		t.Fatalf("live-web network search RequiredSourceAccess = %#v", networkSearch.RequiredSourceAccess)
+	}
+	for _, want := range []string{"BROWSER NETWORK EVIDENCE", "query:", "Next:", "browser_network_read"} {
+		if !stringSliceContains(networkSearch.RequiredToolResultText["browser_network"], want) {
+			t.Fatalf("live-web network search browser_network result requirements = %#v, want %q", networkSearch.RequiredToolResultText["browser_network"], want)
+		}
+	}
+	for _, want := range []string{"SourceAccess:", "browser_network_url=", "requested_url=", "ref=", "status=", "content_type=", "source_method=network_xhr_fetch"} {
+		if !stringSliceContains(networkSearch.RequiredToolResultText["browser_network_read"], want) {
+			t.Fatalf("live-web network search browser_network_read result requirements = %#v, want %q", networkSearch.RequiredToolResultText["browser_network_read"], want)
+		}
+	}
+	for _, want := range []string{"browser_network", "market_cap", "browser_network_url", "requested_url", "ref=", "status=", "content_type=", "source_method", "未验证"} {
+		if !stringSliceContains(networkSearch.RequiredFinalText, want) {
+			t.Fatalf("live-web network search RequiredFinalText = %#v, want %q", networkSearch.RequiredFinalText, want)
 		}
 	}
 }
