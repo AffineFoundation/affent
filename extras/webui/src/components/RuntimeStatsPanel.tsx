@@ -86,7 +86,6 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
     metrics.push({ label: "Mode", value: evalModeDetail(stats), tone: "warning" });
     metrics.push({ label: "Tools", value: toolSurface(stats), tone: stats.eval_all_tools ? "warning" : "muted" });
   }
-  if (aggregate) metrics.push({ label: "Tokens", value: tokenSummary(aggregate), tone: "muted" });
   const source = sourceMetric(tools);
   if (source) metrics.push(source);
   const recall = recallMetric(tools);
@@ -103,6 +102,7 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   if (errors) metrics.push(errors);
   const browser = browserMetric(aggregate);
   if (browser) metrics.push(browser);
+  if (aggregate && metrics.length > 0) metrics.push({ label: "Tokens", value: tokenSummary(aggregate), tone: "muted" });
   return metrics;
 }
 

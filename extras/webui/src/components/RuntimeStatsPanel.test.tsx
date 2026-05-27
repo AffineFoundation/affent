@@ -101,6 +101,37 @@ describe("RuntimeStatsPanel", () => {
     expect(panel).not.toHaveTextContent("standard");
   });
 
+  it("does not show isolated token counts as runtime diagnostics", () => {
+    render(
+      <RuntimeStatsPanel
+        defaultOpen
+        stats={{
+          model: "qwen-small",
+          active_sessions: 0,
+          running_turns: 0,
+          aggregate: {
+            blocked_by_type: 0,
+            blocked_by_domain: 0,
+            cache_hit: 0,
+            cache_miss: 0,
+            network_fetch: 0,
+            input_tokens: 1200,
+            output_tokens: 300,
+            turns: 2,
+            tools: { tool_requests: 0, tool_errors: 0 },
+            runtime: { runtime_errors: 0 },
+          },
+        }}
+      />,
+    );
+
+    const panel = screen.getByTestId("runtime-stats-panel");
+    expect(panel).toHaveTextContent("No runtime diagnostics need attention.");
+    expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
+    expect(panel).not.toHaveTextContent("Tokens");
+    expect(panel).not.toHaveTextContent("1.5k");
+  });
+
   it("shows browser policy blocks that promote Runtime into Workbench", () => {
     render(
       <RuntimeStatsPanel
