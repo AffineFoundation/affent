@@ -448,6 +448,7 @@ Summary records aggregate all scenario records from the same process:
   `plan_error_rate` when plan calls were observed,
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
   observed, `verifier_pass_rate` when verifier commands ran,
+  `memory_search_miss_rate` when memory search was used,
   `source_access_verified_rate` when source evidence was observed,
   `source_network_rate` when source evidence was observed,
   `source_discovery_only_rate` when source evidence was observed,

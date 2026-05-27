@@ -1270,10 +1270,11 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,loop_protocol_feed:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,memory_search_miss:%s,loop_protocol_feed:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
 		formatPercent(batchRatio(s.MemoryUpdates, s.Total)),
+		formatOptionalPercent(batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls)),
 		formatPercent(batchRatio(s.LoopProtocolFeedScenarios, s.Total)),
 		formatPercent(batchRatio(s.RuntimeSurfaceScenarios, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolErrors, s.ToolCalls)),
@@ -2877,6 +2878,7 @@ type batchSummaryRecord struct {
 	PassRate                             float64                                          `json:"pass_rate"`
 	CompletionRate                       float64                                          `json:"completion_rate"`
 	MemoryUpdateRate                     float64                                          `json:"memory_update_rate"`
+	MemorySearchMissRate                 *float64                                         `json:"memory_search_miss_rate,omitempty"`
 	LoopProtocolFeedRate                 float64                                          `json:"loop_protocol_feed_rate"`
 	ToolErrorRate                        *float64                                         `json:"tool_error_rate,omitempty"`
 	FocusedTaskErrorRate                 *float64                                         `json:"focused_task_error_rate,omitempty"`
@@ -3287,6 +3289,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		PassRate:                             batchRatio(s.Passed, s.Total),
 		CompletionRate:                       batchRatio(s.EndCompleted, s.Total),
 		MemoryUpdateRate:                     batchRatio(s.MemoryUpdates, s.Total),
+		MemorySearchMissRate:                 batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls),
 		LoopProtocolFeedRate:                 batchRatio(s.LoopProtocolFeedScenarios, s.Total),
 		ToolErrorRate:                        batchOptionalRatio(s.ToolErrors, s.ToolCalls),
 		FocusedTaskErrorRate:                 batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls),

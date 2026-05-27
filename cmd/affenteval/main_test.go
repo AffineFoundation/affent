@@ -1692,7 +1692,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120,artifacts=1,missing_artifacts=0") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,loop_protocol_feed:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
+	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_protocol_feed:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
@@ -3482,6 +3482,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"pass_rate":                              float64(0.5),
 		"completion_rate":                        float64(0.5),
 		"memory_update_rate":                     float64(0.5),
+		"memory_search_miss_rate":                float64(0.5),
 		"loop_protocol_feed_rate":                float64(0.5),
 		"tool_error_rate":                        float64(0.2),
 		"focused_task_error_rate":                float64(0.25),
