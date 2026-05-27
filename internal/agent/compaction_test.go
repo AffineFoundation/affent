@@ -466,6 +466,50 @@ func TestLLMSummaryCompactor_Compact_Real(t *testing.T) {
 			t.Errorf("head/tail bookends wrong: head=%q tail=%q", got[1].Content, got[6].Content)
 		}
 	})
+
+	t.Run("preserves loop protocol anchor when LLM summary omits it", func(t *testing.T) {
+		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 0, KeepFirst: 1, KeepLast: 1}
+		loopBlock := strings.Join([]string{
+			"AFFENT LOOP PROTOCOL:",
+			"feed_mode=digest feed_number=4 protocol_path=.affent/loops/longrun/LOOP.md",
+			"loop_id=longrun status=running protocol_feeds=4 last_feed=digest",
+			"plan_label=plan:1/3:active plan_step_index=2 plan_step_status=in_progress",
+			"plan_current_step: verify browser evidence",
+			"",
+			"# Loop",
+			"Keep long-run evidence anchored.",
+		}, "\n")
+		msgs := []ChatMessage{
+			mk("system", "be helpful"),
+			mk("user", "head"),
+			mk("system", loopBlock),
+			mk("assistant", "middle"),
+			mk("user", "tail"),
+		}
+		got, err := c.Compact(context.Background(), msgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) != 4 || got[2].Role != "user" || !strings.HasPrefix(got[2].Content, summaryPrefix) {
+			t.Fatalf("expected synthetic summary at index 2, got %+v", got)
+		}
+		summary := got[2].Content
+		for _, want := range []string{
+			"FAKE SUMMARY",
+			"LOOP_PROTOCOL: active",
+			"path=.affent/loops/longrun/LOOP.md",
+			"mode=digest",
+			"feed=4",
+			"plan=plan:1/3:active",
+			"current=2:in_progress",
+			`step="verify browser evidence"`,
+			"reload LOOP.md",
+		} {
+			if !strings.Contains(summary, want) {
+				t.Fatalf("summary missing %q:\n%s", want, summary)
+			}
+		}
+	})
 }
 
 func TestBackUpToSafeBoundary(t *testing.T) {

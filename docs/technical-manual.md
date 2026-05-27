@@ -776,6 +776,11 @@ When rolling compaction later summarizes the session, `run_task` and
 (`summary`/`findings` or `report` plus bounded metadata and tool-call names)
 instead of raw JSON, so long sessions preserve the evidence the parent acted on
 without paying to re-summarize child transcripts or bulky response metadata.
+If the compacted span included an active `LOOP.md` feed, the rolling summary
+also receives a deterministic `LOOP_PROTOCOL:` anchor with the protocol path,
+feed mode/count, loop id/status, and active plan checkpoint. This keeps
+post-compaction recovery pointed at the per-session protocol even when the
+summarizer model omits that detail from its natural-language summary.
 Eval debug manifests index the retained child transcript paths and sizes under
 `child_transcripts`, and timelines include a `Child Transcripts` section, so
 operators can jump to isolated child work without pushing transcript contents

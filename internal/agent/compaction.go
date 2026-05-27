@@ -32,6 +32,7 @@ type Compactor interface {
 // the summarizer (rolling / incremental summarization, matching
 // OpenHands' LLMSummarizingCondenser behaviour).
 const summaryPrefix = "[summary of earlier work] "
+const loopProtocolSummaryPrefix = "LOOP_PROTOCOL:"
 
 // DefaultSummaryTriggerMsgs is the conventional proactive threshold
 // borrowed from OpenHands V1 (max_size = 240). Used by callers that
@@ -223,6 +224,7 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	if err != nil {
 		return nil, fmt.Errorf("summarize: %w", err)
 	}
+	summary = ensureLoopProtocolSummaryAnchor(summary, prevSummary, middle)
 
 	out := make([]ChatMessage, 0, headEnd+1+(len(msgs)-tailStart))
 	out = append(out, msgs[:headEnd]...)
@@ -313,6 +315,82 @@ func (c *LLMSummaryCompactor) summarize(ctx context.Context, prevSummary string,
 		return "", errors.New("compactor: empty summary")
 	}
 	return s, nil
+}
+
+func ensureLoopProtocolSummaryAnchor(summary, prevSummary string, events []ChatMessage) string {
+	summary = strings.TrimSpace(summary)
+	if summary == "" || strings.Contains(summary, loopProtocolSummaryPrefix) {
+		return summary
+	}
+	anchor := latestLoopProtocolSummaryAnchor(events)
+	if anchor == "" {
+		anchor = latestLoopProtocolSummaryAnchorFromText(prevSummary)
+	}
+	if anchor == "" {
+		return summary
+	}
+	return summary + "\n" + anchor
+}
+
+func latestLoopProtocolSummaryAnchor(events []ChatMessage) string {
+	for i := len(events) - 1; i >= 0; i-- {
+		if anchor := loopProtocolSummaryAnchorFromText(events[i].Content); anchor != "" {
+			return anchor
+		}
+	}
+	return ""
+}
+
+func latestLoopProtocolSummaryAnchorFromText(text string) string {
+	lines := strings.Split(text, "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(lines[i])
+		if strings.HasPrefix(line, loopProtocolSummaryPrefix) {
+			return line
+		}
+	}
+	return loopProtocolSummaryAnchorFromText(text)
+}
+
+func loopProtocolSummaryAnchorFromText(text string) string {
+	idx := strings.LastIndex(text, "AFFENT LOOP PROTOCOL:")
+	if idx < 0 {
+		return ""
+	}
+	payload, ok := loopProtocolFeedPayloadFromBlock("", text[idx:])
+	if !ok {
+		return ""
+	}
+	parts := []string{"active"}
+	if payload.ProtocolPath != "" {
+		parts = append(parts, "path="+payload.ProtocolPath)
+	}
+	if payload.Mode != "" {
+		parts = append(parts, "mode="+payload.Mode)
+	}
+	if payload.FeedNumber > 0 {
+		parts = append(parts, fmt.Sprintf("feed=%d", payload.FeedNumber))
+	}
+	if payload.ProtocolFeeds > 0 {
+		parts = append(parts, fmt.Sprintf("feeds=%d", payload.ProtocolFeeds))
+	}
+	if payload.LoopID != "" {
+		parts = append(parts, "loop_id="+payload.LoopID)
+	}
+	if payload.Status != "" {
+		parts = append(parts, "status="+payload.Status)
+	}
+	if payload.PlanLabel != "" {
+		parts = append(parts, "plan="+payload.PlanLabel)
+	}
+	if payload.PlanCurrentStepIndex > 0 || payload.PlanCurrentStepStatus != "" {
+		step := fmt.Sprintf("current=%d:%s", payload.PlanCurrentStepIndex, payload.PlanCurrentStepStatus)
+		parts = append(parts, strings.TrimRight(step, ":"))
+	}
+	if payload.PlanCurrentStep != "" {
+		parts = append(parts, fmt.Sprintf("step=%q", textutil.Preview(payload.PlanCurrentStep, compactPlanStepMaxText)))
+	}
+	return loopProtocolSummaryPrefix + " " + strings.Join(parts, " ") + "; reload LOOP.md when north-star, rules, memory indexes, or recovery protocol details are needed after compaction."
 }
 
 // formatEvent renders one ChatMessage in a compact textual form for the
