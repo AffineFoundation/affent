@@ -120,6 +120,10 @@ type Loop struct {
 	ToolResultArtifactDir        string
 	ToolResultArtifactPathPrefix string
 
+	// SecretValuesProvider returns runtime/account secret values that
+	// must not appear in trace-visible tool request args.
+	SecretValuesProvider func() []string
+
 	// PerCallTimeout overrides DefaultPerCallTimeout for this loop.
 	// Zero means "use the default".
 	PerCallTimeout time.Duration
@@ -1103,9 +1107,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			originalArgsSummary := ""
 			if canonicalChanged || argsRepaired || argsRepairErr != nil {
 				originalArgsSummary = summarizeOriginalToolArgs(tc.Function.Arguments)
+				originalArgsSummary = redactSecretValues(originalArgsSummary, l.SecretValuesProvider)
 			}
 			toolStats.ToolRequests++
-			argsView := toolRequestArgsEventView(args)
+			argsView := toolRequestArgsEventViewWithSecrets(args, l.SecretValuesProvider)
 			// Classify delegations once per dispatch and stamp the result
 			// on both the request and the eventual result event. Keeps
 			// trace consumers (WebUI, eval) from re-parsing tool-specific
@@ -1888,7 +1893,7 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 		if rawArgs == "" {
 			rawArgs = "{}"
 		}
-		argsView := toolRequestArgsEventView(json.RawMessage(rawArgs))
+		argsView := toolRequestArgsEventViewWithSecrets(json.RawMessage(rawArgs), l.SecretValuesProvider)
 		// Even though the call never dispatched, the original args carry
 		// the delegation classification a trace UI needs to render
 		// "focused task was canceled because the parent turn ran out

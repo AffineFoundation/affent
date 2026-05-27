@@ -433,6 +433,7 @@ func runFocusedTask(ctx context.Context, deps FocusedTaskDeps, profile FocusedTa
 		Memory:                      deps.Memory,
 		ProjectContextDir:           deps.ProjectContextDir,
 		Log:                         deps.Log.With().Str("focused_task_type", string(profile.Kind)).Logger(),
+		SecretValuesProvider:        deps.SecretValuesProvider,
 		SystemPrompt:                focusedTaskSystemPromptFor(profile, reg),
 		UserPrompt:                  focusedTaskUserPrompt(profile, objective, deps.HostWorkspaceDir, maxTurns),
 	}

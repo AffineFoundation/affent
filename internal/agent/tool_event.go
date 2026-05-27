@@ -35,6 +35,10 @@ type toolRequestArgsEvent struct {
 }
 
 func toolRequestArgsEventView(args json.RawMessage) toolRequestArgsEvent {
+	return toolRequestArgsEventViewWithSecrets(args, nil)
+}
+
+func toolRequestArgsEventViewWithSecrets(args json.RawMessage, secretValuesProvider func() []string) toolRequestArgsEvent {
 	view := toolRequestArgsEvent{
 		Args:     map[string]any{},
 		Bytes:    len(args),
@@ -49,6 +53,7 @@ func toolRequestArgsEventView(args json.RawMessage) toolRequestArgsEvent {
 	if !ok || capped == nil {
 		return view
 	}
+	capped = redactToolRequestArgs(capped, secretValuesProvider)
 	raw, err := json.Marshal(capped)
 	if err == nil && len(raw) <= maxToolRequestArgsEventBytes {
 		view.Args = capped
@@ -63,6 +68,38 @@ func toolRequestArgsEventView(args json.RawMessage) toolRequestArgsEvent {
 	view.Truncated = true
 	view.OmittedBytes = len(args)
 	return view
+}
+
+func redactToolRequestArgs(args map[string]any, secretValuesProvider func() []string) map[string]any {
+	if secretValuesProvider == nil || len(args) == 0 {
+		return args
+	}
+	redacted, ok := redactToolRequestArgValue(args, secretValuesProvider).(map[string]any)
+	if !ok || redacted == nil {
+		return args
+	}
+	return redacted
+}
+
+func redactToolRequestArgValue(v any, secretValuesProvider func() []string) any {
+	switch x := v.(type) {
+	case string:
+		return redactSecretValues(x, secretValuesProvider)
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		for k, v := range x {
+			out[k] = redactToolRequestArgValue(v, secretValuesProvider)
+		}
+		return out
+	case []any:
+		out := make([]any, len(x))
+		for i, v := range x {
+			out[i] = redactToolRequestArgValue(v, secretValuesProvider)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func capToolRequestArgValue(v any) (any, int) {

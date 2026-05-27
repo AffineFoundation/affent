@@ -696,6 +696,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			"tool-results",
 		),
 		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+		SecretValuesProvider:         p.accountSecretValues,
 		// Snapshot source for EnsureSystemPrompt — when nil, the
 		// memory block is just omitted from the system prompt and
 		// the tool isn't registered above anyway.

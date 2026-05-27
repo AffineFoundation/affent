@@ -744,6 +744,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		Memory:                      deps.Memory,
 		ProjectContextDir:           deps.ProjectContextDir,
 		Log:                         deps.Log,
+		SecretValuesProvider:        deps.SecretValuesProvider,
 		SystemPrompt:                subagentSystemPromptFor(mode, reg),
 		UserPrompt:                  subagentUserPrompt(mode.Name, task, deps.HostWorkspaceDir, maxTurns, childDepth, deps.resolvedMaxDepth()),
 	}

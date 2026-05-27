@@ -48,6 +48,7 @@ type childRunSpec struct {
 	Memory                      memory.MemoryStore
 	ProjectContextDir           string
 	Log                         zerolog.Logger
+	SecretValuesProvider        func() []string
 
 	SystemPrompt string
 	UserPrompt   string
@@ -99,6 +100,7 @@ func runChildLoop(ctx context.Context, spec childRunSpec) childRunResult {
 		FinalNoToolsOnMaxTurns:      true,
 		Memory:                      spec.Memory,
 		ProjectContextDir:           spec.ProjectContextDir,
+		SecretValuesProvider:        spec.SecretValuesProvider,
 		SkillProvider:               SkillProviderForTools(nil, spec.Tools),
 		FirstToolPolicy:             spec.FirstToolPolicy,
 		PostToolPolicy:              spec.PostToolPolicy,

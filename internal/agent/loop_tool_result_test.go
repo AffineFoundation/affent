@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -910,6 +911,106 @@ func TestToolRequestArgsViewCapsLargeStringValues(t *testing.T) {
 	}
 	if strings.Contains(content, strings.Repeat("x", 5120)) {
 		t.Fatal("tool.request args leaked oversized content tail")
+	}
+}
+
+func TestToolRequestArgsViewRedactsSecretValues(t *testing.T) {
+	const secret = "ghp_trace_secret_token"
+	raw := json.RawMessage(`{
+		"command":"git clone https://` + secret + `@github.com/acme/private.git",
+		"nested":{"token":"` + secret + `"},
+		"argv":["echo","` + secret + `"],
+		"safe":"short"
+	}`)
+	view := toolRequestArgsEventViewWithSecrets(raw, func() []string {
+		return []string{secret, "short"}
+	})
+	encoded, err := json.Marshal(view.Args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), secret) {
+		t.Fatalf("tool.request args leaked secret:\n%s", encoded)
+	}
+	if !strings.Contains(string(encoded), "[REDACTED:account-secret]") {
+		t.Fatalf("tool.request args missing redaction marker:\n%s", encoded)
+	}
+	if !strings.Contains(string(encoded), "short") {
+		t.Fatalf("short non-secret value should remain visible:\n%s", encoded)
+	}
+}
+
+func TestRunTurn_RedactsSecretValuesFromToolRequestEvent(t *testing.T) {
+	const secret = "ghp_request_secret_token"
+	var calls int32
+	args := `{"command":"echo ` + secret + `"}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if call == 1 {
+			line := `data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"big","arguments":` + strconv.Quote(args) + `}}]},"finish_reason":null}]}`
+			w.Write([]byte(line + "\n\n"))
+			w.Write([]byte(`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+			return
+		}
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}` + "\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("ok"))
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM:                  NewLLMClient(srv.URL, "", "fake-model"),
+		Tools:                reg,
+		Conv:                 conv,
+		Events:               events,
+		MaxTurnSteps:         4,
+		PerCallTimeout:       5 * time.Second,
+		SecretValuesProvider: func() []string { return []string{secret} },
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type != sse.TypeToolRequest {
+				continue
+			}
+			var p sse.ToolRequestPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode tool.request: %v", err)
+			}
+			encoded, err := json.Marshal(p.Args)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(encoded), secret) {
+				t.Fatalf("tool.request event leaked secret:\n%s", encoded)
+			}
+			if !strings.Contains(string(encoded), "[REDACTED:account-secret]") {
+				t.Fatalf("tool.request event missing redaction marker:\n%s", encoded)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for tool.request")
+		}
 	}
 }
 
