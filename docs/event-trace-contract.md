@@ -308,7 +308,9 @@ external-calibration reminder paired with a `loop.decision`.
   rejection; false for proactive threshold compaction.
 - `reason`: compact reason, currently `threshold` or `context_overflow`.
 - `summary_present`, `summary_bytes`, `summary_preview`: bounded diagnostics
-  for the rolling summary inserted back into model context.
+  for the rolling summary inserted back into model context. `summary_present`
+  is emitted even when false so consumers can distinguish a confirmed missing
+  summary from older traces where the field is unavailable.
 - `loop_protocol_anchor`: optional deterministic recovery anchor copied from a
   compacted `LOOP.md` feed summary. It keeps the protocol path, feed metadata,
   loop id/status, and active plan checkpoint visible even when

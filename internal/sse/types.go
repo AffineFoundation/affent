@@ -358,7 +358,7 @@ type ContextCompactPayload struct {
 	RemovedMessages    int    `json:"removed_messages"`
 	Reactive           bool   `json:"reactive"`
 	Reason             string `json:"reason"`
-	SummaryPresent     bool   `json:"summary_present,omitempty"`
+	SummaryPresent     bool   `json:"summary_present"`
 	SummaryBytes       int    `json:"summary_bytes,omitempty"`
 	SummaryPreview     string `json:"summary_preview,omitempty"`
 	LoopProtocolAnchor string `json:"loop_protocol_anchor,omitempty"`

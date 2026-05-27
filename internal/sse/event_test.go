@@ -75,6 +75,24 @@ func TestEvent_Encode_EmptyData(t *testing.T) {
 	}
 }
 
+func TestContextCompactPayloadKeepsFalseSummaryPresent(t *testing.T) {
+	ev, err := NewEvent(TypeContextCompact, ContextCompactPayload{
+		TurnID:          "turn-1",
+		BeforeMessages:  40,
+		AfterMessages:   12,
+		RemovedMessages: 28,
+		Reactive:        true,
+		Reason:          "context_overflow",
+		SummaryPresent:  false,
+	})
+	if err != nil {
+		t.Fatalf("NewEvent: %v", err)
+	}
+	if !bytes.Contains(ev.Data, []byte(`"summary_present":false`)) {
+		t.Fatalf("context.compacted event must preserve explicit false summary_present, data=%s", ev.Data)
+	}
+}
+
 // parseSSE is a minimal SSE field-parser used to round-trip the
 // encoder under test. Reads exactly one event from buf.
 func parseSSE(t *testing.T, buf []byte) (eventType, id, data string) {
