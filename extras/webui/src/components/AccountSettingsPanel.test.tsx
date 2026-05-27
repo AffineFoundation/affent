@@ -60,4 +60,23 @@ describe("AccountSettingsPanel", () => {
 
     expect(onEnsureSSHKey).toHaveBeenCalled();
   });
+
+  it("does not offer generation when a private key exists but public key is unavailable", () => {
+    render(
+      <AccountSettingsPanel
+        settings={{
+          env: [],
+          ssh: {
+            exists: true,
+            public_key_error: "private SSH key already exists but public key is missing and could not be derived",
+          },
+        }}
+        defaultOpen
+      />,
+    );
+
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("SSH key found; public key unavailable");
+    expect(screen.getByRole("alert")).toHaveTextContent("could not be derived");
+    expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
+  });
 });

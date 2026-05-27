@@ -168,6 +168,56 @@ func TestAccountSettingsSSHKeyDoesNotOverwriteExistingKey(t *testing.T) {
 	}
 }
 
+func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromExistingPrivate(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	first, err := ensureAccountSSHKey(pool)
+	if err != nil {
+		t.Fatalf("ensure first ssh key: %v", err)
+	}
+	_, publicPath := accountSSHKeyPaths(pool)
+	if err := os.Remove(publicPath); err != nil {
+		t.Fatalf("remove public key: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/settings", nil)
+	w := httptest.NewRecorder()
+	handleAccountSettings(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("get settings status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var got accountSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode get settings: %v", err)
+	}
+	if !got.SSH.Exists || got.SSH.PublicKey != first.PublicKey || got.SSH.PublicKeyError != "" {
+		t.Fatalf("get ssh = %+v, want derived public key from existing private", got.SSH)
+	}
+	if _, err := os.Stat(publicPath); !os.IsNotExist(err) {
+		t.Fatalf("GET settings should not create public key file; stat err=%v", err)
+	}
+
+	r = httptest.NewRequest(http.MethodPost, "/v1/settings/ssh-key", nil)
+	w = httptest.NewRecorder()
+	handleAccountSettingsRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("ensure settings status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var ensured accountSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &ensured); err != nil {
+		t.Fatalf("decode ensure settings: %v", err)
+	}
+	if ensured.SSH.Created || ensured.SSH.PublicKey != first.PublicKey {
+		t.Fatalf("ensured ssh = %+v, want existing derived public key without private overwrite", ensured.SSH)
+	}
+	raw, err := os.ReadFile(publicPath)
+	if err != nil {
+		t.Fatalf("read derived public key file: %v", err)
+	}
+	if strings.TrimSpace(string(raw)) != first.PublicKey {
+		t.Fatalf("derived public key file = %q, want %q", strings.TrimSpace(string(raw)), first.PublicKey)
+	}
+}
+
 func TestAccountSettingsSSHKeyRefusesPrivateOnlyOverwrite(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	privatePath, _ := accountSSHKeyPaths(pool)

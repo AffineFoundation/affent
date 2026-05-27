@@ -25,6 +25,7 @@ const (
 	accountSettingsFileName       = "settings.json"
 	accountSSHKeyName             = "id_ed25519"
 	accountSettingsMaxFileBytes   = 256 * 1024
+	accountSSHKeyMaxFileBytes     = 128 * 1024
 	accountSettingsMaxEnvVars     = 128
 	accountSettingsMaxEnvValueLen = 32 * 1024
 )
@@ -59,6 +60,7 @@ type accountSSHKeyInfo struct {
 	PublicKeyPath  string `json:"public_key_path,omitempty"`
 	PrivateKeyPath string `json:"private_key_path,omitempty"`
 	Created        bool   `json:"created,omitempty"`
+	PublicKeyError string `json:"public_key_error,omitempty"`
 }
 
 type accountEnvSetRequest struct {
@@ -392,6 +394,23 @@ func readAccountSSHKeyInfo(pool *SessionPool) (accountSSHKeyInfo, error) {
 	if err != nil {
 		return accountSSHKeyInfo{}, err
 	}
+	if pub == "" {
+		derived, deriveErr := deriveAccountPublicKeyFromPrivate(privatePath)
+		if deriveErr != nil {
+			if privateExists, existsErr := accountPrivateKeyExists(privatePath); existsErr != nil {
+				return accountSSHKeyInfo{}, existsErr
+			} else if privateExists {
+				return accountSSHKeyInfo{
+					Exists:         true,
+					PublicKeyPath:  publicPath,
+					PrivateKeyPath: privatePath,
+					PublicKeyError: deriveErr.Error(),
+				}, nil
+			}
+		} else if derived != "" {
+			pub = derived
+		}
+	}
 	return accountSSHKeyInfo{
 		Exists:         pub != "",
 		PublicKey:      pub,
@@ -408,7 +427,15 @@ func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
 		return accountSSHKeyInfo{Exists: true, PublicKey: pub, PublicKeyPath: publicPath, PrivateKeyPath: privatePath}, nil
 	}
 	if _, err := os.Lstat(privatePath); err == nil {
-		return accountSSHKeyInfo{}, errors.New("private SSH key already exists but public key is missing; refusing to overwrite")
+		pub, deriveErr := deriveAccountPublicKeyFromPrivate(privatePath)
+		if deriveErr != nil {
+			return accountSSHKeyInfo{}, fmt.Errorf("private SSH key already exists but public key is missing and could not be derived: %w; refusing to overwrite", deriveErr)
+		}
+		if err := writeNewFile(publicPath, []byte(pub+"\n"), 0o644); err != nil {
+			return accountSSHKeyInfo{}, err
+		}
+		syncAccountDir(filepath.Dir(privatePath))
+		return accountSSHKeyInfo{Exists: true, PublicKey: pub, PublicKeyPath: publicPath, PrivateKeyPath: privatePath}, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return accountSSHKeyInfo{}, err
 	}
@@ -437,11 +464,7 @@ func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
 }
 
 func accountGitSSHCommand(pool *SessionPool) (string, bool) {
-	privatePath, publicPath := accountSSHKeyPaths(pool)
-	pub, err := readAccountPublicKey(publicPath)
-	if err != nil || pub == "" {
-		return "", false
-	}
+	privatePath, _ := accountSSHKeyPaths(pool)
 	info, err := os.Lstat(privatePath)
 	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return "", false
@@ -468,6 +491,65 @@ func readAccountPublicKey(path string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(raw)), nil
+}
+
+func accountPrivateKeyExists(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if info.IsDir() {
+		return true, errors.New("ssh private key path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return true, errors.New("ssh private key path must not be a symlink")
+	}
+	return true, nil
+}
+
+func deriveAccountPublicKeyFromPrivate(path string) (string, error) {
+	exists, err := accountPrivateKeyExists(path)
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return "", nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, accountSSHKeyMaxFileBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(raw) > accountSSHKeyMaxFileBytes {
+		return "", fmt.Errorf("ssh private key exceeds %d bytes", accountSSHKeyMaxFileBytes)
+	}
+	block, _ := pem.Decode(bytes.TrimSpace(raw))
+	if block == nil {
+		return "", errors.New("ssh private key is not PEM encoded")
+	}
+	if block.Type != "PRIVATE KEY" {
+		return "", fmt.Errorf("unsupported private key PEM type %q", block.Type)
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	privateKey, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return "", fmt.Errorf("unsupported private key type %T", key)
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return "", errors.New("private key did not expose an Ed25519 public key")
+	}
+	return marshalOpenSSHEd25519PublicKey(publicKey, "affentserve"), nil
 }
 
 func marshalOpenSSHEd25519PublicKey(pub ed25519.PublicKey, comment string) string {

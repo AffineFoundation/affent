@@ -27,8 +27,9 @@ export function AccountSettingsPanel({
   const [value, setValue] = useState("");
   const envCount = settings?.env.length ?? 0;
   const ssh = settings?.ssh;
+  const hasPublicKey = !!ssh?.public_key;
   const title = loading ? "Loading" : error ? "Unavailable" : `${envCount} env${envCount === 1 ? "" : "s"}`;
-  const detail = ssh?.exists ? "SSH public key ready" : "Generate an SSH key before cloning private repos";
+  const detail = hasPublicKey ? "SSH public key ready" : ssh?.exists ? "SSH key found; public key unavailable" : "Generate an SSH key before cloning private repos";
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 
   async function submitEnv(event: FormEvent) {
@@ -65,6 +66,19 @@ export function AccountSettingsPanel({
                   <pre className="session-loop-protocol account-public-key" data-testid="account-public-key">{ssh.public_key}</pre>
                   <div className="session-loop-actions">
                     <CopyButton label="Copy public key" value={ssh.public_key} className="ghost-action" />
+                    {onRefresh ? (
+                      <button type="button" className="ghost-action" disabled={!!busy} onClick={() => void onRefresh()}>
+                        Refresh
+                      </button>
+                    ) : null}
+                  </div>
+                </>
+              ) : ssh?.exists ? (
+                <>
+                  <div className="session-skills-empty error" role="alert">
+                    {ssh.public_key_error || "Public key is missing for the existing SSH private key."}
+                  </div>
+                  <div className="session-loop-actions">
                     {onRefresh ? (
                       <button type="button" className="ghost-action" disabled={!!busy} onClick={() => void onRefresh()}>
                         Refresh
