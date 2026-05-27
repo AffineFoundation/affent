@@ -6669,6 +6669,8 @@ pre.code {
 
 .composer-actions {
   display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   padding-bottom: 3px;
@@ -6681,6 +6683,9 @@ pre.code {
 .primary-action,
 .secondary-action,
 .ghost-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 66px;
   height: 40px;
   border-radius: var(--radius-sm);
@@ -6716,6 +6721,55 @@ pre.code {
   border: 1px solid var(--border-strong);
   color: var(--text);
   background: var(--bg-raised);
+}
+
+.composer-automation {
+  position: relative;
+}
+
+.composer-automation summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  list-style: none;
+  user-select: none;
+  transition: border-color var(--motion-fast) ease, box-shadow var(--motion-fast) ease, transform var(--motion-fast) ease;
+}
+
+.composer-automation summary::-webkit-details-marker {
+  display: none;
+}
+
+.composer-automation[open] summary,
+.composer-automation summary:hover,
+.composer-automation summary:focus-visible {
+  border-color: rgba(20, 184, 166, 0.44);
+  box-shadow: 0 8px 20px rgba(20, 184, 166, 0.12);
+  outline: none;
+}
+
+.composer-automation-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 12;
+  display: grid;
+  gap: 4px;
+  min-width: 178px;
+  padding: 6px;
+  border: 1px solid rgba(189, 199, 211, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-pop);
+  backdrop-filter: blur(18px) saturate(1.08);
+  animation: detail-reveal var(--motion-panel) var(--ease-snap);
+}
+
+.composer-automation-menu .ghost-action {
+  justify-content: flex-start;
+  width: 100%;
+  height: 34px;
+  text-align: left;
 }
 
 .ghost-action {
@@ -7796,6 +7850,11 @@ html[data-theme="dark"] .ghost-action {
   color: var(--text);
 }
 
+html[data-theme="dark"] .composer-automation-menu {
+  border-color: rgba(58, 68, 81, 0.92);
+  background: rgba(17, 20, 24, 0.94);
+}
+
 html[data-theme="dark"] ::selection {
   background: rgba(45, 212, 191, 0.28);
 }
@@ -8329,6 +8388,12 @@ html[data-theme="dark"] ::selection {
   .composer[data-resume-idle="true"] {
     grid-template-columns: minmax(0, 1fr) auto;
   }
+  .composer:has(.composer-automation[open]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .composer:has(.composer-automation[open]) .composer-actions {
+    grid-column: 1 / -1;
+  }
   .composer[data-resume-idle="true"] .composer-intent {
     grid-column: 1 / -1;
     min-height: 18px;
@@ -8351,6 +8416,20 @@ html[data-theme="dark"] ::selection {
   .composer-actions {
     justify-content: flex-end;
     padding-bottom: 1px;
+  }
+  .composer-automation[open] {
+    flex: 1 0 100%;
+    order: -1;
+  }
+  .composer-automation[open] summary {
+    width: 100%;
+  }
+  .composer-automation[open] .composer-automation-menu {
+    position: static;
+    width: 100%;
+    min-width: 0;
+    margin-top: 6px;
+    box-shadow: var(--shadow-soft);
   }
   .primary-action,
   .secondary-action,

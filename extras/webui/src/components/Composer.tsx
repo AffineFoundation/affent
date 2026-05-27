@@ -29,6 +29,10 @@ export function Composer({
   runtimeCapabilities,
   onSubmit,
   onStartLoop,
+  onScheduleLoopTick,
+  onScheduleCheckIn,
+  onScheduleDaily,
+  automationBusy,
   onCancel,
 }: {
   disabled: boolean;
@@ -42,6 +46,10 @@ export function Composer({
   runtimeCapabilities?: RuntimeCapabilityView;
   onSubmit: (content: string) => Promise<void>;
   onStartLoop?: (goal: string) => Promise<void>;
+  onScheduleLoopTick?: () => Promise<void> | void;
+  onScheduleCheckIn?: () => Promise<void> | void;
+  onScheduleDaily?: () => Promise<void> | void;
+  automationBusy?: "loop" | "checkin" | "daily";
   onCancel: () => Promise<void>;
 }) {
   const [content, setContent] = useState("");
@@ -99,6 +107,11 @@ export function Composer({
     } catch {
       textareaRef.current?.focus();
     }
+  }
+
+  async function runAutomation(action?: () => Promise<void> | void) {
+    if (!action || disabled || busy || cancelling || automationBusy) return;
+    await action();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -184,6 +197,7 @@ export function Composer({
   const composerMeta = composerMetaLabel({ contentText, lineCount, draftContext, busy, cancelling, hasSession, resumeSession });
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
+  const hasAutomation = !!(onStartLoop || onScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
   const placeholder = "Message Affent...";
   const primaryLabel = primaryActionLabel({
     busy,
@@ -265,10 +279,32 @@ export function Composer({
             {cancelling ? "Stopping" : "Stop"}
           </button>
         ) : null}
-        {!busy && onStartLoop && content.trim() !== "" ? (
-          <button type="button" className="secondary-action" disabled={cancelling} onClick={() => void startLoop()}>
-            Set up loop
-          </button>
+        {!busy && hasAutomation ? (
+          <details className="composer-automation" data-testid="composer-automation">
+            <summary className="secondary-action">Automation</summary>
+            <div className="composer-automation-menu">
+              {onStartLoop ? (
+                <button type="button" className="ghost-action" disabled={!hasContent || cancelling || !!automationBusy} onClick={() => void startLoop()}>
+                  Set up loop
+                </button>
+              ) : null}
+              {onScheduleCheckIn ? (
+                <button type="button" className="ghost-action" disabled={!hasSession || cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleCheckIn)}>
+                  {automationBusy === "checkin" ? "Scheduling" : "Check in 1h"}
+                </button>
+              ) : null}
+              {onScheduleLoopTick ? (
+                <button type="button" className="ghost-action" disabled={!hasSession || cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleLoopTick)}>
+                  {automationBusy === "loop" ? "Scheduling" : "Loop every 30m"}
+                </button>
+              ) : null}
+              {onScheduleDaily ? (
+                <button type="button" className="ghost-action" disabled={!hasSession || cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleDaily)}>
+                  {automationBusy === "daily" ? "Scheduling" : "Daily check-in"}
+                </button>
+              ) : null}
+            </div>
+          </details>
         ) : null}
         <button type="button" className="primary-action" disabled={content.trim() === "" || cancelling} onClick={() => void submit()}>
           {primaryLabel}

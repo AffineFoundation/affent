@@ -231,8 +231,8 @@ export function App() {
   const selectedScheduleState = scheduleState.state !== "idle" && scheduleState.sessionId === selectedSessionId
     ? scheduleState
     : { state: "idle" as const };
-  const showLoopContext = !demoActive && !!selectedSessionId;
-  const showScheduleContext = !demoActive && !!selectedSessionId;
+  const showLoopContext = !demoActive && !!selectedSessionId && shouldShowLoopContext(selectedSession, selectedLoopState, selectedLoopProtocolState, loopProtocolBusy);
+  const showScheduleContext = !demoActive && !!selectedSessionId && shouldShowScheduleContext(selectedSession, selectedScheduleState, scheduleBusy, deletingScheduleId, updatingScheduleId);
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
   const memoryUpdateCount = useMemo(
     () => session.turns.reduce((sum, turn) => sum + memoryUpdatesForTurn(turn).length, 0),
@@ -277,7 +277,11 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const showSurfaceContext = showChatContext || showWorkflowStatus || showLoopContext || showScheduleContext;
+  const showAutomationContext = showLoopContext || showScheduleContext;
+  const automationContext = showAutomationContext
+    ? automationContextDisplay(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState)
+    : undefined;
+  const showSurfaceContext = showChatContext || showWorkflowStatus || showAutomationContext;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -1393,41 +1397,49 @@ export function App() {
                   loading={planState.state === "loading"}
                   error={planState.state === "error" ? planState.error : undefined}
                 />
-                {showLoopContext ? (
-                  <SessionLoopPanel
-                    summary={selectedSession?.loop_protocol}
-                    state={selectedLoopState}
-                    disabling={loopProtocolBusy}
-                    defaultGoal={selectedSessionTitle ?? selectedSessionId}
-                    starting={loopProtocolBusy || actionBusy || session.status === "running"}
-                    onStart={handleStartLoop}
-                    onDisable={handleDisableLoopProtocol}
-                    protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
-                    events={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.events : undefined}
-                    loadingProtocol={selectedLoopProtocolState.state === "loading"}
-                    protocolError={selectedLoopProtocolState.state === "error" ? selectedLoopProtocolState.error : undefined}
-                    onLoadProtocol={handleLoadLoopProtocol}
-                    onUseAsDraft={handleUseLoopProtocolDraft}
-                  />
-                ) : null}
-                {showScheduleContext ? (
-                  <SessionSchedulePanel
-                    summary={selectedSession?.schedules}
-                    schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
-                    busy={scheduleBusy}
-                    disabled={actionBusy || session.status === "running"}
-                    loading={selectedScheduleState.state === "loading"}
-                    error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
-                    deletingId={deletingScheduleId}
-                    updatingId={updatingScheduleId}
-                    loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
-                    onLoadSchedules={handleLoadSchedules}
-                    onUpdateSchedule={handleUpdateSchedule}
-                    onDeleteSchedule={handleDeleteSchedule}
-                    onScheduleLoopTick={() => handleCreateSchedule("loop")}
-                    onScheduleCheckIn={() => handleCreateSchedule("checkin")}
-                    onScheduleDaily={() => handleCreateSchedule("daily")}
-                  />
+                {showAutomationContext && automationContext ? (
+                  <details className="session-plan-panel session-automation-panel" data-testid="session-automation-panel">
+                    <summary className="session-plan-summary">
+                      <span className="session-plan-kicker">Automation</span>
+                      <strong>{automationContext.title}</strong>
+                      <span>{automationContext.detail}</span>
+                    </summary>
+                    <div className="session-plan-body session-automation-body">
+                      {showLoopContext ? (
+                        <SessionLoopPanel
+                          summary={selectedSession?.loop_protocol}
+                          state={selectedLoopState}
+                          disabling={loopProtocolBusy}
+                          defaultGoal={selectedSessionTitle ?? selectedSessionId}
+                          starting={loopProtocolBusy || actionBusy || session.status === "running"}
+                          onStart={handleStartLoop}
+                          onDisable={handleDisableLoopProtocol}
+                          protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
+                          events={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.events : undefined}
+                          loadingProtocol={selectedLoopProtocolState.state === "loading"}
+                          protocolError={selectedLoopProtocolState.state === "error" ? selectedLoopProtocolState.error : undefined}
+                          onLoadProtocol={handleLoadLoopProtocol}
+                          onUseAsDraft={handleUseLoopProtocolDraft}
+                        />
+                      ) : null}
+                      {showScheduleContext ? (
+                        <SessionSchedulePanel
+                          summary={selectedSession?.schedules}
+                          schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
+                          busy={scheduleBusy}
+                          disabled={actionBusy || session.status === "running"}
+                          loading={selectedScheduleState.state === "loading"}
+                          error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
+                          deletingId={deletingScheduleId}
+                          updatingId={updatingScheduleId}
+                          loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
+                          onLoadSchedules={handleLoadSchedules}
+                          onUpdateSchedule={handleUpdateSchedule}
+                          onDeleteSchedule={handleDeleteSchedule}
+                        />
+                      ) : null}
+                    </div>
+                  </details>
                 ) : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>
@@ -1466,6 +1478,10 @@ export function App() {
               runtimeCapabilities={capabilityView}
               onSubmit={handleSend}
               onStartLoop={handleStartLoop}
+              onScheduleLoopTick={() => handleCreateSchedule("loop")}
+              onScheduleCheckIn={() => handleCreateSchedule("checkin")}
+              onScheduleDaily={() => handleCreateSchedule("daily")}
+              automationBusy={scheduleBusy}
               onCancel={handleCancel}
             />
           </section>
@@ -1638,6 +1654,91 @@ function lastRawEventId(events: readonly RawEvent[]): number {
 
 function hasRecoveryMetric(overview: SessionOverview): boolean {
   return overview.metrics.some((metric) => metric.label === "Recovery" && metric.value.trim() !== "");
+}
+
+function shouldShowLoopContext(
+  session: SessionSummary | undefined,
+  state: SessionSummary["loop_state"] | undefined,
+  panelState: LoopProtocolState | { state: "idle" },
+  busy: boolean,
+): boolean {
+  if (busy || panelState.state !== "idle") return true;
+  if (session?.has_loop_protocol || session?.loop_protocol) return true;
+  const status = compactStatus(state?.status);
+  return !!status && status !== "off";
+}
+
+function shouldShowScheduleContext(
+  session: SessionSummary | undefined,
+  panelState: ScheduleState | { state: "idle" },
+  busy: "loop" | "checkin" | "daily" | undefined,
+  deletingId: string | undefined,
+  updatingId: string | undefined,
+): boolean {
+  if (busy || deletingId || updatingId || panelState.state === "loading" || panelState.state === "error") return true;
+  if (panelState.state === "ready" && panelState.schedules.length > 0) return true;
+  if (session?.has_schedules && !session.schedules) return true;
+  const summary = session?.schedules;
+  if (!summary) return false;
+  if (summary.count > 0 || summary.enabled > 0 || (summary.pending_loop_ticks ?? 0) > 0) return true;
+  return (summary.error_count ?? 0) > 0 || !!summary.last_error;
+}
+
+function compactStatus(value: string | undefined): string | undefined {
+  const compacted = value?.replace(/\s+/g, " ").trim().toLowerCase();
+  return compacted || undefined;
+}
+
+function automationContextDisplay(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  loopPanelState: LoopProtocolState | { state: "idle" },
+  schedulePanelState: ScheduleState | { state: "idle" },
+): { title: string; detail: string } {
+  const parts = [
+    loopAutomationLabel(session, loopState, loopPanelState),
+    scheduleAutomationLabel(session, schedulePanelState),
+  ].filter((part): part is string => !!part);
+  return {
+    title: parts.length > 0 ? parts.join(" · ") : "Attention",
+    detail: "Long-running protocol and timers share one automation surface",
+  };
+}
+
+function loopAutomationLabel(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  panelState: LoopProtocolState | { state: "idle" },
+): string | undefined {
+  if (panelState.state === "loading") return "Loop loading";
+  if (panelState.state === "error") return "Loop error";
+  const status = compactStatus(loopState?.status ?? session?.loop_protocol?.status);
+  if (!status || status === "off") return undefined;
+  if (status === "draft") {
+    const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
+    return answers > 0 ? "Loop review" : "Loop waiting";
+  }
+  return `Loop ${status}`;
+}
+
+function scheduleAutomationLabel(
+  session: SessionSummary | undefined,
+  panelState: ScheduleState | { state: "idle" },
+): string | undefined {
+  if (panelState.state === "loading") return "Timers loading";
+  if (panelState.state === "error") return "Timers error";
+  const visibleSchedules = panelState.state === "ready" ? panelState.schedules.length : 0;
+  const visibleEnabled = panelState.state === "ready" ? panelState.schedules.filter((schedule) => schedule.enabled).length : 0;
+  const summary = session?.schedules;
+  const pending = summary?.pending_loop_ticks ?? 0;
+  if (pending > 0) return `${pending} timer pending`;
+  if ((summary?.error_count ?? 0) > 0 || summary?.last_error) return "Timer failed";
+  const enabled = Math.max(summary?.enabled ?? 0, visibleEnabled);
+  if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} active`;
+  const count = Math.max(summary?.count ?? 0, visibleSchedules);
+  if (count > 0) return `${count} timer${count === 1 ? "" : "s"} paused`;
+  if (session?.has_schedules) return "Timers available";
+  return undefined;
 }
 
 function ChatContextBar({ overview }: { overview: SessionOverview }) {
