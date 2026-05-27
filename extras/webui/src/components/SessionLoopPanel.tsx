@@ -80,6 +80,7 @@ export function SessionLoopPanel({
   const updates = state?.protocol_updates ?? 0;
   const event = compact(state?.last_event_summary);
   const memory = loopMemoryUpdate(state);
+  const compaction = loopCompaction(state);
   const disabled = status === "disabled";
   const draft = status === "draft";
   const title = disabled ? "Disabled" : statusLabel(status);
@@ -100,6 +101,7 @@ export function SessionLoopPanel({
           {feeds > 0 ? <LoopField label="Feeds" value={String(feeds)} /> : null}
           {updates > 0 ? <LoopField label="Updates" value={String(updates)} /> : null}
           {memory ? <LoopField label="Memory" value={memory} /> : null}
+          {compaction ? <LoopField label="Compaction" value={compaction} /> : null}
           {compact(state?.last_decision_kind) ? (
             <LoopField label="Decision" value={[state?.last_decision_kind, state?.last_decision].filter(Boolean).join(":")} />
           ) : null}
@@ -248,6 +250,17 @@ function memoryActionLabel(action: string): string {
   if (action === "replace") return "Replaced";
   if (action === "remove") return "Removed";
   return action;
+}
+
+function loopCompaction(state?: SessionLoopState): string | undefined {
+  if (!state) return undefined;
+  const count = state.context_compactions ?? 0;
+  const parts = [
+    count > 0 ? `${count} ${count === 1 ? "compaction" : "compactions"}` : undefined,
+    state.last_context_compaction_reactive ? "reactive" : undefined,
+    compact(state.last_context_compaction_reason),
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 function loopDetail({

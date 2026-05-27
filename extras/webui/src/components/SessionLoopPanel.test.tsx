@@ -47,6 +47,28 @@ describe("SessionLoopPanel", () => {
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("2 memory updates");
   });
 
+  it("surfaces context compaction state as loop recovery context", () => {
+    render(
+      <SessionLoopPanel
+        summary={{ path: ".affent/loops/loop-compact/LOOP.md", status: "running", bytes: 512 }}
+        state={{
+          version: 1,
+          loop_id: "loop-compact",
+          status: "running",
+          context_compactions: 3,
+          last_context_compaction_reactive: true,
+          last_context_compaction_reason: "context_overflow",
+        }}
+      />,
+    );
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Compaction");
+    expect(panel).toHaveTextContent("3 compactions");
+    expect(panel).toHaveTextContent("reactive");
+    expect(panel).toHaveTextContent("context_overflow");
+  });
+
   it("renders recent loop protocol events returned with LOOP.md", () => {
     render(
       <SessionLoopPanel
