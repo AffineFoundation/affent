@@ -58,7 +58,7 @@ type accountSSHKeyInfo struct {
 	Exists         bool   `json:"exists"`
 	PublicKey      string `json:"public_key,omitempty"`
 	PublicKeyPath  string `json:"public_key_path,omitempty"`
-	PrivateKeyPath string `json:"private_key_path,omitempty"`
+	PrivateKeyPath string `json:"-"`
 	Created        bool   `json:"created,omitempty"`
 	PublicKeyError string `json:"public_key_error,omitempty"`
 }

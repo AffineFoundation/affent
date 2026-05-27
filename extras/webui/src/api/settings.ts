@@ -10,7 +10,6 @@ export interface AccountSSHKeyInfo {
   exists: boolean;
   public_key?: string;
   public_key_path?: string;
-  private_key_path?: string;
   created?: boolean;
   public_key_error?: string;
 }

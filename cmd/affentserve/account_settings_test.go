@@ -85,6 +85,9 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 		t.Fatalf("first ssh = %+v, want generated public key", first.SSH)
 	}
 	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), privatePath) {
+		t.Fatalf("generate ssh response leaked private key path: %s", w.Body.String())
+	}
 	privateInfo, err := os.Stat(privatePath)
 	if err != nil {
 		t.Fatalf("stat private key: %v", err)
@@ -111,6 +114,9 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	}
 	if second.SSH.PublicKey != first.SSH.PublicKey {
 		t.Fatalf("public key changed on second ensure:\nfirst=%s\nsecond=%s", first.SSH.PublicKey, second.SSH.PublicKey)
+	}
+	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), privatePath) {
+		t.Fatalf("existing ssh response leaked private key path: %s", w.Body.String())
 	}
 	pairs := pool.accountEnvPairs()
 	gitSSHCommand := findEnvPairValue(pairs, "GIT_SSH_COMMAND")
