@@ -395,6 +395,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     sourceAccess?.httpStatus ? `http ${sourceAccess.httpStatus}` : undefined,
     sourceAccess?.contentType,
     sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
+    sourceAccess?.resultPreview ? `preview ${sourceAccess.resultPreview}` : undefined,
     toolContextMeta(contextBytes, contextOmittedBytes),
     artifactPath
       ? `artifact ${artifactDisplayLabel({

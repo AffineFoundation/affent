@@ -118,7 +118,7 @@ describe("EventTrace", () => {
     render(<EventTrace events={events} />);
 
     expect(screen.getByText("Action finished")).toBeInTheDocument();
-    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120 · from https://taostats.io/subnets/120 · ref n1 · http 200 · application/json")).toBeInTheDocument();
+    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120 · from https://taostats.io/subnets/120 · ref n1 · http 200 · application/json · preview {\"price\":\"0.06342 T\"}")).toBeInTheDocument();
     expect(screen.getByText("network")).toBeInTheDocument();
   });
 

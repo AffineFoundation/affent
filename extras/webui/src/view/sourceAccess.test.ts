@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
+import { describeSourceAccess, sourceAccessResultPreview, sourceEvidenceLabel } from "./sourceAccess";
 
 describe("describeSourceAccess", () => {
   it("classifies rendered dynamic partial, network, discovery, and verified sources", () => {
@@ -18,6 +18,7 @@ describe("describeSourceAccess", () => {
       httpStatus: "200",
       contentType: "application/json",
       jsonPath: "$.data.items[0].price",
+      resultPreview: "JSON_PATH: $.data.items[0].price \"0.06342 T\"",
     });
 
     expect(describeSourceAccess("SourceAccess: browser_rendered_url=https://search.example/?q=affine; page_text_below=search_results_discovery_only\nPAGE TEXT:\nresult")).toMatchObject({
@@ -34,5 +35,10 @@ describe("describeSourceAccess", () => {
     expect(describeSourceAccess("SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=verified_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value")).toMatchObject({
       status: "dynamic_partial",
     });
+  });
+
+  it("extracts compact source evidence previews after the provenance header", () => {
+    expect(sourceAccessResultPreview("SourceAccess: fetched_url=https://example.test/report\n\nPAGE TEXT:\nPrice 0.06342 T\nMarket Cap 201.04K T")).toBe("PAGE TEXT: Price 0.06342 T Market Cap 201.04K T");
+    expect(sourceAccessResultPreview("no source header\nbody")).toBeUndefined();
   });
 });

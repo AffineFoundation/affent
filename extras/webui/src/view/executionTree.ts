@@ -1,5 +1,6 @@
 import type { ToolCallState, ToolCallStatus, TurnState } from "../store/sessionState";
 import { formatByteCount } from "./byteFormat";
+import { sourceAccessResultPreview } from "./sourceAccess";
 
 export type ExecutionNodeKind = "tool" | "subagent" | "focused_task" | "mcp";
 
@@ -346,6 +347,8 @@ function previewFor(tool: string, resultSummary?: string, resultText?: string, p
     const sessionSearch = sessionSearchPreview(parsed);
     if (sessionSearch) return sessionSearch;
   }
+  const sourcePreview = sourceAccessResultPreview(resultText) ?? sourceAccessResultPreview(resultSummary);
+  if (sourcePreview) return sourcePreview;
   const finding = readFindings(parsed)[0];
   const raw =
     readString(parsed, "summary") ??

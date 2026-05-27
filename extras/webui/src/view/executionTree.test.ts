@@ -144,4 +144,33 @@ describe("buildExecutionTree", () => {
     expect(search.title).toBe("Search history Alpha Coast marker");
     expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · message 8 · matched alpha, coast · context · 1 more");
   });
+
+  it("previews source evidence body instead of the SourceAccess header", () => {
+    const [source] = buildExecutionTree(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "browser_network_read",
+          args: { ref: "n2", json_path: "$.price" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: "SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://app.taostats.io/subnets/120; ref=n2; status=200; content_type=application/json; source_method=network_xhr_fetch",
+          result: "SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://app.taostats.io/subnets/120; ref=n2; status=200; content_type=application/json; source_method=network_xhr_fetch\nJSON_PATH: $.price\n\"0.06342 T\"",
+        },
+      },
+    ]).turns[0]);
+
+    expect(source.label).toBe("MCP action");
+    expect(source.preview).toBe("JSON_PATH: $.price \"0.06342 T\"");
+  });
 });

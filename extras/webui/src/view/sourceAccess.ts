@@ -11,6 +11,7 @@ export interface SourceAccessInfo {
   ref?: string;
   httpStatus?: string;
   contentType?: string;
+  resultPreview?: string;
   status: SourceEvidenceStatus;
 }
 
@@ -31,10 +32,20 @@ export function describeSourceAccess(result: string | undefined): SourceAccessIn
     ref: fields.ref,
     httpStatus: fields.status,
     contentType: fields.content_type,
+    resultPreview: sourceAccessResultPreview(result),
     status: "verified",
   };
   info.status = sourceEvidenceStatus(info, result ?? "");
   return info;
+}
+
+export function sourceAccessResultPreview(result: string | undefined, maxChars = 132): string | undefined {
+  if (!result) return undefined;
+  const lines = result.split(/\r?\n/);
+  const sourceLineIndex = lines.findIndex((line) => line.trimStart().startsWith("SourceAccess:"));
+  if (sourceLineIndex < 0) return undefined;
+  const body = lines.slice(sourceLineIndex + 1).join("\n");
+  return compactLine(body, maxChars);
 }
 
 export function sourceEvidenceLabel(info: SourceAccessInfo): string {
@@ -83,4 +94,14 @@ function sourceAccessFields(line: string): Record<string, string> {
     fields[key] = value;
   }
   return fields;
+}
+
+function compactLine(value: string, maxChars: number): string | undefined {
+  const line = value
+    .replace(/\r?\n+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!line) return undefined;
+  if (line.length <= maxChars) return line;
+  return `${line.slice(0, Math.max(0, maxChars - 1))}...`;
 }

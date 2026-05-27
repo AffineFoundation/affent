@@ -398,7 +398,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Action finished",
-        meta: ["browser_navigate", "42 ms", "partial source", "https://taostats.io/subnets/120"],
+        meta: ["browser_navigate", "42 ms", "partial source", "https://taostats.io/subnets/120", "preview PAGE TEXT: Market Cap"],
         badges: ["dynamic_partial"],
       },
     });
@@ -439,6 +439,7 @@ describe("eventTrace view model", () => {
           "ref n2",
           "http 200",
           "application/json",
+          "preview {\"price\":\"0.06342 T\"}",
         ],
         badges: ["network"],
       },
