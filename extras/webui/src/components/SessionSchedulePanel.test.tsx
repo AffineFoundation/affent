@@ -3,6 +3,58 @@ import { describe, expect, it } from "vitest";
 import { SessionSchedulePanel } from "./SessionSchedulePanel";
 
 describe("SessionSchedulePanel", () => {
+  it("blocks resuming paused loop ticks until LOOP.md is running", () => {
+    render(
+      <SessionSchedulePanel
+        loopStatus="draft"
+        onUpdateSchedule={() => undefined}
+        summary={{ count: 1, enabled: 0, enabled_loop_ticks: 0 }}
+        schedules={[
+          {
+            id: "sched_paused_loop",
+            kind: "loop_tick",
+            prompt: "Scheduled loop tick for session: runtime",
+            enabled: false,
+            next_run_at: "2026-05-27T14:00:00Z",
+            repeat_interval_seconds: 1800,
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+            last_error: "LOOP.md not running; answer calibration first",
+          },
+        ]}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Activate loop first" });
+    expect(button).toBeDisabled();
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Paused");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("LOOP.md not running");
+  });
+
+  it("allows resuming paused loop ticks once LOOP.md is running", () => {
+    render(
+      <SessionSchedulePanel
+        loopStatus="running"
+        onUpdateSchedule={() => undefined}
+        summary={{ count: 1, enabled: 0, enabled_loop_ticks: 0 }}
+        schedules={[
+          {
+            id: "sched_paused_loop",
+            kind: "loop_tick",
+            prompt: "Scheduled loop tick for session: runtime",
+            enabled: false,
+            next_run_at: "2026-05-27T14:00:00Z",
+            repeat_interval_seconds: 1800,
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
+  });
+
   it("shows enabled loop ticks as pending until LOOP.md is running", () => {
     render(
       <SessionSchedulePanel

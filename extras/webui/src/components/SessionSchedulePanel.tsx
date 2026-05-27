@@ -79,10 +79,10 @@ export function SessionSchedulePanel({
                     <button
                       type="button"
                       className="ghost-action"
-                      disabled={!!deletingId || !!updatingId}
+                      disabled={scheduleUpdateDisabled(schedule, loopStatus, deletingId, updatingId)}
                       onClick={() => void onUpdateSchedule(schedule.id, !schedule.enabled)}
                     >
-                      {updatingId === schedule.id ? "Updating" : schedule.enabled ? "Pause" : "Resume"}
+                      {scheduleUpdateLabel(schedule, loopStatus, updatingId)}
                     </button>
                   ) : null}
                   {onDeleteSchedule ? (
@@ -168,6 +168,21 @@ function scheduleMeta(schedule: SessionSchedule, loopStatus?: string): string {
 function scheduleStatusLabel(schedule: SessionSchedule, loopStatus?: string): string {
   if (loopTimerPendingCalibration(schedule, loopStatus)) return "Pending calibration";
   return schedule.enabled ? "Active" : "Paused";
+}
+
+function scheduleUpdateDisabled(schedule: SessionSchedule, loopStatus?: string, deletingId?: string, updatingId?: string): boolean {
+  return !!deletingId || !!updatingId || loopTimerResumeNeedsActivation(schedule, loopStatus);
+}
+
+function scheduleUpdateLabel(schedule: SessionSchedule, loopStatus?: string, updatingId?: string): string {
+  if (updatingId === schedule.id) return "Updating";
+  if (schedule.enabled) return "Pause";
+  if (loopTimerResumeNeedsActivation(schedule, loopStatus)) return "Activate loop first";
+  return "Resume";
+}
+
+function loopTimerResumeNeedsActivation(schedule: SessionSchedule, loopStatus?: string): boolean {
+  return schedule.kind === "loop_tick" && !schedule.enabled && !loopProtocolRunning(loopStatus);
 }
 
 function pendingLoopTimerCount(schedules?: SessionSchedule[], summary?: SessionSchedulesSummary, loopStatus?: string): number {
