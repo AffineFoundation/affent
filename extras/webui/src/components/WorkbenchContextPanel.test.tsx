@@ -72,6 +72,26 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-status")).not.toHaveTextContent("npm test -- checkout.spec.ts: Next");
   });
 
+  it("keeps the completed chat state in the collapsed summary", () => {
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        overview={overview({
+          headline: "Checkout route inspected",
+          detail: "Read src/payments.ts and found the route handler.",
+          stateLabel: "Result ready",
+          tone: "success",
+        })}
+      />,
+    );
+
+    const summary = within(screen.getByTestId("workbench-context-panel")).getByText("Context").closest("summary");
+    expect(summary).toHaveTextContent("Result ready");
+    expect(summary).toHaveTextContent("Checkout route inspected");
+    expect(summary).not.toHaveTextContent("Chat ready");
+  });
+
   it("keeps fresh-task Workbench context short and actionable", () => {
     render(
       <WorkbenchContextPanel

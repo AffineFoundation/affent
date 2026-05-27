@@ -67,5 +67,5 @@ function contextSummary(overview: SessionOverview, hasSelectedSession: boolean):
   if (!hasSelectedSession) return "Fresh task";
   if (overview.tone === "error") return "Needs attention";
   if (overview.tone === "warning") return "Review needed";
-  return "Chat ready";
+  return overview.stateLabel || "Chat ready";
 }
