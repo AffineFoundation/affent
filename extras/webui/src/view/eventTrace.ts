@@ -349,8 +349,23 @@ function loopProtocolFeedMeta(event: NormalizedEvent, turn: string | undefined):
     readString(event.data, "loop_id"),
     feedNumber ? `feed ${feedNumber}` : undefined,
     feeds && feeds !== feedNumber ? `${feeds} total` : undefined,
+    loopProtocolPlanMeta(event),
     readString(event.data, "protocol_path"),
   ]);
+}
+
+function loopProtocolPlanMeta(event: NormalizedEvent): string | undefined {
+  const label = readString(event.data, "plan_label");
+  const index = readNumber(event.data, "plan_current_step_index");
+  const status = readString(event.data, "plan_current_step_status");
+  const step = readString(event.data, "plan_current_step");
+  if (!label && !index && !step) return undefined;
+  const current = index ? `step ${index}${status ? ` ${status}` : ""}` : status;
+  return compact([
+    label ? `plan ${label}` : "plan",
+    current,
+    step ? streamSummary(step) : undefined,
+  ]).join(" · ");
 }
 
 function loopProtocolFeedBadges(event: NormalizedEvent): string[] {

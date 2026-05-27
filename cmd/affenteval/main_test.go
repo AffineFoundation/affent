@@ -939,7 +939,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ByMode: map[string]int{"digest": 1, "full": 1},
 			Latest: agenteval.LoopProtocolFeed{LoopID: "longrun", Status: "running", Mode: "digest", FeedNumber: 2, ProtocolFeeds: 2, ProtocolPath: ".affent/loops/longrun/LOOP.md"},
 			Examples: []agenteval.LoopProtocolFeed{
-				{LoopID: "longrun", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/longrun/LOOP.md"},
+				{LoopID: "longrun", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/longrun/LOOP.md", PlanLabel: "plan:1/3:active", PlanCurrentStepIndex: 2, PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "verify browser evidence"},
 			},
 		},
 		ContextCompactions: agenteval.ContextCompactionStats{
@@ -1031,7 +1031,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
-		"loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md",
+		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence"`,
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
 	} {
@@ -1883,7 +1883,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ByMode: map[string]int{"digest": 1, "full": 1},
 			Latest: agenteval.LoopProtocolFeed{LoopID: "sample-loop", Status: "running", Mode: "digest", FeedNumber: 2, ProtocolFeeds: 2, ProtocolPath: ".affent/loops/sample-loop/LOOP.md"},
 			Examples: []agenteval.LoopProtocolFeed{
-				{LoopID: "sample-loop", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/sample-loop/LOOP.md"},
+				{LoopID: "sample-loop", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/sample-loop/LOOP.md", PlanLabel: "plan:1/2:active", PlanCurrentStepIndex: 2, PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "finish implementation"},
 			},
 		},
 		ContextCompactions: agenteval.ContextCompactionStats{
@@ -2269,6 +2269,10 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		loopProtocolFeedExample["loop_id"] != "sample-loop" ||
 		loopProtocolFeedExample["mode"] != "full" ||
 		loopProtocolFeedExample["feed_number"] != float64(1) ||
+		loopProtocolFeedExample["plan_label"] != "plan:1/2:active" ||
+		loopProtocolFeedExample["plan_current_step_index"] != float64(2) ||
+		loopProtocolFeedExample["plan_current_step_status"] != "in_progress" ||
+		loopProtocolFeedExample["plan_current_step"] != "finish implementation" ||
 		loopProtocolFeedExample["protocol_path"] != ".affent/loops/sample-loop/LOOP.md" {
 		t.Fatalf("loop_protocol_feed_example = %#v\njson=%s", loopProtocolFeedExamples[0], out.String())
 	}
@@ -2821,13 +2825,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		LoopProtocolFeeds:      2,
 		LoopProtocolFeedByMode: map[string]int{"digest": 1, "full": 1},
 		LoopProtocolFeedExamples: []agenteval.LoopProtocolFeed{{
-			Scenario:      "taostats-rendered",
-			LoopID:        "taostats-rendered",
-			Status:        "running",
-			Mode:          "digest",
-			FeedNumber:    4,
-			ProtocolFeeds: 4,
-			ProtocolPath:  ".affent/loops/taostats-rendered/LOOP.md",
+			Scenario:              "taostats-rendered",
+			LoopID:                "taostats-rendered",
+			Status:                "running",
+			Mode:                  "digest",
+			FeedNumber:            4,
+			ProtocolFeeds:         4,
+			ProtocolPath:          ".affent/loops/taostats-rendered/LOOP.md",
+			PlanLabel:             "plan:2/5:active",
+			PlanCurrentStepIndex:  3,
+			PlanCurrentStepStatus: "in_progress",
+			PlanCurrentStep:       "read taostats network evidence",
 		}},
 		ContextCompactions:              1,
 		ContextCompactionsReactive:      1,
@@ -3400,7 +3408,11 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		loopProtocolFeedExample["scenario"] != "taostats-rendered" ||
 		loopProtocolFeedExample["loop_id"] != "taostats-rendered" ||
 		loopProtocolFeedExample["mode"] != "digest" ||
-		loopProtocolFeedExample["feed_number"] != float64(4) {
+		loopProtocolFeedExample["feed_number"] != float64(4) ||
+		loopProtocolFeedExample["plan_label"] != "plan:2/5:active" ||
+		loopProtocolFeedExample["plan_current_step_index"] != float64(3) ||
+		loopProtocolFeedExample["plan_current_step_status"] != "in_progress" ||
+		loopProtocolFeedExample["plan_current_step"] != "read taostats network evidence" {
 		t.Fatalf("loop_protocol_feed_example = %#v\njson=%s", loopProtocolFeedExamples[0], out.String())
 	}
 	contextCompactionExamples, ok := got["context_compaction_examples"].([]any)

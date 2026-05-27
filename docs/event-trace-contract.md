@@ -259,10 +259,18 @@ diagnostics.
 - `feed_number`: durable per-loop feed sequence number.
 - `protocol_feeds`: optional durable feed count after this feed.
 - `protocol_path`: optional workspace/session-relative protocol path.
+- `plan_label`: optional active persisted-plan summary label captured at feed
+  time, such as `plan:1/3:active`.
+- `plan_current_step_index`: optional 1-based current plan step index captured
+  at feed time.
+- `plan_current_step_status`: optional status for the current plan step.
+- `plan_current_step`: optional compact current plan step text.
 
 This event mirrors the sidecar `.affent/loops/<id>/events.jsonl` feed record
 into the normal session trace/SSE stream, so WebUI, replay, and eval tooling can
-inspect loop context pressure without separately reading loop files.
+inspect loop context pressure without separately reading loop files. Plan
+checkpoint fields are recovery pointers only; the persisted plan state remains
+the step authority.
 
 ### `error`
 

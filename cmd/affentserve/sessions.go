@@ -23,6 +23,7 @@ import (
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -676,7 +677,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	if !p.cfg.EvalMode {
-		loop.SkillProvider = agent.WithLoopProtocolSkillProvider(loopProtocolPath, loop.SkillProvider)
+		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	if p.cfg.EnableSubagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
@@ -768,6 +769,28 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	go s.fanout()
 	return s, nil
+}
+
+func loopProtocolPlanCheckpointProvider(planPath string) agent.LoopProtocolCheckpointProvider {
+	if strings.TrimSpace(planPath) == "" {
+		return nil
+	}
+	return func() loopstate.PlanCheckpoint {
+		summary, found := planstate.SummarizeFile(planPath)
+		if !found || summary.Done || summary.Label == "" ||
+			summary.Label == planstate.LabelMissing ||
+			summary.Label == planstate.LabelEmpty ||
+			summary.Label == planstate.LabelError {
+			return loopstate.PlanCheckpoint{Valid: true}
+		}
+		return loopstate.PlanCheckpoint{
+			Valid:      true,
+			Label:      summary.Label,
+			StepIndex:  summary.CurrentStepIndex,
+			StepStatus: summary.CurrentStepStatus,
+			Step:       summary.CurrentStep,
+		}
+	}
 }
 
 func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, int64, error) {

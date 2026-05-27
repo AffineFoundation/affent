@@ -627,10 +627,14 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   const status = session.loop_protocol?.status?.trim() ?? state?.status?.trim();
   const updates = state?.protocol_updates;
   const feeds = state?.protocol_feeds;
+  const plan = state?.last_plan_label?.trim();
+  const planStepIndex = state?.last_plan_step_index;
+  const planStepStatus = state?.last_plan_step_status?.trim();
   const eventSummary = state?.last_event_summary?.trim();
   const parts = [status ? `Loop ${status}` : "Loop protocol"];
   if (updates && updates > 0) parts.push(`${updates} ${updates === 1 ? "update" : "updates"}`);
   if (feeds && feeds > 0) parts.push(`${feeds} ${feeds === 1 ? "feed" : "feeds"}`);
+  if (plan) parts.push(planStepIndex ? `${plan} step ${planStepIndex}${planStepStatus ? ` ${planStepStatus}` : ""}` : plan);
   if (eventSummary) parts.push(eventSummary);
   return parts.join(", ");
 }

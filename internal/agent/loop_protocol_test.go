@@ -166,11 +166,55 @@ func TestWithLoopProtocolSkillProviderPersistsFeedCadenceAcrossProviders(t *test
 	}
 }
 
+func TestWithLoopProtocolSkillProviderIncludesPlanCheckpoint(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nRecover the current step."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	checkpoint := func() loopstate.PlanCheckpoint {
+		return loopstate.PlanCheckpoint{
+			Valid:      true,
+			Label:      "plan:1/2:active",
+			StepIndex:  2,
+			StepStatus: "in_progress",
+			Step:       "continue loop runtime implementation",
+		}
+	}
+
+	got := WithLoopProtocolSkillProviderWithCheckpoint(path, checkpoint, nil)("continue")
+	for _, want := range []string{
+		"plan_label=plan:1/2:active plan_step_index=2 plan_step_status=in_progress",
+		"plan_current_step: continue loop runtime implementation",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("loop protocol provider missing plan checkpoint %q:\n%s", want, got)
+		}
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(dir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("read state found=%v err=%v", found, err)
+	}
+	if state.LastPlanLabel != "plan:1/2:active" || state.LastPlanStepIndex != 2 || state.LastPlanStepStatus != "in_progress" || state.LastPlanStep != "continue loop runtime implementation" {
+		t.Fatalf("state plan checkpoint = %+v", state)
+	}
+	events, _, err := loopstate.ReadRecentEvents(filepath.Join(dir, loopstate.EventsFileName), 1)
+	if err != nil || len(events) != 1 {
+		t.Fatalf("read events len=%d err=%v", len(events), err)
+	}
+	if events[0].PlanLabel != "plan:1/2:active" || events[0].PlanStepIndex != 2 || events[0].PlanStepStatus != "in_progress" || events[0].PlanStep != "continue loop runtime implementation" {
+		t.Fatalf("event plan checkpoint = %+v", events[0])
+	}
+}
+
 func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")
 	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nTrace protocol feeds."), 0o644); err != nil {
 		t.Fatal(err)
+	}
+	checkpoint := func() loopstate.PlanCheckpoint {
+		return loopstate.PlanCheckpoint{Valid: true, Label: "plan:0/1:active", StepIndex: 1, StepStatus: "in_progress", Step: "read trace evidence"}
 	}
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
 	if err != nil {
@@ -180,7 +224,7 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 	loop := &Loop{
 		Conv:          conv,
 		Events:        events,
-		SkillProvider: WithLoopProtocolSkillProvider(path, nil),
+		SkillProvider: WithLoopProtocolSkillProviderWithCheckpoint(path, checkpoint, nil),
 	}
 	if err := loop.appendUserMessage("turn_loop_feed", "continue"); err != nil {
 		t.Fatal(err)
@@ -198,6 +242,10 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.Mode != "full" ||
 			payload.FeedNumber != 1 ||
 			payload.ProtocolFeeds != 1 ||
+			payload.PlanLabel != "plan:0/1:active" ||
+			payload.PlanCurrentStepIndex != 1 ||
+			payload.PlanCurrentStepStatus != "in_progress" ||
+			payload.PlanCurrentStep != "read trace evidence" ||
 			payload.ProtocolPath != ".affent/loops/"+filepath.Base(dir)+"/LOOP.md" {
 			t.Fatalf("payload = %+v", payload)
 		}

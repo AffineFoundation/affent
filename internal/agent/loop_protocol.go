@@ -22,9 +22,19 @@ const (
 // file exists. Missing protocols are a no-op, so runtimes can wire this once
 // and let explicit loop activation decide whether extra context is spent.
 func WithLoopProtocolSkillProvider(protocolPath string, next SkillProvider) SkillProvider {
+	return WithLoopProtocolSkillProviderWithCheckpoint(protocolPath, nil, next)
+}
+
+type LoopProtocolCheckpointProvider func() loopstate.PlanCheckpoint
+
+// WithLoopProtocolSkillProviderWithCheckpoint injects LOOP.md and mirrors an
+// external plan checkpoint into the loop feed. The plan remains authoritative
+// through the separate active-plan provider; this checkpoint is a recovery
+// pointer for traces, WebUI, and post-compaction alignment.
+func WithLoopProtocolSkillProviderWithCheckpoint(protocolPath string, checkpointProvider LoopProtocolCheckpointProvider, next SkillProvider) SkillProvider {
 	return func(userText string) string {
 		parts := make([]string, 0, 2)
-		if block := activeLoopProtocolSkillBlock(protocolPath); block != "" {
+		if block := activeLoopProtocolSkillBlockWithCheckpoint(protocolPath, checkpointProvider); block != "" {
 			parts = append(parts, block)
 		}
 		if next != nil {
@@ -34,6 +44,10 @@ func WithLoopProtocolSkillProvider(protocolPath string, next SkillProvider) Skil
 		}
 		return strings.Join(parts, "\n\n")
 	}
+}
+
+func activeLoopProtocolSkillBlock(protocolPath string) string {
+	return activeLoopProtocolSkillBlockWithCheckpoint(protocolPath, nil)
 }
 
 func loopProtocolFeedMode(feedNumber int) string {
@@ -46,7 +60,7 @@ func loopProtocolFeedMode(feedNumber int) string {
 	return "digest"
 }
 
-func activeLoopProtocolSkillBlock(protocolPath string) string {
+func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointProvider LoopProtocolCheckpointProvider) string {
 	content, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil || !found {
 		return ""
@@ -57,11 +71,13 @@ func activeLoopProtocolSkillBlock(protocolPath string) string {
 	}
 	feedNumber := nextLoopProtocolFeedNumber(protocolPath)
 	mode := loopProtocolFeedMode(feedNumber)
-	if _, ev, err := loopstate.RecordProtocolFeed(protocolPath, mode); err == nil && ev.FeedNumber > 0 {
+	planCheckpoint := loopProtocolPlanCheckpoint(checkpointProvider)
+	if _, ev, err := loopstate.RecordProtocolFeedWithCheckpoint(protocolPath, mode, planCheckpoint); err == nil && ev.FeedNumber > 0 {
 		feedNumber = ev.FeedNumber
 		mode = ev.Mode
 	}
 	stateLine := loopProtocolStateLine(protocolPath)
+	planLine := loopProtocolPlanStateLine(planCheckpoint)
 	body := textutil.Preview(content, maxActiveLoopProtocolFullBytes)
 	if mode == "digest" {
 		body = loopProtocolDigest(content, maxActiveLoopProtocolDigestBytes)
@@ -69,6 +85,7 @@ func activeLoopProtocolSkillBlock(protocolPath string) string {
 	return "AFFENT LOOP PROTOCOL:\n" +
 		fmt.Sprintf("feed_mode=%s feed_number=%d protocol_path=%s\n", mode, feedNumber, loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))) +
 		stateLine +
+		planLine +
 		"The following is the active long-run loop protocol for this session. " +
 		"Use it to realign with the north-star, memory indexes, self-checks, stop conditions, and recovery rules before continuing. " +
 		"Digest mode is intentionally partial to save tokens; do not infer missing details from absence in the digest. " +
@@ -97,6 +114,9 @@ func loopProtocolStateLine(protocolPath string) string {
 	if state.LastProtocolFeedMode != "" {
 		parts = append(parts, "last_feed="+state.LastProtocolFeedMode)
 	}
+	if state.LastPlanLabel != "" {
+		parts = append(parts, "last_plan="+state.LastPlanLabel)
+	}
 	if state.LastEventSummary != "" {
 		parts = append(parts, "last_event="+state.LastEventSummary)
 	}
@@ -112,6 +132,31 @@ func nextLoopProtocolFeedNumber(protocolPath string) int {
 		return 1
 	}
 	return state.ProtocolFeeds + 1
+}
+
+func loopProtocolPlanCheckpoint(provider LoopProtocolCheckpointProvider) loopstate.PlanCheckpoint {
+	if provider == nil {
+		return loopstate.PlanCheckpoint{}
+	}
+	return provider()
+}
+
+func loopProtocolPlanStateLine(checkpoint loopstate.PlanCheckpoint) string {
+	if !checkpoint.Valid || checkpoint.Label == "" {
+		return ""
+	}
+	parts := []string{"plan_label=" + checkpoint.Label}
+	if checkpoint.StepIndex > 0 {
+		parts = append(parts, fmt.Sprintf("plan_step_index=%d", checkpoint.StepIndex))
+	}
+	if checkpoint.StepStatus != "" {
+		parts = append(parts, "plan_step_status="+checkpoint.StepStatus)
+	}
+	out := strings.Join(parts, " ") + "\n"
+	if step := strings.TrimSpace(checkpoint.Step); step != "" {
+		out += "plan_current_step: " + textutil.Preview(step, 240) + "\n"
+	}
+	return out
 }
 
 func loopProtocolDigest(content string, maxBytes int) string {
@@ -226,7 +271,16 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 				payload.Status = value
 			case "protocol_feeds":
 				payload.ProtocolFeeds = parsePositiveInt(value)
+			case "plan_label":
+				payload.PlanLabel = value
+			case "plan_step_index":
+				payload.PlanCurrentStepIndex = parsePositiveInt(value)
+			case "plan_step_status":
+				payload.PlanCurrentStepStatus = value
 			}
+		}
+		if step, ok := strings.CutPrefix(line, "plan_current_step:"); ok {
+			payload.PlanCurrentStep = strings.TrimSpace(step)
 		}
 	}
 	if payload.Mode == "" || payload.FeedNumber <= 0 {

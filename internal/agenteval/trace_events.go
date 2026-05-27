@@ -205,13 +205,17 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			return false, nil
 		}
 		t.LoopProtocolFeeds = append(t.LoopProtocolFeeds, LoopProtocolFeed{
-			TurnID:        p.TurnID,
-			LoopID:        p.LoopID,
-			Status:        p.Status,
-			Mode:          p.Mode,
-			FeedNumber:    p.FeedNumber,
-			ProtocolFeeds: p.ProtocolFeeds,
-			ProtocolPath:  p.ProtocolPath,
+			TurnID:                p.TurnID,
+			LoopID:                p.LoopID,
+			Status:                p.Status,
+			Mode:                  p.Mode,
+			FeedNumber:            p.FeedNumber,
+			ProtocolFeeds:         p.ProtocolFeeds,
+			ProtocolPath:          p.ProtocolPath,
+			PlanLabel:             p.PlanLabel,
+			PlanCurrentStepIndex:  p.PlanCurrentStepIndex,
+			PlanCurrentStepStatus: p.PlanCurrentStepStatus,
+			PlanCurrentStep:       p.PlanCurrentStep,
 		})
 	case sse.TypeContextCompact:
 		var p sse.ContextCompactPayload

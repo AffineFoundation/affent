@@ -18,6 +18,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/agenteval"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -1966,6 +1967,18 @@ func printLoopProtocolFeedExampleLines(w io.Writer, examples []agenteval.LoopPro
 		}
 		if ex.ProtocolPath != "" {
 			fmt.Fprintf(w, " path=%s", ex.ProtocolPath)
+		}
+		if ex.PlanLabel != "" {
+			fmt.Fprintf(w, " plan=%s", ex.PlanLabel)
+		}
+		if ex.PlanCurrentStepIndex > 0 {
+			fmt.Fprintf(w, " current=%d", ex.PlanCurrentStepIndex)
+			if ex.PlanCurrentStepStatus != "" {
+				fmt.Fprintf(w, ":%s", ex.PlanCurrentStepStatus)
+			}
+		}
+		if ex.PlanCurrentStep != "" {
+			fmt.Fprintf(w, " step=%q", textutil.Preview(ex.PlanCurrentStep, 96))
 		}
 		fmt.Fprintln(w)
 	}

@@ -169,6 +169,9 @@ describe("sessionList view model", () => {
             protocol_updates: 2,
             protocol_feeds: 5,
             last_protocol_feed_mode: "digest",
+            last_plan_label: "plan:1/3:active",
+            last_plan_step_index: 2,
+            last_plan_step_status: "in_progress",
             event_count: 2,
             last_event_type: "loop.protocol_update",
             last_event_summary: "Updated LOOP.md",
@@ -177,7 +180,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running, 2 updates, 5 feeds, Updated LOOP.md");
+    expect(rows[0].metrics).toContain("Loop running, 2 updates, 5 feeds, plan:1/3:active step 2 in_progress, Updated LOOP.md");
     expect(rows[0].chips).toContain("loop");
     expect(rows[0].searchText).toContain("loop running");
   });

@@ -121,6 +121,10 @@ export interface SessionLoopState {
   protocol_feeds?: number;
   last_protocol_feed_at?: string;
   last_protocol_feed_mode?: string;
+  last_plan_label?: string;
+  last_plan_step_index?: number;
+  last_plan_step_status?: string;
+  last_plan_step?: string;
   event_count?: number;
   last_event_type?: string;
   last_event_summary?: string;
@@ -137,6 +141,10 @@ export interface SessionLoopEvent {
   path?: string;
   mode?: string;
   feed_number?: number;
+  plan_label?: string;
+  plan_step_index?: number;
+  plan_step_status?: string;
+  plan_step?: string;
 }
 
 export interface SessionLoopProtocolResponse {

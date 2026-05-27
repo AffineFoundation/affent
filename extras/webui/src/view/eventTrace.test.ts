@@ -47,6 +47,10 @@ describe("eventTrace view model", () => {
           feed_number: 4,
           protocol_feeds: 4,
           protocol_path: ".affent/loops/longrun/LOOP.md",
+          plan_label: "plan:1/3:active",
+          plan_current_step_index: 2,
+          plan_current_step_status: "in_progress",
+          plan_current_step: "verify browser evidence",
         },
       },
       {
@@ -141,7 +145,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Loop protocol fed",
-        meta: ["Request 1", "longrun", "feed 4", ".affent/loops/longrun/LOOP.md"],
+        meta: ["Request 1", "longrun", "feed 4", "plan plan:1/3:active · step 2 in_progress · verify browser evidence", ".affent/loops/longrun/LOOP.md"],
         badges: ["digest", "running"],
       },
     });

@@ -31,6 +31,10 @@ type State struct {
 	ProtocolFeeds        int    `json:"protocol_feeds,omitempty"`
 	LastProtocolFeedAt   string `json:"last_protocol_feed_at,omitempty"`
 	LastProtocolFeedMode string `json:"last_protocol_feed_mode,omitempty"`
+	LastPlanLabel        string `json:"last_plan_label,omitempty"`
+	LastPlanStepIndex    int    `json:"last_plan_step_index,omitempty"`
+	LastPlanStepStatus   string `json:"last_plan_step_status,omitempty"`
+	LastPlanStep         string `json:"last_plan_step,omitempty"`
 	EventCount           int    `json:"event_count,omitempty"`
 	LastEventType        string `json:"last_event_type,omitempty"`
 	LastEventSummary     string `json:"last_event_summary,omitempty"`
@@ -47,6 +51,10 @@ type Event struct {
 	Path            string   `json:"path,omitempty"`
 	Mode            string   `json:"mode,omitempty"`
 	FeedNumber      int      `json:"feed_number,omitempty"`
+	PlanLabel       string   `json:"plan_label,omitempty"`
+	PlanStepIndex   int      `json:"plan_step_index,omitempty"`
+	PlanStepStatus  string   `json:"plan_step_status,omitempty"`
+	PlanStep        string   `json:"plan_step,omitempty"`
 }
 
 func ReadState(path string) (State, bool, error) {
@@ -143,7 +151,19 @@ func WriteState(path string, state State) error {
 	return nil
 }
 
+type PlanCheckpoint struct {
+	Valid      bool
+	Label      string
+	StepIndex  int
+	StepStatus string
+	Step       string
+}
+
 func RecordProtocolFeed(protocolPath, mode string) (State, Event, error) {
+	return RecordProtocolFeedWithCheckpoint(protocolPath, mode, PlanCheckpoint{})
+}
+
+func RecordProtocolFeedWithCheckpoint(protocolPath, mode string, checkpoint PlanCheckpoint) (State, Event, error) {
 	mode = strings.TrimSpace(mode)
 	if mode == "" {
 		mode = "digest"
@@ -183,13 +203,17 @@ func RecordProtocolFeed(protocolPath, mode string) (State, Event, error) {
 	}
 	feedNumber := state.ProtocolFeeds + 1
 	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
-		Type:       "loop.protocol_feed",
-		Summary:    "Fed LOOP.md " + mode,
-		Reason:     "loop protocol feed policy",
-		Path:       ProtocolRelPath(loopID),
-		Mode:       mode,
-		FeedNumber: feedNumber,
-		Time:       formatTime(now),
+		Type:           "loop.protocol_feed",
+		Summary:        "Fed LOOP.md " + mode,
+		Reason:         "loop protocol feed policy",
+		Path:           ProtocolRelPath(loopID),
+		Mode:           mode,
+		FeedNumber:     feedNumber,
+		Time:           formatTime(now),
+		PlanLabel:      checkpointLabel(checkpoint),
+		PlanStepIndex:  checkpointStepIndex(checkpoint),
+		PlanStepStatus: checkpointStepStatus(checkpoint),
+		PlanStep:       checkpointStep(checkpoint),
 	})
 	if err != nil {
 		return State{}, Event{}, err
@@ -197,6 +221,12 @@ func RecordProtocolFeed(protocolPath, mode string) (State, Event, error) {
 	state.ProtocolFeeds = feedNumber
 	state.LastProtocolFeedAt = event.Time
 	state.LastProtocolFeedMode = mode
+	if checkpoint.Valid {
+		state.LastPlanLabel = strings.TrimSpace(checkpoint.Label)
+		state.LastPlanStepIndex = checkpoint.StepIndex
+		state.LastPlanStepStatus = strings.TrimSpace(checkpoint.StepStatus)
+		state.LastPlanStep = strings.TrimSpace(checkpoint.Step)
+	}
 	state.UpdatedAt = event.Time
 	state.EventCount = event.Seq
 	state.LastEventType = event.Type
@@ -206,6 +236,34 @@ func RecordProtocolFeed(protocolPath, mode string) (State, Event, error) {
 		return State{}, Event{}, err
 	}
 	return state, event, nil
+}
+
+func checkpointLabel(checkpoint PlanCheckpoint) string {
+	if !checkpoint.Valid {
+		return ""
+	}
+	return strings.TrimSpace(checkpoint.Label)
+}
+
+func checkpointStepIndex(checkpoint PlanCheckpoint) int {
+	if !checkpoint.Valid {
+		return 0
+	}
+	return checkpoint.StepIndex
+}
+
+func checkpointStepStatus(checkpoint PlanCheckpoint) string {
+	if !checkpoint.Valid {
+		return ""
+	}
+	return strings.TrimSpace(checkpoint.StepStatus)
+}
+
+func checkpointStep(checkpoint PlanCheckpoint) string {
+	if !checkpoint.Valid {
+		return ""
+	}
+	return strings.TrimSpace(checkpoint.Step)
 }
 
 func AppendEvent(path string, ev Event) (Event, error) {

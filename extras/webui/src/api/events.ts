@@ -219,6 +219,10 @@ export interface LoopProtocolFeedPayload {
   feed_number: number;
   protocol_feeds?: number;
   protocol_path?: string;
+  plan_label?: string;
+  plan_current_step_index?: number;
+  plan_current_step_status?: string;
+  plan_current_step?: string;
 }
 
 export interface LoopDecisionPayload {

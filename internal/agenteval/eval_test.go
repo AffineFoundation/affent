@@ -79,7 +79,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
-		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"protocol_path":".affent/loops/longrun/LOOP.md"}}`,
+		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
@@ -181,10 +181,10 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		t.Fatalf("LoopDecisionStats examples = %+v", loopDecisions.Examples)
 	}
 	feeds := trace.LoopProtocolFeedStats(1)
-	if feeds.Count != 1 || feeds.ByMode["digest"] != 1 || feeds.Latest.FeedNumber != 4 || feeds.Latest.ProtocolPath != ".affent/loops/longrun/LOOP.md" {
+	if feeds.Count != 1 || feeds.ByMode["digest"] != 1 || feeds.Latest.FeedNumber != 4 || feeds.Latest.ProtocolPath != ".affent/loops/longrun/LOOP.md" || feeds.Latest.PlanLabel != "plan:1/3:active" || feeds.Latest.PlanCurrentStepIndex != 2 {
 		t.Fatalf("LoopProtocolFeedStats = %+v", feeds)
 	}
-	if len(feeds.Examples) != 1 || feeds.Examples[0].LoopID != "longrun" || feeds.Examples[0].Mode != "digest" {
+	if len(feeds.Examples) != 1 || feeds.Examples[0].LoopID != "longrun" || feeds.Examples[0].Mode != "digest" || feeds.Examples[0].PlanCurrentStep != "verify browser network evidence" {
 		t.Fatalf("LoopProtocolFeedStats examples = %+v", feeds.Examples)
 	}
 	compactions := trace.ContextCompactionStats(1)

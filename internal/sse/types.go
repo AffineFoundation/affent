@@ -258,13 +258,17 @@ type TurnEndPayload struct {
 // that decision into the normal session trace/SSE stream so WebUI and evals can
 // inspect long-run context pressure without reading sidecar loop files.
 type LoopProtocolFeedPayload struct {
-	TurnID        string `json:"turn_id,omitempty"`
-	LoopID        string `json:"loop_id,omitempty"`
-	Status        string `json:"status,omitempty"`
-	Mode          string `json:"mode"`
-	FeedNumber    int    `json:"feed_number"`
-	ProtocolFeeds int    `json:"protocol_feeds,omitempty"`
-	ProtocolPath  string `json:"protocol_path,omitempty"`
+	TurnID                string `json:"turn_id,omitempty"`
+	LoopID                string `json:"loop_id,omitempty"`
+	Status                string `json:"status,omitempty"`
+	Mode                  string `json:"mode"`
+	FeedNumber            int    `json:"feed_number"`
+	ProtocolFeeds         int    `json:"protocol_feeds,omitempty"`
+	ProtocolPath          string `json:"protocol_path,omitempty"`
+	PlanLabel             string `json:"plan_label,omitempty"`
+	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
+	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
 }
 
 // LoopDecisionPayload records one short protocol decision made outside the

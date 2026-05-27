@@ -458,14 +458,18 @@ type LoopDecisionStats struct {
 }
 
 type LoopProtocolFeed struct {
-	Scenario      string `json:"scenario,omitempty"`
-	TurnID        string `json:"turn_id,omitempty"`
-	LoopID        string `json:"loop_id,omitempty"`
-	Status        string `json:"status,omitempty"`
-	Mode          string `json:"mode"`
-	FeedNumber    int    `json:"feed_number"`
-	ProtocolFeeds int    `json:"protocol_feeds,omitempty"`
-	ProtocolPath  string `json:"protocol_path,omitempty"`
+	Scenario              string `json:"scenario,omitempty"`
+	TurnID                string `json:"turn_id,omitempty"`
+	LoopID                string `json:"loop_id,omitempty"`
+	Status                string `json:"status,omitempty"`
+	Mode                  string `json:"mode"`
+	FeedNumber            int    `json:"feed_number"`
+	ProtocolFeeds         int    `json:"protocol_feeds,omitempty"`
+	ProtocolPath          string `json:"protocol_path,omitempty"`
+	PlanLabel             string `json:"plan_label,omitempty"`
+	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
+	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
 }
 
 type LoopProtocolFeedStats struct {
@@ -1173,13 +1177,17 @@ func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, LoopProtocolFeed{
-			TurnID:        feed.TurnID,
-			LoopID:        feed.LoopID,
-			Status:        feed.Status,
-			Mode:          feed.Mode,
-			FeedNumber:    feed.FeedNumber,
-			ProtocolFeeds: feed.ProtocolFeeds,
-			ProtocolPath:  feed.ProtocolPath,
+			TurnID:                feed.TurnID,
+			LoopID:                feed.LoopID,
+			Status:                feed.Status,
+			Mode:                  feed.Mode,
+			FeedNumber:            feed.FeedNumber,
+			ProtocolFeeds:         feed.ProtocolFeeds,
+			ProtocolPath:          feed.ProtocolPath,
+			PlanLabel:             feed.PlanLabel,
+			PlanCurrentStepIndex:  feed.PlanCurrentStepIndex,
+			PlanCurrentStepStatus: feed.PlanCurrentStepStatus,
+			PlanCurrentStep:       feed.PlanCurrentStep,
 		})
 	}
 	return stats
