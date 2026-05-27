@@ -1035,8 +1035,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 13 {
-		t.Fatalf("long-run suite size = %d, want 13", len(scenarios))
+	if len(scenarios) != 14 {
+		t.Fatalf("long-run suite size = %d, want 14", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1247,6 +1247,39 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if stringSliceContains(crashResume.ProtectedFiles, ".affentctl/resume-missing-tool-result.jsonl") {
 		t.Fatalf("crash resume conversation must not be protected because repair rewrites it: %#v", crashResume.ProtectedFiles)
+	}
+
+	duplicateResume, ok := seen["longrun-crash-duplicate-tool-result-resume"]
+	if !ok {
+		t.Fatalf("long-run suite missing crash duplicate-tool-result resume scenario")
+	}
+	if duplicateResume.SessionID != "resume-duplicate-tool-result" {
+		t.Fatalf("duplicate resume SessionID = %q, want resume-duplicate-tool-result", duplicateResume.SessionID)
+	}
+	if _, ok := duplicateResume.Files[".affentctl/resume-duplicate-tool-result.jsonl"]; !ok {
+		t.Fatalf("duplicate resume scenario missing seeded broken conversation")
+	}
+	for _, want := range []string{"RECOVER-DUP-23", "current/duplicate.md", "resume_duplicate_tool_result", "resume_unexpected_tool_result"} {
+		if !stringSliceContains(duplicateResume.RequiredFinalText, want) {
+			t.Fatalf("duplicate resume RequiredFinalText = %#v, want %q", duplicateResume.RequiredFinalText, want)
+		}
+	}
+	for _, forbidden := range []string{"read_file", "web_fetch", "browser_network_read", "session_search", "memory", "plan"} {
+		if !stringSliceContains(duplicateResume.ForbiddenTools, forbidden) {
+			t.Fatalf("duplicate resume ForbiddenTools = %#v, want %q", duplicateResume.ForbiddenTools, forbidden)
+		}
+	}
+	requiredDuplicateConversation := duplicateResume.RequiredFileSubstrings[".affentctl/resume-duplicate-tool-result.jsonl"]
+	for _, want := range []string{"Failure: kind=resume_duplicate_tool_result", "Failure: kind=resume_unexpected_tool_result", "duplicate stale retry", "unexpected orphan web result", "call-orphan-web"} {
+		if !stringSliceContains(requiredDuplicateConversation, want) {
+			t.Fatalf("duplicate resume RequiredFileSubstrings = %#v, want %q", duplicateResume.RequiredFileSubstrings, want)
+		}
+	}
+	if duplicateResume.RequiredTraceEventCounts["conversation.repaired"] != 1 {
+		t.Fatalf("duplicate resume RequiredTraceEventCounts = %#v, want conversation.repaired=1", duplicateResume.RequiredTraceEventCounts)
+	}
+	if stringSliceContains(duplicateResume.ProtectedFiles, ".affentctl/resume-duplicate-tool-result.jsonl") {
+		t.Fatalf("duplicate resume conversation must not be protected because repair rewrites it: %#v", duplicateResume.ProtectedFiles)
 	}
 
 	compactionRetention, ok := seen["longrun-context-compaction-retention"]

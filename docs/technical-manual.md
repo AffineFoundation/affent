@@ -916,8 +916,8 @@ Current built-in suites:
 - `long-run`: deterministic complex tasks for longer practical runs, currently
   covering stock synthesis, Bittensor subnet research, code implementation with
   PR-style reporting, focused-task recovery, research-checkpoint visibility,
-  multi-session task recovery, and crash-window resume after a missing tool
-  result is repaired.
+  multi-session task recovery, and crash-window resume after missing, duplicate,
+  or unexpected tool results are repaired.
   The stock and subnet scenarios require reading the explicit evidence files,
   so a run cannot pass by answering only from prompt wording or stale archive
   files. The PR-style coding scenario requires reading the implementation file
@@ -925,9 +925,9 @@ Current built-in suites:
   combined recovery scenario requires joining persistent memory with prior
   session history, covering the shared-memory plus session-search path. Eval
   scenarios can also require trace event counts and post-run workspace file
-  substrings; the missing tool-result resume scenario uses these to prove
+  substrings; the crash-window resume scenarios use these to prove
   `conversation.repaired` was emitted and `conversation.jsonl` was repaired
-  with the structured recovery placeholder instead of only checking the final
+  with structured recovery placeholders/notes instead of only checking the final
   answer. Eval debug manifests and timelines surface conversation repair
   examples with the repaired count, failure kind, and next-step guidance.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,

@@ -1437,6 +1437,71 @@ func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 	}
 }
 
+func longRunCrashDuplicateToolResultResumeScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-crash-duplicate-tool-result-resume",
+		Suites:    []string{longRunSuite},
+		SessionID: "resume-duplicate-tool-result",
+		Prompt:    "继续这个刚从重复 tool result 修复中恢复的 session。不要调用任何工具；只根据已恢复的对话上下文回答 recovery marker、已确认的证据文件，并原样包含短语 \"resume_duplicate_tool_result\" 和 \"resume_unexpected_tool_result\" 来说明修复过的重复/游离 tool result。",
+		Files: map[string]string{
+			".affentctl/resume-duplicate-tool-result.jsonl": `{"role":"user","content":"原始任务: 汇总重复 tool result 恢复 marker RECOVER-DUP-23。已确认证据来自 current/duplicate.md；崩溃重试留下了重复和游离 tool result。"}
+{"role":"assistant","content":"","tool_calls":[{"id":"call-read-duplicate","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"current/duplicate.md\"}"}},{"id":"call-session-evidence","type":"function","function":{"name":"session_search","arguments":"{\"query\":\"RECOVER-DUP-23\"}"}}]}
+{"role":"tool","tool_call_id":"call-read-duplicate","name":"read_file","content":"current/duplicate.md confirms marker RECOVER-DUP-23 and says the accepted evidence file is current/duplicate.md."}
+{"role":"tool","tool_call_id":"call-read-duplicate","name":"read_file","content":"duplicate stale retry says RECOVER-DUP-OLD and must not be trusted."}
+{"role":"tool","tool_call_id":"call-orphan-web","name":"web_fetch","content":"unexpected orphan web result says WEB-ORPHAN-00 and must not be trusted."}
+{"role":"tool","tool_call_id":"call-session-evidence","name":"session_search","content":"session_search confirms RECOVER-DUP-23 and no external web evidence is needed."}
+{"role":"tool","tool_call_id":"call-session-evidence","name":"session_search","content":"duplicate session retry says HIST-DUP-OLD and must not be trusted."}
+`,
+			"current/duplicate.md": "Authoritative recovery marker: RECOVER-DUP-23. Evidence file: current/duplicate.md. Duplicate or orphan tool results must remain audit-only until safely repeated.\n",
+		},
+		RequiredFinalText: []string{
+			"RECOVER-DUP-23",
+			"current/duplicate.md",
+			"resume_duplicate_tool_result",
+			"resume_unexpected_tool_result",
+		},
+		ForbiddenFinalText: []string{
+			"RECOVER-DUP-OLD",
+			"WEB-ORPHAN-00",
+			"HIST-DUP-OLD",
+		},
+		RequiredFileSubstrings: map[string][]string{
+			".affentctl/resume-duplicate-tool-result.jsonl": {
+				"Failure: kind=resume_duplicate_tool_result",
+				"Failure: kind=resume_unexpected_tool_result",
+				"duplicate stale retry",
+				"unexpected orphan web result",
+				"call-orphan-web",
+			},
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"conversation.repaired": 1,
+		},
+		ForbiddenTools: []string{
+			"read_file",
+			"shell",
+			"web_fetch",
+			"web_search",
+			"browser_navigate",
+			"browser_snapshot",
+			"browser_find",
+			"browser_network",
+			"browser_network_read",
+			"session_search",
+			"memory",
+			"plan",
+			"run_task",
+			"subagent_run",
+			"write_file",
+			"edit_file",
+		},
+		ProtectedFiles: []string{
+			"current/duplicate.md",
+		},
+		MaxTurns: 4,
+	}
+}
+
 func longRunContextCompactionRetentionScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-context-compaction-retention",
