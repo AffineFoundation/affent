@@ -6,6 +6,42 @@ import type { SessionRunView } from "./sessionRun";
 import { buildWorkbenchAttention } from "./workbenchAttention";
 
 describe("buildWorkbenchAttention", () => {
+  it("uses the current issue detail as the Workbench badge fact", () => {
+    expect(buildWorkbenchAttention({
+      overview: overview({
+        tone: "error",
+        detail: "shell command failed: Next: retry after fixing checkout route",
+        metrics: [{ label: "Issue", value: "1", tone: "error" }],
+      }),
+      files: files(),
+      changes: changes(),
+      run: run({ failed: 1, failedDetail: "checkout spec failed", failedNext: "update payment route then rerun" }),
+    })).toEqual({
+      label: "Issue: checkout spec failed · View context",
+      detail: "checkout spec failed · Next: update payment route then rerun",
+      tone: "error",
+      target: "context",
+    });
+  });
+
+  it("falls back to the issue count when the overview detail is generic", () => {
+    expect(buildWorkbenchAttention({
+      overview: overview({
+        tone: "error",
+        detail: "Open current chat context and recovery evidence.",
+        metrics: [{ label: "Issues", value: "2", tone: "error" }],
+      }),
+      files: files(),
+      changes: changes(),
+      run: run(),
+    })).toEqual({
+      label: "2 issues · View context",
+      detail: "Open current chat context and recovery evidence.",
+      tone: "error",
+      target: "context",
+    });
+  });
+
   it("prioritizes failed commands over recovery hints and changed files", () => {
     expect(buildWorkbenchAttention({
       overview: overview({ metrics: [{ label: "Recovery", value: "rerun tests", tone: "warning" }] }),
@@ -121,10 +157,16 @@ function changes(counts: { changed?: number; failed?: number; running?: number }
   };
 }
 
-function run(counts: { failed?: number; running?: number; passed?: number } = {}): SessionRunView {
+function run(counts: { failed?: number; running?: number; passed?: number; failedDetail?: string; failedNext?: string } = {}): SessionRunView {
   return {
     commands: [
-      ...Array.from({ length: counts.failed ?? 0 }, (_, index) => ({ command: `npm test ${index}`, status: "failed" as const, turnNumber: 1 })),
+      ...Array.from({ length: counts.failed ?? 0 }, (_, index) => ({
+        command: `npm test ${index}`,
+        status: "failed" as const,
+        turnNumber: 1,
+        detail: counts.failedDetail,
+        next: counts.failedNext,
+      })),
       ...Array.from({ length: counts.running ?? 0 }, (_, index) => ({ command: `npm run build ${index}`, status: "running" as const, turnNumber: 1 })),
       ...Array.from({ length: counts.passed ?? 0 }, (_, index) => ({ command: `npm lint ${index}`, status: "passed" as const, turnNumber: 1 })),
     ],

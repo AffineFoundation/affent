@@ -48,6 +48,30 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Answer setup question before LOOP.md can run.");
   });
 
+  it("uses the context attention detail as the status evidence", () => {
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        overview={overview({
+          headline: "Fix failing checkout tests",
+          detail: "npm test -- checkout.spec.ts: Next: update payment route then rerun",
+          tone: "error",
+          metrics: [{ label: "Issue", value: "1", tone: "error" }],
+        })}
+        attention={{
+          label: "Issue: checkout spec failed · View context",
+          detail: "checkout spec failed · Next: update payment route then rerun",
+          tone: "error",
+          target: "context",
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("workbench-context-status")).toHaveTextContent("checkout spec failed");
+    expect(screen.getByTestId("workbench-context-status")).not.toHaveTextContent("npm test -- checkout.spec.ts: Next");
+  });
+
   it("keeps fresh-task Workbench context short and actionable", () => {
     render(
       <WorkbenchContextPanel

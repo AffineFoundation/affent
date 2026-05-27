@@ -31,7 +31,10 @@ export function buildWorkbenchAttention({
 }): WorkbenchAttention | undefined {
   const currentIssue = overview.metrics.find((metric) => (metric.label === "Issue" || metric.label === "Issues") && metric.value.trim());
   if (currentIssue) {
-    return { label: withAction(`${currentIssue.value} ${currentIssue.label.toLowerCase()}`, "View context"), detail: "Open current chat context and recovery evidence.", tone: "error", target: "context" };
+    const failedCommand = run.commands.find((command) => command.status === "failed" && command.detail);
+    const issueDetail = failedCommand?.detail ?? overview.detail;
+    const fact = currentIssueFact(currentIssue.value, currentIssue.label, issueDetail);
+    return { label: withAction(fact, "View context"), detail: currentIssueDetail(issueDetail, failedCommand?.next), tone: "error", target: "context" };
   }
 
   if (workspace?.issue) return { label: withAction("Workspace mismatch", "View workspace"), detail: workspace.issue, tone: "warning", target: "workspace" };
@@ -83,6 +86,28 @@ function withAction(fact: string, action: string): string {
   return `${fact} · ${action}`;
 }
 
+function currentIssueFact(value: string, label: string, detail: string): string {
+  const issueDetail = issueDetailSummary(detail);
+  if (issueDetail) return `Issue: ${issueDetail}`;
+  return `${value} ${label.toLowerCase()}`;
+}
+
+function currentIssueDetail(detail: string, next?: string): string {
+  const summary = issueDetailSummary(detail);
+  if (!summary) return "Open current chat context and recovery evidence.";
+  return next ? `${summary} · Next: ${next}` : summary;
+}
+
+function issueDetailSummary(detail: string): string | undefined {
+  const normalized = detail.replace(/\s+/g, " ").trim();
+  if (!normalized || isGenericIssueDetail(normalized)) return undefined;
+  return summarize(normalized, 64);
+}
+
+function isGenericIssueDetail(detail: string): boolean {
+  return /^(open|view|check) current chat context/i.test(detail) || /^describe the outcome you want/i.test(detail);
+}
+
 function failedCommandLabel(count: number): string {
   return `${count} failed ${plural("command", count)}`;
 }
@@ -109,4 +134,9 @@ function changedFileLabel(count: number): string {
 
 function plural(label: string, count: number): string {
   return count === 1 ? label : `${label}s`;
+}
+
+function summarize(text: string, limit: number): string {
+  if (text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}...`;
 }

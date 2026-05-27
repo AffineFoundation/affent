@@ -1464,6 +1464,7 @@ export function App() {
                 <WorkbenchContextPanel
                   overview={overview}
                   hasSelectedSession={!!selectedSessionId}
+                  attention={workbenchAttention?.target === "context" ? workbenchAttention : undefined}
                   automationTitle={automationContext?.title}
                   automationDetail={automationContext?.detail}
                   defaultOpen

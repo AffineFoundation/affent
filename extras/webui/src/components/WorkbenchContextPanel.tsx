@@ -1,15 +1,18 @@
 import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
+import type { WorkbenchAttention } from "../view/workbenchAttention";
 import { RunDetails } from "./RunDetails";
 
 export function WorkbenchContextPanel({
   overview,
   hasSelectedSession,
+  attention,
   automationTitle,
   automationDetail,
   defaultOpen = false,
 }: {
   overview: SessionOverview;
   hasSelectedSession: boolean;
+  attention?: WorkbenchAttention;
   automationTitle?: string;
   automationDetail?: string;
   defaultOpen?: boolean;
@@ -17,6 +20,7 @@ export function WorkbenchContextPanel({
   const metrics = displaySessionOverviewMetrics(overview.metrics);
   const summary = contextSummary(overview, hasSelectedSession);
   const detail = hasSelectedSession ? overview.headline : "No chat selected";
+  const statusDetail = attention?.target === "context" ? attention.detail : overview.detail;
 
   return (
     <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
@@ -29,7 +33,7 @@ export function WorkbenchContextPanel({
         <div className="workbench-context-status" data-tone={overview.tone} data-testid="workbench-context-status">
           <div>
             <strong>{overview.headline}</strong>
-            <span>{overview.detail}</span>
+            <span>{statusDetail}</span>
           </div>
           <span className="state-pill" data-tone={overview.tone}>
             {overview.stateLabel}
