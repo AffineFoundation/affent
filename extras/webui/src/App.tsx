@@ -1331,6 +1331,64 @@ export function App() {
     );
   }
 
+  function renderRuntimeStatsPanel() {
+    return (
+      <RuntimeStatsPanel
+        stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
+        loading={runtimeStatsState.state === "loading"}
+        error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
+      />
+    );
+  }
+
+  function renderAccountSettingsPanel() {
+    return (
+      <AccountSettingsPanel
+        settings={accountSettingsState.state === "ready" ? accountSettingsState.settings : accountSettingsState.state === "error" ? accountSettingsState.settings : undefined}
+        loading={accountSettingsState.state === "loading"}
+        error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
+        busy={accountSettingsBusy}
+        onRefresh={handleRefreshAccountSettings}
+        onSetEnv={handleSetAccountEnv}
+        onDeleteEnv={handleDeleteAccountEnv}
+        onEnsureSSHKey={handleEnsureAccountSSHKey}
+      />
+    );
+  }
+
+  function renderMemoryPanel() {
+    return (
+      <SessionMemoryPanel
+        memory={memoryState.state === "ready" ? memoryState.memory : undefined}
+        latestUpdate={selectedSession?.latest_memory_update}
+        loading={memoryState.state === "loading"}
+        error={memoryState.state === "error" ? memoryState.error : undefined}
+        noSession={memoryState.state === "empty"}
+      />
+    );
+  }
+
+  function renderSkillsPanel() {
+    return (
+      <SessionSkillsPanel
+        skills={skillsState.state === "ready" ? skillsState.skills : undefined}
+        loading={skillsState.state === "loading"}
+        error={skillsState.state === "error" ? skillsState.error : undefined}
+        installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
+        onReadSkill={handleReadSkill}
+        onInstallSkill={handleInstallSkill}
+      />
+    );
+  }
+
+  const secondaryWorkbenchPanels = [
+    { key: "runtime", label: "Runtime", direct: shouldShowRuntimePanel(runtimeStatsState), render: renderRuntimeStatsPanel },
+    { key: "access", label: "Access", direct: shouldShowAccessPanel(accountSettingsState), render: renderAccountSettingsPanel },
+    { key: "memory", label: "Memory", direct: shouldShowMemoryPanel(memoryState, selectedSession?.latest_memory_update), render: renderMemoryPanel },
+    { key: "skills", label: "Skills", direct: shouldShowSkillsPanel(skillsState), render: renderSkillsPanel },
+  ];
+  const hiddenWorkbenchPanels = secondaryWorkbenchPanels.filter((panel) => !panel.direct);
+
   return (
     <div
       className="app"
@@ -1451,36 +1509,27 @@ export function App() {
                     onUseAsDraft={handleUseAsDraft}
                   />
                 ) : null}
-                <RuntimeStatsPanel
-                  stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
-                  loading={runtimeStatsState.state === "loading"}
-                  error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
-                />
-                <AccountSettingsPanel
-                  settings={accountSettingsState.state === "ready" ? accountSettingsState.settings : accountSettingsState.state === "error" ? accountSettingsState.settings : undefined}
-                  loading={accountSettingsState.state === "loading"}
-                  error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
-                  busy={accountSettingsBusy}
-                  onRefresh={handleRefreshAccountSettings}
-                  onSetEnv={handleSetAccountEnv}
-                  onDeleteEnv={handleDeleteAccountEnv}
-                  onEnsureSSHKey={handleEnsureAccountSSHKey}
-                />
-                <SessionMemoryPanel
-                  memory={memoryState.state === "ready" ? memoryState.memory : undefined}
-                  latestUpdate={selectedSession?.latest_memory_update}
-                  loading={memoryState.state === "loading"}
-                  error={memoryState.state === "error" ? memoryState.error : undefined}
-                  noSession={memoryState.state === "empty"}
-                />
-                <SessionSkillsPanel
-                  skills={skillsState.state === "ready" ? skillsState.skills : undefined}
-                  loading={skillsState.state === "loading"}
-                  error={skillsState.state === "error" ? skillsState.error : undefined}
-                  installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
-                  onReadSkill={handleReadSkill}
-                  onInstallSkill={handleInstallSkill}
-                />
+                {secondaryWorkbenchPanels.filter((panel) => panel.direct).map((panel) => (
+                  <div key={panel.key} className="workbench-secondary-panel">
+                    {panel.render()}
+                  </div>
+                ))}
+                {hiddenWorkbenchPanels.length > 0 ? (
+                  <details className="session-skills-panel workbench-more-panel" data-testid="workbench-more-panel">
+                    <summary className="session-skills-summary">
+                      <span className="session-skills-kicker">More</span>
+                      <strong>{hiddenWorkbenchPanels.length} {hiddenWorkbenchPanels.length === 1 ? "tool" : "tools"}</strong>
+                      <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(", ")} stay folded until they have data or an issue.</span>
+                    </summary>
+                    <div className="session-skills-body workbench-more-body">
+                      {hiddenWorkbenchPanels.map((panel) => (
+                        <div key={panel.key} className="workbench-secondary-panel">
+                          {panel.render()}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </div>
             ) : null}
           </details>
@@ -1783,6 +1832,51 @@ function shouldShowScheduleContext(
   if (!summary) return false;
   if (summary.count > 0 || summary.enabled > 0 || (summary.pending_loop_ticks ?? 0) > 0) return true;
   return (summary.error_count ?? 0) > 0 || !!summary.last_error;
+}
+
+function shouldShowRuntimePanel(state: RuntimeStatsState): boolean {
+  if (state.state === "loading" || state.state === "error") return true;
+  if (state.state !== "ready") return false;
+  const stats = state.stats;
+  const aggregate = stats.aggregate;
+  const tools = aggregate?.tools;
+  const runtime = aggregate?.runtime;
+  return !!(
+    stats.shutting_down
+    || (stats.running_turns ?? 0) > 0
+    || stats.eval_mode
+    || stats.eval_all_tools
+    || (aggregate?.blocked_by_type ?? 0) > 0
+    || (aggregate?.blocked_by_domain ?? 0) > 0
+    || (aggregate?.domain_relaxations ?? 0) > 0
+    || (aggregate?.network_fetch ?? 0) > 0
+    || (tools?.tool_errors ?? 0) > 0
+    || (tools?.source_access_results ?? 0) > 0
+    || (tools?.memory_updates ?? 0) > 0
+    || (tools?.session_search_calls ?? 0) > 0
+    || (tools?.loop_guard_interventions ?? 0) > 0
+    || (tools?.tool_context_truncated ?? 0) > 0
+    || (runtime?.runtime_errors ?? 0) > 0
+    || (runtime?.context_compactions ?? 0) > 0
+  );
+}
+
+function shouldShowAccessPanel(state: AccountSettingsState): boolean {
+  if (state.state === "loading" || state.state === "error") return true;
+  if (state.state !== "ready") return false;
+  const ssh = state.settings.ssh;
+  return state.settings.env.length > 0 || !!ssh.exists || !!ssh.public_key || !!ssh.public_key_error;
+}
+
+function shouldShowMemoryPanel(state: MemoryState, latestUpdate: SessionSummary["latest_memory_update"] | undefined): boolean {
+  if (state.state === "loading" || state.state === "error") return true;
+  if (latestUpdate) return true;
+  return state.state === "ready" && state.memory.has_memory;
+}
+
+function shouldShowSkillsPanel(state: SkillsState): boolean {
+  if (state.state === "loading" || state.state === "error") return true;
+  return state.state === "ready" && state.skills.length > 0;
 }
 
 function compactStatus(value: string | undefined): string | undefined {

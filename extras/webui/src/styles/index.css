@@ -390,6 +390,38 @@ body {
   background: #ffffff;
 }
 
+.workbench-more-body {
+  gap: 10px;
+}
+
+.workbench-more-panel > summary {
+  grid-template-rows: auto auto;
+  align-items: start;
+  min-height: 48px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.workbench-more-panel > summary .session-skills-kicker {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.workbench-more-panel > summary strong {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.workbench-more-panel > summary > span:last-of-type {
+  grid-column: 1 / 3;
+  grid-row: 2;
+}
+
+.workbench-more-body .session-skills-panel,
+.workbench-secondary-panel > .session-skills-panel {
+  margin-bottom: 0;
+}
+
 .workbench-context-status {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

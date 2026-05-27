@@ -1735,6 +1735,7 @@ describe("App", () => {
     expect(screen.getByTestId("account-settings-panel")).not.toHaveAttribute("open");
     expect(screen.getByTestId("session-skills-panel")).not.toHaveAttribute("open");
     const runtime = await screen.findByTestId("runtime-stats-panel");
+    expect(runtime.closest("[data-testid='workbench-more-panel']")).toBeNull();
     expect(runtime).toHaveTextContent("qwen-small");
     expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network");
@@ -1743,6 +1744,33 @@ describe("App", () => {
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
     await user.click(screen.getByRole("button", { name: "Close Workbench" }));
     expect(screen.queryByTestId("workbench-panel")).toBeNull();
+  });
+
+  it("keeps empty secondary Workbench panels folded under More", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") return jsonResponse({ sessions: [], has_more: false });
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 0, running_turns: 0 });
+      if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByTestId("connection-pill")).toHaveTextContent("Connected");
+    await user.click(screen.getByLabelText("Workbench"));
+
+    const more = await screen.findByTestId("workbench-more-panel");
+    expect(more).not.toHaveAttribute("open");
+    expect(more).toHaveTextContent("4 tools");
+    expect(more).toHaveTextContent("Runtime, Access, Memory, Skills");
+    expect(screen.getByTestId("runtime-stats-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
+    expect(screen.getByTestId("account-settings-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
+    expect(screen.getByTestId("session-memory-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
+    expect(screen.getByTestId("session-skills-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
   });
 
   it("surfaces changed files inside Workbench without adding default Chat noise", async () => {
