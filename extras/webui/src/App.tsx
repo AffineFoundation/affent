@@ -748,12 +748,14 @@ export function App() {
   function handleUseLoopProtocolDraft() {
     const goal = selectedLoopState?.initial_goal_preview?.trim() || selectedSessionTitle || "this long-running session";
     const status = selectedLoopState?.status || selectedSession?.loop_protocol?.status;
+    const calibrationQuestions = selectedLoopState?.calibration_questions ?? selectedSession?.loop_protocol?.state?.calibration_questions ?? 0;
+    const calibrationQuestion = selectedLoopState?.last_calibration_question_preview || selectedSession?.loop_protocol?.state?.last_calibration_question_preview;
     const calibrationAnswers = selectedLoopState?.calibration_answers ?? selectedSession?.loop_protocol?.state?.calibration_answers ?? 0;
     const calibrationPreview = selectedLoopState?.last_calibration_answer_preview || selectedSession?.loop_protocol?.state?.last_calibration_answer_preview;
     setComposerDraft({
       id: Date.now(),
       source: "starter",
-      content: webLoopProtocolDraftPrompt(goal, status, calibrationAnswers, calibrationPreview),
+      content: webLoopProtocolDraftPrompt(goal, status, calibrationQuestions, calibrationQuestion, calibrationAnswers, calibrationPreview),
     });
     setComposerFocusSignal((current) => current + 1);
   }
@@ -1397,8 +1399,24 @@ function webLoopActivationPrompt(goal: string): string {
   ].join("\n");
 }
 
-function webLoopProtocolDraftPrompt(goal: string, status?: string, calibrationAnswers = 0, calibrationPreview?: string): string {
+function webLoopProtocolDraftPrompt(
+  goal: string,
+  status?: string,
+  calibrationQuestions = 0,
+  calibrationQuestion?: string,
+  calibrationAnswers = 0,
+  calibrationPreview?: string,
+): string {
   const normalizedStatus = status?.trim().toLowerCase();
+  if (normalizedStatus === "draft" && calibrationQuestions > 0 && calibrationAnswers === 0 && calibrationQuestion?.trim()) {
+    return [
+      `Loop calibration answer for: ${goal}`,
+      "",
+      `Pending question: ${calibrationQuestion.trim()}`,
+      "",
+      "My answer: ",
+    ].join("\n");
+  }
   const lines = [
     `Review and update LOOP.md for: ${goal}`,
     "",
