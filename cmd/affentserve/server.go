@@ -26,6 +26,8 @@ import (
 //	GET    /v1/sessions/{id}/plan
 //	DELETE /v1/sessions/{id}/plan
 //	GET    /v1/sessions/{id}/loop-protocol
+//	POST   /v1/sessions/{id}/loop-protocol
+//	DELETE /v1/sessions/{id}/loop-protocol
 //	GET    /v1/sessions/{id}/tools
 //	GET    /v1/sessions/{id}/transcripts
 //	GET    /v1/sessions/{id}/transcripts/{path...}
@@ -70,6 +72,8 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/plan    → persisted plan snapshot
 //	DELETE /v1/sessions/{id}/plan    → remove persisted plan snapshot
 //	GET    /v1/sessions/{id}/loop-protocol → active LOOP.md snapshot
+//	POST   /v1/sessions/{id}/loop-protocol → create/update LOOP.md
+//	DELETE /v1/sessions/{id}/loop-protocol → remove LOOP.md
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
@@ -106,6 +110,10 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionPlanDelete(pool, sessionID, w, r)
 		case sub == "loop-protocol" && r.Method == http.MethodGet:
 			handleSessionLoopProtocol(pool, sessionID, w, r)
+		case sub == "loop-protocol" && r.Method == http.MethodPost:
+			handleSessionLoopProtocolUpdate(pool, sessionID, w, r)
+		case sub == "loop-protocol" && r.Method == http.MethodDelete:
+			handleSessionLoopProtocolDelete(pool, sessionID, w, r)
 		case sub == "tools" && r.Method == http.MethodGet:
 			handleSessionTools(pool, sessionID, w, r)
 		case (sub == "transcripts" || strings.HasPrefix(sub, "transcripts/")) && r.Method == http.MethodGet:

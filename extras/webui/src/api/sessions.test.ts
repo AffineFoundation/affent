@@ -3,13 +3,16 @@ import { ApiClient } from "./client";
 import {
   cancelSessionTurn,
   createSession,
+  deleteSessionLoopProtocol,
   deleteSession,
   getSessionHistory,
+  getSessionLoopProtocol,
   getSessionPlan,
   listSessions,
   readSessionArtifact,
   sendSessionMessage,
   streamSessionEvents,
+  updateSessionLoopProtocol,
 } from "./sessions";
 
 describe("session API helpers", () => {
@@ -32,6 +35,11 @@ describe("session API helpers", () => {
     await getSessionPlan(client, "s/1");
 
     expect(fetchImpl.mock.calls[2][0]).toBe("/v1/sessions/s%2F1/plan");
+
+    fetchImpl.mockResolvedValueOnce(jsonResponse({ session_id: "s/1", protocol: "# Loop" }));
+    await getSessionLoopProtocol(client, "s/1");
+
+    expect(fetchImpl.mock.calls[3][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
   });
 
   it("uses the documented HTTP methods for controls", async () => {
@@ -42,6 +50,8 @@ describe("session API helpers", () => {
     await sendSessionMessage(client, "s1", { content: "hello" });
     await cancelSessionTurn(client, "s1");
     await deleteSession(client, "s/1");
+    await updateSessionLoopProtocol(client, "s/1", { protocol: "# Loop" });
+    await deleteSessionLoopProtocol(client, "s/1");
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
@@ -49,6 +59,11 @@ describe("session API helpers", () => {
     expect((fetchImpl.mock.calls[2][1] as RequestInit).method).toBe("POST");
     expect(fetchImpl.mock.calls[3][0]).toBe("/v1/sessions/s%2F1");
     expect((fetchImpl.mock.calls[3][1] as RequestInit).method).toBe("DELETE");
+    expect(fetchImpl.mock.calls[4][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
+    expect((fetchImpl.mock.calls[4][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[4][1] as RequestInit).body).toBe(JSON.stringify({ protocol: "# Loop" }));
+    expect(fetchImpl.mock.calls[5][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
+    expect((fetchImpl.mock.calls[5][1] as RequestInit).method).toBe("DELETE");
   });
 
   it("streams native affent session events", async () => {

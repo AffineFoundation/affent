@@ -113,6 +113,15 @@ export interface SessionLoopProtocolResponse {
   summary?: SessionLoopProtocolSummary;
 }
 
+export interface SessionLoopProtocolUpdateRequest {
+  protocol: string;
+}
+
+export interface SessionLoopProtocolDeleteResponse {
+  session_id: string;
+  cleared: boolean;
+}
+
 export interface SessionSkillInfo {
   name: string;
   description?: string;
@@ -335,6 +344,30 @@ export function getSessionLoopProtocol(
   return client.json<SessionLoopProtocolResponse>(
     `/v1/sessions/${encodeURIComponent(sessionId)}/loop-protocol`,
     { signal },
+  );
+}
+
+export function updateSessionLoopProtocol(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionLoopProtocolUpdateRequest,
+  signal?: AbortSignal,
+): Promise<SessionLoopProtocolResponse> {
+  return client.json<SessionLoopProtocolResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/loop-protocol`, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export function deleteSessionLoopProtocol(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionLoopProtocolDeleteResponse> {
+  return client.json<SessionLoopProtocolDeleteResponse>(
+    `/v1/sessions/${encodeURIComponent(sessionId)}/loop-protocol`,
+    { method: "DELETE", signal },
   );
 }
 

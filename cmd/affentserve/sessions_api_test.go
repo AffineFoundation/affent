@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -775,6 +776,140 @@ func TestHandleSessionLoopProtocol_Returns404WhenMissing(t *testing.T) {
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
+func TestHandleSessionLoopProtocolUpdate_WritesDurableProtocolWithoutReopeningSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	protocol := `# Loop Protocol: API
+
+## 0. Metadata
+
+- loop_id: api-loop
+- owner_session: api-loop
+- status: running
+
+## 1. North Star
+
+Keep API-created loop state durable.`
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop/loop-protocol", strings.NewReader(`{"protocol":`+strconv.Quote(protocol)+`}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "api-loop") != nil {
+		t.Fatal("POST loop-protocol must not reopen an inactive durable session")
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.SessionID != "api-loop" || resp.Protocol != protocol {
+		t.Fatalf("response = %+v", resp)
+	}
+	if resp.Summary == nil || resp.Summary.Status != "running" || resp.Summary.Path != loopstate.ProtocolRelPath("api-loop") {
+		t.Fatalf("summary = %+v", resp.Summary)
+	}
+	raw, err := os.ReadFile(sessionLoopProtocolPath(pool, "api-loop"))
+	if err != nil {
+		t.Fatalf("read written protocol: %v", err)
+	}
+	if string(raw) != protocol+"\n" {
+		t.Fatalf("written protocol = %q", string(raw))
+	}
+}
+
+func TestHandleSessionLoopProtocolUpdate_RejectsBlankAndUnknownFields(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "blank", body: `{"protocol":" \n\t"}`},
+		{name: "unknown", body: `{"protocol":"# Loop","extra":true}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/v1/sessions/bad-loop/loop-protocol", strings.NewReader(tc.body))
+			w := httptest.NewRecorder()
+			handleSessionRoutes(pool).ServeHTTP(w, r)
+			if got := w.Result().StatusCode; got != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleSessionLoopProtocolDelete_RemovesDurableProtocolWithoutReopeningSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "clear-loop")
+	path := sessionLoopProtocolPath(pool, "clear-loop")
+	if err := loopstate.WriteProtocol(path, "# Loop\n\nstatus: paused"); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-loop/loop-protocol", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "clear-loop") != nil {
+		t.Fatal("DELETE loop-protocol must not reopen an inactive durable session")
+	}
+	var resp sessionLoopProtocolDeleteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.SessionID != "clear-loop" || !resp.Cleared {
+		t.Fatalf("delete response = %+v, want cleared clear-loop", resp)
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("loop protocol path after delete err = %v, want not exists", err)
+	}
+
+	r = httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-loop/loop-protocol", nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("second status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode second: %v", err)
+	}
+	if resp.Cleared {
+		t.Fatalf("second delete response = %+v, want cleared=false", resp)
+	}
+}
+
+func TestHandleSessionLoopProtocolDelete_RejectsSymlinkProtocol(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "clear-link-loop")
+	outside := filepath.Join(t.TempDir(), "outside-loop.md")
+	if err := os.WriteFile(outside, []byte("# outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := sessionLoopProtocolPath(pool, "clear-link-loop")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, path); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-link-loop/loop-protocol", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", got, w.Body.String())
+	}
+	if _, err := os.Lstat(outside); err != nil {
+		t.Fatalf("outside protocol should remain: %v", err)
 	}
 }
 

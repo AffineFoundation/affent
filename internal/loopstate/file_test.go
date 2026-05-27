@@ -42,6 +42,85 @@ func TestReadProtocolRejectsSymlinkAndOversize(t *testing.T) {
 	}
 }
 
+func TestWriteProtocolPersistsAtomicallyAndRejectsUnsafeTargets(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".affent", "loops", "alpha", "LOOP.md")
+	if err := WriteProtocol(path, "  # Loop\n\nstatus: running  "); err != nil {
+		t.Fatalf("WriteProtocol: %v", err)
+	}
+	got, found, err := ReadProtocol(path)
+	if err != nil || !found || got != "# Loop\n\nstatus: running" {
+		t.Fatalf("ReadProtocol = %q found=%v err=%v", got, found, err)
+	}
+	if _, err := os.Lstat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("temp file err = %v, want not exists", err)
+	}
+	if err := WriteProtocol(path, "updated"); err != nil {
+		t.Fatalf("overwrite WriteProtocol: %v", err)
+	}
+	got, found, err = ReadProtocol(path)
+	if err != nil || !found || got != "updated" {
+		t.Fatalf("updated ReadProtocol = %q found=%v err=%v", got, found, err)
+	}
+
+	if err := WriteProtocol(filepath.Join(dir, "blank.md"), " \n\t "); err == nil || !strings.Contains(err.Error(), "content is required") {
+		t.Fatalf("blank WriteProtocol err = %v", err)
+	}
+	if err := WriteProtocol(filepath.Join(dir, "too-big.md"), strings.Repeat("x", MaxProtocolBytes+1)); err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversize WriteProtocol err = %v", err)
+	}
+
+	outside := filepath.Join(dir, "outside.md")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.md")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteProtocol(link, "new"); err == nil || !strings.Contains(err.Error(), "must not be a symlink") {
+		t.Fatalf("symlink WriteProtocol err = %v", err)
+	}
+	raw, err := os.ReadFile(outside)
+	if err != nil || string(raw) != "outside" {
+		t.Fatalf("outside content = %q err=%v", string(raw), err)
+	}
+}
+
+func TestRemoveProtocolRejectsSymlinkAndRemovesRegularFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := WriteProtocol(path, "protocol"); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := RemoveProtocol(path)
+	if err != nil || !removed {
+		t.Fatalf("RemoveProtocol = removed %v err %v", removed, err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("protocol still exists err=%v", err)
+	}
+	removed, err = RemoveProtocol(path)
+	if err != nil || removed {
+		t.Fatalf("second RemoveProtocol = removed %v err %v", removed, err)
+	}
+
+	outside := filepath.Join(dir, "outside.md")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "link.md")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
+	if removed, err := RemoveProtocol(link); err == nil || removed || !strings.Contains(err.Error(), "must not be a symlink") {
+		t.Fatalf("RemoveProtocol symlink = removed %v err %v", removed, err)
+	}
+	if _, err := os.Lstat(outside); err != nil {
+		t.Fatalf("outside should remain: %v", err)
+	}
+}
+
 func TestSummarizeFileExtractsMetadata(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")

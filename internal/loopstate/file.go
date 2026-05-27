@@ -76,6 +76,87 @@ func ReadProtocol(path string) (string, bool, error) {
 	return string(raw), true, nil
 }
 
+func WriteProtocol(path, content string) error {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return errors.New("loop protocol content is required")
+	}
+	if len([]byte(content)) > MaxProtocolBytes {
+		return fmt.Errorf("loop protocol file exceeds %d bytes", MaxProtocolBytes)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if info, err := os.Lstat(path); err == nil {
+		if info.IsDir() {
+			return errors.New("loop protocol path is a directory")
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("loop protocol path must not be a symlink")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.Remove(tmp); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write([]byte(content + "\n")); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
+}
+
+func RemoveProtocol(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if info.IsDir() {
+		return false, errors.New("loop protocol path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, errors.New("loop protocol path must not be a symlink")
+	}
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return true, nil
+}
+
 func SummarizeFile(path, relPath string) (Summary, bool, error) {
 	info, err := os.Lstat(path)
 	if err != nil {
