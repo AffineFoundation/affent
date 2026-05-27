@@ -368,6 +368,32 @@ func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testin
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromConversation(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "resume-repair")
+	dir := pool.sessionDirPath("resume-repair")
+
+	if err := os.WriteFile(filepath.Join(dir, "conversation.jsonl"), []byte(
+		`{"role":"system","content":"base"}`+"\n"+
+			`{"role":"user","content":"continue recovered task"}`+"\n"+
+			`{"role":"tool","tool_call_id":"c2","name":"web_fetch","content":"(tool result missing on resume; process likely crashed mid-turn)\nFailure: kind=resume_missing_tool_result\nNext: do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat."}`+"\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "resume-repair")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat." {
+		t.Fatalf("latest_recovery_hint = %q, want conversation repair hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
 	got := mergeSessionSummaries(
 		sessionSummary{

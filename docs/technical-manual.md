@@ -615,7 +615,9 @@ Session endpoints:
 Use `GET /v1/sessions/{id}/events` for live SSE. Reconnect with
 `Last-Event-ID` to replay persisted events before live events continue. Use
 `GET /v1/sessions/{id}/history?after=-1&limit=100` for paged replay from the
-durable event log.
+durable event log. Session summaries expose `latest_recovery_hint` from recent
+failed tool events and, when the event log is missing or incomplete, from
+structured tool-result placeholders in `conversation.jsonl`.
 
 ## Configuration
 

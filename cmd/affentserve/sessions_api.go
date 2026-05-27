@@ -635,6 +635,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		if err != nil {
 			return sessionSummary{}, false, err
 		}
+		recovery, err := latestRecoveryHintFromConversationFile(filepath.Join(dir, "conversation.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.LatestRecoveryHint = recovery
 	}
 	var eventMod time.Time
 	if exists, eventMod, err = durableRegularFileModTime(filepath.Join(dir, "events.jsonl")); err != nil {
@@ -664,7 +669,9 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		if err != nil {
 			return sessionSummary{}, false, err
 		}
-		summary.LatestRecoveryHint = recovery
+		if recovery != "" {
+			summary.LatestRecoveryHint = recovery
+		}
 		memoryUpdate, err := latestMemoryUpdateFromEventsFile(filepath.Join(dir, "events.jsonl"))
 		if err != nil {
 			return sessionSummary{}, false, err
@@ -905,6 +912,44 @@ func userMessageSummariesFromConversationFile(path string) (string, string, erro
 		topic = latest
 	}
 	return latest, topic, nil
+}
+
+func latestRecoveryHintFromConversationFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return "", err
+	}
+
+	latest := ""
+	r := bufio.NewReaderSize(f, 64*1024)
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var msg agent.ChatMessage
+		if err := json.Unmarshal(line, &msg); err != nil || msg.Role != "tool" {
+			continue
+		}
+		if hint := recoveryHintFromToolResult("", msg.Content); hint != "" {
+			latest = hint
+		}
+	}
+	return latest, nil
 }
 
 type sessionUserMessageScan struct {

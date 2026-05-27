@@ -292,6 +292,9 @@ func TestOpenConversationAt_RepairsCrashMidTurnToolCalls(t *testing.T) {
 	if !strings.Contains(snap[4].Content, "Failure: kind=resume_missing_tool_result") {
 		t.Errorf("placeholder content should carry a structured failure kind; got %q", snap[4].Content)
 	}
+	if !strings.Contains(snap[4].Content, "Next:") {
+		t.Errorf("placeholder content should expose the standard recovery hint field; got %q", snap[4].Content)
+	}
 	if !strings.Contains(snap[4].Content, "do not assume the tool succeeded") {
 		t.Errorf("placeholder content should guide safe recovery; got %q", snap[4].Content)
 	}

@@ -20,7 +20,7 @@ const maxConversationLineBytes = jsonl.DefaultMaxRecordBytes
 
 const missingToolResultOnResume = `(tool result missing on resume; process likely crashed mid-turn)
 Failure: kind=resume_missing_tool_result
-Guidance: do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat.`
+Next: do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat.`
 
 // Conversation is the in-memory + on-disk record of one session's messages.
 // Persistence is JSONL on the host (under the user's home volume), one
