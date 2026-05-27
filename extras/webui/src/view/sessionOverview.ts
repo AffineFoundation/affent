@@ -36,6 +36,7 @@ export function buildSessionOverview({
   sessionTitle,
   planSummary,
   contextSummary,
+  recoveryHint,
 }: {
   session: SessionState;
   workflow: WorkflowStatus;
@@ -45,6 +46,7 @@ export function buildSessionOverview({
   sessionTitle?: string;
   planSummary?: SessionPlanSummary;
   contextSummary?: SessionContextSummary;
+  recoveryHint?: string;
 }): SessionOverview {
   const latestTurn = session.turns.at(-1);
   const latestActivity = latestTurn ? buildTurnActivity(latestTurn) : undefined;
@@ -61,7 +63,7 @@ export function buildSessionOverview({
       stateLabel: "Sending",
       tone: "running",
       active: true,
-      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary),
+      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary, recoveryHint),
     };
   }
 
@@ -72,7 +74,7 @@ export function buildSessionOverview({
       stateLabel: "Sending guidance",
       tone: "running",
       active: true,
-      metrics: buildMetrics(session, latestTurn, latestActivity, planSummary, contextSummary),
+      metrics: buildMetrics(session, latestTurn, latestActivity, planSummary, contextSummary, recoveryHint),
     };
   }
 
@@ -83,7 +85,7 @@ export function buildSessionOverview({
       stateLabel: "Ready",
       tone: "ready",
       active: false,
-      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary),
+      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary, recoveryHint),
     };
   }
 
@@ -94,7 +96,7 @@ export function buildSessionOverview({
       stateLabel: "Ready",
       tone: "ready",
       active: false,
-      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary),
+      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary, recoveryHint),
     };
   }
 
@@ -105,7 +107,7 @@ export function buildSessionOverview({
     stateLabel: workflow.title,
     tone,
     active: workflow.active,
-    metrics: buildMetrics(session, latestTurn, latestActivity, planSummary, contextSummary),
+    metrics: buildMetrics(session, latestTurn, latestActivity, planSummary, contextSummary, recoveryHint),
   };
 }
 
@@ -144,6 +146,7 @@ function buildMetrics(
   latestActivity?: TurnActivityView,
   planSummary?: SessionPlanSummary,
   contextSummary?: SessionContextSummary,
+  recoveryHint?: string,
 ): SessionOverviewMetric[] {
   const metrics: SessionOverviewMetric[] = [];
 
@@ -155,6 +158,8 @@ function buildMetrics(
   if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
   const recoveryMetric = latestTurn ? buildToolRecoveryMetric(latestTurn) : undefined;
   if (recoveryMetric) metrics.push(recoveryMetric);
+  const summaryRecoveryMetric = !recoveryMetric && (!latestTurn || currentIssueCount > 0) ? buildSummaryRecoveryMetric(recoveryHint) : undefined;
+  if (summaryRecoveryMetric) metrics.push(summaryRecoveryMetric);
   const artifactMetric = buildArtifactMetric(session);
   if (artifactMetric) metrics.push(artifactMetric);
   const loopMetric = buildLoopMetric(session);
@@ -196,6 +201,11 @@ function buildMetrics(
   if (session.unknownEventCount > 0) metrics.push({ label: "Unclassified", value: String(session.unknownEventCount), tone: "warning" });
 
   return metrics;
+}
+
+function buildSummaryRecoveryMetric(hint?: string): SessionOverviewMetric | undefined {
+  const value = hint?.replace(/\s+/g, " ").trim();
+  return value ? { label: "Recovery", value: summarize(value, 72), tone: "warning" } : undefined;
 }
 
 function buildToolRecoveryMetric(turn: TurnState): SessionOverviewMetric | undefined {

@@ -711,6 +711,63 @@ describe("buildSessionOverview", () => {
     expect(overview.metrics).toContainEqual({ label: "Recovery", value: "run rg --files config before retrying", tone: "warning" });
   });
 
+  it("uses durable recovery hints when selected history has not loaded a failing turn", () => {
+    const session = reduceRawEvents([]);
+
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      recoveryHint: "check the browser network panel before retrying the taostats value",
+    });
+
+    expect(overview.metrics).toContainEqual({
+      label: "Recovery",
+      value: "check the browser network panel before retrying the taostats value",
+      tone: "warning",
+    });
+  });
+
+  it("prefers live recovery hints over durable summary recovery hints", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "read the missing config" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "read_file",
+          args: { path: "config/missing.yaml" },
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 1,
+          result_summary: "file not found\nNext: run rg --files config before retrying\nFailure: kind=not_found",
+          result: "file not found\nNext: run rg --files config before retrying\nFailure: kind=not_found",
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, tool_errors: 1 } } },
+    ]);
+
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      recoveryHint: "stale durable recovery hint",
+    });
+
+    expect(overview.metrics.filter((metric) => metric.label === "Recovery")).toEqual([
+      { label: "Recovery", value: "run rg --files config before retrying", tone: "warning" },
+    ]);
+  });
+
   it("carries source counts into the header when a final report uses earlier tool evidence", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

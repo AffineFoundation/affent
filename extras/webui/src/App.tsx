@@ -268,8 +268,9 @@ export function App() {
       sessionTitle: selectedSessionTitle,
       planSummary: planPanelSummary,
       contextSummary: selectedSession?.context,
+      recoveryHint: selectedSession?.latest_recovery_hint,
     }),
-    [pendingMessage, planPanelSummary, selectedSession?.context, selectedSessionId, selectedSessionTitle, session, workflow],
+    [pendingMessage, planPanelSummary, selectedSession?.context, selectedSession?.latest_recovery_hint, selectedSessionId, selectedSessionTitle, session, workflow],
   );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
   const showSessionNav = !demoActive && sessions.length > 0;
