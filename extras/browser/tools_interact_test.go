@@ -25,6 +25,21 @@ func TestBrowserNotInteractableError_Message(t *testing.T) {
 	}
 }
 
+func TestErrNoPageGuidesRecovery(t *testing.T) {
+	msg := ErrNoPage.Error()
+	for _, want := range []string{
+		"browser session has no active page",
+		"Failure: kind=no_page",
+		"Next:",
+		"browser_navigate",
+		"http:// or https://",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("ErrNoPage missing %q: %q", want, msg)
+		}
+	}
+}
+
 func TestFormatScrollTelemetry_NoMovementGivesNextStep(t *testing.T) {
 	got := formatScrollTelemetry(browserScrollTelemetry{
 		Direction: "down",

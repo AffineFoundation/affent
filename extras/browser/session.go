@@ -407,7 +407,7 @@ func (s *Session) newSnapshotID() int64 {
 // page loaded. NewSession opens about:blank so this shouldn't fire in
 // practice; reserved for future code paths that close the page on
 // idle.
-var ErrNoPage = errors.New("browser session has no active page")
+var ErrNoPage = errors.New("browser session has no active page\nFailure: kind=no_page\nNext: call browser_navigate with the target http:// or https:// URL before using browser_snapshot, browser_find, browser_network_read, or interaction tools")
 
 // defaultStableUA is a current Chrome stable UA on Linux x86_64.
 // We override the headless "Chrome for Testing" UA with this so the
