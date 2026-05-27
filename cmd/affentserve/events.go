@@ -31,6 +31,8 @@ const (
 	maxHistoryLineBytes = jsonl.DefaultMaxRecordBytes
 )
 
+var errEventCursorAhead = errors.New("event cursor is ahead of latest event")
+
 // handleSessionEvents tails the session's affent event stream and
 // passes events through to the SSE client verbatim. The client gets
 // affent's native 13-event schema, not an OpenAI-translated view.
@@ -61,6 +63,16 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 		}
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
 		return
+	}
+	if replay {
+		if err := validateSessionReplayCursor(pool.sessionDirPath(sessionID), lastEventID); err != nil {
+			if errors.Is(err, errEventCursorAhead) {
+				writeJSONErrorTyped(w, http.StatusConflict, "Last-Event-ID is ahead of latest session event", err, "cursor_ahead")
+				return
+			}
+			writeJSONError(w, http.StatusInternalServerError, "validate session event cursor", err)
+			return
+		}
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -152,6 +164,28 @@ func parseLastEventID(raw string) (int64, bool, error) {
 	return n, true, nil
 }
 
+func validateSessionReplayCursor(sessionDir string, cursor int64) error {
+	if cursor < 0 {
+		return nil
+	}
+	last, err := sessionEventLogLastCursor(sessionDir)
+	if err != nil {
+		return err
+	}
+	if cursor > last {
+		return fmt.Errorf("%w: Last-Event-ID %d is ahead of latest event cursor %d", errEventCursorAhead, cursor, last)
+	}
+	return nil
+}
+
+func sessionEventLogLastCursor(sessionDir string) (int64, error) {
+	lines, err := countJSONLLines(filepath.Join(sessionDir, "events.jsonl"))
+	if err != nil {
+		return 0, err
+	}
+	return lines - 1, nil
+}
+
 func replaySessionEvents(w http.ResponseWriter, flusher http.Flusher, sessionDir string, after int64) (int64, error) {
 	cursor := after
 	for {
@@ -240,6 +274,10 @@ func handleSessionHistory(pool *SessionPool, sessionID string, w http.ResponseWr
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			writeJSONError(w, http.StatusNotFound, "session history not found", err)
+			return
+		}
+		if errors.Is(err, errEventCursorAhead) {
+			writeJSONErrorTyped(w, http.StatusConflict, "history cursor is ahead of latest session event", err, "cursor_ahead")
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "read session history", err)
@@ -358,6 +396,9 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 		ev.ID = lineNo
 		page.Records = append(page.Records, sessionHistoryRecord{Cursor: lineNo, Event: ev})
 		page.NextAfter = lineNo
+	}
+	if after > lineNo {
+		return sessionHistoryPage{}, fmt.Errorf("%w: after %d is ahead of latest event cursor %d", errEventCursorAhead, after, lineNo)
 	}
 	return page, nil
 }

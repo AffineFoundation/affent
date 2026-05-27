@@ -657,7 +657,10 @@ Session endpoints:
 Use `GET /v1/sessions/{id}/events` for live SSE. Reconnect with
 `Last-Event-ID` to replay persisted events before live events continue. Use
 `GET /v1/sessions/{id}/history?after=-1&limit=100` for paged replay from the
-durable event log. Session summaries expose `latest_recovery_hint` from recent
+durable event log. If `Last-Event-ID` or `history?after=` is ahead of the
+latest durable event cursor, the server returns a `cursor_ahead` conflict
+instead of opening an empty stream that silently skips future live events.
+Session summaries expose `latest_recovery_hint` from recent
 failed tool events, `conversation.repaired` events, visible `loop.decision`
 required actions, runtime `error` events, `turn.end` budget/runtime failures,
 truncated tool results with artifact paths or missing-artifact warnings,

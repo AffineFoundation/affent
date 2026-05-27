@@ -123,6 +123,28 @@ func TestHandleSessionEvents_RejectsBadLastEventIDBeforeReopeningDurableSession(
 	}
 }
 
+func TestHandleSessionEvents_RejectsFutureLastEventID(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	if _, err := pool.GetOrCreate("future-cursor"); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/future-cursor/events", nil)
+	r.Header.Set("Last-Event-ID", "99")
+	w := httptest.NewRecorder()
+	handleSessionEvents(pool, "future-cursor", w, r)
+
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "cursor_ahead") || !strings.Contains(w.Body.String(), "Last-Event-ID") {
+		t.Fatalf("future cursor response should be actionable JSON, got: %s", w.Body.String())
+	}
+	if strings.Contains(w.Result().Header.Get("Content-Type"), "text/event-stream") {
+		t.Fatalf("future cursor must fail before SSE streaming starts, content-type=%q body=%s", w.Result().Header.Get("Content-Type"), w.Body.String())
+	}
+}
+
 // TestHandleSessionEvents_RejectsNonStreamingWriter pins the
 // "streaming unsupported" guard. The handler asserts w to
 // http.Flusher; on any wrapper that doesn't implement it (some
@@ -389,6 +411,27 @@ func TestReplaySessionEventsRejectsFutureTraceSchemaVersion(t *testing.T) {
 	}
 }
 
+func TestReplaySessionEventsRejectsFutureCursor(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		`{"id":0,"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"id":1,"type":"turn.start","data":{"turn_id":"one"}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	spy := &flushSpyRecorder{ResponseRecorder: rec}
+	if _, err := replaySessionEvents(spy, spy, dir, 99); err == nil || !errors.Is(err, errEventCursorAhead) {
+		t.Fatalf("replaySessionEvents future cursor err = %v, want cursor_ahead", err)
+	}
+	if rec.Body.Len() != 0 {
+		t.Fatalf("future replay cursor should not write partial SSE frames:\n%s", rec.Body.String())
+	}
+}
+
 func TestHandleSessionHistoryNormalizesLegacyEventIDsToLineCursor(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Join([]string{
@@ -409,6 +452,22 @@ func TestHandleSessionHistoryNormalizesLegacyEventIDsToLineCursor(t *testing.T) 
 	}
 	if resp.Events[0].ID != 0 || resp.Events[1].ID != 1 || resp.NextAfter != 1 {
 		t.Fatalf("history should expose durable line cursor ids, got ids %d/%d next_after=%d", resp.Events[0].ID, resp.Events[1].ID, resp.NextAfter)
+	}
+}
+
+func TestHandleSessionHistoryRejectsFutureCursor(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		`{"id":0,"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"id":1,"type":"turn.start","data":{"turn_id":"one"}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := readSessionHistory(dir, "future-cursor", 99, 10); err == nil || !errors.Is(err, errEventCursorAhead) {
+		t.Fatalf("readSessionHistory future cursor err = %v, want cursor_ahead", err)
 	}
 }
 
