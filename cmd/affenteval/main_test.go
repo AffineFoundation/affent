@@ -799,14 +799,16 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			},
 		},
 		LoopGuardExamples: []agenteval.LoopGuardExample{{
-			Kind:          "loop_guard_repeated_failed_input",
-			Category:      "loop_guard",
-			ToolIndex:     1,
-			CallID:        "guard-print-1",
-			Tool:          "web_fetch",
-			ArgsSummary:   `url="https://example.com"`,
-			ResultSummary: "repeated failed input | Next: stop retrying this URL",
-			ExitCode:      1,
+			Kind:              "loop_guard_repeated_failed_input",
+			Category:          "loop_guard",
+			ToolIndex:         1,
+			CallID:            "guard-print-1",
+			Tool:              "web_fetch",
+			ArgsSummary:       `url="https://example.com"`,
+			GuardSummary:      "repeated failed input",
+			SuggestedNextStep: "stop retrying this URL",
+			ResultSummary:     "repeated failed input | Next: stop retrying this URL",
+			ExitCode:          1,
 		}},
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
 			ToolIndex:     2,
@@ -936,7 +938,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
-		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 result=repeated failed input | Next: stop retrying this URL`,
+		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 guard=repeated failed input next=stop retrying this URL result=repeated failed input | Next: stop retrying this URL`,
 		"source_access_example: status=network tool=browser_network_read call_id=source-print-1 url=https://metrics.example/api.json requested=https://metrics.example/dashboard method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price preview=\"JSON_PATH: $.price \\\"12.34\\\"\"",
 		`browser_network_example: status=no_matches call_id=browser-network-print-1 page=https://metrics.example/dashboard query="market_cap" not_citable=true next="adjust query or read available network refs before citing values"`,
 		`memory_update_example: action=replace target=memory location=memory:markets call_id=memory-print-1 topic=markets previous="old dashboard rule" next="prefer browser_network_read evidence"`,
@@ -1091,15 +1093,17 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Succeeded:     true,
 		}},
 		LoopGuardExamples: []agenteval.LoopGuardExample{{
-			Scenario:      "sample",
-			Kind:          "loop_guard_repeated_failed_input",
-			Category:      "loop_guard",
-			ToolIndex:     2,
-			CallID:        "guard-1",
-			Tool:          "web_fetch",
-			ArgsSummary:   `url="https://loop.example"`,
-			ResultSummary: "repeated failed input | Next: use browser_network_read",
-			ExitCode:      1,
+			Scenario:          "sample",
+			Kind:              "loop_guard_repeated_failed_input",
+			Category:          "loop_guard",
+			ToolIndex:         2,
+			CallID:            "guard-1",
+			Tool:              "web_fetch",
+			ArgsSummary:       `url="https://loop.example"`,
+			GuardSummary:      "repeated failed input",
+			SuggestedNextStep: "use browser_network_read",
+			ResultSummary:     "repeated failed input | Next: use browser_network_read",
+			ExitCode:          1,
 		}},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:    1,
@@ -1382,7 +1386,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `tool_failure_example[timeout]: scenario=taostats-rendered tool=web_fetch args=url="https://slow.example"`) {
 		t.Fatalf("summary output missing tool failure example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: scenario=sample category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
+	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: scenario=sample category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 guard=repeated failed input next=use browser_network_read result=repeated failed input | Next: use browser_network_read`) {
 		t.Fatalf("summary output missing loop guard example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price preview=\"JSON_PATH: $.price \\\"12.34\\\"\"") {
@@ -1695,14 +1699,16 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			},
 		},
 		LoopGuardExamples: []agenteval.LoopGuardExample{{
-			Kind:          "tool_policy_forced_no_tools",
-			Category:      "tool_policy",
-			ToolIndex:     1,
-			CallID:        "guard-jsonl-1",
-			Tool:          "web_fetch",
-			ArgsSummary:   `url="https://blocked.example/metrics"`,
-			ResultSummary: "forced no-tools after repeated failures",
-			ExitCode:      1,
+			Kind:              "tool_policy_forced_no_tools",
+			Category:          "tool_policy",
+			ToolIndex:         1,
+			CallID:            "guard-jsonl-1",
+			Tool:              "web_fetch",
+			ArgsSummary:       `url="https://blocked.example/metrics"`,
+			GuardSummary:      "forced no-tools after repeated failures",
+			SuggestedNextStep: "answer from gathered evidence",
+			ResultSummary:     "forced no-tools after repeated failures",
+			ExitCode:          1,
 		}},
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
 			ToolIndex:     2,
@@ -2006,7 +2012,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		loopGuardExample["kind"] != "tool_policy_forced_no_tools" ||
 		loopGuardExample["category"] != "tool_policy" ||
 		loopGuardExample["tool"] != "web_fetch" ||
-		!strings.Contains(fmt.Sprint(loopGuardExample["args_summary"]), "blocked.example") {
+		!strings.Contains(fmt.Sprint(loopGuardExample["args_summary"]), "blocked.example") ||
+		!strings.Contains(fmt.Sprint(loopGuardExample["guard_summary"]), "forced no-tools") ||
+		!strings.Contains(fmt.Sprint(loopGuardExample["suggested_next_step"]), "gathered evidence") {
 		t.Fatalf("loop_guard_example = %#v\njson=%s", loopGuardExamples[0], out.String())
 	}
 	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
@@ -2651,15 +2659,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			},
 		},
 		LoopGuardExamples: []agenteval.LoopGuardExample{{
-			Scenario:      "taostats-rendered",
-			Kind:          "loop_guard_repeated_failed_input",
-			Category:      "loop_guard",
-			ToolIndex:     1,
-			CallID:        "summary-guard-1",
-			Tool:          "web_fetch",
-			ArgsSummary:   `url="https://blocked.example"`,
-			ResultSummary: "repeated failed input",
-			ExitCode:      1,
+			Scenario:          "taostats-rendered",
+			Kind:              "loop_guard_repeated_failed_input",
+			Category:          "loop_guard",
+			ToolIndex:         1,
+			CallID:            "summary-guard-1",
+			Tool:              "web_fetch",
+			ArgsSummary:       `url="https://blocked.example"`,
+			GuardSummary:      "repeated failed input",
+			SuggestedNextStep: "use another source",
+			ResultSummary:     "repeated failed input",
+			ExitCode:          1,
 		}},
 		RuntimeErrors:      1,
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
@@ -3024,7 +3034,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		loopGuardExample["call_id"] != "summary-guard-1" ||
 		loopGuardExample["kind"] != "loop_guard_repeated_failed_input" ||
 		loopGuardExample["category"] != "loop_guard" ||
-		!strings.Contains(fmt.Sprint(loopGuardExample["args_summary"]), "blocked.example") {
+		!strings.Contains(fmt.Sprint(loopGuardExample["args_summary"]), "blocked.example") ||
+		!strings.Contains(fmt.Sprint(loopGuardExample["guard_summary"]), "repeated failed input") ||
+		!strings.Contains(fmt.Sprint(loopGuardExample["suggested_next_step"]), "another source") {
 		t.Fatalf("loop_guard_example = %#v\njson=%s", loopGuardExamples[0], out.String())
 	}
 	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)

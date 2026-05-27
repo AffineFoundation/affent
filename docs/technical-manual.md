@@ -441,11 +441,12 @@ they block a model call before the underlying tool runs. Per-turn stats expose
 also include bounded `tool_repair_examples`, so repeated small-model tool-name,
 alias, enum, type-coercion, and unknown-field mistakes can be inspected without
 opening raw trace events. They also include bounded `loop_guard_examples`,
-showing the blocked tool, compact args/result guidance, failure kind, and
-whether the rejection came from loop guard logic or tool policy. Source evidence
-examples include compact body previews after the `SourceAccess:` header, and
-memory update examples include previous/next previews, so live-web facts and
-long-run memory changes can be audited without opening the raw trace. Durable
+showing the blocked tool, compact args/result guidance, structured guard
+reason and suggested next step, failure kind, and whether the rejection came
+from loop guard logic or tool policy. Source evidence examples include compact
+body previews after the `SourceAccess:` header, and memory update examples
+include previous/next previews, so live-web facts and long-run memory changes
+can be audited without opening the raw trace. Durable
 transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
 `session_search_context_hits`, `session_search_matched_terms`, and matched

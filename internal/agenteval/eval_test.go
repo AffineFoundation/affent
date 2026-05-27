@@ -1476,7 +1476,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			ArgsBytes:              70000,
 			ArgsOmittedBytes:       128,
 			ArgsCapBytes:           65536,
-			Result:                 "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value\nPAGE TEXT:\nAffine SN120",
+			Result:                 "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value\nPAGE TEXT:\nAffine SN120\nloop_guard: blocked repeated failed call to \"web_fetch\" with the same effective URL after previous Failure kind=dynamic_shell.\nNext: switch to browser_network_read before citing dynamic dashboard metrics.\nFailure: kind=loop_guard_repeated_failed_input",
 			ResultSummary:          "Rendered page partial dynamic evidence: empty metric widgets",
 			ResultTruncated:        true,
 			ResultBytes:            300000,
@@ -1811,7 +1811,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.LoopGuardExamples[0].Tool != "web_fetch" ||
 		manifest.LoopGuardExamples[0].Kind != "loop_guard_repeated_failed_input" ||
 		manifest.LoopGuardExamples[0].Category != "loop_guard" ||
-		!strings.Contains(manifest.LoopGuardExamples[0].ArgsSummary, "https://example.test/report") {
+		!strings.Contains(manifest.LoopGuardExamples[0].ArgsSummary, "https://example.test/report") ||
+		!strings.Contains(manifest.LoopGuardExamples[0].GuardSummary, "blocked repeated failed call") ||
+		!strings.Contains(manifest.LoopGuardExamples[0].SuggestedNextStep, "browser_network_read") {
 		t.Fatalf("manifest loop guard examples = %+v", manifest.LoopGuardExamples)
 	}
 	if len(manifest.MemoryUpdateExamples) != 2 ||
@@ -1929,6 +1931,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"## Loop Guard",
 		"tool#1 `web_fetch` kind=`loop_guard_repeated_failed_input` category=`loop_guard` exit=`1` call_id=`call-1`",
 		"args: url=\"https://example.test/report\"",
+		"guard: blocked repeated failed call to \"web_fetch\" with the same effective URL after previous Failure kind=dynamic_shell.",
+		"next: switch to browser_network_read before citing dynamic dashboard metrics.",
 		"child_transcripts: `2` indexed",
 		"## Child Transcripts",
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",

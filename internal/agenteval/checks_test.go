@@ -789,6 +789,7 @@ func TestTraceToolFailureExamples(t *testing.T) {
 		t.Fatalf("no_results example missing query context: %#v", search)
 	}
 	trace.Tools[0].FailureKinds = append(trace.Tools[0].FailureKinds, "loop_guard_repeated_failed_input")
+	trace.Tools[0].Result = "loop_guard: blocked repeated failed call to \"web_fetch\" with the same effective URL after previous Failure kind=blocked.\nNext: do not retry the same failing URL; choose a different source.\nFailure: kind=loop_guard_repeated_failed_input"
 	guards := trace.LoopGuardExamples(1)
 	if len(guards) != 1 ||
 		guards[0].Kind != "loop_guard_repeated_failed_input" ||
@@ -796,7 +797,9 @@ func TestTraceToolFailureExamples(t *testing.T) {
 		guards[0].ToolIndex != 1 ||
 		guards[0].CallID != "fetch-1" ||
 		guards[0].Tool != "web_fetch" ||
-		!strings.Contains(guards[0].ArgsSummary, "dashboard.example") {
+		!strings.Contains(guards[0].ArgsSummary, "dashboard.example") ||
+		!strings.Contains(guards[0].GuardSummary, "blocked repeated failed call") ||
+		!strings.Contains(guards[0].SuggestedNextStep, "choose a different source") {
 		t.Fatalf("loop guard example = %#v", guards)
 	}
 }

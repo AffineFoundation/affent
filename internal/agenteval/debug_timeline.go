@@ -797,6 +797,12 @@ func renderTimelineLoopGuard(b *strings.Builder, trace *Trace) {
 		if ex.ArgsSummary != "" {
 			fmt.Fprintf(b, "   args: %s\n", timelineInline(ex.ArgsSummary, timelineMemoryPreviewBytes))
 		}
+		if ex.GuardSummary != "" {
+			fmt.Fprintf(b, "   guard: %s\n", timelineInline(ex.GuardSummary, timelineResultPreviewBytes))
+		}
+		if ex.SuggestedNextStep != "" {
+			fmt.Fprintf(b, "   next: %s\n", timelineInline(ex.SuggestedNextStep, timelineResultPreviewBytes))
+		}
 		if ex.ResultSummary != "" {
 			fmt.Fprintf(b, "   result: %s\n", timelineInline(ex.ResultSummary, timelineResultPreviewBytes))
 		}

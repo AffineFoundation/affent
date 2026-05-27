@@ -1763,6 +1763,12 @@ func printLoopGuardExampleLines(w io.Writer, examples []agenteval.LoopGuardExamp
 			fmt.Fprintf(w, " args=%s", ex.ArgsSummary)
 		}
 		fmt.Fprintf(w, " exit=%d", ex.ExitCode)
+		if ex.GuardSummary != "" {
+			fmt.Fprintf(w, " guard=%s", ex.GuardSummary)
+		}
+		if ex.SuggestedNextStep != "" {
+			fmt.Fprintf(w, " next=%s", ex.SuggestedNextStep)
+		}
 		if ex.ResultSummary != "" {
 			fmt.Fprintf(w, " result=%s", ex.ResultSummary)
 		}

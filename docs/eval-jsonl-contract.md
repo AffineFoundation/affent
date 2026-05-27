@@ -206,10 +206,12 @@ Scenario records describe one eval case:
 - `loop_guard_examples`: optional bounded examples of loop-guard and tool
   policy rejections. Each sample includes the failure kind, category
   (`loop_guard` or `tool_policy`), tool index, call id, tool name, compact
-  argument/result previews, and exit code. Use this when `loop_guard_interventions`
-  or `forced_no_tools` spike and the generic failure-kind counts do not show
-  which attempted call was blocked. Summary records include the originating
-  scenario.
+  argument/result previews, structured `guard_summary` and
+  `suggested_next_step` fields when the tool result carried `loop_guard:` /
+  `Next:` guidance, and exit code. Use this when
+  `loop_guard_interventions` or `forced_no_tools` spike and the generic
+  failure-kind counts do not show which attempted call was blocked. Summary
+  records include the originating scenario.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.

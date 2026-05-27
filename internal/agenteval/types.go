@@ -353,15 +353,17 @@ type ToolFailureExample struct {
 }
 
 type LoopGuardExample struct {
-	Scenario      string `json:"scenario,omitempty"`
-	Kind          string `json:"kind"`
-	Category      string `json:"category"`
-	ToolIndex     int    `json:"tool_index"`
-	CallID        string `json:"call_id,omitempty"`
-	Tool          string `json:"tool"`
-	ArgsSummary   string `json:"args_summary,omitempty"`
-	ResultSummary string `json:"result_summary,omitempty"`
-	ExitCode      int    `json:"exit_code"`
+	Scenario          string `json:"scenario,omitempty"`
+	Kind              string `json:"kind"`
+	Category          string `json:"category"`
+	ToolIndex         int    `json:"tool_index"`
+	CallID            string `json:"call_id,omitempty"`
+	Tool              string `json:"tool"`
+	ArgsSummary       string `json:"args_summary,omitempty"`
+	GuardSummary      string `json:"guard_summary,omitempty"`
+	SuggestedNextStep string `json:"suggested_next_step,omitempty"`
+	ResultSummary     string `json:"result_summary,omitempty"`
+	ExitCode          int    `json:"exit_code"`
 }
 
 type MemoryUpdateExample struct {
@@ -596,14 +598,16 @@ func (t Trace) LoopGuardExamples(maxExamples int) []LoopGuardExample {
 				continue
 			}
 			out = append(out, LoopGuardExample{
-				Kind:          kind,
-				Category:      category,
-				ToolIndex:     i + 1,
-				CallID:        c.CallID,
-				Tool:          c.Tool,
-				ArgsSummary:   summarizeToolCallArgs(c.Args),
-				ResultSummary: summarizeToolFailureResult(c.Result),
-				ExitCode:      c.ExitCode,
+				Kind:              kind,
+				Category:          category,
+				ToolIndex:         i + 1,
+				CallID:            c.CallID,
+				Tool:              c.Tool,
+				ArgsSummary:       summarizeToolCallArgs(c.Args),
+				GuardSummary:      summarizeLoopGuardMessage(c.Result),
+				SuggestedNextStep: summarizeLoopGuardNextStep(c.Result),
+				ResultSummary:     summarizeToolFailureResult(c.Result),
+				ExitCode:          c.ExitCode,
 			})
 			if len(out) >= maxExamples {
 				break
@@ -1004,6 +1008,30 @@ func summarizeToolFailureResult(result string) string {
 		}
 	}
 	return compactOneLine(strings.Join(parts, " | "), 260)
+}
+
+func summarizeLoopGuardMessage(result string) string {
+	for _, raw := range strings.Split(result, "\n") {
+		line := strings.TrimSpace(raw)
+		for _, prefix := range []string{"loop_guard:", "first_tool_policy:", "post_tool_policy:"} {
+			if !strings.HasPrefix(line, prefix) {
+				continue
+			}
+			return compactOneLine(strings.TrimSpace(strings.TrimPrefix(line, prefix)), 260)
+		}
+	}
+	return ""
+}
+
+func summarizeLoopGuardNextStep(result string) string {
+	for _, raw := range strings.Split(result, "\n") {
+		line := strings.TrimSpace(raw)
+		if !strings.HasPrefix(line, "Next:") {
+			continue
+		}
+		return compactOneLine(strings.TrimSpace(strings.TrimPrefix(line, "Next:")), 260)
+	}
+	return ""
 }
 
 func loopGuardExampleCategory(kind string) (string, bool) {
