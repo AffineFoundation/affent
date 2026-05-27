@@ -1790,6 +1790,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.SourceAccessExamples[1].Ref != "n1" ||
 		manifest.SourceAccessExamples[1].HTTPStatus != "200" ||
 		manifest.SourceAccessExamples[1].ContentType != "application/json" ||
+		!strings.Contains(manifest.SourceAccessExamples[1].ResultPreview, `"0.06342 T"`) ||
 		manifest.SourceAccessExamples[2].Status != "discovery_only" {
 		t.Fatalf("manifest source access examples = %+v", manifest.SourceAccessExamples)
 	}
@@ -1970,7 +1971,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"`message.delta`: `2`",
 		"## Source Evidence",
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
+		"preview: PAGE DIAGNOSTICS: - empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value PAGE TEXT: Affine SN120",
 		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` ref=`n1` source_method=`network_xhr_fetch` http_status=`200` content_type=`application/json` json_path=`$.price`",
+		"preview: JSON_PATH: $.price \"0.06342 T\"",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
 		"## Browser Network Searches",
 		"tool#8 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`call-8` requires_read=`true` citable=`false`",

@@ -1801,6 +1801,9 @@ func printSourceAccessExampleLines(w io.Writer, examples []agenteval.SourceAcces
 		if ex.Ref != "" {
 			fmt.Fprintf(w, " ref=%s", ex.Ref)
 		}
+		if ex.ResultPreview != "" {
+			fmt.Fprintf(w, " preview=%q", ex.ResultPreview)
+		}
 		fmt.Fprintln(w)
 	}
 }

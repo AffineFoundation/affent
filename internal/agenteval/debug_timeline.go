@@ -906,6 +906,9 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
 		}
 		b.WriteByte('\n')
+		if preview := sourceAccessResultPreview(entry.Tool.Result, entry.Tool.ResultSummary); preview != "" {
+			fmt.Fprintf(b, "   preview: %s\n", timelineInline(preview, timelineMemoryPreviewBytes))
+		}
 	}
 }
 

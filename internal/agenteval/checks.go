@@ -623,6 +623,9 @@ func sourceAccessExampleSummary(ex SourceAccessExample) string {
 	if ex.JSONPath != "" {
 		parts = append(parts, "json_path="+ex.JSONPath)
 	}
+	if ex.ResultPreview != "" {
+		parts = append(parts, "preview="+previewSubstr(ex.ResultPreview, 100))
+	}
 	return strings.Join(parts, " ")
 }
 

@@ -378,19 +378,20 @@ type MemoryUpdateExample struct {
 }
 
 type SourceAccessExample struct {
-	Scenario     string `json:"scenario,omitempty"`
-	ToolIndex    int    `json:"tool_index"`
-	CallID       string `json:"call_id,omitempty"`
-	Tool         string `json:"tool"`
-	Status       string `json:"status"`
-	URL          string `json:"url,omitempty"`
-	RequestedURL string `json:"requested_url,omitempty"`
-	URLField     string `json:"url_field,omitempty"`
-	SourceMethod string `json:"source_method,omitempty"`
-	JSONPath     string `json:"json_path,omitempty"`
-	Ref          string `json:"ref,omitempty"`
-	HTTPStatus   string `json:"http_status,omitempty"`
-	ContentType  string `json:"content_type,omitempty"`
+	Scenario      string `json:"scenario,omitempty"`
+	ToolIndex     int    `json:"tool_index"`
+	CallID        string `json:"call_id,omitempty"`
+	Tool          string `json:"tool"`
+	Status        string `json:"status"`
+	URL           string `json:"url,omitempty"`
+	RequestedURL  string `json:"requested_url,omitempty"`
+	URLField      string `json:"url_field,omitempty"`
+	SourceMethod  string `json:"source_method,omitempty"`
+	JSONPath      string `json:"json_path,omitempty"`
+	Ref           string `json:"ref,omitempty"`
+	HTTPStatus    string `json:"http_status,omitempty"`
+	ContentType   string `json:"content_type,omitempty"`
+	ResultPreview string `json:"result_preview,omitempty"`
 }
 
 type BrowserNetworkSearchExample struct {
@@ -651,21 +652,35 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 			status = "discovery_only"
 		}
 		out = append(out, SourceAccessExample{
-			ToolIndex:    i + 1,
-			CallID:       c.CallID,
-			Tool:         c.Tool,
-			Status:       status,
-			URL:          info.AccessedURL,
-			RequestedURL: info.RequestedURL,
-			URLField:     info.URLField,
-			SourceMethod: info.SourceMethod,
-			JSONPath:     info.JSONPath,
-			Ref:          info.Ref,
-			HTTPStatus:   info.HTTPStatus,
-			ContentType:  info.ContentType,
+			ToolIndex:     i + 1,
+			CallID:        c.CallID,
+			Tool:          c.Tool,
+			Status:        status,
+			URL:           info.AccessedURL,
+			RequestedURL:  info.RequestedURL,
+			URLField:      info.URLField,
+			SourceMethod:  info.SourceMethod,
+			JSONPath:      info.JSONPath,
+			Ref:           info.Ref,
+			HTTPStatus:    info.HTTPStatus,
+			ContentType:   info.ContentType,
+			ResultPreview: sourceAccessResultPreview(c.Result, c.ResultSummary),
 		})
 	}
 	return out
+}
+
+func sourceAccessResultPreview(result, summary string) string {
+	body := strings.TrimSpace(result)
+	if idx := strings.IndexByte(body, '\n'); idx >= 0 {
+		body = strings.TrimSpace(body[idx+1:])
+	} else {
+		body = ""
+	}
+	if body == "" {
+		body = strings.TrimSpace(summary)
+	}
+	return compactOneLine(body, 260)
 }
 
 func (t Trace) BrowserNetworkSearchExamples(maxExamples int) []BrowserNetworkSearchExample {
