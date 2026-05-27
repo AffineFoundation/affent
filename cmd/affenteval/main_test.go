@@ -1062,6 +1062,19 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			Proactive:       1,
 			RemovedMessages: 64,
 			SummaryBytes:    4096,
+			Examples: []agenteval.ContextCompaction{{
+				TurnID:              "turn-compact-print",
+				BeforeMessages:      72,
+				AfterMessages:       24,
+				RemovedMessages:     48,
+				Reactive:            true,
+				Reason:              "context_overflow",
+				SummaryPresent:      true,
+				SummaryPresentKnown: true,
+				SummaryBytes:        2048,
+				SummaryPreview:      "USER_CONTEXT: keep browser evidence and recovery anchors.",
+				LoopProtocolAnchor:  "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=full",
+			}},
 		},
 		ContextInjections: agenteval.ContextInjectionStats{
 			Count:           1,
@@ -1164,6 +1177,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
 		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence" situation="current risk: dashboard values need network refs" last_turn="id=turn-prev reason=max_turns memory_searches=3 memory_misses=2 session_search=1"`,
+		`context_compaction_example: turn=turn-compact-print reactive=true messages=72->24 removed=48 summary_state=present summary_bytes=2048 reason=context_overflow loop_anchor="LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=full" preview="USER_CONTEXT: keep browser evidence and recovery anchors."`,
 		`context_injection_example: turn=turn-1 source=account_access bytes=1200 estimated_tokens=300 title="Account access context injected" summary="Account-level environment and SSH access hints were made available." preview="Configured environment variables: GITHUB_TOKEN"`,
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
@@ -1641,15 +1655,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			RemovedMessages: 32,
 			SummaryBytes:    2048,
 			Examples: []agenteval.ContextCompaction{{
-				TurnID:          "turn-summary",
-				BeforeMessages:  70,
-				AfterMessages:   22,
-				RemovedMessages: 48,
-				Reactive:        true,
-				Reason:          "context_overflow",
-				SummaryPresent:  true,
-				SummaryBytes:    2048,
-				SummaryPreview:  "USER_CONTEXT: preserve the market evidence trail.",
+				TurnID:              "turn-summary",
+				BeforeMessages:      70,
+				AfterMessages:       22,
+				RemovedMessages:     48,
+				Reactive:            true,
+				Reason:              "context_overflow",
+				SummaryPresent:      true,
+				SummaryPresentKnown: true,
+				SummaryBytes:        2048,
+				SummaryPreview:      "USER_CONTEXT: preserve the market evidence trail.",
 			}},
 		},
 		Repair: agenteval.ToolRepairStats{
@@ -1756,6 +1771,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,summary_bytes=2048,summary_missing=0,summary_empty=0") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
+		t.Fatalf("summary output missing context compaction example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
 		t.Fatalf("summary output missing trace event rollup:\n%s", out.String())

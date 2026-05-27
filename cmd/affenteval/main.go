@@ -1459,6 +1459,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
 	printLoopProtocolFeedExampleLines(w, s.LoopProtocolFeedExamples, "")
+	printContextCompactionExampleLines(w, s.ContextCompactionExamples, "")
 	printContextInjectionExampleLines(w, s.ContextInjectionExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printPlanExampleLines(w, s.PlanExamples, "")
@@ -2287,6 +2288,49 @@ func loopProtocolFeedLastTurnSummary(ex agenteval.LoopProtocolFeed) string {
 		parts = append(parts, fmt.Sprintf("loop_guards=%d", ex.LastTurnLoopGuards))
 	}
 	return strings.Join(parts, " ")
+}
+
+func printContextCompactionExampleLines(w io.Writer, examples []agenteval.ContextCompaction, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%scontext_compaction_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.TurnID != "" {
+			fmt.Fprintf(w, " turn=%s", ex.TurnID)
+		}
+		fmt.Fprintf(w, " reactive=%t messages=%d->%d removed=%d summary_state=%s summary_bytes=%d",
+			ex.Reactive,
+			ex.BeforeMessages,
+			ex.AfterMessages,
+			ex.RemovedMessages,
+			contextCompactionExampleSummaryState(ex),
+			ex.SummaryBytes,
+		)
+		if ex.Reason != "" {
+			fmt.Fprintf(w, " reason=%s", ex.Reason)
+		}
+		if ex.LoopProtocolAnchor != "" {
+			fmt.Fprintf(w, " loop_anchor=%q", textutil.Preview(ex.LoopProtocolAnchor, 160))
+		}
+		if ex.SummaryPreview != "" {
+			fmt.Fprintf(w, " preview=%q", textutil.Preview(ex.SummaryPreview, 180))
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func contextCompactionExampleSummaryState(ex agenteval.ContextCompaction) string {
+	if ex.SummaryBytes > 0 || strings.TrimSpace(ex.SummaryPreview) != "" {
+		return "present"
+	}
+	if !ex.SummaryPresentKnown {
+		return "unknown"
+	}
+	if !ex.SummaryPresent {
+		return "missing"
+	}
+	return "empty"
 }
 
 func printContextInjectionExampleLines(w io.Writer, examples []agenteval.ContextInjection, indent string) {
@@ -4337,6 +4381,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
 	printLoopProtocolFeedExampleLines(w, res.LoopProtocolFeeds.Examples, "  ")
+	printContextCompactionExampleLines(w, res.ContextCompactions.Examples, "  ")
 	printContextInjectionExampleLines(w, res.ContextInjections.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
 	printPlanExampleLines(w, res.PlanExamples, "  ")
