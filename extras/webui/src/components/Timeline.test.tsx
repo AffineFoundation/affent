@@ -698,7 +698,7 @@ describe("Timeline", () => {
     expect(within(card).getByText("(8 KiB, 1 MiB omitted)")).toBeInTheDocument();
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 truncated");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 file");
-    expect(screen.getAllByTestId("action-inspector-summary")[0]).toHaveTextContent("+3 more");
+    expect(screen.getAllByTestId("action-inspector-summary")[0]).toHaveTextContent("Duration, Tool context · 1 other fact");
   });
 
   it("copies fallback results and turns them into follow-up drafts", async () => {
@@ -892,7 +892,10 @@ describe("Timeline", () => {
     expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("Sources");
     expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("docs");
-    expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("+1 more");
+    expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("docs/focused-tasks.md");
+    expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("MCP webui trace");
+    expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("1 other source");
+    expect(screen.getByTestId("agent-activity-digest-evidence")).not.toHaveTextContent("+1 more");
     await user.click(screen.getByRole("button", { name: /What Affent did/ }));
     expect(screen.queryByTestId("agent-activity-digest-evidence")).toBeNull();
     const activityTree = screen.getByTestId("agent-activity-tree");
@@ -930,7 +933,7 @@ describe("Timeline", () => {
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText(/WebUI must render trace details/).length).toBeGreaterThan(0);
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText("Delegated worker").length).toBeGreaterThan(0);
     expect(within(screen.getAllByTestId("tool-details")[0]).queryByText("subagent_run")).toBeNull();
-    expect(screen.getAllByTestId("tool-details")[0]).toHaveTextContent("+3 more");
+    expect(screen.getAllByTestId("tool-details")[0]).toHaveTextContent("Duration, Usage · 1 other fact");
     expect(screen.getByText("MCP action")).toBeInTheDocument();
     expect(screen.getAllByText("External MCP service").length).toBeGreaterThan(0);
     expect(screen.getAllByText("subagent_01").length).toBeGreaterThan(0);

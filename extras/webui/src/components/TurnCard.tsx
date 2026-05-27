@@ -276,6 +276,7 @@ function AgentActivity({
   }
 
   const evidenceSummary = summarizeAgentActivityEvidence(activity.evidencePreview, activity.evidenceCount, 2);
+  const foldedEvidenceOverflow = summarizeFoldedEvidenceOverflow(activity.evidencePreview, activity.evidenceCount);
   const digestLabel = agentActivityDigestLabel(activity, showDigestLabel, evidenceSummary);
 
   return (
@@ -333,10 +334,12 @@ function AgentActivity({
               <span className="agent-activity-digest-evidence-value">
                 {activity.evidencePreview[0] ? renderAgentActivityDigestEvidenceValue(activity.evidencePreview[0], searchQuery) : null}
               </span>
-              {activity.evidenceCount > activity.evidencePreview.length ? (
+              {foldedEvidenceOverflow ? (
                 <>
                   <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
-                  <small className="agent-activity-digest-evidence-more">{`+${activity.evidenceCount - activity.evidencePreview.length} more`}</small>
+                  <small className="agent-activity-digest-evidence-more" title={foldedEvidenceOverflow.full}>
+                    {foldedEvidenceOverflow.label}
+                  </small>
                 </>
               ) : null}
             </span>
@@ -534,14 +537,47 @@ function summarizeAgentActivityEvidence(
   visibleCount = 2,
 ): string | undefined {
   if (items.length === 0) return undefined;
-  const preview = items.slice(0, visibleCount).map(evidenceDigestText).join(" · ");
-  const overflow = totalCount - Math.min(items.length, visibleCount);
-  const label = items.length === 1 && overflow === 0 ? "Source" : "Sources";
-  return [label, preview, overflow > 0 ? `+${overflow} more` : undefined].filter(Boolean).join(" · ");
+  const previewItems = items.slice(0, visibleCount);
+  const preview = previewItems.map(evidenceDigestText).join(" · ");
+  const overflow = summarizeEvidenceOverflow(items.slice(visibleCount), totalCount - previewItems.length);
+  const label = items.length === 1 && !overflow ? "Source" : "Sources";
+  return [label, preview, overflow?.full].filter(Boolean).join(" · ");
 }
 
 function evidenceDigestText(item: TurnActivityEvidence): string {
   return `${item.label} ${item.displayValue || item.value}`;
+}
+
+function summarizeFoldedEvidenceOverflow(
+  items: readonly TurnActivityEvidence[],
+  totalCount: number,
+): { label: string; full: string } | undefined {
+  if (totalCount <= 1) return undefined;
+  return summarizeEvidenceOverflow(items.slice(1), totalCount - 1);
+}
+
+function summarizeEvidenceOverflow(
+  items: readonly TurnActivityEvidence[],
+  totalCount: number,
+): { label: string; full: string } | undefined {
+  if (totalCount <= 0) return undefined;
+  const visible = items.slice(0, 2);
+  const hiddenCount = Math.max(0, totalCount - visible.length);
+  const compactParts = visible.map(compactEvidenceDigestText);
+  const fullParts = visible.map(evidenceDigestText);
+  if (hiddenCount > 0) {
+    const label = `${hiddenCount} other ${hiddenCount === 1 ? "source" : "sources"}`;
+    compactParts.push(label);
+    fullParts.push(label);
+  }
+  return {
+    label: compactParts.join(" · "),
+    full: fullParts.join(" · "),
+  };
+}
+
+function compactEvidenceDigestText(item: TurnActivityEvidence): string {
+  return `${item.label} ${summarize(item.displayValue || item.value, 56)}`;
 }
 
 function renderAgentActivityDigestEvidenceValue(item: TurnActivityEvidence, searchQuery?: string) {

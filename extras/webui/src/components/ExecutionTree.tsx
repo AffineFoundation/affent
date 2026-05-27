@@ -499,7 +499,7 @@ function hiddenSummaryLabel(items: readonly SummaryItem[]): string {
   if (items.length === 1) return formatSummaryItem(items[0]);
   const labels = items.slice(0, 2).map((item) => item.label);
   const remaining = items.length - labels.length;
-  return remaining > 0 ? `${labels.join(", ")} +${remaining}` : labels.join(", ");
+  return remaining > 0 ? `${labels.join(", ")} · ${remaining} other ${remaining === 1 ? "fact" : "facts"}` : labels.join(", ");
 }
 
 function selectHeadlineActionFacts(items: readonly SummaryItem[], visibleCount: number): SummaryItem[] {
