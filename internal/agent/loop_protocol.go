@@ -365,6 +365,8 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 				payload.Status = value
 			case "protocol_feeds":
 				payload.ProtocolFeeds = parsePositiveInt(value)
+			case "calibration_answers":
+				payload.CalibrationAnswers = parsePositiveInt(value)
 			case "plan_label":
 				payload.PlanLabel = value
 			case "plan_step_index":
@@ -375,6 +377,12 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 		}
 		if step, ok := strings.CutPrefix(line, "plan_current_step:"); ok {
 			payload.PlanCurrentStep = strings.TrimSpace(step)
+		}
+		if calibration, ok := strings.CutPrefix(line, "last_calibration:"); ok {
+			calibration = strings.TrimSpace(calibration)
+			if answer, ok := strings.CutPrefix(calibration, "answer="); ok {
+				payload.LastCalibrationAnswer = textutil.Preview(strings.TrimSpace(answer), 220)
+			}
 		}
 	}
 	if payload.Mode == "" || payload.FeedNumber <= 0 {

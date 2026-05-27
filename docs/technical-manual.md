@@ -1065,9 +1065,10 @@ Otherwise keep these surfaces off so evals stay on the minimal surface they
 intend to measure.
 Scenario files can seed `.affent/loops/<session_id>/LOOP.md`; even in runtime
 eval mode, `affentctl` injects that protocol when present and emits
-`loop.protocol_feed` with the active plan checkpoint. This lets long-run evals
-assert that the loop protocol was actually fed, rather than only checking that
-the file existed in the workspace.
+`loop.protocol_feed` with the active plan checkpoint and any recorded
+calibration answer count/latest preview. This lets long-run evals assert that
+the loop protocol was actually fed, rather than only checking that the file
+existed in the workspace.
 Batch scenarios can also define multiple ordered prompts. The harness reruns
 `affentctl run` with the same workspace, trace, and explicit session id, so the
 second and later turns exercise real persisted conversation state instead of a

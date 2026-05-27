@@ -573,6 +573,9 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nTrace protocol feeds."), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop when the requested source cannot be verified."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
 	checkpoint := func() loopstate.PlanCheckpoint {
 		return loopstate.PlanCheckpoint{Valid: true, Label: "plan:0/1:active", StepIndex: 1, StepStatus: "in_progress", Step: "read trace evidence"}
 	}
@@ -602,6 +605,8 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.Mode != "full" ||
 			payload.FeedNumber != 1 ||
 			payload.ProtocolFeeds != 1 ||
+			payload.CalibrationAnswers != 1 ||
+			payload.LastCalibrationAnswer != "Stop when the requested source cannot be verified." ||
 			payload.PlanLabel != "plan:0/1:active" ||
 			payload.PlanCurrentStepIndex != 1 ||
 			payload.PlanCurrentStepStatus != "in_progress" ||

@@ -237,8 +237,9 @@ Scenario records describe one eval case:
   are `full` and `digest`; future modes should be treated as diagnostic labels.
 - `loop_protocol_feed_examples`: optional bounded examples of protocol feed
   events. Each sample includes turn id, loop id, loop status, feed mode,
-  sequential feed number, persisted protocol feed count, protocol path, and
-  optional active plan checkpoint fields (`plan_label`,
+  sequential feed number, persisted protocol feed count, optional calibration
+  answer count/latest answer preview, protocol path, and optional active plan
+  checkpoint fields (`plan_label`,
   `plan_current_step_index`, `plan_current_step_status`, and
   `plan_current_step`). Summary records include the originating scenario. Use
   these fields to verify that long-running loop sessions actually refreshed

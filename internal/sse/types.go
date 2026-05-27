@@ -267,6 +267,8 @@ type LoopProtocolFeedPayload struct {
 	Mode                  string `json:"mode"`
 	FeedNumber            int    `json:"feed_number"`
 	ProtocolFeeds         int    `json:"protocol_feeds,omitempty"`
+	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
 	ProtocolPath          string `json:"protocol_path,omitempty"`
 	PlanLabel             string `json:"plan_label,omitempty"`
 	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`

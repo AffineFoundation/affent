@@ -387,9 +387,18 @@ function loopProtocolFeedMeta(event: NormalizedEvent, turn: string | undefined):
     readString(event.data, "loop_id"),
     feedNumber ? `feed ${feedNumber}` : undefined,
     feeds && feeds !== feedNumber ? `${feeds} total` : undefined,
+    loopProtocolCalibrationMeta(event),
     loopProtocolPlanMeta(event),
     readString(event.data, "protocol_path"),
   ]);
+}
+
+function loopProtocolCalibrationMeta(event: NormalizedEvent): string | undefined {
+  const answers = readNumber(event.data, "calibration_answers");
+  const preview = readString(event.data, "last_calibration_answer_preview");
+  if (!answers && !preview) return undefined;
+  const label = answers ? `calibration ${answers}` : "calibration";
+  return preview ? `${label} · ${streamSummary(preview)}` : label;
 }
 
 function loopProtocolPlanMeta(event: NormalizedEvent): string | undefined {

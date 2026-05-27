@@ -472,6 +472,8 @@ type LoopProtocolFeed struct {
 	Mode                  string `json:"mode"`
 	FeedNumber            int    `json:"feed_number"`
 	ProtocolFeeds         int    `json:"protocol_feeds,omitempty"`
+	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
 	ProtocolPath          string `json:"protocol_path,omitempty"`
 	PlanLabel             string `json:"plan_label,omitempty"`
 	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
@@ -1208,6 +1210,8 @@ func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
 			Mode:                  feed.Mode,
 			FeedNumber:            feed.FeedNumber,
 			ProtocolFeeds:         feed.ProtocolFeeds,
+			CalibrationAnswers:    feed.CalibrationAnswers,
+			LastCalibrationAnswer: feed.LastCalibrationAnswer,
 			ProtocolPath:          feed.ProtocolPath,
 			PlanLabel:             feed.PlanLabel,
 			PlanCurrentStepIndex:  feed.PlanCurrentStepIndex,

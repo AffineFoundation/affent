@@ -273,6 +273,10 @@ diagnostics.
 - `mode`: feed mode, currently `full` or `digest`.
 - `feed_number`: durable per-loop feed sequence number.
 - `protocol_feeds`: optional durable feed count after this feed.
+- `calibration_answers`: optional count of user calibration answers recorded
+  before this feed.
+- `last_calibration_answer_preview`: optional bounded preview of the latest
+  calibration answer included in the active protocol state line.
 - `protocol_path`: optional workspace/session-relative protocol path.
 - `plan_label`: optional active persisted-plan summary label captured at feed
   time, such as `plan:1/3:active`.
