@@ -337,6 +337,11 @@ Scenario records describe one eval case:
   available. These examples make long-run memory drift auditable without
   opening the full trace or markdown timeline. Summary records include the
   originating scenario.
+- `memory_search_miss_examples`: optional bounded per-scenario examples of
+  successful memory searches that returned no direct hits but exposed topic
+  anchors for retry. Each sample includes tool index, call id, target/topic,
+  query, topic count, compact topic names, and the recovery message. Summary
+  records include the originating scenario.
 - `context_compaction_examples`: optional bounded examples of context
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
@@ -464,6 +469,7 @@ Summary records aggregate all scenario records from the same process:
   `browser_network_examples`,
   `memory_updates`, `memory_update_add`, `memory_update_replace`,
   `memory_update_remove`, `memory_update_examples`,
+  `memory_search_miss_examples`,
   `session_search_calls`, `session_search_results`,
   `session_search_context_hits`, `session_search_matched_terms`,
   `session_search_recent_sessions`, `session_search_examples`,
@@ -498,6 +504,7 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_examples`, `loop_guard_examples`, `runtime_error_examples`,
   `source_access_examples`, `browser_scroll_examples`,
   `browser_network_examples`, `memory_update_examples`,
+  `memory_search_miss_examples`,
   `session_search_examples`, `tool_truncation_examples`,
   `context_compaction_examples`, `context_injection_examples`,
   `loop_decision_examples`,

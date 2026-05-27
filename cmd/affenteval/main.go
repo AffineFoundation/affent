@@ -713,6 +713,7 @@ type batchSummary struct {
 	MemoryUpdateReplace                  int
 	MemoryUpdateRemove                   int
 	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample
+	MemorySearchMissExamples             []agenteval.MemorySearchMissExample
 	SessionSearchCalls                   int
 	SessionSearchResults                 int
 	SessionSearchContextHits             int
@@ -929,6 +930,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
 	s.MemoryUpdateRemove += res.ToolStats.MemoryUpdateRemove
 	s.MemoryUpdateExamples = appendMemoryUpdateExamples(s.MemoryUpdateExamples, res.MemoryUpdateExamples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.MemorySearchMissExamples = appendMemorySearchMissExamples(s.MemorySearchMissExamples, res.MemorySearchMissExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.SessionSearchCalls += res.ToolStats.SessionSearchCalls
 	s.SessionSearchResults += res.ToolStats.SessionSearchResults
 	s.SessionSearchContextHits += res.ToolStats.SessionSearchContextHits
@@ -1440,6 +1442,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printBrowserScrollExampleLines(w, s.BrowserScrollExamples, "")
 	printBrowserNetworkExampleLines(w, s.BrowserNetworkExamples, "")
 	printMemoryUpdateExampleLines(w, s.MemoryUpdateExamples, "")
+	printMemorySearchMissExampleLines(w, s.MemorySearchMissExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
@@ -2128,6 +2131,37 @@ func printMemoryUpdateExampleLines(w io.Writer, examples []agenteval.MemoryUpdat
 	}
 }
 
+func printMemorySearchMissExampleLines(w io.Writer, examples []agenteval.MemorySearchMissExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%smemory_search_miss_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.Target != "" {
+			fmt.Fprintf(w, " target=%s", ex.Target)
+		}
+		if ex.Topic != "" {
+			fmt.Fprintf(w, " topic=%s", ex.Topic)
+		}
+		if ex.Query != "" {
+			fmt.Fprintf(w, " query=%q", ex.Query)
+		}
+		if ex.TopicCount > 0 {
+			fmt.Fprintf(w, " topic_count=%d", ex.TopicCount)
+		}
+		if len(ex.Topics) > 0 {
+			fmt.Fprintf(w, " topics=%s", strings.Join(ex.Topics, ","))
+		}
+		if ex.Message != "" {
+			fmt.Fprintf(w, " message=%q", textutil.Preview(ex.Message, 180))
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func printRuntimeErrorExampleLines(w io.Writer, examples map[string][]agenteval.RuntimeErrorExample, indent string) {
 	if len(examples) == 0 {
 		return
@@ -2764,6 +2798,7 @@ type batchResultRecord struct {
 	MemoryUpdateAdd                  int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace              int                                        `json:"memory_update_replace"`
 	MemoryUpdateRemove               int                                        `json:"memory_update_remove"`
+	MemorySearchMissExamples         []agenteval.MemorySearchMissExample        `json:"memory_search_miss_examples,omitempty"`
 	SessionSearchCalls               int                                        `json:"session_search_calls,omitempty"`
 	SessionSearchResults             int                                        `json:"session_search_results,omitempty"`
 	SessionSearchContextHits         int                                        `json:"session_search_context_hits,omitempty"`
@@ -2924,6 +2959,7 @@ type batchSummaryRecord struct {
 	MemoryUpdateReplace                  int                                              `json:"memory_update_replace"`
 	MemoryUpdateRemove                   int                                              `json:"memory_update_remove"`
 	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample                  `json:"memory_update_examples,omitempty"`
+	MemorySearchMissExamples             []agenteval.MemorySearchMissExample              `json:"memory_search_miss_examples,omitempty"`
 	SessionSearchCalls                   int                                              `json:"session_search_calls,omitempty"`
 	SessionSearchResults                 int                                              `json:"session_search_results,omitempty"`
 	SessionSearchContextHits             int                                              `json:"session_search_context_hits,omitempty"`
@@ -3094,6 +3130,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		MemoryUpdateAdd:                  res.ToolStats.MemoryUpdateAdd,
 		MemoryUpdateReplace:              res.ToolStats.MemoryUpdateReplace,
 		MemoryUpdateRemove:               res.ToolStats.MemoryUpdateRemove,
+		MemorySearchMissExamples:         cloneMemorySearchMissExamples(res.MemorySearchMissExamples),
 		SessionSearchCalls:               res.ToolStats.SessionSearchCalls,
 		SessionSearchResults:             res.ToolStats.SessionSearchResults,
 		SessionSearchContextHits:         res.ToolStats.SessionSearchContextHits,
@@ -3328,6 +3365,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		MemoryUpdateReplace:                  s.MemoryUpdateReplace,
 		MemoryUpdateRemove:                   s.MemoryUpdateRemove,
 		MemoryUpdateExamples:                 cloneMemoryUpdateExamples(s.MemoryUpdateExamples),
+		MemorySearchMissExamples:             cloneMemorySearchMissExamples(s.MemorySearchMissExamples),
 		SessionSearchCalls:                   s.SessionSearchCalls,
 		SessionSearchResults:                 s.SessionSearchResults,
 		SessionSearchContextHits:             s.SessionSearchContextHits,
@@ -3621,6 +3659,20 @@ func cloneMemoryUpdateExamples(in []agenteval.MemoryUpdateExample) []agenteval.M
 	return append([]agenteval.MemoryUpdateExample(nil), in...)
 }
 
+func cloneMemorySearchMissExamples(in []agenteval.MemorySearchMissExample) []agenteval.MemorySearchMissExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]agenteval.MemorySearchMissExample, 0, len(in))
+	for _, ex := range in {
+		if len(ex.Topics) > 0 {
+			ex.Topics = append([]string(nil), ex.Topics...)
+		}
+		out = append(out, ex)
+	}
+	return out
+}
+
 func cloneSessionSearchExamples(in []agenteval.SessionSearchExample) []agenteval.SessionSearchExample {
 	if len(in) == 0 {
 		return nil
@@ -3850,6 +3902,25 @@ func appendMemoryUpdateExamples(dst, src []agenteval.MemoryUpdateExample, scenar
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendMemorySearchMissExamples(dst, src []agenteval.MemorySearchMissExample, scenario string, limit int) []agenteval.MemorySearchMissExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if len(ex.Topics) > 0 {
+			ex.Topics = append([]string(nil), ex.Topics...)
 		}
 		if ex.Scenario == "" {
 			ex.Scenario = scenario
@@ -4196,6 +4267,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printBrowserScrollExampleLines(w, res.BrowserScrollExamples, "  ")
 	printBrowserNetworkExampleLines(w, res.BrowserNetworkExamples, "  ")
 	printMemoryUpdateExampleLines(w, res.MemoryUpdateExamples, "  ")
+	printMemorySearchMissExampleLines(w, res.MemorySearchMissExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")

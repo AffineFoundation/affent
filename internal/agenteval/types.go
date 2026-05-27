@@ -8,6 +8,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -413,6 +414,32 @@ type MemoryUpdateExample struct {
 	NextPreview     string `json:"next_preview,omitempty"`
 }
 
+type MemorySearchMissExample struct {
+	Scenario   string   `json:"scenario,omitempty"`
+	ToolIndex  int      `json:"tool_index"`
+	CallID     string   `json:"call_id,omitempty"`
+	Target     string   `json:"target,omitempty"`
+	Topic      string   `json:"topic,omitempty"`
+	Query      string   `json:"query,omitempty"`
+	Message    string   `json:"message,omitempty"`
+	TopicCount int      `json:"topic_count,omitempty"`
+	Topics     []string `json:"topics,omitempty"`
+}
+
+func cloneMemorySearchMissExamples(in []MemorySearchMissExample) []MemorySearchMissExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]MemorySearchMissExample, 0, len(in))
+	for _, ex := range in {
+		if len(ex.Topics) > 0 {
+			ex.Topics = append([]string(nil), ex.Topics...)
+		}
+		out = append(out, ex)
+	}
+	return out
+}
+
 type SourceAccessExample struct {
 	Scenario      string `json:"scenario,omitempty"`
 	ToolIndex     int    `json:"tool_index"`
@@ -761,6 +788,23 @@ func (t Trace) MemoryUpdateExamples(maxExamples int) []MemoryUpdateExample {
 			break
 		}
 		ex, ok := memoryUpdateExampleForTool(i+1, c)
+		if ok {
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
+func (t Trace) MemorySearchMissExamples(maxExamples int) []MemorySearchMissExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []MemorySearchMissExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		ex, ok := memorySearchMissExampleForTool(i+1, c)
 		if ok {
 			out = append(out, ex)
 		}
@@ -1143,6 +1187,44 @@ func memoryUpdateExampleForTool(index int, c ToolCall) (MemoryUpdateExample, boo
 		Preview:         preview,
 		PreviousPreview: previousPreview,
 		NextPreview:     nextPreview,
+	}, true
+}
+
+func memorySearchMissExampleForTool(index int, c ToolCall) (MemorySearchMissExample, bool) {
+	if c.Tool != agent.MemoryToolName || c.ExitCode != 0 || c.IsErr || c.ResultTruncated {
+		return MemorySearchMissExample{}, false
+	}
+	action := strings.TrimSpace(strings.ToLower(memoryUpdateArg(c.Args, "action")))
+	if action != "search" {
+		return MemorySearchMissExample{}, false
+	}
+	var resp memory.MemoryResponse
+	if err := json.Unmarshal([]byte(c.Result), &resp); err != nil {
+		return MemorySearchMissExample{}, false
+	}
+	if !resp.OK || len(resp.Results) > 0 || len(resp.Topics) == 0 || !strings.Contains(resp.Message, "no entries matched") {
+		return MemorySearchMissExample{}, false
+	}
+	topics := make([]string, 0, min(len(resp.Topics), 5))
+	for _, topic := range resp.Topics {
+		name := strings.TrimSpace(topic.Topic)
+		if name == "" {
+			continue
+		}
+		topics = append(topics, compactOneLine(name, 80))
+		if len(topics) >= 5 {
+			break
+		}
+	}
+	return MemorySearchMissExample{
+		ToolIndex:  index,
+		CallID:     c.CallID,
+		Target:     compactOneLine(string(resp.Target), 80),
+		Topic:      compactOneLine(resp.Topic, 120),
+		Query:      compactOneLine(memoryUpdateArg(c.Args, "query"), 220),
+		Message:    compactOneLine(resp.Message, 260),
+		TopicCount: len(resp.Topics),
+		Topics:     topics,
 	}, true
 }
 

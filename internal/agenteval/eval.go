@@ -24,20 +24,21 @@ import (
 )
 
 const (
-	DefaultBatchTimeout            = 5 * time.Minute
-	DefaultBatchMaxTurnSteps       = 10
-	DefaultVerifierOutputCapBytes  = 1 * 1024 * 1024
-	maxDebugToolRepairExamples     = 5
-	maxDebugLoopGuardExamples      = 5
-	maxDebugToolTruncationExamples = 5
-	maxDebugSourceAccessExamples   = 5
-	maxDebugBrowserScrollExamples  = 5
-	maxDebugBrowserNetworkExamples = 5
-	maxDebugMemoryUpdateExamples   = 5
-	maxDebugSessionSearchExamples  = 5
-	maxDebugPlanExamples           = 5
-	maxDebugChildTranscriptRefs    = 20
-	maxTraceLineBytes              = jsonl.DefaultMaxRecordBytes
+	DefaultBatchTimeout              = 5 * time.Minute
+	DefaultBatchMaxTurnSteps         = 10
+	DefaultVerifierOutputCapBytes    = 1 * 1024 * 1024
+	maxDebugToolRepairExamples       = 5
+	maxDebugLoopGuardExamples        = 5
+	maxDebugToolTruncationExamples   = 5
+	maxDebugSourceAccessExamples     = 5
+	maxDebugBrowserScrollExamples    = 5
+	maxDebugBrowserNetworkExamples   = 5
+	maxDebugMemoryUpdateExamples     = 5
+	maxDebugMemorySearchMissExamples = 5
+	maxDebugSessionSearchExamples    = 5
+	maxDebugPlanExamples             = 5
+	maxDebugChildTranscriptRefs      = 20
+	maxTraceLineBytes                = jsonl.DefaultMaxRecordBytes
 )
 
 type ToolOrderRequirement struct {
@@ -228,6 +229,7 @@ type BatchResult struct {
 	BrowserScrollExamples           []BrowserScrollExample
 	BrowserNetworkExamples          []BrowserNetworkSearchExample
 	MemoryUpdateExamples            []MemoryUpdateExample
+	MemorySearchMissExamples        []MemorySearchMissExample
 	SessionSearchExamples           []SessionSearchExample
 	PlanExamples                    []PlanExample
 	ToolTruncationExamples          []ToolTruncationExample
@@ -290,6 +292,7 @@ type DebugManifest struct {
 	BrowserScrollExamples                  []BrowserScrollExample            `json:"browser_scroll_examples,omitempty"`
 	BrowserNetworkExamples                 []BrowserNetworkSearchExample     `json:"browser_network_examples,omitempty"`
 	MemoryUpdateExamples                   []MemoryUpdateExample             `json:"memory_update_examples,omitempty"`
+	MemorySearchMissExamples               []MemorySearchMissExample         `json:"memory_search_miss_examples,omitempty"`
 	SessionSearchExamples                  []SessionSearchExample            `json:"session_search_examples,omitempty"`
 	PlanExamples                           []PlanExample                     `json:"plan_examples,omitempty"`
 	ToolTruncationExamples                 []ToolTruncationExample           `json:"tool_truncation_examples,omitempty"`
@@ -953,6 +956,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.BrowserScrollExamples = trace.BrowserScrollExamples(maxDebugBrowserScrollExamples)
 		res.BrowserNetworkExamples = trace.BrowserNetworkSearchExamples(maxDebugBrowserNetworkExamples)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
+		res.MemorySearchMissExamples = trace.MemorySearchMissExamples(maxDebugMemorySearchMissExamples)
 		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
 		res.PlanExamples = trace.PlanExamples(maxDebugPlanExamples)
 		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
@@ -998,6 +1002,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	if trace != nil && len(res.MemoryUpdateExamples) == 0 {
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
+	}
+	if trace != nil && len(res.MemorySearchMissExamples) == 0 {
+		res.MemorySearchMissExamples = trace.MemorySearchMissExamples(maxDebugMemorySearchMissExamples)
 	}
 	if trace != nil && len(res.SourceAccessExamples) == 0 {
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
@@ -1086,6 +1093,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		BrowserScrollExamples:                  append([]BrowserScrollExample(nil), res.BrowserScrollExamples...),
 		BrowserNetworkExamples:                 append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
 		MemoryUpdateExamples:                   append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
+		MemorySearchMissExamples:               cloneMemorySearchMissExamples(res.MemorySearchMissExamples),
 		SessionSearchExamples:                  append([]SessionSearchExample(nil), res.SessionSearchExamples...),
 		PlanExamples:                           append([]PlanExample(nil), res.PlanExamples...),
 		ToolTruncationExamples:                 append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),

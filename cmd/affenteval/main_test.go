@@ -1187,6 +1187,29 @@ func TestPrintBatchResultIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 	}
 }
 
+func TestPrintBatchResultIncludesMemorySearchMissExamples(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResult(&out, agenteval.BatchResult{
+		BatchScenario: "sample",
+		OK:            true,
+		MemorySearchMissExamples: []agenteval.MemorySearchMissExample{{
+			ToolIndex:  1,
+			CallID:     "memory-search-1",
+			Target:     "memory",
+			Topic:      "deploy",
+			Query:      "helm deployment",
+			Message:    "no entries matched. Next: retry with fewer keywords or search a specific topic.",
+			TopicCount: 2,
+			Topics:     []string{"deploy", "auth"},
+		}},
+	})
+
+	got := out.String()
+	if !strings.Contains(got, `memory_search_miss_example: call_id=memory-search-1 target=memory topic=deploy query="helm deployment" topic_count=2 topics=deploy,auth message="no entries matched. Next: retry with fewer keywords or search a specific topic."`) {
+		t.Fatalf("output missing memory search miss example:\n%s", got)
+	}
+}
+
 func TestPrintBatchResultIncludesBrowserScrollExamples(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResult(&out, agenteval.BatchResult{
@@ -1478,6 +1501,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Location:    "memory:markets",
 			NextPreview: "Prefer browser_network_read evidence for dynamic dashboards.",
 		}},
+		MemorySearchMissExamples: []agenteval.MemorySearchMissExample{{
+			ToolIndex:  2,
+			CallID:     "memory-search-1",
+			Target:     "memory",
+			Topic:      "deploy",
+			Query:      "helm deployment",
+			Message:    "no entries matched. Next: search a specific topic from topics.",
+			TopicCount: 2,
+			Topics:     []string{"deploy", "auth"},
+		}},
 		SessionSearchExamples: []agenteval.SessionSearchExample{{
 			ToolIndex:       2,
 			CallID:          "search-1",
@@ -1666,7 +1699,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,memory_search_miss:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:memory_topic_anchors:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
@@ -1741,6 +1774,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `memory_update_example: scenario=sample action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
 		t.Fatalf("summary output missing memory update example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `memory_search_miss_example: scenario=sample call_id=memory-search-1 target=memory topic=deploy query="helm deployment" topic_count=2 topics=deploy,auth message="no entries matched. Next: search a specific topic from topics."`) {
+		t.Fatalf("summary output missing memory search miss example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: scenario=taostats-rendered LLM llm_stream timed out after 4m0s") {
 		t.Fatalf("summary output missing runtime error example:\n%s", out.String())
@@ -1836,6 +1872,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		summary.MemoryUpdateExamples[0].CallID != "memory-1" ||
 		summary.MemoryUpdateExamples[0].Scenario != "sample" {
 		t.Fatalf("MemoryUpdateExamples = %#v", summary.MemoryUpdateExamples)
+	}
+	if len(summary.MemorySearchMissExamples) != 1 ||
+		summary.MemorySearchMissExamples[0].CallID != "memory-search-1" ||
+		summary.MemorySearchMissExamples[0].Scenario != "sample" {
+		t.Fatalf("MemorySearchMissExamples = %#v", summary.MemorySearchMissExamples)
 	}
 	if len(summary.SessionSearchExamples) != 1 ||
 		summary.SessionSearchExamples[0].CallID != "search-1" ||
@@ -2116,6 +2157,16 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			Topic:     "markets",
 			Location:  "memory:markets",
 			Preview:   "Prefer browser_network_read evidence for dynamic market pages.",
+		}},
+		MemorySearchMissExamples: []agenteval.MemorySearchMissExample{{
+			ToolIndex:  4,
+			CallID:     "mem-search-jsonl-1",
+			Target:     "memory",
+			Topic:      "deploy",
+			Query:      "helm deployment",
+			Message:    "no entries matched. Next: search a specific topic from topics.",
+			TopicCount: 2,
+			Topics:     []string{"deploy", "auth"},
 		}},
 		SessionSearchExamples: []agenteval.SessionSearchExample{{
 			ToolIndex:       4,
@@ -2455,6 +2506,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		!jsonArrayContainsString(debugBrief["tags"], "browser_scroll:boundary") ||
 		!jsonArrayContainsString(debugBrief["tags"], "browser_network:refs") ||
 		!jsonArrayContainsString(debugBrief["tags"], "memory_update:add") ||
+		!jsonArrayContainsString(debugBrief["tags"], "memory_search_miss") ||
+		!jsonArrayContainsString(debugBrief["tags"], "recall:memory_topic_anchors") ||
 		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
 		!jsonArrayContainsString(debugBrief["tags"], "context_compaction:reactive") ||
 		!jsonArrayContainsString(debugBrief["tags"], "context_injection:account_access") ||
@@ -2526,6 +2579,21 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		memoryUpdateExample["location"] != "memory:markets" ||
 		!strings.Contains(fmt.Sprint(memoryUpdateExample["preview"]), "browser_network_read") {
 		t.Fatalf("memory_update_example = %#v\njson=%s", memoryUpdateExamples[0], out.String())
+	}
+	memorySearchMissExamples, ok := got["memory_search_miss_examples"].([]any)
+	if !ok || len(memorySearchMissExamples) != 1 {
+		t.Fatalf("memory_search_miss_examples = %#v\njson=%s", got["memory_search_miss_examples"], out.String())
+	}
+	memorySearchMissExample, ok := memorySearchMissExamples[0].(map[string]any)
+	if !ok ||
+		memorySearchMissExample["call_id"] != "mem-search-jsonl-1" ||
+		memorySearchMissExample["target"] != "memory" ||
+		memorySearchMissExample["topic"] != "deploy" ||
+		memorySearchMissExample["query"] != "helm deployment" ||
+		memorySearchMissExample["topic_count"] != float64(2) ||
+		!jsonArrayContainsString(memorySearchMissExample["topics"], "auth") ||
+		!strings.Contains(fmt.Sprint(memorySearchMissExample["message"]), "no entries matched") {
+		t.Fatalf("memory_search_miss_example = %#v\njson=%s", memorySearchMissExamples[0], out.String())
 	}
 	sessionSearchExamples, ok := got["session_search_examples"].([]any)
 	if !ok || len(sessionSearchExamples) != 1 {

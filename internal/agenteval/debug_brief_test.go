@@ -635,6 +635,27 @@ func TestBuildDebugBriefClassifiesTruncationArtifactQuality(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesMemorySearchMissAnchors(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		MemorySearchMissExamples: []MemorySearchMissExample{{
+			CallID:     "mem-search-empty",
+			Query:      "helm deployment",
+			TopicCount: 2,
+			Topics:     []string{"deploy", "auth"},
+		}},
+	})
+
+	item := debugBriefItemByKind(brief, "memory_search_miss")
+	if item == nil ||
+		item.Counts["misses"] != 1 ||
+		item.Counts["topics"] != 2 ||
+		!stringSliceContains(brief.Tags, "memory_search_miss") ||
+		!stringSliceContains(brief.Tags, "recall:memory_topic_anchors") {
+		t.Fatalf("memory search miss item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {
 	if brief == nil {
 		return nil

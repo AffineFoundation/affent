@@ -372,6 +372,16 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"remove":  res.ToolStats.MemoryUpdateRemove,
 		}, tags...)
 	}
+	if len(res.MemorySearchMissExamples) > 0 {
+		topics := 0
+		for _, ex := range res.MemorySearchMissExamples {
+			topics += ex.TopicCount
+		}
+		add("memory_search_miss", "info", "memory search returned no direct hits but exposed topic anchors for retry", []string{"memory_search_miss_examples", "tool_timeline"}, map[string]int{
+			"misses": len(res.MemorySearchMissExamples),
+			"topics": topics,
+		}, "memory_search_miss", "recall:memory_topic_anchors")
+	}
 	if res.ContextCompactions.Count > 0 {
 		tags := []string{"context_compaction"}
 		message := "context was compacted; inspect summary quality if resume degraded"

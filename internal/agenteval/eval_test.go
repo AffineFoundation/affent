@@ -50,6 +50,36 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	}
 }
 
+func TestMemorySearchMissExamplesIncludeTopicAnchors(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		Tool:     "memory",
+		CallID:   "mem-search-empty",
+		ExitCode: 0,
+		Args: map[string]any{
+			"action": "search",
+			"target": "memory",
+			"query":  "helm deployment",
+		},
+		Result: `{"ok":true,"message":"no entries matched. Next: retry with fewer/different keywords, search a specific topic from topics, or use action=list for full topic discovery.","target":"memory","topic":"deploy","results":[],"topics":[{"topic":"deploy","entries":2},{"topic":"auth","entries":1}]}`,
+	}}}
+
+	examples := trace.MemorySearchMissExamples(5)
+	if len(examples) != 1 {
+		t.Fatalf("MemorySearchMissExamples len = %d, want 1: %+v", len(examples), examples)
+	}
+	ex := examples[0]
+	if ex.ToolIndex != 1 ||
+		ex.CallID != "mem-search-empty" ||
+		ex.Target != "memory" ||
+		ex.Topic != "deploy" ||
+		ex.Query != "helm deployment" ||
+		ex.TopicCount != 2 ||
+		!reflect.DeepEqual(ex.Topics, []string{"deploy", "auth"}) ||
+		!strings.Contains(ex.Message, "no entries matched") {
+		t.Fatalf("unexpected memory search miss example: %+v", ex)
+	}
+}
+
 func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "shell", Args: map[string]any{"command": "python -m pytest 2>&1 | head -80"}},
