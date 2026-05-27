@@ -55,6 +55,24 @@ diagnostics.
 
 - `schema_version`: integer trace contract version.
 
+### `conversation.repaired`
+
+Emitted when a resumed conversation file contained an invalid tool-result
+window and Affent repaired it before continuing the session.
+
+- `session_id`: optional durable session id.
+- `missing_tool_results`: count of assistant tool calls that were missing their
+  matching tool result and were filled with a structured
+  `resume_missing_tool_result` placeholder.
+- `duplicate_tool_results`: count of duplicate tool-result records converted
+  into bounded user-visible `resume_duplicate_tool_result` repair notes.
+- `unexpected_tool_results`: count of stray tool-result records converted into
+  bounded user-visible `resume_unexpected_tool_result` repair notes.
+- `failure_kind`: primary repair class. Consumers should treat it as the most
+  actionable class for this repair event, not as an exhaustive list.
+- `next`: short operator/model guidance for how to continue safely after the
+  repair. Session summaries may surface this as `latest_recovery_hint`.
+
 ### `turn.start`
 
 - `turn_id`: runtime turn id.
