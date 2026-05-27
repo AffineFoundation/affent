@@ -66,6 +66,7 @@ describe("SessionLoopPanel", () => {
     expect(panel).toHaveTextContent("Calibration recorded; ready for activation review");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("A calibration answer is recorded");
+    expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("Current Situation <= 1200 chars");
     expect(panel).toHaveTextContent("Setup question");
     expect(panel).toHaveTextContent("What should pause this loop?");
     expect(panel).toHaveTextContent("Calibration");

@@ -573,6 +573,7 @@ describe("App", () => {
     expect(sent.content).toContain("wait for the user's answer");
     expect(sent.content).toContain("complete_activation");
     expect(sent.content).toContain("Current Situation");
+    expect(sent.content).toContain("1200 characters");
     expect(await screen.findByTestId("session-list")).toHaveTextContent("Loop draft");
     expect(screen.getByTestId("session-list")).toHaveTextContent("analyze market data");
   });
@@ -638,6 +639,7 @@ describe("App", () => {
     expect(sent.content).toContain("ask one focused follow-up in a later turn");
     expect(sent.content).toContain("Do not complete activation in the same turn");
     expect(sent.content).toContain("complete_activation");
+    expect(sent.content).toContain("1200 characters");
     expect(sent).toMatchObject({ display_text: "Set up loop: long running subnet analysis" });
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Set up loop: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("complete_activation");
@@ -710,6 +712,7 @@ describe("App", () => {
     expect(draft).toContain("Stop when taostats evidence or source confidence is weak.");
     expect(draft).toContain("metadata status: running");
     expect(draft).toContain("loop_protocol action=complete_activation");
+    expect(draft).toContain("Current Situation at or below 1200 characters");
     expect(draft).toContain("ask exactly one focused missing-field question");
     expect(draft).not.toContain("Ask one concise calibration question before changing the protocol");
   });

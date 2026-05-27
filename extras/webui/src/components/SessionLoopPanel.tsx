@@ -273,7 +273,7 @@ function loopActivationSteps(status: "off" | "draft" | "running" | "disabled" | 
   return [
     { label: "Create draft", detail: draft ? "LOOP.md exists but is not running yet." : "Set up LOOP.md before autonomous work starts.", state: draft ? "done" : "active", icon: draft ? "OK" : "1" },
     { label: "Ask calibration", detail: answered ? "A calibration answer is recorded for this LOOP.md." : "Affent asks for intent, stop conditions, memory policy, and recovery expectations.", state: answered ? "done" : draft ? "active" : "pending", icon: answered ? "OK" : draft ? "!" : "2" },
-    { label: "Activate after answer", detail: "Only then can the model complete_activation and future timers run.", state: answered ? "active" : "pending", icon: answered ? "!" : "3" },
+    { label: "Activate after answer", detail: "Only then can the model complete_activation with Current Situation <= 1200 chars.", state: answered ? "active" : "pending", icon: answered ? "!" : "3" },
   ];
 }
 

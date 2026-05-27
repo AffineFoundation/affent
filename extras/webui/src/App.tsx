@@ -1502,7 +1502,7 @@ function webLoopActivationPrompt(goal: string): string {
     "Do not complete activation in the same turn that created the draft unless this turn is responding to an earlier explicit calibration answer.",
     "If the goal, stop conditions, memory policy, or recovery expectations are still unclear after the answer, ask one focused follow-up in a later turn; keep status: draft until the protocol is complete.",
     "After asking, wait for the user's answer; do not continue autonomous work or claim the loop is running while LOOP.md is still draft.",
-    "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
+    "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a Current Situation snapshot kept at or below 1200 characters, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
     "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
   ].join("\n");
 }
@@ -1539,6 +1539,7 @@ function webLoopProtocolDraftPrompt(
     }
     lines.push(
       "Use the answer to supplement Current Situation, stop conditions, durable rules, self-attack checks, and recovery anchors.",
+      "Keep Current Situation at or below 1200 characters; summarize instead of copying task history.",
       "If activation is now safe, set metadata status: running and call loop_protocol action=complete_activation with the full LOOP.md.",
       "If activation is still unsafe, use loop_protocol action=update_draft and ask exactly one focused missing-field question.",
     );
@@ -1546,7 +1547,7 @@ function webLoopProtocolDraftPrompt(
   }
   lines.push(
     "Ask one concise calibration question before changing the protocol unless the user's requested change is already explicit; if more is missing, ask one focused follow-up in a later turn.",
-    "Use loop_protocol action=update_draft for draft protocols, or complete_activation only after the user answers and the protocol is fully supplemented.",
+    "Use loop_protocol action=update_draft for draft protocols, or complete_activation only after the user answers and the protocol is fully supplemented with Current Situation at or below 1200 characters.",
     "For a running protocol, update only durable rules, current situation, recovery anchors, or stop conditions that materially improve long-run behavior.",
   );
   return lines.join("\n");
