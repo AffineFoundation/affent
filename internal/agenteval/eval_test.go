@@ -1379,7 +1379,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RunExitCode:      3,
 		TraceDeltas:      true,
 		TurnEndReason:    "completed",
-		ToolCalls:        7,
+		ToolCalls:        8,
 		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolFailureExamples: map[string][]ToolFailureExample{
 			"dynamic_shell": {{
@@ -1538,6 +1538,19 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				"note":     "verified browser evidence step",
 			},
 			Result:   `{"version":1,"message":"updated step 2","steps":[{"text":"inspect dynamic dashboard","status":"completed"},{"text":"verify browser network evidence","status":"completed","evidence":["go test ./internal/agenteval"],"note":"verified browser evidence step"},{"text":"summarize findings","status":"pending"}]}`,
+			ExitCode: 0,
+		}, {
+			TurnID: "turn-debug",
+			CallID: "call-8",
+			Tool:   "browser_network",
+			Args:   map[string]any{"query": "market_cap", "max_results": float64(5)},
+			Result: "BROWSER NETWORK EVIDENCE\n" +
+				"CURRENT_PAGE: https://taostats.io/subnets/120\n" +
+				"query: \"market_cap\"\n" +
+				"MATCHES:\n" +
+				"- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120\n" +
+				"  preview: {\"price\":\"0.06342 T\"}\n" +
+				"Next: call browser_network_read with the most relevant ref and json_path before citing values.\n",
 			ExitCode: 0,
 		}},
 		LoopDecisions: []LoopDecision{{
@@ -1738,6 +1751,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.DebugBrief.Tags, "recall:context") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "memory_update:replace") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "context_compaction:reactive") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "browser_network:refs") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "truncation") {
 		t.Fatalf("manifest debug brief tags = %+v", manifest.DebugBrief.Tags)
 	}
@@ -1765,6 +1779,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.SourceAccessExamples[1].JSONPath != "$.price" ||
 		manifest.SourceAccessExamples[2].Status != "discovery_only" {
 		t.Fatalf("manifest source access examples = %+v", manifest.SourceAccessExamples)
+	}
+	if len(manifest.BrowserNetworkExamples) != 1 ||
+		manifest.BrowserNetworkExamples[0].ToolIndex != 8 ||
+		manifest.BrowserNetworkExamples[0].CallID != "call-8" ||
+		manifest.BrowserNetworkExamples[0].Status != "matches" ||
+		manifest.BrowserNetworkExamples[0].Query != "market_cap" ||
+		!manifest.BrowserNetworkExamples[0].RequiresRead ||
+		!manifest.BrowserNetworkExamples[0].NotCitable ||
+		!reflect.DeepEqual(manifest.BrowserNetworkExamples[0].Refs, []string{"n1"}) {
+		t.Fatalf("manifest browser network examples = %+v", manifest.BrowserNetworkExamples)
 	}
 	if len(manifest.LoopGuardExamples) != 1 ||
 		manifest.LoopGuardExamples[0].ToolIndex != 1 ||
@@ -1830,7 +1854,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.ChildTranscripts[1].Path != ".affentctl/subagents/debug-session/subagent_beta.jsonl" {
 		t.Fatalf("manifest child transcript refs = %+v", manifest.ChildTranscripts)
 	}
-	if manifest.Metrics.ToolCalls != 7 ||
+	if manifest.Metrics.ToolCalls != 8 ||
 		manifest.Metrics.ToolErrors != 1 ||
 		manifest.Metrics.LoopGuardInterventions != 1 ||
 		manifest.Metrics.SourceAccessResults != 2 ||
@@ -1869,7 +1893,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=7 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 tokens=100/20",
+		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"## Tool Repair",
@@ -1933,6 +1957,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
 		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` json_path=`$.price`",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
+		"## Browser Network Searches",
+		"tool#8 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`call-8` requires_read=`true` citable=`false`",
+		"refs: `n1`",
 		"## Plan Updates",
 		"tool#7 action=`update` index=`2` status=`completed` progress=`2/3` current=`3:pending` call_id=`call-7`",
 		"step: verify browser network evidence",

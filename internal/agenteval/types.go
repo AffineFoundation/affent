@@ -385,6 +385,19 @@ type SourceAccessExample struct {
 	JSONPath     string `json:"json_path,omitempty"`
 }
 
+type BrowserNetworkSearchExample struct {
+	Scenario          string   `json:"scenario,omitempty"`
+	ToolIndex         int      `json:"tool_index"`
+	CallID            string   `json:"call_id,omitempty"`
+	CurrentPageURL    string   `json:"current_page_url,omitempty"`
+	Query             string   `json:"query,omitempty"`
+	Status            string   `json:"status"`
+	Refs              []string `json:"refs,omitempty"`
+	RequiresRead      bool     `json:"requires_read,omitempty"`
+	NotCitable        bool     `json:"not_citable,omitempty"`
+	SuggestedNextStep string   `json:"suggested_next_step,omitempty"`
+}
+
 type SessionSearchExample struct {
 	Scenario        string   `json:"scenario,omitempty"`
 	ToolIndex       int      `json:"tool_index"`
@@ -643,6 +656,23 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 	return out
 }
 
+func (t Trace) BrowserNetworkSearchExamples(maxExamples int) []BrowserNetworkSearchExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []BrowserNetworkSearchExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		ex, ok := browserNetworkSearchExampleForTool(i+1, c)
+		if ok {
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
 func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
 	if maxExamples <= 0 {
 		return nil
@@ -722,6 +752,53 @@ func (t Trace) ToolTruncationExamples(maxExamples int) []ToolTruncationExample {
 		})
 	}
 	return out
+}
+
+func browserNetworkSearchExampleForTool(index int, c ToolCall) (BrowserNetworkSearchExample, bool) {
+	if c.Tool != "browser_network" || c.ExitCode != 0 || c.IsErr {
+		return BrowserNetworkSearchExample{}, false
+	}
+	body := strings.TrimSpace(c.Result)
+	if !strings.HasPrefix(body, "BROWSER NETWORK EVIDENCE") {
+		return BrowserNetworkSearchExample{}, false
+	}
+	var ex BrowserNetworkSearchExample
+	ex.ToolIndex = index
+	ex.CallID = c.CallID
+	ex.Status = "unknown"
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "CURRENT_PAGE:"):
+			ex.CurrentPageURL = compactOneLine(strings.TrimSpace(strings.TrimPrefix(trimmed, "CURRENT_PAGE:")), 500)
+		case strings.HasPrefix(trimmed, "query:"):
+			ex.Query = strings.Trim(strings.TrimSpace(strings.TrimPrefix(trimmed, "query:")), `"`)
+			ex.Query = compactOneLine(ex.Query, 220)
+		case trimmed == "MATCHES: none":
+			ex.Status = "no_matches"
+			ex.NotCitable = true
+		case trimmed == "MATCHES:":
+			ex.Status = "matches"
+			ex.RequiresRead = true
+			ex.NotCitable = true
+		case strings.HasPrefix(trimmed, "- ") && ex.Status == "matches":
+			if len(ex.Refs) < 8 {
+				ref := strings.Fields(strings.TrimSpace(strings.TrimPrefix(trimmed, "- ")))
+				if len(ref) > 0 {
+					ex.Refs = append(ex.Refs, compactOneLine(ref[0], 80))
+				}
+			}
+		case strings.HasPrefix(trimmed, "Next:"):
+			ex.SuggestedNextStep = compactOneLine(strings.TrimSpace(strings.TrimPrefix(trimmed, "Next:")), 260)
+		}
+	}
+	if ex.Status == "unknown" && len(ex.Refs) == 0 && ex.CurrentPageURL == "" && ex.Query == "" {
+		return BrowserNetworkSearchExample{}, false
+	}
+	if ex.Status == "matches" && len(ex.Refs) == 0 {
+		ex.RequiresRead = true
+	}
+	return ex, true
 }
 
 func memoryUpdateExampleForTool(index int, c ToolCall) (MemoryUpdateExample, bool) {

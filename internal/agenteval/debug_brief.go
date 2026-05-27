@@ -195,6 +195,36 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"discovery_only":  res.ToolStats.SourceAccessDiscoveryOnly,
 		}, tags...)
 	}
+	if len(res.BrowserNetworkExamples) > 0 {
+		refs, noMatches := 0, 0
+		for _, ex := range res.BrowserNetworkExamples {
+			if ex.Status == "matches" {
+				refs++
+			}
+			if ex.Status == "no_matches" {
+				noMatches++
+			}
+		}
+		severity := "info"
+		message := "browser network searches produced refs or checks; read refs before citing values"
+		tags := []string{"browser_network"}
+		if noMatches > 0 {
+			severity = "warn"
+			tags = append(tags, "browser_network:no_matches")
+			message = "browser network searches returned no matches; inspect queries and current pages before trusting hidden dashboard gaps"
+		} else if refs > 0 && res.ToolStats.SourceAccessNetwork == 0 {
+			severity = "warn"
+			tags = append(tags, "browser_network:unread_refs")
+			message = "browser network searches found refs but no network SourceAccess reads; call browser_network_read before citing values"
+		} else if refs > 0 {
+			tags = append(tags, "browser_network:refs")
+		}
+		add("browser_network", severity, message, []string{"browser_network_examples", "source_evidence", "tool_timeline"}, map[string]int{
+			"searches":   len(res.BrowserNetworkExamples),
+			"refs":       refs,
+			"no_matches": noMatches,
+		}, tags...)
+	}
 	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 {
 		kind := "recall"
 		severity := "info"

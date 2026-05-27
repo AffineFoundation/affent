@@ -88,6 +88,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
+	renderTimelineBrowserNetworkSearches(&b, trace)
 	renderTimelinePlan(&b, trace)
 	renderTimelineMemoryUpdates(&b, trace)
 	renderTimelineSessionSearch(&b, trace)
@@ -893,6 +894,40 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
 		}
 		b.WriteByte('\n')
+	}
+}
+
+func renderTimelineBrowserNetworkSearches(b *strings.Builder, trace *Trace) {
+	examples := trace.BrowserNetworkSearchExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Browser Network Searches\n\n")
+	b.WriteString("These are refs/checks, not citable sources. Use Source Evidence from `browser_network_read` before citing values.\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d status=`%s`", i+1, ex.ToolIndex, ex.Status)
+		if ex.Query != "" {
+			fmt.Fprintf(b, " query=`%s`", timelineInline(ex.Query, 220))
+		}
+		if ex.CurrentPageURL != "" {
+			fmt.Fprintf(b, " page=`%s`", timelineInline(ex.CurrentPageURL, 300))
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		if ex.RequiresRead {
+			fmt.Fprintf(b, " requires_read=`true`")
+		}
+		if ex.NotCitable {
+			fmt.Fprintf(b, " citable=`false`")
+		}
+		b.WriteByte('\n')
+		if len(ex.Refs) > 0 {
+			fmt.Fprintf(b, "   refs: `%s`\n", strings.Join(ex.Refs, "`, `"))
+		}
+		if ex.SuggestedNextStep != "" {
+			fmt.Fprintf(b, "   next: %s\n", timelineInline(ex.SuggestedNextStep, timelineMemoryPreviewBytes))
+		}
 	}
 }
 

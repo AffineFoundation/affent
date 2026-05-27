@@ -875,7 +875,10 @@ failed or diagnostic-heavy runs, shows the redacted
 `affentctl` command argv, trace event type counts, effective runtime surface,
 tool calls with args/result previews, child transcript refs,
 truncation/artifact pointers, loop decisions, context compactions, and runtime
-errors. By default, eval
+errors. Browser network searches are listed separately from `SourceAccess`
+evidence: `browser_network` entries are refs/checks only, and the timeline
+requires `browser_network_read` source evidence before treating hidden JSON/text
+values as citable. By default, eval
 traces pass `affentctl --trace-skip-deltas` so token
 streaming deltas do not bury the tool timeline; use `--trace-deltas` only for
 deep provider/stream debugging when the raw `message.delta` sequence matters.
