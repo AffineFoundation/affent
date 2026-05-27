@@ -1,0 +1,83 @@
+import type { SessionChangesView } from "./sessionChanges";
+import type { SessionFilesView } from "./sessionFiles";
+import type { SessionOverview } from "./sessionOverview";
+import type { SessionRunView } from "./sessionRun";
+
+export type WorkbenchAttentionTone = "error" | "warning" | "attention";
+
+export interface WorkbenchAttention {
+  label: string;
+  detail: string;
+  tone: WorkbenchAttentionTone;
+}
+
+export function buildWorkbenchAttention({
+  overview,
+  files,
+  changes,
+  run,
+}: {
+  overview: SessionOverview;
+  files: SessionFilesView;
+  changes: SessionChangesView;
+  run: SessionRunView;
+}): WorkbenchAttention | undefined {
+  const currentIssue = overview.metrics.find((metric) => (metric.label === "Issue" || metric.label === "Issues") && metric.value.trim());
+  if (currentIssue) {
+    return { label: `${currentIssue.value} ${currentIssue.label.toLowerCase()}`, detail: "View context", tone: "error" };
+  }
+
+  const failedCommands = run.commands.filter((command) => command.status === "failed").length;
+  if (failedCommands > 0) return { label: failedCommandLabel(failedCommands), detail: "View run", tone: "error" };
+
+  const failedChanges = changes.files.filter((file) => file.status === "failed").length;
+  if (failedChanges > 0) return { label: fileIssueLabel(failedChanges), detail: "Review changes", tone: "error" };
+
+  const failedFiles = files.items.filter((item) => item.status === "failed").length;
+  if (failedFiles > 0) return { label: fileIssueLabel(failedFiles), detail: "Review files", tone: "error" };
+
+  const recovery = overview.metrics.find((metric) => metric.label === "Recovery" && metric.value.trim());
+  if (recovery) return { label: "Recovery hint", detail: recovery.value, tone: "warning" };
+
+  const runningCommands = run.commands.filter((command) => command.status === "running").length;
+  if (runningCommands > 0) return { label: runningCommandLabel(runningCommands), detail: "View run", tone: "warning" };
+
+  const pendingChanges = changes.files.filter((file) => file.status === "running").length;
+  if (pendingChanges > 0) return { label: pendingChangeLabel(pendingChanges), detail: "Review changes", tone: "warning" };
+
+  const pendingFiles = files.items.filter((item) => item.status === "running").length;
+  if (pendingFiles > 0) return { label: pendingFileLabel(pendingFiles), detail: "Review files", tone: "warning" };
+
+  const changedFiles = changes.files.filter((file) => file.status === "changed").length;
+  if (changedFiles > 0) return { label: changedFileLabel(changedFiles), detail: "Review changes", tone: "attention" };
+
+  return undefined;
+}
+
+function failedCommandLabel(count: number): string {
+  return `${count} failed ${plural("command", count)}`;
+}
+
+function runningCommandLabel(count: number): string {
+  return `${count} running ${plural("command", count)}`;
+}
+
+function fileIssueLabel(count: number): string {
+  return `${count} file ${count === 1 ? "issue" : "issues"}`;
+}
+
+function pendingChangeLabel(count: number): string {
+  return `${count} pending ${plural("change", count)}`;
+}
+
+function pendingFileLabel(count: number): string {
+  return `${count} pending file ${count === 1 ? "action" : "actions"}`;
+}
+
+function changedFileLabel(count: number): string {
+  return `${count} changed ${plural("file", count)}`;
+}
+
+function plural(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
+}

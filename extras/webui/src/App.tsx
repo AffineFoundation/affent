@@ -70,6 +70,7 @@ import { buildSessionOverview, type SessionOverview } from "./view/sessionOvervi
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
+import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
 
@@ -282,6 +283,10 @@ export function App() {
   const sessionFiles = useMemo(() => buildSessionFiles(session), [session]);
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
+  const workbenchAttention = useMemo(
+    () => buildWorkbenchAttention({ overview, files: sessionFiles, changes: sessionChanges, run: sessionRun }),
+    [overview, sessionChanges, sessionFiles, sessionRun],
+  );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
@@ -1306,13 +1311,18 @@ export function App() {
             open={workbenchOpen}
             onToggle={(event) => setWorkbenchOpen(event.currentTarget.open)}
           >
-            <summary aria-label="Workbench">
+            <summary aria-label="Workbench" title={workbenchAttention ? `${workbenchAttention.label} · ${workbenchAttention.detail}` : undefined}>
               <span className="workbench-icon" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </span>
               <span className="workbench-label">Workbench</span>
+              {workbenchAttention ? (
+                <span className="workbench-attention" data-tone={workbenchAttention.tone}>
+                  {workbenchAttention.label}
+                </span>
+              ) : null}
             </summary>
             {workbenchOpen ? (
               <div className="workbench-panel" data-testid="workbench-panel">

@@ -1783,6 +1783,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Checkout route fixed.")).toBeVisible();
     expect(screen.queryByTestId("session-changes-panel")).toBeNull();
+    expect(screen.getByText("1 changed file")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
 
@@ -1869,6 +1870,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Checkout route inspected.")).toBeVisible();
     expect(screen.queryByTestId("session-files-panel")).toBeNull();
+    expect(screen.queryByText("2 file references")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
 
@@ -1947,6 +1949,7 @@ describe("App", () => {
 
     expect((await screen.findAllByText("Checkout test still fails."))[0]).toBeVisible();
     expect(screen.queryByTestId("session-run-panel")).toBeNull();
+    expect(screen.getByText("1 failed command")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
 
