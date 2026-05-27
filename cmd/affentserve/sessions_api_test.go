@@ -961,6 +961,106 @@ func TestReadSessionLoopProtocolReturnsStateAndRecentEvents(t *testing.T) {
 	}
 }
 
+func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	protocol := `# Loop
+
+- status: running`
+	if _, _, _, _, err := writeSessionLoopProtocol(pool, "loop-visible", sessionLoopProtocolUpdateRequest{Protocol: protocol, Reason: "activate"}); err != nil {
+		t.Fatalf("write protocol: %v", err)
+	}
+	protocolPath := sessionLoopProtocolPath(pool, "loop-visible")
+	if _, _, err := loopstate.RecordMemoryUpdate(protocolPath, loopstate.MemoryUpdateCheckpoint{
+		TurnID:          "turn_mem",
+		CallID:          "memory-1",
+		Action:          "replace",
+		Target:          "memory",
+		Topic:           "markets",
+		Location:        "memory:markets",
+		Preview:         "old dashboard rule -> prefer browser network evidence",
+		PreviousPreview: "old dashboard rule",
+		NextPreview:     "prefer browser network evidence",
+	}); err != nil {
+		t.Fatalf("RecordMemoryUpdate: %v", err)
+	}
+	if _, _, err := loopstate.RecordDecision(protocolPath, loopstate.DecisionCheckpoint{
+		DecisionID:     "evidence-quality-dynamic-partial",
+		Kind:           "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         "dynamic widgets lacked text",
+		RequiredAction: "read browser network responses",
+	}); err != nil {
+		t.Fatalf("RecordDecision: %v", err)
+	}
+	if _, _, err := loopstate.RecordTurnCheckpoint(protocolPath, loopstate.TurnCheckpoint{
+		TurnID:             "turn_done",
+		EndReason:          sse.TurnEndCompleted,
+		InputTokens:        123,
+		OutputTokens:       45,
+		ToolRequests:       2,
+		MemoryUpdates:      1,
+		SessionSearchCalls: 1,
+	}); err != nil {
+		t.Fatalf("RecordTurnCheckpoint: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/loop-visible/loop-protocol", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil ||
+		resp.State.MemoryUpdateEvents != 1 ||
+		resp.State.LastMemoryUpdateLoc != "memory:markets" ||
+		resp.State.LastMemoryUpdate != "old dashboard rule -> prefer browser network evidence" ||
+		resp.State.LoopDecisions != 1 ||
+		resp.State.LastDecisionKind != "evidence_quality" ||
+		resp.State.LastDecisionAction != "read browser network responses" ||
+		resp.State.TurnCheckpoints != 1 ||
+		resp.State.LastTurnID != "turn_done" ||
+		resp.State.LastTurnMemoryUpdates != 1 {
+		t.Fatalf("state should expose runtime checkpoints for WebUI: %+v", resp.State)
+	}
+	if len(resp.Events) != 4 {
+		t.Fatalf("events len = %d, want 4: %+v", len(resp.Events), resp.Events)
+	}
+	if resp.Events[1].Type != "loop.memory_update" ||
+		resp.Events[1].MemoryLocation != "memory:markets" ||
+		resp.Events[1].NextPreview != "prefer browser network evidence" {
+		t.Fatalf("memory update event = %+v", resp.Events[1])
+	}
+	if resp.Events[2].Type != "loop.decision" ||
+		resp.Events[2].DecisionKind != "evidence_quality" ||
+		resp.Events[2].RequiredAction != "read browser network responses" {
+		t.Fatalf("decision event = %+v", resp.Events[2])
+	}
+	if resp.Events[3].Type != "loop.turn_checkpoint" ||
+		resp.Events[3].TurnID != "turn_done" ||
+		resp.Events[3].MemoryUpdates != 1 {
+		t.Fatalf("turn checkpoint event = %+v", resp.Events[3])
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-visible")
+	if err != nil || !found {
+		t.Fatalf("summarizeDurableSession found=%v err=%v", found, err)
+	}
+	if !summary.HasLoopState ||
+		summary.LoopState == nil ||
+		summary.LoopState.LastMemoryUpdateLoc != "memory:markets" ||
+		summary.LoopState.LastDecisionKind != "evidence_quality" ||
+		summary.LoopState.LastTurnID != "turn_done" {
+		t.Fatalf("durable session summary loop_state = %+v", summary.LoopState)
+	}
+}
+
 func TestHandleSessionLoopProtocolDelete_RejectsSymlinkProtocol(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
