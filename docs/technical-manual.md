@@ -762,7 +762,9 @@ Current built-in suites:
   The stock and subnet scenarios require reading the explicit evidence files,
   so a run cannot pass by answering only from prompt wording or stale archive
   files. The PR-style coding scenario requires reading the implementation file
-  before editing it and naming the changed file in the final PR summary.
+  before editing it and naming the changed file in the final PR summary. A
+  combined recovery scenario requires joining persistent memory with prior
+  session history, covering the shared-memory plus session-search path.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools

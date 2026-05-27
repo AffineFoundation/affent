@@ -1190,6 +1190,87 @@ func sessionHistoryRecallScenario() BatchScenario {
 	}
 }
 
+func longRunMemorySessionJoinScenario() BatchScenario {
+	return BatchScenario{
+		Name:         "longrun-memory-session-join",
+		Suites:       []string{longRunSuite},
+		SessionID:    "memory-session-join-reader",
+		EnableMemory: true,
+		Prompt:       "你正在恢复 Alpha Coast 股票研究任务。请同时从持久记忆和历史 session 中找当前规则与当前决策，并合并回答 memory marker、history marker、risk label、confidence tag 和证据 session。必须同时使用 memory 和 session_search；不要读取文件、运行 shell、修改文件。如果任一来源缺失，要明确说明缺失。",
+		Files: map[string]string{
+			".affent/memory/topics/markets.md": "2026-05-27T00:00:00Z Alpha Coast research memory rule: include memory marker MEM-JOIN-22 and confidence tag source-led when citing historical stock decisions.\n",
+			".affentctl/alpha-current.jsonl": `{"role":"user","content":"Alpha Coast current stock decision handoff"}
+{"role":"assistant","content":"current decision: history marker HIST-JOIN-88, risk label backlog-slippage, next action compare backlog conversion. Evidence should cite session alpha-current."}
+`,
+			".affentctl/alpha-stale.jsonl": `{"role":"user","content":"Alpha Coast stale decision"}
+{"role":"assistant","content":"outdated decision: history marker HIST-JOIN-OLD, risk label risk-cleared, ignore backlog slippage."}
+`,
+			"README.md": "# Memory Session Join Eval\n\nThis file intentionally does not contain the current markers.\n",
+		},
+		RequiredTools: []string{"memory", "session_search"},
+		RequiredToolCounts: map[string]int{
+			"memory":         1,
+			"session_search": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "action", Substring: "search"},
+			{Tool: "memory", Arg: "query", Substring: "Alpha Coast"},
+			{Tool: "session_search", Arg: "query", Substring: "Alpha Coast"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"memory": {
+				"MEM-JOIN-22",
+				"source-led",
+				"markets",
+			},
+			"session_search": {
+				"HIST-JOIN-88",
+				"backlog-slippage",
+				"alpha-current",
+				`"context_included":true`,
+				`"matched_terms"`,
+				`"alpha"`,
+				`"coast"`,
+			},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"session_search_calls":         1,
+			"session_search_results":       1,
+			"session_search_context_hits":  1,
+			"session_search_matched_terms": 2,
+		},
+		RequiredSessionSearch: []SessionSearchRequirement{
+			{
+				QueryContains:   "Alpha Coast",
+				SessionID:       "alpha-current",
+				SnippetContains: "HIST-JOIN-88",
+				MatchedTerms:    []string{"alpha", "coast"},
+				ContextIncluded: true,
+			},
+		},
+		RequiredFinalText: []string{
+			"MEM-JOIN-22",
+			"HIST-JOIN-88",
+			"backlog-slippage",
+			"source-led",
+			"alpha-current",
+		},
+		ForbiddenFinalText: []string{"HIST-JOIN-OLD", "risk-cleared"},
+		ForbiddenTools:     []string{"read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles: []string{
+			".affent/memory/topics/markets.md",
+			".affentctl/alpha-current.jsonl",
+			".affentctl/alpha-stale.jsonl",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"memory":         1,
+			"session_search": 1,
+		},
+		MaxTurns: 6,
+	}
+}
+
 func longRunMultiTaskSessionRecoveryScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-multitask-session-recovery",

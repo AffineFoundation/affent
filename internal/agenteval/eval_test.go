@@ -857,8 +857,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 10 {
-		t.Fatalf("long-run suite size = %d, want 10", len(scenarios))
+	if len(scenarios) != 11 {
+		t.Fatalf("long-run suite size = %d, want 11", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -981,6 +981,29 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("session history final text constraints = forbidden:%#v", sessionHistory.ForbiddenFinalText)
 	}
 	assertSessionSearchDiagnosticsRequired(t, sessionHistory)
+
+	memorySessionJoin, ok := seen["longrun-memory-session-join"]
+	if !ok {
+		t.Fatalf("long-run suite missing memory/session join scenario")
+	}
+	if !memorySessionJoin.EnableMemory || memorySessionJoin.SessionID != "memory-session-join-reader" {
+		t.Fatalf("memory/session join fields = memory:%v session:%q", memorySessionJoin.EnableMemory, memorySessionJoin.SessionID)
+	}
+	if memorySessionJoin.RequiredToolCounts["memory"] != 1 ||
+		memorySessionJoin.RequiredToolCounts["session_search"] != 1 ||
+		memorySessionJoin.MaxSuccessfulToolCallsByTool["memory"] != 1 ||
+		memorySessionJoin.MaxSuccessfulToolCallsByTool["session_search"] != 1 {
+		t.Fatalf("memory/session join tool constraints = counts:%#v max:%#v", memorySessionJoin.RequiredToolCounts, memorySessionJoin.MaxSuccessfulToolCallsByTool)
+	}
+	for _, want := range []string{"MEM-JOIN-22", "HIST-JOIN-88", "backlog-slippage", "source-led", "alpha-current"} {
+		if !stringSliceContains(memorySessionJoin.RequiredFinalText, want) {
+			t.Fatalf("memory/session join RequiredFinalText = %#v, want %q", memorySessionJoin.RequiredFinalText, want)
+		}
+	}
+	if !stringSliceContains(memorySessionJoin.ForbiddenFinalText, "HIST-JOIN-OLD") {
+		t.Fatalf("memory/session join ForbiddenFinalText = %#v, want stale history marker", memorySessionJoin.ForbiddenFinalText)
+	}
+	assertSessionSearchDiagnosticsRequired(t, memorySessionJoin)
 
 	multiTaskRecovery, ok := seen["longrun-multitask-session-recovery"]
 	if !ok {
