@@ -50,7 +50,7 @@ export function SessionSkillsPanel({
   const summaryDetail = loading
     ? "Fetching reusable workflows."
     : error
-      ? error
+      ? "Open for route, proxy, or build details."
       : runtimeCount > 0
         ? `${runtimeCount} custom · ${allSkills.length - runtimeCount} built in${activationCoverage(allSkills)}`
         : `Built-in workflows ready${activationCoverage(allSkills)}`;

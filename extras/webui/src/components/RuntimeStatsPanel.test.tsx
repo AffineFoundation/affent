@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { RuntimeStatsPanel } from "./RuntimeStatsPanel";
 
@@ -87,5 +87,14 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.getByTestId("runtime-stats-panel")).toHaveTextContent("Runtime unavailable");
     expect(screen.getByRole("alert")).toHaveTextContent("stats offline");
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
+  });
+
+  it("keeps long API diagnostics out of the collapsed summary", () => {
+    const diagnostic = "API route /v1/stats returned the WebUI app shell. The affentserve build may not expose this route.";
+    render(<RuntimeStatsPanel error={diagnostic} />);
+
+    const summary = within(screen.getByTestId("runtime-stats-panel")).getByText("Runtime unavailable").closest("summary");
+    expect(summary).toHaveTextContent("Open for route, proxy, or build details.");
+    expect(summary).not.toHaveTextContent("returned the WebUI app shell");
   });
 });

@@ -48,7 +48,7 @@ export function SessionMemoryPanel({
     : loading
       ? "Reading durable buckets."
       : error
-        ? error
+        ? "Open for route, proxy, or build details."
         : memory?.has_memory
           ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";

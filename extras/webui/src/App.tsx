@@ -1838,6 +1838,7 @@ function isAbortError(err: unknown): boolean {
 
 function formatError(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.type === "invalid_api_response") return err.message;
     return err.type ? `${err.type}: ${err.message}` : err.message;
   }
   if (err instanceof Error) return err.message;

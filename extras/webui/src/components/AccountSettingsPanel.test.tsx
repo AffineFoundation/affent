@@ -79,4 +79,16 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("could not be derived");
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
   });
+
+  it("keeps long API diagnostics out of the collapsed summary", async () => {
+    const diagnostic = "API route /v1/settings returned the WebUI app shell. The affentserve build may not expose this route.";
+    render(<AccountSettingsPanel error={diagnostic} />);
+
+    const summary = within(screen.getByTestId("account-settings-panel")).getByText("Unavailable").closest("summary");
+    expect(summary).toHaveTextContent("Open for route, proxy, or build details.");
+    expect(summary).not.toHaveTextContent("returned the WebUI app shell");
+
+    await userEvent.click(screen.getByText("Unavailable"));
+    expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+  });
 });

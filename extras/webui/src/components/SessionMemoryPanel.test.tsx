@@ -80,4 +80,16 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("No chat selected");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("No selected chat.");
   });
+
+  it("keeps long API diagnostics out of the collapsed summary", async () => {
+    const diagnostic = "API route /v1/sessions/s1/memory returned the WebUI app shell. The affentserve build may not expose this route.";
+    render(<SessionMemoryPanel error={diagnostic} />);
+
+    const summary = within(screen.getByTestId("session-memory-panel")).getByText("Memory unavailable").closest("summary");
+    expect(summary).toHaveTextContent("Open for route, proxy, or build details.");
+    expect(summary).not.toHaveTextContent("returned the WebUI app shell");
+
+    await userEvent.click(screen.getByText("Memory unavailable"));
+    expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+  });
 });

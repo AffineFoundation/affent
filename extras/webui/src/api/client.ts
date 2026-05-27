@@ -116,7 +116,7 @@ function invalidJsonResponse(path: string, resp: Response): ApiError {
   const contentType = resp.headers.get("Content-Type") ?? "unknown content type";
   const fromHtmlFallback = contentType.toLowerCase().includes("text/html");
   const message = fromHtmlFallback
-    ? `API returned HTML for ${path}. Start affentserve or configure the WebUI API proxy.`
+    ? `API route ${path} returned the WebUI app shell. The affentserve build may not expose this route, or the WebUI API proxy may point at the frontend instead of the API.`
     : `API returned invalid JSON for ${path} (${contentType}).`;
   return new ApiError(resp.status, message, "invalid_api_response");
 }

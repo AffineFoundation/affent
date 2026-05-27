@@ -29,7 +29,9 @@ export function AccountSettingsPanel({
   const ssh = settings?.ssh;
   const hasPublicKey = !!ssh?.public_key;
   const title = loading ? "Loading" : error ? "Unavailable" : `${envCount} env${envCount === 1 ? "" : "s"}`;
-  const detail = hasPublicKey ? "SSH public key ready" : ssh?.exists ? "SSH key found; public key unavailable" : "Generate an SSH key before cloning private repos";
+  const detail = error
+    ? "Open for route, proxy, or build details."
+    : hasPublicKey ? "SSH public key ready" : ssh?.exists ? "SSH key found; public key unavailable" : "Generate an SSH key before cloning private repos";
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 
   async function submitEnv(event: FormEvent) {

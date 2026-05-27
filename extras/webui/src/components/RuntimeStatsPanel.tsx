@@ -13,7 +13,7 @@ export function RuntimeStatsPanel({
   defaultOpen?: boolean;
 }) {
   const summary = loading ? "Loading runtime" : error ? "Runtime unavailable" : runtimeSummary(stats);
-  const detail = loading ? "Reading server diagnostics." : error ? error : runtimeDetail(stats);
+  const detail = loading ? "Reading server diagnostics." : error ? "Open for route, proxy, or build details." : runtimeDetail(stats);
   const metrics = stats ? runtimeMetrics(stats) : [];
 
   return (

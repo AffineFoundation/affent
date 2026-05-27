@@ -48,7 +48,7 @@ describe("ApiClient", () => {
     await expect(client.json("/v1/sessions")).rejects.toMatchObject({
       name: "ApiError",
       status: 200,
-      message: "API returned HTML for /v1/sessions. Start affentserve or configure the WebUI API proxy.",
+      message: "API route /v1/sessions returned the WebUI app shell. The affentserve build may not expose this route, or the WebUI API proxy may point at the frontend instead of the API.",
       type: "invalid_api_response",
     } satisfies Partial<ApiError>);
   });

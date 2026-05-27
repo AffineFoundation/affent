@@ -1967,8 +1967,10 @@ body {
 }
 
 .session-skills-empty {
+  min-width: 0;
   color: var(--text-muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .session-skills-empty.error {

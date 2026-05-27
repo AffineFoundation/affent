@@ -79,4 +79,16 @@ describe("SessionSkillsPanel", () => {
     });
     expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
   });
+
+  it("keeps long API diagnostics out of the collapsed summary", async () => {
+    const diagnostic = "API route /v1/skills returned the WebUI app shell. The affentserve build may not expose this route.";
+    render(<SessionSkillsPanel error={diagnostic} />);
+
+    const summary = within(screen.getByTestId("session-skills-panel")).getByText("Skills unavailable").closest("summary");
+    expect(summary).toHaveTextContent("Open for route, proxy, or build details.");
+    expect(summary).not.toHaveTextContent("returned the WebUI app shell");
+
+    await userEvent.click(screen.getByText("Skills unavailable"));
+    expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+  });
 });
