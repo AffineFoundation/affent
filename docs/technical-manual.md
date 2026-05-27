@@ -675,9 +675,11 @@ They also include a compact memory summary with shared-user-memory status,
 bucket count, entry count, chars used, and the latest stamped target/topic so
 long-run recovery can decide whether to inspect memory before guessing.
 Durable-only session summaries also restore aggregate tool counters from recent
-persisted `turn.end.tool_stats` events, so WebUI can still show tool volume,
-loop guard interventions, recall misses, and source-access quality after a
-server restart without replaying the full event log.
+persisted `turn.end.tool_stats` events and runtime counters from recent
+`turn.end`, `error`, and `context.compacted` events, so WebUI can still show
+tool volume, loop guard interventions, recall misses, source-access quality,
+turn-end reasons, runtime errors, and compaction health after a server restart
+without replaying the full event log.
 
 ## Configuration
 

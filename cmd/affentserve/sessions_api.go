@@ -736,6 +736,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			return sessionSummary{}, false, err
 		}
 		summary.Tools = tools
+		runtime, err := runtimeStatsSummaryFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.Runtime = runtime
 		cwd, _, err := latestShellCWDFromEventsFile(filepath.Join(dir, "events.jsonl"))
 		if err != nil {
 			return sessionSummary{}, false, err
@@ -1088,6 +1093,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	}
 	if b.Tools != nil && (a.Tools == nil || (b.Active && !aWasActive)) {
 		a.Tools = b.Tools
+	}
+	if b.Runtime != nil && (a.Runtime == nil || (b.Active && !aWasActive)) {
+		a.Runtime = b.Runtime
 	}
 	if b.Browser != nil {
 		a.Browser = b.Browser
@@ -1444,6 +1452,114 @@ func toolStatsSummaryFromEventsFile(path string) (*ToolStatsSnapshot, error) {
 		return nil, err
 	}
 	return scanToolStatsFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func runtimeStatsSummaryFromEventsFile(path string) (*RuntimeStatsSnapshot, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return nil, err
+	}
+	return scanRuntimeStatsFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func scanRuntimeStatsFromEvents(r *bufio.Reader) (*RuntimeStatsSnapshot, error) {
+	var summary RuntimeStatsSnapshot
+	seen := false
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		switch ev.Type {
+		case sse.TypeTurnEnd:
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			addRuntimeTurnEndReason(&summary, p.Reason)
+			seen = true
+		case sse.TypeError:
+			var p sse.ErrorPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			addRuntimeErrorKind(&summary, p.FailureKind)
+			seen = true
+		case sse.TypeContextCompact:
+			var p sse.ContextCompactPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			var raw struct {
+				SummaryPresent *bool `json:"summary_present"`
+			}
+			_ = json.Unmarshal(ev.Data, &raw)
+			addRuntimeContextCompaction(&summary, p, raw.SummaryPresent != nil)
+			seen = true
+		}
+	}
+	if !seen {
+		return nil, nil
+	}
+	return &summary, nil
+}
+
+func addRuntimeTurnEndReason(summary *RuntimeStatsSnapshot, reason string) {
+	if reason == "" {
+		reason = "unknown"
+	}
+	if summary.TurnEndByReason == nil {
+		summary.TurnEndByReason = map[string]int64{}
+	}
+	summary.TurnEndByReason[reason]++
+}
+
+func addRuntimeErrorKind(summary *RuntimeStatsSnapshot, kind string) {
+	summary.RuntimeErrors++
+	if kind == "" {
+		return
+	}
+	if summary.RuntimeErrorByKind == nil {
+		summary.RuntimeErrorByKind = map[string]int64{}
+	}
+	summary.RuntimeErrorByKind[kind]++
+}
+
+func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCompactPayload, summaryPresentKnown bool) {
+	summary.ContextCompactions++
+	if p.Reactive {
+		summary.ContextCompactionsReactive++
+	}
+	summary.ContextCompactionRemovedMessages += int64(p.RemovedMessages)
+	summary.ContextCompactionSummaryBytes += int64(p.SummaryBytes)
+	state := contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, summaryPresentKnown)
+	switch state {
+	case "missing":
+		summary.ContextCompactionSummaryMissing++
+	case "empty":
+		summary.ContextCompactionSummaryEmpty++
+	}
+	summary.ContextCompactionLatestReason = p.Reason
+	summary.ContextCompactionLatestReactive = p.Reactive
+	summary.ContextCompactionLatestState = state
 }
 
 func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {

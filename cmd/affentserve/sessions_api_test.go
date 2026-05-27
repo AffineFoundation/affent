@@ -1016,6 +1016,50 @@ func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "durable-runtime-stats")
+	dir := pool.sessionDirPath("durable-runtime-stats")
+
+	body := sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t1", Reason: sse.TurnEndMaxTurns}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t2", Reason: sse.TurnEndError}) +
+		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t2", Code: "llm_timeout", FailureKind: "llm_timeout", Recoverable: true}) +
+		sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
+			TurnID:          "t2",
+			BeforeMessages:  120,
+			AfterMessages:   80,
+			RemovedMessages: 40,
+			Reactive:        true,
+			Reason:          "context_overflow",
+			SummaryPresent:  false,
+		})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "durable-runtime-stats")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.Runtime == nil {
+		t.Fatalf("durable runtime stats missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 1 ||
+		summary.Runtime.TurnEndByReason[sse.TurnEndError] != 1 ||
+		summary.Runtime.RuntimeErrors != 1 ||
+		summary.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
+		summary.Runtime.ContextCompactions != 1 ||
+		summary.Runtime.ContextCompactionsReactive != 1 ||
+		summary.Runtime.ContextCompactionRemovedMessages != 40 ||
+		summary.Runtime.ContextCompactionLatestReason != "context_overflow" ||
+		summary.Runtime.ContextCompactionLatestState != "missing" {
+		t.Fatalf("durable runtime stats = %+v, want aggregated runtime events", summary.Runtime)
+	}
+	if summary.ContextCompactions == nil || summary.ContextCompactions.Count != 1 || summary.ContextCompactions.LatestSummaryState != "missing" {
+		t.Fatalf("context compaction summary = %+v, want existing durable summary preserved", summary.ContextCompactions)
+	}
+}
+
 func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
 	got := mergeSessionSummaries(
 		sessionSummary{
@@ -1035,6 +1079,38 @@ func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testin
 	}
 	if got.LatestUserMessage != "请继续同一个任务。基于已有证据输出报告" {
 		t.Fatalf("latest_user_message = %q, want active latest prompt", got.LatestUserMessage)
+	}
+}
+
+func TestMergeSessionSummariesCarriesRuntimeStatsAndPrefersActive(t *testing.T) {
+	got := mergeSessionSummaries(
+		sessionSummary{ID: "active"},
+		sessionSummary{
+			ID:      "active",
+			Durable: true,
+			Runtime: &RuntimeStatsSnapshot{TurnEndByReason: map[string]int64{sse.TurnEndMaxTurns: 1}},
+		},
+	)
+	if got.Runtime == nil || got.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 1 {
+		t.Fatalf("merged durable runtime stats = %+v, want carried over", got.Runtime)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{
+			ID:      "active",
+			Durable: true,
+			Runtime: &RuntimeStatsSnapshot{TurnEndByReason: map[string]int64{sse.TurnEndMaxTurns: 1}},
+		},
+		sessionSummary{
+			ID:      "active",
+			Active:  true,
+			Runtime: &RuntimeStatsSnapshot{TurnEndByReason: map[string]int64{sse.TurnEndCompleted: 2}},
+		},
+	)
+	if got.Runtime == nil ||
+		got.Runtime.TurnEndByReason[sse.TurnEndCompleted] != 2 ||
+		got.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 0 {
+		t.Fatalf("merged active runtime stats = %+v, want active stats", got.Runtime)
 	}
 }
 
