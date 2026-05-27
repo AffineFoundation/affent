@@ -635,6 +635,66 @@ func TestHandleSessionList_ReportsPlanSummary(t *testing.T) {
 	}
 }
 
+func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "scheduled-list")
+	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	file := sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{
+			{
+				ID:        "sched_later",
+				Prompt:    "review project progress",
+				Enabled:   true,
+				NextRunAt: now.Add(2 * time.Hour).Format(time.RFC3339),
+				CreatedAt: now.Format(time.RFC3339),
+				UpdatedAt: now.Format(time.RFC3339),
+			},
+			{
+				ID:        "sched_next",
+				Prompt:    "ask clarifying questions and update LOOP.md",
+				Enabled:   true,
+				NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
+				CreatedAt: now.Format(time.RFC3339),
+				UpdatedAt: now.Format(time.RFC3339),
+			},
+			{
+				ID:        "sched_paused",
+				Prompt:    "paused task",
+				Enabled:   false,
+				NextRunAt: now.Add(30 * time.Minute).Format(time.RFC3339),
+				CreatedAt: now.Format(time.RFC3339),
+				UpdatedAt: now.Format(time.RFC3339),
+			},
+		},
+	}
+	if err := writeSessionSchedulesFile(sessionSchedulesPath(pool, "scheduled-list"), file); err != nil {
+		t.Fatalf("write schedules: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
+	w := httptest.NewRecorder()
+	handleSessionsCollection(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Sessions) != 1 {
+		t.Fatalf("sessions = %+v, want one session", resp.Sessions)
+	}
+	summary := resp.Sessions[0].Schedules
+	if !resp.Sessions[0].HasSchedules || summary == nil {
+		t.Fatalf("session = %+v, want schedule summary", resp.Sessions[0])
+	}
+	if summary.Count != 3 || summary.Enabled != 2 || summary.NextScheduleID != "sched_next" || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "ask clarifying questions and update LOOP.md" {
+		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
+	}
+}
+
 func TestSummarizeDurableSessionReportsBadPlanSummaryWithoutFailing(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
@@ -652,6 +712,94 @@ func TestSummarizeDurableSessionReportsBadPlanSummaryWithoutFailing(t *testing.T
 	}
 	if !summary.HasPlan || summary.PlanSummary == nil || !summary.PlanSummary.Error || summary.PlanSummary.Label != "plan:error" {
 		t.Fatalf("bad plan summary = %+v", summary)
+	}
+}
+
+func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "scheduled")
+	nextRunAt := time.Date(2026, 5, 27, 13, 30, 0, 0, time.UTC).Format(time.RFC3339)
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/scheduled/schedules", bytes.NewBufferString(`{"prompt":"Ask the user two focused questions before enabling loop.","next_run_at":"`+nextRunAt+`","repeat_interval_seconds":3600}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("create status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "scheduled") != nil {
+		t.Fatal("POST schedules must not reopen an inactive durable session")
+	}
+	var created sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("decode create: %v", err)
+	}
+	if created.SessionID != "scheduled" || len(created.Schedules) != 1 {
+		t.Fatalf("created = %+v, want one schedule", created)
+	}
+	schedule := created.Schedules[0]
+	if schedule.ID == "" || schedule.Prompt != "Ask the user two focused questions before enabling loop." || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
+		t.Fatalf("schedule = %+v, want persisted request fields", schedule)
+	}
+	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.NextScheduleID != schedule.ID {
+		t.Fatalf("summary = %+v, want one enabled schedule", created.Summary)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/scheduled/schedules", nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("list status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "scheduled") != nil {
+		t.Fatal("GET schedules must not reopen an inactive durable session")
+	}
+	var listed sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode list: %v", err)
+	}
+	if len(listed.Schedules) != 1 || listed.Schedules[0].ID != schedule.ID {
+		t.Fatalf("listed = %+v, want created schedule", listed)
+	}
+
+	r = httptest.NewRequest(http.MethodDelete, "/v1/sessions/scheduled/schedules/"+schedule.ID, nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "scheduled") != nil {
+		t.Fatal("DELETE schedule must not reopen an inactive durable session")
+	}
+	var deleted sessionScheduleDeleteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &deleted); err != nil {
+		t.Fatalf("decode delete: %v", err)
+	}
+	if !deleted.Cleared || deleted.ScheduleID != schedule.ID || deleted.Summary == nil || deleted.Summary.Count != 0 {
+		t.Fatalf("deleted = %+v, want cleared with empty summary", deleted)
+	}
+}
+
+func TestHandleSessionSchedules_ValidatesRequest(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "empty prompt", body: `{"prompt":" ","next_run_at":"2026-05-27T13:30:00Z"}`},
+		{name: "missing next run", body: `{"prompt":"work"}`},
+		{name: "too fast repeat", body: `{"prompt":"work","next_run_at":"2026-05-27T13:30:00Z","repeat_interval_seconds":1}`},
+		{name: "unknown field", body: `{"prompt":"work","next_run_at":"2026-05-27T13:30:00Z","cron":"*"}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/v1/sessions/bad-schedule/schedules", strings.NewReader(tc.body))
+			w := httptest.NewRecorder()
+			handleSessionRoutes(pool).ServeHTTP(w, r)
+			if got := w.Result().StatusCode; got != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+			}
+		})
 	}
 }
 

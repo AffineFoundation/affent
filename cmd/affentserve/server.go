@@ -28,6 +28,9 @@ import (
 //	GET    /v1/sessions/{id}/loop-protocol
 //	POST   /v1/sessions/{id}/loop-protocol
 //	DELETE /v1/sessions/{id}/loop-protocol
+//	GET    /v1/sessions/{id}/schedules
+//	POST   /v1/sessions/{id}/schedules
+//	DELETE /v1/sessions/{id}/schedules/{schedule_id}
 //	GET    /v1/sessions/{id}/tools
 //	GET    /v1/sessions/{id}/transcripts
 //	GET    /v1/sessions/{id}/transcripts/{path...}
@@ -74,6 +77,9 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/loop-protocol → active LOOP.md snapshot
 //	POST   /v1/sessions/{id}/loop-protocol → create/update LOOP.md
 //	DELETE /v1/sessions/{id}/loop-protocol → remove LOOP.md
+//	GET    /v1/sessions/{id}/schedules → persisted scheduled prompts
+//	POST   /v1/sessions/{id}/schedules → create scheduled prompt
+//	DELETE /v1/sessions/{id}/schedules/{schedule_id} → remove scheduled prompt
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
@@ -114,6 +120,10 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionLoopProtocolUpdate(pool, sessionID, w, r)
 		case sub == "loop-protocol" && r.Method == http.MethodDelete:
 			handleSessionLoopProtocolDelete(pool, sessionID, w, r)
+		case sub == "schedules" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
+			handleSessionSchedules(pool, sessionID, w, r)
+		case strings.HasPrefix(sub, "schedules/") && r.Method == http.MethodDelete:
+			handleSessionScheduleDelete(pool, sessionID, strings.TrimPrefix(sub, "schedules/"), w, r)
 		case sub == "tools" && r.Method == http.MethodGet:
 			handleSessionTools(pool, sessionID, w, r)
 		case (sub == "transcripts" || strings.HasPrefix(sub, "transcripts/")) && r.Method == http.MethodGet:

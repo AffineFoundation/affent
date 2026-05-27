@@ -70,6 +70,8 @@ type sessionSummary struct {
 	LoopProtocol       *sessionLoopProtocolSummary      `json:"loop_protocol,omitempty"`
 	HasLoopState       bool                             `json:"has_loop_state"`
 	LoopState          *loopstate.State                 `json:"loop_state,omitempty"`
+	HasSchedules       bool                             `json:"has_schedules"`
+	Schedules          *sessionSchedulesSummary         `json:"schedules,omitempty"`
 	HasArtifacts       bool                             `json:"has_artifacts"`
 	HasMemory          bool                             `json:"has_memory"`
 	HasRuntimeSkills   bool                             `json:"has_runtime_skills"`
@@ -487,6 +489,10 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			summary.LoopState = &state
 		}
 	}
+	if schedules := summarizeSessionSchedulesFileForDir(filepath.Dir(s.loopProtocolPath), s.ID); schedules != nil {
+		summary.HasSchedules = true
+		summary.Schedules = schedules
+	}
 	if compactions := contextCompactionSummaryFromRuntimeStats(runtime); compactions != nil {
 		summary.ContextCompactions = compactions
 	}
@@ -686,6 +692,17 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if summary.HasLoopState && loopStateMod.After(newest) {
 		newest = loopStateMod
 	}
+	var schedulesMod time.Time
+	if exists, schedulesMod, err = durableRegularFileModTime(filepath.Join(dir, sessionSchedulesFileName)); err != nil {
+		return sessionSummary{}, false, err
+	}
+	if exists {
+		summary.Schedules = summarizeSessionSchedulesFile(pool, id)
+		summary.HasSchedules = summary.Schedules != nil
+	}
+	if summary.HasSchedules && schedulesMod.After(newest) {
+		newest = schedulesMod
+	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
@@ -744,6 +761,10 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.HasLoopState = a.HasLoopState || b.HasLoopState
 	if b.LoopState != nil {
 		a.LoopState = b.LoopState
+	}
+	a.HasSchedules = a.HasSchedules || b.HasSchedules
+	if b.Schedules != nil {
+		a.Schedules = b.Schedules
 	}
 	a.HasArtifacts = a.HasArtifacts || b.HasArtifacts
 	a.HasMemory = a.HasMemory || b.HasMemory

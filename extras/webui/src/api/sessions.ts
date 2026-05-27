@@ -231,6 +231,48 @@ export interface SessionLoopProtocolDeleteResponse {
   events?: SessionLoopEvent[];
 }
 
+export interface SessionSchedule {
+  id: string;
+  prompt: string;
+  enabled: boolean;
+  next_run_at: string;
+  repeat_interval_seconds?: number;
+  created_at: string;
+  updated_at: string;
+  last_run_at?: string;
+  last_turn_id?: string;
+  run_count?: number;
+  last_error?: string;
+}
+
+export interface SessionSchedulesSummary {
+  count: number;
+  enabled: number;
+  next_run_at?: string;
+  next_schedule_id?: string;
+  next_prompt_preview?: string;
+}
+
+export interface SessionSchedulesResponse {
+  session_id: string;
+  schedules: SessionSchedule[];
+  summary?: SessionSchedulesSummary;
+}
+
+export interface SessionScheduleCreateRequest {
+  prompt: string;
+  next_run_at: string;
+  repeat_interval_seconds?: number;
+  enabled?: boolean;
+}
+
+export interface SessionScheduleDeleteResponse {
+  session_id: string;
+  schedule_id: string;
+  cleared: boolean;
+  summary?: SessionSchedulesSummary;
+}
+
 export interface SessionSkillInfo {
   name: string;
   description?: string;
@@ -353,6 +395,8 @@ export interface SessionSummary {
   loop_protocol?: SessionLoopProtocolSummary;
   has_loop_state?: boolean;
   loop_state?: SessionLoopState;
+  has_schedules?: boolean;
+  schedules?: SessionSchedulesSummary;
   has_memory: boolean;
   has_runtime_skills: boolean;
   context?: SessionContextSummary;
@@ -478,6 +522,39 @@ export function deleteSessionLoopProtocol(
 ): Promise<SessionLoopProtocolDeleteResponse> {
   return client.json<SessionLoopProtocolDeleteResponse>(
     `/v1/sessions/${encodeURIComponent(sessionId)}/loop-protocol`,
+    { method: "DELETE", signal },
+  );
+}
+
+export function listSessionSchedules(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionSchedulesResponse> {
+  return client.json<SessionSchedulesResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/schedules`, { signal });
+}
+
+export function createSessionSchedule(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionScheduleCreateRequest,
+  signal?: AbortSignal,
+): Promise<SessionSchedulesResponse> {
+  return client.json<SessionSchedulesResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/schedules`, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export function deleteSessionSchedule(
+  client: ApiClient,
+  sessionId: string,
+  scheduleId: string,
+  signal?: AbortSignal,
+): Promise<SessionScheduleDeleteResponse> {
+  return client.json<SessionScheduleDeleteResponse>(
+    `/v1/sessions/${encodeURIComponent(sessionId)}/schedules/${encodeURIComponent(scheduleId)}`,
     { method: "DELETE", signal },
   );
 }
