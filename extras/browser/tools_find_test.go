@@ -123,6 +123,40 @@ func TestBrowserFindMarksNotFoundPagesAsDiscoveryOnly(t *testing.T) {
 	}
 }
 
+func TestBrowserFindMarksDynamicMetricWidgetsAsPartialEvidence(t *testing.T) {
+	out, err := formatBrowserFindResult(&BrowserFindResult{
+		SnapshotID: 14,
+		URL:        "https://taostats.io/subnets/120",
+		Title:      "SN120 Affine",
+		Diagnostics: []string{
+			"empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified",
+		},
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "Market Cap"},
+		},
+	}, "market cap", 8)
+	if err != nil {
+		t.Fatalf("dynamic metric find result should still return a body: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://taostats.io/subnets/120",
+		"page_text_below=partial_dynamic_page_evidence",
+		"rendered_browser_source_status=partial_dynamic_page_evidence",
+		"PAGE DIAGNOSTICS:",
+		"empty_dynamic_metric_widgets: 2 visible custom metric widget",
+		"Next: visible page text is partial dynamic evidence",
+		"browser_network/browser_network_read",
+		"[text p] Market Cap",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dynamic find output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "page_text_below=verified_page_evidence") {
+		t.Fatalf("dynamic metric find must not mark label-only evidence as verified:\n%s", out)
+	}
+}
+
 func TestBrowserFindDeduplicatesEquivalentTextMatches(t *testing.T) {
 	result := &BrowserFindResult{
 		URL: "https://example.test",
@@ -161,7 +195,7 @@ func TestBrowserFindTimeoutErrorHasRecoveryHint(t *testing.T) {
 
 func TestBrowserFindResultDecodesDOMShape(t *testing.T) {
 	var result BrowserFindResult
-	raw := []byte(`{"url":"https://example.test","title":"Example","interactive":[{"ref":2,"role":"link","name":"Market"}],"text_blocks":[{"type":"p","text":"Market cap"}]}`)
+	raw := []byte(`{"url":"https://example.test","title":"Example","diagnostics":["empty_dynamic_metric_widgets: 1 visible custom metric widget(s) exposed no text value"],"interactive":[{"ref":2,"role":"link","name":"Market"}],"text_blocks":[{"type":"p","text":"Market cap"}]}`)
 	if err := json.Unmarshal(raw, &result); err != nil {
 		t.Fatal(err)
 	}
@@ -173,6 +207,9 @@ func TestBrowserFindResultDecodesDOMShape(t *testing.T) {
 	}
 	if len(result.TextBlocks) != 1 || result.TextBlocks[0].Text != "Market cap" {
 		t.Fatalf("decoded text blocks = %+v", result.TextBlocks)
+	}
+	if len(result.Diagnostics) != 1 || !strings.Contains(result.Diagnostics[0], "empty_dynamic_metric_widgets") {
+		t.Fatalf("decoded diagnostics = %+v", result.Diagnostics)
 	}
 }
 

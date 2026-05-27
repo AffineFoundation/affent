@@ -87,6 +87,7 @@ type BrowserFindResult struct {
 	SnapshotID  int64                `json:"snapshot_id"`
 	URL         string               `json:"url"`
 	Title       string               `json:"title"`
+	Diagnostics []string             `json:"diagnostics"`
 	Interactive []InteractiveElement `json:"interactive"`
 	TextBlocks  []TextBlock          `json:"text_blocks"`
 }
@@ -208,6 +209,13 @@ func browserFindJS(query string, limit int) string {
     }
     visit(document);
   }
+  function firstElement(selector) {
+    let found = null;
+    forEachElement(selector, el => {
+      if (!found) found = el;
+    });
+    return found;
+  }
   forEachElement('[data-affent-ref]', el => el.removeAttribute('data-affent-ref'));
   function accessibleName(el) {
     const ariaLabel = el.getAttribute && el.getAttribute('aria-label');
@@ -294,6 +302,7 @@ func browserFindJS(query string, limit int) string {
   }
   const interactive = [];
   const textBlocks = [];
+  const diagnostics = [];
   const seenText = new Set();
   const interactiveSelectors = [
     'a[href]', 'button', 'summary',
@@ -323,6 +332,52 @@ func browserFindJS(query string, limit int) string {
       interactive.push(info);
     }
   });
+  function hasVisibleTurnstileOrChallenge() {
+    const selectors = [
+      '#cf-turnstile',
+      '[id*="cf-turnstile" i]',
+      '[name="cf-turnstile-response"]',
+      'iframe[src*="challenges.cloudflare.com"]',
+      'script[src*="challenges.cloudflare.com/turnstile"]',
+      '[data-sitekey][class*="cf" i]',
+    ];
+    return selectors.some(sel => {
+      try {
+        const el = firstElement(sel);
+        if (!el) return false;
+        if (el.tagName === 'SCRIPT') return true;
+        return isVisible(el) || !!el.closest('[aria-hidden="false"]');
+      } catch (_) {
+        return false;
+      }
+    });
+  }
+  function emptyMetricCustomElementCount() {
+    const selectors = [
+      'number-flow-react',
+      'number-flow',
+      '[data-number-flow]',
+      '[data-slot*="number" i]',
+      '[class*="number-flow" i]',
+    ];
+    let count = 0;
+    selectors.forEach(sel => {
+      forEachElement(sel, el => {
+        if (!isVisible(el)) return;
+        const text = clean(el.textContent);
+        const aria = clean(el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('aria-valuetext') || el.getAttribute('title')));
+        if (!text && !aria) count++;
+      });
+    });
+    return count;
+  }
+  if (hasVisibleTurnstileOrChallenge()) {
+    diagnostics.push('cloudflare_turnstile_or_challenge_visible: page content may be gated; do not treat missing metric values as unavailable facts');
+  }
+  const emptyMetricCount = emptyMetricCustomElementCount();
+  if (emptyMetricCount > 0) {
+    diagnostics.push('empty_dynamic_metric_widgets: ' + emptyMetricCount + ' visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified');
+  }
   const remaining = () => maxResults - interactive.length - textBlocks.length;
   const addText = (el, type, text) => {
     if (remaining() <= 0) return;
@@ -336,7 +391,7 @@ func browserFindJS(query string, limit int) string {
     seenText.add(key);
     textBlocks.push({ type, text: snippet });
   };
-  const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,td,blockquote,pre';
+  const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,dt,dd,td,th,caption,label,blockquote,pre';
   forEachElement(namedBlocks, el => {
     if (remaining() <= 0 || !isVisible(el)) return;
     addText(el, el.tagName.toLowerCase(), visibleText(el));
@@ -349,6 +404,7 @@ func browserFindJS(query string, limit int) string {
   return {
     url: location.href,
     title: document.title,
+    diagnostics: diagnostics,
     interactive: interactive,
     text_blocks: textBlocks,
   };
@@ -363,6 +419,17 @@ func formatBrowserFindResults(result *BrowserFindResult, query string, limit int
 	}
 	fmt.Fprintf(&b, "SNAPSHOT_ID: %d\n", result.SnapshotID)
 	fmt.Fprintf(&b, "QUERY: %q\n\n", query)
+	if len(result.Diagnostics) > 0 {
+		b.WriteString("PAGE DIAGNOSTICS:\n")
+		for _, diagnostic := range result.Diagnostics {
+			diagnostic = strings.TrimSpace(diagnostic)
+			if diagnostic == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "- %s\n", truncateSnapshotField(diagnostic, maxGroupedTextLine))
+		}
+		b.WriteString("\n")
+	}
 
 	matches := browserFindMatches(result, query, limit)
 	if len(matches) == 0 {
@@ -387,10 +454,16 @@ func formatBrowserFindResult(result *BrowserFindResult, query string, limit int)
 		)
 	}
 	out = browserSourceAccessLine(result.URL, result.SnapshotID, "", snapshotNotFoundReason(&Snapshot{
-		URL:        result.URL,
-		Title:      result.Title,
-		TextBlocks: result.TextBlocks,
-	}), "") + out
+		URL:         result.URL,
+		Title:       result.Title,
+		TextBlocks:  result.TextBlocks,
+		Diagnostics: result.Diagnostics,
+	}), snapshotDynamicPartialReason(&Snapshot{
+		URL:         result.URL,
+		Title:       result.Title,
+		TextBlocks:  result.TextBlocks,
+		Diagnostics: result.Diagnostics,
+	})) + out
 	return out, nil
 }
 

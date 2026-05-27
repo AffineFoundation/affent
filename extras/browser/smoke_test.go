@@ -266,7 +266,7 @@ func TestSession_NetworkEvidenceCapturesDashboardXHR(t *testing.T) {
 <body>
   <h1>Affine SN120 dashboard</h1>
   <dl>
-    <dt>Market Cap</dt><dd id="market-cap">loading</dd>
+    <dt>Market Cap</dt><dd id="market-cap">loading <number-flow-react style="display:inline-block;width:12px;height:12px"></number-flow-react></dd>
     <dt>24h Volume</dt><dd id="volume">loading</dd>
   </dl>
   <div id="status">booting</div>
@@ -322,6 +322,22 @@ func TestSession_NetworkEvidenceCapturesDashboardXHR(t *testing.T) {
 	}
 	if !strings.Contains(findOut, "MATCHES: none") {
 		t.Fatalf("hidden API value should not be visible to browser_find:\n%s", findOut)
+	}
+	labelFindOut, err := FindTool(sess).Execute(ctx, []byte(`{"query":"Market Cap","max_results":3}`))
+	if err != nil {
+		t.Fatalf("browser_find visible metric label: %v", err)
+	}
+	for _, want := range []string{
+		"page_text_below=partial_dynamic_page_evidence",
+		"empty_dynamic_metric_widgets:",
+		"[text dt] Market Cap",
+	} {
+		if !strings.Contains(labelFindOut, want) {
+			t.Fatalf("browser_find metric label output missing %q:\n%s", want, labelFindOut)
+		}
+	}
+	if strings.Contains(labelFindOut, "page_text_below=verified_page_evidence") {
+		t.Fatalf("browser_find must not mark empty widget label as verified evidence:\n%s", labelFindOut)
 	}
 
 	searchOut := waitForNetworkEvidence(t, ctx, sess, "market_cap")

@@ -272,7 +272,7 @@ const snapshotJS = `() => {
   // when they contain a non-empty direct text node — that catches
   // leaf-text-divs (the common idiom on modern sites) without
   // duplicating the same text under every ancestor wrapper.
-  const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,td,blockquote,pre';
+  const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,dt,dd,td,th,caption,label,blockquote,pre';
   const candidates = ['div', 'span', 'section', 'article'];
 
   function hasDirectText(el) {
