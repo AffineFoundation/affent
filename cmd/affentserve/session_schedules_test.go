@@ -51,7 +51,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	}
 }
 
-func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickUntilProtocolRuns(t *testing.T) {
+func TestSessionPool_RunDueSessionSchedulesOnceSkipsRecurringLoopTickUntilProtocolRuns(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
 	createDurableSessionDir(t, pool, "draft-loop")
@@ -76,8 +76,11 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickUntilProtocolRuns(t
 		t.Fatalf("read schedules found=%v err=%v", found, err)
 	}
 	schedule := file.Schedules[0]
-	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" {
-		t.Fatalf("schedule = %+v, want paused without a run", schedule)
+	if !schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" {
+		t.Fatalf("schedule = %+v, want recurring timer still enabled without a run", schedule)
+	}
+	if got, want := schedule.NextRunAt, now.Add(29*time.Minute).Format(time.RFC3339); got != want {
+		t.Fatalf("next_run_at = %q, want skipped to %q", got, want)
 	}
 	if !strings.Contains(schedule.LastError, "LOOP.md not running") {
 		t.Fatalf("last_error = %q, want calibration guidance", schedule.LastError)
@@ -90,6 +93,38 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickUntilProtocolRuns(t
 		if ev.Type == sse.TypeUserMessage {
 			t.Fatalf("unexpected scheduled user.message while LOOP.md is draft: %+v", ev)
 		}
+	}
+}
+
+func TestSessionPool_RunDueSessionSchedulesOncePausesOneShotLoopTickUntilProtocolRuns(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "draft-one-shot-loop")
+	writeLoopProtocolStatusFixture(t, pool, "draft-one-shot-loop", "draft")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "draft-one-shot-loop", sessionSchedule{
+		ID:        "sched_loop_once",
+		Kind:      sessionScheduleKindLoopTick,
+		Prompt:    "Scheduled one-shot loop tick for session: draft-one-shot-loop",
+		Enabled:   true,
+		NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
+		CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
+	}
+	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "draft-one-shot-loop"))
+	if err != nil || !found {
+		t.Fatalf("read schedules found=%v err=%v", found, err)
+	}
+	schedule := file.Schedules[0]
+	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" {
+		t.Fatalf("schedule = %+v, want one-shot loop tick paused without a run", schedule)
+	}
+	if !strings.Contains(schedule.LastError, "LOOP.md not running") {
+		t.Fatalf("last_error = %q, want calibration guidance", schedule.LastError)
 	}
 }
 

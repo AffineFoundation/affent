@@ -776,7 +776,11 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 			continue
 		}
 		if schedule.Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(p, sessionID) {
-			schedule.Enabled = false
+			if schedule.RepeatIntervalSeconds > 0 {
+				schedule.NextRunAt = nextSessionScheduleRunAt(schedule.NextRunAt, schedule.RepeatIntervalSeconds, now).Format(time.RFC3339)
+			} else {
+				schedule.Enabled = false
+			}
 			schedule.LastError = "LOOP.md not running; answer calibration and activate the loop protocol before resuming this timer"
 			schedule.UpdatedAt = nowStr
 			if err := writeSessionSchedulesFile(path, file); err != nil {
