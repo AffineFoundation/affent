@@ -625,8 +625,8 @@ describe("App", () => {
     expect(panel).toHaveTextContent("Draft first");
     expect(panel).toHaveTextContent("Draft setup");
     expect(panel).toHaveTextContent("asks before it begins running");
-    expect(within(panel).getByLabelText("Goal")).toHaveValue("long running subnet analysis");
-    await user.click(within(panel).getByRole("button", { name: "Set up loop" }));
+    expect(within(panel).getByLabelText("Long-run goal")).toHaveValue("long running subnet analysis");
+    await user.click(within(panel).getByRole("button", { name: "Start setup" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-panel/loop-protocol", expect.objectContaining({ method: "POST" })));
     const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/loop-protocol");
@@ -843,7 +843,7 @@ describe("App", () => {
 
     const panel = await screen.findByTestId("session-schedule-panel");
     expect(panel).toHaveTextContent("Timers");
-    await user.click(within(panel).getByRole("button", { name: "1h check-in" }));
+    await user.click(within(panel).getByRole("button", { name: "Check in 1h" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/schedules");
@@ -958,7 +958,7 @@ describe("App", () => {
     render(<App />);
 
     const panel = await screen.findByTestId("session-schedule-panel");
-    await user.click(within(panel).getByRole("button", { name: "30m loop tick" }));
+    await user.click(within(panel).getByRole("button", { name: "Loop every 30m" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/schedules");

@@ -39,6 +39,7 @@ export function SessionSchedulePanel({
   const preview = compact(summary?.next_prompt_preview);
   const lastError = compact(summary?.last_error);
   const pendingLoopTimers = pendingLoopTimerCount(schedules, summary, loopStatus);
+  const runningLoop = loopProtocolRunning(loopStatus);
   const title = pendingLoopTimers > 0 ? `${pendingLoopTimers} pending` : enabled > 0 ? `${enabled} active` : count > 0 ? `${count} paused` : "None";
   const detail = lastError
     ? `${summary?.error_count ?? 1} error${summary?.error_count === 1 ? "" : "s"} · ${lastError}`
@@ -53,6 +54,7 @@ export function SessionSchedulePanel({
         <span>{detail}</span>
       </summary>
       <div className="session-plan-body session-schedule-body">
+        <ScheduleCallout pendingLoopTimers={pendingLoopTimers} runningLoop={runningLoop} hasActions={!!(onScheduleLoopTick || onScheduleCheckIn || onScheduleDaily)} />
         <div className="session-schedule-grid">
           <ScheduleField label="Enabled" value={String(enabled)} />
           <ScheduleField label="Total" value={String(count)} />
@@ -118,7 +120,7 @@ export function SessionSchedulePanel({
               disabled={disabled || !!busy}
               onClick={() => void onScheduleCheckIn()}
             >
-              {busy === "checkin" ? "Scheduling" : "1h check-in"}
+              {busy === "checkin" ? "Scheduling" : "Check in 1h"}
             </button>
           ) : null}
           {onScheduleLoopTick ? (
@@ -128,7 +130,7 @@ export function SessionSchedulePanel({
               disabled={disabled || !!busy}
               onClick={() => void onScheduleLoopTick()}
             >
-              {busy === "loop" ? "Scheduling" : "30m loop tick"}
+              {busy === "loop" ? "Scheduling" : "Loop every 30m"}
             </button>
           ) : null}
           {onScheduleDaily ? (
@@ -144,6 +146,40 @@ export function SessionSchedulePanel({
         </div>
       </div>
     </details>
+  );
+}
+
+function ScheduleCallout({
+  pendingLoopTimers,
+  runningLoop,
+  hasActions,
+}: {
+  pendingLoopTimers: number;
+  runningLoop: boolean;
+  hasActions: boolean;
+}) {
+  if (pendingLoopTimers > 0) {
+    return (
+      <div className="session-schedule-callout pending" data-testid="session-schedule-callout">
+        <strong>Calibration pending</strong>
+        <span>Loop ticks stay queued until LOOP.md is activated from chat.</span>
+      </div>
+    );
+  }
+  if (!hasActions) return null;
+  if (runningLoop) {
+    return (
+      <div className="session-schedule-callout running" data-testid="session-schedule-callout">
+        <strong>Ready for loop ticks</strong>
+        <span>Scheduled loop turns use the running LOOP.md and should advance one compact step.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="session-schedule-callout setup" data-testid="session-schedule-callout">
+      <strong>Calibration first</strong>
+      <span>Creating a timer opens chat so Affent can ask what to remember, when to stop, and what LOOP.md should contain.</span>
+    </div>
   );
 }
 

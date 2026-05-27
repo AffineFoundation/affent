@@ -85,6 +85,7 @@ describe("SessionSchedulePanel", () => {
     const panel = screen.getByTestId("session-schedule-panel");
     expect(panel).toHaveTextContent("1 pending");
     expect(panel).toHaveTextContent("Loop timer waits for LOOP.md activation");
+    expect(screen.getByTestId("session-schedule-callout")).toHaveTextContent("Calibration pending");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Pending calibration");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("waiting for LOOP.md activation");
@@ -115,5 +116,23 @@ describe("SessionSchedulePanel", () => {
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Active");
     expect(panel).not.toHaveTextContent("Pending calibration");
+  });
+
+  it("labels timer creation as a calibration-first chat action", () => {
+    render(
+      <SessionSchedulePanel
+        summary={{ count: 0, enabled: 0 }}
+        onScheduleCheckIn={() => undefined}
+        onScheduleLoopTick={() => undefined}
+        onScheduleDaily={() => undefined}
+      />,
+    );
+
+    const callout = screen.getByTestId("session-schedule-callout");
+    expect(callout).toHaveTextContent("Calibration first");
+    expect(callout).toHaveTextContent("opens chat");
+    expect(screen.getByRole("button", { name: "Check in 1h" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Loop every 30m" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Daily check-in" })).toBeInTheDocument();
   });
 });

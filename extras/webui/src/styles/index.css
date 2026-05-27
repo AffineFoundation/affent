@@ -1131,6 +1131,14 @@ body {
   outline: none;
 }
 
+.session-loop-setup-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
 .session-loop-protocol {
   max-height: min(320px, 42vh);
   margin: 0;
@@ -1193,6 +1201,38 @@ body {
 
 .session-schedule-body {
   gap: 9px;
+}
+
+.session-schedule-callout {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(217, 224, 232, 0.82);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(248, 250, 252, 0.78);
+  padding: 8px 9px;
+}
+
+.session-schedule-callout strong {
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.session-schedule-callout span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.session-schedule-callout.setup,
+.session-schedule-callout.pending {
+  border-color: rgba(194, 120, 3, 0.28);
+  background: rgba(255, 247, 237, 0.72);
+}
+
+.session-schedule-callout.running {
+  border-color: rgba(16, 185, 129, 0.24);
+  background: rgba(236, 253, 245, 0.68);
 }
 
 .session-schedule-grid {
@@ -7114,6 +7154,7 @@ html[data-theme="dark"] .runtime-status-bar,
 html[data-theme="dark"] .session-plan-panel,
 html[data-theme="dark"] .session-plan-step,
 html[data-theme="dark"] .session-loop-callout,
+html[data-theme="dark"] .session-schedule-callout,
 html[data-theme="dark"] .session-loop-field,
 html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
@@ -7158,12 +7199,15 @@ html[data-theme="dark"] .session-plan-step[data-status="in_progress"] {
 }
 
 html[data-theme="dark"] .session-loop-callout.draft,
-html[data-theme="dark"] .session-loop-callout.off {
+html[data-theme="dark"] .session-loop-callout.off,
+html[data-theme="dark"] .session-schedule-callout.setup,
+html[data-theme="dark"] .session-schedule-callout.pending {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(120, 53, 15, 0.16);
 }
 
-html[data-theme="dark"] .session-loop-callout.running {
+html[data-theme="dark"] .session-loop-callout.running,
+html[data-theme="dark"] .session-schedule-callout.running {
   border-color: rgba(16, 185, 129, 0.28);
   background: rgba(6, 95, 70, 0.16);
 }

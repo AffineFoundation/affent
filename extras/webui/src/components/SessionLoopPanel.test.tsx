@@ -13,6 +13,8 @@ describe("SessionLoopPanel", () => {
     expect(checklist).toHaveTextContent("Ask calibration");
     expect(checklist).toHaveTextContent("Activate after answer");
     expect(checklist).toHaveTextContent("intent, stop conditions, memory policy");
+    expect(screen.getByRole("button", { name: "Start setup" })).toBeInTheDocument();
+    expect(panel).toHaveTextContent("opens a calibration chat");
   });
 
   it("labels draft protocol maintenance as answering setup in chat", () => {

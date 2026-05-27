@@ -56,17 +56,20 @@ export function SessionLoopPanel({
             }}
           >
             <label>
-              <span>Goal</span>
+              <span>Long-run goal</span>
               <input
                 value={setupGoal}
                 onChange={(event) => setSetupGoal(event.target.value)}
-                placeholder="Long-running objective"
+                placeholder="Track subnet 19 evidence and prepare weekly updates"
                 disabled={starting}
               />
             </label>
             <button type="submit" className="secondary-action" disabled={!goal || starting || !onStart}>
-              {starting ? "Starting loop" : "Set up loop"}
+              {starting ? "Starting setup" : "Start setup"}
             </button>
+            <p className="session-loop-setup-note">
+              Creates a draft LOOP.md and opens a calibration chat before autonomous loop turns can run.
+            </p>
           </form>
         </div>
       </details>
