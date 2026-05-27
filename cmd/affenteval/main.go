@@ -765,15 +765,15 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.ToolRepairByKind[k] += v
 	}
-	s.ToolRepairExamples = appendToolRepairExamples(s.ToolRepairExamples, res.ToolRepairExamples, batchSummaryExamplesPerKind)
-	s.LoopGuardExamples = appendLoopGuardExamples(s.LoopGuardExamples, res.LoopGuardExamples, batchSummaryExamplesPerKind)
+	s.ToolRepairExamples = appendToolRepairExamples(s.ToolRepairExamples, res.ToolRepairExamples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.LoopGuardExamples = appendLoopGuardExamples(s.LoopGuardExamples, res.LoopGuardExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	for k, v := range res.ToolStats.ToolFailureByKind {
 		if s.ToolFailureByKind == nil {
 			s.ToolFailureByKind = map[string]int{}
 		}
 		s.ToolFailureByKind[k] += v
 	}
-	mergeExampleMap(&s.ToolFailureExamples, res.ToolFailureExamples, batchSummaryExamplesPerKind)
+	mergeToolFailureExamples(&s.ToolFailureExamples, res.ToolFailureExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	for k, v := range res.RuntimeErrorByKind {
 		if s.RuntimeErrorByKind == nil {
 			s.RuntimeErrorByKind = map[string]int{}
@@ -781,7 +781,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.RuntimeErrorByKind[k] += v
 		s.RuntimeErrors += v
 	}
-	mergeExampleMap(&s.RuntimeErrorExamples, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
+	mergeRuntimeErrorExamples(&s.RuntimeErrorExamples, res.RuntimeErrorExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	if res.RuntimeSurface != nil {
 		s.RuntimeSurfaceScenarios++
 		if s.RuntimeSurfaceTools == nil {
@@ -810,14 +810,14 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.LoopDecisionByDecision[k] += v
 	}
-	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, batchSummaryExamplesPerKind)
+	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ContextCompactions += res.ContextCompactions.Count
 	s.ContextCompactionsReactive += res.ContextCompactions.Reactive
 	s.ContextCompactionRemoved += res.ContextCompactions.RemovedMessages
 	s.ContextCompactionSummary += res.ContextCompactions.SummaryBytes
 	s.ContextCompactionSummaryMissing += res.ContextCompactions.SummaryMissing
 	s.ContextCompactionSummaryEmpty += res.ContextCompactions.SummaryEmpty
-	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, batchSummaryExamplesPerKind)
+	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.SourceAccessResults += res.ToolStats.SourceAccessResults
@@ -830,12 +830,12 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
 	s.MemoryUpdateRemove += res.ToolStats.MemoryUpdateRemove
-	s.MemoryUpdateExamples = appendMemoryUpdateExamples(s.MemoryUpdateExamples, res.MemoryUpdateExamples, batchSummaryExamplesPerKind)
+	s.MemoryUpdateExamples = appendMemoryUpdateExamples(s.MemoryUpdateExamples, res.MemoryUpdateExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.SessionSearchCalls += res.ToolStats.SessionSearchCalls
 	s.SessionSearchResults += res.ToolStats.SessionSearchResults
 	s.SessionSearchContextHits += res.ToolStats.SessionSearchContextHits
 	s.SessionSearchMatchedTerms += res.ToolStats.SessionSearchMatchedTerms
-	s.SessionSearchExamples = appendSessionSearchExamples(s.SessionSearchExamples, res.SessionSearchExamples, batchSummaryExamplesPerKind)
+	s.SessionSearchExamples = appendSessionSearchExamples(s.SessionSearchExamples, res.SessionSearchExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
 	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
@@ -844,7 +844,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
 	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
 	s.ToolResultArtifacts += res.ToolTruncation.ResultArtifacts
-	s.ToolTruncationExamples = appendToolTruncationExamples(s.ToolTruncationExamples, res.ToolTruncationExamples, batchSummaryExamplesPerKind)
+	s.ToolTruncationExamples = appendToolTruncationExamples(s.ToolTruncationExamples, res.ToolTruncationExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	if res.Verifier.Ran {
 		s.VerifierRuns++
 		if res.Verifier.OK {
@@ -923,7 +923,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.PlanByAction[k] += v
 	}
-	s.PlanExamples = appendPlanExamples(s.PlanExamples, res.PlanExamples, batchSummaryExamplesPerKind)
+	s.PlanExamples = appendPlanExamples(s.PlanExamples, res.PlanExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	for _, failure := range res.Failures {
 		kind := failureKind(failure)
 		if s.FailureKinds == nil {
@@ -1321,6 +1321,46 @@ func mergeExampleMap[T any](dst *map[string][]T, src map[string][]T, maxPerKind 
 	}
 }
 
+func mergeToolFailureExamples(dst *map[string][]agenteval.ToolFailureExample, src map[string][]agenteval.ToolFailureExample, scenario string, maxPerKind int) {
+	if dst == nil || maxPerKind <= 0 {
+		return
+	}
+	for kind, values := range src {
+		for _, ex := range values {
+			if len((*dst)[kind]) >= maxPerKind {
+				break
+			}
+			if *dst == nil {
+				*dst = map[string][]agenteval.ToolFailureExample{}
+			}
+			if ex.Scenario == "" {
+				ex.Scenario = scenario
+			}
+			(*dst)[kind] = append((*dst)[kind], ex)
+		}
+	}
+}
+
+func mergeRuntimeErrorExamples(dst *map[string][]agenteval.RuntimeErrorExample, src map[string][]agenteval.RuntimeErrorExample, scenario string, maxPerKind int) {
+	if dst == nil || maxPerKind <= 0 {
+		return
+	}
+	for kind, values := range src {
+		for _, ex := range values {
+			if len((*dst)[kind]) >= maxPerKind {
+				break
+			}
+			if *dst == nil {
+				*dst = map[string][]agenteval.RuntimeErrorExample{}
+			}
+			if ex.Scenario == "" {
+				ex.Scenario = scenario
+			}
+			(*dst)[kind] = append((*dst)[kind], ex)
+		}
+	}
+}
+
 func hasBatchRepairStats(s batchSummary) bool {
 	return s.ToolRepairCalls > 0 ||
 		s.ToolRepairSucceeded > 0 ||
@@ -1639,7 +1679,11 @@ func printFailureExampleLines(w io.Writer, examples map[string][]batchFailureExa
 
 func printToolRepairExampleLines(w io.Writer, examples []agenteval.ToolRepairExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%stool_repair_example: tool=%s", indent, ex.Tool)
+		fmt.Fprintf(w, "%stool_repair_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " tool=%s", ex.Tool)
 		if ex.OriginalTool != "" {
 			fmt.Fprintf(w, " original=%s", ex.OriginalTool)
 		}
@@ -1683,7 +1727,11 @@ func printToolFailureExampleLines(w io.Writer, examples map[string][]agenteval.T
 	sort.Strings(kinds)
 	for _, kind := range kinds {
 		for _, ex := range examples[kind] {
-			fmt.Fprintf(w, "%stool_failure_example[%s]: tool=%s", indent, kind, ex.Tool)
+			fmt.Fprintf(w, "%stool_failure_example[%s]:", indent, kind)
+			if ex.Scenario != "" {
+				fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+			}
+			fmt.Fprintf(w, " tool=%s", ex.Tool)
 			if ex.ArgsSummary != "" {
 				fmt.Fprintf(w, " args=%s", ex.ArgsSummary)
 			}
@@ -1698,7 +1746,11 @@ func printToolFailureExampleLines(w io.Writer, examples map[string][]agenteval.T
 
 func printLoopGuardExampleLines(w io.Writer, examples []agenteval.LoopGuardExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%sloop_guard_example[%s]: category=%s tool=%s", indent, ex.Kind, ex.Category, ex.Tool)
+		fmt.Fprintf(w, "%sloop_guard_example[%s]:", indent, ex.Kind)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " category=%s tool=%s", ex.Category, ex.Tool)
 		if ex.CallID != "" {
 			fmt.Fprintf(w, " call_id=%s", ex.CallID)
 		}
@@ -1741,7 +1793,11 @@ func printSourceAccessExampleLines(w io.Writer, examples []agenteval.SourceAcces
 
 func printMemoryUpdateExampleLines(w io.Writer, examples []agenteval.MemoryUpdateExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%smemory_update_example: action=%s target=%s location=%s", indent, ex.Action, ex.Target, ex.Location)
+		fmt.Fprintf(w, "%smemory_update_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " action=%s target=%s location=%s", ex.Action, ex.Target, ex.Location)
 		if ex.CallID != "" {
 			fmt.Fprintf(w, " call_id=%s", ex.CallID)
 		}
@@ -1772,14 +1828,22 @@ func printRuntimeErrorExampleLines(w io.Writer, examples map[string][]agenteval.
 	sort.Strings(kinds)
 	for _, kind := range kinds {
 		for _, ex := range examples[kind] {
-			fmt.Fprintf(w, "%sruntime_error_example[%s]: %s\n", indent, kind, ex.Message)
+			fmt.Fprintf(w, "%sruntime_error_example[%s]:", indent, kind)
+			if ex.Scenario != "" {
+				fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+			}
+			fmt.Fprintf(w, " %s\n", ex.Message)
 		}
 	}
 }
 
 func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecision, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%sloop_decision_example[%s]: decision=%s", indent, ex.Kind, ex.Decision)
+		fmt.Fprintf(w, "%sloop_decision_example[%s]:", indent, ex.Kind)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " decision=%s", ex.Decision)
 		if ex.Trigger != "" {
 			fmt.Fprintf(w, " trigger=%s", ex.Trigger)
 		}
@@ -1798,7 +1862,11 @@ func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecisio
 
 func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSearchExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%ssession_search_example: query=%q total=%d", indent, ex.Query, ex.Total)
+		fmt.Fprintf(w, "%ssession_search_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " query=%q total=%d", ex.Query, ex.Total)
 		if ex.SessionID != "" {
 			fmt.Fprintf(w, " session=%s", ex.SessionID)
 		}
@@ -1820,7 +1888,11 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 
 func printPlanExampleLines(w io.Writer, examples []agenteval.PlanExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%splan_example: action=%s", indent, ex.Action)
+		fmt.Fprintf(w, "%splan_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " action=%s", ex.Action)
 		if ex.Index > 0 {
 			fmt.Fprintf(w, " index=%d", ex.Index)
 		}
@@ -1851,7 +1923,11 @@ func printPlanExampleLines(w io.Writer, examples []agenteval.PlanExample, indent
 
 func printToolTruncationExampleLines(w io.Writer, examples []agenteval.ToolTruncationExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%stool_truncation_example: tool=%s", indent, ex.Tool)
+		fmt.Fprintf(w, "%stool_truncation_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " tool=%s", ex.Tool)
 		if ex.CallID != "" {
 			fmt.Fprintf(w, " call_id=%s", ex.CallID)
 		}
@@ -3071,7 +3147,7 @@ func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteva
 	return append([]agenteval.ContextCompaction(nil), in...)
 }
 
-func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []agenteval.LoopDecision {
+func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, scenario string, limit int) []agenteval.LoopDecision {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3079,12 +3155,15 @@ func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []
 		if len(dst) >= limit {
 			break
 		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
 		dst = append(dst, ex)
 	}
 	return dst
 }
 
-func appendToolRepairExamples(dst, src []agenteval.ToolRepairExample, limit int) []agenteval.ToolRepairExample {
+func appendToolRepairExamples(dst, src []agenteval.ToolRepairExample, scenario string, limit int) []agenteval.ToolRepairExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3098,18 +3177,24 @@ func appendToolRepairExamples(dst, src []agenteval.ToolRepairExample, limit int)
 		if len(ex.RepairKinds) > 0 {
 			ex.RepairKinds = append([]string(nil), ex.RepairKinds...)
 		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
 		dst = append(dst, ex)
 	}
 	return dst
 }
 
-func appendLoopGuardExamples(dst, src []agenteval.LoopGuardExample, limit int) []agenteval.LoopGuardExample {
+func appendLoopGuardExamples(dst, src []agenteval.LoopGuardExample, scenario string, limit int) []agenteval.LoopGuardExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
 		}
 		dst = append(dst, ex)
 	}
@@ -3132,7 +3217,7 @@ func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, scenar
 	return dst
 }
 
-func appendMemoryUpdateExamples(dst, src []agenteval.MemoryUpdateExample, limit int) []agenteval.MemoryUpdateExample {
+func appendMemoryUpdateExamples(dst, src []agenteval.MemoryUpdateExample, scenario string, limit int) []agenteval.MemoryUpdateExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3140,12 +3225,15 @@ func appendMemoryUpdateExamples(dst, src []agenteval.MemoryUpdateExample, limit 
 		if len(dst) >= limit {
 			break
 		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
 		dst = append(dst, ex)
 	}
 	return dst
 }
 
-func appendSessionSearchExamples(dst, src []agenteval.SessionSearchExample, limit int) []agenteval.SessionSearchExample {
+func appendSessionSearchExamples(dst, src []agenteval.SessionSearchExample, scenario string, limit int) []agenteval.SessionSearchExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3156,12 +3244,15 @@ func appendSessionSearchExamples(dst, src []agenteval.SessionSearchExample, limi
 		if len(ex.MatchedTerms) > 0 {
 			ex.MatchedTerms = append([]string(nil), ex.MatchedTerms...)
 		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
 		dst = append(dst, ex)
 	}
 	return dst
 }
 
-func appendPlanExamples(dst, src []agenteval.PlanExample, limit int) []agenteval.PlanExample {
+func appendPlanExamples(dst, src []agenteval.PlanExample, scenario string, limit int) []agenteval.PlanExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3172,12 +3263,15 @@ func appendPlanExamples(dst, src []agenteval.PlanExample, limit int) []agenteval
 		if len(ex.Evidence) > 0 {
 			ex.Evidence = append([]string(nil), ex.Evidence...)
 		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
 		dst = append(dst, ex)
 	}
 	return dst
 }
 
-func appendToolTruncationExamples(dst, src []agenteval.ToolTruncationExample, limit int) []agenteval.ToolTruncationExample {
+func appendToolTruncationExamples(dst, src []agenteval.ToolTruncationExample, scenario string, limit int) []agenteval.ToolTruncationExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3185,18 +3279,24 @@ func appendToolTruncationExamples(dst, src []agenteval.ToolTruncationExample, li
 		if len(dst) >= limit {
 			break
 		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
 		dst = append(dst, ex)
 	}
 	return dst
 }
 
-func appendContextCompactionExamples(dst, src []agenteval.ContextCompaction, limit int) []agenteval.ContextCompaction {
+func appendContextCompactionExamples(dst, src []agenteval.ContextCompaction, scenario string, limit int) []agenteval.ContextCompaction {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
 		}
 		dst = append(dst, ex)
 	}

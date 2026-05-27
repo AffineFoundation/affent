@@ -292,6 +292,7 @@ type ToolTruncationStats struct {
 }
 
 type ToolTruncationExample struct {
+	Scenario               string `json:"scenario,omitempty"`
 	ToolIndex              int    `json:"tool_index"`
 	CallID                 string `json:"call_id,omitempty"`
 	Tool                   string `json:"tool"`
@@ -323,6 +324,7 @@ type ToolRepairStats struct {
 }
 
 type ToolRepairExample struct {
+	Scenario            string   `json:"scenario,omitempty"`
 	ToolIndex           int      `json:"tool_index"`
 	CallID              string   `json:"call_id,omitempty"`
 	Tool                string   `json:"tool"`
@@ -337,6 +339,7 @@ type ToolRepairExample struct {
 }
 
 type ToolFailureExample struct {
+	Scenario      string `json:"scenario,omitempty"`
 	Kind          string `json:"kind"`
 	Tool          string `json:"tool"`
 	ArgsSummary   string `json:"args_summary,omitempty"`
@@ -345,6 +348,7 @@ type ToolFailureExample struct {
 }
 
 type LoopGuardExample struct {
+	Scenario      string `json:"scenario,omitempty"`
 	Kind          string `json:"kind"`
 	Category      string `json:"category"`
 	ToolIndex     int    `json:"tool_index"`
@@ -356,6 +360,7 @@ type LoopGuardExample struct {
 }
 
 type MemoryUpdateExample struct {
+	Scenario        string `json:"scenario,omitempty"`
 	ToolIndex       int    `json:"tool_index"`
 	CallID          string `json:"call_id,omitempty"`
 	Action          string `json:"action"`
@@ -381,6 +386,7 @@ type SourceAccessExample struct {
 }
 
 type SessionSearchExample struct {
+	Scenario        string   `json:"scenario,omitempty"`
 	ToolIndex       int      `json:"tool_index"`
 	CallID          string   `json:"call_id,omitempty"`
 	Query           string   `json:"query,omitempty"`
@@ -396,11 +402,13 @@ type SessionSearchExample struct {
 }
 
 type RuntimeErrorExample struct {
-	Kind    string `json:"kind"`
-	Message string `json:"message"`
+	Scenario string `json:"scenario,omitempty"`
+	Kind     string `json:"kind"`
+	Message  string `json:"message"`
 }
 
 type LoopDecision struct {
+	Scenario       string `json:"scenario,omitempty"`
 	Kind           string `json:"kind"`
 	Decision       string `json:"decision"`
 	Trigger        string `json:"trigger,omitempty"`
@@ -420,6 +428,7 @@ type LoopDecisionStats struct {
 }
 
 type ContextCompaction struct {
+	Scenario        string `json:"scenario,omitempty"`
 	TurnID          string `json:"turn_id,omitempty"`
 	BeforeMessages  int    `json:"before_messages"`
 	AfterMessages   int    `json:"after_messages"`

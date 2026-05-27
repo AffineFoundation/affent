@@ -69,6 +69,7 @@ func planActionFromArgs(args map[string]any) string {
 }
 
 type PlanExample struct {
+	Scenario          string   `json:"scenario,omitempty"`
 	ToolIndex         int      `json:"tool_index"`
 	CallID            string   `json:"call_id,omitempty"`
 	Action            string   `json:"action"`

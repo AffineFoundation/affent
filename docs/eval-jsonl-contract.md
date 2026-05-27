@@ -137,7 +137,8 @@ Scenario records describe one eval case:
   canonicalized tool calls. Each sample includes tool index, call id, final
   tool name, original tool name when present, canonicalized/args-repaired
   flags, compact original argument preview, repair notes/kinds, exit code, and
-  whether the repaired call succeeded.
+  whether the repaired call succeeded. Summary records include the originating
+  scenario for cross-scenario triage.
 - `tool_failure_by_kind`: optional map of structured tool failure kind to
   count. New traces prefer `turn.end.tool_stats`; replay of older or partial
   traces may derive counts from per-call `tool.result.failure_kinds`,
@@ -160,7 +161,8 @@ Scenario records describe one eval case:
   `args_summary` such as `url="..."` or `query="..."`, the exit code, and a
   compact `result_summary` containing the failure reason and `Next:` guidance
   when the trace carried it. This is diagnostic context for operators; counts
-  in `tool_failure_by_kind` remain the aggregation source of truth.
+  in `tool_failure_by_kind` remain the aggregation source of truth. Summary
+  records include the originating scenario.
 - `runtime_error_by_kind`: optional map of structured `error.failure_kind`
   counts, such as `llm_timeout`, `llm_incomplete_stream`, or
   `context_overflow`. This is separate from `failure_kinds` so recoverable LLM
@@ -172,7 +174,8 @@ Scenario records describe one eval case:
   message samples. Scenario records derive samples from that scenario; summary
   records carry a small cross-scenario sample per kind. These preserve the
   specific timeout, endpoint, or incomplete-stream detail from `error` events
-  without requiring operators to inspect the full trace.
+  without requiring operators to inspect the full trace. Summary records
+  include the originating scenario.
 - `debug_brief`: optional machine-readable triage block for failed or
   diagnostic-heavy scenarios. It contains sorted `tags` such as
   `outcome:failed`, `tool_failure:blocked`, `runtime_error:llm_timeout`,
@@ -202,7 +205,8 @@ Scenario records describe one eval case:
   (`loop_guard` or `tool_policy`), tool index, call id, tool name, compact
   argument/result previews, and exit code. Use this when `loop_guard_interventions`
   or `forced_no_tools` spike and the generic failure-kind counts do not show
-  which attempted call was blocked.
+  which attempted call was blocked. Summary records include the originating
+  scenario.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.
@@ -229,16 +233,18 @@ Scenario records describe one eval case:
 - `session_search_examples`: optional bounded examples of parsed
   `session_search` responses. Each sample includes tool index, call id, query,
   total result count, matched session id, turn index, role, score, matched
-  terms, context-included flag, and a compact snippet/message preview.
+  terms, context-included flag, and a compact snippet/message preview. Summary
+  records include the originating scenario.
 - `memory_update_examples`: optional bounded per-scenario examples of confirmed
   durable memory mutations. Each sample includes the tool index, call id,
   action, target/topic location, and compact previous/next previews when
   available. These examples make long-run memory drift auditable without
-  opening the full trace or markdown timeline.
+  opening the full trace or markdown timeline. Summary records include the
+  originating scenario.
 - `context_compaction_examples`: optional bounded examples of context
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
-  byte size.
+  byte size. Summary records include the originating scenario.
 - `context_compactions`, `context_compactions_reactive`,
   `context_compaction_removed_messages`, `context_compaction_summary_bytes`,
   `context_compaction_summary_missing`, and
@@ -248,7 +254,8 @@ Scenario records describe one eval case:
   request args, event result, result artifact, or model-context insertion were
   truncated. Each sample includes the tool index, call id, tool name, omitted
   byte counts, cap byte counts, artifact path when present, and context bytes
-  omitted before the tool result was fed back to the model.
+  omitted before the tool result was fed back to the model. Summary records
+  include the originating scenario.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
@@ -275,7 +282,8 @@ Scenario records describe one eval case:
 - `plan_examples`: optional bounded examples of persisted-plan tool activity.
   Each sample includes tool index, call id, action, updated step index/status,
   compact step text, evidence refs, note preview, result progress/current step,
-  and a compact error/result message when relevant.
+  and a compact error/result message when relevant. Summary records include the
+  originating scenario.
 - `verifier_command`: verifier shell command, when configured.
 - `verifier_ran`: whether a verifier command ran.
 - `verifier_ok`: whether the verifier exited successfully.
@@ -366,9 +374,13 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
   `runtime_error_hints`, `runtime_error_examples`.
-- Source evidence examples: `source_access_examples`, the first bounded
-  samples across the batch, including their originating scenario when emitted
-  from the batch summary.
+- Bounded diagnostic examples: summary-level `tool_repair_examples`,
+  `tool_failure_examples`, `loop_guard_examples`, `runtime_error_examples`,
+  `source_access_examples`, `memory_update_examples`,
+  `session_search_examples`, `tool_truncation_examples`,
+  `context_compaction_examples`, `loop_decision_examples`, and `plan_examples`
+  include their originating scenario so long-run batch failures can be routed
+  directly to the right trace/timeline.
 - Context pressure totals: `context_compactions`,
   `context_compactions_reactive`, `context_compaction_removed_messages`,
   `context_compaction_summary_bytes`, `context_compaction_summary_missing`, and

@@ -1052,6 +1052,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ByKind:         map[string]int{"tool_name": 1, "alias_rename": 1},
 		},
 		ToolRepairExamples: []agenteval.ToolRepairExample{{
+			Scenario:      "sample",
 			ToolIndex:     1,
 			CallID:        "repair-1",
 			Tool:          "read_file",
@@ -1063,6 +1064,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Succeeded:     true,
 		}},
 		LoopGuardExamples: []agenteval.LoopGuardExample{{
+			Scenario:      "sample",
 			Kind:          "loop_guard_repeated_failed_input",
 			Category:      "loop_guard",
 			ToolIndex:     2,
@@ -1308,7 +1310,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "terms_per_call:2.00") {
 		t.Fatalf("summary output missing session search matched terms per call:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `session_search_example: query="Alpha Coast" total=2 session=market-alpha turn=4 terms=alpha,coast context=true`) {
+	if !strings.Contains(out.String(), `session_search_example: scenario=sample query="Alpha Coast" total=2 session=market-alpha turn=4 terms=alpha,coast context=true`) {
 		t.Fatalf("summary output missing session search example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
@@ -1332,37 +1334,37 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "hint[context_overflow]") || !strings.Contains(out.String(), "hint[llm_timeout]") {
 		t.Fatalf("summary output missing runtime error hints:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `tool_failure_example[timeout]: tool=web_fetch args=url="https://slow.example"`) {
+	if !strings.Contains(out.String(), `tool_failure_example[timeout]: scenario=taostats-rendered tool=web_fetch args=url="https://slow.example"`) {
 		t.Fatalf("summary output missing tool failure example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
+	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: scenario=sample category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
 		t.Fatalf("summary output missing loop guard example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json json_path=$.price") {
 		t.Fatalf("summary output missing source access example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `memory_update_example: action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
+	if !strings.Contains(out.String(), `memory_update_example: scenario=sample action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
 		t.Fatalf("summary output missing memory update example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s") {
+	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: scenario=taostats-rendered LLM llm_stream timed out after 4m0s") {
 		t.Fatalf("summary output missing runtime error example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial") {
+	if !strings.Contains(out.String(), "loop_decision_example[evidence_quality]: scenario=taostats-rendered decision=defer trigger=source_access_dynamic_partial") {
 		t.Fatalf("summary output missing loop decision example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `tool_repair_example: tool=read_file original=readFile call_id=repair-1 kinds=tool_name,alias_rename canonicalized=true args_repaired=true exit=0 note="canonicalized tool readFile to read_file"`) {
+	if !strings.Contains(out.String(), `tool_repair_example: scenario=sample tool=read_file original=readFile call_id=repair-1 kinds=tool_name,alias_rename canonicalized=true args_repaired=true exit=0 note="canonicalized tool readFile to read_file"`) {
 		t.Fatalf("summary output missing tool repair example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "plan=calls:3,errors:1 plan_by_action=set:1,update:2") {
 		t.Fatalf("summary output missing plan rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`) {
+	if !strings.Contains(out.String(), `plan_example: scenario=sample action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`) {
 		t.Fatalf("summary output missing plan example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "tool_truncation_example: tool=web_fetch call_id=trunc-1 args=truncated:true,bytes:0,omitted:128,cap:0 context=bytes:0,omitted:1024,tokens:256") {
+	if !strings.Contains(out.String(), "tool_truncation_example: scenario=sample tool=web_fetch call_id=trunc-1 args=truncated:true,bytes:0,omitted:128,cap:0 context=bytes:0,omitted:1024,tokens:256") {
 		t.Fatalf("summary output missing tool truncation example:\n%s", out.String())
 	}
 	if summary.TraceSchemaVersions[1] != 2 {
@@ -1380,10 +1382,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if summary.ToolRepairCalls != 5 || summary.ToolRepairSucceeded != 4 || summary.ToolRepairFailed != 1 {
 		t.Fatalf("repair outcomes = calls:%d ok:%d failed:%d, want 5/4/1", summary.ToolRepairCalls, summary.ToolRepairSucceeded, summary.ToolRepairFailed)
 	}
-	if len(summary.ToolRepairExamples) != 1 || summary.ToolRepairExamples[0].CallID != "repair-1" {
+	if len(summary.ToolRepairExamples) != 1 ||
+		summary.ToolRepairExamples[0].CallID != "repair-1" ||
+		summary.ToolRepairExamples[0].Scenario != "sample" {
 		t.Fatalf("ToolRepairExamples = %#v", summary.ToolRepairExamples)
 	}
-	if len(summary.LoopGuardExamples) != 1 || summary.LoopGuardExamples[0].CallID != "guard-1" {
+	if len(summary.LoopGuardExamples) != 1 ||
+		summary.LoopGuardExamples[0].CallID != "guard-1" ||
+		summary.LoopGuardExamples[0].Scenario != "sample" {
 		t.Fatalf("LoopGuardExamples = %#v", summary.LoopGuardExamples)
 	}
 	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
@@ -1416,28 +1422,42 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		summary.SourceAccessExamples[0].Scenario != "sample" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
 	}
-	if len(summary.MemoryUpdateExamples) != 1 || summary.MemoryUpdateExamples[0].CallID != "memory-1" {
+	if len(summary.MemoryUpdateExamples) != 1 ||
+		summary.MemoryUpdateExamples[0].CallID != "memory-1" ||
+		summary.MemoryUpdateExamples[0].Scenario != "sample" {
 		t.Fatalf("MemoryUpdateExamples = %#v", summary.MemoryUpdateExamples)
 	}
 	if len(summary.SessionSearchExamples) != 1 ||
 		summary.SessionSearchExamples[0].CallID != "search-1" ||
-		summary.SessionSearchExamples[0].SessionID != "market-alpha" {
+		summary.SessionSearchExamples[0].SessionID != "market-alpha" ||
+		summary.SessionSearchExamples[0].Scenario != "sample" {
 		t.Fatalf("SessionSearchExamples = %#v", summary.SessionSearchExamples)
 	}
-	if len(summary.ToolTruncationExamples) != 1 || summary.ToolTruncationExamples[0].CallID != "trunc-1" {
+	if len(summary.ToolTruncationExamples) != 1 ||
+		summary.ToolTruncationExamples[0].CallID != "trunc-1" ||
+		summary.ToolTruncationExamples[0].Scenario != "sample" {
 		t.Fatalf("ToolTruncationExamples = %#v", summary.ToolTruncationExamples)
 	}
-	if got := summary.ToolFailureExamples["timeout"]; len(got) != 1 || got[0].Tool != "web_fetch" {
+	if got := summary.ToolFailureExamples["timeout"]; len(got) != 1 ||
+		got[0].Tool != "web_fetch" ||
+		got[0].Scenario != "taostats-rendered" {
 		t.Fatalf("ToolFailureExamples[timeout] = %#v", got)
 	}
-	if got := summary.RuntimeErrorExamples["llm_timeout"]; len(got) != 1 || !strings.Contains(got[0].Message, "llm_stream timed out") {
+	if got := summary.RuntimeErrorExamples["llm_timeout"]; len(got) != 1 ||
+		got[0].Scenario != "taostats-rendered" ||
+		!strings.Contains(got[0].Message, "llm_stream timed out") {
 		t.Fatalf("RuntimeErrorExamples[llm_timeout] = %#v", got)
 	}
 	if summary.LoopDecisions != 1 || summary.LoopDecisionByKind["evidence_quality"] != 1 || summary.LoopDecisionByDecision["defer"] != 1 {
 		t.Fatalf("loop decision summary = count:%d kinds:%#v decisions:%#v", summary.LoopDecisions, summary.LoopDecisionByKind, summary.LoopDecisionByDecision)
 	}
+	if len(summary.LoopDecisionExamples) != 1 ||
+		summary.LoopDecisionExamples[0].Scenario != "taostats-rendered" {
+		t.Fatalf("LoopDecisionExamples = %#v", summary.LoopDecisionExamples)
+	}
 	if len(summary.ContextCompactionExamples) != 1 ||
 		summary.ContextCompactionExamples[0].TurnID != "turn-summary" ||
+		summary.ContextCompactionExamples[0].Scenario != "taostats-rendered" ||
 		!strings.Contains(summary.ContextCompactionExamples[0].SummaryPreview, "market evidence") {
 		t.Fatalf("ContextCompactionExamples = %#v", summary.ContextCompactionExamples)
 	}
@@ -1447,7 +1467,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !reflect.DeepEqual(summary.PlanByAction, map[string]int{"set": 1, "update": 2}) {
 		t.Fatalf("PlanByAction = %#v", summary.PlanByAction)
 	}
-	if len(summary.PlanExamples) != 1 || summary.PlanExamples[0].CallID != "plan-1" || summary.PlanExamples[0].StepText != "verify browser evidence" {
+	if len(summary.PlanExamples) != 1 ||
+		summary.PlanExamples[0].CallID != "plan-1" ||
+		summary.PlanExamples[0].StepText != "verify browser evidence" ||
+		summary.PlanExamples[0].Scenario != "sample" {
 		t.Fatalf("PlanExamples = %#v", summary.PlanExamples)
 	}
 	if summary.ExpectationScenarios != 2 {
@@ -2497,6 +2520,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolRepairNotes:       4,
 		ToolRepairByKind:      map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
 		ToolRepairExamples: []agenteval.ToolRepairExample{{
+			Scenario:      "taostats-rendered",
 			ToolIndex:     1,
 			CallID:        "summary-repair-1",
 			Tool:          "read_file",
@@ -2510,10 +2534,11 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolFailureByKind: map[string]int{"blocked": 1},
 		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
 			"blocked": {
-				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example"`, ResultSummary: "blocked | Next: use another source", ExitCode: 1},
+				{Scenario: "taostats-rendered", Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example"`, ResultSummary: "blocked | Next: use another source", ExitCode: 1},
 			},
 		},
 		LoopGuardExamples: []agenteval.LoopGuardExample{{
+			Scenario:      "taostats-rendered",
 			Kind:          "loop_guard_repeated_failed_input",
 			Category:      "loop_guard",
 			ToolIndex:     1,
@@ -2527,7 +2552,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
 			"llm_timeout": {
-				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s"},
+				{Scenario: "taostats-rendered", Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s"},
 			},
 		},
 		RuntimeSurfaceScenarios:    2,
@@ -2537,7 +2562,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		LoopDecisionByKind:         map[string]int{"evidence_quality": 1},
 		LoopDecisionByDecision:     map[string]int{"defer": 1},
 		LoopDecisionExamples: []agenteval.LoopDecision{
-			{Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
+			{Scenario: "taostats-rendered", Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
 		},
 		ContextCompactions:              1,
 		ContextCompactionsReactive:      1,
@@ -2546,6 +2571,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ContextCompactionSummaryMissing: 1,
 		ContextCompactionSummaryEmpty:   1,
 		ContextCompactionExamples: []agenteval.ContextCompaction{{
+			Scenario:        "taostats-rendered",
 			TurnID:          "turn-summary-jsonl",
 			BeforeMessages:  64,
 			AfterMessages:   20,
@@ -2575,6 +2601,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		MemoryUpdates:   1,
 		MemoryUpdateAdd: 1,
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
+			Scenario:    "taostats-rendered",
 			ToolIndex:   2,
 			CallID:      "summary-memory-1",
 			Action:      "add",
@@ -2588,6 +2615,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		SessionSearchContextHits:  1,
 		SessionSearchMatchedTerms: 2,
 		SessionSearchExamples: []agenteval.SessionSearchExample{{
+			Scenario:        "taostats-rendered",
 			ToolIndex:       3,
 			CallID:          "summary-search-1",
 			Query:           "Alpha Coast",
@@ -2606,6 +2634,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolResultsOmittedBytes: 4096,
 		ToolResultArtifacts:     2,
 		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
+			Scenario:           "taostats-rendered",
 			ToolIndex:          4,
 			CallID:             "summary-trunc-1",
 			Tool:               "browser_snapshot",
@@ -2665,6 +2694,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		PlanByAction:             map[string]int{"set": 1, "update": 2},
 		PlanErrors:               1,
 		PlanExamples: []agenteval.PlanExample{{
+			Scenario:          "taostats-rendered",
 			ToolIndex:         4,
 			CallID:            "summary-plan-1",
 			Action:            "update",
@@ -2827,6 +2857,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	toolRepairExample, ok := toolRepairExamples[0].(map[string]any)
 	if !ok ||
+		toolRepairExample["scenario"] != "taostats-rendered" ||
 		toolRepairExample["call_id"] != "summary-repair-1" ||
 		toolRepairExample["tool"] != "read_file" ||
 		toolRepairExample["original_tool"] != "readFile" ||
@@ -2845,12 +2876,21 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureExamples["blocked"]), "blocked.example") {
 		t.Fatalf("tool_failure_examples = %#v\njson=%s", got["tool_failure_examples"], out.String())
 	}
+	blockedExamples, ok := toolFailureExamples["blocked"].([]any)
+	if !ok || len(blockedExamples) != 1 {
+		t.Fatalf("blocked tool_failure_examples = %#v\njson=%s", toolFailureExamples["blocked"], out.String())
+	}
+	blockedExample, ok := blockedExamples[0].(map[string]any)
+	if !ok || blockedExample["scenario"] != "taostats-rendered" {
+		t.Fatalf("blocked tool_failure_example = %#v\njson=%s", blockedExamples[0], out.String())
+	}
 	loopGuardExamples, ok := got["loop_guard_examples"].([]any)
 	if !ok || len(loopGuardExamples) != 1 {
 		t.Fatalf("loop_guard_examples = %#v\njson=%s", got["loop_guard_examples"], out.String())
 	}
 	loopGuardExample, ok := loopGuardExamples[0].(map[string]any)
 	if !ok ||
+		loopGuardExample["scenario"] != "taostats-rendered" ||
 		loopGuardExample["call_id"] != "summary-guard-1" ||
 		loopGuardExample["kind"] != "loop_guard_repeated_failed_input" ||
 		loopGuardExample["category"] != "loop_guard" ||
@@ -2868,6 +2908,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
 		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	timeoutExamples, ok := runtimeErrorExamples["llm_timeout"].([]any)
+	if !ok || len(timeoutExamples) != 1 {
+		t.Fatalf("llm_timeout runtime_error_examples = %#v\njson=%s", runtimeErrorExamples["llm_timeout"], out.String())
+	}
+	timeoutExample, ok := timeoutExamples[0].(map[string]any)
+	if !ok || timeoutExample["scenario"] != "taostats-rendered" {
+		t.Fatalf("llm_timeout runtime_error_example = %#v\njson=%s", timeoutExamples[0], out.String())
 	}
 	failureExamples, ok := got["failure_examples"].(map[string]any)
 	if !ok {
@@ -2902,6 +2950,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	memoryUpdateExample, ok := memoryUpdateExamples[0].(map[string]any)
 	if !ok ||
+		memoryUpdateExample["scenario"] != "taostats-rendered" ||
 		memoryUpdateExample["call_id"] != "summary-memory-1" ||
 		memoryUpdateExample["action"] != "add" ||
 		memoryUpdateExample["location"] != "memory:markets" ||
@@ -2914,6 +2963,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	sessionSearchExample, ok := sessionSearchExamples[0].(map[string]any)
 	if !ok ||
+		sessionSearchExample["scenario"] != "taostats-rendered" ||
 		sessionSearchExample["call_id"] != "summary-search-1" ||
 		sessionSearchExample["query"] != "Alpha Coast" ||
 		sessionSearchExample["session_id"] != "market-alpha" ||
@@ -2927,6 +2977,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	toolTruncationExample, ok := toolTruncationExamples[0].(map[string]any)
 	if !ok ||
+		toolTruncationExample["scenario"] != "taostats-rendered" ||
 		toolTruncationExample["call_id"] != "summary-trunc-1" ||
 		toolTruncationExample["tool"] != "browser_snapshot" ||
 		toolTruncationExample["result_truncated"] != true ||
@@ -3028,12 +3079,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	if !ok || len(loopDecisionExamples) != 1 {
 		t.Fatalf("loop_decision_examples = %#v\njson=%s", got["loop_decision_examples"], out.String())
 	}
+	loopDecisionExample, ok := loopDecisionExamples[0].(map[string]any)
+	if !ok || loopDecisionExample["scenario"] != "taostats-rendered" {
+		t.Fatalf("loop_decision_example = %#v\njson=%s", loopDecisionExamples[0], out.String())
+	}
 	contextCompactionExamples, ok := got["context_compaction_examples"].([]any)
 	if !ok || len(contextCompactionExamples) != 1 {
 		t.Fatalf("context_compaction_examples = %#v\njson=%s", got["context_compaction_examples"], out.String())
 	}
 	contextCompactionExample, ok := contextCompactionExamples[0].(map[string]any)
 	if !ok ||
+		contextCompactionExample["scenario"] != "taostats-rendered" ||
 		contextCompactionExample["turn_id"] != "turn-summary-jsonl" ||
 		contextCompactionExample["removed_messages"] != float64(44) ||
 		contextCompactionExample["reason"] != "context_overflow" ||
@@ -3053,6 +3109,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	planExample, ok := planExamples[0].(map[string]any)
 	if !ok ||
+		planExample["scenario"] != "taostats-rendered" ||
 		planExample["call_id"] != "summary-plan-1" ||
 		planExample["action"] != "update" ||
 		planExample["step_text"] != "verify browser evidence" ||
