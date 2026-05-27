@@ -392,6 +392,15 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 			wantErr: "source-stats missing source_access",
 		},
 		{
+			name:   "source access pseudo tool does not satisfy source stats",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "source_access"},
+			scenario: agenteval.BatchScenario{
+				Name:                     "source-stats",
+				RequiredToolStatsAtLeast: map[string]int{"source_access_verified": 1},
+			},
+			wantErr: "source-stats missing source_access",
+		},
+		{
 			name:   "individual web tool satisfies source access stats",
 			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "web_fetch"},
 			scenario: agenteval.BatchScenario{

@@ -4006,11 +4006,13 @@ func enabledRuntimeToolSet(runtimeTools string, runtimeAllTools, runtimeMemory, 
 	enabled := map[string]bool{}
 	add := func(names ...string) {
 		for _, name := range names {
-			if strings.TrimSpace(name) != "" {
-				enabled[name] = true
-				if name == "web_fetch" || name == "web_search" || strings.HasPrefix(name, "browser_") {
-					enabled["source_access"] = true
-				}
+			name = strings.TrimSpace(name)
+			if name == "" || name == "source_access" {
+				continue
+			}
+			enabled[name] = true
+			if name == "web_fetch" || name == "web_search" || strings.HasPrefix(name, "browser_") {
+				enabled["source_access"] = true
 			}
 		}
 	}
