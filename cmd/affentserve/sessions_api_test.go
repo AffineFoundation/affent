@@ -760,6 +760,40 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromMemorySearchTopicAnchors
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromContextCompactionGap(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "compaction-summary-gap")
+	dir := pool.sessionDirPath("compaction-summary-gap")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeContextCompact, map[string]any{
+			"turn_id":          "t1",
+			"before_messages":  80,
+			"after_messages":   18,
+			"removed_messages": 62,
+			"reactive":         true,
+			"reason":           "context_overflow",
+			"summary_present":  false,
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "compaction-summary-gap")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{"context compaction summary missing", "removed 62 message", "reason=context_overflow", "reactive=true", "recover from durable plan"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
 func TestRecoveryHintFromConversationMemorySearchTopicAnchors(t *testing.T) {
 	result := `{"ok":true,"message":"no entries matched. Next: retry with fewer/different keywords, search a specific topic from topics, or use action=list for full topic discovery.","target":"memory","results":[],"topics":[{"topic":"markets","entries":2}]}`
 	got := recoveryHintFromConversationMessage(agent.ChatMessage{

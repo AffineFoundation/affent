@@ -1332,6 +1332,20 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			}
 			continue
 		}
+		if ev.Type == sse.TypeContextCompact {
+			var p sse.ContextCompactPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			var raw struct {
+				SummaryPresent *bool `json:"summary_present"`
+			}
+			_ = json.Unmarshal(ev.Data, &raw)
+			if hint := recoveryHintFromContextCompaction(p, raw.SummaryPresent != nil); hint != "" {
+				setLatest(hint, p.TurnID)
+			}
+			continue
+		}
 		if ev.Type != sse.TypeToolResult {
 			continue
 		}
@@ -1431,6 +1445,25 @@ func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {
 	default:
 		return ""
 	}
+}
+
+func recoveryHintFromContextCompaction(p sse.ContextCompactPayload, summaryPresentKnown bool) string {
+	state := contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, summaryPresentKnown)
+	if state != "missing" && state != "empty" {
+		return ""
+	}
+	parts := []string{"context compaction summary " + state}
+	if p.RemovedMessages > 0 {
+		parts = append(parts, fmt.Sprintf("removed %d message(s)", p.RemovedMessages))
+	}
+	if reason := strings.TrimSpace(p.Reason); reason != "" {
+		parts = append(parts, "reason="+reason)
+	}
+	if p.Reactive {
+		parts = append(parts, "reactive=true")
+	}
+	parts = append(parts, "recover from durable plan, LOOP, memory, or session_search; inspect trace/context_compactions")
+	return recoveryHintFromText(strings.Join(parts, "; "))
 }
 
 func recoveryHintFromBrowserNetworkRefsResult(text string) string {

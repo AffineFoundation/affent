@@ -660,8 +660,9 @@ required actions, runtime `error` events, `turn.end` budget/runtime failures,
 truncated tool results with artifact paths or missing-artifact warnings,
 successful no-hit `session_search` results that returned recent-session
 recovery anchors, successful no-hit memory searches that returned topic
-recovery anchors, and, when the event log is missing or incomplete, from
-structured resume repair placeholders and notes in `conversation.jsonl`.
+recovery anchors, context compactions whose summary is missing or empty, and,
+when the event log is missing or incomplete, from structured resume repair
+placeholders and notes in `conversation.jsonl`.
 Artifact list responses include path, size, mod time, and a bounded compact
 preview from the start of each artifact so operators can choose the right large
 tool result without opening every file.
