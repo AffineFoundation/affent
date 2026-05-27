@@ -2591,7 +2591,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_file_substrings[trace.jsonl]: `resume_missing_tool_result`",
 		"forbidden_file_substrings[notes.md]: `uncited taostats metric`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
-		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context; inspect Session Search examples for incomplete recovery.",
+		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context or persisted plan anchors; inspect Session Search examples for incomplete recovery.",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",
 		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1 context_artifacts=0 missing_artifacts=0",
 		"## Trace Events",

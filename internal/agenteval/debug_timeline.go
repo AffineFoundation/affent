@@ -291,13 +291,13 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			}
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {
 			tone = "recall_no_context"
-			guidance = "hits lacked adjacent context; inspect Session Search examples for stale or shallow recovery."
+			guidance = "hits lacked adjacent context or persisted plan anchors; inspect Session Search examples for stale or shallow recovery."
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchMatchedTerms == 0 {
 			tone = "recall_no_terms"
 			guidance = "hits lacked matched terms; inspect Session Search examples before trusting recovery."
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits < res.ToolStats.SessionSearchResults {
 			tone = "recall_weak_context"
-			guidance = "only some hits included adjacent context; inspect Session Search examples for incomplete recovery."
+			guidance = "only some hits included adjacent context or persisted plan anchors; inspect Session Search examples for incomplete recovery."
 		}
 		recent := ""
 		if res.ToolStats.SessionSearchRecent > 0 {

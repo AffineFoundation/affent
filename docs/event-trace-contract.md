@@ -288,7 +288,7 @@ external-calibration reminder paired with a `loop.decision`.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.
 - `session_search_context_hits`: count of `session_search` hits that included
-  adjacent transcript context.
+  adjacent transcript context or a compact persisted plan anchor.
 - `session_search_matched_terms`: count of unique matched query terms reported
   across parsed `session_search` responses.
 - `session_search_recent_sessions`: count of recent-session recovery anchors

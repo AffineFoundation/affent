@@ -460,7 +460,10 @@ can be audited without opening the raw trace. Durable
 transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
 `session_search_context_hits`, `session_search_matched_terms`,
-`session_search_recent_sessions`, and matched terms per call. Eval debug
+`session_search_recent_sessions`, and matched terms per call.
+`session_search_context_hits` counts adjacent transcript context and compact
+persisted plan anchors, because both are actionable long-run recovery context.
+Eval debug
 manifests, timelines, and JSONL records also include
 bounded `session_search_examples` with the query, matched session, turn,
 physical message index when available, session log modification time, matched

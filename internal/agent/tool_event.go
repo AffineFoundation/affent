@@ -375,6 +375,7 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 		Results []struct {
 			MatchedTerms    []string `json:"matched_terms"`
 			ContextIncluded bool     `json:"context_included"`
+			Role            string   `json:"role"`
 		} `json:"results"`
 	}
 	if err := json.Unmarshal([]byte(result), &resp); err != nil {
@@ -387,7 +388,7 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 	stats.SessionSearchResults += results
 	matched := map[string]bool{}
 	for _, hit := range resp.Results {
-		if hit.ContextIncluded {
+		if hit.ContextIncluded || strings.TrimSpace(hit.Role) == "plan" {
 			stats.SessionSearchContextHits++
 		}
 		for _, term := range hit.MatchedTerms {
