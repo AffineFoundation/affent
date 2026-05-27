@@ -733,6 +733,47 @@ func TestRecoveryHintFromConversationSessionSearchRecentPlanAnchor(t *testing.T)
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromWeakSessionSearchHits(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "recall-weak-hits")
+	dir := pool.sessionDirPath("recall-weak-hits")
+
+	result := `{"query":"alpha coast decision","total":2,"results":[{"session_id":"market-alpha","turn_idx":4,"message_idx":8,"role":"assistant","snippet":"final marker HIST-STOCK-44","matched_terms":["alpha"],"context_included":false},{"session_id":"market-beta","turn_idx":2,"message_idx":5,"role":"user","snippet":"alpha coast","matched_terms":["alpha","coast"],"context_included":false}]}`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t1", CallID: "search-1", ExitCode: 0, ResultSummary: result, Result: result}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "recall-weak-hits")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{"session recall hits lack adjacent context", "market-alpha", "turn=4", "message=8"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestRecoveryHintFromSessionSearchHitsAllowsPlanAnchor(t *testing.T) {
+	result := `{"query":"loop protocol","total":1,"results":[{"session_id":"looped","role":"plan","snippet":"current_step: verify loop protocol","matched_terms":["loop","protocol"],"context_included":false}]}`
+	if got := recoveryHintFromSessionSearchResult(result); got != "" {
+		t.Fatalf("hint = %q, want no weak-hit warning for plan anchor", got)
+	}
+}
+
+func TestRecoveryHintFromSessionSearchDoesNotTreatOtherResultJSONAsWeakHits(t *testing.T) {
+	result := `{"ok":true,"target":"memory","results":[{"topic":"markets","entry":"alpha coast decision"}]}`
+	if got := recoveryHintFromSessionSearchResult(result); got != "" {
+		t.Fatalf("hint = %q, want no session_search hint for non-session result JSON", got)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromMemorySearchTopicAnchors(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

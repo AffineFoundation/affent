@@ -1522,14 +1522,17 @@ func recoveryHintFromToolResult(summary, result string) string {
 
 func recoveryHintFromSessionSearchResult(text string) string {
 	text = strings.TrimSpace(text)
-	if text == "" || !strings.HasPrefix(text, "{") || !strings.Contains(text, `"recent_sessions"`) {
+	if text == "" || !strings.HasPrefix(text, "{") || (!strings.Contains(text, `"recent_sessions"`) && !strings.Contains(text, `"session_id"`)) {
 		return ""
 	}
 	var resp agent.SessionSearchResponse
 	if err := json.Unmarshal([]byte(text), &resp); err != nil {
 		return ""
 	}
-	if resp.Total > 0 || len(resp.Results) > 0 || len(resp.RecentSessions) == 0 {
+	if resp.Total > 0 || len(resp.Results) > 0 {
+		return recoveryHintFromWeakSessionSearchResults(resp)
+	}
+	if len(resp.RecentSessions) == 0 {
 		return ""
 	}
 	recent := resp.RecentSessions[0]
@@ -1549,6 +1552,42 @@ func recoveryHintFromSessionSearchResult(text string) string {
 	}
 	if preview != "" {
 		parts = append(parts, "preview: "+preview)
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) string {
+	if len(resp.Results) == 0 {
+		return ""
+	}
+	for _, hit := range resp.Results {
+		if hit.ContextIncluded || strings.TrimSpace(hit.Role) == "plan" {
+			return ""
+		}
+	}
+	first := resp.Results[0]
+	parts := []string{"session recall hits lack adjacent context or plan anchors"}
+	if strings.TrimSpace(first.SessionID) != "" {
+		anchor := "verify with narrower session_search before relying on " + strings.TrimSpace(first.SessionID)
+		if first.TurnIdx > 0 {
+			anchor += fmt.Sprintf(" turn=%d", first.TurnIdx)
+		}
+		if first.MessageIdx > 0 {
+			anchor += fmt.Sprintf(" message=%d", first.MessageIdx)
+		}
+		parts = append(parts, anchor)
+	} else {
+		parts = append(parts, "verify with narrower session_search before relying on the hits")
+	}
+	hasMatchedTerms := false
+	for _, hit := range resp.Results {
+		if len(hit.MatchedTerms) > 0 {
+			hasMatchedTerms = true
+			break
+		}
+	}
+	if !hasMatchedTerms {
+		parts = append(parts, "matched terms missing")
 	}
 	return recoveryHintFromText(strings.Join(parts, "; "))
 }
