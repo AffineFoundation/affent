@@ -354,7 +354,7 @@ describe("SessionList", () => {
     });
 
     const row = screen.getByRole("button", { name: /list the files/ });
-    expect(row).toHaveTextContent("Done");
+    expect(row).not.toHaveTextContent("Done");
     expect(row).toHaveAccessibleDescription("Answer · There are two files.");
     expect(within(row).getByTestId("session-preview")).toHaveTextContent("Answer · There are two files.");
     expect(within(row).queryByTestId("session-stats")).toBeNull();
@@ -525,7 +525,7 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /Affine/ });
     expect(row).toHaveAttribute("data-tone", "saved");
-    expect(row).toHaveTextContent("Done");
+    expect(row).not.toHaveTextContent("Done");
     expect(row).not.toHaveTextContent("research affine");
     expect(row).not.toHaveTextContent("1 tool issue");
   });

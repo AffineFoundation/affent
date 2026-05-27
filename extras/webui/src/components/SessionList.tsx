@@ -296,7 +296,7 @@ function dotStatus(tone: string): string {
 }
 
 function shouldShowRowStatus(status: string): boolean {
-  return !["Saved", "Ephemeral"].includes(status);
+  return !["Saved", "Ephemeral", "Done"].includes(status);
 }
 
 function shouldPinRowPreview(tone: string, selected: boolean): boolean {
