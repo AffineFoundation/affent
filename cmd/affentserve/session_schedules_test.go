@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -144,6 +148,50 @@ func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
 	running := summarizeSessionSchedulesWithLoopState(schedules, true)
 	if running.EnabledLoopTicks != 1 || running.PendingLoopTicks != 0 {
 		t.Fatalf("running summary = %+v, want enabled loop tick without pending", running)
+	}
+}
+
+func TestCreateSessionScheduleLoopTickInitializesDraftProtocol(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	next := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC).Format(time.RFC3339)
+	body := `{
+		"kind":"loop_tick",
+		"prompt":"Scheduled loop tick for session: direct API",
+		"display_text":"Loop every 30m: direct API",
+		"next_run_at":` + strconv.Quote(next) + `,
+		"repeat_interval_seconds":1800,
+		"enabled":true
+	}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/direct-loop/schedules", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	handleSessionSchedules(pool, "direct-loop", w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("create schedule status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	var resp sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Summary == nil || resp.Summary.EnabledLoopTicks != 1 || resp.Summary.PendingLoopTicks != 1 {
+		t.Fatalf("summary = %+v, want one pending loop tick", resp.Summary)
+	}
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "direct-loop"))
+	if err != nil || !found {
+		t.Fatalf("read loop protocol found=%v err=%v", found, err)
+	}
+	if status := loopstate.ProtocolStatus(protocol); status != "draft" {
+		t.Fatalf("protocol status = %q, want draft\n%s", status, protocol)
+	}
+	if !strings.Contains(protocol, "Loop every 30m: direct API") {
+		t.Fatalf("protocol goal missing schedule display text:\n%s", protocol)
+	}
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "direct-loop"))
+	if err != nil || !found {
+		t.Fatalf("read loop state found=%v err=%v", found, err)
+	}
+	if state.Status != "draft" || state.InitialGoalPreview != "Loop every 30m: direct API" || state.LastEventType != "loop.protocol_init" {
+		t.Fatalf("loop state = %+v, want draft protocol init from loop timer", state)
 	}
 }
 

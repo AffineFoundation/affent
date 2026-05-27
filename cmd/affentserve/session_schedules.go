@@ -312,6 +312,12 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		writeJSONError(w, http.StatusInternalServerError, "create session directory", err)
 		return
 	}
+	if kind == sessionScheduleKindLoopTick {
+		if err := ensureLoopTickProtocolDraft(pool, sessionID, scheduleLoopProtocolGoal(displayText, prompt)); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "initialize loop protocol draft", err)
+			return
+		}
+	}
 	path := sessionSchedulesPath(pool, sessionID)
 	pool.schedulesMu.Lock()
 	defer pool.schedulesMu.Unlock()
@@ -396,6 +402,27 @@ func decodeSessionScheduleUpdateRequest(w http.ResponseWriter, r *http.Request) 
 
 func sessionSchedulesPath(pool *SessionPool, sessionID string) string {
 	return filepath.Join(pool.sessionDirPath(sessionID), sessionSchedulesFileName)
+}
+
+func ensureLoopTickProtocolDraft(pool *SessionPool, sessionID, goal string) error {
+	if pool == nil {
+		return errors.New("session pool is nil")
+	}
+	_, _, _, err := loopstate.EnsureProtocolTemplate(sessionLoopProtocolPath(pool, sessionID), loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         goal,
+		Status:       "draft",
+		Plan:         serveLoopProtocolCurrentPlanCheckpoint(filepath.Join(pool.sessionDirPath(sessionID), "plan.json")),
+	})
+	return err
+}
+
+func scheduleLoopProtocolGoal(displayText, prompt string) string {
+	if goal := strings.Join(strings.Fields(displayText), " "); goal != "" {
+		return goal
+	}
+	return strings.Join(strings.Fields(prompt), " ")
 }
 
 func readSessionSchedulesFile(path string) (sessionSchedulesFile, bool, error) {
