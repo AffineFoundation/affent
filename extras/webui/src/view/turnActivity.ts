@@ -171,6 +171,19 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     });
   }
 
+  const loopFeed = latestLoopProtocolFeed(turn);
+  if (loopFeed) {
+    items.push({
+      id: `${turn.id}:loop-feed:${loopFeed.eventId}`,
+      kind: "reasoning",
+      label: "Loop",
+      title: "Loop protocol fed",
+      detail: loopProtocolFeedDetail(loopFeed),
+      meta: loopFeed.mode,
+      tone: "muted",
+    });
+  }
+
   const memoryUpdates = memoryUpdatesForTurn(turn);
   memoryUpdates.forEach((update, index) => {
     items.push({
@@ -249,6 +262,16 @@ function buildBrief(
       label: "Context",
       value: contextCompactionBrief(compaction),
       tone: compaction.reactive ? "warning" : "muted",
+    });
+  }
+
+  const loopFeed = latestLoopProtocolFeed(turn);
+  if (loopFeed) {
+    rows.push({
+      id: `loop-feed:${loopFeed.eventId}`,
+      label: "Loop",
+      value: loopProtocolFeedBrief(loopFeed),
+      tone: "muted",
     });
   }
 
@@ -598,6 +621,8 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   if (decisionCount > 0) meta.push(`${decisionCount} ${pluralize("decision", decisionCount)}`);
   const compactionCount = turn.contextCompactions?.length ?? 0;
   if (compactionCount > 0) meta.push(`${compactionCount} ${pluralize("compaction", compactionCount)}`);
+  const loopFeedCount = turn.loopProtocolFeeds?.length ?? 0;
+  if (loopFeedCount > 0) meta.push(`${loopFeedCount} loop ${pluralize("feed", loopFeedCount)}`);
   const memoryUpdateCount = memoryUpdatesForTurn(turn).length;
   if (memoryUpdateCount > 0) meta.push(`${memoryUpdateCount} memory ${pluralize("update", memoryUpdateCount)}`);
   return meta;
@@ -637,6 +662,40 @@ function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleL
 
 function latestContextCompaction(turn: TurnState) {
   return turn.contextCompactions?.at(-1);
+}
+
+function latestLoopProtocolFeed(turn: TurnState) {
+  return turn.loopProtocolFeeds?.at(-1);
+}
+
+function loopProtocolFeedDetail(feed: NonNullable<ReturnType<typeof latestLoopProtocolFeed>>): string {
+  const parts = [
+    feed.mode ? `${feed.mode} feed` : "feed",
+    feed.feed_number > 0 ? `#${feed.feed_number}` : undefined,
+    feed.protocol_path,
+    loopProtocolFeedPlan(feed),
+  ].filter(Boolean);
+  return summarize(parts.join(" · "), 180);
+}
+
+function loopProtocolFeedBrief(feed: NonNullable<ReturnType<typeof latestLoopProtocolFeed>>): string {
+  const parts = [
+    feed.mode ? `${feed.mode} feed` : "feed",
+    feed.feed_number > 0 ? `#${feed.feed_number}` : undefined,
+    loopProtocolFeedPlan(feed),
+    feed.protocol_path,
+  ].filter(Boolean);
+  return summarize(parts.join(" · "), 180);
+}
+
+function loopProtocolFeedPlan(feed: NonNullable<ReturnType<typeof latestLoopProtocolFeed>>): string | undefined {
+  const checkpoint = [
+    feed.plan_label,
+    feed.plan_current_step_index ? `step ${feed.plan_current_step_index}` : undefined,
+    feed.plan_current_step_status,
+    feed.plan_current_step,
+  ].filter(Boolean);
+  return checkpoint.length > 0 ? checkpoint.join(" · ") : undefined;
 }
 
 function contextCompactionDetail(compaction: NonNullable<ReturnType<typeof latestContextCompaction>>): string {

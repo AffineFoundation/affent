@@ -4,6 +4,7 @@ import {
   type ContextCompactedPayload,
   type ErrorPayload,
   type LoopDecisionPayload,
+  type LoopProtocolFeedPayload,
   type MessageDeltaPayload,
   type MessageDonePayload,
   type RawEvent,
@@ -112,6 +113,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         assistantText: "",
         messageStreaming: false,
         toolCalls: [],
+        loopProtocolFeeds: [],
         loopDecisions: [],
         contextCompactions: [],
       };
@@ -229,6 +231,19 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         messageStreaming: false,
       }));
       return { ...next, status: deriveSessionStatus(next.turns) };
+    }
+    case EventType.LoopProtocolFeed: {
+      const p = ev.data as LoopProtocolFeedPayload;
+      const next = p.turn_id
+        ? updateTurn(state, p.turn_id, (t) => ({
+            ...t,
+            loopProtocolFeeds: [...(t.loopProtocolFeeds ?? []), { ...p, eventId: ev.id }],
+          }))
+        : state;
+      return {
+        ...next,
+        loopProtocolFeeds: [...next.loopProtocolFeeds, { ...p, eventId: ev.id }],
+      };
     }
     case EventType.LoopDecision: {
       const p = ev.data as LoopDecisionPayload;

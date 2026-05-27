@@ -80,6 +80,94 @@ describe("buildTurnActivity", () => {
     ]);
   });
 
+  it("surfaces loop protocol feeds on the owning turn", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue active loop" } },
+      {
+        id: 3,
+        type: "loop.protocol_feed",
+        data: {
+          turn_id: "t1",
+          loop_id: "plan-loop",
+          status: "running",
+          mode: "full",
+          feed_number: 1,
+          protocol_feeds: 1,
+          protocol_path: ".affent/loops/plan-loop/LOOP.md",
+          plan_label: "plan:1/3:active",
+          plan_current_step_index: 2,
+          plan_current_step_status: "in_progress",
+          plan_current_step: "verify browser network evidence",
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Loop",
+      summary: "full feed · #1 · .affent/loops/plan-loop/LOOP.md · plan:1/3:active · step 2 · in_progress · verify browser network evidence",
+      meta: ["1 loop feed"],
+      tone: "muted",
+    });
+    expect(activity?.brief.rows).toEqual([
+      { id: "goal", label: "Goal", value: "continue active loop" },
+      {
+        id: "loop-feed:3",
+        label: "Loop",
+        value: "full feed · #1 · plan:1/3:active · step 2 · in_progress · verify browser network evidence · .affent/loops/plan-loop/LOOP.md",
+        tone: "muted",
+      },
+    ]);
+    expect(activity?.items).toEqual([
+      {
+        id: "t1:loop-feed:3",
+        kind: "reasoning",
+        label: "Loop",
+        title: "Loop protocol fed",
+        detail: "full feed · #1 · .affent/loops/plan-loop/LOOP.md · plan:1/3:active · step 2 · in_progress · verify browser network evidence",
+        meta: "full",
+        tone: "muted",
+      },
+    ]);
+  });
+
+  it("keeps loop protocol feeds from replacing completed work summaries", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue active loop" } },
+      {
+        id: 3,
+        type: "loop.protocol_feed",
+        data: {
+          turn_id: "t1",
+          mode: "digest",
+          feed_number: 2,
+          protocol_path: ".affent/loops/plan-loop/LOOP.md",
+        },
+      },
+      { id: 4, type: "tool.request", data: { turn_id: "t1", call_id: "r1", tool: "read_file", args: { path: "current.md" } } },
+      { id: 5, type: "tool.result", data: { call_id: "r1", exit_code: 0, result_summary: "current marker LOOP-42", result: "current marker LOOP-42" } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toMatchObject({
+      label: "Result",
+      summary: "current marker LOOP-42",
+      meta: ["1 step", "1 action", "1 loop feed"],
+    });
+    expect(activity?.brief.rows).toContainEqual({
+      id: "loop-feed:3",
+      label: "Loop",
+      value: "digest feed · #2 · .affent/loops/plan-loop/LOOP.md",
+      tone: "muted",
+    });
+  });
+
   it("surfaces context compactions on the owning turn", () => {
     const turn = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
