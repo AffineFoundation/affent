@@ -567,6 +567,8 @@ func formatNetworkSearchResults(query, pageURL string, entries, recent []Network
 	b.WriteString("BROWSER NETWORK EVIDENCE\n")
 	if strings.TrimSpace(pageURL) != "" {
 		fmt.Fprintf(&b, "CURRENT_PAGE: %s\n", pageURL)
+	} else {
+		b.WriteString("CURRENT_PAGE: none\n")
 	}
 	if query != "" {
 		fmt.Fprintf(&b, "query: %q\n", query)
@@ -574,6 +576,12 @@ func formatNetworkSearchResults(query, pageURL string, entries, recent []Network
 	b.WriteString("EVIDENCE_STATUS: refs_only_not_citable; read_required=true\n")
 	if len(entries) == 0 {
 		b.WriteString("MATCHES: none\n")
+		if strings.TrimSpace(pageURL) == "" && len(recent) == 0 {
+			b.WriteString("CAPTURED_RESPONSES: none\n")
+			b.WriteString("Failure: kind=no_matches\n")
+			b.WriteString("Next: call browser_navigate with the target http:// or https:// URL, wait or snapshot after the page loads, then call browser_network with a distinctive metric label, entity id, or API path before browser_network_read.\n")
+			return b.String()
+		}
 		if len(recent) > 0 {
 			b.WriteString("RECENT_CAPTURED_RESPONSES:\n")
 			for _, entry := range recent {

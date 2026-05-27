@@ -357,6 +357,24 @@ func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceSearchWithoutCurrentPageGuidesNavigate(t *testing.T) {
+	searchOut, err := NetworkSearchTool(&Session{network: NewNetworkEvidenceLog()}).Execute(context.Background(), json.RawMessage(`{"query":"market cap"}`))
+	if err != nil {
+		t.Fatalf("browser_network without current page should not error: %v", err)
+	}
+	for _, want := range []string{
+		"CURRENT_PAGE: none",
+		"CAPTURED_RESPONSES: none",
+		"Failure: kind=no_matches",
+		"Next: call browser_navigate",
+		"browser_network_read",
+	} {
+		if !strings.Contains(searchOut, want) {
+			t.Fatalf("no-current-page output missing %q:\n%s", want, searchOut)
+		}
+	}
+}
+
 func TestNetworkEvidenceSearchNoMatchShowsRecentCapturedRefs(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)

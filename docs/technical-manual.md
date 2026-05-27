@@ -604,7 +604,9 @@ values are citable only after `browser_network_read` returns a `SourceAccess:`
 line. No-match searches include `Failure: kind=no_matches` and, when responses
 were captured but the query did not match, a short `RECENT_CAPTURED_RESPONSES`
 list with bounded JSON path hints so the model can read a likely ref instead
-of blindly repeating searches.
+of blindly repeating searches. If no current page/network log exists yet,
+`browser_network` reports `CURRENT_PAGE: none` and points the model back to
+`browser_navigate` before retrying network evidence discovery.
 Evals and summaries can count failed evidence discovery separately from
 successful `browser_network_read` source evidence.
 The search tokenizer handles common API field shapes such as `market_cap`,
