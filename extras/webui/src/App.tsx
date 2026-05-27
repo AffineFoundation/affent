@@ -860,6 +860,7 @@ export function App() {
     const intervalSeconds = loopTick ? 30 * 60 : daily ? 24 * 60 * 60 : undefined;
     const firstDelayMs = loopTick ? 30 * 60 * 1000 : daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
     const next = new Date(Date.now() + firstDelayMs);
+    const scheduleDisplay = webScheduleDisplayText(kind, sessionTitle);
     const calibrationPrompt = webScheduleCalibrationPrompt(kind, sessionTitle);
     const calibrationDisplay = webScheduleCalibrationSummary(kind, sessionTitle);
     setScheduleBusy(kind);
@@ -869,6 +870,7 @@ export function App() {
         prompt: loopTick
           ? webScheduledLoopTickPrompt(sessionTitle)
           : webScheduledCheckInPrompt(sessionTitle),
+        display_text: scheduleDisplay,
         next_run_at: toRfc3339Seconds(next),
         repeat_interval_seconds: intervalSeconds,
         enabled: true,
@@ -1420,6 +1422,12 @@ function webScheduleCalibrationSummary(kind: "loop" | "checkin" | "daily", sessi
   if (kind === "loop") return `Calibrate loop timer: ${sessionTitle}`;
   if (kind === "daily") return `Calibrate daily timer: ${sessionTitle}`;
   return `Calibrate check-in timer: ${sessionTitle}`;
+}
+
+function webScheduleDisplayText(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
+  if (kind === "loop") return `Loop every 30m: ${sessionTitle}`;
+  if (kind === "daily") return `Daily check-in: ${sessionTitle}`;
+  return `Check in 1h: ${sessionTitle}`;
 }
 
 function webScheduleCalibrationPrompt(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {

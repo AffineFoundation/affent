@@ -14,6 +14,7 @@ describe("SessionSchedulePanel", () => {
             id: "sched_paused_loop",
             kind: "loop_tick",
             prompt: "Scheduled loop tick for session: runtime",
+            display_text: "Loop every 30m: runtime",
             enabled: false,
             next_run_at: "2026-05-27T14:00:00Z",
             repeat_interval_seconds: 1800,
@@ -72,6 +73,7 @@ describe("SessionSchedulePanel", () => {
             id: "sched_loop",
             kind: "loop_tick",
             prompt: "Scheduled loop tick for session: long running runtime improvement",
+            display_text: "Loop every 30m: long running runtime improvement",
             enabled: true,
             next_run_at: "2026-05-27T14:00:00Z",
             repeat_interval_seconds: 1800,
@@ -87,6 +89,8 @@ describe("SessionSchedulePanel", () => {
     expect(panel).toHaveTextContent("Loop timer waits for LOOP.md activation");
     expect(screen.getByTestId("session-schedule-callout")).toHaveTextContent("Calibration pending");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
+    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("Scheduled loop tick for session");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Pending calibration");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("waiting for LOOP.md activation");
   });

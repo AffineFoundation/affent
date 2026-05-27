@@ -777,6 +777,7 @@ describe("App", () => {
               id: "sched_1",
               kind: "checkin",
               prompt: "Scheduled check-in for session: long running subnet analysis",
+              display_text: "Check in 1h: long running subnet analysis",
               enabled: true,
               next_run_at: "2026-05-27T14:30:00Z",
               created_at: "2026-05-27T13:30:00Z",
@@ -788,7 +789,7 @@ describe("App", () => {
             enabled: 1,
             next_run_at: "2026-05-27T14:30:00Z",
             next_schedule_id: "sched_1",
-            next_prompt_preview: "Scheduled check-in for session: long running subnet analysis",
+            next_prompt_preview: "Check in 1h: long running subnet analysis",
           },
         });
       }
@@ -813,6 +814,7 @@ describe("App", () => {
               id: "sched_1",
               kind: "checkin",
               prompt: "Scheduled check-in for session: long running subnet analysis",
+              display_text: "Check in 1h: long running subnet analysis",
               enabled: body.enabled,
               next_run_at: "2026-05-27T14:30:00Z",
               created_at: "2026-05-27T13:30:00Z",
@@ -825,7 +827,7 @@ describe("App", () => {
                 enabled: 1,
                 next_run_at: "2026-05-27T14:30:00Z",
                 next_schedule_id: "sched_1",
-                next_prompt_preview: "Scheduled check-in for session: long running subnet analysis",
+                next_prompt_preview: "Check in 1h: long running subnet analysis",
               }
             : { count: 1, enabled: 0 },
         });
@@ -850,11 +852,12 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/schedules");
-    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; next_run_at: string; enabled: boolean };
+    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; display_text?: string; next_run_at: string; enabled: boolean };
     expect(body.kind).toBe("checkin");
     expect(body.prompt).toContain("Scheduled check-in for session: long running subnet analysis");
     expect(body.prompt).toContain("ask the user one concise question");
     expect(body.prompt).toContain("loop_protocol action=read");
+    expect(body.display_text).toBe("Check in 1h: long running subnet analysis");
     expect(body.enabled).toBe(true);
     expect(body.next_run_at).toMatch(/Z$/);
     const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/loop-protocol");
@@ -868,7 +871,8 @@ describe("App", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate check-in timer: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("do not claim the timer is operationally calibrated");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Scheduled check-in for session: long running subnet analysis");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Check in 1h: long running subnet analysis");
+    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("ask the user one concise question");
     expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
 
     await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Pause" }));
@@ -938,6 +942,7 @@ describe("App", () => {
               id: "sched_loop",
               kind: "loop_tick",
               prompt: "Scheduled loop tick for session: long running runtime improvement",
+              display_text: "Loop every 30m: long running runtime improvement",
               enabled: true,
               next_run_at: "2026-05-27T14:00:00Z",
               repeat_interval_seconds: 1800,
@@ -950,7 +955,7 @@ describe("App", () => {
             enabled: 1,
             next_run_at: "2026-05-27T14:00:00Z",
             next_schedule_id: "sched_loop",
-            next_prompt_preview: "Scheduled loop tick for session: long running runtime improvement",
+            next_prompt_preview: "Loop every 30m: long running runtime improvement",
           },
         });
       }
@@ -968,12 +973,13 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/schedules");
-    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; repeat_interval_seconds?: number; enabled: boolean };
+    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; display_text?: string; repeat_interval_seconds?: number; enabled: boolean };
     expect(body.kind).toBe("loop_tick");
     expect(body.prompt).toContain("Scheduled loop tick for session: long running runtime improvement");
     expect(body.prompt).toContain("autonomous long-run tick");
     expect(body.prompt).toContain("loop_protocol action=read");
     expect(body.prompt).toContain("advance at most one compact high-value step");
+    expect(body.display_text).toBe("Loop every 30m: long running runtime improvement");
     expect(body.repeat_interval_seconds).toBe(1800);
     expect(body.enabled).toBe(true);
     expect(fetchImpl.mock.calls.some(([url]) => String(url) === "/v1/sessions/loop-timer/loop-protocol")).toBe(false);
@@ -987,6 +993,8 @@ describe("App", () => {
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Ask the user one concise question now");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
+    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("autonomous long-run tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
     expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
   });

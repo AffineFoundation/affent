@@ -63,6 +63,13 @@ diagnostics.
 
 - `turn_id`: runtime turn id.
 - `text`: user message text.
+- `display_text`: optional UI-facing label for generated control prompts.
+  The model still received `text`; timeline, session summaries, and trace
+  groups may prefer `display_text` to avoid showing long internal loop/timer
+  protocol instructions as the human-visible request.
+- `source`: optional origin such as `schedule`.
+- `schedule_id`, `schedule_kind`: optional schedule metadata when
+  `source=schedule`.
 
 ### `runtime.surface`
 

@@ -691,13 +691,14 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 				UpdatedAt: now.Format(time.RFC3339),
 			},
 			{
-				ID:        "sched_next",
-				Kind:      sessionScheduleKindLoopTick,
-				Prompt:    "ask clarifying questions and update LOOP.md",
-				Enabled:   true,
-				NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
-				CreatedAt: now.Format(time.RFC3339),
-				UpdatedAt: now.Format(time.RFC3339),
+				ID:          "sched_next",
+				Kind:        sessionScheduleKindLoopTick,
+				Prompt:      "ask clarifying questions and update LOOP.md",
+				DisplayText: "Loop every 30m: scheduled-list",
+				Enabled:     true,
+				NextRunAt:   now.Add(time.Hour).Format(time.RFC3339),
+				CreatedAt:   now.Format(time.RFC3339),
+				UpdatedAt:   now.Format(time.RFC3339),
 			},
 			{
 				ID:        "sched_paused",
@@ -731,7 +732,7 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	if !resp.Sessions[0].HasSchedules || summary == nil {
 		t.Fatalf("session = %+v, want schedule summary", resp.Sessions[0])
 	}
-	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 1 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "ask clarifying questions and update LOOP.md" {
+	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 1 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "Loop every 30m: scheduled-list" {
 		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
 	}
 	if summary.ErrorCount != 1 || summary.LastError != "LOOP.md not running; answer calibration first" {
@@ -765,7 +766,7 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	createDurableSessionDir(t, pool, "scheduled")
 	nextRunAt := time.Date(2026, 5, 27, 13, 30, 0, 0, time.UTC).Format(time.RFC3339)
 
-	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/scheduled/schedules", bytes.NewBufferString(`{"kind":"loop_tick","prompt":"Ask the user two focused questions before enabling loop.","next_run_at":"`+nextRunAt+`","repeat_interval_seconds":3600}`))
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/scheduled/schedules", bytes.NewBufferString(`{"kind":"loop_tick","prompt":"Ask the user two focused questions before enabling loop.","display_text":"Loop every hour: scheduled","next_run_at":"`+nextRunAt+`","repeat_interval_seconds":3600}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusCreated {
@@ -782,7 +783,7 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 		t.Fatalf("created = %+v, want one schedule", created)
 	}
 	schedule := created.Schedules[0]
-	if schedule.ID == "" || schedule.Kind != sessionScheduleKindLoopTick || schedule.Prompt != "Ask the user two focused questions before enabling loop." || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
+	if schedule.ID == "" || schedule.Kind != sessionScheduleKindLoopTick || schedule.Prompt != "Ask the user two focused questions before enabling loop." || schedule.DisplayText != "Loop every hour: scheduled" || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
 		t.Fatalf("schedule = %+v, want persisted request fields", schedule)
 	}
 	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.EnabledLoopTicks != 1 || created.Summary.PendingLoopTicks != 1 || created.Summary.NextScheduleID != schedule.ID {
@@ -877,6 +878,7 @@ func TestHandleSessionSchedules_ValidatesRequest(t *testing.T) {
 	}{
 		{name: "empty prompt", body: `{"prompt":" ","next_run_at":"2026-05-27T13:30:00Z"}`},
 		{name: "missing next run", body: `{"prompt":"work"}`},
+		{name: "display too large", body: `{"prompt":"work","display_text":"` + strings.Repeat("x", maxSessionScheduleDisplay+1) + `","next_run_at":"2026-05-27T13:30:00Z"}`},
 		{name: "too fast repeat", body: `{"prompt":"work","next_run_at":"2026-05-27T13:30:00Z","repeat_interval_seconds":1}`},
 		{name: "bad kind", body: `{"kind":"forever","prompt":"work","next_run_at":"2026-05-27T13:30:00Z"}`},
 		{name: "unknown field", body: `{"prompt":"work","next_run_at":"2026-05-27T13:30:00Z","cron":"*"}`},

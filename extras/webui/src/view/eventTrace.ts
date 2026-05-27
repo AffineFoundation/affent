@@ -188,7 +188,7 @@ function requestRecordGroup(
     meta: compact([
       requestLabel(context, turnId),
       userMessageOriginMeta(userMessage),
-      streamSummary(readString(userMessage?.data, "text") ?? ""),
+      streamSummary(userMessageDisplayText(userMessage) ?? ""),
       readString(end?.data, "reason"),
       ...toolRuntimeStatsMeta(readToolStats(end)),
       tokenTotal > 0 ? `${tokenTotal} tokens` : undefined,
@@ -255,7 +255,7 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
     case EventType.UserMessage:
       return {
         label: userMessageLabel(event),
-        meta: compact([request, userMessageOriginMeta(event), streamSummary(readString(event.data, "text") ?? "")]),
+        meta: compact([request, userMessageOriginMeta(event), streamSummary(userMessageDisplayText(event) ?? "")]),
         badges: userMessageBadges(event),
       };
     case EventType.RuntimeSurface:
@@ -287,6 +287,10 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
     default:
       return { label: event.type, meta: fallbackMeta(event, context), badges: [] };
   }
+}
+
+function userMessageDisplayText(event: NormalizedEvent | undefined): string | undefined {
+  return readString(event?.data, "display_text") ?? readString(event?.data, "text");
 }
 
 function userMessageLabel(event: NormalizedEvent | undefined): string {

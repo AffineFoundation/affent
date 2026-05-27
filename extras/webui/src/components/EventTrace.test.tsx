@@ -186,7 +186,8 @@ describe("EventTrace", () => {
           source: "schedule",
           schedule_id: "sched_1",
           schedule_kind: "loop_tick",
-          text: "Scheduled check-in for session: market monitor",
+          text: "Internal scheduled loop prompt with protocol instructions",
+          display_text: "Loop every 30m: market monitor",
         },
       },
       { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
@@ -195,7 +196,8 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("Request trace")).toBeInTheDocument();
-    expect(screen.getByText("Request 1 · loop tick sched_1 · Scheduled check-in for session: market monitor · completed")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · loop tick sched_1 · Loop every 30m: market monitor · completed")).toBeInTheDocument();
+    expect(screen.queryByText(/Internal scheduled loop prompt/)).toBeNull();
     expect(screen.getByText("scheduled")).toBeInTheDocument();
     expect(screen.getByText("loop_tick")).toBeInTheDocument();
     expect(screen.getByText("sched_1")).toBeInTheDocument();
@@ -210,7 +212,8 @@ describe("EventTrace", () => {
           turn_id: "t1",
           source: "schedule",
           schedule_id: "sched_1",
-          text: "Run daily loop calibration",
+          text: "Internal daily check-in prompt",
+          display_text: "Daily check-in: runtime",
         },
       },
     ];
@@ -218,7 +221,7 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("Scheduled message")).toBeInTheDocument();
-    expect(screen.getByText("Request 1 · timer sched_1 · Run daily loop calibration")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · timer sched_1 · Daily check-in: runtime")).toBeInTheDocument();
     expect(screen.getByText("scheduled")).toBeInTheDocument();
     expect(screen.getByText("sched_1")).toBeInTheDocument();
   });

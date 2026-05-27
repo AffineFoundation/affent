@@ -73,7 +73,7 @@ export function SessionSchedulePanel({
               <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
                 <div className="session-schedule-item-main">
                   <strong>{scheduleKindLabel(schedule.kind)} · {scheduleStatusLabel(schedule, loopStatus)} · {formatScheduleTime(schedule.next_run_at)}</strong>
-                  <p>{schedule.prompt}</p>
+                  <p>{scheduleDisplayText(schedule)}</p>
                   <small>{scheduleMeta(schedule, loopStatus)}</small>
                 </div>
                 <div className="session-schedule-actions">
@@ -199,6 +199,10 @@ function scheduleMeta(schedule: SessionSchedule, loopStatus?: string): string {
   if (schedule.last_run_at) parts.push(`last ${formatScheduleTime(schedule.last_run_at)}`);
   if (schedule.last_error) parts.push(`error ${schedule.last_error}`);
   return parts.join(" · ");
+}
+
+function scheduleDisplayText(schedule: SessionSchedule): string {
+  return compact(schedule.display_text) ?? schedule.prompt;
 }
 
 function scheduleStatusLabel(schedule: SessionSchedule, loopStatus?: string): string {

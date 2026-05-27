@@ -25,6 +25,7 @@ const (
 	maxSessionSchedulesFileBytes = 64 * 1024
 	maxSessionSchedules          = 128
 	maxSessionSchedulePrompt     = 8000
+	maxSessionScheduleDisplay    = 512
 	minSessionScheduleRepeat     = 60 * time.Second
 	sessionScheduleSweepInterval = 30 * time.Second
 	sessionScheduleRetryDelay    = time.Minute
@@ -42,6 +43,7 @@ type sessionSchedule struct {
 	ID                    string `json:"id"`
 	Kind                  string `json:"kind,omitempty"`
 	Prompt                string `json:"prompt"`
+	DisplayText           string `json:"display_text,omitempty"`
 	Enabled               bool   `json:"enabled"`
 	NextRunAt             string `json:"next_run_at"`
 	RepeatIntervalSeconds int64  `json:"repeat_interval_seconds,omitempty"`
@@ -80,6 +82,7 @@ type sessionSchedulesResponse struct {
 type sessionScheduleCreateRequest struct {
 	Kind                  string `json:"kind,omitempty"`
 	Prompt                string `json:"prompt"`
+	DisplayText           string `json:"display_text,omitempty"`
 	NextRunAt             string `json:"next_run_at"`
 	RepeatIntervalSeconds int64  `json:"repeat_interval_seconds,omitempty"`
 	Enabled               *bool  `json:"enabled,omitempty"`
@@ -101,6 +104,7 @@ type sessionScheduleRun struct {
 	ScheduleID   string
 	ScheduleKind string
 	Prompt       string
+	DisplayText  string
 }
 
 func handleSessionSchedules(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
@@ -273,6 +277,7 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		return
 	}
 	prompt := strings.TrimSpace(req.Prompt)
+	displayText := strings.TrimSpace(req.DisplayText)
 	nextRunAt, err := parseSessionScheduleTime(req.NextRunAt)
 	if err != nil {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid next_run_at", err, "bad_request")
@@ -284,6 +289,10 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 	}
 	if len([]byte(prompt)) > maxSessionSchedulePrompt {
 		writeJSONErrorTyped(w, http.StatusRequestEntityTooLarge, "schedule prompt too large", nil, "bad_request")
+		return
+	}
+	if len([]byte(displayText)) > maxSessionScheduleDisplay {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "schedule display_text too large", fmt.Errorf("display_text exceeds %d bytes", maxSessionScheduleDisplay), "bad_request")
 		return
 	}
 	kind, err := normalizeSessionScheduleKind(req.Kind)
@@ -327,6 +336,7 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		ID:                    newSessionScheduleID(),
 		Kind:                  kind,
 		Prompt:                prompt,
+		DisplayText:           displayText,
 		Enabled:               enabled,
 		NextRunAt:             nextRunAt.Format(time.RFC3339),
 		RepeatIntervalSeconds: req.RepeatIntervalSeconds,
@@ -565,7 +575,7 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 		summary.NextRunAt = next.NextRunAt
 		summary.NextScheduleID = next.ID
 		summary.NextScheduleKind = next.Kind
-		summary.NextPromptPreview = previewSessionSchedulePrompt(next.Prompt)
+		summary.NextPromptPreview = previewSessionSchedulePrompt(sessionScheduleDisplayText(*next))
 	}
 	if latestError != nil {
 		summary.LastError = latestError.LastError
@@ -613,6 +623,10 @@ func normalizeSessionSchedule(schedule *sessionSchedule) error {
 	}
 	if len([]byte(schedule.Prompt)) > maxSessionSchedulePrompt {
 		return fmt.Errorf("schedule prompt exceeds %d bytes", maxSessionSchedulePrompt)
+	}
+	schedule.DisplayText = strings.Join(strings.Fields(schedule.DisplayText), " ")
+	if len([]byte(schedule.DisplayText)) > maxSessionScheduleDisplay {
+		return fmt.Errorf("schedule display_text exceeds %d bytes", maxSessionScheduleDisplay)
 	}
 	if _, err := parseSessionScheduleTime(schedule.NextRunAt); err != nil {
 		return fmt.Errorf("invalid next_run_at: %w", err)
@@ -688,6 +702,13 @@ func previewSessionSchedulePrompt(prompt string) string {
 	}
 	runes := []rune(preview)
 	return string(runes[:max]) + "..."
+}
+
+func sessionScheduleDisplayText(schedule sessionSchedule) string {
+	if display := strings.TrimSpace(schedule.DisplayText); display != "" {
+		return display
+	}
+	return schedule.Prompt
 }
 
 func (p *SessionPool) scheduleLoop() {
@@ -797,6 +818,7 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 			ScheduleID:   schedule.ID,
 			ScheduleKind: schedule.Kind,
 			Prompt:       schedule.Prompt,
+			DisplayText:  strings.TrimSpace(schedule.DisplayText),
 		}
 		schedule.LastError = ""
 		schedule.UpdatedAt = nowStr
@@ -834,9 +856,10 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		return err
 	}
 	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{
-		UserSource:   "schedule",
-		ScheduleID:   run.ScheduleID,
-		ScheduleKind: run.ScheduleKind,
+		UserSource:      "schedule",
+		UserDisplayText: run.DisplayText,
+		ScheduleID:      run.ScheduleID,
+		ScheduleKind:    run.ScheduleKind,
 	})
 	if err != nil {
 		_ = p.recordSessionScheduleFailure(run, now, err)

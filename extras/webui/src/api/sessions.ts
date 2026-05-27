@@ -240,6 +240,7 @@ export interface SessionSchedule {
   id: string;
   kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";
   prompt: string;
+  display_text?: string;
   enabled: boolean;
   next_run_at: string;
   repeat_interval_seconds?: number;
@@ -273,6 +274,7 @@ export interface SessionSchedulesResponse {
 export interface SessionScheduleCreateRequest {
   kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";
   prompt: string;
+  display_text?: string;
   next_run_at: string;
   repeat_interval_seconds?: number;
   enabled?: boolean;

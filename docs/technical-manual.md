@@ -584,6 +584,10 @@ Session endpoints:
 - `GET /v1/sessions/{id}/loop-protocol`
 - `POST /v1/sessions/{id}/loop-protocol`
 - `DELETE /v1/sessions/{id}/loop-protocol`
+- `GET /v1/sessions/{id}/schedules`
+- `POST /v1/sessions/{id}/schedules`
+- `PATCH /v1/sessions/{id}/schedules/{schedule_id}`
+- `DELETE /v1/sessions/{id}/schedules/{schedule_id}`
 - `GET /v1/sessions/{id}/tools`
 - `GET /v1/sessions/{id}/transcripts`
 - `GET /v1/sessions/{id}/transcripts/{path}`
@@ -774,6 +778,11 @@ Affent stores durable state as inspectable files:
   protocol feeds, memory updates, loop decisions, turn checkpoints, compaction
   marks, updates, and deletes. `GET /v1/sessions/{id}/loop-protocol` returns
   recent events alongside the protocol for operator visibility.
+- `schedules.json`: per-session scheduled prompts. Each schedule stores the
+  model-facing `prompt` and optional human-facing `display_text`; WebUI lists,
+  session summaries, and scheduled `user.message` events prefer `display_text`
+  so long internal loop/timer control prompts do not become the visible task
+  title.
 - Runtime skill files: installed skill bodies and manifests.
 - Memory files: topic-bucketed workspace or user memory.
 - Transcript files: child-task and subagent conversations.
