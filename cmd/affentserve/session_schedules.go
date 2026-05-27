@@ -80,6 +80,10 @@ type sessionScheduleCreateRequest struct {
 	Enabled               *bool  `json:"enabled,omitempty"`
 }
 
+type sessionScheduleUpdateRequest struct {
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
 type sessionScheduleDeleteResponse struct {
 	SessionID  string                   `json:"session_id"`
 	ScheduleID string                   `json:"schedule_id"`
@@ -111,6 +115,69 @@ func handleSessionSchedules(pool *SessionPool, sessionID string, w http.Response
 	default:
 		writeJSONErrorTyped(w, http.StatusNotFound, "not found", nil, "not_found")
 	}
+}
+
+func handleSessionScheduleUpdate(pool *SessionPool, sessionID, scheduleID string, w http.ResponseWriter, r *http.Request) {
+	if pool == nil {
+		writeJSONError(w, http.StatusNotFound, "session not found", nil)
+		return
+	}
+	if err := agent.ValidateSessionID(sessionID); err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
+		return
+	}
+	if err := validateSessionScheduleID(scheduleID); err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid schedule id", err, "bad_request")
+		return
+	}
+	req, err := decodeSessionScheduleUpdateRequest(w, r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid schedule update request", err, "bad_request")
+		return
+	}
+	if req.Enabled == nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "schedule update requires enabled", nil, "bad_request")
+		return
+	}
+	pool.schedulesMu.Lock()
+	defer pool.schedulesMu.Unlock()
+	path := sessionSchedulesPath(pool, sessionID)
+	file, found, err := readSessionSchedulesFile(path)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read session schedules", err)
+		return
+	}
+	if !found {
+		writeJSONErrorTyped(w, http.StatusNotFound, "session schedules not found", nil, "not_found")
+		return
+	}
+	updated := false
+	now := time.Now().UTC().Format(time.RFC3339)
+	for i := range file.Schedules {
+		if file.Schedules[i].ID != scheduleID {
+			continue
+		}
+		file.Schedules[i].Enabled = *req.Enabled
+		file.Schedules[i].UpdatedAt = now
+		file.Schedules[i].LastError = ""
+		updated = true
+		break
+	}
+	if !updated {
+		writeJSONErrorTyped(w, http.StatusNotFound, "session schedule not found", nil, "not_found")
+		return
+	}
+	if err := writeSessionSchedulesFile(path, file); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "write session schedules", err)
+		return
+	}
+	schedules := sortedSessionSchedules(file.Schedules)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sessionSchedulesResponse{
+		SessionID: sessionID,
+		Schedules: schedules,
+		Summary:   summarizeSessionSchedules(schedules),
+	})
 }
 
 func handleSessionScheduleDelete(pool *SessionPool, sessionID, scheduleID string, w http.ResponseWriter, _ *http.Request) {
@@ -279,6 +346,24 @@ func decodeSessionScheduleCreateRequest(w http.ResponseWriter, r *http.Request) 
 	}
 	defer r.Body.Close()
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSessionSchedulePrompt+4096))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		return req, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return req, errors.New("request body must contain a single JSON object")
+	}
+	return req, nil
+}
+
+func decodeSessionScheduleUpdateRequest(w http.ResponseWriter, r *http.Request) (sessionScheduleUpdateRequest, error) {
+	var req sessionScheduleUpdateRequest
+	if r.Body == nil || r.Body == http.NoBody {
+		return req, errors.New("request body is required")
+	}
+	defer r.Body.Close()
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
 		return req, err

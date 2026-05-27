@@ -771,6 +771,32 @@ describe("App", () => {
           },
         });
       }
+      if (url === "/v1/sessions/timer-control/schedules/sched_1" && init?.method === "PATCH") {
+        const body = JSON.parse(String(init.body)) as { enabled: boolean };
+        return jsonResponse({
+          session_id: "timer-control",
+          schedules: [
+            {
+              id: "sched_1",
+              kind: "checkin",
+              prompt: "Scheduled check-in for session: long running subnet analysis",
+              enabled: body.enabled,
+              next_run_at: "2026-05-27T14:30:00Z",
+              created_at: "2026-05-27T13:30:00Z",
+              updated_at: "2026-05-27T13:40:00Z",
+            },
+          ],
+          summary: body.enabled
+            ? {
+                count: 1,
+                enabled: 1,
+                next_run_at: "2026-05-27T14:30:00Z",
+                next_schedule_id: "sched_1",
+                next_prompt_preview: "Scheduled check-in for session: long running subnet analysis",
+              }
+            : { count: 1, enabled: 0 },
+        });
+      }
       if (url === "/v1/sessions/timer-control/schedules/sched_1" && init?.method === "DELETE") {
         return jsonResponse({
           session_id: "timer-control",
@@ -802,7 +828,20 @@ describe("App", () => {
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Scheduled check-in for session: long running subnet analysis");
     expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
 
-    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Delete timer" }));
+    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Pause" }));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "PATCH" })));
+    const pauseCall = fetchImpl.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
+    expect((pauseCall?.[1] as RequestInit).body).toBe(JSON.stringify({ enabled: false }));
+    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 paused");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Paused");
+
+    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Resume" }));
+    await waitFor(() => expect(fetchImpl.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toHaveLength(2));
+    const resumeCall = fetchImpl.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")[1];
+    expect((resumeCall[1] as RequestInit).body).toBe(JSON.stringify({ enabled: true }));
+    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
+
+    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "DELETE" })));
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("None");
     expect(screen.queryByTestId("session-schedule-list")).toBeNull();

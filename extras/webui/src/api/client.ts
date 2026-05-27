@@ -7,13 +7,13 @@ export interface ApiClientOptions {
 }
 
 export interface JsonRequestOptions {
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   signal?: AbortSignal;
 }
 
 export interface RawRequestOptions {
-  method?: "GET" | "POST" | "DELETE";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   signal?: AbortSignal;
   accept?: string;
 }

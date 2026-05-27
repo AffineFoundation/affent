@@ -1115,6 +1115,13 @@ body {
   font-size: 11px;
 }
 
+.session-schedule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .danger-action {
   color: var(--c-error);
 }

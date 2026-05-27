@@ -155,6 +155,7 @@ func TestNewRouter_RegistersExpectedRoutes(t *testing.T) {
 		{http.MethodDelete, "/v1/sessions/abc/loop-protocol"},
 		{http.MethodGet, "/v1/sessions/abc/schedules"},
 		{http.MethodPost, "/v1/sessions/abc/schedules"},
+		{http.MethodPatch, "/v1/sessions/abc/schedules/sched_abc"},
 		{http.MethodDelete, "/v1/sessions/abc/schedules/sched_abc"},
 		{http.MethodGet, "/v1/sessions/abc/tools"},
 		{http.MethodGet, "/v1/sessions/abc/transcripts"},

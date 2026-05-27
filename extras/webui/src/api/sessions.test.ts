@@ -13,6 +13,7 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
+  updateSessionSchedule,
 } from "./sessions";
 
 describe("session API helpers", () => {
@@ -53,6 +54,7 @@ describe("session API helpers", () => {
     await updateSessionLoopProtocol(client, "s/1", { protocol: "# Loop" });
     await updateSessionLoopProtocol(client, "s/1", { activate: true, goal: "long run" });
     await deleteSessionLoopProtocol(client, "s/1");
+    await updateSessionSchedule(client, "s/1", "sched/1", { enabled: false });
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
@@ -68,6 +70,9 @@ describe("session API helpers", () => {
     expect((fetchImpl.mock.calls[5][1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long run" }));
     expect(fetchImpl.mock.calls[6][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
     expect((fetchImpl.mock.calls[6][1] as RequestInit).method).toBe("DELETE");
+    expect(fetchImpl.mock.calls[7][0]).toBe("/v1/sessions/s%2F1/schedules/sched%2F1");
+    expect((fetchImpl.mock.calls[7][1] as RequestInit).method).toBe("PATCH");
+    expect((fetchImpl.mock.calls[7][1] as RequestInit).body).toBe(JSON.stringify({ enabled: false }));
   });
 
   it("streams native affent session events", async () => {

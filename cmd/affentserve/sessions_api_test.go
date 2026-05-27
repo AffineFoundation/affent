@@ -763,6 +763,37 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 		t.Fatalf("listed = %+v, want created schedule", listed)
 	}
 
+	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":false}`))
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("pause status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "scheduled") != nil {
+		t.Fatal("PATCH schedule must not reopen an inactive durable session")
+	}
+	var paused sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &paused); err != nil {
+		t.Fatalf("decode pause: %v", err)
+	}
+	if len(paused.Schedules) != 1 || paused.Schedules[0].Enabled || paused.Summary == nil || paused.Summary.Enabled != 0 {
+		t.Fatalf("paused = %+v, want disabled schedule", paused)
+	}
+
+	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":true}`))
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("resume status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resumed sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resumed); err != nil {
+		t.Fatalf("decode resume: %v", err)
+	}
+	if len(resumed.Schedules) != 1 || !resumed.Schedules[0].Enabled || resumed.Summary == nil || resumed.Summary.Enabled != 1 {
+		t.Fatalf("resumed = %+v, want enabled schedule", resumed)
+	}
+
 	r = httptest.NewRequest(http.MethodDelete, "/v1/sessions/scheduled/schedules/"+schedule.ID, nil)
 	w = httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
@@ -796,6 +827,43 @@ func TestHandleSessionSchedules_ValidatesRequest(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			r := httptest.NewRequest(http.MethodPost, "/v1/sessions/bad-schedule/schedules", strings.NewReader(tc.body))
+			w := httptest.NewRecorder()
+			handleSessionRoutes(pool).ServeHTTP(w, r)
+			if got := w.Result().StatusCode; got != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleSessionScheduleUpdate_ValidatesRequest(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "bad-schedule-update")
+	now := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := writeSessionSchedulesFile(sessionSchedulesPath(pool, "bad-schedule-update"), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{{
+			ID:        "sched_update",
+			Prompt:    "work",
+			Enabled:   true,
+			NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
+			CreatedAt: now.Format(time.RFC3339),
+			UpdatedAt: now.Format(time.RFC3339),
+		}},
+	}); err != nil {
+		t.Fatalf("write schedules: %v", err)
+	}
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "missing enabled", body: `{}`},
+		{name: "unknown field", body: `{"enabled":false,"next_run_at":"2026-05-27T13:30:00Z"}`},
+		{name: "multiple", body: `{"enabled":false} {"enabled":true}`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPatch, "/v1/sessions/bad-schedule-update/schedules/sched_update", strings.NewReader(tc.body))
 			w := httptest.NewRecorder()
 			handleSessionRoutes(pool).ServeHTTP(w, r)
 			if got := w.Result().StatusCode; got != http.StatusBadRequest {

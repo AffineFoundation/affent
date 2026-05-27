@@ -122,6 +122,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionLoopProtocolDelete(pool, sessionID, w, r)
 		case sub == "schedules" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 			handleSessionSchedules(pool, sessionID, w, r)
+		case strings.HasPrefix(sub, "schedules/") && r.Method == http.MethodPatch:
+			handleSessionScheduleUpdate(pool, sessionID, strings.TrimPrefix(sub, "schedules/"), w, r)
 		case strings.HasPrefix(sub, "schedules/") && r.Method == http.MethodDelete:
 			handleSessionScheduleDelete(pool, sessionID, strings.TrimPrefix(sub, "schedules/"), w, r)
 		case sub == "tools" && r.Method == http.MethodGet:

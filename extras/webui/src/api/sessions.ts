@@ -269,6 +269,10 @@ export interface SessionScheduleCreateRequest {
   enabled?: boolean;
 }
 
+export interface SessionScheduleUpdateRequest {
+  enabled?: boolean;
+}
+
 export interface SessionScheduleDeleteResponse {
   session_id: string;
   schedule_id: string;
@@ -548,6 +552,19 @@ export function createSessionSchedule(
     body,
     signal,
   });
+}
+
+export function updateSessionSchedule(
+  client: ApiClient,
+  sessionId: string,
+  scheduleId: string,
+  body: SessionScheduleUpdateRequest,
+  signal?: AbortSignal,
+): Promise<SessionSchedulesResponse> {
+  return client.json<SessionSchedulesResponse>(
+    `/v1/sessions/${encodeURIComponent(sessionId)}/schedules/${encodeURIComponent(scheduleId)}`,
+    { method: "PATCH", body, signal },
+  );
 }
 
 export function deleteSessionSchedule(

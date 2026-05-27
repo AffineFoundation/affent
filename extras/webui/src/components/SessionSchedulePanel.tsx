@@ -7,7 +7,9 @@ export function SessionSchedulePanel({
   loading = false,
   error,
   deletingId,
+  updatingId,
   onLoadSchedules,
+  onUpdateSchedule,
   onDeleteSchedule,
   onScheduleLoopTick,
   onScheduleCheckIn,
@@ -19,7 +21,9 @@ export function SessionSchedulePanel({
   loading?: boolean;
   error?: string;
   deletingId?: string;
+  updatingId?: string;
   onLoadSchedules?: () => Promise<void> | void;
+  onUpdateSchedule?: (scheduleId: string, enabled: boolean) => Promise<void> | void;
   onDeleteSchedule?: (scheduleId: string) => Promise<void> | void;
   onScheduleLoopTick?: () => Promise<void> | void;
   onScheduleCheckIn?: () => Promise<void> | void;
@@ -60,16 +64,28 @@ export function SessionSchedulePanel({
                   <p>{schedule.prompt}</p>
                   <small>{scheduleMeta(schedule)}</small>
                 </div>
-                {onDeleteSchedule ? (
-                  <button
-                    type="button"
-                    className="ghost-action danger-action"
-                    disabled={!!deletingId}
-                    onClick={() => void onDeleteSchedule(schedule.id)}
-                  >
-                    {deletingId === schedule.id ? "Deleting" : "Delete timer"}
-                  </button>
-                ) : null}
+                <div className="session-schedule-actions">
+                  {onUpdateSchedule ? (
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      disabled={!!deletingId || !!updatingId}
+                      onClick={() => void onUpdateSchedule(schedule.id, !schedule.enabled)}
+                    >
+                      {updatingId === schedule.id ? "Updating" : schedule.enabled ? "Pause" : "Resume"}
+                    </button>
+                  ) : null}
+                  {onDeleteSchedule ? (
+                    <button
+                      type="button"
+                      className="ghost-action danger-action"
+                      disabled={!!deletingId || !!updatingId}
+                      onClick={() => void onDeleteSchedule(schedule.id)}
+                    >
+                      {deletingId === schedule.id ? "Deleting" : "Delete"}
+                    </button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ol>

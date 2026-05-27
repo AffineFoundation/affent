@@ -21,6 +21,7 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
+  updateSessionSchedule,
   type SessionSchedule,
   type SessionScheduleDeleteResponse,
   type SessionSchedulesResponse,
@@ -144,6 +145,7 @@ export function App() {
   const [loopProtocolState, setLoopProtocolState] = useState<LoopProtocolState>({ state: "idle" });
   const [scheduleState, setScheduleState] = useState<ScheduleState>({ state: "idle" });
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | undefined>();
+  const [updatingScheduleId, setUpdatingScheduleId] = useState<string | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -651,6 +653,10 @@ export function App() {
     setActionBusy(false);
     setCancelBusy(false);
     setLoopProtocolBusy(false);
+    setScheduleBusy(undefined);
+    setScheduleState({ state: "idle" });
+    setDeletingScheduleId(undefined);
+    setUpdatingScheduleId(undefined);
     setStatus({ state: "loading", label: "Loading chat", detail: loadingSessionDetail(nextSessionId) });
     setLoopProtocolState({ state: "idle" });
   }
@@ -671,6 +677,7 @@ export function App() {
     setScheduleBusy(undefined);
     setScheduleState({ state: "idle" });
     setDeletingScheduleId(undefined);
+    setUpdatingScheduleId(undefined);
     setComposerDraft(undefined);
     setComposerFocusSignal((current) => current + 1);
     setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
@@ -699,6 +706,7 @@ export function App() {
         setScheduleBusy(undefined);
         setScheduleState({ state: "idle" });
         setDeletingScheduleId(undefined);
+        setUpdatingScheduleId(undefined);
         setLoopProtocolState({ state: "idle" });
       }
       setStatus({ state: "connected", label: "Ready", detail: "Chat deleted" });
@@ -888,8 +896,24 @@ export function App() {
     }
   }
 
+  async function handleUpdateSchedule(scheduleId: string, enabled: boolean): Promise<void> {
+    if (!selectedSessionId || deletingScheduleId || updatingScheduleId) return;
+    const sessionId = selectedSessionId;
+    setUpdatingScheduleId(scheduleId);
+    try {
+      const resp = await updateSessionSchedule(client, sessionId, scheduleId, { enabled });
+      markSessionSchedules(sessionId, resp);
+      setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
+      setStatus({ state: "connected", label: "Ready", detail: enabled ? "Timer resumed" : "Timer paused" });
+    } catch (err) {
+      setStatus({ state: "error", label: enabled ? "Resume timer failed" : "Pause timer failed", detail: formatError(err) });
+    } finally {
+      setUpdatingScheduleId(undefined);
+    }
+  }
+
   async function handleDeleteSchedule(scheduleId: string): Promise<void> {
-    if (!selectedSessionId || deletingScheduleId) return;
+    if (!selectedSessionId || deletingScheduleId || updatingScheduleId) return;
     const sessionId = selectedSessionId;
     setDeletingScheduleId(scheduleId);
     try {
@@ -1259,7 +1283,9 @@ export function App() {
                     loading={selectedScheduleState.state === "loading"}
                     error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
                     deletingId={deletingScheduleId}
+                    updatingId={updatingScheduleId}
                     onLoadSchedules={handleLoadSchedules}
+                    onUpdateSchedule={handleUpdateSchedule}
                     onDeleteSchedule={handleDeleteSchedule}
                     onScheduleLoopTick={() => handleCreateSchedule("loop")}
                     onScheduleCheckIn={() => handleCreateSchedule("checkin")}
