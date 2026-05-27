@@ -921,11 +921,25 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(pr.RequiredTools, "edit_file") {
 		t.Fatalf("code PR scenario RequiredTools = %#v, want edit_file", pr.RequiredTools)
 	}
+	if !stringSliceContains(pr.RequiredTools, "read_file") {
+		t.Fatalf("code PR scenario RequiredTools = %#v, want read_file", pr.RequiredTools)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "read_file", Arg: "path", Substring: "queue/queue.go"},
+		{Tool: "edit_file", Arg: "path", Substring: "queue/queue.go"},
+	} {
+		if !toolArgRequirementContains(pr.RequiredToolArgContains, want) {
+			t.Fatalf("code PR scenario RequiredToolArgContains = %#v, want %#v", pr.RequiredToolArgContains, want)
+		}
+	}
+	if !toolOrderContains(pr.RequiredToolOrder, ToolOrderRequirement{Earlier: "read_file", Later: "edit_file"}) {
+		t.Fatalf("code PR scenario RequiredToolOrder = %#v, want read_file before edit_file", pr.RequiredToolOrder)
+	}
 	if pr.RequiredCommandCounts[`go test`] != 2 {
 		t.Fatalf("code PR scenario RequiredCommandCounts = %#v, want go test=2", pr.RequiredCommandCounts)
 	}
-	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") {
-		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary and Tests", pr.RequiredFinalText)
+	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") || !stringSliceContains(pr.RequiredFinalText, "queue/queue.go") {
+		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary, Tests, and changed file", pr.RequiredFinalText)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]
@@ -1250,6 +1264,15 @@ func assertSessionSearchDiagnosticsRequiredForTerms(t *testing.T, scenario Batch
 }
 
 func commandToolOrderContains(values []CommandToolOrderRequirement, want CommandToolOrderRequirement) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func toolOrderContains(values []ToolOrderRequirement, want ToolOrderRequirement) bool {
 	for _, value := range values {
 		if value == want {
 			return true

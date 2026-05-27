@@ -1681,14 +1681,21 @@ func TestItemsReturnsCopy(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
-		RequiredTools: []string{"edit_file"},
+		RequiredTools: []string{"read_file", "edit_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "queue/queue.go"},
+			{Tool: "edit_file", Arg: "path", Substring: "queue/queue.go"},
+		},
 		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
 		},
-		RequiredFinalText: []string{"PR Summary", "Tests", "go test ./..."},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "edit_file"},
+		},
+		RequiredFinalText: []string{"PR Summary", "Tests", "go test ./...", "queue/queue.go"},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"queue/queue_test.go"},
 		MaxTurns:          12,

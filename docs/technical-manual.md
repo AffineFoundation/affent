@@ -761,7 +761,8 @@ Current built-in suites:
   PR-style reporting, focused-task recovery, and multi-session task recovery.
   The stock and subnet scenarios require reading the explicit evidence files,
   so a run cannot pass by answering only from prompt wording or stale archive
-  files.
+  files. The PR-style coding scenario requires reading the implementation file
+  before editing it and naming the changed file in the final PR summary.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
