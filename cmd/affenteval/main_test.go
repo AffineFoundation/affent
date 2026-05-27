@@ -316,6 +316,29 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 			},
 		},
 		{
+			name:   "runtime browser satisfies rendered page tools",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeBrowser: true},
+			scenario: agenteval.BatchScenario{
+				Name:          "taostats-scroll",
+				RequiredTools: []string{"browser_navigate", "browser_scroll", "browser_network_read"},
+				RequiredToolOrder: []agenteval.ToolOrderRequirement{
+					{Earlier: "browser_scroll", Later: "browser_network_read"},
+				},
+			},
+		},
+		{
+			name:   "browser-only live scenario is rejected without browser surface",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "web"},
+			scenario: agenteval.BatchScenario{
+				Name:          "taostats-scroll",
+				RequiredTools: []string{"browser_navigate", "browser_scroll", "browser_network_read"},
+				RequiredToolOrder: []agenteval.ToolOrderRequirement{
+					{Earlier: "browser_scroll", Later: "browser_network_read"},
+				},
+			},
+			wantErr: "taostats-scroll missing browser_navigate, browser_network_read, browser_scroll",
+		},
+		{
 			name:   "scenario memory flag satisfies memory",
 			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true},
 			scenario: agenteval.BatchScenario{
