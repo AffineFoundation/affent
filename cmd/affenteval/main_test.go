@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/agenteval"
 	"github.com/affinefoundation/affent/internal/sse"
 )
@@ -410,6 +411,27 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 				t.Fatalf("validateRuntimeToolSurface err=%v, want %q", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+func TestExpectationRequiredToolNamesIncludesImplicitTools(t *testing.T) {
+	got := expectationRequiredToolNames(agenteval.DebugScenarioExpectations{
+		RequiredCommands: []string{"go test ./..."},
+		RequiredCommandAfterTool: []agenteval.DebugCommandToolOrderRequirement{{
+			Command: "go test ./...",
+			Tool:    "edit_file",
+		}},
+		RequiredSessionSearch: []agenteval.DebugSessionSearchRequirement{{
+			SessionID: "market-alpha",
+		}},
+		RequiredFocusedTaskCounts: map[string]int{"explore": 1},
+		RequiredSubagentModeCounts: map[string]int{
+			"review": 1,
+		},
+	})
+	want := []string{"edit_file", agent.FocusedTaskToolName, agent.SessionSearchToolName, "shell", agent.SubagentToolName}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("expectationRequiredToolNames = %#v, want %#v", got, want)
 	}
 }
 

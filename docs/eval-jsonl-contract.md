@@ -416,7 +416,8 @@ Summary records aggregate all scenario records from the same process:
 - Expectation coverage totals:
   `expectation_scenarios` counts scenarios that carried declarative
   expectations; `expectation_suites` counts suite markers; `expectation_required_tools`
-  counts tools mentioned by scenario requirements; `expectation_source_access`
+  counts tools mentioned or implied by scenario requirements, including shell
+  command, session-search, and delegation requirements; `expectation_source_access`
   counts declared source-access statuses such as `network` or `verified`; and
   `expectation_capabilities` counts broad required capability families such as
   `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,

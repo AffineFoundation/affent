@@ -433,6 +433,18 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 	for _, req := range exp.RequiredCommandAfterTool {
 		add(req.Tool)
 	}
+	if len(exp.RequiredCommands) > 0 ||
+		len(exp.RequiredCommandCounts) > 0 ||
+		len(exp.RequiredCommandBeforeTool) > 0 ||
+		len(exp.RequiredCommandAfterTool) > 0 {
+		add("shell")
+	}
+	if len(exp.RequiredFocusedTaskCounts) > 0 {
+		add(agent.FocusedTaskToolName)
+	}
+	if len(exp.RequiredSubagentModeCounts) > 0 {
+		add(agent.SubagentToolName)
+	}
 	for _, tool := range exp.RequiredTruncatedResults {
 		add(tool)
 	}
