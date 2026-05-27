@@ -174,6 +174,32 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("labels research checkpoint loop decisions in event trace metadata", () => {
+    const model = buildEventTraceModel(normalizeEvents([
+      {
+        id: 1,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "research_checkpoint",
+          decision: "trigger",
+          confidence: "medium",
+          reason: "High-impact loop design review needs external calibration.",
+          visible_in_ui: true,
+        },
+      },
+    ]));
+
+    expect(model.items[0]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop decision",
+        meta: ["Request 1", "research checkpoint", "trigger", "High-impact loop design review needs external calibration."],
+        badges: ["medium", "visible"],
+      },
+    });
+  });
+
   it("summarizes session search match diagnostics", () => {
     const model = buildEventTraceModel(normalizeEvents([
       {

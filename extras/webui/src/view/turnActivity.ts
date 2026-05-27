@@ -150,7 +150,7 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     items.push({
       id: `${turn.id}:decision:${decision.eventId}`,
       kind: "attention",
-      label: "Decision",
+      label: loopDecisionLabel(decision),
       title: loopDecisionTitle(decision),
       detail: loopDecisionDetail(decision),
       meta: decision.confidence,
@@ -246,11 +246,11 @@ function buildBrief(
   if (decision) {
     rows.push({
       id: `decision:${decision.eventId}`,
-      label: "Decision",
+      label: loopDecisionLabel(decision),
       value: loopDecisionBrief(decision),
       tone: loopDecisionTone(decision),
       action: decision.required_action
-        ? { label: "Use action", draft: `Continue: ${decision.required_action}`, source: "tool_guidance" }
+        ? { label: loopDecisionActionLabel(decision), draft: `Continue: ${decision.required_action}`, source: "tool_guidance" }
         : undefined,
     });
   }
@@ -636,8 +636,13 @@ function latestVisibleLoopDecision(turn: TurnState) {
   return visibleLoopDecisions(turn).at(-1);
 }
 
+function loopDecisionLabel(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
+  if (decision.kind === "research_checkpoint") return "Research";
+  return "Decision";
+}
+
 function loopDecisionTitle(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
-  const kind = decision.kind ? decision.kind.replace(/_/g, " ") : "runtime";
+  const kind = loopDecisionDisplayName(decision);
   return `${capitalize(kind)}: ${decision.decision || "decision"}`;
 }
 
@@ -648,15 +653,25 @@ function loopDecisionDetail(decision: NonNullable<ReturnType<typeof latestVisibl
 
 function loopDecisionBrief(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
   const parts = [
-    decision.decision,
+    decision.kind === "research_checkpoint" ? "checkpoint triggered" : decision.decision,
     decision.reason,
     decision.required_action ? `Next: ${decision.required_action}` : undefined,
   ].filter(Boolean);
   return summarize(parts.join(" · "), 150);
 }
 
+function loopDecisionDisplayName(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
+  if (decision.kind === "research_checkpoint") return "research checkpoint";
+  return decision.kind ? decision.kind.replace(/_/g, " ") : "runtime";
+}
+
+function loopDecisionActionLabel(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
+  if (decision.kind === "research_checkpoint") return "Research next";
+  return "Use action";
+}
+
 function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): TurnActivityTone {
-  if (decision.decision === "defer" || decision.required_action) return "warning";
+  if (decision.kind === "research_checkpoint" || decision.decision === "defer" || decision.required_action) return "warning";
   return "muted";
 }
 

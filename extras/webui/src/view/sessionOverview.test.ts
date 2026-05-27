@@ -260,6 +260,33 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("labels research checkpoint decisions in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "research_checkpoint",
+          trigger: "external_calibration_requested",
+          decision: "trigger",
+          visible_in_ui: true,
+        },
+      },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Loop", value: "1 research checkpoint trigger", tone: undefined },
+    ]));
+  });
+
   it("surfaces context compactions in the session overview", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

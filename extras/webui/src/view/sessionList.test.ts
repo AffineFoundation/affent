@@ -215,6 +215,27 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("loop disabled");
   });
 
+  it("labels research checkpoint decisions in loop row stats", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "research-loop",
+        durable: true,
+        has_loop_state: true,
+        loop_state: {
+          version: 1,
+          status: "running",
+          loop_decisions: 1,
+          last_decision_kind: "research_checkpoint",
+          last_decision: "trigger",
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Loop running, research checkpoint research_checkpoint:trigger");
+    expect(rows[0].chips).toContain("loop");
+    expect(rows[0].searchText).toContain("research checkpoint");
+  });
+
   it("surfaces high context pressure in row stats and search", () => {
     const rows = buildSessionRows([
       session({

@@ -256,9 +256,14 @@ function buildLoopMetric(session: SessionState): SessionOverviewMetric | undefin
   if (loopFeeds.length > 0) parts.push(loopProtocolFeedMetric(loopFeeds));
   if (visibleDecisions.length > 0) {
     const latest = visibleDecisions.at(-1);
-    parts.push(`${visibleDecisions.length} decision${visibleDecisions.length === 1 ? "" : "s"}${latest?.decision ? ` ${latest.decision}` : ""}`);
+    parts.push(`${visibleDecisions.length} ${loopDecisionMetricName(latest)}${visibleDecisions.length === 1 ? "" : "s"}${latest?.decision ? ` ${latest.decision}` : ""}`);
   }
   return { label: "Loop", value: parts.join(" · "), tone: stats.maxTurns > 0 || stats.interventions > 0 ? "warning" : undefined };
+}
+
+function loopDecisionMetricName(decision: SessionState["loopDecisions"][number] | undefined): string {
+  if (decision?.kind === "research_checkpoint") return "research checkpoint";
+  return "decision";
 }
 
 function loopProtocolFeedMetric(feeds: SessionState["loopProtocolFeeds"]): string {

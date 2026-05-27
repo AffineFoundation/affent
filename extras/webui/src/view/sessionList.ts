@@ -659,7 +659,8 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
     parts.push(lastMemoryAction && lastMemoryLocation ? `memory ${lastMemoryAction} ${lastMemoryLocation}` : `${memoryUpdates} memory ${memoryUpdates === 1 ? "update" : "updates"}`);
   }
   if (decisions && decisions > 0) {
-    parts.push(lastDecisionKind && lastDecision ? `decision ${lastDecisionKind}:${lastDecision}` : `${decisions} ${decisions === 1 ? "decision" : "decisions"}`);
+    const decisionName = lastDecisionKind === "research_checkpoint" ? "research checkpoint" : "decision";
+    parts.push(lastDecisionKind && lastDecision ? `${decisionName} ${lastDecisionKind}:${lastDecision}` : `${decisions} ${decisions === 1 ? decisionName : `${decisionName}s`}`);
   }
   if (turnReason) parts.push(`last turn ${turnReason}`);
   if (eventSummary) parts.push(eventSummary);

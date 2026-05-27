@@ -335,10 +335,15 @@ function contextCompactedBadges(event: NormalizedEvent): string[] {
 function loopDecisionMeta(event: NormalizedEvent, turn: string | undefined): string[] {
   return compact([
     turn,
-    readString(event.data, "kind"),
+    loopDecisionKindLabel(readString(event.data, "kind")),
     readString(event.data, "decision"),
     streamSummary(readString(event.data, "reason") ?? readString(event.data, "required_action") ?? ""),
   ]);
+}
+
+function loopDecisionKindLabel(kind: string | undefined): string | undefined {
+  if (kind === "research_checkpoint") return "research checkpoint";
+  return kind;
 }
 
 function loopProtocolFeedMeta(event: NormalizedEvent, turn: string | undefined): string[] {

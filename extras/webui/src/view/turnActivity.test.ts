@@ -134,6 +134,48 @@ describe("buildTurnActivity", () => {
     ]);
   });
 
+  it("labels research checkpoint loop decisions as research work", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "review Affent loop against mainstream agents" } },
+      {
+        id: 3,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "research_checkpoint",
+          trigger: "external_calibration_requested",
+          decision: "trigger",
+          confidence: "medium",
+          reason: "High-impact loop design review needs external calibration.",
+          required_action: "Compare current assumptions against mainstream implementations.",
+          visible_in_ui: true,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Research",
+      summary: "Research checkpoint: trigger: High-impact loop design review needs external calibration. Next: Compare current assumptions against mainstream implementations.",
+      meta: ["1 decision"],
+      tone: "warning",
+    });
+    expect(activity?.brief.rows).toContainEqual({
+      id: "decision:3",
+      label: "Research",
+      value: "checkpoint triggered · High-impact loop design review needs external calibration. · Next: Compare current assumptions against mainstream implementati...",
+      tone: "warning",
+      action: {
+        label: "Research next",
+        draft: "Continue: Compare current assumptions against mainstream implementations.",
+        source: "tool_guidance",
+      },
+    });
+  });
+
   it("keeps loop protocol feeds from replacing completed work summaries", () => {
     const turn = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
