@@ -693,7 +693,7 @@ describe("Timeline", () => {
     expect(within(card).getByText("(8 KiB, 1 MiB omitted)")).toBeInTheDocument();
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 truncated");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 file");
-    expect(screen.getAllByTestId("action-inspector-summary")[0]).toHaveTextContent("+2 more");
+    expect(screen.getAllByTestId("action-inspector-summary")[0]).toHaveTextContent("+3 more");
   });
 
   it("copies fallback results and turns them into follow-up drafts", async () => {
@@ -925,7 +925,7 @@ describe("Timeline", () => {
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText(/WebUI must render trace details/).length).toBeGreaterThan(0);
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText("Delegated worker").length).toBeGreaterThan(0);
     expect(within(screen.getAllByTestId("tool-details")[0]).queryByText("subagent_run")).toBeNull();
-    expect(screen.getAllByTestId("tool-details")[0]).toHaveTextContent("+2 more");
+    expect(screen.getAllByTestId("tool-details")[0]).toHaveTextContent("+3 more");
     expect(screen.getByText("MCP action")).toBeInTheDocument();
     expect(screen.getAllByText("External MCP service").length).toBeGreaterThan(0);
     expect(screen.getAllByText("subagent_01").length).toBeGreaterThan(0);
