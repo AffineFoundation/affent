@@ -47,10 +47,10 @@ describe("buildWorkbenchAttention", () => {
       overview: overview({ metrics: [{ label: "Recovery", value: "rerun tests", tone: "warning" }] }),
       files: files(),
       changes: changes({ changed: 2 }),
-      run: run({ failed: 1, failedDetail: "checkout spec failed", failedNext: "update payment route then rerun" }),
+      run: run({ failed: 2, failedDetail: "checkout spec failed", failedNext: "update payment route then rerun" }),
     })).toEqual({
-      label: "1 failed command · View run",
-      detail: "npm test 0 · checkout spec failed · Next: update payment route then rerun",
+      label: "2 failed commands · View run",
+      detail: "npm test 0 · checkout spec failed · Next: update payment route then rerun · +1 more",
       tone: "error",
       target: "run",
     });
@@ -94,7 +94,7 @@ describe("buildWorkbenchAttention", () => {
       run: run(),
     })).toEqual({
       label: "3 changed files · Review diff",
-      detail: "src/changed-0.ts · Updated payment route",
+      detail: "src/changed-0.ts · Updated payment route · +2 more",
       tone: "attention",
       target: "changes",
     });
@@ -105,6 +105,20 @@ describe("buildWorkbenchAttention", () => {
       changes: changes(),
       run: run(),
     })).toBeUndefined();
+  });
+
+  it("keeps failed file evidence concrete while preserving the remaining count", () => {
+    expect(buildWorkbenchAttention({
+      overview: overview(),
+      files: files({ failed: 2, failedDetail: "Missing config import", next: "restore config path" }),
+      changes: changes(),
+      run: run(),
+    })).toEqual({
+      label: "2 file issues · Review files",
+      detail: "src/missing-0.ts · Missing config import · Next: restore config path · +1 more",
+      tone: "error",
+      target: "files",
+    });
   });
 
   it("opens automation for pending loop or timer work without badging normal running automation", () => {

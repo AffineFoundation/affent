@@ -87,24 +87,27 @@ function withAction(fact: string, action: string): string {
 }
 
 function commandAttentionDetail(commands: SessionRunView["commands"], status: SessionRunView["commands"][number]["status"]): string {
-  const command = commands.find((item) => item.status === status);
+  const matches = commands.filter((item) => item.status === status);
+  const command = matches[0];
   if (!command) return status === "running" ? "Command is still running." : "Open command output and recovery actions.";
   const parts = [command.command, command.detail, command.next ? `Next: ${command.next}` : undefined].filter((item): item is string => !!item?.trim());
-  return summarize(parts.join(" · "), 120);
+  return summarizeWithRemainder(parts.join(" · "), matches.length, 120);
 }
 
 function changedFileAttentionDetail(files: SessionChangesView["files"], status: SessionChangesView["files"][number]["status"]): string {
-  const file = files.find((item) => item.status === status);
+  const matches = files.filter((item) => item.status === status);
+  const file = matches[0];
   if (!file) return status === "running" ? "Pending change evidence." : status === "failed" ? "Failed change evidence." : "Changed file evidence.";
   const parts = [file.path, file.detail].filter((item): item is string => !!item?.trim());
-  return summarize(parts.join(" · "), 120);
+  return summarizeWithRemainder(parts.join(" · "), matches.length, 120);
 }
 
 function fileAttentionDetail(files: SessionFilesView["items"], status: SessionFilesView["items"][number]["status"]): string {
-  const file = files.find((item) => item.status === status);
+  const matches = files.filter((item) => item.status === status);
+  const file = matches[0];
   if (!file) return status === "running" ? "Pending file evidence." : "Failed file evidence.";
   const parts = [file.path, file.detail, file.next ? `Next: ${file.next}` : undefined].filter((item): item is string => !!item?.trim());
-  return summarize(parts.join(" · "), 120);
+  return summarizeWithRemainder(parts.join(" · "), matches.length, 120);
 }
 
 function currentIssueFact(value: string, label: string, detail: string): string {
@@ -160,4 +163,10 @@ function plural(label: string, count: number): string {
 function summarize(text: string, limit: number): string {
   if (text.length <= limit) return text;
   return `${text.slice(0, Math.max(0, limit - 1)).trimEnd()}...`;
+}
+
+function summarizeWithRemainder(text: string, count: number, limit: number): string {
+  if (count <= 1) return summarize(text, limit);
+  const suffix = ` · +${count - 1} more`;
+  return `${summarize(text, Math.max(1, limit - suffix.length))}${suffix}`;
 }
