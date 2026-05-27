@@ -4,6 +4,7 @@ export function SessionSchedulePanel({
   summary,
   schedules,
   busy,
+  disabled = false,
   loading = false,
   error,
   deletingId,
@@ -18,6 +19,7 @@ export function SessionSchedulePanel({
   summary?: SessionSchedulesSummary;
   schedules?: SessionSchedule[];
   busy?: "loop" | "checkin" | "daily";
+  disabled?: boolean;
   loading?: boolean;
   error?: string;
   deletingId?: string;
@@ -105,7 +107,7 @@ export function SessionSchedulePanel({
             <button
               type="button"
               className="ghost-action"
-              disabled={!!busy}
+              disabled={disabled || !!busy}
               onClick={() => void onScheduleCheckIn()}
             >
               {busy === "checkin" ? "Scheduling" : "1h check-in"}
@@ -115,7 +117,7 @@ export function SessionSchedulePanel({
             <button
               type="button"
               className="ghost-action"
-              disabled={!!busy}
+              disabled={disabled || !!busy}
               onClick={() => void onScheduleLoopTick()}
             >
               {busy === "loop" ? "Scheduling" : "30m loop tick"}
@@ -125,7 +127,7 @@ export function SessionSchedulePanel({
             <button
               type="button"
               className="ghost-action"
-              disabled={!!busy}
+              disabled={disabled || !!busy}
               onClick={() => void onScheduleDaily()}
             >
               {busy === "daily" ? "Scheduling" : "Daily check-in"}

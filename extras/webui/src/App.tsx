@@ -851,33 +851,56 @@ export function App() {
   }
 
   async function handleCreateSchedule(kind: "loop" | "checkin" | "daily") {
-    if (!selectedSessionId || scheduleBusy) return;
+    if (!selectedSessionId || scheduleBusy || actionBusy || session.status === "running") return;
     const sessionId = selectedSessionId;
     const loopTick = kind === "loop";
     const daily = kind === "daily";
+    const sessionTitle = selectedSessionTitle ?? sessionId;
     const intervalSeconds = loopTick ? 30 * 60 : daily ? 24 * 60 * 60 : undefined;
     const firstDelayMs = loopTick ? 30 * 60 * 1000 : daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
     const next = new Date(Date.now() + firstDelayMs);
+    const calibrationPrompt = webScheduleCalibrationPrompt(kind, sessionTitle);
     setScheduleBusy(kind);
     try {
       const resp = await createSessionSchedule(client, sessionId, {
         kind: loopTick ? "loop_tick" : daily ? "daily_checkin" : "checkin",
         prompt: loopTick
-          ? webScheduledLoopTickPrompt(selectedSessionTitle ?? sessionId)
-          : webScheduledCheckInPrompt(selectedSessionTitle ?? sessionId),
+          ? webScheduledLoopTickPrompt(sessionTitle)
+          : webScheduledCheckInPrompt(sessionTitle),
         next_run_at: toRfc3339Seconds(next),
         repeat_interval_seconds: intervalSeconds,
         enabled: true,
       });
       markSessionSchedules(sessionId, resp);
       setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
-      setStatus({
-        state: "connected",
-        label: "Ready",
-        detail: loopTick ? "Loop tick scheduled" : daily ? "Daily check-in scheduled" : "Check-in scheduled",
-      });
+      if (!selectedSession?.has_loop_protocol) {
+        const loopProtocol = await updateSessionLoopProtocol(client, sessionId, {
+          activate: true,
+          goal: webScheduleCalibrationGoal(kind, sessionTitle),
+        });
+        markSessionLoopProtocol(sessionId, loopProtocol, webScheduleCalibrationGoal(kind, sessionTitle));
+      }
+      sendInFlightRef.current = true;
+      sendFailedRef.current = false;
+      setPendingMessage({ text: calibrationPrompt, kind: "task" });
+      setActionBusy(true);
+      await sendSessionMessage(client, sessionId, { content: calibrationPrompt });
+      sendInFlightRef.current = false;
+      markSessionLive(sessionId, webScheduleCalibrationSummary(kind, sessionTitle));
+      const hasOpenStream = streamSessionIdRef.current === sessionId && !streamClosedRef.current;
+      if (!hasOpenStream) {
+        const reconciled = await loadHistory(sessionId);
+        releaseSettledTurn(reconciled.session, calibrationPrompt);
+        setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
+      } else {
+        setStatus((current) => ({ ...current, state: "live", label: "Running" }));
+      }
     } catch (err) {
+      sendInFlightRef.current = false;
+      sendFailedRef.current = true;
       setStatus({ state: "error", label: "Schedule failed", detail: formatError(err) });
+      setPendingMessage(undefined);
+      setActionBusy(false);
     } finally {
       setScheduleBusy(undefined);
     }
@@ -1281,6 +1304,7 @@ export function App() {
                     summary={selectedSession?.schedules}
                     schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
                     busy={scheduleBusy}
+                    disabled={actionBusy || session.status === "running"}
                     loading={selectedScheduleState.state === "loading"}
                     error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
                     deletingId={deletingScheduleId}
@@ -1378,6 +1402,31 @@ function webScheduledCheckInPrompt(sessionTitle: string): string {
     "If LOOP.md exists, read it with loop_protocol action=read before proposing protocol changes.",
     "Update LOOP.md only after the user answers or when the active loop protocol already gives explicit authority.",
     "Keep concrete task steps in plan state rather than duplicating a todo list into LOOP.md.",
+  ].join("\n");
+}
+
+function webScheduleCalibrationGoal(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
+  if (kind === "loop") return `Recurring loop timer for ${sessionTitle}`;
+  if (kind === "daily") return `Daily scheduled check-in for ${sessionTitle}`;
+  return `Scheduled check-in for ${sessionTitle}`;
+}
+
+function webScheduleCalibrationSummary(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
+  if (kind === "loop") return `Calibrate loop timer: ${sessionTitle}`;
+  if (kind === "daily") return `Calibrate daily timer: ${sessionTitle}`;
+  return `Calibrate check-in timer: ${sessionTitle}`;
+}
+
+function webScheduleCalibrationPrompt(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
+  const label = kind === "loop" ? "recurring loop tick" : kind === "daily" ? "daily check-in" : "scheduled check-in";
+  return [
+    `Calibrate ${label} for session: ${sessionTitle}`,
+    "",
+    "The timer has been created, but calibration is still required before relying on it.",
+    "Read LOOP.md with loop_protocol action=read; if it is draft, disabled, or underspecified, keep it draft.",
+    "Ask the user one concise question now to clarify timer purpose, stop conditions, memory expectations, and what should change in LOOP.md.",
+    "Do not run the scheduled work yet, and do not claim the timer is operationally calibrated until the user answers.",
+    "After the user answers, update LOOP.md only for durable timer policy, current situation, recovery anchors, or stop conditions; keep concrete task steps in plan state.",
   ].join("\n");
 }
 

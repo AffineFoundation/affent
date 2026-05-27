@@ -778,6 +778,18 @@ describe("App", () => {
           },
         });
       }
+      if (url === "/v1/sessions/timer-control/loop-protocol" && init?.method === "POST") {
+        return jsonResponse({
+          session_id: "timer-control",
+          protocol: "# Loop Protocol\n\n- status: draft",
+          summary: { path: ".affent/loops/timer-control/LOOP.md", status: "draft", bytes: 32 },
+          state: { version: 1, loop_id: "timer-control", status: "draft", initial_goal_preview: "Scheduled check-in for long running subnet analysis" },
+          events: [],
+        });
+      }
+      if (url === "/v1/sessions/timer-control/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "timer-control", turn_id: "timer_calibration" });
+      }
       if (url === "/v1/sessions/timer-control/schedules/sched_1" && init?.method === "PATCH") {
         const body = JSON.parse(String(init.body)) as { enabled: boolean };
         return jsonResponse({
@@ -831,6 +843,13 @@ describe("App", () => {
     expect(body.prompt).toContain("loop_protocol action=read");
     expect(body.enabled).toBe(true);
     expect(body.next_run_at).toMatch(/Z$/);
+    const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/loop-protocol");
+    expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "Scheduled check-in for long running subnet analysis" }));
+    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/messages");
+    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
+    expect(sent.content).toContain("Calibrate scheduled check-in");
+    expect(sent.content).toContain("Ask the user one concise question now");
+    expect(sent.content).toContain("do not claim the timer is operationally calibrated");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Scheduled check-in for session: long running subnet analysis");
     expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
@@ -918,6 +937,9 @@ describe("App", () => {
           },
         });
       }
+      if (url === "/v1/sessions/loop-timer/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "loop-timer", turn_id: "loop_timer_calibration" });
+      }
       return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
     });
     vi.stubGlobal("fetch", fetchImpl);
@@ -937,6 +959,12 @@ describe("App", () => {
     expect(body.prompt).toContain("advance at most one compact high-value step");
     expect(body.repeat_interval_seconds).toBe(1800);
     expect(body.enabled).toBe(true);
+    expect(fetchImpl.mock.calls.some(([url]) => String(url) === "/v1/sessions/loop-timer/loop-protocol")).toBe(false);
+    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/messages");
+    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
+    expect(sent.content).toContain("Calibrate recurring loop tick");
+    expect(sent.content).toContain("Read LOOP.md with loop_protocol action=read");
+    expect(sent.content).toContain("Ask the user one concise question now");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
