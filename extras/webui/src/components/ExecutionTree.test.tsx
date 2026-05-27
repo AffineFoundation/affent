@@ -37,7 +37,7 @@ describe("ExecutionTree", () => {
 
     expect(screen.getByText("000001-c2.txt (8 KiB, 1 MiB omitted)")).toBeInTheDocument();
     expect(screen.getByText("output file")).toBeInTheDocument();
-    expect(screen.getByText("Status done · Exit 0 · File 000001-c2.txt (8 KiB, 1 MiB omitted) · +1 more")).toBeInTheDocument();
+    expect(screen.getByText("Status done · Exit 0 · File 000001-c2.txt (8 KiB, 1 MiB omitted) · Limit truncated")).toBeInTheDocument();
   });
 
   it("opens artifact files from nested raw trace rows", async () => {
@@ -80,7 +80,7 @@ describe("ExecutionTree", () => {
 
     await user.click(screen.getByRole("button", { name: /Command cat report\.txt/ }));
 
-    expect(screen.getByText(/Status done · Exit 0 · File 000001-c2\.txt \(8 KiB, 1 MiB omitted\) · \+2 more/)).toBeInTheDocument();
+    expect(screen.getByText(/Status done · Duration 1\.25s · Exit 0 · File 000001-c2\.txt \(8 KiB, 1 MiB omitted\) · Limit truncated/)).toBeInTheDocument();
   });
 
   it("shows delegated result size merged into the parent context", async () => {

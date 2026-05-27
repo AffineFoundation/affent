@@ -483,10 +483,23 @@ function actionSummaryTone(items: readonly SummaryItem[]): SummaryTone | undefin
 }
 
 function summarizeActionFacts(items: readonly SummaryItem[], visibleCount: number): string {
-  const visible = selectHeadlineActionFacts(items, visibleCount).map((item) => `${item.label} ${item.value}`);
-  const remaining = items.length - visible.length;
-  if (remaining > 0) visible.push(`+${remaining} more`);
-  return visible.join(" · ");
+  if (items.length <= visibleCount + 2) return items.map(formatSummaryItem).join(" · ");
+  const headlineItems = selectHeadlineActionFacts(items, visibleCount);
+  const headlineSet = new Set(headlineItems);
+  const hiddenItems = items.filter((item) => !headlineSet.has(item));
+  return [...headlineItems.map(formatSummaryItem), hiddenSummaryLabel(hiddenItems)].join(" · ");
+}
+
+function formatSummaryItem(item: SummaryItem): string {
+  return `${item.label} ${item.value}`;
+}
+
+function hiddenSummaryLabel(items: readonly SummaryItem[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return formatSummaryItem(items[0]);
+  const labels = items.slice(0, 2).map((item) => item.label);
+  const remaining = items.length - labels.length;
+  return remaining > 0 ? `${labels.join(", ")} +${remaining}` : labels.join(", ");
 }
 
 function selectHeadlineActionFacts(items: readonly SummaryItem[], visibleCount: number): SummaryItem[] {
