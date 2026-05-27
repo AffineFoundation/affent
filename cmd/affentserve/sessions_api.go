@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -1350,6 +1351,10 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			setLatest(hint, p.TurnID)
 			continue
 		}
+		if hint := recoveryHintFromToolArtifact(p); hint != "" {
+			setLatest(hint, p.TurnID)
+			continue
+		}
 		if p.ExitCode == 0 && p.FailureKind == "" && len(p.FailureKinds) == 0 {
 			continue
 		}
@@ -1359,6 +1364,24 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		}
 	}
 	return latest, nil
+}
+
+func recoveryHintFromToolArtifact(p sse.ToolResultPayload) string {
+	if !p.ResultTruncated && p.ResultOmittedBytes == 0 && p.ContextOmittedBytes == 0 {
+		return ""
+	}
+	artifactPath := strings.TrimSpace(p.ResultArtifactPath)
+	if artifactPath == "" {
+		return recoveryHintFromText("truncated tool output without saved artifact; rerun a narrower command or inspect trace before relying on omitted output.")
+	}
+	parts := []string{"truncated tool output; inspect artifact " + artifactPath}
+	if p.ResultOmittedBytes > 0 {
+		parts = append(parts, fmt.Sprintf("result omitted %d bytes", p.ResultOmittedBytes))
+	}
+	if p.ContextOmittedBytes > 0 {
+		parts = append(parts, fmt.Sprintf("context omitted %d bytes", p.ContextOmittedBytes))
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
 }
 
 func recoveryHintFromErrorPayload(p sse.ErrorPayload) string {

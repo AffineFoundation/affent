@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -626,6 +627,53 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromMaxTurns(t *testing.T) {
 		"change strategy",
 		"inspect artifacts",
 	} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestSummarizeDurableSessionRestoresRecoveryHintFromTruncatedArtifact(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "artifact-hint")
+	dir := pool.sessionDirPath("artifact-hint")
+
+	artifactRel := path.Join(artifactPathPrefix, "000001-c1.txt")
+	artifactFull := filepath.Join(dir, filepath.FromSlash(artifactRel))
+	if err := os.MkdirAll(filepath.Dir(artifactFull), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(artifactFull, []byte(strings.Repeat("large output\n", 256)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:              "t1",
+			CallID:              "c1",
+			ExitCode:            0,
+			ResultSummary:       "large output preview",
+			Result:              "large output preview",
+			ResultTruncated:     true,
+			ResultOmittedBytes:  4096,
+			ContextOmittedBytes: 8192,
+			ResultArtifactPath:  artifactRel,
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "artifact-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if !summary.HasArtifacts {
+		t.Fatal("summary should report saved artifacts")
+	}
+	for _, want := range []string{"truncated tool output", artifactRel, "result omitted 4096 bytes", "context omitted 8192 bytes"} {
 		if !strings.Contains(summary.LatestRecoveryHint, want) {
 			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
 		}

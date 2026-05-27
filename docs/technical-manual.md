@@ -647,6 +647,7 @@ Use `GET /v1/sessions/{id}/events` for live SSE. Reconnect with
 durable event log. Session summaries expose `latest_recovery_hint` from recent
 failed tool events, `conversation.repaired` events, visible `loop.decision`
 required actions, runtime `error` events, `turn.end` budget/runtime failures,
+truncated tool results with artifact paths or missing-artifact warnings,
 successful no-hit `session_search` results that returned recent-session
 recovery anchors, successful no-hit memory searches that returned topic
 recovery anchors, and, when the event log is missing or incomplete, from
