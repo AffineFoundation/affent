@@ -74,7 +74,7 @@ export function SessionMemoryPanel({
             {error}
           </div>
         ) : null}
-        {!loading && !error && noSession ? <div className="session-skills-empty">No selected chat.</div> : null}
+        {!loading && !error && noSession ? <div className="session-skills-empty">Select a chat to inspect stored memory buckets.</div> : null}
         {!loading && !error && !noSession ? (
           <>
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
