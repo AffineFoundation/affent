@@ -29,7 +29,7 @@ func ParseLine(line string) Info {
 		return info
 	}
 	line = strings.TrimSpace(strings.TrimPrefix(line, "SourceAccess:"))
-	for _, field := range strings.Split(line, ";") {
+	for _, field := range splitSourceAccessFields(line) {
 		field = strings.TrimSpace(field)
 		switch {
 		case strings.HasPrefix(field, "fetched_url="):
@@ -58,6 +58,63 @@ func ParseLine(line string) Info {
 		}
 	}
 	return info
+}
+
+func splitSourceAccessFields(line string) []string {
+	var fields []string
+	rest := strings.TrimSpace(line)
+	for rest != "" {
+		rest = strings.TrimLeft(rest, " ;")
+		if rest == "" {
+			break
+		}
+		next := nextSourceAccessFieldDelimiter(rest, 1)
+		if next < 0 {
+			fields = append(fields, rest)
+			break
+		}
+		fields = append(fields, rest[:next])
+		rest = rest[next+1:]
+	}
+	return fields
+}
+
+func nextSourceAccessFieldDelimiter(line string, from int) int {
+	if from < 0 {
+		from = 0
+	}
+	if from > len(line) {
+		return -1
+	}
+	best := -1
+	for _, key := range sourceAccessFieldKeys {
+		pattern := "; " + key + "="
+		if idx := strings.Index(line[from:], pattern); idx >= 0 {
+			idx += from
+			if best < 0 || idx < best {
+				best = idx
+			}
+		}
+	}
+	return best
+}
+
+var sourceAccessFieldKeys = []string{
+	"fetched_url",
+	"browser_rendered_url",
+	"browser_network_url",
+	"requested_url",
+	"linked_urls_in_content",
+	"links_in_snapshot",
+	"page_text_below",
+	"result_links_and_snippets",
+	"rendered_browser_source_status",
+	"snapshot_id",
+	"mode",
+	"source_method",
+	"ref",
+	"status",
+	"content_type",
 }
 
 // IsDiscoveryOnly reports whether the source line describes a page that is

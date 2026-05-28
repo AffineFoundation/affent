@@ -68,6 +68,29 @@ func TestParseLineNetworkSource(t *testing.T) {
 	}
 }
 
+func TestParseLinePreservesSemicolonValues(t *testing.T) {
+	line := FormatSourceAccessLine(
+		"fetched_url",
+		"https://example.com/path;v=1/data?x=1;y=2",
+		"https://example.com/start;mode=full?q=tao;netuid=120",
+		"content_type=text/html; charset=utf-8",
+		"page_text_below=verified_page_evidence",
+	)
+	info := ParseLine(line)
+	if got, want := info.AccessedURL, "https://example.com/path;v=1/data?x=1;y=2"; got != want {
+		t.Fatalf("AccessedURL = %q, want %q", got, want)
+	}
+	if got, want := info.RequestedURL, "https://example.com/start;mode=full?q=tao;netuid=120"; got != want {
+		t.Fatalf("RequestedURL = %q, want %q", got, want)
+	}
+	if got, want := info.ContentType, "text/html; charset=utf-8"; got != want {
+		t.Fatalf("ContentType = %q, want %q", got, want)
+	}
+	if got, want := info.PageTextBelow, "verified_page_evidence"; got != want {
+		t.Fatalf("PageTextBelow = %q, want %q", got, want)
+	}
+}
+
 func TestFirstInfoFromResultCapturesNetworkJSONPath(t *testing.T) {
 	info, ok := FirstInfoFromResult("SourceAccess: browser_network_url=https://example.com/api/data; ref=n1; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].price\n\"0.06342 T\"")
 	if !ok {
