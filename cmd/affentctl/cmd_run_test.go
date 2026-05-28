@@ -105,8 +105,12 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenConversationAt: %v", err)
 	}
-	if err := conv.Append(agent.ChatMessage{Role: "assistant", Content: "For this loop, what stop condition should pause work?"}); err != nil {
+	question := "For this loop, what stop condition should pause work?"
+	if err := conv.Append(agent.ChatMessage{Role: "assistant", Content: question}); err != nil {
 		t.Fatalf("append assistant question: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, question); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -150,7 +154,6 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 		t.Fatalf("read trace: %v", err)
 	}
 	for _, want := range []string{
-		`"type":"loop.protocol_calibration_request"`,
 		`"type":"loop.protocol_calibration"`,
 		`"last_calibration_answer_preview":"Pause if source quality is weak or the market report is complete."`,
 	} {

@@ -529,6 +529,9 @@ func TestChatLoopRecordsCalibrationAnswerBeforeNextTurn(t *testing.T) {
 	if err := conv.Append(agent.ChatMessage{Role: "assistant", Content: question}); err != nil {
 		t.Fatalf("append assistant question: %v", err)
 	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, question); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
 	b := &loopBundle{
 		loop:             &agent.Loop{Conv: conv},
 		workspace:        workspace,
@@ -547,6 +550,44 @@ func TestChatLoopRecordsCalibrationAnswerBeforeNextTurn(t *testing.T) {
 	}
 	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
 		t.Fatalf("ValidateProtocolActivationReady after CLI answer: %v", err)
+	}
+}
+
+func TestChatLoopDoesNotInferCalibrationQuestionFromTranscriptText(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "loop-unrecorded-question"
+	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "keep loop calibration state authoritative",
+		Workspace:    workspace,
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	conv, err := agent.OpenConversationAt(filepath.Join(workspace, "chat.jsonl"))
+	if err != nil {
+		t.Fatalf("OpenConversationAt: %v", err)
+	}
+	if err := conv.Append(agent.ChatMessage{Role: "assistant", Content: "For this loop, what stop condition should pause work?"}); err != nil {
+		t.Fatalf("append assistant question: %v", err)
+	}
+	b := &loopBundle{
+		loop:             &agent.Loop{Conv: conv},
+		workspace:        workspace,
+		sessionID:        sessionID,
+		loopProtocolPath: protocolPath,
+	}
+
+	recordCurrentSessionLoopCalibrationAnswerIfReady(b, "Pause if tests fail.")
+
+	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 0 || state.CalibrationAnswers != 0 {
+		t.Fatalf("transcript-only calibration question must not mutate state: %+v", state)
 	}
 }
 
