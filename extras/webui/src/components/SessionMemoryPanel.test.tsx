@@ -92,7 +92,7 @@ describe("SessionMemoryPanel", () => {
 
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic"), "research");
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "CoinGecko pages require a browser fallback.");
-    await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Use memory draft" }));
+    await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Prepare memory draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [
         "Add or update durable memory if this is useful, accurate, and non-secret:",
@@ -103,6 +103,38 @@ describe("SessionMemoryPanel", () => {
       ].join("\n"),
       "memory",
     );
+  });
+
+  it("saves memory directly when the runtime supports memory writes", async () => {
+    const user = userEvent.setup();
+    const onAddMemory = vi.fn(async () => ({
+      session_id: "s1",
+      has_memory: true,
+      topics: [
+        {
+          target: "memory",
+          topic: "research",
+          entries: ["CoinGecko pages require a browser fallback."],
+          entry_count: 1,
+          chars_used: 42,
+          chars_limit: 4400,
+          percent: 1,
+        },
+      ],
+    }));
+    render(<SessionMemoryPanel defaultOpen memory={{ session_id: "s1", has_memory: false, topics: [] }} onAddMemory={onAddMemory} />);
+
+    await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic"), "research");
+    await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "CoinGecko pages require a browser fallback.");
+    await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Save memory" }));
+
+    expect(onAddMemory).toHaveBeenCalledWith({
+      target: "memory",
+      topic: "research",
+      content: "CoinGecko pages require a browser fallback.",
+    });
+    expect(await screen.findByText("Memory saved.")).toBeInTheDocument();
+    expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("");
   });
 
   it("shows an empty selected-chat state", () => {
@@ -138,7 +170,7 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
     expect(screen.getByTestId("session-memory-fallback")).toHaveTextContent("Memory can still be prepared");
     await userEvent.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "Remember that this repo uses Vite.");
-    await userEvent.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Use memory draft" }));
+    await userEvent.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Prepare memory draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Remember that this repo uses Vite."), "memory");
   });
 });

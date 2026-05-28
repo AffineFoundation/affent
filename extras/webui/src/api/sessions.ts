@@ -103,6 +103,12 @@ export interface SessionMemoryResponse {
   topics?: SessionMemoryBucket[];
 }
 
+export interface SessionMemoryAddRequest {
+  target?: string;
+  topic?: string;
+  content: string;
+}
+
 export interface SessionPlanResponse {
   session_id: string;
   plan: unknown;
@@ -524,6 +530,19 @@ export function getSessionMemory(
   signal?: AbortSignal,
 ): Promise<SessionMemoryResponse> {
   return client.json<SessionMemoryResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/memory`, { signal });
+}
+
+export function addSessionMemory(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionMemoryAddRequest,
+  signal?: AbortSignal,
+): Promise<SessionMemoryResponse> {
+  return client.json<SessionMemoryResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/memory`, {
+    method: "POST",
+    body,
+    signal,
+  });
 }
 
 export function getSessionPlan(

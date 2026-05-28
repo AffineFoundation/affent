@@ -3531,6 +3531,17 @@ button.workbench-context-runtime-item:focus-visible {
   min-height: 86px;
 }
 
+.session-memory-form-status {
+  align-self: center;
+  color: var(--accent-strong);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.session-memory-form-status[data-tone="error"] {
+  color: var(--c-error);
+}
+
 .session-skills-add-toggle,
 .session-skills-add-submit {
   min-height: 32px;

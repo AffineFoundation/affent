@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
-import type { SessionMemoryResponse } from "../api/sessions";
+import type { SessionMemoryAddRequest, SessionMemoryResponse } from "../api/sessions";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   memoryActionLabel,
@@ -29,6 +29,7 @@ export function SessionMemoryPanel({
   noSession = false,
   defaultOpen = false,
   onRefresh,
+  onAddMemory,
   onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
@@ -38,6 +39,7 @@ export function SessionMemoryPanel({
   noSession?: boolean;
   defaultOpen?: boolean;
   onRefresh?: () => Promise<void> | void;
+  onAddMemory?: (request: SessionMemoryAddRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
@@ -45,6 +47,7 @@ export function SessionMemoryPanel({
   const [memoryTarget, setMemoryTarget] = useState("memory");
   const [memoryTopic, setMemoryTopic] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
+  const [memorySaveState, setMemorySaveState] = useState<{ state: "idle" | "saving" | "saved" | "error"; message?: string }>({ state: "idle" });
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
@@ -77,11 +80,24 @@ export function SessionMemoryPanel({
           ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalMemoryChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";
 
-  function handleManualMemorySubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleManualMemorySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const content = memoryContent.trim();
-    if (!content || !onUseAsDraft) return;
+    if (!content) return;
+    if (onAddMemory) {
+      setMemorySaveState({ state: "saving" });
+      try {
+        await onAddMemory({ content, target: memoryTarget, topic: memoryTopic });
+        setMemoryContent("");
+        setMemorySaveState({ state: "saved", message: "Memory saved." });
+      } catch (err) {
+        setMemorySaveState({ state: "error", message: formatPanelError(err) });
+      }
+      return;
+    }
+    if (!onUseAsDraft) return;
     onUseAsDraft(manualMemoryDraft({ content, target: memoryTarget, topic: memoryTopic }), "memory");
+    setMemorySaveState({ state: "saved", message: "Memory draft prepared." });
   }
 
   return (
@@ -118,6 +134,9 @@ export function SessionMemoryPanel({
               memoryTarget={memoryTarget}
               memoryTopic={memoryTopic}
               memoryContent={memoryContent}
+              busy={memorySaveState.state === "saving"}
+              status={memorySaveState}
+              submitLabel={onAddMemory ? "Save memory" : "Prepare memory draft"}
               setMemoryTarget={setMemoryTarget}
               setMemoryTopic={setMemoryTopic}
               setMemoryContent={setMemoryContent}
@@ -211,11 +230,14 @@ export function SessionMemoryPanel({
                 <div className="session-skills-empty">{buckets.length > 0 ? "No matching memory." : "No memory buckets."}</div>
               )}
             </div>
-            {onUseAsDraft ? (
+            {onAddMemory || onUseAsDraft ? (
               <MemoryDraftForm
                 memoryTarget={memoryTarget}
                 memoryTopic={memoryTopic}
                 memoryContent={memoryContent}
+                busy={memorySaveState.state === "saving"}
+                status={memorySaveState}
+                submitLabel={onAddMemory ? "Save memory" : "Prepare memory draft"}
                 setMemoryTarget={setMemoryTarget}
                 setMemoryTopic={setMemoryTopic}
                 setMemoryContent={setMemoryContent}
@@ -233,6 +255,9 @@ function MemoryDraftForm({
   memoryTarget,
   memoryTopic,
   memoryContent,
+  busy = false,
+  status,
+  submitLabel,
   setMemoryTarget,
   setMemoryTopic,
   setMemoryContent,
@@ -241,6 +266,9 @@ function MemoryDraftForm({
   memoryTarget: string;
   memoryTopic: string;
   memoryContent: string;
+  busy?: boolean;
+  status?: { state: "idle" | "saving" | "saved" | "error"; message?: string };
+  submitLabel: string;
   setMemoryTarget: (value: string) => void;
   setMemoryTopic: (value: string) => void;
   setMemoryContent: (value: string) => void;
@@ -250,19 +278,22 @@ function MemoryDraftForm({
     <form className="session-skill-form session-memory-form" data-testid="session-memory-form" onSubmit={onSubmit}>
       <label>
         <span>Target</span>
-        <input value={memoryTarget} onChange={(event) => setMemoryTarget(event.target.value)} placeholder="memory" />
+        <input value={memoryTarget} onChange={(event) => setMemoryTarget(event.target.value)} placeholder="memory" disabled={busy} />
       </label>
       <label>
         <span>Topic</span>
-        <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" />
+        <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" disabled={busy} />
       </label>
       <label className="session-skill-form-body">
         <span>Content</span>
-        <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} placeholder="Fact to remember" />
+        <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} placeholder="Fact to remember" disabled={busy} />
       </label>
-      <button type="submit" className="session-skills-add-submit" disabled={!memoryContent.trim()}>
-        Use memory draft
+      <button type="submit" className="session-skills-add-submit" disabled={!memoryContent.trim() || busy}>
+        {busy ? "Saving" : submitLabel}
       </button>
+      {status?.message ? (
+        <span className="session-memory-form-status" data-tone={status.state === "error" ? "error" : "success"}>{status.message}</span>
+      ) : null}
     </form>
   );
 }
@@ -294,4 +325,9 @@ function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatPanelError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Unknown error";
 }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import "./styles/index.css";
 import { ApiClient, ApiError } from "./api/client";
 import {
+  addSessionMemory,
   cancelSessionTurn,
   createSessionSchedule,
   createSession,
@@ -28,6 +29,7 @@ import {
   type SessionLoopProtocolDeleteResponse,
   type SessionLoopProtocolResponse,
   type SessionMemoryResponse,
+  type SessionMemoryAddRequest,
   type SessionPlanSummary,
   type SessionContextSummary,
   type SessionSkillInfo,
@@ -649,6 +651,23 @@ export function App() {
     try {
       const memory = await getSessionMemory(client, selectedSessionId);
       setMemoryState({ state: "ready", memory });
+    } catch (err) {
+      setMemoryState({ state: "error", error: formatError(err) });
+      throw err;
+    }
+  }, [client, selectedSessionId]);
+
+  const handleAddMemory = useCallback(async (request: SessionMemoryAddRequest): Promise<SessionMemoryResponse> => {
+    if (!selectedSessionId) {
+      setMemoryState({ state: "empty" });
+      throw new Error("Open a saved chat before saving memory.");
+    }
+    setMemoryState({ state: "loading" });
+    try {
+      const memory = await addSessionMemory(client, selectedSessionId, request);
+      setMemoryState({ state: "ready", memory });
+      setSessions((current) => current.map((item) => item.id === selectedSessionId ? { ...item, has_memory: true } : item));
+      return memory;
     } catch (err) {
       setMemoryState({ state: "error", error: formatError(err) });
       throw err;
@@ -1570,6 +1589,7 @@ export function App() {
         noSession={memoryState.state === "empty"}
         defaultOpen={defaultOpen}
         onRefresh={handleRefreshMemory}
+        onAddMemory={handleAddMemory}
         onUseAsDraft={handleUseAsDraft}
       />
     );

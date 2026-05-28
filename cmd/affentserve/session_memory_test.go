@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -54,6 +55,61 @@ func TestHandleSessionMemoryReadsDurableBuckets(t *testing.T) {
 	}
 	if out.Topics[0].Preview != "taostats pages are dynamic" {
 		t.Fatalf("topic preview = %q", out.Topics[0].Preview)
+	}
+}
+
+func TestHandleSessionMemoryAddsDurableMemory(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	createDurableSessionDir(t, pool, "memory-add")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-add/memory", bytes.NewBufferString(`{
+		"target": "memory",
+		"topic": "research",
+		"content": "CoinGecko pages require browser fallback"
+	}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	var out sessionMemoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, w.Body.String())
+	}
+	if !out.HasMemory || len(out.Topics) != 1 || out.Topics[0].Topic != "research" {
+		t.Fatalf("memory response = %+v", out)
+	}
+	if got := strings.Join(out.Topics[0].Entries, "\n"); !strings.Contains(got, "CoinGecko pages require browser fallback") {
+		t.Fatalf("topic entries = %q", got)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/memory-add/memory", nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("get status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	out = sessionMemoryResponse{}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode get response: %v\n%s", err, w.Body.String())
+	}
+	if len(out.Topics) != 1 || out.Topics[0].EntryCount != 1 {
+		t.Fatalf("durable topics = %+v", out.Topics)
+	}
+}
+
+func TestHandleSessionMemoryAddRejectsInvalidContent(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	createDurableSessionDir(t, pool, "memory-add-invalid")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-add-invalid/memory", bytes.NewBufferString(`{"target":"memory","topic":"research","content":"   "}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "content is required") {
+		t.Fatalf("body = %s, want content validation", w.Body.String())
 	}
 }
 

@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 )
 
 const sessionMemoryBucketPreviewChars = 180
+const maxSessionMemoryAddBodyBytes = 32 * 1024
 
 type sessionMemoryResponse struct {
 	SessionID        string                `json:"session_id"`
@@ -34,13 +37,23 @@ type sessionMemoryBucket struct {
 	Preview    string   `json:"preview,omitempty"`
 }
 
-func handleSessionMemory(pool *SessionPool, sessionID string, w http.ResponseWriter, _ *http.Request) {
+type sessionMemoryAddRequest struct {
+	Target  string `json:"target"`
+	Topic   string `json:"topic,omitempty"`
+	Content string `json:"content"`
+}
+
+func handleSessionMemory(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
 	if pool == nil {
 		writeJSONError(w, http.StatusNotFound, "session not found", nil)
 		return
 	}
 	if err := agent.ValidateSessionID(sessionID); err != nil {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
+		return
+	}
+	if r.Method == http.MethodPost {
+		handleSessionMemoryAdd(pool, sessionID, w, r)
 		return
 	}
 	resp, found, err := readSessionMemory(pool, sessionID)
@@ -57,14 +70,66 @@ func handleSessionMemory(pool *SessionPool, sessionID string, w http.ResponseWri
 }
 
 func readSessionMemory(pool *SessionPool, sessionID string) (sessionMemoryResponse, bool, error) {
+	store, found, err := sessionMemoryStore(pool, sessionID)
+	if err != nil || !found {
+		return sessionMemoryResponse{}, found, err
+	}
+	resp, err := inspectSessionMemory(pool, sessionID, store)
+	return resp, true, err
+}
+
+func handleSessionMemoryAdd(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
+	req, err := decodeSessionMemoryAddRequest(w, r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid memory request", err, "bad_request")
+		return
+	}
+	store, found, err := sessionMemoryStore(pool, sessionID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read session memory", err)
+		return
+	}
+	if !found {
+		writeJSONErrorTyped(w, http.StatusNotFound, "session not found", nil, "not_found")
+		return
+	}
+	target := memory.MemoryTarget(strings.TrimSpace(req.Target))
+	if target == "" {
+		target = memory.TargetMemory
+	}
+	result, err := store.Add(target, req.Topic, req.Content)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "add memory", err)
+		return
+	}
+	if !result.OK {
+		writeJSONErrorTyped(w, http.StatusBadRequest, result.Message, nil, "memory_update_rejected")
+		return
+	}
+	resp, err := inspectSessionMemory(pool, sessionID, store)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read session memory", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func sessionMemoryStore(pool *SessionPool, sessionID string) (*memory.FileMemoryStore, bool, error) {
 	dir := pool.sessionDirPath(sessionID)
 	if _, found, err := durableSessionDirInfo(dir); err != nil || !found {
-		return sessionMemoryResponse{}, found, err
+		return nil, found, err
 	}
 	store := memory.NewFileMemoryStore("")
 	store.MemoryDir = dir
+	store.UserPath = pool.userMemoryPath(dir)
+	return store, true, nil
+}
+
+func inspectSessionMemory(pool *SessionPool, sessionID string, store *memory.FileMemoryStore) (sessionMemoryResponse, error) {
+	dir := pool.sessionDirPath(sessionID)
 	userPath := pool.userMemoryPath(dir)
-	store.UserPath = userPath
 
 	resp := sessionMemoryResponse{
 		SessionID:        sessionID,
@@ -74,24 +139,24 @@ func readSessionMemory(pool *SessionPool, sessionID string) (sessionMemoryRespon
 	}
 	userNewest := ""
 	if userTopics, err := store.ListTopics(memory.TargetUser); err != nil {
-		return sessionMemoryResponse{}, true, err
+		return sessionMemoryResponse{}, err
 	} else if len(userTopics.Topics) > 0 {
 		userNewest = userTopics.Topics[0].NewestAt
 	}
 	if bucket, ok, err := inspectSessionMemoryBucket(store, memory.TargetUser, "", userNewest); err != nil {
-		return sessionMemoryResponse{}, true, err
+		return sessionMemoryResponse{}, err
 	} else if ok || durableStatePathExists(userPath) {
 		resp.User = &bucket
 	}
 	if bucket, ok, err := inspectSessionMemoryBucket(store, memory.TargetMemory, memory.CoreTopic, ""); err != nil {
-		return sessionMemoryResponse{}, true, err
+		return sessionMemoryResponse{}, err
 	} else if ok || durableStatePathExists(filepath.Join(dir, "core.md")) {
 		resp.Core = &bucket
 	}
 
 	topics, err := store.ListTopics(memory.TargetMemory)
 	if err != nil {
-		return sessionMemoryResponse{}, true, err
+		return sessionMemoryResponse{}, err
 	}
 	for _, summary := range topics.Topics {
 		if summary.Topic == memory.CoreTopic {
@@ -102,11 +167,35 @@ func readSessionMemory(pool *SessionPool, sessionID string) (sessionMemoryRespon
 		}
 		bucket, _, err := inspectSessionMemoryBucket(store, memory.TargetMemory, summary.Topic, summary.NewestAt)
 		if err != nil {
-			return sessionMemoryResponse{}, true, err
+			return sessionMemoryResponse{}, err
 		}
 		resp.Topics = append(resp.Topics, bucket)
 	}
-	return resp, true, nil
+	return resp, nil
+}
+
+func decodeSessionMemoryAddRequest(w http.ResponseWriter, r *http.Request) (sessionMemoryAddRequest, error) {
+	var req sessionMemoryAddRequest
+	if r.Body == nil || r.Body == http.NoBody {
+		return req, errors.New("request body is required")
+	}
+	defer r.Body.Close()
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSessionMemoryAddBodyBytes))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		return req, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return req, errors.New("request body must contain a single JSON object")
+	}
+	req.Target = strings.TrimSpace(req.Target)
+	req.Topic = strings.TrimSpace(req.Topic)
+	req.Content = strings.TrimSpace(req.Content)
+	if req.Content == "" {
+		return req, errors.New("content is required")
+	}
+	return req, nil
 }
 
 func inspectSessionMemoryBucket(store *memory.FileMemoryStore, target memory.MemoryTarget, topic, newestAt string) (sessionMemoryBucket, bool, error) {
