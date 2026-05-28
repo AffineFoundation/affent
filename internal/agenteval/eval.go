@@ -1013,6 +1013,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCrashDuplicateToolResultResumeScenario(),
 		longRunContextCompactionRetentionScenario(),
 		longRunLoopActivationCalibrationScenario(),
+		longRunLoopActivationCompletedDraftScenario(),
 		longRunResearchCheckpointScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		memoryAutonomousDurableRuleScenario(),

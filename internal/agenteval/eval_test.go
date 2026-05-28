@@ -1748,8 +1748,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 25 {
-		t.Fatalf("long-run suite size = %d, want 25", len(scenarios))
+	if len(scenarios) != 26 {
+		t.Fatalf("long-run suite size = %d, want 26", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2630,6 +2630,48 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if scenarioRequiresActiveLoopProtocol(loopCalibration) {
 		t.Fatal("loop calibration setup scenario must not require a pre-active LOOP.md fixture")
+	}
+
+	loopActivation, ok := seen["longrun-loop-activation-completed-draft"]
+	if !ok {
+		t.Fatalf("long-run suite missing loop activation completed-draft scenario")
+	}
+	if !loopActivation.EnableLoopProtocol || loopActivation.SessionID != "loop-activation-completed-draft" {
+		t.Fatalf("loop activation fields = enable:%v session:%q", loopActivation.EnableLoopProtocol, loopActivation.SessionID)
+	}
+	if len(loopActivation.Prompts) != 2 ||
+		loopActivation.RequiredUserMessageModes[agent.UserModeLoopSetup] != 1 ||
+		loopActivation.RequiredLoopProtocolCalibrationRequests != 1 ||
+		loopActivation.RequiredLoopProtocolCalibrations != 1 ||
+		loopActivation.RequiredLoopProtocolCalibrationRequestStatuses["draft"] != 1 ||
+		loopActivation.RequiredLoopProtocolCalibrationStatuses["draft"] != 1 ||
+		loopActivation.RequiredTraceEventCounts["loop.protocol_calibration_request"] != 1 ||
+		loopActivation.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
+		t.Fatalf("loop activation expectations = prompts:%d modes:%#v requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopActivation.Prompts), loopActivation.RequiredUserMessageModes, loopActivation.RequiredLoopProtocolCalibrationRequests, loopActivation.RequiredLoopProtocolCalibrations, loopActivation.RequiredLoopProtocolCalibrationRequestStatuses, loopActivation.RequiredLoopProtocolCalibrationStatuses, loopActivation.RequiredTraceEventCounts)
+	}
+	if loopActivation.RequiredToolCounts["loop_protocol"] != 1 {
+		t.Fatalf("loop activation RequiredToolCounts = %#v, want loop_protocol=1", loopActivation.RequiredToolCounts)
+	}
+	if !toolArgRequirementContains(loopActivation.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "complete_activation"}) {
+		t.Fatalf("loop activation RequiredToolArgContains = %#v, want complete_activation action", loopActivation.RequiredToolArgContains)
+	}
+	if !stringSliceContains(loopActivation.RequiredToolResultText["loop_protocol"], "activated LOOP.md status=running") {
+		t.Fatalf("loop activation RequiredToolResultText = %#v, want activated running result", loopActivation.RequiredToolResultText)
+	}
+	for _, kind := range []string{"loop_protocol_activation_status", "loop_protocol_activation_unready", "loop_protocol_activation_invalid"} {
+		if max, ok := loopActivation.MaxToolFailureKindCounts[kind]; !ok || max != 0 {
+			t.Fatalf("loop activation MaxToolFailureKindCounts = %#v, want %s=0", loopActivation.MaxToolFailureKindCounts, kind)
+		}
+	}
+	for _, want := range []string{"LOOP-ACTIVATE-Q23", "LOOP-ACTIVATED-23", "status running", "activated LOOP.md status=running"} {
+		if !stringSliceContains(loopActivation.RequiredFinalText, want) {
+			t.Fatalf("loop activation RequiredFinalText = %#v, want %q", loopActivation.RequiredFinalText, want)
+		}
+	}
+	loopActivationCaps := ExpectationCapabilityNames(debugScenarioExpectations(loopActivation))
+	if !stringSliceContains(loopActivationCaps, "loop_protocol") ||
+		!stringSliceContains(loopActivationCaps, "trace") {
+		t.Fatalf("loop activation expectation capabilities = %#v, want loop protocol and trace", loopActivationCaps)
 	}
 
 	researchCheckpoint, ok := seen["longrun-research-checkpoint"]

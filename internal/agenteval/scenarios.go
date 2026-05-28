@@ -2202,6 +2202,62 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 	}
 }
 
+func longRunLoopActivationCompletedDraftScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-loop-activation-completed-draft",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{longRunRecoveryDomain},
+		SessionID:          "loop-activation-completed-draft",
+		EnableLoopProtocol: true,
+		Prompts: []string{
+			"Start long-running loop setup for this session. Ask exactly one short calibration question about stop conditions or pause conditions, include marker LOOP-ACTIVATE-Q23, and do not activate LOOP.md yet.",
+			"Calibration answer: Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. Now supplement the saved draft protocol compactly and call loop_protocol action=complete_activation. Do not call update_draft with status running. The final answer must include LOOP-ACTIVATED-23, status running, and the activated loop protocol result.",
+		},
+		RequiredUserMessageModes: map[string]int{
+			agent.UserModeLoopSetup: 1,
+		},
+		RequiredToolCounts: map[string]int{
+			"loop_protocol": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "loop_protocol", Arg: "action", Substring: "complete_activation"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"loop_protocol": {"activated LOOP.md status=running"},
+		},
+		MaxToolFailureKindCounts: map[string]int{
+			"loop_protocol_activation_status":  0,
+			"loop_protocol_activation_unready": 0,
+			"loop_protocol_activation_invalid": 0,
+		},
+		RequiredLoopProtocolCalibrationRequests: 1,
+		RequiredLoopProtocolCalibrations:        1,
+		RequiredLoopProtocolCalibrationRequestStatuses: map[string]int{
+			"draft": 1,
+		},
+		RequiredLoopProtocolCalibrationStatuses: map[string]int{
+			"draft": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.protocol_calibration_request": 1,
+			"loop.protocol_calibration":         1,
+		},
+		RequiredFinalText: []string{
+			"LOOP-ACTIVATE-Q23",
+			"LOOP-ACTIVATED-23",
+			"status running",
+			"activated LOOP.md status=running",
+		},
+		ForbiddenTools: []string{
+			"read_file", "write_file", "edit_file", "shell",
+			"web_fetch", "web_search", "browser_navigate", "browser_snapshot",
+			"browser_find", "browser_network", "browser_network_read",
+			"run_task", "subagent_run",
+		},
+		MaxTurns: 8,
+	}
+}
+
 func liveWebResearchCheckpointEvidenceScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "live-web-research-checkpoint-evidence",
