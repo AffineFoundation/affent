@@ -3454,6 +3454,21 @@ button.workbench-context-runtime-item:focus-visible {
   transform: translateY(2px) rotate(225deg);
 }
 
+.session-skills-panel[data-surface="true"] > summary {
+  cursor: default;
+}
+
+.session-skills-panel[data-surface="true"] > summary::after {
+  display: none;
+}
+
+.workbench-tab-surface > .session-skills-panel[data-surface="true"] {
+  border-color: rgba(203, 213, 225, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
+  box-shadow: none;
+}
+
 .session-skills-summary {
   display: grid;
 }

@@ -28,6 +28,7 @@ export function SessionSkillsPanel({
   loading = false,
   error,
   defaultOpen = false,
+  surface = false,
   installEnabled = false,
   onRefresh,
   onReadSkill,
@@ -38,6 +39,7 @@ export function SessionSkillsPanel({
   loading?: boolean;
   error?: string;
   defaultOpen?: boolean;
+  surface?: boolean;
   installEnabled?: boolean;
   onRefresh?: () => Promise<void> | void;
   onReadSkill?: (name: string) => Promise<SessionSkillInfo>;
@@ -131,10 +133,17 @@ export function SessionSkillsPanel({
     <details
       className="session-skills-panel"
       data-testid="session-skills-panel"
-      open={panelOpen}
-      onToggle={(event) => setPanelOpen(event.currentTarget.open)}
+      data-surface={surface ? "true" : undefined}
+      open={surface || panelOpen}
+      onToggle={(event) => {
+        if (surface) {
+          event.currentTarget.open = true;
+          return;
+        }
+        setPanelOpen(event.currentTarget.open);
+      }}
     >
-      <summary className="session-skills-summary">
+      <summary className="session-skills-summary" onClick={surface ? (event) => event.preventDefault() : undefined}>
         <span className="session-skills-kicker">Skills</span>
         <strong>{summary}</strong>
         <span>{summaryDetail}</span>

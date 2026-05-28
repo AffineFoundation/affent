@@ -1900,11 +1900,19 @@ describe("App", () => {
     expect(requestedUrls()).not.toContain("/v1/sessions/s1/memory");
 
     await selectWorkbenchTab(user, "Config");
-    expect(await screen.findByTestId("account-settings-panel")).toHaveTextContent("No config");
+    const configPanel = await screen.findByTestId("account-settings-panel");
+    expect(configPanel).toHaveTextContent("No config");
+    expect(configPanel).toHaveAttribute("data-surface", "true");
+    await user.click(within(configPanel).getByText("Config"));
+    expect(screen.getByTestId("account-env-list")).toBeVisible();
     expect(requestedUrls()).toContain("/v1/settings");
     expect(requestedUrls()).not.toContain("/v1/skills");
     await selectWorkbenchTab(user, "Skills");
-    expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("No reusable workflows");
+    const skillsPanel = await screen.findByTestId("session-skills-panel");
+    expect(skillsPanel).toHaveTextContent("No reusable workflows");
+    expect(skillsPanel).toHaveAttribute("data-surface", "true");
+    await user.click(within(skillsPanel).getByText("Skills"));
+    expect(screen.getByTestId("session-skills-list")).toBeVisible();
     expect(requestedUrls()).toContain("/v1/skills");
   });
 

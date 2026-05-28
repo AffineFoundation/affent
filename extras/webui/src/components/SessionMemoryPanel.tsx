@@ -28,6 +28,7 @@ export function SessionMemoryPanel({
   error,
   noSession = false,
   defaultOpen = false,
+  surface = false,
   onRefresh,
   onAddMemory,
   onRemoveMemory,
@@ -40,6 +41,7 @@ export function SessionMemoryPanel({
   error?: string;
   noSession?: boolean;
   defaultOpen?: boolean;
+  surface?: boolean;
   onRefresh?: () => Promise<void> | void;
   onAddMemory?: (request: SessionMemoryAddRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
   onRemoveMemory?: (request: SessionMemoryRemoveRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
@@ -139,10 +141,17 @@ export function SessionMemoryPanel({
     <details
       className="session-skills-panel session-memory-panel"
       data-testid="session-memory-panel"
-      open={panelOpen}
-      onToggle={(event) => setPanelOpen(event.currentTarget.open)}
+      data-surface={surface ? "true" : undefined}
+      open={surface || panelOpen}
+      onToggle={(event) => {
+        if (surface) {
+          event.currentTarget.open = true;
+          return;
+        }
+        setPanelOpen(event.currentTarget.open);
+      }}
     >
-      <summary className="session-skills-summary">
+      <summary className="session-skills-summary" onClick={surface ? (event) => event.preventDefault() : undefined}>
         <span className="session-skills-kicker">Memory</span>
         <strong>{summary}</strong>
         <span>{summaryDetail}</span>

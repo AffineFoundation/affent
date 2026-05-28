@@ -1605,6 +1605,7 @@ export function App() {
         error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
         busy={accountSettingsBusy}
         defaultOpen={defaultOpen}
+        surface={defaultOpen}
         onRefresh={handleRefreshAccountSettings}
         onSetEnv={handleSetAccountEnv}
         onDeleteEnv={handleDeleteAccountEnv}
@@ -1623,6 +1624,7 @@ export function App() {
         error={memoryState.state === "error" ? memoryState.error : undefined}
         noSession={memoryState.state === "empty"}
         defaultOpen={defaultOpen}
+        surface={defaultOpen}
         onRefresh={handleRefreshMemory}
         onAddMemory={handleAddMemory}
         onRemoveMemory={handleRemoveMemory}
@@ -1639,6 +1641,7 @@ export function App() {
         loading={skillsState.state === "loading"}
         error={skillsState.state === "error" ? skillsState.error : undefined}
         defaultOpen={defaultOpen}
+        surface={defaultOpen}
         installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
         onRefresh={handleRefreshSkills}
         onReadSkill={handleReadSkill}

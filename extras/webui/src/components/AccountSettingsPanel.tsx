@@ -18,6 +18,7 @@ export function AccountSettingsPanel({
   error,
   busy,
   defaultOpen = false,
+  surface = false,
   onRefresh,
   onSetEnv,
   onDeleteEnv,
@@ -29,6 +30,7 @@ export function AccountSettingsPanel({
   error?: string;
   busy?: "env" | "ssh" | string;
   defaultOpen?: boolean;
+  surface?: boolean;
   onRefresh?: () => Promise<void> | void;
   onSetEnv?: (name: string, value: string) => Promise<void> | void;
   onDeleteEnv?: (name: string) => Promise<void> | void;
@@ -92,8 +94,16 @@ export function AccountSettingsPanel({
   }
 
   return (
-    <details className="session-skills-panel account-settings-panel" data-testid="account-settings-panel" {...(defaultOpen ? { open: true } : {})}>
-      <summary className="session-skills-summary">
+    <details
+      className="session-skills-panel account-settings-panel"
+      data-testid="account-settings-panel"
+      data-surface={surface ? "true" : undefined}
+      {...(defaultOpen || surface ? { open: true } : {})}
+      onToggle={(event) => {
+        if (surface) event.currentTarget.open = true;
+      }}
+    >
+      <summary className="session-skills-summary" onClick={surface ? (event) => event.preventDefault() : undefined}>
         <span className="session-skills-kicker">Config</span>
         <strong>{title}</strong>
         <span>{detail}</span>
