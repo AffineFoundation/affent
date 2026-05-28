@@ -62,6 +62,8 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=source_network:missing_response_diagnostics=0.000",
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
+		"require-expectation-capability=longrun_recovery,loop_protocol,session_search",
+		"require-expectation-capability=browser,source_access,web",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--list-quality-profiles output missing %q:\n%s", want, out)
@@ -846,6 +848,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinEachExpectationCapabilityPassRate == nil || *gates.MinEachExpectationCapabilityPassRate != 0.50 {
 		t.Fatalf("longrun min each expectation capability pass rate = %#v, want 0.50", gates.MinEachExpectationCapabilityPassRate)
 	}
+	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"longrun_recovery", "loop_protocol", "session_search"}) {
+		t.Fatalf("longrun required expectation capabilities = %#v", gates.RequiredExpectationCapabilities)
+	}
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
 		t.Fatalf("longrun profile should not require source evidence for non-web suites: %#v", gates.MinSourceAccessVerifiedRate)
 	}
@@ -897,7 +902,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["research_checkpoint:no_external_evidence"] != 0 ||
-		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
+		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
+		!reflect.DeepEqual(webGates.RequiredExpectationCapabilities, []string{"browser", "source_access", "web"}) {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}
 	if err := applyQualityGateProfile(&qualityGateConfig{}, "unknown", nil); err == nil || !strings.Contains(err.Error(), "--quality-profile") {
@@ -909,9 +915,10 @@ func TestApplyQualityGateProfile(t *testing.T) {
 			"source_dynamic_without_network": -1,
 			"recall:no_context":              0.25,
 		},
+		RequiredExpectationCapabilities: []string{"delegated_source_evidence", "web"},
 	}
 	if err := applyQualityGateProfile(&overrideGates, "web-evidence", func(name string) bool {
-		return name == "max-debug-brief-tag-rate"
+		return name == "max-debug-brief-tag-rate" || name == "require-expectation-capability"
 	}); err != nil {
 		t.Fatalf("apply web-evidence profile with debug tag overrides: %v", err)
 	}
@@ -921,6 +928,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		overrideGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		overrideGates.MaxDebugBriefTagRates["recall:no_context"] != 0.25 {
 		t.Fatalf("debug brief tag gates not merged: %+v", overrideGates.MaxDebugBriefTagRates)
+	}
+	if !reflect.DeepEqual(overrideGates.RequiredExpectationCapabilities, []string{"browser", "delegated_source_evidence", "source_access", "web"}) {
+		t.Fatalf("required expectation capabilities not merged: %#v", overrideGates.RequiredExpectationCapabilities)
 	}
 	if err := validateQualityGateConfig(overrideGates); err != nil {
 		t.Fatalf("validate debug brief tag gate override: %v", err)

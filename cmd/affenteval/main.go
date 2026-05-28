@@ -486,6 +486,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                       float64Ptr(14),
 				MaxAvgDurationMS:                      float64Ptr(180000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
+				RequiredExpectationCapabilities:       []string{"longrun_recovery", "loop_protocol", "session_search"},
 				MaxDebugBriefTagRates: map[string]float64{
 					"empty_recall:no_recent_sessions": 0,
 					"loop_protocol:fixture":           0,
@@ -532,6 +533,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                       float64Ptr(18),
 				MaxAvgDurationMS:                      float64Ptr(240000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
+				RequiredExpectationCapabilities:       []string{"browser", "source_access", "web"},
 				MaxDebugBriefTagRates: map[string]float64{
 					"browser_network:unread_refs":                 0,
 					"browser_scroll:stuck_without_network":        0,
@@ -681,6 +683,13 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 			}
 		}
 		g.MaxDebugBriefTagRates = profileTags
+	}
+	if len(profileConfig.RequiredExpectationCapabilities) > 0 {
+		profileCapabilities := cloneStringSlice(profileConfig.RequiredExpectationCapabilities)
+		if flagSet != nil && flagSet("require-expectation-capability") {
+			profileCapabilities = append(profileCapabilities, g.RequiredExpectationCapabilities...)
+		}
+		g.RequiredExpectationCapabilities = uniqueSortedStrings(profileCapabilities)
 	}
 	return nil
 }
@@ -3876,6 +3885,28 @@ func cloneStringSlice(in []string) []string {
 		return nil
 	}
 	return append([]string(nil), in...)
+}
+
+func uniqueSortedStrings(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	for _, value := range in {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			seen[value] = true
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for value := range seen {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[string][]agenteval.ToolFailureExample {

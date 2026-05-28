@@ -1104,7 +1104,10 @@ runs; it includes minimum trace-event, memory-update, loop-protocol feed,
 session-search context-hit, scenario-level session-recall debug tag, and missing
 truncation-artifact gates, plus a scenario-level failed tool-repair gate, so
 observability, shared memory, tool recovery, loop-guard no-tool fallback, and
-cross-session recovery regressions fail the batch. No-hit session recall is
+cross-session recovery regressions fail the batch. It also requires the batch
+to include `longrun_recovery`, `loop_protocol`, and `session_search`
+expectation capabilities, so a filtered run cannot pass the profile without
+exercising durable recovery. No-hit session recall is
 allowed only when `recent_sessions` exposes recovery anchors; no-hit recall
 without recent anchors trips the `empty_recall:no_recent_sessions` debug tag
 gate. Memory search misses are not gated merely for missing once, but misses
@@ -1117,14 +1120,17 @@ regressions. Use
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads, browser network refs that were not followed by
 `browser_network_read`, or dynamic gaps without an explicit evidence-quality
-defer decision.
+defer decision. The profile requires `browser`, `source_access`, and `web`
+expectation capability coverage so accidental non-web batches fail before their
+source-quality rates are interpreted.
 Explicit `--max-debug-brief-tag-rate tag=rate` flags merge with profile
 defaults and can disable one profile tag with `tag=-1`. Other explicit gate
 flags override the profile defaults. Use
 `--require-expectation-capability CAPABILITY` when a CI batch must prove it
 actually included at least one scenario for a capability family such as
-`delegated_source_evidence`; this catches filtered or misconfigured suites
-before pass-rate gates are interpreted. JSONL summary records also
+`delegated_source_evidence`; these explicit requirements are added to any
+profile-provided coverage requirements and catch filtered or misconfigured
+suites before pass-rate gates are interpreted. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr.
