@@ -5,9 +5,9 @@ import type { WorkbenchNavItem } from "../view/workbenchNav";
 import { WorkbenchEmpty, WorkbenchPanel } from "./WorkbenchPanel";
 
 const navItems: WorkbenchNavItem[] = [
-  { key: "context", label: "Context", detail: "Result ready" },
-  { key: "run", label: "Run", detail: "1 failed", badge: "1", tone: "error" },
-  { key: "config", label: "Config", detail: "1 env configured", badge: "1" },
+  { key: "context", label: "Context", detail: "Result ready", scope: "current" },
+  { key: "run", label: "Run", detail: "1 failed", scope: "current", badge: "1", tone: "error" },
+  { key: "config", label: "Config", detail: "1 env configured", scope: "platform", badge: "1" },
 ];
 
 describe("WorkbenchPanel", () => {
@@ -31,6 +31,8 @@ describe("WorkbenchPanel", () => {
 
     expect(screen.getByTestId("workbench-panel")).toHaveAccessibleName("Workbench");
     expect(screen.getByText("checkout payment flow")).toBeInTheDocument();
+    expect(screen.getByText("Current work")).toBeInTheDocument();
+    expect(screen.getByText("Platform")).toBeInTheDocument();
     expect(screen.getByTestId("active-tab")).toHaveTextContent("Context content");
     expect(within(screen.getByRole("navigation", { name: "Workbench sections" })).getByRole("button", { name: /^Run\b/ })).toHaveAttribute("data-tone", "error");
 

@@ -15,11 +15,13 @@ import {
 
 export type WorkbenchTab = "context" | "changes" | "run" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
 export type WorkbenchNavTone = "error" | "warning" | "attention";
+export type WorkbenchNavScope = "current" | "platform";
 
 export interface WorkbenchNavItem {
   key: WorkbenchTab;
   label: string;
   detail: string;
+  scope: WorkbenchNavScope;
   badge?: string;
   tone?: WorkbenchNavTone;
 }
@@ -60,6 +62,7 @@ export function buildWorkbenchNavItems({
     {
       key: "context",
       label: "Context",
+      scope: "current",
       detail: overview.stateLabel || "Current session",
       badge: attention?.target === "context" ? attention.label : undefined,
       tone: attention?.target === "context" ? attention.tone : undefined,
@@ -67,6 +70,7 @@ export function buildWorkbenchNavItems({
     {
       key: "changes",
       label: "Changes",
+      scope: "current",
       detail: changes.files.length > 0 ? changes.detail : "Changed file review",
       badge: changes.files.length > 0 ? String(changes.files.length) : undefined,
       tone: attention?.target === "changes" ? attention.tone : changes.tone,
@@ -74,6 +78,7 @@ export function buildWorkbenchNavItems({
     {
       key: "run",
       label: "Run",
+      scope: "current",
       detail: run.commands.length > 0 ? run.detail : "Command history",
       badge: run.commands.length > 0 ? String(run.commands.length) : undefined,
       tone: attention?.target === "run" ? attention.tone : run.tone,
@@ -81,6 +86,7 @@ export function buildWorkbenchNavItems({
     {
       key: "files",
       label: "Files",
+      scope: "current",
       detail: files.items.length > 0 ? files.detail : "Task file evidence",
       badge: files.items.length > 0 ? String(files.items.length) : undefined,
       tone: attention?.target === "files" ? attention.tone : files.tone,
@@ -88,6 +94,7 @@ export function buildWorkbenchNavItems({
     {
       key: "workspace",
       label: "Workspace",
+      scope: "current",
       detail: workspace.hasData ? workspace.summary : "No binding evidence",
       badge: workspace.issue ? "!" : undefined,
       tone: attention?.target === "workspace" ? attention.tone : workspace.tone,
@@ -95,6 +102,7 @@ export function buildWorkbenchNavItems({
     {
       key: "automation",
       label: "Automation",
+      scope: "current",
       detail: automation?.title ?? "Loop and timers",
       badge: automation ? "active" : undefined,
       tone: attention?.target === "automation" ? attention.tone : undefined,
@@ -102,6 +110,7 @@ export function buildWorkbenchNavItems({
     {
       key: "memory",
       label: "Memory",
+      scope: "platform",
       detail: memoryNavDetail(memoryState),
       badge: memoryTabHasSignal ? memoryBadge(memoryState, latestMemoryUpdate) : undefined,
       tone: memoryState.state === "error" ? "error" : undefined,
@@ -109,6 +118,7 @@ export function buildWorkbenchNavItems({
     {
       key: "skills",
       label: "Skills",
+      scope: "platform",
       detail: skillsNavDetail(skillsState),
       badge: skillsTabHasSignal ? skillsBadge(skillsState) : undefined,
       tone: skillsState.state === "error" ? "error" : undefined,
@@ -116,6 +126,7 @@ export function buildWorkbenchNavItems({
     {
       key: "config",
       label: "Config",
+      scope: "platform",
       detail: configNavDetail(configState),
       badge: configTabHasSignal ? configBadge(configState) : undefined,
       tone: configState.state === "error" ? "error" : undefined,
@@ -123,6 +134,7 @@ export function buildWorkbenchNavItems({
     {
       key: "trace",
       label: "Trace",
+      scope: "platform",
       detail: runtimeNavDetail(runtimeState),
       badge: runtimeTabHasSignal ? runtimeBadge(runtimeState) : undefined,
       tone: runtimeState.state === "error" ? "error" : undefined,

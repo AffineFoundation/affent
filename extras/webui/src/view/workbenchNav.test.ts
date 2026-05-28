@@ -44,6 +44,20 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "workspace")).toMatchObject({ detail: "No binding evidence" });
     expect(items.find((item) => item.key === "automation")).toMatchObject({ detail: "Loop and timers" });
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
+    expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
+      "context",
+      "changes",
+      "run",
+      "files",
+      "workspace",
+      "automation",
+    ]);
+    expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
+      "memory",
+      "skills",
+      "config",
+      "trace",
+    ]);
   });
 
   it("surfaces only actionable counts and attention tones", () => {
