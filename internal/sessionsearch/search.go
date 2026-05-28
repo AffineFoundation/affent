@@ -722,26 +722,35 @@ func recentLoopPreviewContent(path, sid string) (string, bool, error) {
 	}
 	var b strings.Builder
 	appendLatestLoopEventPreview(&b, filepath.Join(filepath.Dir(path), loopstate.EventsFileName))
-	if current := markdownSection(protocol, "## 2. Current Situation"); current != "" {
-		appendLoopStateLine(&b, "current_situation", "text="+stateSearchValue(current))
-	}
 	if summary.State != nil {
+		appendLoopStateLine(&b, "last_recovery",
+			"turn_end="+stateSearchValue(summary.State.LastTurnEndReason),
+			"tool_errors="+stateSearchInt(summary.State.LastTurnToolErrors),
+			"forced_no_tools="+stateSearchInt(summary.State.LastTurnForcedNoTools),
+			"session_search="+stateSearchInt(summary.State.LastTurnSessionSearch),
+			"loop_guards="+stateSearchInt(summary.State.LastTurnLoopGuards),
+			"confidence="+stateSearchValue(summary.State.LastDecisionConfidence),
+			"decision="+stateSearchValue(summary.State.LastDecision),
+			"action="+stateSearchValue(summary.State.LastDecisionAction),
+			"reason="+stateSearchValue(summary.State.LastDecisionReason),
+		)
+		appendLoopStateLine(&b, "last_decision",
+			"kind="+stateSearchValue(summary.State.LastDecisionKind),
+			"trigger="+stateSearchValue(summary.State.LastDecisionTrigger),
+		)
+		appendLoopStateLine(&b, "last_turn",
+			"memory_misses="+stateSearchInt(summary.State.LastTurnMemoryMisses),
+			"memory_searches="+stateSearchInt(summary.State.LastTurnMemorySearches),
+			"tools="+stateSearchInt(summary.State.LastTurnToolRequests),
+		)
 		appendLoopStateLine(&b, "last_plan",
 			"label="+stateSearchValue(summary.State.LastPlanLabel),
 			"step_status="+stateSearchValue(summary.State.LastPlanStepStatus),
 			"step="+stateSearchValue(summary.State.LastPlanStep),
 		)
-		appendLoopStateLine(&b, "last_turn",
-			"reason="+stateSearchValue(summary.State.LastTurnEndReason),
-			"tools="+stateSearchInt(summary.State.LastTurnToolRequests),
-			"loop_guards="+stateSearchInt(summary.State.LastTurnLoopGuards),
-			"session_search="+stateSearchInt(summary.State.LastTurnSessionSearch),
-		)
-		appendLoopStateLine(&b, "last_decision",
-			"kind="+stateSearchValue(summary.State.LastDecisionKind),
-			"decision="+stateSearchValue(summary.State.LastDecision),
-			"action="+stateSearchValue(summary.State.LastDecisionAction),
-		)
+	}
+	if current := markdownSection(protocol, "## 2. Current Situation"); current != "" {
+		appendLoopStateLine(&b, "current_situation", "text="+stateSearchValue(current))
 	}
 	appendLoopStateLine(&b, "loop",
 		"status="+stateSearchValue(summary.Status),
@@ -764,17 +773,25 @@ func appendLatestLoopEventPreview(b *strings.Builder, path string) {
 	}
 	ev := events[len(events)-1]
 	appendLoopStateLine(b, "recent_loop_event",
+		"summary="+stateSearchValue(ev.Summary),
+		"turn_end="+stateSearchValue(ev.TurnEndReason),
+		"tool_errors="+stateSearchInt(ev.ToolErrors),
+		"forced_no_tools="+stateSearchInt(ev.ForcedNoTools),
+		"session_search="+stateSearchInt(ev.SessionSearch),
+		"loop_guards="+stateSearchInt(ev.LoopGuards),
+		"action="+stateSearchValue(ev.RequiredAction),
+		"memory_misses="+stateSearchInt(ev.MemoryMisses),
+		"memory_searches="+stateSearchInt(ev.MemorySearches),
 		"type="+stateSearchValue(ev.Type),
 		"mode="+stateSearchValue(ev.Mode),
 		"feed="+stateSearchInt(ev.FeedNumber),
-		"turn_end="+stateSearchValue(ev.TurnEndReason),
-		"plan_step="+stateSearchValue(ev.PlanStep),
-		"loop_guards="+stateSearchInt(ev.LoopGuards),
-		"session_search="+stateSearchInt(ev.SessionSearch),
-		"memory_misses="+stateSearchInt(ev.MemoryMisses),
+		"tools="+stateSearchInt(ev.ToolRequests),
+		"decision_kind="+stateSearchValue(ev.DecisionKind),
 		"decision="+stateSearchValue(ev.Decision),
-		"action="+stateSearchValue(ev.RequiredAction),
-		"summary="+stateSearchValue(ev.Summary),
+		"trigger="+stateSearchValue(ev.Trigger),
+		"confidence="+stateSearchValue(ev.Confidence),
+		"plan_step="+stateSearchValue(ev.PlanStep),
+		"reason="+stateSearchValue(ev.Reason),
 	)
 }
 
@@ -1053,7 +1070,10 @@ func loopEventSearchFields(ev loopstate.Event) []string {
 		"memory_searches=" + stateSearchInt(ev.MemorySearches),
 		"memory_misses=" + stateSearchInt(ev.MemoryMisses),
 		"session_search=" + stateSearchInt(ev.SessionSearch),
+		"decision_kind=" + stateSearchValue(ev.DecisionKind),
 		"decision=" + stateSearchValue(ev.Decision),
+		"trigger=" + stateSearchValue(ev.Trigger),
+		"confidence=" + stateSearchValue(ev.Confidence),
 		"action=" + stateSearchValue(ev.RequiredAction),
 		"calibration=" + stateSearchValue(ev.Calibration),
 		"summary=" + stateSearchValue(ev.Summary),
@@ -1087,6 +1107,7 @@ func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {
 		"tools="+stateSearchInt(state.LastTurnToolRequests),
 		"tool_errors="+stateSearchInt(state.LastTurnToolErrors),
 		"loop_guards="+stateSearchInt(state.LastTurnLoopGuards),
+		"forced_no_tools="+stateSearchInt(state.LastTurnForcedNoTools),
 		"memory_updates="+stateSearchInt(state.LastTurnMemoryUpdates),
 		"memory_searches="+stateSearchInt(state.LastTurnMemorySearches),
 		"memory_misses="+stateSearchInt(state.LastTurnMemoryMisses),
@@ -1104,6 +1125,7 @@ func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {
 		"trigger="+stateSearchValue(state.LastDecisionTrigger),
 		"decision="+stateSearchValue(state.LastDecision),
 		"confidence="+stateSearchValue(state.LastDecisionConfidence),
+		"reason="+stateSearchValue(state.LastDecisionReason),
 		"action="+stateSearchValue(state.LastDecisionAction),
 	)
 	appendLoopStateLine(b, "last_compaction",

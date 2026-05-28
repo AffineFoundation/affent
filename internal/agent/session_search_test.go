@@ -250,6 +250,9 @@ Keep the long-running task recoverable.`); err != nil {
 		Status:                 "running",
 		LastTurnID:             "turn_42",
 		LastTurnEndReason:      sse.TurnEndMaxTurns,
+		LastTurnToolRequests:   4,
+		LastTurnToolErrors:     1,
+		LastTurnForcedNoTools:  1,
 		LastTurnMemorySearches: 2,
 		LastTurnMemoryMisses:   1,
 		LastMemoryUpdateAction: "replace",
@@ -258,6 +261,8 @@ Keep the long-running task recoverable.`); err != nil {
 		LastDecisionKind:       "evidence_quality",
 		LastDecisionTrigger:    "source_access_dynamic_partial",
 		LastDecision:           "defer",
+		LastDecisionConfidence: "high",
+		LastDecisionReason:     "dynamic widgets exposed empty metric values",
 		LastDecisionAction:     "read browser_network_read ref n7 before citing dashboard values",
 		LastCompactionReason:   "context_overflow",
 		LastCompactionReactive: true,
@@ -285,7 +290,7 @@ Keep the long-running task recoverable.`); err != nil {
 	if hit.SessionID != sessionID || hit.Role != "loop" {
 		t.Fatalf("unexpected loop-state hit: %+v", hit)
 	}
-	for _, want := range []string{"loop.protocol_update", "evidence-quality"} {
+	for _, want := range []string{"loop.protocol_update", "evidence-quality", "tool_errors=1", "forced_no_tools=1", "confidence=high", "empty metric values"} {
 		if !strings.Contains(hit.Snippet, want) {
 			t.Fatalf("loop-state hit missing %q:\n%+v\nraw=%s", want, hit, out)
 		}

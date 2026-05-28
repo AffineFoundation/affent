@@ -476,9 +476,10 @@ or current situation even when that state no longer appears in the transcript.
 Loop search content and no-hit recent-session loop previews also include recent
 loop sidecar events with bounded protocol-feed checkpoints: feed mode/number,
 plan label/current step, last turn end reason, loop guard count, memory
-search/update counts, and session-search counts. Recent-session previews put
-the latest durable loop event before long protocol prose so the model can see
-where to resume instead of merely proving that a loop existed.
+search/update counts, session-search counts, tool-error/forced-no-tool counts,
+and loop decision confidence/reason/action. Recent-session previews put the
+latest durable loop event before long protocol prose so the model can see where
+to resume instead of merely proving that a loop existed.
 A user-request hit can carry the adjacent assistant answer so resume/debug runs
 show the prior outcome, not just the old question, which lets poor
 resume/recovery runs be debugged without opening the full transcript. When

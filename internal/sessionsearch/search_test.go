@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 type testMessage struct {
@@ -530,15 +531,24 @@ event recovery checkpoint out of the recent_sessions loop preview. `+strings.Rep
 - current risk: model may forget the previous max_turns failure and repeat stale searches.
 `)
 	if _, err := loopstate.AppendEvent(loopstate.EventsPath(filepath.Join(dir, sessionID), sessionID), loopstate.Event{
-		Type:          "loop.protocol_feed",
-		Summary:       "digest feed preserved RECENT-EVENT-55 recovery anchors",
-		Mode:          "digest",
-		FeedNumber:    7,
-		TurnEndReason: "max_turns",
-		PlanStep:      "continue RECENT-EVENT-55 via browser_network_read",
-		LoopGuards:    2,
-		MemoryMisses:  1,
-		SessionSearch: 1,
+		Type:           "loop.protocol_feed",
+		Summary:        "digest feed preserved RECENT-EVENT-55 recovery anchors",
+		Mode:           "digest",
+		FeedNumber:     7,
+		TurnEndReason:  "max_turns",
+		PlanStep:       "continue RECENT-EVENT-55 via browser_network_read",
+		ToolRequests:   4,
+		ToolErrors:     1,
+		LoopGuards:     2,
+		ForcedNoTools:  1,
+		MemorySearches: 3,
+		MemoryMisses:   1,
+		SessionSearch:  1,
+		DecisionKind:   "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		RequiredAction: "read browser_network_read ref n7 before citing market cap",
 	}); err != nil {
 		t.Fatalf("AppendEvent: %v", err)
 	}
@@ -550,7 +560,7 @@ event recovery checkpoint out of the recent_sessions loop preview. `+strings.Rep
 	if len(recent) != 1 {
 		t.Fatalf("expected one recent loop anchor, got %+v", recent)
 	}
-	for _, want := range []string{"RECENT-EVENT-55", "max_turns", "browser_network_read", "loop_guards=2", "session_search=1"} {
+	for _, want := range []string{"RECENT-EVENT-55", "max_turns", "browser_network_read", "tool_errors=1", "loop_guards=2", "forced_no_tools=1", "session_search=1"} {
 		if !strings.Contains(recent[0].Loop, want) {
 			t.Fatalf("recent loop preview missing %q:\n%+v", want, recent[0])
 		}
@@ -574,8 +584,18 @@ func TestRecentSessionsUsesLoopStateMTime(t *testing.T) {
 `)
 	}
 	writeDurableLoopState(t, dir, "stale-protocol-active-state", loopstate.State{
-		LastDecisionKind:   "evidence_quality",
-		LastDecisionAction: "read browser_network_read before citing dashboard values",
+		LastTurnEndReason:      sse.TurnEndMaxTurns,
+		LastTurnToolRequests:   4,
+		LastTurnToolErrors:     1,
+		LastTurnLoopGuards:     2,
+		LastTurnForcedNoTools:  1,
+		LastTurnMemorySearches: 3,
+		LastTurnMemoryMisses:   1,
+		LastDecisionKind:       "evidence_quality",
+		LastDecision:           "defer",
+		LastDecisionConfidence: "high",
+		LastDecisionReason:     "dynamic widgets exposed empty values",
+		LastDecisionAction:     "read browser_network_read before citing dashboard values",
 	})
 
 	oldTime := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
@@ -604,8 +624,10 @@ func TestRecentSessionsUsesLoopStateMTime(t *testing.T) {
 	if !strings.HasPrefix(recent[0].ModTime, "2026-05-27T12:00:00Z") {
 		t.Fatalf("recent loop mod_time should come from state.json, got %+v", recent[0])
 	}
-	if !strings.Contains(recent[0].Loop, "browser_network_read") {
-		t.Fatalf("recent loop preview should include sidecar state anchor: %+v", recent[0])
+	for _, want := range []string{"browser_network_read", "tool_errors=1", "forced_no_tools=1", "confidence=high", "dynamic widgets exposed empty values"} {
+		if !strings.Contains(recent[0].Loop, want) {
+			t.Fatalf("recent loop preview should include sidecar state anchor %q: %+v", want, recent[0])
+		}
 	}
 }
 
