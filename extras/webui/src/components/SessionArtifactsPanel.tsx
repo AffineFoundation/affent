@@ -55,10 +55,10 @@ export function SessionArtifactsPanel({
                   </div>
                   <span className="session-evidence-actions">
                     <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
-                    <CopyButton label="Copy evidence" value={artifactEvidenceText(artifact)} className="ghost-action" />
+                    <CopyButton label="Copy details" value={artifactEvidenceText(artifact)} className="ghost-action" />
                     {onOpenArtifact ? (
                       <button type="button" className="ghost-action" onClick={() => onOpenArtifact(artifact.path)}>
-                        Open artifact
+                        Open
                       </button>
                     ) : null}
                     {downloadUrl ? (
@@ -68,7 +68,7 @@ export function SessionArtifactsPanel({
                     ) : null}
                     {onUseAsDraft ? (
                       <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
-                        Use artifact as draft
+                        Reference
                       </button>
                     ) : null}
                   </span>
@@ -79,7 +79,10 @@ export function SessionArtifactsPanel({
         ) : artifacts.length > 0 ? (
           <div className="session-skills-empty">No artifacts matching "{trimmedQuery}".</div>
         ) : (
-          <div className="session-skills-empty">No artifacts in this chat.</div>
+          <div className="session-artifacts-empty">
+            <strong>No deliverable artifacts</strong>
+            <span>Raw command outputs are in Run. File reads and edits are in Files.</span>
+          </div>
         )}
       </div>
     </details>

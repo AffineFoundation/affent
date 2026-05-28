@@ -86,7 +86,7 @@ describe("sessionArtifacts", () => {
         "Summary: saved output",
       ].join("\n"),
     );
-    expect(artifactEvidenceDraft(artifacts[0])).toContain("Use this artifact in the next step:\nArtifact evidence");
+    expect(artifactEvidenceDraft(artifacts[0])).toContain("Reference this artifact in the next step:\nArtifact evidence");
   });
 
   it("keeps deliverable artifacts in Workbench while excluding raw tool result files", () => {

@@ -58,12 +58,12 @@ describe("SessionArtifactsPanel", () => {
 
     await user.click(within(firstArtifact).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    await user.click(within(firstArtifact).getByRole("button", { name: "Copy evidence" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Copy details" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Artifact evidence for .affent/artifacts/tool-results/000001-test.txt"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Summary: checkout spec failed"));
-    await user.click(within(firstArtifact).getByRole("button", { name: "Open artifact" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Open" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    await user.click(within(firstArtifact).getByRole("button", { name: "Use artifact as draft" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Reference" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Source: npm test -- checkout.spec.ts"), "artifact");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Summary: checkout spec failed"), "artifact");
 
@@ -77,5 +77,15 @@ describe("SessionArtifactsPanel", () => {
     await user.type(screen.getByLabelText("Search artifacts"), "missing.log");
     expect(screen.queryByTestId("session-artifacts-list")).toBeNull();
     expect(panel).toHaveTextContent('No artifacts matching "missing.log".');
+  });
+
+  it("keeps empty artifacts state tied to Workbench boundaries", () => {
+    render(<SessionArtifactsPanel defaultOpen artifacts={[]} />);
+
+    const panel = screen.getByTestId("session-artifacts-panel");
+    expect(panel).toHaveTextContent("No artifacts");
+    expect(panel).toHaveTextContent("No deliverable artifacts");
+    expect(panel).toHaveTextContent("Raw command outputs are in Run. File reads and edits are in Files.");
+    expect(screen.queryByLabelText("Search artifacts")).toBeNull();
   });
 });

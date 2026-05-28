@@ -34,7 +34,7 @@ export function artifactEvidenceText(artifact: TurnArtifact): string {
 }
 
 export function artifactEvidenceDraft(artifact: TurnArtifact): string {
-  return `Use this artifact in the next step:\n${artifactEvidenceText(artifact)}`;
+  return `Reference this artifact in the next step:\n${artifactEvidenceText(artifact)}`;
 }
 
 export function isWorkbenchArtifact(artifact: TurnArtifact): boolean {
