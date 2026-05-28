@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
 func TestHandleSessionMessage_StartsTurn(t *testing.T) {
@@ -113,6 +114,96 @@ func TestHandleSessionMessage_PublishesDisplayTextForGeneratedPrompts(t *testing
 		return
 	}
 	t.Fatalf("history missing user.message: %+v", history.Events)
+}
+
+func TestHandleSessionMessage_LoopSetupMarkerCreatesDraftBeforeTurn(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"What should pause this loop?"},"finish_reason":"stop"}]}` + "\n\n"))
+	}))
+	defer srv.Close()
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	pool.cfg.EnableLoopProtocol = true
+
+	body := `{"content":"Start a long-running loop for this goal: 持续分析最近的世界形势"}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/loop-marker/messages", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "loop-marker"))
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "draft" ||
+		!strings.Contains(protocol, "持续分析最近的世界形势") {
+		t.Fatalf("loop setup protocol:\n%s", protocol)
+	}
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-marker"), "events.jsonl"), `"display_text":"Set up loop: 持续分析最近的世界形势"`)
+	s := activeSessionByID(pool, "loop-marker")
+	if s == nil {
+		t.Fatal("loop setup should create active session")
+	}
+	messages := s.conv.Snapshot()
+	sawSetupPrompt := false
+	for _, msg := range messages {
+		if msg.Role != "user" {
+			continue
+		}
+		if strings.Contains(msg.Content, "Loop protocol activation is pending, not active yet.") &&
+			!strings.Contains(msg.Content, sessionLoopSetupMarker) {
+			sawSetupPrompt = true
+		}
+	}
+	if !sawSetupPrompt {
+		t.Fatalf("conversation should include backend loop setup prompt, got %+v", messages)
+	}
+}
+
+func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"What should pause this loop?"},"finish_reason":"stop"}]}` + "\n\n"))
+	}))
+	defer srv.Close()
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	pool.cfg.EnableLoopProtocol = true
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/loop-mode/messages", strings.NewReader(`{"mode":"loop_setup","content":"market monitor"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "loop-mode"))
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "draft" || !strings.Contains(protocol, "market monitor") {
+		t.Fatalf("loop setup mode protocol:\n%s", protocol)
+	}
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"type":"turn.end"`)
+}
+
+func TestHandleSessionMessage_LoopSetupMarkerRequiresLoopProtocol(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableLoopProtocol = false
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/no-loop-mode/messages", strings.NewReader(`{"content":"Start a long-running loop for this goal: market monitor"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "mode_unavailable") || !strings.Contains(w.Body.String(), "loop protocol is not available") {
+		t.Fatalf("body should explain missing loop protocol: %s", w.Body.String())
+	}
+	if activeSessionByID(pool, "no-loop-mode") != nil {
+		t.Fatal("loop setup rejection must not create a session")
+	}
 }
 
 func TestHandleSessionMessage_PlanOnlyStartsConstrainedTurn(t *testing.T) {

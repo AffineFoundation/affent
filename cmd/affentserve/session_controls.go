@@ -23,7 +23,10 @@ const (
 	sessionMessageModeNormal      = "normal"
 	sessionMessageModePlanOnly    = "plan_only"
 	sessionMessageModeExecutePlan = "execute_plan"
+	sessionMessageModeLoopSetup   = "loop_setup"
 )
+
+const sessionLoopSetupMarker = "Start a long-running loop for this goal:"
 
 type sessionMessageRequest struct {
 	Content     string `json:"content"`
@@ -70,9 +73,22 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONErrorTyped(w, http.StatusBadRequest, "content is required", nil, "bad_request")
 		return
 	}
+	loopSetupGoal := ""
+	if mode == sessionMessageModeLoopSetup {
+		loopSetupGoal = compactSessionLoopSetupGoal(content)
+	} else {
+		loopSetupGoal = sessionLoopSetupGoalFromMessage(content)
+		if mode == sessionMessageModeNormal && loopSetupGoal != "" {
+			mode = sessionMessageModeLoopSetup
+		}
+	}
 	executePlanStepIndex := 0
 	if sessionMessageModeRequiresPlanTool(mode) && !pool.cfg.EnableBuiltins {
 		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("plan tool is not available"), "mode_unavailable")
+		return
+	}
+	if mode == sessionMessageModeLoopSetup && (!pool.cfg.EnableLoopProtocol || pool.cfg.EvalMode) {
+		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("loop protocol is not available"), "mode_unavailable")
 		return
 	}
 	if mode == sessionMessageModeExecutePlan {
@@ -83,6 +99,9 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		}
 	} else if mode == sessionMessageModePlanOnly {
 		content = agent.PlanOnlyUserPrompt(content)
+	} else if mode == sessionMessageModeLoopSetup && loopSetupGoal == "" {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "loop setup", errors.New("loop setup goal is required"), "bad_request")
+		return
 	}
 	sess, err := pool.GetOrCreate(sessionID)
 	if err != nil {
@@ -93,6 +112,16 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		}
 		writeJSONError(w, http.StatusInternalServerError, "create session", err)
 		return
+	}
+	if mode == sessionMessageModeLoopSetup {
+		if _, err := sess.ensureLoopProtocolInitializedWithCreated(loopSetupGoal); err != nil {
+			writeJSONError(w, http.StatusInternalServerError, "initialize loop protocol", err)
+			return
+		}
+		content = sessionLoopSetupPrompt(loopSetupGoal)
+		if displayText == "" {
+			displayText = sessionLoopSetupDisplayText(loopSetupGoal)
+		}
 	}
 	opts, err := sessionMessageTurnOptions(sess, mode, executePlanStepIndex)
 	if err != nil {
@@ -173,8 +202,10 @@ func normalizeSessionMessageMode(raw string) (string, error) {
 		return sessionMessageModeNormal, nil
 	case sessionMessageModePlanOnly, sessionMessageModeExecutePlan:
 		return mode, nil
+	case sessionMessageModeLoopSetup:
+		return mode, nil
 	default:
-		return "", fmt.Errorf("mode must be one of %q, %q, or %q", sessionMessageModeNormal, sessionMessageModePlanOnly, sessionMessageModeExecutePlan)
+		return "", fmt.Errorf("mode must be one of %q, %q, %q, or %q", sessionMessageModeNormal, sessionMessageModePlanOnly, sessionMessageModeExecutePlan, sessionMessageModeLoopSetup)
 	}
 }
 
@@ -221,6 +252,94 @@ func prepareSessionExecutePlan(pool *SessionPool, sessionID, request string) (st
 		request = "Proceed with the active persisted plan."
 	}
 	return sessionExecutePlanPrompt(request, summary.Label), summary.CurrentStepIndex, nil
+}
+
+func sessionLoopSetupGoalFromMessage(content string) string {
+	text := strings.TrimSpace(content)
+	if text == "" {
+		return ""
+	}
+	markerAt := strings.Index(strings.ToLower(text), strings.ToLower(sessionLoopSetupMarker))
+	if markerAt < 0 {
+		return ""
+	}
+	afterMarker := strings.TrimSpace(text[markerAt+len(sessionLoopSetupMarker):])
+	goal := sessionLoopSetupTemplateField(afterMarker, "Goal:", []string{
+		"Success criteria:",
+		"What to keep improving or checking:",
+		"When to pause and ask me:",
+	})
+	if goal == "" {
+		goal = sessionLoopSetupInlineGoal(afterMarker)
+	}
+	return compactSessionLoopSetupGoal(goal)
+}
+
+func sessionLoopSetupTemplateField(text, label string, nextLabels []string) string {
+	lower := strings.ToLower(text)
+	start := strings.Index(lower, strings.ToLower(label))
+	if start < 0 {
+		return ""
+	}
+	valueStart := start + len(label)
+	valueEnd := len(text)
+	for _, next := range nextLabels {
+		if nextAt := strings.Index(lower[valueStart:], strings.ToLower(next)); nextAt >= 0 && valueStart+nextAt < valueEnd {
+			valueEnd = valueStart + nextAt
+		}
+	}
+	return strings.TrimSpace(text[valueStart:valueEnd])
+}
+
+func sessionLoopSetupInlineGoal(text string) string {
+	line := strings.TrimSpace(strings.SplitN(text, "\n", 2)[0])
+	if line == "" || strings.HasSuffix(line, ":") {
+		return ""
+	}
+	return line
+}
+
+func compactSessionLoopSetupGoal(goal string) string {
+	goal = strings.Join(strings.Fields(strings.TrimSpace(goal)), " ")
+	if goal == "" {
+		return ""
+	}
+	return textWithinBytes(goal, 500)
+}
+
+func sessionLoopSetupDisplayText(goal string) string {
+	return textWithinBytes("Set up loop: "+strings.TrimSpace(goal), maxSessionMessageDisplay)
+}
+
+func textWithinBytes(text string, maxBytes int) string {
+	text = strings.TrimSpace(text)
+	if maxBytes <= 0 || len([]byte(text)) <= maxBytes {
+		return text
+	}
+	var b strings.Builder
+	for _, r := range text {
+		if b.Len()+len([]byte(string(r))) > maxBytes-3 {
+			break
+		}
+		b.WriteRune(r)
+	}
+	return strings.TrimSpace(b.String()) + "..."
+}
+
+func sessionLoopSetupPrompt(goal string) string {
+	goal = strings.TrimSpace(goal)
+	return strings.Join([]string{
+		"Set up loop for: " + goal,
+		"",
+		"Loop protocol activation is pending, not active yet.",
+		"This setup path may have been started from chat or the WebUI; both require the same calibration-first activation flow.",
+		"Use loop_protocol action=read to inspect the draft LOOP.md.",
+		"Ask exactly one concise calibration question now before activation, even when the initial goal seems clear.",
+		"Do not complete activation in the same turn that created the draft unless this turn is responding to an earlier explicit calibration answer.",
+		"After asking, wait for the user's answer; do not continue autonomous work or claim the loop is running while LOOP.md is still draft.",
+		"Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
+		"Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
+	}, "\n")
 }
 
 func sessionExecutePlanPrompt(request, label string) string {
