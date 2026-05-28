@@ -1,6 +1,6 @@
 import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
-import type { SessionState } from "../store/sessionState";
+import { latestAssistantMessageText, type SessionState } from "../store/sessionState";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
@@ -219,8 +219,9 @@ function currentSessionPreview(session: SessionState, title: string, detail?: st
   }
   const issue = currentTurnIssuePreview(latestTurn);
   if (issue) return issue;
-  if (latestTurn.assistantText.trim()) {
-    return `Answer · ${summarizeAnswerPreview(latestTurn.assistantText, 96)}`;
+  const latestAnswer = latestAssistantMessageText(latestTurn);
+  if (latestAnswer) {
+    return `Answer · ${summarizeAnswerPreview(latestAnswer, 96)}`;
   }
   if (detail) return detail;
   const userText = latestTurn.userText?.trim();

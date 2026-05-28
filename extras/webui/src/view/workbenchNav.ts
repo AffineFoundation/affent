@@ -73,17 +73,15 @@ export function buildWorkbenchNavItems({
       scope: "current",
       detail: contextNavDetail(usage),
     },
-  ];
-  if (automation || attention?.target === "automation") {
-    currentItems.push({
+    {
       key: "loop",
       label: "Automation",
       scope: "current",
-      detail: automation?.title ?? "Loop and timer attention",
+      detail: automation?.title ?? "Loop and timers",
       badge: automation ? "active" : undefined,
       tone: toneForAttention(attention?.target === "automation" ? attention.tone : undefined),
-    });
-  }
+    },
+  ];
   if (changes.files.length > 0 || attention?.target === "changes") {
     currentItems.push({
       key: "changes",
@@ -146,14 +144,6 @@ export function buildWorkbenchNavItems({
 
   return [
     ...currentItems,
-    ...(automation || attention?.target === "automation"
-      ? []
-      : [{
-        key: "loop" as const,
-        label: "Automation",
-        scope: "platform" as const,
-        detail: "Loop and timers",
-      }]),
     {
       key: "memory",
       label: "Memory",

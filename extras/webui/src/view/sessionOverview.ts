@@ -1,6 +1,6 @@
 import { EventType, type ToolRuntimeStats } from "../api/events";
 import type { SessionContextSummary, SessionPlanSummary } from "../api/sessions";
-import type { SessionState, TurnState } from "../store/sessionState";
+import { latestAssistantMessageText, type SessionState, type TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { memoryUpdatesForTurn } from "./memoryUpdate";
@@ -155,21 +155,22 @@ function pendingTaskDetail({ hasSelectedSession, hasLatestTurn }: { hasSelectedS
 }
 
 function overviewDetail(turn: TurnState, activity: TurnActivityView | undefined, workflow: WorkflowStatus): string {
+  const latestAnswer = latestAssistantMessageText(turn);
   if (activity?.digest.summary && activity.digest.summary !== "No activity yet.") {
     const summary = summarize(activity.digest.summary, 140);
     if (
       turn.status === "completed" &&
-      turn.assistantText.trim() &&
+      latestAnswer &&
       (activity.digest.label === "Process" || isMechanicalActivitySummary(summary))
     ) {
-      return summarizeAnswer(turn.assistantText, 140);
+      return summarizeAnswer(latestAnswer, 140);
     }
     return summary;
   }
-  if (turn.status === "completed" && turn.assistantText.trim()) {
-    return summarizeAnswer(turn.assistantText, 140);
+  if (turn.status === "completed" && latestAnswer) {
+    return summarizeAnswer(latestAnswer, 140);
   }
-  if (turn.assistantText.trim()) return summarizeAnswer(turn.assistantText, 140);
+  if (latestAnswer) return summarizeAnswer(latestAnswer, 140);
   return workflow.detail;
 }
 
@@ -577,11 +578,12 @@ function buildThreadMetrics(session: SessionState, latestTurn: TurnState): Threa
 }
 
 function shouldShowThreadMetrics(session: SessionState, latestTurn: TurnState): boolean {
+  const latestAnswer = latestAssistantMessageText(latestTurn);
   if (session.turns.length < 2) return false;
   if (latestTurn.toolCalls.length > 0) return false;
-  if (latestTurn.status !== "completed" || !latestTurn.assistantText.trim()) return false;
+  if (latestTurn.status !== "completed" || !latestAnswer) return false;
   if (!previousTurnsHaveToolWork(session, latestTurn)) return false;
-  return looksLikeThreadFinalization(latestTurn.userText) || latestAnswerUsesPriorWork(latestTurn.assistantText);
+  return looksLikeThreadFinalization(latestTurn.userText) || latestAnswerUsesPriorWork(latestAnswer);
 }
 
 function previousTurnsHaveToolWork(session: SessionState, latestTurn: TurnState): boolean {

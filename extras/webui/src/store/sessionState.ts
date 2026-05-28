@@ -130,3 +130,16 @@ export function initialSessionState(): SessionState {
     unknownEventCount: 0,
   };
 }
+
+export function assistantMessageTexts(turn: TurnState): string[] {
+  const completed = (turn.assistantMessages ?? []).filter((message) => message.trim().length > 0);
+  const draft = turn.assistantTextDraft?.trim() ? turn.assistantTextDraft : "";
+  if (completed.length > 0) return draft ? [...completed, draft] : completed;
+  const text = turn.assistantText.trim() ? turn.assistantText : "";
+  return text ? [text] : [];
+}
+
+export function latestAssistantMessageText(turn?: TurnState): string {
+  if (!turn) return "";
+  return assistantMessageTexts(turn).at(-1)?.trim() ?? "";
+}

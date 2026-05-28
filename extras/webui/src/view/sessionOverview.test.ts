@@ -114,6 +114,26 @@ describe("buildSessionOverview", () => {
     ]);
   });
 
+  it("uses the latest assistant reply for the main context when one turn has multiple replies", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "set up the report" } },
+      { id: 3, type: "message.done", data: { turn_id: "t1", text: "First I drafted the outline." } },
+      { id: 4, type: "message.done", data: { turn_id: "t1", text: "Then I added evidence notes." } },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "Final state: waiting for calibration." } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.detail).toBe("Final state: waiting for calibration.");
+    expect(overview.detail).not.toContain("First I drafted");
+    expect(overview.detail).not.toContain("Then I added");
+  });
+
   it("keeps work metrics visible only when they include evidence, risk, or next-step signal", () => {
     expect(displaySessionOverviewMetrics([
       { label: "Work", value: "1 action", tone: "warning" },

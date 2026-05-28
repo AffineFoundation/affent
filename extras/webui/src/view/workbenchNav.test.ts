@@ -37,14 +37,14 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "loop")).toMatchObject({
       label: "Automation",
       detail: "Loop and timers",
-      scope: "platform",
+      scope: "current",
     });
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
     expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
       "context",
+      "loop",
     ]);
     expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
-      "loop",
       "memory",
       "skills",
       "config",

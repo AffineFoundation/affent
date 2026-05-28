@@ -728,6 +728,10 @@ body[data-resizing="true"] {
   max-width: 100%;
 }
 
+.workbench-tab-surface > .session-plan-panel {
+  overflow: visible;
+}
+
 .workbench-tab-surface > .session-skills-panel[open] {
   display: flex;
   flex-direction: column;

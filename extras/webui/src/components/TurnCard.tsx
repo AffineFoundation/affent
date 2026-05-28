@@ -58,6 +58,7 @@ export function TurnCard({
   const memoryUpdates = memoryUpdatesForTurn(turn);
   const activity = buildTurnActivity(turn, { continuedAfterLimit, continuedIntoTurnNumber });
   const fallbackAnswer = buildFallbackAnswer(turn, { continuedAfterLimit });
+  const assistantMessageSteps = turnAssistantMessageSteps(turn);
   const boundary = buildTurnBoundaryView({
     turn,
     turnNumber,
@@ -127,17 +128,18 @@ export function TurnCard({
         ) : null}
         <div className="assistant-cluster">
           <div className="assistant-name">Affent</div>
-          {turn.assistantText ? (
+          {assistantMessageSteps.map((message, index) => (
             <MessageStep
-              label="Affent"
-              text={turn.assistantText}
+              key={`${index}-${message.text.slice(0, 24)}`}
+              label={message.label}
+              text={message.text}
               variant="assistant"
-              streaming={turn.messageStreaming}
+              streaming={message.streaming}
               searchQuery={searchQuery}
               onContinue={onUseAsDraft}
               onRetry={onUseAsDraft}
             />
-          ) : null}
+          ))}
           {turn.status === "running" && !turn.assistantText ? (
             <RunningAnswerBubble turn={turn} summary={workSummary} />
           ) : null}
@@ -178,6 +180,19 @@ export function TurnCard({
       </div>
     </section>
   );
+}
+
+function turnAssistantMessageSteps(turn: TurnState): Array<{ text: string; streaming?: boolean; label: string }> {
+  const completed = (turn.assistantMessages ?? []).filter((message) => message.trim().length > 0);
+  const draft = turn.assistantTextDraft?.trim() ? turn.assistantTextDraft : "";
+  if (completed.length > 0) {
+    return [
+      ...completed.map((text) => ({ text, label: "Affent" })),
+      ...(draft && draft !== completed.at(-1) ? [{ text: draft, label: "Affent", streaming: turn.messageStreaming }] : []),
+    ];
+  }
+  const text = turn.assistantText.trim() ? turn.assistantText : "";
+  return text ? [{ text, label: "Affent", streaming: turn.messageStreaming }] : [];
 }
 
 function MemoryUpdateStrip({ updates, searchQuery }: { updates: readonly MemoryUpdateSummary[]; searchQuery?: string }) {

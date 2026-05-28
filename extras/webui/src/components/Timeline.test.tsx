@@ -551,6 +551,23 @@ describe("Timeline", () => {
     expect(answer.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("keeps multiple assistant messages in the same turn visible as separate replies", () => {
+    renderTimeline([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 1, type: "user.message", data: { turn_id: "t1", text: "set up the report" } },
+      { id: 2, type: "message.done", data: { turn_id: "t1", text: "I drafted the report structure." } },
+      { id: 3, type: "message.done", data: { turn_id: "t1", text: "I added the first evidence section." } },
+      { id: 4, type: "message.done", data: { turn_id: "t1", text: "Next, I will verify the update cadence." } },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    const replies = screen.getAllByTestId("msg-assistant");
+    expect(replies).toHaveLength(3);
+    expect(replies[0]).toHaveTextContent("I drafted the report structure.");
+    expect(replies[1]).toHaveTextContent("I added the first evidence section.");
+    expect(replies[2]).toHaveTextContent("Next, I will verify the update cadence.");
+  });
+
   it("surfaces streaming assistant text as a live writing state", () => {
     renderTimeline(completedTurn.filter((event) => event.id <= 8));
 
