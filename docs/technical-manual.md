@@ -297,18 +297,19 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
 
 ## Web Retrieval Diagnostics
 
-`web_fetch` starts as a direct HTTP reader. `web_search` uses the configured
-search backend selected by `AFFENT_WEB_SEARCH_PROVIDER`, which accepts `auto`,
-`tavily`, or `google`. `auto` preserves the historical Tavily default when
-`TAVILY_API_KEY` is present, otherwise uses Google when an API key
+`web_fetch` starts as a direct HTTP reader. `web_search` depends on the
+configured search backend selected by `AFFENT_WEB_SEARCH_PROVIDER`, which
+accepts `auto`, `tavily`, or `google`. `auto` preserves the historical Tavily
+default when `TAVILY_API_KEY` is present, otherwise uses Google when an API key
 (`GOOGLE_CSE_API_KEY` or `GOOGLE_API_KEY`) and a search engine ID
 (`GOOGLE_CSE_ID` or `GOOGLE_SEARCH_ENGINE_ID`) are configured, and otherwise
 falls back to the built-in public HTML search provider. The Google backend uses
 the official Programmable Search JSON API instead of scraping
 `google.com/search`, because automated browser sessions from datacenter IPs
 often receive anti-abuse challenge pages. Explicit `tavily` or `google`
-selection still requires that provider's credentials and fails at startup when
-they are missing or invalid. When a runtime also enables `extras/browser`,
+selection still requires that provider's credentials; when they are missing or
+invalid, the runtime fails at startup instead of silently degrading to
+fetch-only. When a runtime also enables `extras/browser`,
 `affentserve` wires the session Chromium instance into `web_fetch` as a rendered
 fallback: direct-reader trap hosts, anti-bot/challenge responses, and
 client-rendered app shells are retried through the browser and returned as

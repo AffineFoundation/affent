@@ -458,10 +458,21 @@ func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 		"contribute to\n`tool_failure_by_kind` even when their `tool.result.exit_code` is `0`",
 		"`tool_errors` remains reserved for non-zero tool exits",
 	} {
-		if !strings.Contains(body, want) {
+		if !containsDocPhrase(body, want) {
 			t.Fatalf("technical manual session persistence docs missing %q", want)
 		}
 	}
+}
+
+func containsDocPhrase(body, want string) bool {
+	if strings.Contains(body, want) {
+		return true
+	}
+	return strings.Contains(collapseDocWhitespace(body), collapseDocWhitespace(want))
+}
+
+func collapseDocWhitespace(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
