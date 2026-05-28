@@ -62,6 +62,51 @@ func TestAppendUserMessagePublishesContextInjectedEvents(t *testing.T) {
 	if payloads[0].Bytes <= 0 || payloads[0].EstimatedTokens <= 0 {
 		t.Fatalf("payload should carry prompt size metadata: %+v", payloads[0])
 	}
+	msgs := conv.Snapshot()
+	if len(msgs) != 2 || !msgs[0].TransientContext || msgs[1].Role != "user" {
+		t.Fatalf("dynamic context should be persisted as transient before the user message: %+v", msgs)
+	}
+}
+
+func TestAppendUserMessagePrunesPreviousTransientContext(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		Conv:   conv,
+		Events: make(chan sse.Event, 8),
+		SkillProvider: func(userText string) string {
+			return "runtime context for " + userText
+		},
+	}
+
+	if err := loop.appendUserMessage("turn_1", "first", TurnOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Append(ChatMessage{Role: "assistant", Content: "first done"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := loop.appendUserMessage("turn_2", "second", TurnOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs := conv.Snapshot()
+	var transientCount int
+	for _, msg := range msgs {
+		if msg.TransientContext {
+			transientCount++
+			if !strings.Contains(msg.Content, "second") {
+				t.Fatalf("stale transient context survived: %+v", msgs)
+			}
+		}
+		if strings.Contains(msg.Content, "runtime context for first") {
+			t.Fatalf("first turn transient context should be pruned: %+v", msgs)
+		}
+	}
+	if transientCount != 1 {
+		t.Fatalf("transient context count = %d, want 1: %+v", transientCount, msgs)
+	}
 }
 
 func TestContextInjectedPayloadSkipsLoopProtocolBlock(t *testing.T) {

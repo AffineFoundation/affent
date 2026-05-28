@@ -933,6 +933,18 @@ func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	}
 }
 
+func TestLoopDefaultMaxToolCallsTracksEffectiveTurnSteps(t *testing.T) {
+	if got := (&Loop{}).maxToolCallsForTurn(TurnOptions{}); got != DefaultMaxTurnSteps {
+		t.Fatalf("default max tool calls = %d, want %d", got, DefaultMaxTurnSteps)
+	}
+	if got := (&Loop{MaxTurnSteps: 4}).maxToolCallsForTurn(TurnOptions{}); got != 4 {
+		t.Fatalf("max tool calls should default to MaxTurnSteps, got %d", got)
+	}
+	if got := (&Loop{MaxTurnSteps: 4, MaxToolCalls: 7}).maxToolCallsForTurn(TurnOptions{}); got != 7 {
+		t.Fatalf("explicit MaxToolCalls should win, got %d", got)
+	}
+}
+
 func TestEnsureSystemPrompt_EmptyConv_NoMemory(t *testing.T) {
 	conv := newTestConv(t)
 	l := &Loop{Conv: conv}

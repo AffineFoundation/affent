@@ -405,6 +405,31 @@ func (c *Conversation) Snapshot() []ChatMessage {
 	return out
 }
 
+// PruneTransientContext removes runtime-injected context from prior turns.
+// These messages are persisted while a turn is active so crashes remain
+// inspectable, but they are not durable user/assistant history.
+func (c *Conversation) PruneTransientContext() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if len(c.messages) == 0 {
+		return nil
+	}
+	out := make([]ChatMessage, 0, len(c.messages))
+	changed := false
+	for _, msg := range c.messages {
+		if msg.TransientContext {
+			changed = true
+			continue
+		}
+		out = append(out, msg)
+	}
+	if !changed {
+		return nil
+	}
+	return c.replaceWithoutLock(out)
+}
+
 // Replace overwrites the entire message log, on disk and in memory. Used
 // by Compactors after summarizing earlier turns; the caller is responsible
 // for preserving tool_calls / tool message pairing — Replace will not

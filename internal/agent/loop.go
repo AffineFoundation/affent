@@ -104,7 +104,7 @@ type Loop struct {
 	Events       chan<- sse.Event
 	Log          zerolog.Logger
 	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps
-	MaxToolCalls int // total tool calls per user turn; zero means uncapped
+	MaxToolCalls int // total tool calls per user turn; zero falls back to the effective MaxTurnSteps
 
 	// ToolResultMaxBytesInContext caps the tool result bytes persisted
 	// into conversation history for subsequent LLM calls. Zero uses
@@ -815,7 +815,7 @@ func (l *Loop) appendActiveSkills(turnID, userText string) error {
 	if block == "" {
 		return nil
 	}
-	if err := l.Conv.Append(ChatMessage{Role: "system", Content: block}); err != nil {
+	if err := l.Conv.Append(ChatMessage{Role: "system", Content: block, TransientContext: true}); err != nil {
 		return err
 	}
 	sections := contextInjectedSections(block)
@@ -985,11 +985,14 @@ func activePlanContextPreview(section string) string {
 }
 
 func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
+	if err := l.Conv.PruneTransientContext(); err != nil {
+		return err
+	}
 	if err := l.appendActiveSkills(turnID, text); err != nil {
 		return err
 	}
 	if block := l.researchCheckpointSkillBlock(text, opts); block != "" {
-		if err := l.Conv.Append(ChatMessage{Role: "system", Content: block}); err != nil {
+		if err := l.Conv.Append(ChatMessage{Role: "system", Content: block, TransientContext: true}); err != nil {
 			return err
 		}
 		l.publishContextInjected(turnID, block)
@@ -2440,7 +2443,10 @@ func (l *Loop) maxToolCallsForTurn(opts TurnOptions) int {
 	if opts.MaxToolCalls > 0 {
 		return opts.MaxToolCalls
 	}
-	return l.MaxToolCalls
+	if l.MaxToolCalls > 0 {
+		return l.MaxToolCalls
+	}
+	return l.maxTurnStepsForSurface()
 }
 
 func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {

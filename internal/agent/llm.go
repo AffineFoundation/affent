@@ -215,6 +215,9 @@ type ChatMessage struct {
 	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID       string     `json:"tool_call_id,omitempty"`
 	Name             string     `json:"name,omitempty"` // tool name for role=tool (some providers want it)
+	// TransientContext marks runtime-injected system context that should be
+	// visible to the current turn but pruned before the next user turn.
+	TransientContext bool `json:"transient_context,omitempty"`
 }
 
 // wireMessage is the on-the-wire request shape. Mirrors ChatMessage minus
