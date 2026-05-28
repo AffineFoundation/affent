@@ -128,7 +128,8 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 					}
 				}
 				loopPath := loopstate.ProtocolPath(filepath.Join(sessionsDir, sid), sid)
-				if mtime, ok := regularFileModTime(loopPath); ok {
+				loopStatePath := filepath.Join(filepath.Dir(loopPath), loopstate.StateFileName)
+				if mtime, ok := newestRegularFileModTime(loopPath, loopStatePath); ok {
 					hit, ok, serr := scoreLoopFile(ctx, loopPath, sid, terms, mtime)
 					if serr != nil {
 						if ctx.Err() != nil {
@@ -237,12 +238,14 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				conversationPath := filepath.Join(sessionsDir, sid, "conversation.jsonl")
 				planPath := filepath.Join(sessionsDir, sid, "plan.json")
 				loopPath := loopstate.ProtocolPath(filepath.Join(sessionsDir, sid), sid)
+				loopStatePath := filepath.Join(filepath.Dir(loopPath), loopstate.StateFileName)
 				eventsPath := filepath.Join(sessionsDir, sid, "events.jsonl")
 				conversationInfo, hasConversation := regularFileInfo(conversationPath)
 				planInfo, hasPlan := regularFileInfo(planPath)
 				loopInfo, hasLoop := regularFileInfo(loopPath)
+				loopStateInfo, hasLoopState := regularFileInfo(loopStatePath)
 				eventsInfo, hasEvents := regularFileInfo(eventsPath)
-				if !hasConversation && !hasPlan && !hasLoop && !hasEvents {
+				if !hasConversation && !hasPlan && !hasLoop && !hasLoopState && !hasEvents {
 					continue
 				}
 				modTime := time.Time{}
@@ -254,6 +257,9 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				}
 				if hasLoop && (modTime.IsZero() || loopInfo.ModTime().After(modTime)) {
 					modTime = loopInfo.ModTime()
+				}
+				if hasLoopState && (modTime.IsZero() || loopStateInfo.ModTime().After(modTime)) {
+					modTime = loopStateInfo.ModTime()
 				}
 				if hasEvents && (modTime.IsZero() || eventsInfo.ModTime().After(modTime)) {
 					modTime = eventsInfo.ModTime()
@@ -1119,6 +1125,25 @@ func regularFileModTime(path string) (string, bool) {
 		return "", false
 	}
 	return info.ModTime().UTC().Format(time.RFC3339), true
+}
+
+func newestRegularFileModTime(paths ...string) (string, bool) {
+	var newest time.Time
+	found := false
+	for _, path := range paths {
+		info, ok := regularFileInfo(path)
+		if !ok {
+			continue
+		}
+		if !found || info.ModTime().After(newest) {
+			newest = info.ModTime()
+			found = true
+		}
+	}
+	if !found {
+		return "", false
+	}
+	return newest.UTC().Format(time.RFC3339), true
 }
 
 func regularFileInfo(path string) (os.FileInfo, bool) {

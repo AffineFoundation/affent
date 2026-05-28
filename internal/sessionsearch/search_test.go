@@ -77,6 +77,23 @@ func writeDurableLoop(t *testing.T, root, sessionID, raw string) {
 	}
 }
 
+func writeDurableLoopState(t *testing.T, root, sessionID string, state loopstate.State) {
+	t.Helper()
+	path := loopstate.StatePath(filepath.Join(root, sessionID), sessionID)
+	if state.LoopID == "" {
+		state.LoopID = sessionID
+	}
+	if state.OwnerSession == "" {
+		state.OwnerSession = sessionID
+	}
+	if state.Status == "" {
+		state.Status = "running"
+	}
+	if err := loopstate.WriteState(path, state); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func writeDurableEvents(t *testing.T, root, sessionID string, events ...eventRecord) {
 	t.Helper()
 	dir := filepath.Join(root, sessionID)
@@ -437,6 +454,58 @@ Recover Alpha Coast market research without losing evidence quality.
 	}
 	if strings.Contains(fmt.Sprint(recent), "hidden current loop") {
 		t.Fatalf("current session loop leaked into recent anchors: %+v", recent)
+	}
+}
+
+func TestRecentSessionsUsesLoopStateMTime(t *testing.T) {
+	dir := t.TempDir()
+	for _, sessionID := range []string{"stale-protocol-active-state", "fresh-protocol"} {
+		writeDurableLoop(t, dir, sessionID, `# Loop Protocol: `+sessionID+`
+
+## 0. Metadata
+
+- loop_id: `+sessionID+`
+- owner_session: `+sessionID+`
+- status: running
+
+## 2. Current Situation
+
+- current intent: recover `+sessionID+`
+`)
+	}
+	writeDurableLoopState(t, dir, "stale-protocol-active-state", loopstate.State{
+		LastDecisionKind:   "evidence_quality",
+		LastDecisionAction: "read browser_network_read before citing dashboard values",
+	})
+
+	oldTime := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	midTime := time.Date(2026, 5, 26, 12, 0, 0, 0, time.UTC)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(loopstate.ProtocolPath(filepath.Join(dir, "stale-protocol-active-state"), "stale-protocol-active-state"), oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(loopstate.ProtocolPath(filepath.Join(dir, "fresh-protocol"), "fresh-protocol"), midTime, midTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(loopstate.StatePath(filepath.Join(dir, "stale-protocol-active-state"), "stale-protocol-active-state"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 2 {
+		t.Fatalf("expected two recent loop anchors, got %+v", recent)
+	}
+	if recent[0].SessionID != "stale-protocol-active-state" {
+		t.Fatalf("loop state mtime should make active state first, got %+v", recent)
+	}
+	if !strings.HasPrefix(recent[0].ModTime, "2026-05-27T12:00:00Z") {
+		t.Fatalf("recent loop mod_time should come from state.json, got %+v", recent[0])
+	}
+	if !strings.Contains(recent[0].Loop, "browser_network_read") {
+		t.Fatalf("recent loop preview should include sidecar state anchor: %+v", recent[0])
 	}
 }
 
