@@ -147,6 +147,40 @@ describe("buildExecutionTree", () => {
     expect(search.preview).not.toContain("1 more");
   });
 
+  it("uses a factual empty history-search preview instead of an isolated count", () => {
+    const [search] = buildExecutionTree(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "session_search",
+          args: { query: "missing deployment marker" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: JSON.stringify({
+            query: "missing deployment marker",
+            total: 0,
+            results: [],
+          }),
+        },
+      },
+    ]).turns[0]);
+
+    expect(search.label).toBe("Search");
+    expect(search.title).toBe("Search history missing deployment marker");
+    expect(search.preview).toBe("No history hits");
+    expect(search.preview).not.toBe("0 history hits");
+  });
+
   it("previews source evidence body instead of the SourceAccess header", () => {
     const [source] = buildExecutionTree(reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

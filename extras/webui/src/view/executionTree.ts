@@ -373,7 +373,7 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
   const message = readString(parsed, "message");
   const results = readObjectList(parsed, "results");
   const total = readNumber(parsed, "total") ?? results.length;
-  if (!message && total === 0 && results.length === 0) return "0 history hits";
+  if (!message && total === 0 && results.length === 0) return "No history hits";
   if (results.length === 0) return message ? compactLine(message, 132) : undefined;
 
   const first = results[0];
