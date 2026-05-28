@@ -1066,6 +1066,14 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
 		t.Fatal("system prompt should not include subagent guidance when disabled")
 	}
+	if strings.Contains(msgs[0].Content, cf.workspace) || strings.Contains(msgs[0].Content, "Use this exact path") {
+		t.Fatalf("system prompt should not steer agents toward workspace absolute paths:\n%s", msgs[0].Content)
+	}
+	for _, want := range []string{"start in", "use relative paths", "omit cwd"} {
+		if !strings.Contains(msgs[0].Content, want) {
+			t.Fatalf("system prompt missing relative workspace guidance %q:\n%s", want, msgs[0].Content)
+		}
+	}
 }
 
 func TestSetupLoop_WebOptInRegistersTools(t *testing.T) {
@@ -1194,8 +1202,16 @@ func TestSetupLoop_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *test
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	if !strings.Contains(msgs[0].Content, workspace) {
-		t.Fatalf("eval-mode workspace prompt should mention actual workspace when workspace tools are registered:\n%s", msgs[0].Content)
+	if strings.Contains(msgs[0].Content, workspace) {
+		t.Fatalf("eval-mode workspace prompt should not inject the absolute workspace path:\n%s", msgs[0].Content)
+	}
+	if strings.Contains(msgs[0].Content, "Use this exact path") {
+		t.Fatalf("eval-mode workspace prompt should not steer agents toward absolute paths:\n%s", msgs[0].Content)
+	}
+	for _, want := range []string{"Commands and workspace tools start there by default", "prefer relative paths", "omit cwd"} {
+		if !strings.Contains(msgs[0].Content, want) {
+			t.Fatalf("eval-mode workspace prompt missing %q:\n%s", want, msgs[0].Content)
+		}
 	}
 	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
 		if strings.Contains(msgs[0].Content, forbidden) {

@@ -1497,9 +1497,8 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if c.evalMode && c.systemPromptPath == "" {
 		systemPrompt = agent.BaseSystemPromptForRegistry(tools)
-		if registryHasWorkspaceTool(tools) && workspace != "/workspace" {
-			systemPrompt += "\n\nYour workspace directory is \"" + workspace +
-				"\". Use this exact path (or a relative path inside it) with registered workspace tools."
+		if registryHasWorkspaceTool(tools) {
+			systemPrompt = withWorkspaceRelativeGuidance(systemPrompt)
 		}
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
@@ -1664,11 +1663,17 @@ func resolveSystemPrompt(c commonFlags, workspace string, caps runtimeCapabiliti
 			return "", exitRuntime
 		}
 		systemPrompt = raw
-	} else if caps.Builtins && workspace != "/workspace" {
-		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
-			"\". Use this exact path (or a relative path inside it) with the file tools."
+	} else if caps.Builtins {
+		systemPrompt = withWorkspaceRelativeGuidance(systemPrompt)
 	}
 	return systemPrompt, 0
+}
+
+func withWorkspaceRelativeGuidance(prompt string) string {
+	if strings.Contains(prompt, "Commands and workspace tools start there by default") {
+		return prompt
+	}
+	return prompt + "\n\nWorkspace tools are bound to the active workspace. Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed."
 }
 
 func setupMemoryStore(c commonFlags, workspace string, log zerolog.Logger) (memory.MemoryStore, int) {
