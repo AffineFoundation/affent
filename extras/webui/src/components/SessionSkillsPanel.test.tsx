@@ -183,8 +183,9 @@ describe("SessionSkillsPanel", () => {
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
+    const onUseAsDraft = vi.fn();
     const diagnostic = "API route /v1/skills returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
-    render(<SessionSkillsPanel error={diagnostic} />);
+    render(<SessionSkillsPanel error={diagnostic} onUseAsDraft={onUseAsDraft} />);
 
     const summary = within(screen.getByTestId("session-skills-panel")).getByText("Skills unavailable").closest("summary");
     expect(summary).toHaveTextContent("Skills API failed: API route /v1/skills returned the WebUI app shell.");
@@ -192,5 +193,11 @@ describe("SessionSkillsPanel", () => {
 
     await userEvent.click(screen.getByText("Skills unavailable"));
     expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+    expect(screen.getByTestId("session-skills-fallback")).toHaveTextContent("Skills can still be drafted");
+    await userEvent.click(screen.getByRole("button", { name: "Draft skill" }));
+    await userEvent.type(screen.getByLabelText("Name"), "trace_debugging");
+    await userEvent.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: trace_debugging\nFilter failures first.");
+    await userEvent.click(screen.getByRole("button", { name: "Use skill draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("trace_debugging"), "skill");
   });
 });

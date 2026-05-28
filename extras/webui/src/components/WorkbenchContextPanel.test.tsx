@@ -132,6 +132,12 @@ describe("WorkbenchContextPanel", () => {
     );
 
     const usageCard = screen.getByTestId("workbench-usage-card");
+    const health = screen.getByTestId("workbench-context-health");
+    expect(health).toHaveTextContent("Current context");
+    expect(health).toHaveTextContent("Context is getting tight");
+    expect(health).toHaveTextContent("80%");
+    expect(health).toHaveTextContent("96 of 120 context messages are loaded.");
+    expect(health).toHaveTextContent("24 messages before compaction");
     expect(usageCard).toHaveTextContent("Token usage");
     expect(usageCard).toHaveTextContent("Conversation context");
     expect(usageCard).toHaveTextContent("96/120 context messages");
@@ -183,6 +189,31 @@ describe("WorkbenchContextPanel", () => {
 
     await user.click(within(statusCards).getByRole("button", { name: /Tool issue/ }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
+  });
+
+  it("keeps low-value work and tool-context metrics out of Context actions", () => {
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        overview={overview({
+          headline: "Inspect runtime metrics",
+          detail: "Trace loaded.",
+          metrics: [
+            { label: "Work", value: "2 actions · 2 sources" },
+            { label: "Tool context", value: "8 trims · 37 KiB omitted", tone: "warning" },
+            { label: "Session tokens", value: "0.87M" },
+          ],
+        })}
+        contextSummary={{ message_count: 99, compact_trigger: 240, compact_percent: 41, messages_until_compact: 141 }}
+      />,
+    );
+
+    expect(screen.queryByTestId("workbench-context-actions-list")).toBeNull();
+    expect(screen.getByTestId("workbench-context-health")).toHaveTextContent("Context has room");
+    expect(screen.getByTestId("workbench-context-health")).toHaveTextContent("41%");
+    expect(screen.getByTestId("workbench-context-panel")).not.toHaveTextContent("8 trims");
+    expect(screen.getByTestId("workbench-context-panel")).not.toHaveTextContent("2 actions");
   });
 
   it("shows concrete non-shell tool issues instead of a generic trace instruction", () => {

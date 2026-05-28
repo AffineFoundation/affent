@@ -77,7 +77,8 @@ export function filterEventTraceEvents(events: readonly NormalizedEvent[], query
   const search = query.trim().toLowerCase();
   if (!search) return [...events];
   const context = buildDisplayContext(events);
-  return events.filter((event) => eventTraceEventMatches(event, search, context));
+  const parsed = parseTraceSearch(search);
+  return events.filter((event) => eventTraceEventMatches(event, parsed, context));
 }
 
 interface DisplayContext {
@@ -302,7 +303,28 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
   }
 }
 
-function eventTraceEventMatches(event: NormalizedEvent, search: string, context: DisplayContext): boolean {
+interface ParsedTraceSearch {
+  terms: string[];
+  fields: Array<{ key: string; value: string }>;
+}
+
+function parseTraceSearch(search: string): ParsedTraceSearch {
+  const terms: string[] = [];
+  const fields: Array<{ key: string; value: string }> = [];
+  for (const raw of search.match(/"[^"]+"|\S+/g) ?? []) {
+    const token = raw.replace(/^"|"$/g, "").trim();
+    if (!token) continue;
+    const field = token.match(/^([a-z_]+):(.*)$/);
+    if (field && field[2]) {
+      fields.push({ key: field[1], value: field[2] });
+    } else {
+      terms.push(token);
+    }
+  }
+  return { terms, fields };
+}
+
+function eventTraceEventMatches(event: NormalizedEvent, search: ParsedTraceSearch, context: DisplayContext): boolean {
   const display = eventDisplay(event, context);
   const haystack = [
     String(event.id),
@@ -314,7 +336,70 @@ function eventTraceEventMatches(event: NormalizedEvent, search: string, context:
     ...display.badges,
     JSON.stringify(event.raw),
   ].filter(Boolean).join("\n").toLowerCase();
-  return haystack.includes(search);
+  if (!search.fields.every((field) => eventTraceFieldMatches(event, display, field, context))) return false;
+  return search.terms.every((term) => haystack.includes(term));
+}
+
+function eventTraceFieldMatches(
+  event: NormalizedEvent,
+  display: EventDisplay,
+  field: { key: string; value: string },
+  context: DisplayContext,
+): boolean {
+  const value = field.value.toLowerCase();
+  switch (field.key) {
+    case "type":
+      return event.type.toLowerCase().includes(value);
+    case "tool":
+      return eventToolName(event, context).toLowerCase().includes(value);
+    case "call":
+    case "call_id":
+      return readString(event.data, "call_id")?.toLowerCase().includes(value) ?? false;
+    case "turn":
+    case "turn_id":
+      return (event.turnId ?? "").toLowerCase().includes(value);
+    case "id":
+      return String(event.id) === value || String(event.id).includes(value);
+    case "status":
+      return eventStatusWords(event, display).some((word) => word.includes(value));
+    case "artifact":
+    case "path":
+      return [
+        readString(event.data, "result_artifact_path"),
+        readString(event.data, "path"),
+        readString(event.data, "protocol_path"),
+        JSON.stringify(readObject(event.data, "args") ?? {}),
+      ].filter(Boolean).join("\n").toLowerCase().includes(value);
+    default:
+      return [
+        event.type,
+        display.label,
+        ...display.meta,
+        ...display.badges,
+        JSON.stringify(event.raw),
+      ].join("\n").toLowerCase().includes(`${field.key}:${value}`) ||
+        JSON.stringify(event.raw).toLowerCase().includes(value);
+  }
+}
+
+function eventToolName(event: NormalizedEvent, context: DisplayContext): string {
+  const direct = readString(event.data, "tool");
+  if (direct) return direct;
+  const callID = readString(event.data, "call_id");
+  return callID ? context.callTools.get(callID) ?? "" : "";
+}
+
+function eventStatusWords(event: NormalizedEvent, display: EventDisplay): string[] {
+  const exitCode = readNumber(event.data, "exit_code");
+  const failures = eventFailureKinds(event);
+  return compact([
+    display.label.toLowerCase(),
+    typeof exitCode === "number" && exitCode !== 0 ? "failed" : undefined,
+    typeof exitCode === "number" && exitCode === 0 ? "ok" : undefined,
+    typeof exitCode === "number" ? `exit${exitCode}` : undefined,
+    ...failures,
+    ...display.badges,
+  ]).map((word) => word.toLowerCase());
 }
 
 function userMessageDisplayText(event: NormalizedEvent | undefined): string | undefined {

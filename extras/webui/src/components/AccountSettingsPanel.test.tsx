@@ -122,8 +122,9 @@ describe("AccountSettingsPanel", () => {
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
+    const onSetEnv = vi.fn().mockResolvedValue(undefined);
     const diagnostic = "API route /v1/settings returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
-    render(<AccountSettingsPanel error={diagnostic} />);
+    render(<AccountSettingsPanel error={diagnostic} onSetEnv={onSetEnv} />);
 
     const summary = within(screen.getByTestId("account-settings-panel")).getByText("Unavailable").closest("summary");
     expect(summary).toHaveTextContent("Config API failed: API route /v1/settings returned the WebUI app shell.");
@@ -131,5 +132,11 @@ describe("AccountSettingsPanel", () => {
 
     await userEvent.click(screen.getByText("Unavailable"));
     expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+    expect(screen.getByTestId("account-settings-fallback")).toHaveTextContent("Config actions remain available");
+    await userEvent.type(screen.getByPlaceholderText("GITHUB_TOKEN"), "GITLAB_TOKEN");
+    await userEvent.type(screen.getByPlaceholderText("Stored server-side"), "gl_secret");
+    await userEvent.click(screen.getByRole("button", { name: "Save env" }));
+    expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
+    expect(screen.queryByText("gl_secret")).toBeNull();
   });
 });

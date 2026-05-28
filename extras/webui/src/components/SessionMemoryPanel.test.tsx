@@ -126,8 +126,9 @@ describe("SessionMemoryPanel", () => {
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
+    const onUseAsDraft = vi.fn();
     const diagnostic = "API route /v1/sessions/s1/memory returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
-    render(<SessionMemoryPanel error={diagnostic} />);
+    render(<SessionMemoryPanel error={diagnostic} onUseAsDraft={onUseAsDraft} />);
 
     const summary = within(screen.getByTestId("session-memory-panel")).getByText("Memory unavailable").closest("summary");
     expect(summary).toHaveTextContent("Memory API failed: API route /v1/sessions/s1/memory returned the WebUI app shell.");
@@ -135,5 +136,9 @@ describe("SessionMemoryPanel", () => {
 
     await userEvent.click(screen.getByText("Memory unavailable"));
     expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
+    expect(screen.getByTestId("session-memory-fallback")).toHaveTextContent("Memory can still be prepared");
+    await userEvent.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "Remember that this repo uses Vite.");
+    await userEvent.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Use memory draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Remember that this repo uses Vite."), "memory");
   });
 });

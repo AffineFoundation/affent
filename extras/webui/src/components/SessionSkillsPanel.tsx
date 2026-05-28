@@ -59,6 +59,7 @@ export function SessionSkillsPanel({
     return allSkills.filter((skill) => skillMatchesQuery(skill, trimmedQuery));
   }, [allSkills, trimmedQuery]);
   const runtimeCount = allSkills.filter((skill) => skill.runtime).length;
+  const canDraftSkill = !!onUseAsDraft;
   const summary = loading
     ? "Loading skills"
     : error
@@ -89,7 +90,15 @@ export function SessionSkillsPanel({
 
   async function submitSkill(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!onInstallSkill || installing) return;
+    if (installing) return;
+    if (!onInstallSkill) {
+      if (onUseAsDraft && form.name.trim() && form.body.trim()) {
+        onUseAsDraft(manualSkillDraft(form), "skill");
+        setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
+        setShowForm(false);
+      }
+      return;
+    }
     setInstallError(undefined);
     setInstalling(true);
     try {
@@ -134,6 +143,25 @@ export function SessionSkillsPanel({
             ) : null}
           </div>
         ) : null}
+        {!loading && error && canDraftSkill ? (
+          <>
+            <div className="session-runtime-fallback" data-testid="session-skills-fallback">
+              <strong>Skills can still be drafted</strong>
+              <span>Prepare a reusable workflow in chat while the Skills API is unavailable.</span>
+              <button type="button" className="session-skills-add-toggle" onClick={() => setShowForm((open) => !open)}>
+                {showForm ? "Cancel" : "Draft skill"}
+              </button>
+            </div>
+            {showForm ? renderSkillForm({
+              form,
+              setForm,
+              submitSkill,
+              installError,
+              installing,
+              submitLabel: "Use skill draft",
+            }) : null}
+          </>
+        ) : null}
         {!loading && !error ? (
           <>
             {hasSearch || canInstall || onRefresh ? (
@@ -167,49 +195,7 @@ export function SessionSkillsPanel({
               </div>
             ) : null}
             {showForm ? (
-              <form className="session-skill-form" onSubmit={submitSkill}>
-                <label>
-                  <span>Name</span>
-                  <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="my_skill" required />
-                </label>
-                <label>
-                  <span>Summary</span>
-                  <input
-                    value={form.description}
-                    onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="When this skill should be used"
-                  />
-                </label>
-                <label>
-                  <span>Triggers</span>
-                  <input
-                    value={form.triggers}
-                    onChange={(event) => setForm((current) => ({ ...current, triggers: event.target.value }))}
-                    placeholder="comma or newline separated"
-                  />
-                </label>
-                <label>
-                  <span>Required tools</span>
-                  <input
-                    value={form.requiredTools}
-                    onChange={(event) => setForm((current) => ({ ...current, requiredTools: event.target.value }))}
-                    placeholder="workspace, browser, web"
-                  />
-                </label>
-                <label className="session-skill-form-body">
-                  <span>Full content</span>
-                  <textarea
-                    value={form.body}
-                    onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
-                    placeholder="AFFENT ACTIVE SKILL: my_skill&#10;Use this workflow..."
-                    required
-                  />
-                </label>
-                {installError ? <div className="session-skills-empty error">{installError}</div> : null}
-                <button type="submit" className="session-skills-add-submit" disabled={installing}>
-                  {installing ? "Adding" : "Save skill"}
-                </button>
-              </form>
+              renderSkillForm({ form, setForm, submitSkill, installError, installing, submitLabel: "Save skill" })
             ) : null}
             <div className="session-skills-list" data-testid="session-skills-list">
               {filteredSkills.length > 0 ? (
@@ -285,6 +271,83 @@ export function SessionSkillsPanel({
       </div>
     </details>
   );
+}
+
+type SkillFormState = { name: string; description: string; triggers: string; requiredTools: string; body: string };
+
+function renderSkillForm({
+  form,
+  setForm,
+  submitSkill,
+  installError,
+  installing,
+  submitLabel,
+}: {
+  form: SkillFormState;
+  setForm: (updater: (current: SkillFormState) => SkillFormState) => void;
+  submitSkill: (event: FormEvent<HTMLFormElement>) => void;
+  installError?: string;
+  installing: boolean;
+  submitLabel: string;
+}) {
+  return (
+    <form className="session-skill-form" onSubmit={submitSkill}>
+      <label>
+        <span>Name</span>
+        <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="my_skill" required />
+      </label>
+      <label>
+        <span>Summary</span>
+        <input
+          value={form.description}
+          onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+          placeholder="When this skill should be used"
+        />
+      </label>
+      <label>
+        <span>Triggers</span>
+        <input
+          value={form.triggers}
+          onChange={(event) => setForm((current) => ({ ...current, triggers: event.target.value }))}
+          placeholder="comma or newline separated"
+        />
+      </label>
+      <label>
+        <span>Required tools</span>
+        <input
+          value={form.requiredTools}
+          onChange={(event) => setForm((current) => ({ ...current, requiredTools: event.target.value }))}
+          placeholder="workspace, browser, web"
+        />
+      </label>
+      <label className="session-skill-form-body">
+        <span>Full content</span>
+        <textarea
+          value={form.body}
+          onChange={(event) => setForm((current) => ({ ...current, body: event.target.value }))}
+          placeholder="AFFENT ACTIVE SKILL: my_skill&#10;Use this workflow..."
+          required
+        />
+      </label>
+      {installError ? <div className="session-skills-empty error">{installError}</div> : null}
+      <button type="submit" className="session-skills-add-submit" disabled={installing || !form.name.trim() || !form.body.trim()}>
+        {installing ? "Adding" : submitLabel}
+      </button>
+    </form>
+  );
+}
+
+function manualSkillDraft(form: SkillFormState): string {
+  return [
+    "Create or update this reusable skill when the Skills API is available:",
+    `Name: ${form.name.trim()}`,
+    form.description.trim() ? `Summary: ${form.description.trim()}` : undefined,
+    splitList(form.triggers)?.length ? `Triggers: ${splitList(form.triggers)?.join(", ")}` : undefined,
+    splitList(form.requiredTools)?.length ? `Required tools: ${splitList(form.requiredTools)?.join(", ")}` : undefined,
+    "",
+    "Content:",
+    form.body.trim(),
+  ].filter((line): line is string => line != null).join("\n");
 }
 
 function splitList(text: string): string[] | undefined {

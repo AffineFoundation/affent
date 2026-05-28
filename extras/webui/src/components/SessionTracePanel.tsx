@@ -25,15 +25,17 @@ export function SessionTracePanel({
   onUseAsDraft?: (draft: string, source: DraftSource) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [issueOnly, setIssueOnly] = useState(false);
+  const [filter, setFilter] = useState<TraceFilter>("all");
   const trimmedQuery = query.trim();
+  const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
   const visibleEvents = useMemo(
     () => {
-      const source = issueOnly ? filterToolIssueEvents(events) : events;
+      const source = filterEventsByTraceFilter(events, filter);
       return trimmedQuery ? filterEventTraceEvents(source, trimmedQuery) : source;
     },
-    [events, issueOnly, trimmedQuery],
+    [events, filter, trimmedQuery],
   );
+  const searchHelp = "Search supports plain text plus type:, tool:, call:, turn:, id:, status:failed, artifact:, path:.";
 
   return (
     <details className="session-skills-panel session-trace-panel" data-testid="session-trace-panel" open={defaultOpen}>
@@ -57,30 +59,41 @@ export function SessionTracePanel({
               <div className="session-skills-controls">
                 <label className="session-skills-search">
                   <span>Search trace</span>
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="event type, tool, turn, path, or raw payload" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="plain text, tool:shell, status:failed, turn:t1"
+                    aria-describedby="session-trace-search-help"
+                  />
                 </label>
                 {trimmedQuery ? (
                   <button type="button" className="ghost-action" onClick={() => setQuery("")}>
                     Clear
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  className="session-trace-filter"
-                  aria-pressed={issueOnly}
-                  disabled={trace.toolIssueCount === 0}
-                  onClick={() => setIssueOnly((enabled) => !enabled)}
-                >
-                  Tool issues{trace.toolIssueCount > 0 ? ` ${trace.toolIssueCount}` : ""}
-                </button>
+                <div className="session-trace-filter-group" role="group" aria-label="Trace filters">
+                  {filters.map((item) => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      className="session-trace-filter"
+                      aria-pressed={filter === item.key}
+                      disabled={item.count === 0 && item.key !== "all"}
+                      onClick={() => setFilter((current) => current === item.key && item.key !== "all" ? "all" : item.key)}
+                    >
+                      {item.label}{item.count > 0 ? ` ${item.count}` : ""}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : null}
+            {events.length > 1 ? <p className="session-trace-search-help" id="session-trace-search-help">{searchHelp}</p> : null}
             <div className="session-trace-metrics" data-testid="session-trace-metrics">
               <span><strong>Entries</strong>{trace.eventCount}</span>
               <span><strong>Records</strong>{trace.recordCount}</span>
               {trace.toolIssueCount > 0 ? <span data-tone="error"><strong>Tool issues</strong>{trace.toolIssueCount}</span> : null}
               {trimmedQuery ? <span><strong>Matching</strong>{visibleEvents.length}</span> : null}
-              {issueOnly ? <span><strong>Filter</strong>Tool issues</span> : null}
+              {filter !== "all" ? <span><strong>Filter</strong>{filterLabel(filter)}</span> : null}
               {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
               {trace.unknownCount > 0 ? <span data-tone="warning"><strong>Unclassified</strong>{trace.unknownCount}</span> : null}
             </div>
@@ -93,7 +106,7 @@ export function SessionTracePanel({
             {visibleEvents.length > 0 ? (
               <EventTrace events={visibleEvents} onOpenArtifact={onOpenArtifact} />
             ) : (
-              <div className="session-skills-empty">No trace entries matching {issueOnly ? "tool issues" : `"${trimmedQuery}"`}.</div>
+              <div className="session-skills-empty">No trace entries matching {emptyStateLabel(filter, trimmedQuery)}.</div>
             )}
           </>
         ) : (
@@ -102,6 +115,67 @@ export function SessionTracePanel({
       </div>
     </details>
   );
+}
+
+type TraceFilter = "all" | "issues" | "actions" | "commands" | "files" | "memory" | "context" | "loop";
+
+interface TraceFilterItem {
+  key: TraceFilter;
+  label: string;
+  count: number;
+}
+
+function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number): TraceFilterItem[] {
+  return [
+    { key: "all", label: "All", count: events.length },
+    { key: "issues", label: "Tool issues", count: toolIssueCount },
+    { key: "actions", label: "Actions", count: countFilter(events, "actions") },
+    { key: "commands", label: "Commands", count: countFilter(events, "commands") },
+    { key: "files", label: "Files", count: countFilter(events, "files") },
+    { key: "memory", label: "Memory", count: countFilter(events, "memory") },
+    { key: "context", label: "Context", count: countFilter(events, "context") },
+    { key: "loop", label: "Loop", count: countFilter(events, "loop") },
+  ];
+}
+
+function filterEventsByTraceFilter(events: readonly NormalizedEvent[], filter: TraceFilter): NormalizedEvent[] {
+  if (filter === "all") return [...events];
+  if (filter === "issues") return filterToolIssueEvents(events);
+  const callTools = toolNamesByCallId(events);
+  return events.filter((event) => eventMatchesFilter(event, filter, callTools));
+}
+
+function countFilter(events: readonly NormalizedEvent[], filter: TraceFilter): number {
+  return filterEventsByTraceFilter(events, filter).length;
+}
+
+function filterLabel(filter: TraceFilter): string {
+  if (filter === "issues") return "Tool issues";
+  if (filter === "actions") return "Actions";
+  if (filter === "commands") return "Commands";
+  if (filter === "files") return "Files";
+  if (filter === "memory") return "Memory";
+  if (filter === "context") return "Context";
+  if (filter === "loop") return "Loop";
+  return "All";
+}
+
+function emptyStateLabel(filter: TraceFilter, query: string): string {
+  const filterText = filter === "all" ? "" : filterLabel(filter);
+  if (query) return filterText ? `${filterText} and "${query}"` : `"${query}"`;
+  return filterText || "the selected filter";
+}
+
+function eventMatchesFilter(event: NormalizedEvent, filter: TraceFilter, callTools: Map<string, string>): boolean {
+  if (filter === "actions") return event.type === EventType.ToolRequest || event.type === EventType.ToolResult;
+  if (filter === "context") return event.type === EventType.ContextInjected || event.type === EventType.ContextCompacted || event.type === EventType.Usage;
+  if (filter === "loop") return event.type.startsWith("loop.");
+  if (event.type !== EventType.ToolRequest && event.type !== EventType.ToolResult) return false;
+  const tool = toolName(event, callTools);
+  if (filter === "commands") return tool === "shell";
+  if (filter === "files") return tool === "read_file" || tool === "write_file" || tool === "edit_file" || tool === "list_files";
+  if (filter === "memory") return tool === "memory" || tool === "session_search";
+  return false;
 }
 
 function filterToolIssueEvents(events: readonly NormalizedEvent[]): NormalizedEvent[] {
@@ -119,4 +193,25 @@ function filterToolIssueEvents(events: readonly NormalizedEvent[]): NormalizedEv
     }
     return false;
   });
+}
+
+function toolNamesByCallId(events: readonly NormalizedEvent[]): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const event of events) {
+    if (event.type !== EventType.ToolRequest || !event.data || typeof event.data !== "object") continue;
+    const callID = (event.data as { call_id?: unknown }).call_id;
+    const tool = (event.data as { tool?: unknown }).tool;
+    if (typeof callID === "string" && typeof tool === "string") out.set(callID, tool);
+  }
+  return out;
+}
+
+function toolName(event: NormalizedEvent, callTools: Map<string, string>): string | undefined {
+  if (!event.data || typeof event.data !== "object") return undefined;
+  const value = (event.data as { tool?: unknown }).tool;
+  if (typeof value === "string") return value;
+  if (event.type !== EventType.ToolResult) return undefined;
+  const callID = (event.data as { call_id?: unknown }).call_id;
+  if (typeof callID !== "string") return undefined;
+  return callTools.get(callID);
 }

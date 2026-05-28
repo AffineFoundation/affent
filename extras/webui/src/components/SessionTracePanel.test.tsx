@@ -23,6 +23,7 @@ describe("SessionTracePanel", () => {
 
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("5 trace entries");
     expect(screen.getByLabelText("Search trace")).toBeInTheDocument();
+    expect(screen.getByText(/Search supports plain text/)).toHaveTextContent("tool:");
     expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Entries5");
     expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Tool issues1");
     expect(screen.getByTestId("session-trace-latest")).toHaveTextContent("Action failed");
@@ -51,6 +52,19 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Inspect trace");
     await user.click(screen.getByRole("button", { name: "Tool issues 1" }));
+
+    await user.click(screen.getByRole("button", { name: "Commands 2" }));
+    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("FilterCommands");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Inspect trace");
+    await user.click(screen.getByRole("button", { name: "Commands 2" }));
+
+    await user.type(screen.getByLabelText("Search trace"), "tool:shell status:failed");
+    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Matching1");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started action");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
 
     await user.type(screen.getByLabelText("Search trace"), "missing event");
     expect(screen.queryByTestId("event-trace")).toBeNull();

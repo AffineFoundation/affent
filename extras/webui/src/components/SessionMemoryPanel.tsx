@@ -108,6 +108,23 @@ export function SessionMemoryPanel({
             ) : null}
           </div>
         ) : null}
+        {!loading && error && onUseAsDraft ? (
+          <>
+            <div className="session-runtime-fallback" data-testid="session-memory-fallback">
+              <strong>Memory can still be prepared</strong>
+              <span>Use a draft when the API is unavailable; Affent can save or inspect memory after the runtime route is fixed.</span>
+            </div>
+            <MemoryDraftForm
+              memoryTarget={memoryTarget}
+              memoryTopic={memoryTopic}
+              memoryContent={memoryContent}
+              setMemoryTarget={setMemoryTarget}
+              setMemoryTopic={setMemoryTopic}
+              setMemoryContent={setMemoryContent}
+              onSubmit={handleManualMemorySubmit}
+            />
+          </>
+        ) : null}
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
         {!loading && !error && !noSession ? (
           <>
@@ -195,28 +212,58 @@ export function SessionMemoryPanel({
               )}
             </div>
             {onUseAsDraft ? (
-              <form className="session-skill-form session-memory-form" data-testid="session-memory-form" onSubmit={handleManualMemorySubmit}>
-                <label>
-                  <span>Target</span>
-                  <input value={memoryTarget} onChange={(event) => setMemoryTarget(event.target.value)} placeholder="memory" />
-                </label>
-                <label>
-                  <span>Topic</span>
-                  <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" />
-                </label>
-                <label className="session-skill-form-body">
-                  <span>Content</span>
-                  <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} placeholder="Fact to remember" />
-                </label>
-                <button type="submit" className="session-skills-add-submit" disabled={!memoryContent.trim()}>
-                  Use memory draft
-                </button>
-              </form>
+              <MemoryDraftForm
+                memoryTarget={memoryTarget}
+                memoryTopic={memoryTopic}
+                memoryContent={memoryContent}
+                setMemoryTarget={setMemoryTarget}
+                setMemoryTopic={setMemoryTopic}
+                setMemoryContent={setMemoryContent}
+                onSubmit={handleManualMemorySubmit}
+              />
             ) : null}
           </>
         ) : null}
       </div>
     </details>
+  );
+}
+
+function MemoryDraftForm({
+  memoryTarget,
+  memoryTopic,
+  memoryContent,
+  setMemoryTarget,
+  setMemoryTopic,
+  setMemoryContent,
+  onSubmit,
+}: {
+  memoryTarget: string;
+  memoryTopic: string;
+  memoryContent: string;
+  setMemoryTarget: (value: string) => void;
+  setMemoryTopic: (value: string) => void;
+  setMemoryContent: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  return (
+    <form className="session-skill-form session-memory-form" data-testid="session-memory-form" onSubmit={onSubmit}>
+      <label>
+        <span>Target</span>
+        <input value={memoryTarget} onChange={(event) => setMemoryTarget(event.target.value)} placeholder="memory" />
+      </label>
+      <label>
+        <span>Topic</span>
+        <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" />
+      </label>
+      <label className="session-skill-form-body">
+        <span>Content</span>
+        <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} placeholder="Fact to remember" />
+      </label>
+      <button type="submit" className="session-skills-add-submit" disabled={!memoryContent.trim()}>
+        Use memory draft
+      </button>
+    </form>
   );
 }
 

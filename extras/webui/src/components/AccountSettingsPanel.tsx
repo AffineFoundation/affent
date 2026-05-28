@@ -78,9 +78,20 @@ export function AccountSettingsPanel({
         {!loading && error ? (
           <div className="session-skills-empty error" role="alert">
             {error}
+            {onRefresh ? (
+              <button type="button" className="ghost-action" disabled={!!busy} onClick={() => void onRefresh()}>
+                Retry
+              </button>
+            ) : null}
           </div>
         ) : null}
-        {!loading && !error ? (
+        {!loading && error && (onSetEnv || onEnsureSSHKey || settings) ? (
+          <div className="session-runtime-fallback" data-testid="account-settings-fallback">
+            <strong>Config actions remain available</strong>
+            <span>Try saving env or generating SSH again; the server will report the exact failure if the API route is still unavailable.</span>
+          </div>
+        ) : null}
+        {!loading && (!error || settings || onSetEnv || onEnsureSSHKey) ? (
           <>
             {settings ? (
               <div className="account-settings-actions">

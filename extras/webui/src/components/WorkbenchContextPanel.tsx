@@ -127,7 +127,17 @@ interface ContextStatusCard {
 
 function contextStatusCards(metrics: ReturnType<typeof displaySessionOverviewMetrics>, run?: SessionRunView, session?: SessionState): ContextStatusCard[] {
   return metrics.flatMap((metric): ContextStatusCard[] => {
-    if (metric.label === "Next step" || metric.label === "Automation" || metric.label === "Context") return [];
+    if (
+      metric.label === "Next step" ||
+      metric.label === "Automation" ||
+      metric.label === "Context" ||
+      metric.label === "Work" ||
+      metric.label === "Earlier work" ||
+      metric.label === "Tool context" ||
+      metric.label === "Tokens" ||
+      metric.label === "Turn tokens" ||
+      metric.label === "Session tokens"
+    ) return [];
     if (metric.label === "Tool issue" || metric.label === "Tool issues") {
       const detail = toolIssueDetail(run, session);
       return [{
@@ -212,9 +222,11 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
   const trend = usage?.trend ?? [];
   const total = workbenchContextUsageSummary(usage);
   const contextBudget = contextBudgetView(contextSummary);
+  const contextHealth = contextHealthView(contextSummary, total);
 
   return (
     <section className="workbench-usage-card" data-testid="workbench-usage-card" aria-label="Token usage">
+      <ContextHealthCard health={contextHealth} />
       <div className="workbench-usage-head">
         <div>
           <strong>Token usage</strong>
@@ -250,6 +262,86 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
         </div>
       ) : null}
     </section>
+  );
+}
+
+interface ContextHealthView {
+  percent?: number;
+  label: string;
+  detail: string;
+  remaining?: string;
+  tokenSummary?: string;
+  tone: "ready" | "attention" | "error";
+  estimated?: boolean;
+}
+
+function contextHealthView(context?: SessionContextSummary, tokenSummary?: string): ContextHealthView {
+  if (!context || context.compact_trigger <= 0) {
+    return {
+      label: "Context not measured",
+      detail: "No conversation context summary is available yet.",
+      tokenSummary,
+      tone: "ready",
+    };
+  }
+  const percent = Math.max(0, Math.min(100, Math.round(context.compact_percent)));
+  const tone = percent >= 95 ? "error" : percent >= 72 ? "attention" : "ready";
+  const label = percent >= 95
+    ? "Compaction likely"
+    : percent >= 72
+      ? "Context is getting tight"
+      : "Context has room";
+  const remaining = context.messages_until_compact > 0
+    ? `${formatContextCount(context.messages_until_compact)} messages before compaction`
+    : "Compaction threshold reached";
+  return {
+    percent,
+    label,
+    detail: `${formatContextCount(context.message_count)} of ${formatContextCount(context.compact_trigger)} context messages are loaded.`,
+    remaining,
+    tokenSummary,
+    tone,
+    estimated: Boolean((context as SessionContextSummary & { estimated?: boolean }).estimated),
+  };
+}
+
+function ContextHealthCard({ health }: { health: ContextHealthView }) {
+  return (
+    <div className="workbench-context-health" data-tone={health.tone} data-testid="workbench-context-health">
+      <ContextHealthRing percent={health.percent} />
+      <div className="workbench-context-health-copy">
+        <span>Current context</span>
+        <strong>{health.label}</strong>
+        <p>{health.detail}</p>
+        <div className="workbench-context-health-meta">
+          {health.remaining ? <small>{health.remaining}</small> : null}
+          {health.tokenSummary ? <small>{health.tokenSummary}</small> : null}
+          {health.estimated ? <small>estimated from loaded trace</small> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ContextHealthRing({ percent }: { percent?: number }) {
+  const value = percent == null ? 0 : Math.max(0, Math.min(100, percent));
+  const radius = 30;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (value / 100) * circumference;
+  return (
+    <span className="workbench-context-health-ring" aria-label={percent == null ? "Context usage unavailable" : `Context usage ${value}%`}>
+      <svg viewBox="0 0 76 76" aria-hidden="true">
+        <circle className="workbench-context-health-ring-track" cx="38" cy="38" r={radius} />
+        <circle
+          className="workbench-context-health-ring-value"
+          cx="38"
+          cy="38"
+          r={radius}
+          strokeDasharray={`${dash} ${circumference - dash}`}
+        />
+      </svg>
+      <b>{percent == null ? "--" : `${value}%`}</b>
+    </span>
   );
 }
 
