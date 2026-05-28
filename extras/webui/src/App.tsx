@@ -1919,6 +1919,11 @@ export function App() {
         <SessionChangesPanel
           changes={sessionChanges}
           defaultOpen
+          onOpenWorkspacePath={sessionWorkspace.path ? (path) => {
+            setWorkbenchTab("files");
+            void handleOpenWorkspacePath(path);
+          } : undefined}
+          onOpenWorkspacePanel={() => setWorkbenchTab("workspace")}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
         />

@@ -7,11 +7,12 @@ import type { SessionChangesView } from "../view/sessionChanges";
 describe("SessionChangesPanel", () => {
   it("renders changed files as evidence and creates an adjustment draft", async () => {
     const user = userEvent.setup();
+    const onOpenWorkspacePath = vi.fn();
     const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<SessionChangesPanel defaultOpen changes={changes} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionChangesPanel defaultOpen changes={changes} onOpenWorkspacePath={onOpenWorkspacePath} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-changes-panel");
     expect(panel).toHaveAttribute("open");
@@ -32,6 +33,9 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-change-diff")).toHaveAccessibleName("Diff preview for src/payments.ts");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
+
+    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Open current" })[0]);
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
 
     await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
@@ -72,10 +76,12 @@ describe("SessionChangesPanel", () => {
 
   it("makes no-diff changes explicit and offers file review", async () => {
     const user = userEvent.setup();
+    const onOpenWorkspacePath = vi.fn();
     const onUseAsDraft = vi.fn();
     render(
       <SessionChangesPanel
         defaultOpen
+        onOpenWorkspacePath={onOpenWorkspacePath}
         changes={{
           summary: "1 changed file",
           detail: "1 changed",
@@ -100,9 +106,38 @@ describe("SessionChangesPanel", () => {
     expect(panel).toHaveTextContent("No diff preview captured");
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Diff/ })).toBeNull();
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Issues/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open current" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("game2048.py");
     await user.click(screen.getByRole("button", { name: "Review file" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("No diff preview was captured"), "changed_file");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: game2048.py"), "changed_file");
+  });
+
+  it("routes no-diff review gaps to workspace setup when the current file cannot be opened", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspacePanel = vi.fn();
+    render(
+      <SessionChangesPanel
+        defaultOpen
+        onOpenWorkspacePanel={onOpenWorkspacePanel}
+        changes={{
+          summary: "1 changed file",
+          detail: "1 changed",
+          files: [{
+            path: "game2048.py",
+            operation: "edit",
+            status: "changed",
+            turnNumber: 4,
+            actionCount: 5,
+            detail: "replaced 1 occurrence(s) in game2048.py",
+          }],
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Open current" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+    expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the panel folded by default", () => {

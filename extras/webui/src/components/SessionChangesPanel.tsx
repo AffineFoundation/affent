@@ -8,11 +8,15 @@ type ChangeFilter = "all" | "changed" | "issues" | "diff";
 export function SessionChangesPanel({
   changes,
   defaultOpen = false,
+  onOpenWorkspacePath,
+  onOpenWorkspacePanel,
   onOpenArtifact,
   onUseAsDraft,
 }: {
   changes: SessionChangesView;
   defaultOpen?: boolean;
+  onOpenWorkspacePath?: (path: string) => void;
+  onOpenWorkspacePanel?: () => void;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
@@ -82,6 +86,15 @@ export function SessionChangesPanel({
               {focusFile.artifactPath ? <small title={focusFile.artifactPath}>Evidence: {artifactLabel(focusFile.artifactPath)}</small> : null}
             </div>
             <span className="session-evidence-actions">
+              {onOpenWorkspacePath ? (
+                <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(focusFile.path)}>
+                  Open current
+                </button>
+              ) : onOpenWorkspacePanel && !focusFile.diffPreview?.length ? (
+                <button type="button" className="ghost-action" onClick={onOpenWorkspacePanel}>
+                  Open Workspace
+                </button>
+              ) : null}
               <CopyButton label="Copy path" value={focusFile.path} className="ghost-action" />
               {focusFile.diffPreview && focusFile.diffPreview.length > 0 ? (
                 <CopyButton label="Copy diff" value={changedFileDiffText(focusFile)} className="ghost-action" />
@@ -129,6 +142,11 @@ export function SessionChangesPanel({
                   {file.artifactPath ? <small title={file.artifactPath}>Evidence: {artifactLabel(file.artifactPath)}</small> : null}
                 </div>
                 <span className="session-evidence-actions">
+                  {onOpenWorkspacePath ? (
+                    <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(file.path)}>
+                      Open current
+                    </button>
+                  ) : null}
                   <CopyButton label="Copy path" value={file.path} className="ghost-action" />
                   {file.diffPreview && file.diffPreview.length > 0 ? (
                     <CopyButton label="Copy diff" value={changedFileDiffText(file)} className="ghost-action" />
