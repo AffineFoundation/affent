@@ -76,9 +76,9 @@ describe("ArtifactViewer", () => {
     expect(onSearch).toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Load more" }));
     expect(onLoadMore).toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Use file" }));
+    await user.click(screen.getByRole("button", { name: "Use artifact" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Use this file in the next step: .affent/artifacts/tool-results/000001-c1.txt",
+      "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
       "artifact",
     );
     await user.click(screen.getByRole("button", { name: "Use text" }));

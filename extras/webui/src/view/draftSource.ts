@@ -23,7 +23,7 @@ export type DraftMergeMode = "append" | "replace";
 
 const draftSourceLabels: Record<DraftSource, string> = {
   answer: "Continuing from answer",
-  artifact: "File added to message",
+  artifact: "Artifact added to message",
   artifact_text: "Using file text",
   changed_file: "Using changed file",
   continuation: "Requesting final answer",

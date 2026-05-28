@@ -2740,12 +2740,12 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Use in message" }));
+    await user.click(await screen.findByRole("button", { name: "Use artifact" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
-      "Use this file in the next step: .affent/artifacts/tool-results/000001-c1.txt",
+      "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
     );
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("File added to message");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Artifact added to message");
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));

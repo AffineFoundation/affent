@@ -427,13 +427,13 @@ describe("Composer", () => {
       <Composer
         disabled={false}
         busy={false}
-        draft={{ id: 1, content: "Use this file in the next step: a.txt", source: "artifact" }}
+        draft={{ id: 1, content: "Use this artifact in the next step: a.txt", source: "artifact" }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
     const input = screen.getByPlaceholderText("Message Affent...");
-    expect(input).toHaveValue("Use this file in the next step: a.txt");
+    expect(input).toHaveValue("Use this artifact in the next step: a.txt");
 
     rerender(
       <Composer
@@ -456,14 +456,14 @@ describe("Composer", () => {
       <Composer
         disabled={false}
         busy={false}
-        draft={{ id: 1, content: "Use this file in the next step: a.txt", source: "artifact" }}
+        draft={{ id: 1, content: "Use this artifact in the next step: a.txt", source: "artifact" }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file in the next step: a.txt");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("File added to message");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this artifact in the next step: a.txt");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Artifact added to message");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Added");
     expect(screen.getByTestId("composer-context")).not.toHaveTextContent("Replaced");
   });

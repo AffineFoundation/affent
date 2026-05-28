@@ -94,7 +94,7 @@ export function ArtifactViewer({
                   className="node-action"
                   onClick={() => onUseAsDraft(artifactDraft(artifact.chunk.path), "artifact")}
                 >
-                  Use file
+                  Use artifact
                 </button>
                 <button
                   type="button"
@@ -192,7 +192,7 @@ function displayName(path: string): string {
 }
 
 function artifactDraft(path: string): string {
-  return `Use this file in the next step: ${path}`;
+  return `Use this artifact in the next step: ${path}`;
 }
 
 function artifactTextDraft(path: string, text: string): string {

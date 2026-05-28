@@ -1290,7 +1290,7 @@ function ArtifactStrip({
           <div className="artifact-pill-actions">
             {onUseAsDraft ? (
               <button type="button" className="artifact-pill-action" onClick={() => onUseAsDraft(artifactDraft(artifact.path), "artifact")}>
-                Use in message
+                Use artifact
               </button>
             ) : null}
             {onOpenArtifact && sessionId ? (
@@ -1306,7 +1306,7 @@ function ArtifactStrip({
 }
 
 function artifactDraft(path: string): string {
-  return `Use this file in the next step: ${path}`;
+  return `Use this artifact in the next step: ${path}`;
 }
 
 function ContinuationPrompt({ turn, onUseAsDraft }: { turn: TurnState; onUseAsDraft?: UseAsDraft }) {
