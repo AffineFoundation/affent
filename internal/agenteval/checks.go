@@ -2327,8 +2327,12 @@ func workspaceToolCallsLackNeedles(calls []ToolCall, needles []string, resolver 
 }
 
 func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string, resolver workspaceArgPolicyResolver) CheckResult {
+	root := strings.TrimSpace(t.ChildTranscriptRootDir)
+	if root == "" {
+		root = t.WorkspaceDir
+	}
 	for _, ref := range t.ChildTranscripts {
-		path, ok := resolveChildTranscriptPath(t.WorkspaceDir, ref.Path)
+		path, ok := resolveChildTranscriptPath(root, ref.Path)
 		if !ok {
 			continue
 		}

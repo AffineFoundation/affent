@@ -870,6 +870,75 @@ func TestWriteTraceDebugArtifactsAppliesScenarioWithTraceWorkspace(t *testing.T)
 	}
 }
 
+func TestWriteTraceDebugArtifactsChecksDurableChildTranscripts(t *testing.T) {
+	sessionDir := t.TempDir()
+	tracePath := filepath.Join(sessionDir, "events.jsonl")
+	workspace := filepath.Join(string(os.PathSeparator), "workspace", "sessions", "sess_child")
+	alias := strings.TrimPrefix(filepath.ToSlash(filepath.Join(workspace, "data", "value.txt")), "/")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"message.done","data":{"turn_id":"turn-1","text":"Child inspected RELATIVE-WORKSPACE-OK","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":0,"tool_errors":0}}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	transcriptRel := filepath.ToSlash(filepath.Join("subagents", "sess_child", "subagent_child.jsonl"))
+	transcriptPath := filepath.Join(sessionDir, filepath.FromSlash(transcriptRel))
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"role":"assistant","tool_calls":[{"id":"child1","type":"function","function":{"name":"shell","arguments":"{\"command\":\"cat ` + alias + `\"}"}}]}`
+	if err := os.WriteFile(transcriptPath, []byte(line+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	scenario := BatchScenario{
+		Name:                         "trace-child-path-hygiene",
+		ForbidWorkspaceAbsolutePaths: true,
+		RequiredFinalText:            []string{"RELATIVE-WORKSPACE-OK"},
+	}
+	outDir := filepath.Join(sessionDir, "debug")
+	res, err := WriteTraceDebugArtifacts(TraceDebugOptions{
+		TracePath:              tracePath,
+		OutputDir:              outDir,
+		WorkspaceDir:           workspace,
+		ChildTranscriptRootDir: sessionDir,
+		Scenario:               &scenario,
+	})
+	if err != nil {
+		t.Fatalf("WriteTraceDebugArtifacts: %v", err)
+	}
+	if res.OK {
+		t.Fatalf("trace debug should fail child transcript path hygiene, got OK result: %+v", res)
+	}
+	if len(res.ChildTranscripts) != 1 ||
+		res.ChildTranscripts[0].Kind != "subagent" ||
+		res.ChildTranscripts[0].Path != transcriptRel {
+		t.Fatalf("child transcripts = %+v, want durable subagent transcript", res.ChildTranscripts)
+	}
+	hasChildPathFailure := false
+	for _, failure := range res.Failures {
+		if strings.Contains(failure, "child transcript") && strings.Contains(failure, "used workspace absolute path") {
+			hasChildPathFailure = true
+			break
+		}
+	}
+	if !hasChildPathFailure {
+		t.Fatalf("failures = %#v, want child transcript workspace path failure", res.Failures)
+	}
+	var manifest DebugManifest
+	raw, err := os.ReadFile(filepath.Join(outDir, "affenteval-debug.json"))
+	if err != nil {
+		t.Fatalf("read debug manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
+	}
+	if len(manifest.ChildTranscripts) != 1 || manifest.ChildTranscripts[0].Path != transcriptRel {
+		t.Fatalf("manifest child transcripts = %+v, want %s", manifest.ChildTranscripts, transcriptRel)
+	}
+}
+
 func TestToolTruncationExamplesPrioritizeMissingArtifacts(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{

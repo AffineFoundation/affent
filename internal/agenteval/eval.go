@@ -1484,6 +1484,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.Plan = trace.PlanStats()
 	res.Repair = trace.RepairStats()
 	res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
+	res.ChildTranscripts = append([]DebugTranscriptRef(nil), trace.ChildTranscripts...)
 }
 
 func sourceAccessExamplesForDebug(trace Trace) []SourceAccessExample {
@@ -2007,6 +2008,8 @@ func collectDebugChildTranscripts(workspace string, maxRefs int) []DebugTranscri
 	}{
 		{kind: "focused_task", path: filepath.Join(workspace, ".affentctl", "focused-tasks")},
 		{kind: "subagent", path: filepath.Join(workspace, ".affentctl", "subagents")},
+		{kind: "focused_task", path: filepath.Join(workspace, "focused-tasks")},
+		{kind: "subagent", path: filepath.Join(workspace, "subagents")},
 	} {
 		_ = filepath.WalkDir(root.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d == nil {
@@ -2691,14 +2694,15 @@ func ParseTraceFile(path string) (Trace, error) {
 }
 
 type TraceDebugOptions struct {
-	TracePath    string
-	OutputDir    string
-	Name         string
-	Prompt       string
-	Stdout       string
-	Stderr       string
-	Scenario     *BatchScenario
-	WorkspaceDir string
+	TracePath              string
+	OutputDir              string
+	Name                   string
+	Prompt                 string
+	Stdout                 string
+	Stderr                 string
+	Scenario               *BatchScenario
+	WorkspaceDir           string
+	ChildTranscriptRootDir string
 }
 
 // WriteTraceDebugArtifacts parses an existing affent trace/events JSONL file
@@ -2746,6 +2750,12 @@ func WriteTraceDebugArtifacts(opts TraceDebugOptions) (BatchResult, error) {
 		checkWorkspace = outputDir
 	}
 	trace.WorkspaceDir = checkWorkspace
+	childTranscriptRoot := strings.TrimSpace(opts.ChildTranscriptRootDir)
+	if childTranscriptRoot == "" {
+		childTranscriptRoot = filepath.Dir(tracePath)
+	}
+	trace.ChildTranscriptRootDir = childTranscriptRoot
+	trace.ChildTranscripts = collectDebugChildTranscripts(childTranscriptRoot, maxDebugChildTranscriptRefs)
 	res := BatchResult{
 		BatchScenario: scenario.Name,
 		Workspace:     outputDir,
