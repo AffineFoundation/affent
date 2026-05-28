@@ -101,6 +101,65 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolCompletesActivationFromSavedDraftWhenProtocolPayloadHasNoMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, replacement := range [][2]string{
+		{"- hard constraints:", "- hard constraints: keep evidence cited and stop on unresolved user intent"},
+		{"- known evidence:", "- known evidence: user requested durable market analysis"},
+		{"- current risk or blocker:", "- current risk or blocker: needs live source verification"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state before continuing"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	if err := loopstate.WriteProtocol(path, protocol); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "complete_activation",
+		"protocol": "# Loop Protocol — legacy payload without metadata\n\n## Goal\nRun a different stale loop.",
+		"reason":   "user intent understood",
+	})))
+	if err != nil {
+		t.Fatalf("complete_activation: %v", err)
+	}
+	if !strings.Contains(out, "activated LOOP.md status=running") ||
+		!strings.Contains(out, "ignored_protocol_payload=missing_metadata") {
+		t.Fatalf("activation output = %q", out)
+	}
+	got, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol after activation found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(got) != "running" ||
+		!strings.Contains(got, "Run a long market analysis") ||
+		strings.Contains(got, "different stale loop") {
+		t.Fatalf("activation should use saved draft, got:\n%s", got)
+	}
+}
+
 func TestLoopProtocolToolClosesCompletedLoopAndDisablesFeed(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")

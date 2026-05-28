@@ -224,7 +224,18 @@ func updateLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (strin
 
 func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs) (string, error) {
 	protocol := strings.TrimSpace(p.Protocol)
+	ignoredMalformedProtocol := false
 	if protocol != "" {
+		if loopstate.ProtocolStatus(protocol) == "" {
+			saved, ok, err := savedLoopProtocolActivationCandidate(protocolPath)
+			if err != nil {
+				return "", err
+			}
+			if ok {
+				protocol = saved
+				ignoredMalformedProtocol = true
+			}
+		}
 	} else {
 		var found bool
 		var err error
@@ -274,7 +285,11 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("activated LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol will be fed on future turns", state.Status, event.Seq, state.ProtocolUpdates), nil
+	ignored := ""
+	if ignoredMalformedProtocol {
+		ignored = " ignored_protocol_payload=missing_metadata"
+	}
+	return fmt.Sprintf("activated LOOP.md status=%s event_seq=%d updates=%d%s next=active loop protocol will be fed on future turns", state.Status, event.Seq, state.ProtocolUpdates, ignored), nil
 }
 
 func closeLoopProtocol(protocolPath string, p loopProtocolToolArgs) (string, error) {
@@ -289,6 +304,29 @@ func closeLoopProtocol(protocolPath string, p loopProtocolToolArgs) (string, err
 		return "", err
 	}
 	return fmt.Sprintf("closed LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol feed is disabled unless reopened deliberately", state.Status, event.Seq, state.ProtocolUpdates), nil
+}
+
+func savedLoopProtocolActivationCandidate(protocolPath string) (string, bool, error) {
+	saved, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		return "", false, err
+	}
+	status := loopstate.ProtocolStatus(saved)
+	switch status {
+	case "draft":
+		var ok bool
+		saved, ok = loopstate.ProtocolWithStatus(saved, "running")
+		if !ok {
+			return "", false, nil
+		}
+	case "running":
+	default:
+		return "", false, nil
+	}
+	if err := loopstate.ValidateProtocolActivation(saved); err != nil {
+		return "", false, nil
+	}
+	return saved, true, nil
 }
 
 func loopProtocolFailure(message, kind string) error {
