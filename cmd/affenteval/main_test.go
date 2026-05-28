@@ -67,6 +67,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-expectation-domain-loop-guard-intervention-rate=web_evidence=0.250",
 		"max-debug-brief-tag-rate=browser_network:unread_refs=0.000",
 		"max-debug-brief-tag-rate=browser_scroll:stuck_without_network=0.000",
+		"max-debug-brief-tag-rate=context_compaction:summary_missing=0.000",
 		"max-debug-brief-tag-rate=empty_recall:no_recent_sessions=0.000",
 		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
@@ -950,6 +951,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		t.Fatalf("longrun profile should not gate memory search miss rate by default: %#v", gates.MaxMemorySearchMissRate)
 	}
 	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
+		gates.MaxDebugBriefTagRates["context_compaction:summary_empty"] != 0 ||
+		gates.MaxDebugBriefTagRates["context_compaction:summary_missing"] != 0 ||
 		gates.MaxDebugBriefTagRates["empty_recall:no_recent_sessions"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_protocol:fixture"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_guard:forced_no_tools"] != 0 ||
@@ -996,6 +999,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		!reflect.DeepEqual(webGates.MaxExpectationDomainLoopGuardInterventionRates, map[string]float64{"web_evidence": 0.25}) ||
 		webGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
 		webGates.MaxDebugBriefTagRates["browser_scroll:stuck_without_network"] != 0 ||
+		webGates.MaxDebugBriefTagRates["context_compaction:summary_empty"] != 0 ||
+		webGates.MaxDebugBriefTagRates["context_compaction:summary_missing"] != 0 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||

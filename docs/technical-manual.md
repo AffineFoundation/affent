@@ -1116,11 +1116,12 @@ into metadata so result files preserve their pass/fail conditions. Use
 `--quality-profile longrun` for general long-run regression
 runs; it includes minimum trace-event, memory-update, loop-protocol feed,
 loop-protocol calibration request/answer, session-search context-hit,
-scenario-level session-recall debug tag, and missing truncation-artifact gates,
-plus a scenario-level failed tool-repair gate, so observability, shared memory,
-tool recovery, loop startup calibration, loop-guard no-tool fallback, and
-cross-session recovery regressions fail the batch. It also requires the batch
-to include `longrun_recovery`, `loop_protocol`, and `session_search`
+scenario-level session-recall debug tag, context-compaction summary gap tags,
+and missing truncation-artifact gates, plus a scenario-level failed tool-repair
+gate, so observability, shared memory, tool recovery, loop startup calibration,
+loop-guard no-tool fallback, and cross-session recovery regressions fail the
+batch. It also requires the batch to include `longrun_recovery`,
+`loop_protocol`, and `session_search`
 expectation capabilities, so a filtered run cannot pass the profile without
 exercising durable recovery. The profile also requires `market`, `bittensor`,
 `code_pr`, and `longrun_recovery` task-domain coverage so broad pass rates do
@@ -1139,11 +1140,11 @@ regressions. Use
 `--quality-profile web-evidence` for live/current web evidence runs; it also
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads, browser network refs that were not followed by
-`browser_network_read`, or dynamic gaps without an explicit evidence-quality
-defer decision. The profile requires `browser`, `source_access`, `web`, and
-`delegated_source_evidence` expectation capability coverage so accidental
-non-web batches fail before their source-quality rates are interpreted and the
-focused-research evidence path remains covered. It also gates focused-task and
+`browser_network_read`, context-compaction summary gaps, or dynamic gaps without
+an explicit evidence-quality defer decision. The profile requires `browser`,
+`source_access`, `web`, and `delegated_source_evidence` expectation capability
+coverage so accidental non-web batches fail before their source-quality rates
+are interpreted and the focused-research evidence path remains covered. It also gates focused-task and
 subagent error rates for delegated web research, and it requires the
 `web_evidence` task-domain label so source-quality gates are tied to at least
 one current-web workload. It also gates domain-level expectation pass rate, so a
