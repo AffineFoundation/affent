@@ -3613,6 +3613,83 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-automation-focus {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(42, 49, 60, 0.12);
+  border-left: 2px solid rgba(42, 49, 60, 0.24);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 9px;
+}
+
+.session-automation-focus[data-tone="ok"] {
+  border-color: rgba(20, 184, 166, 0.2);
+  border-left-color: rgba(13, 148, 136, 0.56);
+  background: rgba(240, 253, 250, 0.68);
+}
+
+.session-automation-focus[data-tone="attention"] {
+  border-color: rgba(194, 120, 3, 0.2);
+  border-left-color: rgba(194, 120, 3, 0.56);
+  background: rgba(255, 251, 235, 0.72);
+}
+
+.session-automation-focus[data-tone="danger"] {
+  border-color: rgba(185, 28, 28, 0.2);
+  border-left-color: rgba(185, 28, 28, 0.54);
+  background: rgba(254, 242, 242, 0.7);
+}
+
+.session-automation-focus-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-automation-focus-main span,
+.session-automation-focus-main small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+}
+
+.session-automation-focus-main span {
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.session-automation-focus-main strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-automation-focus-main small {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.session-automation-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
 .session-automation-metric {
   display: grid;
   gap: 3px;
@@ -11940,6 +12017,7 @@ html[data-theme="dark"] .session-loop-callout,
 html[data-theme="dark"] .session-loop-next,
 html[data-theme="dark"] .session-schedule-callout,
 html[data-theme="dark"] .session-loop-field,
+html[data-theme="dark"] .session-automation-focus,
 html[data-theme="dark"] .session-automation-metric,
 html[data-theme="dark"] .account-config-focus,
 html[data-theme="dark"] .account-config-focus-fact,
@@ -12056,14 +12134,32 @@ html[data-theme="dark"] .session-automation-metric[data-tone="ok"] {
   background: rgba(20, 184, 166, 0.12);
 }
 
+html[data-theme="dark"] .session-automation-focus[data-tone="ok"] {
+  border-color: rgba(45, 212, 191, 0.26);
+  border-left-color: rgba(45, 212, 191, 0.64);
+  background: rgba(13, 40, 38, 0.34);
+}
+
 html[data-theme="dark"] .session-automation-metric[data-tone="attention"] {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(245, 158, 11, 0.12);
 }
 
+html[data-theme="dark"] .session-automation-focus[data-tone="attention"] {
+  border-color: rgba(245, 158, 11, 0.26);
+  border-left-color: rgba(245, 158, 11, 0.64);
+  background: rgba(67, 44, 9, 0.34);
+}
+
 html[data-theme="dark"] .session-automation-metric[data-tone="danger"] {
   border-color: rgba(248, 113, 113, 0.28);
   background: rgba(127, 29, 29, 0.18);
+}
+
+html[data-theme="dark"] .session-automation-focus[data-tone="danger"] {
+  border-color: rgba(248, 113, 113, 0.26);
+  border-left-color: rgba(248, 113, 113, 0.62);
+  background: rgba(69, 10, 10, 0.28);
 }
 
 html[data-theme="dark"] .workbench-context-link {

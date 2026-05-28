@@ -58,7 +58,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
-import { SessionAutomationPanel, type SessionAutomationMetric } from "./components/SessionAutomationPanel";
+import { SessionAutomationPanel, type SessionAutomationFocus, type SessionAutomationMetric } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
@@ -1650,11 +1650,52 @@ export function App() {
     const automationTitle = automationContext?.title ?? "No automation";
     const automationDetail = automationContext?.detail ?? "Start a loop or schedule a check-in when this chat needs follow-up.";
     const automationMetrics = automationWorkbenchMetrics(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
+    const automationFocus = automationWorkbenchFocus(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
     const emptyScheduleSummary = { count: 0, enabled: 0 };
-    const scheduleSummary = selectedSession?.schedules ?? emptyScheduleSummary;
+    const scheduleSummary = selectedSession?.schedules;
     const loadedSchedules = selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined;
+    const loopStatus = selectedLoopState?.status ?? selectedSession?.loop_protocol?.status;
+    const loopDisabled = automationCompact(loopStatus)?.toLowerCase() === "disabled";
+    const hasLoop = showLoopContext || Boolean(selectedSession?.has_loop_protocol || selectedSession?.loop_protocol || selectedLoopState);
+    const hasScheduleSummary = (scheduleSummary?.count ?? 0) > 0 || (scheduleSummary?.enabled ?? 0) > 0 || (scheduleSummary?.pending_loop_ticks ?? 0) > 0 || (scheduleSummary?.error_count ?? 0) > 0;
     return (
-      <SessionAutomationPanel title={automationTitle} detail={automationDetail} metrics={automationMetrics} defaultOpen>
+      <SessionAutomationPanel
+        title={automationTitle}
+        detail={automationDetail}
+        metrics={automationMetrics}
+        focus={automationFocus}
+        actions={(
+          <>
+            {automationFocus?.action === "answer" || automationFocus?.action === "review" ? (
+              <button type="button" className="ghost-action primary-run-action" onClick={handleUseLoopProtocolDraft}>
+                {automationFocus.action === "answer" ? "Answer setup" : "Review in chat"}
+              </button>
+            ) : null}
+            {hasLoop ? (
+              <button type="button" className="ghost-action" disabled={selectedLoopProtocolState.state === "loading"} onClick={() => void handleLoadLoopProtocol()}>
+                {selectedLoopProtocolState.state === "loading" ? "Loading LOOP.md" : selectedLoopProtocolState.state === "ready" ? "Refresh LOOP.md" : "View LOOP.md"}
+              </button>
+            ) : null}
+            {hasScheduleSummary && selectedScheduleState.state !== "ready" ? (
+              <button type="button" className="ghost-action" disabled={selectedScheduleState.state === "loading"} onClick={() => void handleLoadSchedules()}>
+                {selectedScheduleState.state === "loading" ? "Loading timers" : "Load timers"}
+              </button>
+            ) : null}
+            {hasLoop && !loopDisabled ? (
+              <button type="button" className="ghost-action danger-action" disabled={loopProtocolBusy} onClick={() => void handleDisableLoopProtocol()}>
+                {loopProtocolBusy ? "Disabling loop" : "Disable loop"}
+              </button>
+            ) : null}
+            <button type="button" className="ghost-action" disabled={actionBusy || session.status === "running" || !!scheduleBusy} onClick={() => void handleCreateSchedule("checkin")}>
+              1h check-in
+            </button>
+            <button type="button" className="ghost-action" disabled={actionBusy || session.status === "running" || !!scheduleBusy} onClick={() => void handleCreateSchedule("loop")}>
+              30m loop tick
+            </button>
+          </>
+        )}
+        defaultOpen
+      >
         {showLoopContext ? (
           <SessionLoopPanel
             embedded
@@ -1685,7 +1726,7 @@ export function App() {
         )}
         <SessionSchedulePanel
           embedded
-          summary={scheduleSummary}
+          summary={scheduleSummary ?? emptyScheduleSummary}
           schedules={loadedSchedules}
           busy={scheduleBusy}
           disabled={actionBusy || session.status === "running"}
@@ -2265,6 +2306,101 @@ function automationWorkbenchMetrics(
     automationTimerMetric(session, schedulePanelState),
     automationNextMetric(context),
   ];
+}
+
+function automationWorkbenchFocus(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  loopPanelState: LoopProtocolState,
+  schedulePanelState: ScheduleState,
+  context: { title: string; detail: string } | undefined,
+): SessionAutomationFocus {
+  if (loopPanelState.state === "loading") {
+    return {
+      label: "Checking",
+      title: "Loading LOOP.md",
+      detail: "Reading the protocol and recent loop events.",
+      tone: "neutral",
+    };
+  }
+  if (loopPanelState.state === "error") {
+    return {
+      label: "Loop error",
+      title: "LOOP.md could not be loaded",
+      detail: automationCompact(loopPanelState.error) ?? "Refresh the protocol or disable the loop if it is stale.",
+      tone: "danger",
+    };
+  }
+  if (schedulePanelState.state === "error") {
+    return {
+      label: "Timer error",
+      title: "Timer details could not be loaded",
+      detail: automationCompact(schedulePanelState.error) ?? "Refresh timers before changing scheduled work.",
+      tone: "danger",
+    };
+  }
+  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
+  const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
+  const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
+  const lastQuestion = automationCompact(loopState?.last_calibration_question_preview ?? session?.loop_protocol?.state?.last_calibration_question_preview);
+  if (status === "draft" && answers <= 0) {
+    return {
+      label: "Required action",
+      title: "Answer setup question",
+      detail: lastQuestion ?? (questions > 0 ? "A loop draft exists but cannot run until calibration is answered." : "Wait for Affent to ask the loop calibration question."),
+      tone: "attention",
+      action: "answer",
+    };
+  }
+  if (status === "draft") {
+    return {
+      label: "Required action",
+      title: "Review activation",
+      detail: "Calibration is recorded. Review durable intent and activate through chat before timer ticks run.",
+      tone: "attention",
+      action: "review",
+    };
+  }
+  const schedules = session?.schedules;
+  if ((schedules?.error_count ?? 0) > 0 || schedules?.last_error) {
+    return {
+      label: "Timer issue",
+      title: `${Math.max(schedules?.error_count ?? 0, 1)} timer error`,
+      detail: automationCompact(schedules?.last_error) ?? "Load timer details to inspect the failed schedule.",
+      tone: "danger",
+    };
+  }
+  if ((schedules?.pending_loop_ticks ?? 0) > 0) {
+    return {
+      label: "Timer waiting",
+      title: `${schedules?.pending_loop_ticks} loop tick pending`,
+      detail: "Activate LOOP.md before queued loop ticks can safely run.",
+      tone: "attention",
+      action: answers > 0 ? "review" : "answer",
+    };
+  }
+  if (status === "running") {
+    return {
+      label: "Automation active",
+      title: "Loop can receive timer ticks",
+      detail: automationCompact(loopState?.last_decision ?? loopState?.last_event_summary) ?? "Use chat for durable protocol updates; keep LOOP.md compact.",
+      tone: "ok",
+    };
+  }
+  if ((schedules?.enabled ?? 0) > 0) {
+    return {
+      label: "Timer active",
+      title: `${schedules?.enabled} scheduled follow-up${schedules?.enabled === 1 ? "" : "s"}`,
+      detail: schedules?.next_run_at ? `Next ${automationFormatTime(schedules.next_run_at)}` : "Load timers to inspect the next run and pause controls.",
+      tone: "ok",
+    };
+  }
+  return {
+    label: "Manual control",
+    title: context?.title ?? "No automation running",
+    detail: context?.detail ?? "Start loop setup or create a timer only when this chat needs durable follow-up.",
+    tone: "neutral",
+  };
 }
 
 function automationLoopMetric(

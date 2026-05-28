@@ -7,10 +7,20 @@ export interface SessionAutomationMetric {
   tone?: "ok" | "attention" | "danger" | "neutral";
 }
 
+export interface SessionAutomationFocus {
+  label: string;
+  title: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+  action?: "answer" | "review";
+}
+
 export function SessionAutomationPanel({
   title,
   detail,
   metrics = [],
+  focus,
+  actions,
   defaultOpen = false,
   testId = "session-automation-panel",
   children,
@@ -18,6 +28,8 @@ export function SessionAutomationPanel({
   title: string;
   detail: string;
   metrics?: readonly SessionAutomationMetric[];
+  focus?: SessionAutomationFocus;
+  actions?: ReactNode;
   defaultOpen?: boolean;
   testId?: string;
   children: ReactNode;
@@ -30,6 +42,18 @@ export function SessionAutomationPanel({
         <span>{detail}</span>
       </summary>
       <div className="session-plan-body session-automation-body">
+        {focus || actions ? (
+          <section className="session-automation-focus" data-tone={focus?.tone ?? "neutral"} data-testid="session-automation-focus" aria-label="Automation focus">
+            {focus ? (
+              <div className="session-automation-focus-main">
+                <span>{focus.label}</span>
+                <strong>{focus.title}</strong>
+                <small>{focus.detail}</small>
+              </div>
+            ) : null}
+            {actions ? <div className="session-automation-focus-actions">{actions}</div> : null}
+          </section>
+        ) : null}
         {metrics.length > 0 ? (
           <div className="session-automation-dashboard" data-testid="session-automation-dashboard">
             {metrics.map((metric) => (

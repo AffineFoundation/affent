@@ -28,12 +28,24 @@ describe("SessionAutomationPanel", () => {
           { label: "Timers", value: "Off", detail: "No scheduled follow-ups" },
           { label: "Next", value: "Loop waiting", detail: "Answer setup question before LOOP.md can run.", tone: "attention" },
         ]}
+        focus={{
+          label: "Required action",
+          title: "Answer setup question",
+          detail: "Before LOOP.md can run.",
+          tone: "attention",
+          action: "answer",
+        }}
+        actions={<button type="button">Answer setup</button>}
         defaultOpen
       >
         <section>Loop section</section>
       </SessionAutomationPanel>,
     );
 
+    const focus = screen.getByTestId("session-automation-focus");
+    expect(focus).toHaveTextContent("Required action");
+    expect(focus).toHaveTextContent("Answer setup question");
+    expect(screen.getByRole("button", { name: "Answer setup" })).toBeInTheDocument();
     const dashboard = screen.getByTestId("session-automation-dashboard");
     expect(dashboard).toHaveTextContent("Loop");
     expect(dashboard).toHaveTextContent("Draft");
