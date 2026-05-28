@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
@@ -41,6 +42,7 @@ type RecentSession struct {
 	LatestUser      string `json:"latest_user,omitempty"`
 	LatestAssistant string `json:"latest_assistant,omitempty"`
 	Plan            string `json:"plan,omitempty"`
+	Loop            string `json:"loop,omitempty"`
 }
 
 // Response is the session_search tool return shape.
@@ -124,6 +126,17 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 						sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
 					}
 				}
+				loopPath := loopstate.ProtocolPath(filepath.Join(sessionsDir, sid), sid)
+				if mtime, ok := regularFileModTime(loopPath); ok {
+					hit, ok, serr := scoreLoopFile(ctx, loopPath, sid, terms, mtime)
+					if serr != nil {
+						if ctx.Err() != nil {
+							return nil, ctx.Err()
+						}
+					} else if ok {
+						sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
+					}
+				}
 				for _, hit := range sessionHits {
 					all = appendBoundedHits(all, hit, topK)
 				}
@@ -170,6 +183,7 @@ type sessionLogCandidate struct {
 	sessionID string
 	path      string
 	planPath  string
+	loopPath  string
 	modTime   time.Time
 }
 
@@ -207,9 +221,11 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				}
 				conversationPath := filepath.Join(sessionsDir, sid, "conversation.jsonl")
 				planPath := filepath.Join(sessionsDir, sid, "plan.json")
+				loopPath := loopstate.ProtocolPath(filepath.Join(sessionsDir, sid), sid)
 				conversationInfo, hasConversation := regularFileInfo(conversationPath)
 				planInfo, hasPlan := regularFileInfo(planPath)
-				if !hasConversation && !hasPlan {
+				loopInfo, hasLoop := regularFileInfo(loopPath)
+				if !hasConversation && !hasPlan && !hasLoop {
 					continue
 				}
 				modTime := time.Time{}
@@ -219,10 +235,14 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				if hasPlan && (modTime.IsZero() || planInfo.ModTime().After(modTime)) {
 					modTime = planInfo.ModTime()
 				}
+				if hasLoop && (modTime.IsZero() || loopInfo.ModTime().After(modTime)) {
+					modTime = loopInfo.ModTime()
+				}
 				candidates = append(candidates, sessionLogCandidate{
 					sessionID: sid,
 					path:      conversationPath,
 					planPath:  planPath,
+					loopPath:  loopPath,
 					modTime:   modTime,
 				})
 				continue
@@ -284,7 +304,7 @@ func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (Recent
 	}
 	if cand.path != "" {
 		if _, ok := regularFileInfo(cand.path); !ok {
-			if cand.planPath == "" {
+			if cand.planPath == "" && cand.loopPath == "" {
 				return RecentSession{}, false, errors.New("session log must be a regular file")
 			}
 		} else {
@@ -333,7 +353,12 @@ func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (Recent
 			summary.Plan = plan
 		}
 	}
-	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" {
+	if cand.loopPath != "" {
+		if loop := recentLoopPreview(cand.loopPath, cand.sessionID); loop != "" {
+			summary.Loop = loop
+		}
+	}
+	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" && summary.Loop == "" {
 		return RecentSession{}, false, nil
 	}
 	return summary, true, nil
@@ -523,6 +548,28 @@ func scorePlanFile(ctx context.Context, path, sid string, terms []string, mtime 
 	}, true, nil
 }
 
+func scoreLoopFile(ctx context.Context, path, sid string, terms []string, mtime string) (Hit, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Hit{}, false, err
+	}
+	content, ok, err := loopSearchContent(path, sid)
+	if err != nil || !ok {
+		return Hit{}, false, err
+	}
+	score, matchedTerms := scoreContentDetails(content, terms)
+	if score <= 0 {
+		return Hit{}, false, nil
+	}
+	return Hit{
+		SessionID:    sid,
+		Role:         "loop",
+		Snippet:      SnippetAround(content, terms),
+		Score:        score,
+		MatchedTerms: append([]string(nil), matchedTerms...),
+		ModTime:      mtime,
+	}, true, nil
+}
+
 func planSearchContent(summary planstate.Summary) string {
 	var b strings.Builder
 	if summary.Label != "" {
@@ -563,6 +610,73 @@ func planSearchContent(summary planstate.Summary) string {
 		}
 	}
 	return b.String()
+}
+
+func recentLoopPreview(path, sid string) string {
+	content, ok, err := loopSearchContent(path, sid)
+	if err != nil || !ok {
+		return ""
+	}
+	return recentSessionPreview(content)
+}
+
+func loopSearchContent(path, sid string) (string, bool, error) {
+	summary, found, err := loopstate.SummarizeFile(path, loopstate.ProtocolRelPath(sid))
+	if err != nil || !found {
+		return "", false, err
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		return "", false, err
+	}
+	var b strings.Builder
+	if summary.Status != "" {
+		fmt.Fprintf(&b, "loop_status: %s\n", summary.Status)
+	}
+	if summary.LoopID != "" {
+		fmt.Fprintf(&b, "loop_id: %s\n", summary.LoopID)
+	}
+	if summary.OwnerSession != "" {
+		fmt.Fprintf(&b, "owner_session: %s\n", summary.OwnerSession)
+	}
+	if current := markdownSection(protocol, "## 2. Current Situation"); current != "" {
+		b.WriteString("current_situation:\n")
+		b.WriteString(current)
+		b.WriteByte('\n')
+	}
+	if northStar := markdownSection(protocol, "## 1. North Star"); northStar != "" {
+		b.WriteString("north_star:\n")
+		b.WriteString(northStar)
+		b.WriteByte('\n')
+	}
+	b.WriteString("protocol:\n")
+	b.WriteString(protocol)
+	return b.String(), true, nil
+}
+
+func markdownSection(markdown, heading string) string {
+	heading = strings.TrimSpace(heading)
+	if heading == "" {
+		return ""
+	}
+	var lines []string
+	inSection := false
+	for _, line := range strings.Split(markdown, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			if inSection {
+				break
+			}
+			if trimmed == heading {
+				inSection = true
+			}
+			continue
+		}
+		if inSection {
+			lines = append(lines, line)
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func recentAnchorHitForMessage(sid, role, content string, prev searchableMessage, turnIdx, messageIdx int, mtime string) Hit {

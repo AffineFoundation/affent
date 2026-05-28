@@ -74,7 +74,7 @@ var allowedDeps = map[string]map[string]bool{
 
 	// --- leaf-deps: small packages that legitimately use textutil
 	// for cap-aware string trimming. sessionsearch also reads compact
-	// plan summaries so recall can surface task-state anchors.
+	// plan and loop summaries so recall can surface task-state anchors.
 	"internal/memory": {
 		"internal/textutil": true,
 	},
@@ -98,6 +98,7 @@ var allowedDeps = map[string]map[string]bool{
 	},
 	"internal/sessionsearch": {
 		"internal/jsonl":     true,
+		"internal/loopstate": true,
 		"internal/planstate": true,
 		"internal/textutil":  true,
 	},

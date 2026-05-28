@@ -31,7 +31,7 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 		Tool:     "session_search",
 		CallID:   "search-empty",
 		ExitCode: 0,
-		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
+		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk","loop":"loop_status: running current_situation: preserve Alpha Coast source evidence"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
 	}}}
 
 	examples := trace.SessionSearchExamples(5)
@@ -46,6 +46,7 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 		!strings.Contains(examples[0].RecentUserPreview, "Alpha Coast") ||
 		!strings.Contains(examples[0].RecentAssistantPreview, "HIST-STOCK-44") ||
 		!strings.Contains(examples[0].RecentPlanPreview, "Recheck Alpha Coast risk") ||
+		!strings.Contains(examples[0].RecentLoopPreview, "source evidence") ||
 		!strings.Contains(examples[0].Message, "retry") {
 		t.Fatalf("unexpected recent anchor example: %+v", examples[0])
 	}
@@ -2621,7 +2622,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_file_substrings[trace.jsonl]: `resume_missing_tool_result`",
 		"forbidden_file_substrings[notes.md]: `uncited taostats metric`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
-		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context or persisted plan anchors; inspect Session Search examples for incomplete recovery.",
+		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context or persisted task-state anchors; inspect Session Search examples for incomplete recovery.",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",
 		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1 context_artifacts=0 missing_artifacts=0",
 		"## Trace Events",

@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
 type testMessage struct {
@@ -64,6 +66,17 @@ func writeDurablePlan(t *testing.T, root, sessionID, raw string) {
 	}
 }
 
+func writeDurableLoop(t *testing.T, root, sessionID, raw string) {
+	t.Helper()
+	path := loopstate.ProtocolPath(filepath.Join(root, sessionID), sessionID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSearchFindsAndRanksMatches(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "low", []testMessage{
@@ -113,6 +126,56 @@ func TestSearchFindsDurablePlanCurrentStep(t *testing.T) {
 		}
 	}
 	requireMatchedTerms(t, hit.MatchedTerms, "bittensor", "subnet", "120", "validator", "inventory")
+}
+
+func TestSearchFindsDurableLoopCurrentSituation(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableLoop(t, dir, "loop-research", `# Loop Protocol: loop-research
+
+## 0. Metadata
+
+- loop_id: loop-research
+- owner_session: loop-research
+- status: running
+
+## 1. North Star
+
+Keep subnet research grounded in source evidence.
+
+## 2. Current Situation
+
+- current intent: finish Bittensor subnet 120 validator inventory
+- known evidence: taostats network responses include validator rows
+- next recovery anchor: browser_network_read before citing stake values
+`)
+	writeDurableLoop(t, dir, "current", `# Loop Protocol: current
+
+## 0. Metadata
+
+- status: running
+
+## 2. Current Situation
+
+- current intent: this current loop should be excluded
+`)
+
+	hits, err := Search(context.Background(), dir, "current", "Bittensor subnet 120 validator", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected durable loop hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != "loop-research" || hit.Role != "loop" {
+		t.Fatalf("expected loop hit from past session, got %+v", hit)
+	}
+	for _, want := range []string{"loop_status: running", "current_situation", "Bittensor subnet 120 validator", "browser_network_read"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("loop hit snippet missing %q:\n%+v", want, hit)
+		}
+	}
+	requireMatchedTerms(t, hit.MatchedTerms, "bittensor", "subnet", "120", "validator")
 }
 
 func TestSearchExcludesCurrentAndSkipsNonConversationRoles(t *testing.T) {
@@ -249,6 +312,55 @@ func TestRecentSessionsIncludesPlanAnchors(t *testing.T) {
 	}
 	if strings.Contains(fmt.Sprint(recent), "current plan should be hidden") {
 		t.Fatalf("current session plan leaked into recent anchors: %+v", recent)
+	}
+}
+
+func TestRecentSessionsIncludesLoopAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableLoop(t, dir, "loop-only", `# Loop Protocol: loop-only
+
+## 0. Metadata
+
+- loop_id: loop-only
+- owner_session: loop-only
+- status: running
+
+## 1. North Star
+
+Recover Alpha Coast market research without losing evidence quality.
+
+## 2. Current Situation
+
+- current intent: recheck Alpha Coast risk label
+- next recovery anchor: use primary filings before final answer
+`)
+	writeDurableLoop(t, dir, "current", `# Loop Protocol: current
+
+## 0. Metadata
+
+- status: running
+
+## 2. Current Situation
+
+- current intent: hidden current loop
+`)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(loopstate.ProtocolPath(filepath.Join(dir, "loop-only"), "loop-only"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 {
+		t.Fatalf("expected one recent loop anchor, got %+v", recent)
+	}
+	if recent[0].SessionID != "loop-only" || recent[0].LatestUser != "" || recent[0].Plan != "" || !strings.Contains(recent[0].Loop, "Alpha Coast") || !strings.Contains(recent[0].Loop, "primary filings") {
+		t.Fatalf("loop recent anchor = %+v, want loop preview without conversation/plan", recent[0])
+	}
+	if strings.Contains(fmt.Sprint(recent), "hidden current loop") {
+		t.Fatalf("current session loop leaked into recent anchors: %+v", recent)
 	}
 }
 

@@ -741,6 +741,19 @@ func TestRecoveryHintFromConversationSessionSearchRecentPlanAnchor(t *testing.T)
 	}
 }
 
+func TestRecoveryHintFromConversationSessionSearchRecentLoopAnchor(t *testing.T) {
+	result := `{"query":"missing marker","total":0,"results":[],"recent_sessions":[{"session_id":"recent-loop","loop":"loop_status: running current_situation: Continue Alpha Coast market recovery with primary filings"}]}`
+	got := recoveryHintFromConversationMessage(agent.ChatMessage{
+		Role:    "tool",
+		Content: result,
+	})
+	for _, want := range []string{"session recall found no direct hits", "retry from recent session recent-loop", "current_situation", "Alpha Coast"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation recovery hint missing %q: %q", want, got)
+		}
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromWeakSessionSearchHits(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
@@ -772,6 +785,13 @@ func TestRecoveryHintFromSessionSearchHitsAllowsPlanAnchor(t *testing.T) {
 	result := `{"query":"loop protocol","total":1,"results":[{"session_id":"looped","role":"plan","snippet":"current_step: verify loop protocol","matched_terms":["loop","protocol"],"context_included":false}]}`
 	if got := recoveryHintFromSessionSearchResult(result); got != "" {
 		t.Fatalf("hint = %q, want no weak-hit warning for plan anchor", got)
+	}
+}
+
+func TestRecoveryHintFromSessionSearchHitsAllowsLoopAnchor(t *testing.T) {
+	result := `{"query":"loop protocol","total":1,"results":[{"session_id":"looped","role":"loop","snippet":"current_situation: verify loop protocol","matched_terms":["loop","protocol"],"context_included":false}]}`
+	if got := recoveryHintFromSessionSearchResult(result); got != "" {
+		t.Fatalf("hint = %q, want no weak-hit warning for loop anchor", got)
 	}
 }
 

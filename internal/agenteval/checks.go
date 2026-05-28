@@ -1130,6 +1130,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	if ex.RecentPlanPreview != "" {
 		parts = append(parts, "recent_plan="+previewSubstr(ex.RecentPlanPreview, 100))
 	}
+	if ex.RecentLoopPreview != "" {
+		parts = append(parts, "recent_loop="+previewSubstr(ex.RecentLoopPreview, 100))
+	}
 	return strings.Join(parts, " ")
 }
 

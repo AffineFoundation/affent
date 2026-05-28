@@ -310,7 +310,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 || res.ToolStats.SessionSearchRecent > 0 {
 		kind := "recall"
 		severity := "info"
-		message := "session recall returned history with adjacent context or persisted plan anchors"
+		message := "session recall returned history with adjacent context or persisted task-state anchors"
 		tags := []string{"recall", "recall:context"}
 		if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchResults == 0 {
 			kind = "empty_recall"
@@ -326,7 +326,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {
 			severity = "warn"
 			tags = []string{"recall", "recall:no_context"}
-			message = "session recall returned hits without adjacent context or persisted plan anchors; inspect examples for stale or shallow recovery"
+			message = "session recall returned hits without adjacent context or persisted task-state anchors; inspect examples for stale or shallow recovery"
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchMatchedTerms == 0 {
 			severity = "warn"
 			tags = []string{"recall", "recall:no_matched_terms"}

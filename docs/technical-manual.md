@@ -462,23 +462,25 @@ transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
 `session_search_context_hits`, `session_search_matched_terms`,
 `session_search_recent_sessions`, and matched terms per call.
-`session_search_context_hits` counts adjacent transcript context and compact
-persisted plan anchors, because both are actionable long-run recovery context.
+`session_search_context_hits` counts adjacent transcript context, compact
+persisted plan anchors, and compact loop-protocol anchors, because all three
+are actionable long-run recovery context.
 Eval debug
 manifests, timelines, and JSONL records also include
 bounded `session_search_examples` with the query, matched session, turn,
 physical message index when available, session log modification time, matched
 terms, context flag, and compact snippet preview. Search also indexes compact
-persisted `plan.json` state as `role=plan`, so a long-run task can be recovered
-from its current step even when that step no longer appears in the transcript.
+persisted `plan.json` state as `role=plan` and per-session `LOOP.md` protocol
+state as `role=loop`, so a long-run task can be recovered from its current step
+or current situation even when that state no longer appears in the transcript.
 A user-request hit can carry the adjacent assistant answer so resume/debug runs
 show the prior outcome, not just the old question, which lets poor
 resume/recovery runs be debugged without opening the full transcript. When
 transcript recall has no lexical hits,
 `session_search` may also return a small `recent_sessions` list with session
-ids, modification times, compact latest user/assistant previews, and compact
-plan previews so the agent can retry with better anchors instead of guessing
-unseen history.
+ids, modification times, compact latest user/assistant previews, compact plan
+previews, and compact loop previews so the agent can retry with better anchors
+instead of guessing unseen history.
 Session ids themselves are searchable anchors; retrying with a recent
 `session_id` returns the latest compact user/assistant context from that
 session when ordinary transcript terms do not match. Each
@@ -671,8 +673,8 @@ required actions, runtime `error` events, `turn.end` budget/runtime failures,
 truncated tool results with artifact paths or missing-artifact warnings,
 successful no-hit `session_search` results that returned recent-session
 recovery anchors, successful `session_search` results whose hits lack adjacent
-context or persisted plan anchors, successful no-hit memory searches that
-returned topic recovery anchors or no memory anchors, context compactions whose
+context, persisted plan anchors, or loop anchors, successful no-hit memory
+searches that returned topic recovery anchors or no memory anchors, context compactions whose
 summary is missing or empty, and, when the event log is missing or incomplete,
 from structured resume repair placeholders and notes in `conversation.jsonl`.
 For `turn.end.reason=max_turns`, the recovery hint includes the dominant

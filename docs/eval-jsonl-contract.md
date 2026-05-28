@@ -324,7 +324,8 @@ Scenario records describe one eval case:
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.
 - `session_search_context_hits`: count of `session_search` hits that included
-  adjacent transcript context or a compact persisted plan anchor.
+  adjacent transcript context, a compact persisted plan anchor, or a compact
+  loop-protocol anchor.
 - `session_search_matched_terms`: count of unique matched query terms reported
   across parsed `session_search` responses.
 - `session_search_recent_sessions`: count of recent-session recovery anchors
@@ -335,8 +336,8 @@ Scenario records describe one eval case:
   `message_idx` when available, role, score, matched terms, context-included
   flag, and a compact snippet/message preview. User-request hits can include
   the adjacent assistant answer so recovery evals can inspect the prior
-  outcome. No-hit examples can include recent-session user, assistant, and
-  plan anchor previews for the retry path. Summary records include the
+  outcome. No-hit examples can include recent-session user, assistant, plan,
+  and loop anchor previews for the retry path. Summary records include the
   originating scenario.
 - `memory_update_examples`: optional bounded per-scenario examples of confirmed
   durable memory mutations. Each sample includes the tool index, call id,

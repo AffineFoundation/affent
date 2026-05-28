@@ -388,7 +388,7 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 	stats.SessionSearchResults += results
 	matched := map[string]bool{}
 	for _, hit := range resp.Results {
-		if hit.ContextIncluded || strings.TrimSpace(hit.Role) == "plan" {
+		if hit.ContextIncluded || sessionSearchRoleIsStateAnchor(hit.Role) {
 			stats.SessionSearchContextHits++
 		}
 		for _, term := range hit.MatchedTerms {
@@ -400,6 +400,15 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 	}
 	stats.SessionSearchMatchedTerms += len(matched)
 	stats.SessionSearchRecent += len(resp.RecentSessions)
+}
+
+func sessionSearchRoleIsStateAnchor(role string) bool {
+	switch strings.TrimSpace(role) {
+	case "plan", "loop":
+		return true
+	default:
+		return false
+	}
 }
 
 func toolFailureKind(result string) string {

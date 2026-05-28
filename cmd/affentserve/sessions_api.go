@@ -2183,6 +2183,9 @@ func recoveryHintFromSessionSearchResult(text string) string {
 	if preview == "" {
 		preview = strings.TrimSpace(recent.Plan)
 	}
+	if preview == "" {
+		preview = strings.TrimSpace(recent.Loop)
+	}
 	if preview != "" {
 		parts = append(parts, "preview: "+preview)
 	}
@@ -2194,12 +2197,12 @@ func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) 
 		return ""
 	}
 	for _, hit := range resp.Results {
-		if hit.ContextIncluded || strings.TrimSpace(hit.Role) == "plan" {
+		if hit.ContextIncluded || sessionSearchResultRoleIsRecoveryAnchor(hit.Role) {
 			return ""
 		}
 	}
 	first := resp.Results[0]
-	parts := []string{"session recall hits lack adjacent context or plan anchors"}
+	parts := []string{"session recall hits lack adjacent context, plan anchors, or loop anchors"}
 	if strings.TrimSpace(first.SessionID) != "" {
 		anchor := "verify with narrower session_search before relying on " + strings.TrimSpace(first.SessionID)
 		if first.TurnIdx > 0 {
@@ -2223,6 +2226,15 @@ func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) 
 		parts = append(parts, "matched terms missing")
 	}
 	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func sessionSearchResultRoleIsRecoveryAnchor(role string) bool {
+	switch strings.TrimSpace(role) {
+	case "plan", "loop":
+		return true
+	default:
+		return false
+	}
 }
 
 func recoveryHintFromMemorySearchMissResult(text string) string {
