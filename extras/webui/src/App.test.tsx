@@ -2508,11 +2508,15 @@ describe("App", () => {
     expect(workspace).toHaveAttribute("open");
     expect(workspace).toHaveTextContent("Workspace mismatch");
     expect(workspace).toHaveTextContent("Latest command cwd is outside the session workspace.");
-    expect(workspace).toHaveTextContent("Label: affent");
-    expect(workspace).toHaveTextContent("Session workspace: /repo/affent");
-    expect(workspace).toHaveTextContent("Last agent cwd: /tmp/outside");
-    expect(workspace).toHaveTextContent("Branch: main");
-    expect(workspace).toHaveTextContent("State: dirty");
+    expect(workspace).toHaveTextContent("affent");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Workspace");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/repo/affent");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Last cwd");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp/outside");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Branch");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("main");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("State");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("dirty");
   });
 
   it("surfaces command failures inside Workbench without adding default Chat noise", async () => {

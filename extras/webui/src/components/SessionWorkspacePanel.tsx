@@ -22,15 +22,20 @@ export function SessionWorkspacePanel({
       <div className="session-skills-body">
         <div className="session-workspace-card" data-tone={workspace.tone} data-testid="session-workspace-card">
           <div className="session-workspace-main">
-            {workspace.issue ? <strong className="session-workspace-issue">{workspace.issue}</strong> : null}
-            {workspace.label ? <span>Label: {workspace.label}</span> : null}
-            {workspace.path ? <span title={workspace.path}>Session workspace: {workspace.path}</span> : null}
-            {workspace.lastAgentCwd ? <span title={workspace.lastAgentCwd}>Last agent cwd: {workspace.lastAgentCwd}</span> : null}
-            {workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
-              <span title={workspace.latestCommandCwd}>Latest command cwd: {workspace.latestCommandCwd}</span>
-            ) : null}
-            {workspace.branch ? <span>Branch: {workspace.branch}</span> : null}
-            {workspace.dirtyState ? <span>State: {workspace.dirtyState}</span> : null}
+            <div className="session-workspace-hero" data-tone={workspace.tone ?? "ok"}>
+              <span>{workspace.issue ? "Check cwd" : "Boundary verified"}</span>
+              <strong title={workspace.path ?? workspace.label}>{workspace.label ?? displayPath(workspace.path) ?? "Workspace recorded"}</strong>
+              <small>{workspace.issue ?? "Commands and file actions are inside the session workspace."}</small>
+            </div>
+            <div className="session-workspace-fields" aria-label="Workspace fields">
+              {workspace.path ? <WorkspaceField label="Workspace" value={displayPath(workspace.path)} title={workspace.path} mono /> : null}
+              {workspace.lastAgentCwd ? <WorkspaceField label="Last cwd" value={displayPath(workspace.lastAgentCwd)} title={workspace.lastAgentCwd} mono tone={workspace.issue ? "warning" : undefined} /> : null}
+              {workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
+                <WorkspaceField label="Command cwd" value={displayPath(workspace.latestCommandCwd)} title={workspace.latestCommandCwd} mono />
+              ) : null}
+              {workspace.branch ? <WorkspaceField label="Branch" value={workspace.branch} /> : null}
+              {workspace.dirtyState ? <WorkspaceField label="State" value={workspace.dirtyState} /> : null}
+            </div>
           </div>
           <span className="session-evidence-actions">
             {workspace.path ? <CopyButton label="Copy path" value={workspace.path} className="ghost-action" /> : null}
@@ -46,4 +51,35 @@ export function SessionWorkspacePanel({
       </div>
     </details>
   );
+}
+
+function WorkspaceField({
+  label,
+  value,
+  title,
+  mono = false,
+  tone,
+}: {
+  label: string;
+  value?: string;
+  title?: string;
+  mono?: boolean;
+  tone?: "warning";
+}) {
+  if (!value) return null;
+  return (
+    <div className="session-workspace-field" data-tone={tone}>
+      <span>{label}</span>
+      {mono ? <code title={title ?? value}>{value}</code> : <strong title={title ?? value}>{value}</strong>}
+    </div>
+  );
+}
+
+function displayPath(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  if (normalized.length <= 48) return path;
+  if (parts.length >= 2) return `.../${parts.slice(-2).join("/")}`;
+  return `...${normalized.slice(-45)}`;
 }

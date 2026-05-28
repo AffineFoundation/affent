@@ -17,11 +17,16 @@ describe("SessionWorkspacePanel", () => {
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("Workspace mismatch");
     expect(panel).toHaveTextContent("Latest command cwd is outside the session workspace.");
-    expect(panel).toHaveTextContent("Session workspace: /repo/affent");
-    expect(panel).toHaveTextContent("Last agent cwd: /tmp");
-    expect(panel).toHaveTextContent("Latest command cwd: /tmp/extras/webui");
-    expect(panel).toHaveTextContent("Branch: main");
-    expect(panel).toHaveTextContent("State: dirty");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Workspace");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/repo/affent");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Last cwd");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Command cwd");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp/extras/webui");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Branch");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("main");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("State");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("dirty");
 
     await user.click(within(panel).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith("/repo/affent");
