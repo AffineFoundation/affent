@@ -73,6 +73,26 @@ func TestMemoryAddRejectsDuplicate(t *testing.T) {
 	}
 }
 
+func TestMemoryAddRejectsNormalizedDuplicate(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.Add(TargetMemory, "", "Project uses Go 1.22 with sqlc"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := s.Add(TargetMemory, "", " project   uses go 1.22\nwith SQLC ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("duplicate should not error: %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "duplicate") {
+		t.Fatalf("expected duplicate message, got %q", resp.Message)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("normalized duplicate must not produce second entry: %+v", resp.Entries)
+	}
+}
+
 func TestMemoryAddOverflow(t *testing.T) {
 	s := newTestStore(t)
 	s.TopicCharLimit = 50

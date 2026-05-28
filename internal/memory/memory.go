@@ -520,10 +520,11 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 	if err != nil {
 		return MemoryResponse{}, err
 	}
+	contentKey := normalizedMemoryContentKey(content)
 	for _, e := range entries {
 		// Compare on content only — a legacy unstamped duplicate of
 		// new stamped content shouldn't be double-saved.
-		if entryContent(e) == content {
+		if normalizedMemoryContentKey(entryContent(e)) == contentKey {
 			return s.respondLocked(target, topic, true, "entry already exists (no duplicate added)", entries, nil), nil
 		}
 	}
@@ -1560,6 +1561,10 @@ func scoreMemoryEntry(content string, terms []string) float64 {
 		return 0
 	}
 	return float64(unique) + 0.1*float64(total)
+}
+
+func normalizedMemoryContentKey(content string) string {
+	return strings.ToLower(strings.Join(strings.Fields(content), " "))
 }
 
 // scanMemoryContent blocks content that would be unsafe to inject
