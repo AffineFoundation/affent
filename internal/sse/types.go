@@ -377,7 +377,11 @@ type LoopDecisionPayload struct {
 	Reason         string `json:"reason,omitempty"`
 	RequiredAction string `json:"required_action,omitempty"`
 	TokenBudget    int    `json:"token_budget,omitempty"`
-	BudgetBytes    int    `json:"budget_bytes,omitempty"`
+	// Input-token budget decisions use these fields so Workbench and evals do
+	// not need to parse human-readable Reason text.
+	ObservedInputTokens  int `json:"observed_input_tokens,omitempty"`
+	ProjectedInputTokens int `json:"projected_input_tokens,omitempty"`
+	BudgetBytes          int `json:"budget_bytes,omitempty"`
 	// VisibleInUI is nil by default, which consumers should treat as visible.
 	// Use a pointer so an explicit false still survives JSON omitempty.
 	VisibleInUI *bool `json:"visible_in_ui,omitempty"`

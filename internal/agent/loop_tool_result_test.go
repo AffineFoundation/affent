@@ -2614,7 +2614,7 @@ func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
 	events := make(chan sse.Event, 256)
 	loop := &Loop{
 		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
-		MaxTurnSteps: 4, MaxTurnInputTokens: 50, PerCallTimeout: 5 * time.Second,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 55, PerCallTimeout: 5 * time.Second,
 		FinalNoToolsOnMaxTurns: true,
 	}
 	if err := loop.EnsureSystemPrompt("base"); err != nil {
@@ -2660,8 +2660,11 @@ func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
 				}
 				if p.Kind == "input_budget" {
 					sawDecision = true
-					if p.Trigger != "turn_input_tokens_exhausted" || p.Decision != "defer" || p.TokenBudget != 50 {
+					if p.Trigger != "turn_input_tokens_exhausted" || p.Decision != "defer" || p.TokenBudget != 55 {
 						t.Fatalf("unexpected input-budget decision: %+v", p)
+					}
+					if p.ObservedInputTokens != 60 || p.ProjectedInputTokens != 0 {
+						t.Fatalf("input-budget decision tokens = observed:%d projected:%d, want 60/0", p.ObservedInputTokens, p.ProjectedInputTokens)
 					}
 					if p.VisibleInUI == nil || !*p.VisibleInUI || !strings.Contains(p.RequiredAction, "Stop taking more tool actions") {
 						t.Fatalf("input-budget decision should be visible and actionable: %+v", p)
@@ -2752,7 +2755,7 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 	events := make(chan sse.Event, 256)
 	loop := &Loop{
 		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
-		MaxTurnSteps: 4, MaxTurnInputTokens: 50, PerCallTimeout: 5 * time.Second,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 55, PerCallTimeout: 5 * time.Second,
 		FinalNoToolsOnMaxTurns: true,
 	}
 	if err := loop.EnsureSystemPrompt("base"); err != nil {
@@ -2788,8 +2791,11 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 				}
 				if p.Kind == "input_budget" {
 					sawDecision = true
-					if p.Trigger != "projected_request_input_tokens" || p.Decision != "defer" || p.TokenBudget != 50 {
+					if p.Trigger != "projected_request_input_tokens" || p.Decision != "defer" || p.TokenBudget != 55 {
 						t.Fatalf("unexpected projected input-budget decision: %+v", p)
+					}
+					if p.ObservedInputTokens != 40 || p.ProjectedInputTokens <= p.ObservedInputTokens {
+						t.Fatalf("projected input-budget decision tokens = observed:%d projected:%d", p.ObservedInputTokens, p.ProjectedInputTokens)
 					}
 					if p.VisibleInUI == nil || !*p.VisibleInUI || !strings.Contains(p.Reason, "Projected next request") {
 						t.Fatalf("projected input-budget decision should be visible and explain projection: %+v", p)
@@ -2827,6 +2833,103 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 				}
 				if p.ToolStats == nil || p.ToolStats.ForcedNoTools != 1 || p.ToolStats.ToolRequests != 1 || p.ToolStats.ToolErrors != 0 {
 					t.Fatalf("tool stats = %+v, want one real tool and one forced no-tool transition", p.ToolStats)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestRunTurn_ProjectedInputBudgetChecksFirstRequest(t *testing.T) {
+	var calls int32
+	var requestHadTools atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		if strings.Contains(body, `"tools"`) {
+			requestHadTools.Store(true)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		atomic.AddInt32(&calls, 1)
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"first request stayed under the tool budget"},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":3}}` + "\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "expensive", Description: strings.Repeat("schema pressure ", 40), Schema: json.RawMessage(`{"type":"object","properties":{}}`), Execute: func(context.Context, json.RawMessage) (string, error) {
+		t.Fatal("tool should not run when the initial projected request exceeds the turn input budget")
+		return "", nil
+	}})
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 50, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+	}
+	if err := loop.EnsureSystemPrompt("base\n" + strings.Repeat("large recovered context ", 30)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "continue the recovered task"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawDecision bool
+	var sawFinal bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				if p.Kind == "input_budget" {
+					sawDecision = true
+					if p.Trigger != "projected_request_input_tokens" || p.TokenBudget != 50 || p.ObservedInputTokens != 0 {
+						t.Fatalf("unexpected initial projected input-budget decision: %+v", p)
+					}
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == "first request stayed under the tool budget" {
+					sawFinal = true
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed", p.Reason)
+				}
+				if !sawDecision || !sawFinal {
+					t.Fatalf("sawDecision=%t sawFinal=%t", sawDecision, sawFinal)
+				}
+				if requestHadTools.Load() {
+					t.Fatal("initial projected-budget request should omit tools")
+				}
+				if got := atomic.LoadInt32(&calls); got != 1 {
+					t.Fatalf("LLM calls = %d, want 1", got)
+				}
+				if p.ToolStats == nil || p.ToolStats.ForcedNoTools != 1 || p.ToolStats.ToolRequests != 0 || p.ToolStats.ToolErrors != 0 {
+					t.Fatalf("tool stats = %+v, want one forced no-tool transition without skipped tool calls", p.ToolStats)
 				}
 				return
 			}

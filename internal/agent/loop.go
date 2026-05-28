@@ -1144,7 +1144,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	}
 	forceNoToolsForProjectedInputBudget := func(toolDefs []ToolDef) bool {
 		budget := l.maxTurnInputTokensForTurn(opts)
-		if budget <= 0 || totalIn <= 0 || forceNoToolsNext {
+		if budget <= 0 || forceNoToolsNext {
 			return false
 		}
 		projected := totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
@@ -1616,16 +1616,18 @@ func (l *Loop) publishInputBudgetLoopDecision(turnID, trigger string, observed, 
 		reason = fmt.Sprintf("Projected next request would raise this turn to about %d input token(s) against a %d-token budget.", projected, budget)
 	}
 	l.publishLoopDecision(sse.LoopDecisionPayload{
-		TurnID:         turnID,
-		DecisionID:     "input-budget-" + trigger,
-		Kind:           "input_budget",
-		Trigger:        trigger,
-		Decision:       "defer",
-		Confidence:     "high",
-		Reason:         reason,
-		RequiredAction: "Stop taking more tool actions in this turn; produce a compact final answer from collected evidence, then continue in a new turn if more work is needed.",
-		TokenBudget:    budget,
-		VisibleInUI:    &visible,
+		TurnID:               turnID,
+		DecisionID:           "input-budget-" + trigger,
+		Kind:                 "input_budget",
+		Trigger:              trigger,
+		Decision:             "defer",
+		Confidence:           "high",
+		Reason:               reason,
+		RequiredAction:       "Stop taking more tool actions in this turn; produce a compact final answer from collected evidence, then continue in a new turn if more work is needed.",
+		TokenBudget:          budget,
+		ObservedInputTokens:  observed,
+		ProjectedInputTokens: projected,
+		VisibleInUI:          &visible,
 	})
 	if published != nil {
 		*published = true
