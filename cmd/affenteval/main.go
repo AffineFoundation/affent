@@ -1676,6 +1676,7 @@ func expectationRequiredToolNames(exp agenteval.DebugScenarioExpectations) []str
 	}
 	if len(exp.RequiredCommands) > 0 ||
 		len(exp.RequiredCommandCounts) > 0 ||
+		len(exp.RequiredCommandOrder) > 0 ||
 		len(exp.RequiredCommandBeforeTool) > 0 ||
 		len(exp.RequiredCommandAfterTool) > 0 {
 		add("shell")
@@ -5912,6 +5913,7 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 	}
 	if len(scenario.RequiredCommands) > 0 ||
 		len(scenario.RequiredCommandCounts) > 0 ||
+		len(scenario.RequiredCommandOrder) > 0 ||
 		len(scenario.RequiredCommandBeforeTool) > 0 ||
 		len(scenario.RequiredCommandAfterTool) > 0 {
 		add("shell")

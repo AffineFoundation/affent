@@ -459,6 +459,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
 	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
 	writeTimelineToolOrders(b, "required_tool_order", exp.RequiredToolOrder)
+	writeTimelineCommandOrders(b, "required_command_order", exp.RequiredCommandOrder)
 	writeTimelineCommandToolOrders(b, "required_command_before_tool", exp.RequiredCommandBeforeTool)
 	writeTimelineCommandToolOrders(b, "required_command_after_tool", exp.RequiredCommandAfterTool)
 	writeTimelineCountsLine(b, "required_tool_failure_kind_counts", exp.RequiredToolFailureKindCounts)
@@ -741,6 +742,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredCommands) > 0 ||
 		len(exp.ForbiddenCommands) > 0 ||
 		len(exp.RequiredCommandCounts) > 0 ||
+		len(exp.RequiredCommandOrder) > 0 ||
 		len(exp.RequiredToolCounts) > 0 ||
 		len(exp.RequiredCommandBeforeTool) > 0 ||
 		len(exp.RequiredCommandAfterTool) > 0 ||
@@ -825,6 +827,15 @@ func writeTimelineCommandToolOrders(b *strings.Builder, label string, orders []D
 			continue
 		}
 		fmt.Fprintf(b, "- %s: `%s -> %s`\n", label, timelineInline(order.Command, 180), timelineInline(order.Tool, 120))
+	}
+}
+
+func writeTimelineCommandOrders(b *strings.Builder, label string, orders []DebugCommandOrderRequirement) {
+	for _, order := range orders {
+		if strings.TrimSpace(order.Earlier) == "" && strings.TrimSpace(order.Later) == "" {
+			continue
+		}
+		fmt.Fprintf(b, "- %s: `%s -> %s`\n", label, timelineInline(order.Earlier, 180), timelineInline(order.Later, 180))
 	}
 }
 

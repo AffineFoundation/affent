@@ -2035,6 +2035,45 @@ func ShellCommandMatchingAfterTool(pattern, toolName string) Check {
 	}
 }
 
+func ShellCommandMatchingBeforeCommand(earlierPattern, laterPattern string) Check {
+	earlierRe, earlierErr := regexp.Compile(earlierPattern)
+	laterRe, laterErr := regexp.Compile(laterPattern)
+	return Check{
+		Name: fmt.Sprintf("shell_command_before_command:%s->%s", previewSubstr(earlierPattern, 48), previewSubstr(laterPattern, 48)),
+		Eval: func(t Trace) CheckResult {
+			firstEarlier := -1
+			firstLater := -1
+			var observed []string
+			for i, c := range t.Tools {
+				cmd, ok := c.Args["command"].(string)
+				if !ok || cmd == "" {
+					continue
+				}
+				observed = append(observed, cmd)
+				if firstEarlier == -1 && shellCommandMatches(earlierPattern, earlierRe, earlierErr, cmd) {
+					firstEarlier = i
+				}
+				if firstLater == -1 && shellCommandMatches(laterPattern, laterRe, laterErr, cmd) {
+					firstLater = i
+				}
+			}
+			switch {
+			case firstEarlier == -1:
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed earlier command match %q before %q; commands=%v", earlierPattern, laterPattern, observed)}
+			case firstLater == -1:
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed later command match %q after %q; commands=%v", laterPattern, earlierPattern, observed)}
+			case firstEarlier >= firstLater:
+				return CheckResult{
+					Pass:   false,
+					Detail: fmt.Sprintf("expected command match %q before %q; first earlier command at step %d, first later command at step %d", earlierPattern, laterPattern, firstEarlier, firstLater),
+				}
+			default:
+				return CheckResult{Pass: true}
+			}
+		},
+	}
+}
+
 func shellCommandMatches(pattern string, re *regexp.Regexp, reErr error, cmd string) bool {
 	if reErr == nil {
 		return re.MatchString(cmd)

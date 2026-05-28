@@ -3016,6 +3016,9 @@ func TestMessageUsesName(t *testing.T) {
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
 		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
+		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},

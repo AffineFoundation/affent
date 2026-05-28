@@ -1677,6 +1677,40 @@ func TestShellCommandMatchingBeforeAfterTool(t *testing.T) {
 	}
 }
 
+func TestShellCommandMatchingBeforeCommand(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+		{Tool: "shell", Args: map[string]any{"command": "git commit -m fix"}},
+		{Tool: "shell", Args: map[string]any{"command": "git push origin main"}},
+	}}
+	if res := ShellCommandMatchingBeforeCommand(`git commit`, `git push`).Eval(trace); !res.Pass {
+		t.Fatalf("expected commit before push to pass: %+v", res)
+	}
+
+	reversed := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "git push origin main"}},
+		{Tool: "shell", Args: map[string]any{"command": "git commit -m fix"}},
+	}}
+	res := ShellCommandMatchingBeforeCommand(`git commit`, `git push`).Eval(reversed)
+	if res.Pass {
+		t.Fatal("expected reversed command order to fail")
+	}
+	if !strings.Contains(res.Detail, "before") {
+		t.Fatalf("detail should explain command order failure: %s", res.Detail)
+	}
+
+	missingLater := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "git commit -m fix"}},
+	}}
+	res = ShellCommandMatchingBeforeCommand(`git commit`, `git push`).Eval(missingLater)
+	if res.Pass {
+		t.Fatal("expected missing later command to fail")
+	}
+	if !strings.Contains(res.Detail, "never observed later command") {
+		t.Fatalf("detail should explain missing later command: %s", res.Detail)
+	}
+}
+
 func TestShellCommandLacksUnguarded(t *testing.T) {
 	t.Run("fails on unguarded forbidden", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{

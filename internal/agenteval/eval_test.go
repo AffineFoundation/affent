@@ -1208,6 +1208,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
 		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
+		},
 		ForbiddenCommands: []string{"| head", "|| true"},
 		ProtectedFiles:    []string{"main_test.go", "doc_test.go"},
 	}
@@ -1258,6 +1261,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"shell_command_matching_at_least:go test:2",
 		"shell_command_before_tool:go test->edit_file",
 		"shell_command_after_tool:go test->edit_file",
+		"shell_command_before_command:git commit->git push",
 		"shell_command_lacks_unguarded:| head",
 		"shell_command_lacks_unguarded:|| true",
 		"file_not_edited:",
@@ -1938,6 +1942,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !commandToolOrderContains(sourceRepo.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "edit_file"}) {
 		t.Fatalf("source repo RequiredCommandAfterTool = %#v, want git status after edit_file", sourceRepo.RequiredCommandAfterTool)
+	}
+	if !commandOrderContains(sourceRepo.RequiredCommandOrder, CommandOrderRequirement{Earlier: `git commit`, Later: `git push`}) {
+		t.Fatalf("source repo RequiredCommandOrder = %#v, want git commit before git push", sourceRepo.RequiredCommandOrder)
 	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "read_file", Arg: "path", Substring: "app/greet/greet.go"},
@@ -3103,6 +3110,15 @@ func commandToolOrderContains(values []CommandToolOrderRequirement, want Command
 	return false
 }
 
+func commandOrderContains(values []CommandOrderRequirement, want CommandOrderRequirement) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func toolOrderContains(values []ToolOrderRequirement, want ToolOrderRequirement) bool {
 	for _, value := range values {
 		if value == want {
@@ -3539,6 +3555,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: "go test", Tool: "edit_file"},
 		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: "git commit", Later: "git push"},
+		},
 		RequiredFocusedTaskCounts: map[string]int{
 			"research": 1,
 		},
@@ -3686,6 +3705,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredCommandBeforeTool[0] != (DebugCommandToolOrderRequirement{Command: "go test", Tool: "memory"}) ||
 		len(manifest.Expectations.RequiredCommandAfterTool) != 1 ||
 		manifest.Expectations.RequiredCommandAfterTool[0] != (DebugCommandToolOrderRequirement{Command: "go test", Tool: "edit_file"}) ||
+		len(manifest.Expectations.RequiredCommandOrder) != 1 ||
+		manifest.Expectations.RequiredCommandOrder[0] != (DebugCommandOrderRequirement{Earlier: "git commit", Later: "git push"}) ||
 		manifest.Expectations.RequiredFocusedTaskCounts["research"] != 1 ||
 		manifest.Expectations.RequiredFocusedTaskSourceCounts["research"] != 2 ||
 		manifest.Expectations.RequiredSubagentModeCounts["review"] != 1 ||
@@ -3983,6 +4004,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"forbidden_tools: `shell`",
 		"required_tool_counts: `browser_network_read=1`",
 		"required_tool_order: `web_fetch -> browser_network_read`",
+		"required_command_order: `git commit -> git push`",
 		"required_command_before_tool: `go test -> memory`",
 		"required_command_after_tool: `go test -> edit_file`",
 		"required_tool_failure_kind_counts: `dynamic_shell=1`",

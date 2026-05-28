@@ -49,6 +49,11 @@ type CommandToolOrderRequirement struct {
 	Tool    string
 }
 
+type CommandOrderRequirement struct {
+	Earlier string
+	Later   string
+}
+
 type ToolArgContainsRequirement struct {
 	Tool      string
 	Arg       string
@@ -182,6 +187,7 @@ type BatchScenario struct {
 	RequiredContextLoopProtocolAnchorText   []string
 	RequiredCommandBeforeTool               []CommandToolOrderRequirement
 	RequiredCommandAfterTool                []CommandToolOrderRequirement
+	RequiredCommandOrder                    []CommandOrderRequirement
 	RequiredTools                           []string
 	ForbiddenTools                          []string
 	RequiredFocusedTaskCounts               map[string]int
@@ -378,6 +384,7 @@ type DebugScenarioExpectations struct {
 	RequiredCommands                        []string                              `json:"required_commands,omitempty"`
 	ForbiddenCommands                       []string                              `json:"forbidden_commands,omitempty"`
 	RequiredCommandCounts                   map[string]int                        `json:"required_command_counts,omitempty"`
+	RequiredCommandOrder                    []DebugCommandOrderRequirement        `json:"required_command_order,omitempty"`
 	RequiredToolCounts                      map[string]int                        `json:"required_tool_counts,omitempty"`
 	RequiredToolFailureKindCounts           map[string]int                        `json:"required_tool_failure_kind_counts,omitempty"`
 	MaxToolFailureKindCounts                map[string]int                        `json:"max_tool_failure_kind_counts,omitempty"`
@@ -525,7 +532,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	for range exp.RequiredCommandAfterTool {
 		caps["workspace"] = true
 	}
-	if len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
+	if len(exp.RequiredCommandOrder) > 0 || len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
 		caps["workspace"] = true
 	}
 	if len(exp.RequiredFileSubstrings) > 0 || len(exp.ForbiddenFileSubstrings) > 0 || len(exp.ProtectedFiles) > 0 {
@@ -663,6 +670,7 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 	}
 	if len(exp.RequiredCommands) > 0 ||
 		len(exp.RequiredCommandCounts) > 0 ||
+		len(exp.RequiredCommandOrder) > 0 ||
 		len(exp.RequiredCommandBeforeTool) > 0 ||
 		len(exp.RequiredCommandAfterTool) > 0 {
 		add("shell")
@@ -761,6 +769,11 @@ type DebugToolOrderRequirement struct {
 type DebugCommandToolOrderRequirement struct {
 	Command string `json:"command,omitempty"`
 	Tool    string `json:"tool,omitempty"`
+}
+
+type DebugCommandOrderRequirement struct {
+	Earlier string `json:"earlier,omitempty"`
+	Later   string `json:"later,omitempty"`
 }
 
 type DebugLoopDecisionRequirement struct {
@@ -1831,6 +1844,13 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Tool:    req.Tool,
 		})
 	}
+	commandOrders := make([]DebugCommandOrderRequirement, 0, len(s.RequiredCommandOrder))
+	for _, req := range s.RequiredCommandOrder {
+		commandOrders = append(commandOrders, DebugCommandOrderRequirement{
+			Earlier: req.Earlier,
+			Later:   req.Later,
+		})
+	}
 	checks := BatchScenarioChecks(s)
 	checkNames := make([]string, 0, len(checks))
 	for _, check := range checks {
@@ -1883,6 +1903,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredContextInjectionSources:         cloneStringIntMap(s.RequiredContextInjectionSources),
 		RequiredCommandBeforeTool:               commandBeforeTool,
 		RequiredCommandAfterTool:                commandAfterTool,
+		RequiredCommandOrder:                    commandOrders,
 		RequiredToolOrder:                       toolOrders,
 		RequiredFocusedTaskCounts:               cloneStringIntMap(s.RequiredFocusedTaskCounts),
 		RequiredFocusedTaskSourceCounts:         cloneStringIntMap(s.RequiredFocusedTaskSourceCounts),
@@ -2871,6 +2892,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, order := range scenario.RequiredCommandAfterTool {
 		checks = append(checks, ShellCommandMatchingAfterTool(order.Command, order.Tool))
+	}
+	for _, order := range scenario.RequiredCommandOrder {
+		checks = append(checks, ShellCommandMatchingBeforeCommand(order.Earlier, order.Later))
 	}
 	for _, forbidden := range scenario.ForbiddenCommands {
 		checks = append(checks, ShellCommandLacksUnguarded(forbidden))
