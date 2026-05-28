@@ -1,6 +1,6 @@
 import type { SessionSummary } from "../api/sessions";
 import type { SessionState, TurnState } from "../store/sessionState";
-import { buildExecutionTree, formatTokenUsageDetail, type ExecutionTreeNode } from "./executionTree";
+import { buildExecutionTree, type ExecutionTokenUsage, type ExecutionTreeNode } from "./executionTree";
 import type { SessionChangesView } from "./sessionChanges";
 import type { SessionFilesView } from "./sessionFiles";
 import { displaySessionOverviewMetrics, type SessionOverview } from "./sessionOverview";
@@ -26,6 +26,22 @@ export interface WorkbenchContextUsageItem {
 
 export interface WorkbenchContextUsageView {
   items: WorkbenchContextUsageItem[];
+}
+
+export interface WorkbenchAttachment {
+  label: string;
+  title: string;
+  detail?: string;
+  metrics?: readonly string[];
+  tone?: "live" | "saved" | "none";
+}
+
+export interface WorkbenchAttachmentInput {
+  selectedSessionId?: string;
+  selectedSessionTitle?: string;
+  selectedSession?: Pick<SessionSummary, "active" | "durable">;
+  workspace?: Pick<SessionWorkspaceView, "hasData" | "shortStatus">;
+  usage?: WorkbenchContextUsageView;
 }
 
 export interface WorkbenchContextEvidenceInput {
@@ -150,10 +166,10 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
   }
 
   for (const delegated of delegatedTokenUsage(session).slice(0, 3)) {
-    const merged = delegated.contextEstimatedTokens ? ` · merged ~${formatInteger(delegated.contextEstimatedTokens)} tokens` : "";
+    const merged = delegated.contextEstimatedTokens ? ` · merged ~${formatTokenCountMillions(delegated.contextEstimatedTokens)}` : "";
     items.push({
       label: delegated.kind === "focused_task" ? "Focused task tokens" : "Subagent tokens",
-      value: formatTokenUsageDetail(delegated.tokenUsage),
+      value: formatExecutionTokenUsage(delegated.tokenUsage),
       detail: `${delegated.title}${merged}`,
     });
   }
@@ -165,6 +181,35 @@ export function workbenchContextUsageSummary(usage?: WorkbenchContextUsageView):
   const sessionTokens = usage?.items.find((item) => item.label === "Session tokens");
   if (!sessionTokens) return undefined;
   return compactTokenValue(sessionTokens.value);
+}
+
+export function buildWorkbenchAttachment({
+  selectedSessionId,
+  selectedSessionTitle,
+  selectedSession,
+  workspace,
+  usage,
+}: WorkbenchAttachmentInput): WorkbenchAttachment {
+  if (!selectedSessionId) {
+    return {
+      label: "Attached chat",
+      title: "No chat attached",
+      detail: "Fresh task",
+      tone: "none",
+    };
+  }
+  const metrics = [
+    selectedSession?.active ? "Live" : selectedSession?.durable ? "Saved" : "Selected",
+    workspace?.hasData ? workspace.shortStatus : undefined,
+    workbenchContextUsageSummary(usage),
+  ].filter((value): value is string => Boolean(value));
+  return {
+    label: "Attached chat",
+    title: selectedSessionTitle ?? selectedSessionId,
+    detail: selectedSessionId,
+    metrics,
+    tone: selectedSession?.active ? "live" : "saved",
+  };
 }
 
 export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInput): string {
@@ -224,15 +269,31 @@ function collectDelegatedTokenUsage(
 
 function formatTokenSplit(inputTokens: number, outputTokens: number): string {
   const total = tokenTotal(inputTokens, outputTokens);
-  return `${formatInteger(total)} ${total === 1 ? "token" : "tokens"} (${formatInteger(inputTokens)} in / ${formatInteger(outputTokens)} out)`;
+  return `${formatTokenCountMillions(total)} (${formatTokenMillions(inputTokens)} in / ${formatTokenMillions(outputTokens)} out)`;
+}
+
+function formatExecutionTokenUsage(usage: ExecutionTokenUsage): string {
+  const input = usage.inputTokens ?? 0;
+  const output = usage.outputTokens ?? 0;
+  const split = usage.inputTokens != null || usage.outputTokens != null
+    ? ` (${formatTokenMillions(input)} in / ${formatTokenMillions(output)} out)`
+    : "";
+  return `${formatTokenCountMillions(usage.totalTokens)}${split}`;
 }
 
 function tokenTotal(inputTokens: number, outputTokens: number): number {
   return inputTokens + outputTokens;
 }
 
-function formatInteger(value: number): string {
-  return value.toLocaleString("en-US");
+function formatTokenMillions(value: number): string {
+  const millions = value / 1_000_000;
+  if (value < 10_000) return `${millions.toFixed(4)}M`;
+  if (value < 100_000) return `${millions.toFixed(3)}M`;
+  return `${millions.toFixed(2)}M`;
+}
+
+function formatTokenCountMillions(value: number): string {
+  return `${formatTokenMillions(value)} tokens`;
 }
 
 function compactTokenValue(value: string): string {

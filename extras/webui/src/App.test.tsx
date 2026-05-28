@@ -1901,6 +1901,65 @@ describe("App", () => {
     expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("No reusable workflows");
   });
 
+  it("auto-hides chats for Workbench and lets them reopen without closing Workbench", async () => {
+    window.history.replaceState(null, "", "/?sessionId=s1");
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "s1",
+              active: false,
+              durable: true,
+              title: "Workbench layout fix",
+              workspace_path: "/home/claudeuser/work/affent",
+              workspace_label: "affent",
+              default_branch: "main",
+              dirty_state: "dirty",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+              usage: { input_tokens: 1200, output_tokens: 340, turns: 1 },
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "s1", events: completedTurn, next_after: 11, has_more: false, trace_schema_detected: true });
+      }
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      if (url === "/v1/sessions/s1/memory") return jsonResponse({ session_id: "s1", has_memory: false, topics: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Connected"));
+    await user.click(screen.getByLabelText("Workbench"));
+
+    expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "collapsed");
+    expect(screen.queryByTestId("session-list")).toBeNull();
+    expect(screen.getByRole("button", { name: "Show chats" })).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Attached chat");
+    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("0.0001M tokens");
+    expect(screen.getByRole("separator", { name: "Resize Workbench" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show chats" }));
+    expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Workbench layout fix");
+    expect(screen.getByRole("separator", { name: "Resize chats" })).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-panel")).toBeVisible();
+    expect(screen.getByTestId("composer")).toBeVisible();
+  });
+
   it("surfaces changed files inside Workbench without adding default Chat noise", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {

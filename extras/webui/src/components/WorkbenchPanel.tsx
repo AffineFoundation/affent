@@ -1,20 +1,25 @@
-import type { ReactNode } from "react";
+import type { PointerEventHandler, ReactNode } from "react";
+import type { WorkbenchAttachment } from "../view/workbenchContext";
 import type { WorkbenchNavItem, WorkbenchNavScope, WorkbenchTab } from "../view/workbenchNav";
 
 export function WorkbenchPanel({
   title,
   subtitle,
+  attachment,
   navItems,
   activeTab,
   onSelectTab,
+  onResizeStart,
   onClose,
   children,
 }: {
   title: string;
   subtitle: string;
+  attachment?: WorkbenchAttachment;
   navItems: readonly WorkbenchNavItem[];
   activeTab: WorkbenchTab;
   onSelectTab: (tab: WorkbenchTab) => void;
+  onResizeStart?: PointerEventHandler<HTMLSpanElement>;
   onClose: () => void;
   children?: ReactNode;
 }) {
@@ -22,6 +27,15 @@ export function WorkbenchPanel({
 
   return (
     <aside className="workbench-panel" data-testid="workbench-panel" aria-label={title}>
+      {onResizeStart ? (
+        <span
+          className="workbench-resize-handle"
+          role="separator"
+          aria-label="Resize Workbench"
+          aria-orientation="vertical"
+          onPointerDown={onResizeStart}
+        />
+      ) : null}
       <div className="workbench-panel-head">
         <div>
           <strong>{title}</strong>
@@ -31,6 +45,22 @@ export function WorkbenchPanel({
           Close
         </button>
       </div>
+      {attachment ? (
+        <section className="workbench-attachment" data-tone={attachment.tone ?? "none"} data-testid="workbench-attachment" aria-label={attachment.label}>
+          <div className="workbench-attachment-main">
+            <span>{attachment.label}</span>
+            <strong title={attachment.title}>{attachment.title}</strong>
+            {attachment.detail ? <small title={attachment.detail}>{attachment.detail}</small> : null}
+          </div>
+          {attachment.metrics?.length ? (
+            <div className="workbench-attachment-metrics" aria-label={`${attachment.label} status`}>
+              {attachment.metrics.map((metric) => (
+                <span key={metric}>{metric}</span>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
       <nav className="workbench-nav" aria-label={`${title} sections`}>
         {groups.map((group) => (
           <div key={group.scope} className="workbench-nav-group" data-scope={group.scope}>

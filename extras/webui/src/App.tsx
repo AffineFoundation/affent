@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import "./styles/index.css";
 import { ApiClient, ApiError } from "./api/client";
 import {
@@ -79,7 +79,7 @@ import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
 import { buildSessionTrace } from "./view/sessionTrace";
-import { buildWorkbenchContextUsage } from "./view/workbenchContext";
+import { buildWorkbenchAttachment, buildWorkbenchContextUsage } from "./view/workbenchContext";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
 import {
@@ -148,6 +148,10 @@ const maxHistoryPages = 50;
 const themeStorageKey = "affent.theme";
 const sessionUrlParam = "sessionId";
 const legacySessionUrlParam = "session";
+const minSessionPanelWidth = 220;
+const maxSessionPanelWidth = 420;
+const minWorkbenchPanelWidth = 420;
+const maxWorkbenchPanelWidth = 940;
 
 // The shell stays deliberately thin: transport helpers own HTTP details,
 // the reducer owns event interpretation, and UI components receive stable
@@ -185,6 +189,9 @@ export function App() {
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("context");
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
+  const [sessionsExpandedInWorkbench, setSessionsExpandedInWorkbench] = useState(false);
+  const [sessionPanelWidth, setSessionPanelWidth] = useState(280);
+  const [workbenchPanelWidth, setWorkbenchPanelWidth] = useState<number | undefined>();
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
@@ -199,6 +206,7 @@ export function App() {
   const planFetchInFlightKeyRef = useRef("");
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLDivElement | null>(null);
+  const workspaceShellRef = useRef<HTMLDivElement | null>(null);
   const sessionsRef = useRef(sessions);
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -312,11 +320,26 @@ export function App() {
   const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
   const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
+  const workbenchAttachment = useMemo(
+    () => buildWorkbenchAttachment({
+      selectedSessionId,
+      selectedSessionTitle,
+      selectedSession,
+      workspace: sessionWorkspace,
+      usage: workbenchContextUsage,
+    }),
+    [selectedSession, selectedSessionId, selectedSessionTitle, sessionWorkspace, workbenchContextUsage],
+  );
   const sessionTrace = useMemo(() => buildSessionTrace(session), [session]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const hasSessionNav = !demoActive && sessions.length > 0;
-  const showSessionNav = hasSessionNav && !workbenchOpen;
-  const compactNav = demoActive || !showSessionNav;
+  const showSessionNav = hasSessionNav && (!workbenchOpen || sessionsExpandedInWorkbench);
+  const showSessionRailToggle = hasSessionNav && (
+    (showSessionNav && sessionsCollapsed)
+    || (workbenchOpen && !sessionsExpandedInWorkbench)
+  );
+  const compactNav = demoActive || (!showSessionNav && !showSessionRailToggle);
+  const sessionNavState = showSessionNav ? (sessionsCollapsed ? "collapsed" : "visible") : showSessionRailToggle ? "collapsed" : "hidden";
   const showHeaderNewChat = !demoActive && !hasSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
   const showAutomationContext = showLoopContext || showScheduleContext;
@@ -1441,11 +1464,40 @@ export function App() {
 
   function openWorkbench(tab: WorkbenchTab = "context") {
     setWorkbenchTab(tab);
+    setSessionsExpandedInWorkbench(false);
     setWorkbenchOpen(true);
   }
 
   function handleSelectWorkbenchTab(tab: WorkbenchTab) {
     setWorkbenchTab(tab);
+  }
+
+  function handleShowSessions() {
+    setSessionsExpandedInWorkbench(true);
+    setSessionsCollapsed(false);
+  }
+
+  function handleHideSessions() {
+    setSessionsCollapsed(true);
+    if (workbenchOpen) setSessionsExpandedInWorkbench(false);
+  }
+
+  function handleSessionResizeStart(event: ReactPointerEvent<HTMLSpanElement>) {
+    event.preventDefault();
+    const shellLeft = workspaceShellRef.current?.getBoundingClientRect().left ?? 0;
+    const handleMove = (moveEvent: PointerEvent) => {
+      setSessionPanelWidth(clamp(moveEvent.clientX - shellLeft, minSessionPanelWidth, maxSessionPanelWidth));
+    };
+    trackResize(event, handleMove);
+  }
+
+  function handleWorkbenchResizeStart(event: ReactPointerEvent<HTMLSpanElement>) {
+    event.preventDefault();
+    const handleMove = (moveEvent: PointerEvent) => {
+      const maxWidth = Math.min(maxWorkbenchPanelWidth, Math.max(minWorkbenchPanelWidth, window.innerWidth * 0.64));
+      setWorkbenchPanelWidth(clamp(window.innerWidth - moveEvent.clientX - 22, minWorkbenchPanelWidth, maxWidth));
+    };
+    trackResize(event, handleMove);
   }
 
   function renderWorkbenchTab() {
@@ -1622,18 +1674,23 @@ export function App() {
       </div>
       <main className="app-main">
         <div
+          ref={workspaceShellRef}
           className="workspace-shell"
           data-compact-nav={compactNav}
-          data-session-nav={showSessionNav ? (sessionsCollapsed ? "collapsed" : "visible") : "hidden"}
+          data-session-nav={sessionNavState}
           data-workbench={workbenchOpen ? "open" : "closed"}
           data-testid="workspace-shell"
+          style={{
+            "--session-panel-width": `${sessionPanelWidth}px`,
+            ...(workbenchPanelWidth ? { "--workbench-panel-width": `${workbenchPanelWidth}px` } : {}),
+          } as CSSProperties}
         >
-          {showSessionNav && sessionsCollapsed ? (
+          {showSessionRailToggle ? (
             <button
               type="button"
               className="session-rail-toggle"
               aria-label="Show chats"
-              onClick={() => setSessionsCollapsed(false)}
+              onClick={handleShowSessions}
             >
               <span aria-hidden="true">☰</span>
             </button>
@@ -1649,7 +1706,8 @@ export function App() {
               onNew={() => void handleNewSession()}
               onDelete={(sessionId) => void handleDeleteSession(sessionId)}
               deletingId={deletingSessionId}
-              onCollapse={() => setSessionsCollapsed(true)}
+              onCollapse={handleHideSessions}
+              onResizeStart={handleSessionResizeStart}
             />
           ) : null}
           <section
@@ -1723,9 +1781,11 @@ export function App() {
             <WorkbenchPanel
               title="Workbench"
               subtitle="Global runtime console"
+              attachment={workbenchAttachment}
               navItems={workbenchNavItems}
               activeTab={workbenchTab}
               onSelectTab={handleSelectWorkbenchTab}
+              onResizeStart={handleWorkbenchResizeStart}
               onClose={() => {
                 setWorkbenchOpen(false);
               }}
@@ -1791,6 +1851,26 @@ function syncSessionIdToUrl(sessionId?: string) {
   } catch {
     // URL sync is convenience only; loading and sending should keep working.
   }
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function trackResize(event: ReactPointerEvent<HTMLElement>, onMove: (event: PointerEvent) => void) {
+  const target = event.currentTarget;
+  target.setPointerCapture?.(event.pointerId);
+  document.body.dataset.resizing = "true";
+  const handleMove = (moveEvent: PointerEvent) => onMove(moveEvent);
+  const handleEnd = () => {
+    document.removeEventListener("pointermove", handleMove);
+    document.removeEventListener("pointerup", handleEnd);
+    document.removeEventListener("pointercancel", handleEnd);
+    delete document.body.dataset.resizing;
+  };
+  document.addEventListener("pointermove", handleMove);
+  document.addEventListener("pointerup", handleEnd, { once: true });
+  document.addEventListener("pointercancel", handleEnd, { once: true });
 }
 
 function latestChatMeta(updated: string): string | undefined {

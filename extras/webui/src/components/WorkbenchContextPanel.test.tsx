@@ -122,9 +122,9 @@ describe("WorkbenchContextPanel", () => {
         }}
         usage={{
           items: [
-            { label: "Session tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "1 turn from loaded trace" },
-            { label: "Latest turn tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "t1" },
-            { label: "Subagent tokens", value: "392 tokens (310 in / 82 out)", detail: "Find WebUI requirements · merged ~186 tokens" },
+            { label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" },
+            { label: "Latest turn tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "t1" },
+            { label: "Subagent tokens", value: "0.0004M tokens (0.0003M in / 0.0001M out)", detail: "Find WebUI requirements · merged ~0.0002M tokens" },
           ],
         }}
       />,
@@ -136,7 +136,7 @@ describe("WorkbenchContextPanel", () => {
     expect(runtime).toHaveTextContent("Workspace path");
     expect(runtime).toHaveTextContent("/home/claudeuser/work/affent");
     expect(runtime).toHaveTextContent("Session tokens");
-    expect(runtime).toHaveTextContent("1,540 tokens (1,200 in / 340 out)");
+    expect(runtime).toHaveTextContent("0.0015M tokens (0.0012M in / 0.0003M out)");
     expect(runtime).toHaveTextContent("Latest turn tokens");
     expect(runtime).toHaveTextContent("Subagent tokens");
 
@@ -144,7 +144,7 @@ describe("WorkbenchContextPanel", () => {
     expect(onSelectSection).toHaveBeenCalledWith("workspace");
     await user.click(screen.getByRole("button", { name: "Use context as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Workspace path: /home/claudeuser/work/affent"), "evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Subagent tokens: 392 tokens (310 in / 82 out)"), "evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Subagent tokens: 0.0004M tokens (0.0003M in / 0.0001M out)"), "evidence");
   });
 
   it("links automation only when the current session has automation attention", async () => {

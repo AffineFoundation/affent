@@ -20,6 +20,13 @@ describe("WorkbenchPanel", () => {
       <WorkbenchPanel
         title="Workbench"
         subtitle="Global runtime console"
+        attachment={{
+          label: "Attached chat",
+          title: "Fix checkout tests",
+          detail: "session-123",
+          metrics: ["Live", "affent · main", "0.0015M tokens"],
+          tone: "live",
+        }}
         navItems={navItems}
         activeTab="context"
         onSelectTab={onSelectTab}
@@ -31,6 +38,9 @@ describe("WorkbenchPanel", () => {
 
     expect(screen.getByTestId("workbench-panel")).toHaveAccessibleName("Workbench");
     expect(screen.getByText("Global runtime console")).toBeInTheDocument();
+    expect(screen.getByTestId("workbench-attachment")).toHaveTextContent("Attached chat");
+    expect(screen.getByTestId("workbench-attachment")).toHaveTextContent("Fix checkout tests");
+    expect(screen.getByTestId("workbench-attachment")).toHaveTextContent("0.0015M tokens");
     expect(screen.getByText("Current chat")).toBeInTheDocument();
     expect(screen.getByText("Platform")).toBeInTheDocument();
     expect(screen.getByTestId("active-tab")).toHaveTextContent("Context content");

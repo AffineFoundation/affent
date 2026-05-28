@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEventHandler } from "react";
 import type { SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import {
@@ -34,6 +34,7 @@ export function SessionList({
   onDelete,
   deletingId,
   onCollapse,
+  onResizeStart,
 }: {
   sessions: readonly SessionSummary[];
   selectedId?: string;
@@ -45,6 +46,7 @@ export function SessionList({
   onDelete?: (id: string) => void | Promise<void>;
   deletingId?: string;
   onCollapse?: () => void;
+  onResizeStart?: PointerEventHandler<HTMLSpanElement>;
 }) {
   const [filter, setFilter] = useState<SessionListFilter>("all");
   const [query, setQuery] = useState("");
@@ -110,6 +112,15 @@ export function SessionList({
         data-mobile-open={mobileOpen ? "true" : "false"}
         data-has-selection={selectedId ? "true" : "false"}
       >
+      {onResizeStart ? (
+        <span
+          className="session-resize-handle"
+          role="separator"
+          aria-label="Resize chats"
+          aria-orientation="vertical"
+          onPointerDown={onResizeStart}
+        />
+      ) : null}
       <div className="panel-head">
         <div>
           <h2>Chats</h2>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { completedSubagentTree } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
 import {
+  buildWorkbenchAttachment,
   buildWorkbenchContextEvidence,
   buildWorkbenchContextUsage,
   workbenchContextUsageSummary,
@@ -62,15 +63,15 @@ describe("workbenchContext", () => {
     };
 
     expect(usage.items).toEqual(expect.arrayContaining([
-      { label: "Session tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "1 turn from loaded trace" },
-      { label: "Latest turn tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "t1" },
-      expect.objectContaining({ label: "Focused task tokens", value: "278 tokens (220 in / 58 out)" }),
-      expect.objectContaining({ label: "Subagent tokens", value: "392 tokens (310 in / 82 out)" }),
+      { label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" },
+      { label: "Latest turn tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "t1" },
+      expect.objectContaining({ label: "Focused task tokens", value: "0.0003M tokens (0.0002M in / 0.0001M out)" }),
+      expect.objectContaining({ label: "Subagent tokens", value: "0.0004M tokens (0.0003M in / 0.0001M out)" }),
     ]));
-    expect(workbenchContextUsageSummary(usage)).toBe("1,540 tokens");
+    expect(workbenchContextUsageSummary(usage)).toBe("0.0015M tokens");
     expect(workbenchContextEvidenceText(input)).toContain("Workspace path: /home/claudeuser/work/affent");
-    expect(workbenchContextEvidenceText(input)).toContain("Session tokens: 1,540 tokens (1,200 in / 340 out)");
-    expect(workbenchContextEvidenceText(input)).toContain("Subagent tokens: 392 tokens (310 in / 82 out)");
+    expect(workbenchContextEvidenceText(input)).toContain("Session tokens: 0.0015M tokens (0.0012M in / 0.0003M out)");
+    expect(workbenchContextEvidenceText(input)).toContain("Subagent tokens: 0.0004M tokens (0.0003M in / 0.0001M out)");
   });
 
   it("uses session index usage when the trace has not loaded token events yet", () => {
@@ -87,8 +88,39 @@ describe("workbenchContext", () => {
     });
 
     expect(usage.items).toEqual([
-      { label: "Session tokens", value: "2,500 tokens (2,000 in / 500 out)", detail: "4 turns from session index" },
+      { label: "Session tokens", value: "0.0025M tokens (0.0020M in / 0.0005M out)", detail: "4 turns from session index" },
     ]);
+  });
+
+  it("builds the attached chat summary from session truth", () => {
+    const usage = {
+      items: [
+        { label: "Session tokens", value: "0.0025M tokens (0.0020M in / 0.0005M out)", detail: "4 turns from session index" },
+      ],
+    };
+
+    expect(buildWorkbenchAttachment({
+      selectedSessionId: "checkout-session",
+      selectedSessionTitle: "Fix checkout tests",
+      selectedSession: { active: true, durable: true },
+      workspace: { hasData: true, shortStatus: "affent · main" },
+      usage,
+    })).toEqual({
+      label: "Attached chat",
+      title: "Fix checkout tests",
+      detail: "checkout-session",
+      metrics: ["Live", "affent · main", "0.0025M tokens"],
+      tone: "live",
+    });
+  });
+
+  it("marks Workbench as detached when no chat is selected", () => {
+    expect(buildWorkbenchAttachment({})).toEqual({
+      label: "Attached chat",
+      title: "No chat attached",
+      detail: "Fresh task",
+      tone: "none",
+    });
   });
 
   it("uses context attention detail as the status detail", () => {
