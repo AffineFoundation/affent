@@ -129,7 +129,7 @@ describe("App", () => {
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("saved research task");
     expect(screen.getByRole("button", { name: /Open latest chat/ })).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Use as draft" }));
+    await user.click(screen.getByRole("button", { name: "Use title as draft" }));
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("saved research task");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Starting from recent chat");
     await user.click(screen.getByRole("button", { name: "Remove" }));
@@ -194,7 +194,7 @@ describe("App", () => {
     expect(latest).toHaveTextContent("Saved chat");
     expect(latest).toHaveTextContent("May 23 18:30 UTC");
     expect(latest).not.toHaveTextContent("saved-se...123456");
-    expect(within(latest).queryByRole("button", { name: "Use as draft" })).toBeNull();
+    expect(within(latest).queryByRole("button", { name: "Use title as draft" })).toBeNull();
     expect(within(latest).getByRole("button", { name: /Open latest chat/ })).toBeInTheDocument();
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("saved-se...123456");
   });

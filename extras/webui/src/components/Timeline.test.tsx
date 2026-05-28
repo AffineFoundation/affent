@@ -297,7 +297,7 @@ describe("Timeline", () => {
 
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("affine research");
     expect(screen.queryByTestId("timeline")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Use as draft" }));
+    await user.click(screen.getByRole("button", { name: "Use title as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith("affine research", "recent_chat");
     expect(onOpenLatestChat).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: /Open latest chat/ }));

@@ -216,7 +216,7 @@ export function Timeline({
                     <div className="intro-latest-chat-actions">
                       {latestChat.draft && onUseAsDraft ? (
                         <button type="button" onClick={() => onUseAsDraft(latestChat.draft ?? latestChat.title, "recent_chat")}>
-                          Use as draft
+                          Use title as draft
                         </button>
                       ) : null}
                       <button type="button" onClick={onOpenLatestChat}>
