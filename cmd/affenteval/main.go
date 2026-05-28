@@ -617,7 +617,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 	return []qualityGateProfileDefinition{
 		{
 			Name:        "longrun",
-			Description: "general long-run stability gates for task completion, memory/session recovery, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
+			Description: "general long-run stability gates for task completion, memory/session recovery, source repo workflows, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
 			Gates: qualityGateConfig{
 				MinPassRate:                           float64Ptr(0.80),
 				MinCompletionRate:                     float64Ptr(0.90),
@@ -654,7 +654,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                       float64Ptr(14),
 				MaxAvgDurationMS:                      float64Ptr(180000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
-				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "trace", "verifier", "workspace"},
+				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "source_repo", "trace", "verifier", "workspace"},
 				RequiredExpectationDomains:            []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "session_recovery"},
 				MaxDebugBriefTagRates: map[string]float64{
 					"context_compaction:summary_empty":   0,
@@ -667,6 +667,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"recall:no_matched_terms":            0,
 					"recall:weak_context":                0,
 					"recall:weak_matched_terms":          0,
+					"source_repo:setup":                  0,
 					"tool_repair:failed":                 0,
 					"truncation:missing_artifact":        0,
 					"verifier:abnormal":                  0,
