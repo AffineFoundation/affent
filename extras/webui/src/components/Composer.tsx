@@ -295,17 +295,17 @@ export function Composer({
       ) : null}
       <div className="composer-input-row">
         <details className="composer-add" ref={addMenuRef} data-testid="composer-add">
-          <summary className="composer-add-trigger" role="button" tabIndex={-1} aria-label="Add context or automation">
+          <summary className="composer-add-trigger" role="button" aria-label="Add context or automation">
             +
           </summary>
           <div className="composer-add-menu">
-            <button type="button" tabIndex={-1} onClick={openFilePicker}>
+            <button type="button" onClick={openFilePicker}>
               Upload file
             </button>
-            <button type="button" tabIndex={-1} onClick={() => insertTemplate(loopPromptTemplate)}>
+            <button type="button" onClick={() => insertTemplate(loopPromptTemplate)}>
               Loop
             </button>
-            <button type="button" tabIndex={-1} onClick={() => insertTemplate(schedulePromptTemplate)}>
+            <button type="button" onClick={() => insertTemplate(schedulePromptTemplate)}>
               Scheduled task
             </button>
           </div>

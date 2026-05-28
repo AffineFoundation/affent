@@ -535,11 +535,7 @@ describe("Composer", () => {
   });
 
   it("focuses the message box when requested by the shell", async () => {
-    const user = userEvent.setup();
     const { rerender } = render(<Composer disabled={false} busy={false} onSubmit={vi.fn()} onCancel={vi.fn()} />);
-    await user.tab();
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
-    await user.tab();
     expect(screen.getByPlaceholderText("Message Affent...")).not.toHaveFocus();
 
     rerender(<Composer disabled={false} busy={false} focusSignal={1} onSubmit={vi.fn()} onCancel={vi.fn()} />);
