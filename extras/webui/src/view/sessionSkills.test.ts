@@ -7,6 +7,7 @@ import {
   skillKindLabel,
   skillSizeLabel,
   skillSummaryTags,
+  skillUpdateDraft,
 } from "./sessionSkills";
 
 describe("sessionSkills view helpers", () => {
@@ -38,6 +39,7 @@ describe("sessionSkills view helpers", () => {
       "Loaded content:\nAFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.",
     ].join("\n"));
     expect(skillDraft(skill)).toContain("apply, update, or replace");
+    expect(skillUpdateDraft(skill, "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.")).toContain("Review and update this reusable skill");
   });
 
   it("summarizes activation coverage across skills", () => {

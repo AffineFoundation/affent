@@ -58,6 +58,14 @@ export function skillDraft(skill: SessionSkillInfo, body?: string): string {
   ].join("\n");
 }
 
+export function skillUpdateDraft(skill: SessionSkillInfo, body?: string): string {
+  return [
+    "Review and update this reusable skill if it is stale, incomplete, duplicated, or unsafe. Preserve useful activation rules and explain any replacement:",
+    "",
+    skillEvidenceText(skill, body),
+  ].join("\n");
+}
+
 function skillTriggers(skill: SessionSkillInfo): string[] {
   return skill.triggers ?? skill.auto_activation?.any ?? [];
 }

@@ -58,6 +58,9 @@ describe("SessionSkillsPanel", () => {
 
     await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Use skill as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("apply, update, or replace"), "skill");
+    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Update as draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review and update this reusable skill"), "skill");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Loaded content:"), "skill");
   });
 
   it("submits a manually entered skill", async () => {

@@ -9,6 +9,7 @@ import {
   skillKindLabel,
   skillSizeLabel,
   skillSummaryTags,
+  skillUpdateDraft,
 } from "../view/sessionSkills";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
@@ -226,9 +227,14 @@ export function SessionSkillsPanel({
                         <div className="session-skill-actions">
                           <CopyButton label="Copy skill evidence" value={skillEvidenceText(skill, body)} className="node-action" />
                           {onUseAsDraft ? (
-                            <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
-                              Use skill as draft
-                            </button>
+                            <>
+                              <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
+                                Use skill as draft
+                              </button>
+                              <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
+                                Update as draft
+                              </button>
+                            </>
                           ) : null}
                         </div>
                         {bodyState?.loading ? <div className="session-skills-empty">Loading full content...</div> : null}
