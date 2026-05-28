@@ -212,11 +212,15 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	if !c.shouldCompact(msgs) {
 		return msgs, nil
 	}
+	bytePressure := c.TriggerBytes > 0 && ApproximateConversationBytes(msgs) > c.TriggerBytes
 
 	// Split off leading system messages — never touched.
 	sysHead := 0
 	for sysHead < len(msgs) && msgs[sysHead].Role == "system" {
 		sysHead++
+	}
+	if bytePressure {
+		keepLast = keepLastForBytePressure(len(msgs)-sysHead, keepFirst, keepLast)
 	}
 	if len(msgs)-sysHead <= keepFirst+keepLast+1 {
 		return msgs, nil
@@ -266,6 +270,26 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	})
 	out = append(out, msgs[tailStart:]...)
 	return out, nil
+}
+
+func keepLastForBytePressure(nonSystemMsgs, keepFirst, keepLast int) int {
+	if nonSystemMsgs <= keepFirst+2 {
+		return keepLast
+	}
+	if keepLast > 4 {
+		keepLast = 4
+	}
+	maxKeepLast := nonSystemMsgs - keepFirst - 2
+	if maxKeepLast < 1 {
+		return keepLast
+	}
+	if keepLast > maxKeepLast {
+		keepLast = maxKeepLast
+	}
+	if keepLast < 1 {
+		return 1
+	}
+	return keepLast
 }
 
 func (c *LLMSummaryCompactor) shouldCompact(msgs []ChatMessage) bool {

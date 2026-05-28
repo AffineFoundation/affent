@@ -429,6 +429,9 @@ type ContextCompactPayload struct {
 	BeforeMessages     int    `json:"before_messages"`
 	AfterMessages      int    `json:"after_messages"`
 	RemovedMessages    int    `json:"removed_messages"`
+	BeforeBytes        int    `json:"before_bytes,omitempty"`
+	AfterBytes         int    `json:"after_bytes,omitempty"`
+	ReducedBytes       int    `json:"reduced_bytes,omitempty"`
 	Reactive           bool   `json:"reactive"`
 	Reason             string `json:"reason"`
 	SummaryPresent     bool   `json:"summary_present"`

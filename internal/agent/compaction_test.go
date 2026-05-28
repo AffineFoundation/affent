@@ -571,6 +571,33 @@ func TestLLMSummaryCompactor_Compact_Real(t *testing.T) {
 		}
 	})
 
+	t.Run("byte pressure reduces tail retention on short huge logs", func(t *testing.T) {
+		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 100, TriggerBytes: 512, KeepFirst: 1, KeepLast: 10}
+		msgs := []ChatMessage{
+			mk("system", "be helpful"),
+			mk("user", "continue the coding task"),
+			mk("assistant", strings.Repeat("large historical tool result ", 256)),
+			mk("user", "next step"),
+			mk("assistant", "short progress"),
+			mk("user", "tail1"),
+			mk("assistant", "tail2"),
+			mk("user", "tail3"),
+		}
+		got, err := c.Compact(context.Background(), msgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) >= len(msgs) {
+			t.Fatalf("byte-pressure compaction did not shorten short log: got %d want < %d", len(got), len(msgs))
+		}
+		if ApproximateConversationBytes(got) >= ApproximateConversationBytes(msgs) {
+			t.Fatalf("byte-pressure compaction did not reduce bytes: before=%d after=%d", ApproximateConversationBytes(msgs), ApproximateConversationBytes(got))
+		}
+		if got[2].Role != "user" || !strings.HasPrefix(got[2].Content, summaryPrefix) {
+			t.Fatalf("byte-pressure compaction missing summary at adjusted boundary: %+v", got)
+		}
+	})
+
 	t.Run("above trigger folds middle into one summary msg", func(t *testing.T) {
 		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 0, KeepFirst: 2, KeepLast: 3}
 		// 1 system + 2 head + 6 middle + 3 tail = 12.
@@ -830,6 +857,9 @@ func TestLoopMaybeCompactPublishesContextCompacted(t *testing.T) {
 	if payload.TurnID != "turn-1" || payload.BeforeMessages != len(msgs) || payload.AfterMessages >= payload.BeforeMessages || payload.RemovedMessages != payload.BeforeMessages-payload.AfterMessages {
 		t.Fatalf("payload = %+v, want before/after/removal metadata", payload)
 	}
+	if payload.BeforeBytes <= payload.AfterBytes || payload.ReducedBytes != payload.BeforeBytes-payload.AfterBytes {
+		t.Fatalf("payload = %+v, want byte reduction metadata", payload)
+	}
 	if payload.Reactive || payload.Reason != "threshold" || !payload.SummaryPresent || payload.SummaryBytes != len("earlier work") || payload.SummaryPreview != "earlier work" {
 		t.Fatalf("payload = %+v, want proactive threshold summary metadata", payload)
 	}
@@ -899,6 +929,63 @@ func TestLoopMaybeCompactPublishesLoopProtocolAnchor(t *testing.T) {
 	}
 	if !state.NeedsFullProtocolFeed || state.ContextCompactions != 1 || state.LastCompactionReason != "context_overflow" || !state.LastCompactionReactive {
 		t.Fatalf("loop protocol state after compaction = %+v", state)
+	}
+}
+
+type sameCountByteCompactor struct{}
+
+func (sameCountByteCompactor) Compact(context.Context, []ChatMessage) ([]ChatMessage, error) {
+	return []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: summaryPrefix + "short summary"},
+		{Role: "assistant", Content: "tail"},
+	}, nil
+}
+
+func TestLoopMaybeCompactAcceptsByteReductionWithoutMessageReduction(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("large prior context ", 512)},
+		{Role: "assistant", Content: "tail"},
+	}
+	if err := conv.Replace(msgs); err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 8)
+	loop := &Loop{
+		Conv:      conv,
+		Events:    events,
+		Compactor: sameCountByteCompactor{},
+	}
+
+	if !loop.maybeCompact(context.Background(), "turn-bytes", false) {
+		t.Fatal("maybeCompact should accept byte reduction even when message count is unchanged")
+	}
+
+	var payload sse.ContextCompactPayload
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeContextCompact {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompact)
+		}
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode context.compacted: %v", err)
+		}
+	default:
+		t.Fatal("expected context.compacted event")
+	}
+	if payload.BeforeMessages != payload.AfterMessages || payload.RemovedMessages != 0 {
+		t.Fatalf("payload = %+v, want same message count with no removed messages", payload)
+	}
+	if payload.BeforeBytes <= payload.AfterBytes || payload.ReducedBytes <= 0 {
+		t.Fatalf("payload = %+v, want positive byte reduction", payload)
+	}
+	if got := conv.Snapshot(); len(got) != 3 || strings.Contains(got[1].Content, "large prior context") {
+		t.Fatalf("conversation was not replaced with compacted byte-smaller state: %+v", got)
 	}
 }
 

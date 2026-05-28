@@ -3010,6 +3010,7 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 	if len(before) == 0 {
 		return false
 	}
+	beforeBytes := ApproximateConversationBytes(before)
 	compactor := l.Compactor
 	if bypassThreshold {
 		if c, ok := l.Compactor.(*LLMSummaryCompactor); ok {
@@ -3027,18 +3028,21 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		l.Log.Warn().Err(err).Msg("compaction failed")
 		return false
 	}
-	if len(after) == 0 || len(after) >= len(before) {
+	afterBytes := ApproximateConversationBytes(after)
+	if len(after) == 0 || (len(after) >= len(before) && afterBytes >= beforeBytes) {
 		return false
 	}
 	if err := l.Conv.Replace(after); err != nil {
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
 	}
-	l.publishContextCompacted(turnID, len(before), len(after), reactive, reason, after)
+	l.publishContextCompacted(turnID, len(before), len(after), beforeBytes, afterBytes, reactive, reason, after)
 	l.markLoopProtocolCompacted(reactive, reason)
 	l.Log.Info().
 		Int("before", len(before)).
 		Int("after", len(after)).
+		Int("before_bytes", beforeBytes).
+		Int("after_bytes", afterBytes).
 		Bool("reactive", reactive).
 		Str("reason", reason).
 		Msg("conversation compacted")
@@ -3061,7 +3065,7 @@ func (l *Loop) markLoopProtocolCompacted(reactive bool, reason string) {
 	}
 }
 
-func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, reason string, msgs []ChatMessage) {
+func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes, afterBytes int, reactive bool, reason string, msgs []ChatMessage) {
 	summaryBytes := 0
 	summaryPreview := ""
 	loopProtocolAnchor := ""
@@ -3082,7 +3086,10 @@ func (l *Loop) publishContextCompacted(turnID string, before, after int, reactiv
 		TurnID:             turnID,
 		BeforeMessages:     before,
 		AfterMessages:      after,
-		RemovedMessages:    before - after,
+		RemovedMessages:    max(0, before-after),
+		BeforeBytes:        beforeBytes,
+		AfterBytes:         afterBytes,
+		ReducedBytes:       max(0, beforeBytes-afterBytes),
 		Reactive:           reactive,
 		Reason:             reason,
 		SummaryPresent:     summaryBytes > 0,
