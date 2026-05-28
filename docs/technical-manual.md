@@ -1254,6 +1254,8 @@ Research checkpoints that trigger without SourceAccess evidence or delegated
 research emit `research_checkpoint:no_external_evidence`; the recovery prompt
 routes the next operator to loop decisions, source evidence, and child
 transcripts before treating a loop-route conclusion as externally calibrated.
+Only verified or network-backed SourceAccess counts as checkpoint evidence;
+discovery-only and dynamic-partial page evidence remain weak leads.
 Only focused `research`/`web_extract` tasks and `research` subagents count as
 delegated research evidence; local explore/review children remain internal
 review signals.

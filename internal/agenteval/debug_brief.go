@@ -167,12 +167,16 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "research_checkpoint:no_external_evidence")
 		}
 		add("research_checkpoint", severity, message, []string{"loop_decision_examples", "source_evidence", "child_transcripts", "timeline", "plan"}, map[string]int{
-			"decisions":             researchCheckpoints,
-			"source_access_results": res.ToolStats.SourceAccessResults,
-			"focused_task_calls":    res.Delegation.FocusedTaskCalls,
-			"focused_task_research": researchCheckpointFocusedTaskEvidenceCount(res.Delegation),
-			"subagent_calls":        res.Delegation.SubagentCalls,
-			"subagent_research":     res.Delegation.SubagentByMode["research"],
+			"decisions":                     researchCheckpoints,
+			"source_access_results":         res.ToolStats.SourceAccessResults,
+			"source_access_verified":        res.ToolStats.SourceAccessVerified,
+			"source_access_network":         res.ToolStats.SourceAccessNetwork,
+			"source_access_dynamic_partial": res.ToolStats.SourceAccessDynamicPartial,
+			"source_access_discovery_only":  res.ToolStats.SourceAccessDiscoveryOnly,
+			"focused_task_calls":            res.Delegation.FocusedTaskCalls,
+			"focused_task_research":         researchCheckpointFocusedTaskEvidenceCount(res.Delegation),
+			"subagent_calls":                res.Delegation.SubagentCalls,
+			"subagent_research":             res.Delegation.SubagentByMode["research"],
 		}, tags...)
 	}
 	if res.Delegation.HasAny() {
@@ -562,7 +566,7 @@ func loopProtocolFixtureFailureCount(failures []string) int {
 }
 
 func researchCheckpointHasExternalEvidence(res BatchResult) bool {
-	if res.ToolStats.SourceAccessResults > 0 {
+	if res.ToolStats.SourceAccessVerified > 0 || res.ToolStats.SourceAccessNetwork > 0 {
 		return true
 	}
 	if researchCheckpointFocusedTaskEvidenceCount(res.Delegation) > 0 {

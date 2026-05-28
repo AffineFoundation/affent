@@ -317,7 +317,8 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	brief = BuildDebugBrief(BatchResult{
 		OK: true,
 		ToolStats: ToolRuntimeStats{
-			SourceAccessResults: 1,
+			SourceAccessResults:  1,
+			SourceAccessVerified: 1,
 		},
 		LoopDecisionStats: LoopDecisionStats{
 			ByKind: map[string]int{"research_checkpoint": 1},
@@ -329,6 +330,44 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 		item.Message != "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction" ||
 		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
 		t.Fatalf("evidence-backed research checkpoint debug item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:        2,
+			SourceAccessDiscoveryOnly:  1,
+			SourceAccessDynamicPartial: 1,
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["source_access_discovery_only"] != 1 ||
+		item.Counts["source_access_dynamic_partial"] != 1 ||
+		!stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("weak source access should not satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults: 1,
+			SourceAccessNetwork: 1,
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Counts["source_access_network"] != 1 ||
+		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("network source access should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
 	}
 
 	brief = BuildDebugBrief(BatchResult{
