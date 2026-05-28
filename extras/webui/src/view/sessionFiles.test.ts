@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionFiles, fileEvidenceDraft, fileEvidenceText } from "./sessionFiles";
+import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText } from "./sessionFiles";
 
 describe("buildSessionFiles", () => {
   it("summarizes read, list, and changed file evidence from reducer state", () => {
@@ -26,6 +26,9 @@ describe("buildSessionFiles", () => {
         turnNumber: 1,
         detail: "Updated payment route",
         artifactPath: ".affent/artifacts/tool-results/read.txt",
+        contentPreview: "existing route",
+        contentSource: "read_file",
+        contentTruncated: false,
       }),
       expect.objectContaining({ path: "src", actions: ["listed"], status: "available" }),
     ]);
@@ -94,8 +97,41 @@ describe("buildSessionFiles", () => {
     expect(fileEvidenceText(item)).toContain("File evidence for src/payments.ts");
     expect(fileEvidenceText(item)).toContain("Detail: checkout route handler");
     expect(fileEvidenceText(item)).toContain("Next: rerun checkout tests");
+    expect(fileEvidenceText(item)).toContain("Loaded snapshot: read_file output");
     expect(fileEvidenceDraft(item)).toContain("Use this file evidence in the next step");
     expect(fileEvidenceDraft(item)).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    expect(fileContentText(item)).toContain("File snapshot for src/payments.ts");
+    expect(fileContentText(item)).toContain("checkout route handler");
+    expect(fileContentDraft(item)).toContain("Use this loaded file snapshot in the next step");
+  });
+
+  it("marks truncated read_file snapshots from reducer state", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "read", tool: "read_file", args: { path: "src/large.ts" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "read",
+          exit_code: 0,
+          result_summary: "partial file output",
+          result: "export const partial = true;",
+          result_truncated: true,
+          result_bytes: 8192,
+        },
+      },
+    ]);
+
+    const [item] = buildSessionFiles(session).items;
+
+    expect(item).toMatchObject({
+      path: "src/large.ts",
+      contentPreview: "export const partial = true;",
+      contentTruncated: true,
+      contentBytes: 8192,
+    });
+    expect(fileContentText(item)).toContain("Snapshot: partial output");
   });
 
   it("prioritizes failed, running, and changed files before passive reads", () => {

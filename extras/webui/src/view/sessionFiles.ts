@@ -13,6 +13,10 @@ export interface SessionFileEvidence {
   detail?: string;
   next?: string;
   artifactPath?: string;
+  contentPreview?: string;
+  contentSource?: "read_file";
+  contentTruncated?: boolean;
+  contentBytes?: number;
 }
 
 export interface SessionFilesView {
@@ -57,6 +61,9 @@ export function fileEvidenceText(item: SessionFileEvidence): string {
   if (item.detail) lines.push(`Detail: ${item.detail}`);
   if (item.next) lines.push(`Next: ${item.next}`);
   if (item.artifactPath) lines.push(`Evidence artifact: ${item.artifactPath}`);
+  if (item.contentPreview) {
+    lines.push(`Loaded snapshot: ${item.contentTruncated ? "partial read_file output" : "read_file output"}`);
+  }
   return lines.join("\n");
 }
 
@@ -67,6 +74,30 @@ export function fileEvidenceDraft(item: SessionFileEvidence): string {
       ? "Use this listed directory in the next step"
       : "Use this file evidence in the next step";
   return `${lead}:\n${fileEvidenceText(item)}`;
+}
+
+export function fileContentText(item: SessionFileEvidence): string {
+  const content = item.contentPreview ?? "";
+  const lines = [
+    `File snapshot for ${item.path}`,
+    `Source: ${item.contentSource ?? "read_file"}`,
+    `Snapshot: ${item.contentTruncated ? "partial output" : "available output"}`,
+  ];
+  if (item.contentBytes != null) lines.push(`Bytes: ${item.contentBytes}`);
+  lines.push("", content);
+  return lines.join("\n");
+}
+
+export function fileContentDraft(item: SessionFileEvidence): string {
+  const content = item.contentPreview ?? "";
+  const snapshot = item.contentTruncated ? "partial read_file output" : "read_file output";
+  return [
+    "Use this loaded file snapshot in the next step:",
+    `File: ${item.path}`,
+    `Snapshot: ${snapshot}`,
+    "",
+    boundedDraftContent(content),
+  ].join("\n");
 }
 
 function filePriority(item: SessionFileEvidence): number {
@@ -87,6 +118,8 @@ function fileEvidenceFromCall(
   const path = stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename");
   if (!path) return undefined;
   const detailSource = call.resultSummary || call.result || call.failureKind;
+  const contentPreview =
+    call.tool === "read_file" && call.status === "success" && call.result ? call.result : undefined;
   return {
     path,
     actions: [action],
@@ -97,6 +130,10 @@ function fileEvidenceFromCall(
     detail: detailSource ? summarizePreview(stripRecoveryLines(detailSource), 120) : undefined,
     next: nextHint(call.resultSummary, call.result),
     artifactPath: call.resultArtifactPath,
+    contentPreview,
+    contentSource: contentPreview ? "read_file" : undefined,
+    contentTruncated: contentPreview ? call.resultTruncated : undefined,
+    contentBytes: contentPreview ? call.resultBytes : undefined,
   };
 }
 
@@ -110,6 +147,10 @@ function mergeEvidence(
     actionCount: previous.actionCount + 1,
     artifactPath: next.artifactPath ?? previous.artifactPath,
     next: next.next ?? previous.next,
+    contentPreview: next.contentPreview ?? previous.contentPreview,
+    contentSource: next.contentSource ?? previous.contentSource,
+    contentTruncated: next.contentPreview ? next.contentTruncated : previous.contentTruncated,
+    contentBytes: next.contentPreview ? next.contentBytes : previous.contentBytes,
   };
 }
 
@@ -169,4 +210,10 @@ function filesDetail(items: SessionFileEvidence[]): string {
 function stringArg(call: ToolCallState, key: string): string | undefined {
   const value = call.args[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function boundedDraftContent(text: string): string {
+  const limit = 4000;
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit)}\n\n[Snapshot draft truncated: ${text.length - limit} characters omitted]`;
 }

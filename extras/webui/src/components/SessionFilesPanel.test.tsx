@@ -22,6 +22,12 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Next: rerun checkout tests");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("read_file snapshot available");
+    expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("export function checkout");
+
+    await user.type(screen.getByLabelText("Search file snapshot"), "route");
+    expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("route");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
@@ -30,14 +36,21 @@ describe("SessionFilesPanel", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"));
 
+    await user.click(screen.getByRole("button", { name: "Copy snapshot" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File snapshot for src/payments.ts"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("export function checkout"));
+
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file as draft" })[0]);
+    await user.click(screen.getByRole("button", { name: "Use text as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"), "file_evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("export function checkout"), "file_snapshot");
 
+    await user.clear(screen.getByLabelText("Search file snapshot"));
     await user.type(screen.getByLabelText("Search files"), "listed");
     expect(screen.getByTestId("session-files-list")).not.toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
@@ -70,6 +83,10 @@ const files: SessionFilesView = {
       detail: "Updated payment route",
       next: "rerun checkout tests",
       artifactPath: ".affent/artifacts/tool-results/read.txt",
+      contentPreview: "export function checkout() {\n  return route('/checkout');\n}\n",
+      contentSource: "read_file",
+      contentTruncated: false,
+      contentBytes: 58,
     },
     {
       path: "src",

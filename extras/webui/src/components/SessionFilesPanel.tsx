@@ -1,7 +1,15 @@
 import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { fileEvidenceDraft, fileEvidenceText, type SessionFileEvidence, type SessionFilesView } from "../view/sessionFiles";
+import {
+  fileContentDraft,
+  fileContentText,
+  fileEvidenceDraft,
+  fileEvidenceText,
+  type SessionFileEvidence,
+  type SessionFilesView,
+} from "../view/sessionFiles";
 import { CopyButton } from "./CopyButton";
+import { HighlightText } from "./HighlightText";
 
 export function SessionFilesPanel({
   files,
@@ -15,8 +23,12 @@ export function SessionFilesPanel({
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
+  const [previewQuery, setPreviewQuery] = useState("");
+  const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const visibleItems = trimmedQuery ? files.items.filter((item) => fileMatchesQuery(item, trimmedQuery)) : files.items;
+  const snapshotItems = visibleItems.filter((item) => item.contentPreview);
+  const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
   return (
     <details className="session-skills-panel session-files-panel" data-testid="session-files-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -48,10 +60,23 @@ export function SessionFilesPanel({
                   {item.detail ? <small>{item.detail}</small> : null}
                   {item.next ? <small>Next: {item.next}</small> : null}
                   {item.artifactPath ? <small>Evidence artifact: {item.artifactPath}</small> : null}
+                  {item.contentPreview ? (
+                    <small>{item.contentTruncated ? "Partial read_file snapshot available" : "read_file snapshot available"}</small>
+                  ) : null}
                 </div>
                 <span className="session-files-actions">
                   <CopyButton label="Copy path" value={item.path} className="ghost-action" />
                   <CopyButton label="Copy evidence" value={fileEvidenceText(item)} className="ghost-action" />
+                  {item.contentPreview ? (
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      aria-pressed={selectedItem?.path === item.path}
+                      onClick={() => setSelectedPath(item.path)}
+                    >
+                      View snapshot
+                    </button>
+                  ) : null}
                   {item.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
                       Open evidence
@@ -71,6 +96,39 @@ export function SessionFilesPanel({
         ) : (
           <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
         )}
+        {selectedItem ? (
+          <div className="session-file-preview" data-testid="session-file-preview">
+            <div className="session-file-preview-head">
+              <div>
+                <span>File snapshot</span>
+                <strong title={selectedItem.path}>{selectedItem.path}</strong>
+              </div>
+              <small>{selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
+            </div>
+            <div className="session-file-preview-toolbar">
+              <label className="session-skills-search">
+                <span>Search snapshot</span>
+                <input
+                  aria-label="Search file snapshot"
+                  value={previewQuery}
+                  onChange={(event) => setPreviewQuery(event.target.value)}
+                  placeholder="text in loaded file"
+                />
+              </label>
+              <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
+              {onUseAsDraft ? (
+                <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileContentDraft(selectedItem), "file_snapshot")}>
+                  Use text as draft
+                </button>
+              ) : null}
+            </div>
+            <pre className="code session-file-preview-code" data-testid="session-file-preview-content">
+              <HighlightText text={selectedItem.contentPreview ?? ""} query={previewQuery} />
+            </pre>
+          </div>
+        ) : files.items.some((item) => item.contentPreview) && visibleItems.length > 0 ? (
+          <div className="session-skills-empty">No loaded file snapshot in the visible results.</div>
+        ) : null}
       </div>
     </details>
   );
