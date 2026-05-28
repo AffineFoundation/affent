@@ -52,14 +52,21 @@ export function WorkbenchContextPanel({
   defaultOpen?: boolean;
 }) {
   const requestMode = latestWorkbenchRequestMode(session);
-  const actionMetrics = [
-    ...(requestMode ? [requestModeStatusCard(requestMode)] : []),
-    ...contextStatusCards(displaySessionOverviewMetrics(overview.metrics), run, session),
-  ];
   const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, requestMode, automationTitle, automationDetail };
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
   const hasEvidence = evidence.length > 0;
+  const snapshot = hasSelectedSession ? contextSnapshotCards({
+    overview,
+    statusDetail,
+    metrics: displaySessionOverviewMetrics(overview.metrics),
+    workspace,
+    changes,
+    files,
+    run,
+    requestMode,
+    session,
+  }) : [];
 
   return (
     <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
@@ -79,27 +86,44 @@ export function WorkbenchContextPanel({
             </span>
           </div>
         ) : null}
-        {hasSelectedSession ? <WorkbenchUsageCard usage={usage} contextSummary={contextSummary} /> : null}
-        {actionMetrics.length > 0 ? (
-          <div className="workbench-context-actions-list" data-testid="workbench-context-actions-list">
-            {actionMetrics.slice(0, 2).map((metric) => (
-              <button
-                key={`${metric.label}:${metric.value}`}
-                type="button"
-                className="workbench-context-action"
-                data-tone={metric.tone === "error" ? "error" : undefined}
-                onClick={metric.target ? () => {
-                  if (metric.target) onSelectSection?.(metric.target);
-                } : undefined}
-                disabled={!metric.target}
-              >
-                <strong>{metric.label}</strong>
-                <span>{metric.value}</span>
-                {metric.detail ? <small>{metric.detail}</small> : null}
-              </button>
-            ))}
-          </div>
+        {snapshot.length > 0 ? (
+          <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Developer snapshot">
+            <div className="workbench-context-snapshot-head">
+              <strong>Developer snapshot</strong>
+              <span>Session status</span>
+            </div>
+            <div className="workbench-context-snapshot-grid">
+              {snapshot.map((item) => {
+                const target = item.target;
+                const content = (
+                  <>
+                    <small>{item.label}</small>
+                    <strong>{item.title}</strong>
+                    {item.detail ? <span>{item.detail}</span> : null}
+                    {item.meta ? <b>{item.meta}</b> : null}
+                  </>
+                );
+                return target ? (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className="workbench-context-snapshot-item"
+                    data-tone={item.tone === "error" ? "error" : undefined}
+                    onClick={() => onSelectSection?.(target)}
+                    aria-label={`Open ${item.label}`}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div key={item.key} className="workbench-context-snapshot-item" data-tone={item.tone === "error" ? "error" : undefined}>
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         ) : null}
+        {hasSelectedSession ? <WorkbenchUsageCard usage={usage} contextSummary={contextSummary} /> : null}
         {hasEvidence ? (
           <div className="workbench-context-evidence" data-testid="workbench-context-evidence">
             {evidence.map((item) => (
@@ -118,54 +142,123 @@ export function WorkbenchContextPanel({
             ))}
           </div>
         ) : null}
-        {!hasSelectedSession && actionMetrics.length === 0 ? <div className="session-skills-empty">Start a task or open a saved chat before inspecting session evidence.</div> : null}
+        {!hasSelectedSession ? <div className="session-skills-empty">Start a task or open a saved chat before inspecting session evidence.</div> : null}
       </div>
     </details>
   );
 }
 
-interface ContextStatusCard {
+interface ContextSnapshotCard {
+  key: string;
   label: string;
-  value: string;
+  title: string;
   detail?: string;
+  meta?: string;
   tone?: SessionOverview["tone"];
   target?: WorkbenchTab;
 }
 
-function contextStatusCards(metrics: ReturnType<typeof displaySessionOverviewMetrics>, run?: SessionRunView, session?: SessionState): ContextStatusCard[] {
-  return metrics.flatMap((metric): ContextStatusCard[] => {
-    if (
-      metric.label === "Next step" ||
-      metric.label === "Automation" ||
-      metric.label === "Context" ||
-      metric.label === "Work" ||
-      metric.label === "Earlier work" ||
-      metric.label === "Tool context" ||
-      metric.label === "Tokens" ||
-      metric.label === "Turn tokens" ||
-      metric.label === "Session tokens"
-    ) return [];
-    if (metric.label === "Tool issue" || metric.label === "Tool issues") {
-      const detail = toolIssueDetail(run, session);
-      return [{
-        label: metric.label,
-        value: metric.value,
-        detail,
-        tone: metric.tone,
-        target: run?.commands.length ? "run" : "trace",
-      }];
-    }
-    return [{ label: metric.label, value: metric.value, tone: metric.tone }];
-  });
+function contextSnapshotCards({
+  overview,
+  statusDetail,
+  metrics,
+  workspace,
+  changes,
+  files,
+  run,
+  requestMode,
+  session,
+}: {
+  overview: SessionOverview;
+  statusDetail: string;
+  metrics: ReturnType<typeof displaySessionOverviewMetrics>;
+  workspace?: SessionWorkspaceView;
+  changes?: SessionChangesView;
+  files?: SessionFilesView;
+  run?: SessionRunView;
+  requestMode?: WorkbenchRequestModeView;
+  session?: SessionState;
+}): ContextSnapshotCard[] {
+  const cards: ContextSnapshotCard[] = [{
+    key: "status",
+    label: "Current task",
+    title: overview.headline || "Chat ready",
+    detail: statusDetail && statusDetail !== overview.headline ? statusDetail : undefined,
+    meta: overview.active ? "running" : undefined,
+    tone: overview.tone === "error" ? "error" : undefined,
+  }];
+
+  if (workspace?.hasData) {
+    const title = workspace.path || workspace.label || workspace.summary;
+    const meta = compactSnapshotMeta(workspace.shortStatus, title, workspace.detail);
+    cards.push({
+      key: "workspace",
+      label: "Workspace",
+      title,
+      detail: workspace.detail,
+      meta,
+      tone: workspace.tone === "error" ? "error" : undefined,
+      target: "workspace",
+    });
+  }
+
+  const work = currentWorkSnapshot(run, changes, files);
+  if (work) cards.push(work);
+
+  const attention = concreteAttentionSnapshot(metrics, run, session);
+  if (attention) cards.push(attention);
+
+  if (requestMode) {
+    cards.push({
+      key: "request",
+      label: "Request mode",
+      title: requestMode.label,
+      detail: requestMode.detail,
+      meta: requestMode.source === "schedule" ? "scheduled" : undefined,
+      target: "trace",
+    });
+  }
+
+  return cards.slice(0, 5);
 }
 
-function requestModeStatusCard(mode: WorkbenchRequestModeView): ContextStatusCard {
+function compactSnapshotMeta(value: string | undefined, ...duplicates: Array<string | undefined>): string | undefined {
+  const normalized = value?.trim();
+  if (!normalized) return undefined;
+  const duplicateSet = new Set(duplicates.map((item) => item?.trim()).filter(Boolean));
+  return duplicateSet.has(normalized) ? undefined : normalized;
+}
+
+function currentWorkSnapshot(run?: SessionRunView, changes?: SessionChangesView, files?: SessionFilesView): ContextSnapshotCard | undefined {
+  const parts = [
+    run?.commands.length ? `Run ${run.detail}` : undefined,
+    changes?.files.length ? `Changes ${changes.detail}` : undefined,
+    files?.items.length ? `Files ${files.detail}` : undefined,
+  ].filter(Boolean);
+  if (parts.length === 0) return undefined;
+  const target: WorkbenchTab = run?.commands.length ? "run" : changes?.files.length ? "changes" : "files";
+  const title = run?.commands.length ? run.summary : changes?.files.length ? changes.summary : files?.summary ?? "File evidence";
   return {
-    label: "Request mode",
-    value: mode.label,
-    detail: mode.detail,
-    tone: mode.raw === "loop_setup" || mode.raw === "execute_plan" ? "warning" : "ready",
-    target: "trace",
+    key: "work",
+    label: "Execution",
+    title,
+    detail: parts.join(" · "),
+    tone: run?.tone === "error" ? "error" : undefined,
+    target,
+  };
+}
+
+function concreteAttentionSnapshot(metrics: ReturnType<typeof displaySessionOverviewMetrics>, run?: SessionRunView, session?: SessionState): ContextSnapshotCard | undefined {
+  const issue = metrics.find((metric) => metric.label === "Tool issue" || metric.label === "Tool issues" || metric.label === "Issue" || metric.label === "Issues");
+  if (!issue) return undefined;
+  const detail = toolIssueDetail(run, session);
+  return {
+    key: "attention",
+    label: issue.label,
+    title: `${issue.value} current ${Number(issue.value) === 1 ? "issue" : "issues"}`,
+    detail,
+    tone: issue.tone === "error" || run?.tone === "error" ? "error" : undefined,
+    target: run?.commands.length ? "run" : "trace",
   };
 }
 
