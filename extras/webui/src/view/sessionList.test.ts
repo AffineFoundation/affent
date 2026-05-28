@@ -67,9 +67,9 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Recovery run rg --files config before retrying");
-    expect(rows[0].stats).toContain("Recovery run rg --files config before retrying");
-    expect(rows[0].searchText).toContain("recovery run rg --files config before retrying");
+    expect(rows[0].metrics).toContain("Next step run rg --files config before retrying");
+    expect(rows[0].stats).toContain("Next step run rg --files config before retrying");
+    expect(rows[0].searchText).toContain("next step run rg --files config before retrying");
     expect(countSessionsByFilter(rows).issues).toBe(1);
     expect(filterSessionRows(rows, "issues", "").map((row) => row.id)).toEqual(["recovery-session"]);
   });
@@ -172,9 +172,9 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Recovery guard 2, 1 tool-free");
-    expect(rows[0].stats).toBe("2 issues · Recovery guard 2, 1 tool-free");
-    expect(rows[0].searchText).toContain("recovery guard 2, 1 tool-free");
+    expect(rows[0].metrics).toContain("Recovery limit 2, 1 no-tool retry");
+    expect(rows[0].stats).toBe("2 issues · Recovery limit 2, 1 no-tool retry");
+    expect(rows[0].searchText).toContain("recovery limit 2, 1 no-tool retry");
   });
 
   it("surfaces persisted plan progress in row stats and search", () => {
@@ -1169,8 +1169,8 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 issue · Recovery guard 2, 1 tool-free");
-    expect(rows[0].searchText).toContain("recovery guard 2, 1 tool-free");
+    expect(rows[0].stats).toBe("1 issue · Recovery limit 2, 1 no-tool retry");
+    expect(rows[0].searchText).toContain("recovery limit 2, 1 no-tool retry");
   });
 
   it("surfaces unknown events as an unclassified chip in the chat list", () => {
@@ -1262,7 +1262,7 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       status: "Done",
       tone: "saved",
-      metrics: ["1 message · 1 action · 1 issue", "Recovery check the network panel before retrying"],
+      metrics: ["1 message · 1 action · 1 issue", "Next step check the network panel before retrying"],
     });
   });
 
@@ -1311,9 +1311,9 @@ describe("sessionList view model", () => {
       status: "Blocked",
       tone: "error",
       preview: "Issue · DNS failed Next: check the network panel before retrying Failure: kind=network",
-      metrics: ["1 message · 1 action · 1 issue", "Recovery check the network panel before retrying"],
+      metrics: ["1 message · 1 action · 1 issue", "Next step check the network panel before retrying"],
     });
-    expect(rows[0].searchText).toContain("recovery check the network panel before retrying");
+    expect(rows[0].searchText).toContain("next step check the network panel before retrying");
   });
 
   it("summarizes action-limit chats as needing a final answer", () => {

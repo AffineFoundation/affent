@@ -437,7 +437,7 @@ function toolNextHint(summary?: string, result?: string): string | undefined {
 
 function recoveryMetric(hint: string): string | undefined {
   const value = hint.replace(/\s+/g, " ").trim();
-  return value ? `Recovery ${summarize(value, 72)}` : undefined;
+  return value ? `Next step ${summarize(value, 72)}` : undefined;
 }
 
 function turnNeedsAttention(turn: SessionState["turns"][number]): boolean {
@@ -498,13 +498,13 @@ function hasEvidenceMetric(row: SessionRowView): boolean {
 }
 
 function hasGuardMetric(row: SessionRowView): boolean {
-  return row.metrics.some((metric) => metric.startsWith("Recovery guard "));
+  return row.metrics.some((metric) => metric.startsWith("Recovery limit "));
 }
 
 function needsAttention(row: SessionRowView): boolean {
   if (row.tone === "error" || row.tone === "warning") return true;
   if (row.status === "Blocked" || row.status === "Needs final answer") return true;
-  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Recovery "));
+  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Next step ") || metric.startsWith("Recovery "));
 }
 
 function usageMetrics(session: SessionSummary): string[] {
@@ -555,8 +555,8 @@ function loopGuardMetric(stats: LoopGuardStats | undefined): string | undefined 
   const interventions = stats?.loop_guard_interventions ?? 0;
   if (interventions <= 0) return undefined;
   const forced = stats?.forced_no_tools ?? 0;
-  const parts = [`Recovery guard ${interventions}`];
-  if (forced > 0) parts.push(`${forced} tool-free`);
+  const parts = [`Recovery limit ${interventions}`];
+  if (forced > 0) parts.push(`${forced} no-tool retry${forced === 1 ? "" : "s"}`);
   return parts.join(", ");
 }
 

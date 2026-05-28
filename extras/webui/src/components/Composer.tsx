@@ -231,12 +231,6 @@ export function Composer({
   const hasAvailableAutomation = hasLoopAutomation || hasScheduleAutomation;
   const showIntent = composerStatus !== "" || !!composerMeta;
   const placeholder = "Message Affent...";
-  const primaryLabel = primaryActionLabel({
-    busy,
-    hasSession,
-    draftContext,
-    taskHintTone: taskHint?.tone,
-  });
 
   if (disabled) {
     return (
@@ -367,9 +361,6 @@ export function Composer({
             </div>
           </details>
         ) : null}
-        <button type="button" className="primary-action" disabled={content.trim() === "" || cancelling} onClick={() => void submit()}>
-          {primaryLabel}
-        </button>
       </div>
     </div>
   );
@@ -476,28 +467,6 @@ function composerStatusLabel({
   }
   if (!hasSession) return hasContent ? "Ready to start" : "";
   return "";
-}
-
-function primaryActionLabel({
-  busy,
-  hasSession,
-  draftContext,
-  taskHintTone,
-}: {
-  busy: boolean;
-  hasSession: boolean;
-  draftContext?: DraftContext;
-  taskHintTone?: "ready" | "warning" | "unknown";
-}): string {
-  if (busy) return "Send guidance";
-  if (taskHintTone && taskHintTone !== "ready" && !draftContext) {
-    return hasSession ? "Send anyway" : "Start anyway";
-  }
-  if (!hasSession) return "Start";
-  if (draftContext?.source === "retry_reply") return "Retry";
-  if (draftContext?.source === "previous_message") return "Send edited";
-  if (draftContext) return "Send follow-up";
-  return "Send";
 }
 
 function composerMetaLabel({

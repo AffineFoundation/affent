@@ -21,7 +21,7 @@ describe("workbenchContext", () => {
       stateLabel: "Review needed",
       tone: "warning",
       metrics: [
-        { label: "Recovery", value: "update payment route" },
+        { label: "Next step", value: "update payment route" },
         { label: "Tokens", value: "12k" },
       ],
     });
@@ -35,7 +35,7 @@ describe("workbenchContext", () => {
 
     expect(workbenchContextSummary(overview, true)).toBe("Review needed");
     expect(buildWorkbenchContextEvidence(input).map((item) => item.label)).toEqual(["Changes", "Run", "Artifacts"]);
-    expect(workbenchContextEvidenceText(input)).toContain("Recovery: update payment route");
+    expect(workbenchContextEvidenceText(input)).toContain("Next step: update payment route");
     expect(workbenchContextEvidenceText(input)).toContain("Artifacts: 1 artifact · checkout failure log");
     expect(workbenchContextEvidenceText(input)).not.toContain("Tokens: 12k");
     expect(workbenchContextEvidenceDraft(input)).toContain("Use this current chat context in the next step:");

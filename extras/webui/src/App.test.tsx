@@ -162,7 +162,7 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
     expect(screen.queryByTestId("composer-intent")).toBeNull();
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
     expect(screen.queryByTestId("session-strip")).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
   });
@@ -556,7 +556,7 @@ describe("App", () => {
 
     const input = await screen.findByPlaceholderText("Message Affent...");
     await user.type(input, "summarize the repo");
-    await user.click(screen.getByRole("button", { name: "Start anyway" }));
+    await user.keyboard("{Enter}");
 
     expect(await screen.findByTestId("pending-turn")).toHaveTextContent("summarize the repo");
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("repo");
@@ -744,7 +744,8 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
-    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop review · Open automation");
+    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Workbench");
+    expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Loop review");
     await user.click(screen.getByLabelText("Workbench"));
     await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop review");
@@ -820,7 +821,8 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
-    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop waiting · Open automation");
+    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Workbench");
+    expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Loop waiting");
     await user.click(screen.getByLabelText("Workbench"));
     await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
@@ -1269,7 +1271,7 @@ describe("App", () => {
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("README.md main.go");
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "explain main.go");
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.keyboard("{Enter}");
 
     expect(await screen.findByTestId("pending-turn")).toHaveTextContent("explain main.go");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Waiting for the next update in this chat.");
@@ -1344,7 +1346,7 @@ describe("App", () => {
 
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "explain Bittensor");
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.keyboard("{Enter}");
 
     expect(await within(screen.getByTestId("timeline")).findByText("Bittensor is a decentralized AI network.")).toBeVisible();
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-1/events", expect.anything()));
@@ -1416,7 +1418,7 @@ describe("App", () => {
     await screen.findByText("There are two files.");
 
     await user.type(screen.getByPlaceholderText("Message Affent..."), "explain Bittensor");
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => {
       const activity = screen.getAllByTestId("agent-activity");
@@ -1466,7 +1468,7 @@ describe("App", () => {
 
     const input = await screen.findByPlaceholderText("Message Affent...");
     await user.type(input, "retry-worthy task");
-    await user.click(screen.getByRole("button", { name: "Start" }));
+    await user.keyboard("{Enter}");
 
     await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Send failed"));
     expect(input).toHaveValue("retry-worthy task");
@@ -1933,7 +1935,9 @@ describe("App", () => {
 
     expect(await screen.findByText("Checkout route fixed.")).toBeVisible();
     expect(screen.queryByTestId("session-changes-panel")).toBeNull();
-    expect(screen.getByText("1 changed file · Review diff")).toBeVisible();
+    expect(screen.getByLabelText("Workbench")).toHaveTextContent("Workbench");
+    expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Review diff");
+    expect(screen.getByLabelText("Workbench")).toHaveAttribute("title", expect.stringContaining("Updated payment route"));
     expect(screen.getByTestId("session-list")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
@@ -2110,7 +2114,9 @@ describe("App", () => {
 
     expect(await screen.findByText("Workspace evidence recorded.")).toBeVisible();
     expect(screen.queryByTestId("session-workspace-panel")).toBeNull();
-    expect(screen.getByText("Workspace mismatch · View workspace")).toBeVisible();
+    expect(screen.getByLabelText("Workbench")).toHaveTextContent("Workbench");
+    expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("View workspace");
+    expect(screen.getByLabelText("Workbench")).toHaveAttribute("title", expect.stringContaining("outside the session workspace"));
     expect(screen.getByTestId("workspace-status-pill")).toHaveTextContent("Workspace mismatch");
 
     await user.click(screen.getByTestId("workspace-status-pill"));
@@ -2201,7 +2207,9 @@ describe("App", () => {
 
     expect((await screen.findAllByText("Checkout test still fails."))[0]).toBeVisible();
     expect(screen.queryByTestId("session-run-panel")).toBeNull();
-    expect(screen.getByText("1 failed command · View run")).toBeVisible();
+    expect(screen.getByLabelText("Workbench")).toHaveTextContent("Workbench");
+    expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("View run");
+    expect(screen.getByLabelText("Workbench")).toHaveAttribute("title", expect.stringContaining("checkout spec failed"));
 
     await user.click(screen.getByLabelText("Workbench"));
 
@@ -2597,7 +2605,7 @@ describe("App", () => {
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Guidance for current run:");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
-    expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" })).toBeEnabled();
+    expect(within(screen.getByTestId("composer")).queryByRole("button", { name: "Send guidance" })).toBeNull();
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
   });
 
@@ -2628,7 +2636,7 @@ describe("App", () => {
     expect(context.querySelector(".chat-context-topic")).toBeNull();
     await user.click(await screen.findByRole("button", { name: "Guide run" }));
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check tests first");
-    await user.click(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" }));
+    await user.keyboard("{Enter}");
 
     expect(screen.getByTestId("pending-turn")).toHaveAttribute("data-kind", "guidance");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Guidance");
@@ -2689,7 +2697,7 @@ describe("App", () => {
     expect(screen.getByTestId("composer")).toHaveAttribute("data-cancelling", "true");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Stopping run");
     expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Stopping" })).toBeDisabled();
-    expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" })).toBeDisabled();
+    expect(within(screen.getByTestId("composer")).queryByRole("button", { name: "Send guidance" })).toBeNull();
 
     cancelled.resolve(jsonResponse({ session_id: "s1", cancelled: true }));
     await waitFor(() => expect(screen.getByTestId("composer")).toHaveAttribute("data-cancelling", "false"));
@@ -2922,7 +2930,7 @@ describe("App", () => {
       "Retry from this reply:\n\nThere are two files.",
     );
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Retrying from reply");
-    expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 
   it("keeps previous prompt editing out of the composer flow", async () => {

@@ -314,9 +314,9 @@ describe("WorkflowStatus", () => {
     })} />);
 
     const summary = screen.getByTestId("workflow-status").querySelector("summary") as HTMLElement;
-    expect(summary).toHaveTextContent("1 action limit · 2 recovery guards · 1 tool-free");
-    expect(within(summary).getByText("1 action limit · 2 recovery guards · 1 tool-free")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Automation 1 action limit · 2 recovery guards · 1 tool-free");
+    expect(summary).toHaveTextContent("1 action limit · 2 recovery limits · 1 no-tool retry");
+    expect(within(summary).getByText("1 action limit · 2 recovery limits · 1 no-tool retry")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Automation 1 action limit · 2 recovery limits · 1 no-tool retry");
   });
 
   it("turns recovery metrics into a draft action", async () => {
@@ -336,7 +336,7 @@ describe("WorkflowStatus", () => {
     const summary = screen.getByTestId("workflow-status").querySelector("summary");
     expect(summary).toBeTruthy();
     await user.click(summary!);
-    await user.click(screen.getByRole("button", { name: "Use recovery" }));
+    await user.click(screen.getByRole("button", { name: "Use hint" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
       "Continue: check browser network refs before citing taostats values",

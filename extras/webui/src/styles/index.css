@@ -346,33 +346,23 @@ body {
 }
 
 .workbench-attention {
-  display: inline-flex;
-  align-items: center;
-  max-width: min(280px, 32vw);
-  min-height: 20px;
-  min-width: 0;
-  overflow: hidden;
-  border: 1px solid rgba(45, 212, 191, 0.32);
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border: 0;
   border-radius: 999px;
-  background: rgba(240, 253, 250, 0.82);
-  color: var(--accent-strong);
-  padding: 0 7px;
-  font-size: 11px;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--accent-strong);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
 }
 
 .workbench-attention[data-tone="warning"] {
-  border-color: rgba(245, 158, 11, 0.32);
-  background: rgba(255, 251, 235, 0.86);
-  color: #92400e;
+  background: #b45309;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.14);
 }
 
 .workbench-attention[data-tone="error"] {
-  border-color: rgba(248, 113, 113, 0.36);
-  background: rgba(254, 242, 242, 0.9);
-  color: #b91c1c;
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.16);
 }
 
 .workbench-panel {
@@ -7629,7 +7619,7 @@ pre.code {
   grid-row: 3;
   align-self: end;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: end;
   margin: 0 18px 16px;
@@ -7920,30 +7910,30 @@ pre.code {
 .composer-input-row {
   position: relative;
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 8px;
-  align-items: end;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
   min-width: 0;
 }
 
 .composer-add {
   position: relative;
-  align-self: end;
+  align-self: center;
 }
 
 .composer-add-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
+  border-radius: 999px;
+  background: rgba(241, 245, 249, 0.96);
   color: var(--text-muted);
   font: inherit;
-  font-size: 28px;
-  font-weight: 300;
+  font-size: 24px;
+  font-weight: 350;
   line-height: 1;
   list-style: none;
   cursor: pointer;
@@ -7958,7 +7948,7 @@ pre.code {
 .composer-add[open] .composer-add-trigger,
 .composer-add-trigger:hover,
 .composer-add-trigger:focus-visible {
-  background: rgba(240, 253, 250, 0.72);
+  background: rgba(226, 232, 240, 0.96);
   color: var(--text);
   outline: none;
 }
@@ -8045,12 +8035,17 @@ pre.code {
 }
 
 .composer-actions {
+  grid-column: 1;
   display: flex;
   align-items: flex-end;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   padding-bottom: 3px;
+}
+
+.composer-actions:empty {
+  display: none;
 }
 
 .composer[data-resume-idle="true"] .composer-actions {
@@ -8915,21 +8910,18 @@ html[data-theme="dark"] .workbench-context-evidence-item[data-tone="error"] {
 }
 
 html[data-theme="dark"] .workbench-attention {
-  border-color: rgba(45, 212, 191, 0.28);
-  background: rgba(20, 184, 166, 0.12);
-  color: #5eead4;
+  background: #5eead4;
+  box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.16);
 }
 
 html[data-theme="dark"] .workbench-attention[data-tone="warning"] {
-  border-color: rgba(245, 158, 11, 0.28);
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
+  background: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
 }
 
 html[data-theme="dark"] .workbench-attention[data-tone="error"] {
-  border-color: rgba(248, 113, 113, 0.32);
-  background: rgba(248, 113, 113, 0.14);
-  color: #fca5a5;
+  background: #fca5a5;
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
 }
 
 html[data-theme="dark"] .session-run-focus {
@@ -9682,16 +9674,8 @@ html[data-theme="dark"] ::selection {
     padding: 0;
     background: rgba(255, 255, 255, 0.64);
   }
-  .workbench-trigger:has(.workbench-attention) {
-    width: auto;
-    max-width: min(242px, calc(100vw - 148px));
-    padding: 0 7px;
-  }
   .workbench-label {
     display: none;
-  }
-  .workbench-attention {
-    max-width: min(190px, calc(100vw - 206px));
   }
   .workbench-icon {
     width: 15px;

@@ -24,7 +24,7 @@ describe("WorkbenchContextPanel", () => {
           stateLabel: "Review needed",
           tone: "warning",
           metrics: [
-            { label: "Recovery", value: "rerun checkout spec", tone: "warning" },
+            { label: "Next step", value: "rerun checkout spec", tone: "warning" },
             { label: "Tokens", value: "12k" },
             { label: "Artifact", value: "1 file (8 KiB)" },
           ],
@@ -72,7 +72,7 @@ describe("WorkbenchContextPanel", () => {
     expect(panel).toHaveTextContent("Context");
     expect(panel).toHaveTextContent("Review needed");
     expect(panel).toHaveTextContent("Fix failing checkout tests");
-    expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Recovery rerun checkout spec");
+    expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Next step rerun checkout spec");
     expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Artifact 1 file");
     expect(screen.getByTestId("workbench-context-details")).not.toHaveTextContent("Tokens 12k");
     expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Workspace path");
@@ -93,7 +93,7 @@ describe("WorkbenchContextPanel", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Run: 1 failed command"));
     await user.click(screen.getByRole("button", { name: "Use context as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this current chat context in the next step:"), "evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Recovery: rerun checkout spec"), "evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next step: rerun checkout spec"), "evidence");
 
     await user.click(screen.getByRole("button", { name: "Open Run" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");

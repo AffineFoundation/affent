@@ -1644,7 +1644,7 @@ export function App() {
             className="workbench-trigger"
             aria-label="Workbench"
             aria-expanded={workbenchOpen}
-            title={workbenchAttention ? `${workbenchAttention.label} · ${workbenchAttention.detail}` : undefined}
+            title={workbenchAttention ? workbenchAttention.detail : undefined}
             onClick={() => {
               if (workbenchOpen) {
                 setWorkbenchOpen(false);
@@ -1660,9 +1660,7 @@ export function App() {
             </span>
             <span className="workbench-label">Workbench</span>
             {workbenchAttention ? (
-              <span className="workbench-attention" data-tone={workbenchAttention.tone}>
-                {workbenchAttention.label}
-              </span>
+              <span className="workbench-attention" data-tone={workbenchAttention.tone} aria-hidden="true" />
             ) : null}
           </button>
           {showHeaderNewChat ? (
@@ -2024,7 +2022,7 @@ function lastRawEventId(events: readonly RawEvent[]): number {
 }
 
 function hasRecoveryMetric(overview: SessionOverview): boolean {
-  return overview.metrics.some((metric) => metric.label === "Recovery" && metric.value.trim() !== "");
+  return overview.metrics.some((metric) => (metric.label === "Next step" || metric.label === "Recovery") && metric.value.trim() !== "");
 }
 
 function ChatContextBar({ overview }: { overview: SessionOverview }) {

@@ -496,7 +496,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Automation", value: "1 action limit · 2 recovery guards · 1 tool-free", tone: "warning" },
+      { label: "Automation", value: "1 action limit · 2 recovery limits · 1 no-tool retry", tone: "warning" },
     ]));
   });
 
@@ -748,7 +748,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toContainEqual({ label: "Issue", value: "1", tone: "error" });
-    expect(overview.metrics).toContainEqual({ label: "Recovery", value: "run rg --files config before retrying", tone: "warning" });
+    expect(overview.metrics).toContainEqual({ label: "Next step", value: "run rg --files config before retrying", tone: "warning" });
   });
 
   it("uses durable recovery hints when selected history has not loaded a failing turn", () => {
@@ -762,7 +762,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toContainEqual({
-      label: "Recovery",
+      label: "Next step",
       value: "check the browser network panel before retrying the taostats value",
       tone: "warning",
     });
@@ -803,8 +803,8 @@ describe("buildSessionOverview", () => {
       recoveryHint: "stale durable recovery hint",
     });
 
-    expect(overview.metrics.filter((metric) => metric.label === "Recovery")).toEqual([
-      { label: "Recovery", value: "run rg --files config before retrying", tone: "warning" },
+    expect(overview.metrics.filter((metric) => metric.label === "Next step")).toEqual([
+      { label: "Next step", value: "run rg --files config before retrying", tone: "warning" },
     ]);
   });
 

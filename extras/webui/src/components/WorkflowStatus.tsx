@@ -36,7 +36,7 @@ export function WorkflowStatus({
             className="secondary-action workflow-recovery-action"
             onClick={() => onUseAsDraft(recoveryDraft(recoveryMetric), "tool_guidance")}
           >
-            Use recovery
+            Use hint
           </button>
         ) : null}
         <RunDetails
@@ -53,7 +53,7 @@ export function WorkflowStatus({
 }
 
 function recoveryWorkflowMetric(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric | undefined {
-  return metrics.find((metric) => metric.label === "Recovery" && metric.value.trim() !== "");
+  return metrics.find((metric) => (metric.label === "Next step" || metric.label === "Recovery") && metric.value.trim() !== "");
 }
 
 function recoveryDraft(metric: SessionOverviewMetric): string {

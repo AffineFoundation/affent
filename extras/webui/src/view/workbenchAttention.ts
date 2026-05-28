@@ -48,8 +48,8 @@ export function buildWorkbenchAttention({
   const failedFiles = files.items.filter((item) => item.status === "failed").length;
   if (failedFiles > 0) return { label: withAction(fileIssueLabel(failedFiles), "Review files"), detail: fileAttentionDetail(files.items, "failed"), tone: "error", target: "files" };
 
-  const recovery = overview.metrics.find((metric) => metric.label === "Recovery" && metric.value.trim());
-  if (recovery) return { label: withAction("Recovery hint", "View context"), detail: recovery.value, tone: "warning", target: "context" };
+  const recovery = overview.metrics.find((metric) => (metric.label === "Next step" || metric.label === "Recovery") && metric.value.trim());
+  if (recovery) return { label: withAction("Suggested next step", "View context"), detail: recovery.value, tone: "warning", target: "context" };
 
   const automationAttention = automation ? automationWorkbenchAttention(automation) : undefined;
   if (automationAttention) return automationAttention;

@@ -62,7 +62,7 @@ describe("buildWorkbenchAttention", () => {
       files: files({ available: 1 }),
       changes: changes({ changed: 2 }),
       run: run(),
-    })).toEqual({ label: "Recovery hint · View context", detail: "rerun tests", tone: "warning", target: "context" });
+    })).toEqual({ label: "Suggested next step · View context", detail: "rerun tests", tone: "warning", target: "context" });
   });
 
   it("opens workspace when the recorded command cwd is outside the session workspace", () => {

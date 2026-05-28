@@ -241,7 +241,7 @@ function buildMetrics(
 
 function buildSummaryRecoveryMetric(hint?: string): SessionOverviewMetric | undefined {
   const value = hint?.replace(/\s+/g, " ").trim();
-  return value ? { label: "Recovery", value: summarize(value, 72), tone: "warning" } : undefined;
+  return value ? { label: "Next step", value: summarize(value, 72), tone: "warning" } : undefined;
 }
 
 function buildToolRecoveryMetric(turn: TurnState): SessionOverviewMetric | undefined {
@@ -249,7 +249,7 @@ function buildToolRecoveryMetric(turn: TurnState): SessionOverviewMetric | undef
     if (call.status !== "error" && (!call.exitCode || call.exitCode === 0)) continue;
     const next = toolNextHint(call.resultSummary, call.result);
     if (!next) continue;
-    return { label: "Recovery", value: summarize(next, 72), tone: "warning" };
+    return { label: "Next step", value: summarize(next, 72), tone: "warning" };
   }
   return undefined;
 }
@@ -316,8 +316,8 @@ function buildAutomationMetric(session: SessionState): SessionOverviewMetric | u
   if (stats.interventions <= 0 && stats.forcedNoTools <= 0 && stats.maxTurns <= 0 && visibleDecisions.length === 0 && loopFeeds.length === 0) return undefined;
   const parts: string[] = [];
   if (stats.maxTurns > 0) parts.push(`${stats.maxTurns} action limit${stats.maxTurns === 1 ? "" : "s"}`);
-  if (stats.interventions > 0) parts.push(`${stats.interventions} recovery guard${stats.interventions === 1 ? "" : "s"}`);
-  if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} tool-free`);
+  if (stats.interventions > 0) parts.push(`${stats.interventions} recovery limit${stats.interventions === 1 ? "" : "s"}`);
+  if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} no-tool retry${stats.forcedNoTools === 1 ? "" : "s"}`);
   if (loopFeeds.length > 0) parts.push(loopProtocolFeedMetric(loopFeeds));
   if (visibleDecisions.length > 0) {
     const latest = visibleDecisions.at(-1);
