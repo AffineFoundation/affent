@@ -68,6 +68,31 @@ func TestFetchTool_HTML(t *testing.T) {
 	}
 }
 
+func TestHTMLTextFallbackStripsMarkupScriptsAndStyles(t *testing.T) {
+	body := []byte(`<html>
+<head><style>.price{display:none}</style><script>window.SECRET = "ignore me"</script></head>
+<body>
+<nav>Menu</nav>
+<main>
+  <h1>Affine SN120</h1>
+  <p>Market Cap <strong>201.04K T</strong></p>
+  <svg><text>chart-only label</text></svg>
+</main>
+</body></html>`)
+
+	got := htmlTextFallback(body)
+	for _, want := range []string{"Menu", "Affine SN120", "Market Cap 201.04K T"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("fallback text missing %q:\n%s", want, got)
+		}
+	}
+	for _, forbidden := range []string{"<h1>", "<strong>", "window.SECRET", ".price", "chart-only label"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("fallback text leaked %q:\n%s", forbidden, got)
+		}
+	}
+}
+
 func TestFetchToolDescriptionSteersAwayFromDirectReaderTraps(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	for _, want := range []string{

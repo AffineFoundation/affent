@@ -100,6 +100,7 @@ const (
 	maxDynamicShellLinkScanBytes = 512 * 1024
 	maxDynamicShellLinks         = 5
 	maxDynamicShellLinkText      = 80
+	maxHTMLTextFallbackChars     = 64 * 1024
 	defaultUserAgent             = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
 	defaultAcceptHeader          = "text/html,application/xhtml+xml,application/json;q=0.95,application/ld+json;q=0.95,application/*+json;q=0.9,application/xml;q=0.9,application/rss+xml;q=0.9,application/atom+xml;q=0.9,application/*+xml;q=0.85,application/x-ndjson;q=0.85,text/plain;q=0.8,application/yaml;q=0.75,application/x-yaml;q=0.75,*/*;q=0.5"
 )
@@ -700,7 +701,7 @@ func renderBody(body []byte, contentType, finalURL string) string {
 		}
 		md, err := htmltomarkdown.ConvertString(articleHTML, opts...)
 		if err != nil {
-			return htmlText
+			return htmlTextFallback(body)
 		}
 		return md
 	case isReadableTextMediaType(mediaType):
@@ -734,6 +735,57 @@ func isReadableTextMediaType(mediaType string) bool {
 	}
 	return strings.HasPrefix(mediaType, "application/") &&
 		(strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml"))
+}
+
+func htmlTextFallback(body []byte) string {
+	z := html.NewTokenizer(bytes.NewReader(body))
+	var b strings.Builder
+	skipDepth := 0
+	for {
+		tt := z.Next()
+		switch tt {
+		case html.ErrorToken:
+			return strings.TrimSpace(b.String())
+		case html.StartTagToken:
+			name, _ := z.TagName()
+			if htmlFallbackSkipsTag(string(name)) {
+				skipDepth++
+			}
+		case html.EndTagToken:
+			name, _ := z.TagName()
+			if skipDepth > 0 && htmlFallbackSkipsTag(string(name)) {
+				skipDepth--
+			}
+		case html.TextToken:
+			if skipDepth > 0 {
+				continue
+			}
+			text := textutil.CompactWhitespace(string(z.Text()))
+			if text == "" {
+				continue
+			}
+			if b.Len() > 0 {
+				b.WriteByte(' ')
+			}
+			if b.Len()+len(text) > maxHTMLTextFallbackChars {
+				remaining := maxHTMLTextFallbackChars - b.Len()
+				if remaining > 0 {
+					b.WriteString(textutil.Preview(text, remaining, ""))
+				}
+				return strings.TrimSpace(b.String())
+			}
+			b.WriteString(text)
+		}
+	}
+}
+
+func htmlFallbackSkipsTag(tag string) bool {
+	switch strings.ToLower(tag) {
+	case "script", "style", "template", "svg":
+		return true
+	default:
+		return false
+	}
 }
 
 func shouldSniffBody(mediaType string) bool {
