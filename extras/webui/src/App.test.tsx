@@ -2804,7 +2804,9 @@ describe("App", () => {
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Context");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("Artifacts");
+    expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
+    await selectWorkbenchTab(user, "Artifacts");
     const artifacts = await screen.findByTestId("session-artifacts-panel");
     expect(artifacts).toHaveTextContent("1 artifact");
     expect(within(artifacts).getByRole("link", { name: "Download" })).toHaveAttribute(

@@ -4,6 +4,7 @@ import type { UseAsDraft } from "../view/draftSource";
 import type { SessionFilesView } from "../view/sessionFiles";
 import type { SessionRunView } from "../view/sessionRun";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
+import type { TurnArtifact } from "../view/turnArtifacts";
 import {
   buildWorkbenchContextEvidence,
   workbenchContextEvidenceDraft,
@@ -23,6 +24,7 @@ export function WorkbenchContextPanel({
   workspace,
   files,
   changes,
+  artifacts,
   run,
   automationTitle,
   automationDetail,
@@ -36,6 +38,7 @@ export function WorkbenchContextPanel({
   workspace?: SessionWorkspaceView;
   files?: SessionFilesView;
   changes?: SessionChangesView;
+  artifacts?: readonly TurnArtifact[];
   run?: SessionRunView;
   automationTitle?: string;
   automationDetail?: string;
@@ -46,7 +49,7 @@ export function WorkbenchContextPanel({
   const metrics = displaySessionOverviewMetrics(overview.metrics);
   const summary = workbenchContextSummary(overview, hasSelectedSession);
   const detail = hasSelectedSession ? overview.headline : "Start or open a chat";
-  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, files, run, automationTitle, automationDetail };
+  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, automationTitle, automationDetail };
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
 

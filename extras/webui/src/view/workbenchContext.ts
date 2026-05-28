@@ -3,6 +3,7 @@ import type { SessionFilesView } from "./sessionFiles";
 import { displaySessionOverviewMetrics, type SessionOverview } from "./sessionOverview";
 import type { SessionRunView } from "./sessionRun";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
+import type { TurnArtifact } from "./turnArtifacts";
 import type { WorkbenchAttention } from "./workbenchAttention";
 import type { WorkbenchTab } from "./workbenchNav";
 
@@ -20,6 +21,7 @@ export interface WorkbenchContextEvidenceInput {
   attention?: WorkbenchAttention;
   workspace?: SessionWorkspaceView;
   changes?: SessionChangesView;
+  artifacts?: readonly TurnArtifact[];
   files?: SessionFilesView;
   run?: SessionRunView;
   automationTitle?: string;
@@ -41,9 +43,10 @@ export function workbenchContextStatusDetail(input: Pick<WorkbenchContextEvidenc
 export function buildWorkbenchContextEvidence({
   workspace,
   changes,
+  artifacts = [],
   files,
   run,
-}: Pick<WorkbenchContextEvidenceInput, "workspace" | "changes" | "files" | "run">): WorkbenchContextEvidenceItem[] {
+}: Pick<WorkbenchContextEvidenceInput, "workspace" | "changes" | "artifacts" | "files" | "run">): WorkbenchContextEvidenceItem[] {
   const items: WorkbenchContextEvidenceItem[] = [];
   if (workspace?.hasData) {
     items.push({
@@ -79,6 +82,15 @@ export function buildWorkbenchContextEvidence({
       summary: run.summary,
       detail: run.detail,
       tone: run.tone,
+    });
+  }
+  if (artifacts.length > 0) {
+    const latest = artifacts[artifacts.length - 1];
+    items.push({
+      target: "artifacts",
+      label: "Artifacts",
+      summary: `${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`,
+      detail: latest?.summary || latest?.path || "Generated files available",
     });
   }
   return items;

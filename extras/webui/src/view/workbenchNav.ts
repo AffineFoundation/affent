@@ -6,6 +6,7 @@ import type { SessionOverview } from "./sessionOverview";
 import type { SessionRunView } from "./sessionRun";
 import type { SessionTraceView } from "./sessionTrace";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
+import type { TurnArtifact } from "./turnArtifacts";
 import type { WorkbenchAttention, WorkbenchAttentionTarget } from "./workbenchAttention";
 import {
   shouldShowWorkbenchAccessPanel,
@@ -14,7 +15,7 @@ import {
   shouldShowWorkbenchSkillsPanel,
 } from "./workbenchPanels";
 
-export type WorkbenchTab = "context" | "changes" | "run" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
+export type WorkbenchTab = "context" | "changes" | "run" | "artifacts" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
 export type WorkbenchNavTone = "error" | "warning" | "attention";
 export type WorkbenchNavScope = "current" | "platform";
 
@@ -31,6 +32,7 @@ export function buildWorkbenchNavItems({
   overview,
   changes,
   run,
+  artifacts = [],
   files,
   workspace,
   trace,
@@ -45,6 +47,7 @@ export function buildWorkbenchNavItems({
   overview: SessionOverview;
   changes: SessionChangesView;
   run: SessionRunView;
+  artifacts?: readonly TurnArtifact[];
   files: SessionFilesView;
   workspace: SessionWorkspaceView;
   trace?: SessionTraceView;
@@ -89,6 +92,15 @@ export function buildWorkbenchNavItems({
       detail: run.commands.length > 0 ? run.detail : "Command history",
       badge: run.commands.length > 0 ? String(run.commands.length) : undefined,
       tone: attention?.target === "run" ? attention.tone : run.tone,
+    });
+  }
+  if (artifacts.length > 0) {
+    currentItems.push({
+      key: "artifacts",
+      label: "Artifacts",
+      scope: "current",
+      detail: artifactNavDetail(artifacts),
+      badge: artifactBadge(artifacts),
     });
   }
   if (files.items.length > 0 || attention?.target === "files") {
@@ -169,6 +181,21 @@ export function buildWorkbenchNavItems({
         tone: runtimeState.state === "error" ? "error" as const : undefined,
       }]),
   ];
+}
+
+function artifactNavDetail(artifacts: readonly TurnArtifact[]): string {
+  const truncated = artifacts.filter((artifact) => artifact.truncated).length;
+  const totalBytes = artifacts.reduce((sum, artifact) => sum + (artifact.bytes ?? 0), 0);
+  const parts = [`${artifacts.length} ${artifacts.length === 1 ? "generated file" : "generated files"}`];
+  if (truncated > 0) parts.push(`${truncated} full output`);
+  if (totalBytes > 0) parts.push(`${Math.ceil(totalBytes / 1024)} KiB`);
+  return parts.join(" · ");
+}
+
+function artifactBadge(artifacts: readonly TurnArtifact[]): string | undefined {
+  if (artifacts.length === 0) return undefined;
+  if (artifacts.length > 99) return "99+";
+  return String(artifacts.length);
 }
 
 export function workbenchTabFromAttention(target: WorkbenchAttentionTarget): WorkbenchTab {

@@ -59,6 +59,7 @@ describe("buildWorkbenchNavItems", () => {
         tone: "error",
         commands: [{ command: "npm test -- checkout.spec.ts", status: "failed", turnNumber: 1, exitCode: 1 }],
       },
+      artifacts: [{ path: ".affent/artifacts/test.log", name: "test.log", source: "npm test", summary: "checkout failure log", truncated: true, bytes: 4096 }],
       files: {
         summary: "1 file reference",
         detail: "1 read",
@@ -103,6 +104,7 @@ describe("buildWorkbenchNavItems", () => {
 
     expect(items.find((item) => item.key === "changes")).toMatchObject({ badge: "1" });
     expect(items.find((item) => item.key === "run")).toMatchObject({ badge: "1", tone: "error" });
+    expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 generated file · 1 full output · 4 KiB" });
     expect(items.find((item) => item.key === "workspace")).toMatchObject({ badge: "!", tone: "warning" });
     expect(items.find((item) => item.key === "automation")).toMatchObject({ badge: "active", detail: "Loop waiting" });
     expect(items.find((item) => item.key === "memory")).toMatchObject({ badge: "updated", detail: "1 topics" });

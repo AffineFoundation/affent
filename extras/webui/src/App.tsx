@@ -1410,6 +1410,7 @@ export function App() {
     overview,
     changes: sessionChanges,
     run: sessionRun,
+    artifacts: sessionArtifacts,
     files: sessionFiles,
     workspace: sessionWorkspace,
     trace: sessionTrace,
@@ -1450,6 +1451,7 @@ export function App() {
             workspace={sessionWorkspace}
             files={sessionFiles}
             changes={sessionChanges}
+            artifacts={sessionArtifacts}
             run={sessionRun}
             automationTitle={automationContext?.title}
             automationDetail={automationContext?.detail}
@@ -1457,18 +1459,6 @@ export function App() {
             onUseAsDraft={handleUseAsDraft}
             defaultOpen
           />
-          {sessionArtifacts.length > 0 ? (
-            <SessionArtifactsPanel
-              artifacts={sessionArtifacts}
-              onOpenArtifact={(path) => void handleOpenArtifact(path)}
-              downloadHref={
-                selectedSessionId
-                  ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
-                  : undefined
-              }
-              onUseAsDraft={handleUseAsDraft}
-            />
-          ) : null}
         </>
       );
     }
@@ -1488,6 +1478,21 @@ export function App() {
           run={sessionRun}
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
+        />
+      );
+    }
+    if (workbenchTab === "artifacts") {
+      return (
+        <SessionArtifactsPanel
+          artifacts={sessionArtifacts}
+          defaultOpen
+          onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          downloadHref={
+            selectedSessionId
+              ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
+              : undefined
+          }
           onUseAsDraft={handleUseAsDraft}
         />
       );
