@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sessionsearch"
 	"github.com/affinefoundation/affent/internal/sse"
@@ -228,6 +229,64 @@ func TestSessionSearchTool_NoResultsIncludesRecoveryAnchors(t *testing.T) {
 	}
 	if !strings.Contains(out, `"recovery"`) {
 		t.Fatalf("raw response should expose recovery anchor:\n%s", out)
+	}
+}
+
+func TestSessionSearchTool_SearchesLoopStateRuntimeAnchors(t *testing.T) {
+	dir := t.TempDir()
+	sessionID := "past-loop"
+	protocolPath := loopstate.ProtocolPath(filepath.Join(dir, sessionID), sessionID)
+	if err := loopstate.WriteProtocol(protocolPath, `# Loop Protocol
+
+## 1. North Star
+
+Keep the long-running task recoverable.`); err != nil {
+		t.Fatalf("WriteProtocol: %v", err)
+	}
+	if err := loopstate.WriteState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName), loopstate.State{
+		Version:                1,
+		LoopID:                 sessionID,
+		OwnerSession:           sessionID,
+		Status:                 "running",
+		LastTurnID:             "turn_42",
+		LastTurnEndReason:      sse.TurnEndMaxTurns,
+		LastTurnMemorySearches: 2,
+		LastTurnMemoryMisses:   1,
+		LastMemoryUpdateAction: "replace",
+		LastMemoryUpdateLoc:    "memory:markets",
+		LastMemoryUpdate:       "prefer browser network evidence for dashboard values",
+		LastDecisionKind:       "evidence_quality",
+		LastDecisionTrigger:    "source_access_dynamic_partial",
+		LastDecision:           "defer",
+		LastDecisionAction:     "read browser_network_read ref n7 before citing dashboard values",
+		LastCompactionReason:   "context_overflow",
+		LastCompactionReactive: true,
+		ContextCompactions:     1,
+		LastCalibrationAnswer:  "Pause if dashboard evidence cannot be verified.",
+	}); err != nil {
+		t.Fatalf("WriteState: %v", err)
+	}
+
+	tool := sessionSearchTool(dir, "current")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"browser_network_read dashboard"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp SessionSearchResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out)
+	}
+	if resp.Total != 1 || len(resp.Results) != 1 {
+		t.Fatalf("expected one loop-state hit, got %+v", resp)
+	}
+	hit := resp.Results[0]
+	if hit.SessionID != sessionID || hit.Role != "loop" {
+		t.Fatalf("unexpected loop-state hit: %+v", hit)
+	}
+	for _, want := range []string{"browser_network_read", "dashboard"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("loop-state hit missing %q:\n%+v\nraw=%s", want, hit, out)
+		}
 	}
 }
 

@@ -929,6 +929,7 @@ func loopSearchContent(path, sid string) (string, bool, error) {
 	if summary.OwnerSession != "" {
 		fmt.Fprintf(&b, "owner_session: %s\n", summary.OwnerSession)
 	}
+	appendLoopStateSearchContent(&b, summary.State)
 	if current := markdownSection(protocol, "## 2. Current Situation"); current != "" {
 		b.WriteString("current_situation:\n")
 		b.WriteString(current)
@@ -942,6 +943,92 @@ func loopSearchContent(path, sid string) (string, bool, error) {
 	b.WriteString("protocol:\n")
 	b.WriteString(protocol)
 	return b.String(), true, nil
+}
+
+func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {
+	if b == nil || state == nil {
+		return
+	}
+	appendLoopStateLine(b, "loop_state",
+		"status="+stateSearchValue(state.Status),
+		"updates="+stateSearchInt(state.ProtocolUpdates),
+		"feeds="+stateSearchInt(state.ProtocolFeeds),
+		"calibration_answers="+stateSearchInt(state.CalibrationAnswers),
+	)
+	appendLoopStateLine(b, "last_plan",
+		"label="+stateSearchValue(state.LastPlanLabel),
+		"step_index="+stateSearchInt(state.LastPlanStepIndex),
+		"step_status="+stateSearchValue(state.LastPlanStepStatus),
+		"step="+stateSearchValue(state.LastPlanStep),
+	)
+	appendLoopStateLine(b, "last_turn",
+		"id="+stateSearchValue(state.LastTurnID),
+		"reason="+stateSearchValue(state.LastTurnEndReason),
+		"tools="+stateSearchInt(state.LastTurnToolRequests),
+		"tool_errors="+stateSearchInt(state.LastTurnToolErrors),
+		"loop_guards="+stateSearchInt(state.LastTurnLoopGuards),
+		"memory_updates="+stateSearchInt(state.LastTurnMemoryUpdates),
+		"memory_searches="+stateSearchInt(state.LastTurnMemorySearches),
+		"memory_misses="+stateSearchInt(state.LastTurnMemoryMisses),
+		"session_search="+stateSearchInt(state.LastTurnSessionSearch),
+	)
+	appendLoopStateLine(b, "last_memory_update",
+		"action="+stateSearchValue(state.LastMemoryUpdateAction),
+		"target="+stateSearchValue(state.LastMemoryUpdateTarget),
+		"topic="+stateSearchValue(state.LastMemoryUpdateTopic),
+		"location="+stateSearchValue(state.LastMemoryUpdateLoc),
+		"preview="+stateSearchValue(state.LastMemoryUpdate),
+	)
+	appendLoopStateLine(b, "last_decision",
+		"kind="+stateSearchValue(state.LastDecisionKind),
+		"trigger="+stateSearchValue(state.LastDecisionTrigger),
+		"decision="+stateSearchValue(state.LastDecision),
+		"confidence="+stateSearchValue(state.LastDecisionConfidence),
+		"action="+stateSearchValue(state.LastDecisionAction),
+	)
+	appendLoopStateLine(b, "last_compaction",
+		"reason="+stateSearchValue(state.LastCompactionReason),
+		"reactive="+stateSearchBool(state.LastCompactionReactive),
+		"count="+stateSearchInt(state.ContextCompactions),
+	)
+	if state.LastCalibrationAnswer != "" {
+		appendLoopStateLine(b, "last_calibration", "answer="+stateSearchValue(state.LastCalibrationAnswer))
+	}
+}
+
+func appendLoopStateLine(b *strings.Builder, label string, fields ...string) {
+	var parts []string
+	for _, field := range fields {
+		key, value, ok := strings.Cut(field, "=")
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		parts = append(parts, strings.TrimSpace(key)+"="+strings.TrimSpace(value))
+	}
+	if len(parts) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%s: %s\n", label, strings.Join(parts, " "))
+}
+
+func stateSearchValue(value string) string {
+	value = textutil.StripASCIIControls(value)
+	value = textutil.CompactWhitespace(value)
+	return textutil.Preview(value, 300)
+}
+
+func stateSearchInt(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d", n)
+}
+
+func stateSearchBool(v bool) string {
+	if !v {
+		return ""
+	}
+	return "true"
 }
 
 func markdownSection(markdown, heading string) string {
