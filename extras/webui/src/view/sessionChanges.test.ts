@@ -42,6 +42,26 @@ describe("buildSessionChanges", () => {
     expect(changes.files[0]).toMatchObject({ path: "src/app.ts", status: "failed", actionCount: 2, detail: "file moved" });
   });
 
+  it("merges workspace-absolute and relative paths for the same changed file", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "write", tool: "write_file", args: { path: "/workspace/sessions/sess_123-456/game2048.py" } } },
+      { id: 3, type: "tool.result", data: { call_id: "write", exit_code: 0, result_summary: "wrote file", result: "wrote file" } },
+      { id: 4, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "game2048.py" } } },
+      { id: 5, type: "tool.result", data: { call_id: "edit", exit_code: 0, result_summary: "replaced 1 occurrence", result: "replaced 1 occurrence" } },
+    ]);
+
+    const changes = buildSessionChanges(session);
+
+    expect(changes.summary).toBe("1 changed file");
+    expect(changes.files).toHaveLength(1);
+    expect(changes.files[0]).toMatchObject({
+      path: "game2048.py",
+      actionCount: 2,
+      detail: "replaced 1 occurrence",
+    });
+  });
+
   it("does not report read-only file evidence as a change", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

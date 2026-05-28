@@ -89,7 +89,7 @@ function changeEvidencePriority(file: SessionChangedFile): number {
 function changeFromCall(call: ToolCallState, turnNumber: number, sequence: number): SessionChangedFileInternal | undefined {
   const operation = changeOperation(call.tool);
   if (!operation) return undefined;
-  const path = stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename");
+  const path = normalizeChangePath(stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename"));
   if (!path) return undefined;
   return {
     path,
@@ -169,4 +169,11 @@ function plural(label: string, count: number): string {
 function stringArg(call: ToolCallState, key: string): string | undefined {
   const value = call.args[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeChangePath(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  const normalized = path.trim().replace(/\\/g, "/");
+  const workspaceMatch = normalized.match(/^(?:\/)?workspace\/sessions\/[^/]+\/(.+)$/);
+  return workspaceMatch?.[1] || normalized;
 }

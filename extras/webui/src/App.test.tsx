@@ -2334,12 +2334,12 @@ describe("App", () => {
     expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
     expect(changes).toHaveTextContent("+2 -1");
-    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
-    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("Updated payment route");
-    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Adjust" }));
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Adjust" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using changed file");
     const draft = screen.getByPlaceholderText("Message Affent...");
     expect(draft).toHaveValue();
