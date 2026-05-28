@@ -1386,7 +1386,7 @@ export function App() {
 
   const secondaryWorkbenchPanels = [
     { key: "runtime", label: "Runtime", direct: shouldShowWorkbenchRuntimePanel(runtimeStatsState), render: renderRuntimeStatsPanel },
-    { key: "access", label: "Access setup", direct: shouldShowWorkbenchAccessPanel(accountSettingsState), render: renderAccountSettingsPanel },
+    { key: "access", label: "Config", direct: shouldShowWorkbenchAccessPanel(accountSettingsState), render: renderAccountSettingsPanel },
     { key: "memory", label: "Memory", direct: shouldShowWorkbenchMemoryPanel(memoryState, selectedSession?.latest_memory_update), render: renderMemoryPanel },
     { key: "skills", label: "Skills", direct: shouldShowWorkbenchSkillsPanel(skillsState), render: renderSkillsPanel },
   ];

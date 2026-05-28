@@ -16,6 +16,7 @@ describe("AccountSettingsPanel", () => {
     );
 
     const panel = screen.getByTestId("account-settings-panel");
+    expect(panel).toHaveTextContent("Config");
     expect(panel).toHaveTextContent("SSH public key ready");
     expect(panel).toHaveTextContent("Existing keys are shown, never overwritten");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");

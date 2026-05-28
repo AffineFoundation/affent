@@ -51,7 +51,7 @@ export function AccountSettingsPanel({
   return (
     <details className="session-skills-panel account-settings-panel" data-testid="account-settings-panel" {...(defaultOpen ? { open: true } : {})}>
       <summary className="session-skills-summary">
-        <span className="session-skills-kicker">Access</span>
+        <span className="session-skills-kicker">Config</span>
         <strong>{title}</strong>
         <span>{detail}</span>
       </summary>
