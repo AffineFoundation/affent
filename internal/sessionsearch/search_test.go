@@ -508,6 +508,55 @@ Recover Alpha Coast market research without losing evidence quality.
 	}
 }
 
+func TestRecentSessionsPrioritizesLoopEventRecoveryPreview(t *testing.T) {
+	dir := t.TempDir()
+	sessionID := "loop-event-preview"
+	writeDurableLoop(t, dir, sessionID, `# Loop Protocol: loop-event-preview
+
+## 0. Metadata
+
+- loop_id: loop-event-preview
+- owner_session: loop-event-preview
+- status: running
+
+## 1. North Star
+
+This deliberately long protocol text should not push the latest durable loop
+event recovery checkpoint out of the recent_sessions loop preview. `+strings.Repeat("background ", 80)+`
+
+## 2. Current Situation
+
+- current intent: continue the active browser evidence recovery task.
+- current risk: model may forget the previous max_turns failure and repeat stale searches.
+`)
+	if _, err := loopstate.AppendEvent(loopstate.EventsPath(filepath.Join(dir, sessionID), sessionID), loopstate.Event{
+		Type:          "loop.protocol_feed",
+		Summary:       "digest feed preserved RECENT-EVENT-55 recovery anchors",
+		Mode:          "digest",
+		FeedNumber:    7,
+		TurnEndReason: "max_turns",
+		PlanStep:      "continue RECENT-EVENT-55 via browser_network_read",
+		LoopGuards:    2,
+		MemoryMisses:  1,
+		SessionSearch: 1,
+	}); err != nil {
+		t.Fatalf("AppendEvent: %v", err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 {
+		t.Fatalf("expected one recent loop anchor, got %+v", recent)
+	}
+	for _, want := range []string{"RECENT-EVENT-55", "max_turns", "browser_network_read", "loop_guards=2", "session_search=1"} {
+		if !strings.Contains(recent[0].Loop, want) {
+			t.Fatalf("recent loop preview missing %q:\n%+v", want, recent[0])
+		}
+	}
+}
+
 func TestRecentSessionsUsesLoopStateMTime(t *testing.T) {
 	dir := t.TempDir()
 	for _, sessionID := range []string{"stale-protocol-active-state", "fresh-protocol"} {

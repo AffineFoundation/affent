@@ -704,11 +704,78 @@ func planSearchContent(summary planstate.Summary) string {
 }
 
 func recentLoopPreview(path, sid string) string {
-	content, ok, err := loopSearchContent(path, sid)
+	content, ok, err := recentLoopPreviewContent(path, sid)
 	if err != nil || !ok {
 		return ""
 	}
 	return recentSessionPreview(content)
+}
+
+func recentLoopPreviewContent(path, sid string) (string, bool, error) {
+	summary, found, err := loopstate.SummarizeFile(path, loopstate.ProtocolRelPath(sid))
+	if err != nil || !found {
+		return "", false, err
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		return "", false, err
+	}
+	var b strings.Builder
+	appendLatestLoopEventPreview(&b, filepath.Join(filepath.Dir(path), loopstate.EventsFileName))
+	if current := markdownSection(protocol, "## 2. Current Situation"); current != "" {
+		appendLoopStateLine(&b, "current_situation", "text="+stateSearchValue(current))
+	}
+	if summary.State != nil {
+		appendLoopStateLine(&b, "last_plan",
+			"label="+stateSearchValue(summary.State.LastPlanLabel),
+			"step_status="+stateSearchValue(summary.State.LastPlanStepStatus),
+			"step="+stateSearchValue(summary.State.LastPlanStep),
+		)
+		appendLoopStateLine(&b, "last_turn",
+			"reason="+stateSearchValue(summary.State.LastTurnEndReason),
+			"tools="+stateSearchInt(summary.State.LastTurnToolRequests),
+			"loop_guards="+stateSearchInt(summary.State.LastTurnLoopGuards),
+			"session_search="+stateSearchInt(summary.State.LastTurnSessionSearch),
+		)
+		appendLoopStateLine(&b, "last_decision",
+			"kind="+stateSearchValue(summary.State.LastDecisionKind),
+			"decision="+stateSearchValue(summary.State.LastDecision),
+			"action="+stateSearchValue(summary.State.LastDecisionAction),
+		)
+	}
+	appendLoopStateLine(&b, "loop",
+		"status="+stateSearchValue(summary.Status),
+		"id="+stateSearchValue(summary.LoopID),
+		"owner="+stateSearchValue(summary.OwnerSession),
+	)
+	if b.Len() == 0 {
+		return loopSearchContent(path, sid)
+	}
+	return b.String(), true, nil
+}
+
+func appendLatestLoopEventPreview(b *strings.Builder, path string) {
+	if b == nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	events, found, err := loopstate.ReadRecentEvents(path, 1)
+	if err != nil || !found || len(events) == 0 {
+		return
+	}
+	ev := events[len(events)-1]
+	appendLoopStateLine(b, "recent_loop_event",
+		"type="+stateSearchValue(ev.Type),
+		"mode="+stateSearchValue(ev.Mode),
+		"feed="+stateSearchInt(ev.FeedNumber),
+		"turn_end="+stateSearchValue(ev.TurnEndReason),
+		"plan_step="+stateSearchValue(ev.PlanStep),
+		"loop_guards="+stateSearchInt(ev.LoopGuards),
+		"session_search="+stateSearchInt(ev.SessionSearch),
+		"memory_misses="+stateSearchInt(ev.MemoryMisses),
+		"decision="+stateSearchValue(ev.Decision),
+		"action="+stateSearchValue(ev.RequiredAction),
+		"summary="+stateSearchValue(ev.Summary),
+	)
 }
 
 func recentRecoveryPreview(path string) string {
