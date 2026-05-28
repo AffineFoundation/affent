@@ -1285,8 +1285,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 14 {
-		t.Fatalf("long-run suite size = %d, want 14", len(scenarios))
+	if len(scenarios) != 15 {
+		t.Fatalf("long-run suite size = %d, want 15", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1465,6 +1465,32 @@ func TestSelectLongRunSuite(t *testing.T) {
 		}
 	}
 	assertSessionSearchDiagnosticsRequiredForTerms(t, multiTaskRecovery, []string{`"northstar"`, `"biotech"`})
+
+	recentAnchorRecovery, ok := seen["longrun-recent-session-anchor-recovery"]
+	if !ok {
+		t.Fatalf("long-run suite missing recent session anchor recovery scenario")
+	}
+	if recentAnchorRecovery.SessionID != "recent-anchor-reader" {
+		t.Fatalf("recent anchor recovery fields = session:%q", recentAnchorRecovery.SessionID)
+	}
+	if recentAnchorRecovery.RequiredToolCounts["session_search"] != 1 || recentAnchorRecovery.MaxSuccessfulToolCallsByTool["session_search"] != 1 {
+		t.Fatalf("recent anchor recovery tool constraints = counts:%#v max:%#v", recentAnchorRecovery.RequiredToolCounts, recentAnchorRecovery.MaxSuccessfulToolCallsByTool)
+	}
+	if recentAnchorRecovery.RequiredToolStatsAtLeast["session_search_recent_sessions"] != 1 {
+		t.Fatalf("recent anchor recovery stats = %#v, want recent_sessions", recentAnchorRecovery.RequiredToolStatsAtLeast)
+	}
+	if len(recentAnchorRecovery.RequiredRecentSessionSearch) != 1 ||
+		recentAnchorRecovery.RequiredRecentSessionSearch[0].SessionID != "recent-anchor" ||
+		recentAnchorRecovery.RequiredRecentSessionSearch[0].QueryContains != "ORIONABSENT999" ||
+		recentAnchorRecovery.RequiredRecentSessionSearch[0].LoopContains != "loop.protocol_feed" ||
+		recentAnchorRecovery.RequiredRecentSessionSearch[0].RecoveryContains != "loop_guard_no_new_evidence" {
+		t.Fatalf("recent anchor recovery requirement = %#v", recentAnchorRecovery.RequiredRecentSessionSearch)
+	}
+	for _, want := range []string{"RECENT-HANDOFF-42", "loop.protocol_feed", "loop_guard_no_new_evidence", "recent-anchor"} {
+		if !stringSliceContains(recentAnchorRecovery.RequiredFinalText, want) {
+			t.Fatalf("recent anchor recovery RequiredFinalText = %#v, want %q", recentAnchorRecovery.RequiredFinalText, want)
+		}
+	}
 
 	crashResume, ok := seen["longrun-crash-missing-tool-result-resume"]
 	if !ok {

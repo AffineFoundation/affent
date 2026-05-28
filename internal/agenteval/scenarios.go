@@ -1377,6 +1377,117 @@ func longRunMultiTaskSessionRecoveryScenario() BatchScenario {
 	}
 }
 
+func longRunRecentSessionAnchorRecoveryScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-recent-session-anchor-recovery",
+		Suites:    []string{longRunSuite},
+		SessionID: "recent-anchor-reader",
+		Prompt:    "你正在恢复一个长时间运行的研究 session，但当前只记得错误关键词 ORIONABSENT999。必须先用 session_search 查询 ORIONABSENT999；如果没有直接命中，就使用返回的 recent_sessions 锚点继续恢复。最终回答必须包含 handoff marker、当前 plan step、loop feed 状态、恢复原因/失败类型和证据 session。不要读取文件、运行 shell、使用 memory 或修改文件。",
+		Files: map[string]string{
+			".affentctl/recent-anchor/conversation.jsonl": `{"role":"user","content":"Continue Alpha Coast source verification after browser evidence stalled"}
+{"role":"assistant","content":"Latest handoff marker RECENT-HANDOFF-42. Evidence should cite session recent-anchor and continue the current plan, not restart research."}
+`,
+			".affentctl/recent-anchor/plan.json": `{
+  "version": 1,
+  "updated_at": "2026-05-27T00:00:00Z",
+  "steps": [
+    {
+      "text": "collect Alpha Coast primary filings",
+      "status": "completed",
+      "evidence": ["filings/alpha-10q.md"]
+    },
+    {
+      "text": "continue RECENT-HANDOFF-42 by reading browser network evidence before citing dashboard metrics",
+      "status": "in_progress",
+      "evidence": ["browser-network:alpha-coast-dashboard"]
+    }
+  ]
+}
+`,
+			".affentctl/recent-anchor/.affent/loops/recent-anchor/LOOP.md": `# Loop Protocol: recent-anchor
+
+## 0. Metadata
+
+- loop_id: recent-anchor
+- owner_session: recent-anchor
+- status: running
+
+## 1. North Star
+
+Recover the active Alpha Coast evidence task from durable anchors instead of restarting from stale context.
+
+## 2. Current Situation
+
+- current intent: continue RECENT-HANDOFF-42 from browser network evidence.
+- current risk: direct lexical recall may miss because the operator supplied a wrong keyword.
+
+## 3. Evolution Protocol
+
+Use session_search recent-session anchors when direct hits are empty.
+`,
+			".affentctl/recent-anchor/.affent/loops/recent-anchor/events.jsonl": `{"seq":1,"time":"2026-05-27T00:00:00Z","type":"loop.protocol_feed","summary":"digest feed preserved RECENT-HANDOFF-42 recovery anchors","mode":"digest","feed_number":4,"plan_label":"plan:1/2:active","plan_step_index":2,"plan_step_status":"in_progress","plan_step":"continue RECENT-HANDOFF-42 by reading browser network evidence","turn_end_reason":"max_turns","session_search_calls":1,"loop_guards":1}
+`,
+			".affentctl/recent-anchor/events.jsonl": `{"type":"turn.end","data":{"turn_id":"turn-prev","reason":"max_turns","tool_stats":{"tool_failure_by_kind":{"loop_guard_no_new_evidence":2},"loop_guard_interventions":1,"tool_context_truncated":1}}}
+`,
+			"README.md": "# Recent Session Anchor Recovery Eval\n\nThe answer must come from session_search recent_sessions, not this file.\n",
+		},
+		RequiredTools: []string{"session_search"},
+		RequiredToolCounts: map[string]int{
+			"session_search": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "session_search", Arg: "query", Substring: "ORIONABSENT999"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"session_search": {
+				`"total":0`,
+				`"recent_sessions"`,
+				"recent-anchor",
+				"RECENT-HANDOFF-42",
+				"loop.protocol_feed",
+				"reason=max_turns",
+				"loop_guard_no_new_evidence",
+			},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"session_search_calls":           1,
+			"session_search_recent_sessions": 1,
+		},
+		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
+			{
+				QueryContains:    "ORIONABSENT999",
+				SessionID:        "recent-anchor",
+				PlanContains:     "RECENT-HANDOFF-42",
+				LoopContains:     "loop.protocol_feed",
+				RecoveryContains: "loop_guard_no_new_evidence",
+				MessageContains:  "recent_sessions",
+			},
+		},
+		RequiredFinalText: []string{
+			"RECENT-HANDOFF-42",
+			"browser network evidence",
+			"loop.protocol_feed",
+			"max_turns",
+			"loop_guard_no_new_evidence",
+			"recent-anchor",
+		},
+		ForbiddenTools:     []string{"memory", "read_file", "shell", "write_file", "edit_file"},
+		ForbiddenFinalText: []string{"ORIONABSENT999 是真实结论", "没有历史"},
+		ProtectedFiles: []string{
+			".affentctl/recent-anchor/conversation.jsonl",
+			".affentctl/recent-anchor/plan.json",
+			".affentctl/recent-anchor/.affent/loops/recent-anchor/LOOP.md",
+			".affentctl/recent-anchor/.affent/loops/recent-anchor/events.jsonl",
+			".affentctl/recent-anchor/events.jsonl",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"session_search": 1,
+		},
+		MaxTurns: 6,
+	}
+}
+
 func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-crash-missing-tool-result-resume",
