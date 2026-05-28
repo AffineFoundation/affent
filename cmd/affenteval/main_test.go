@@ -102,6 +102,25 @@ func TestRunListSuiteScenarios(t *testing.T) {
 	}
 }
 
+func TestRunQualityProfilePreflightRejectsNarrowScenarioSelection(t *testing.T) {
+	errOut, code := captureStderr(t, func() int {
+		return run([]string{"--quality-profile=longrun", "--scenario=longrun-stock-analysis-synthesis"})
+	})
+	if code != 64 {
+		t.Fatalf("run narrow longrun profile exit = %d, stderr:\n%s", code, errOut)
+	}
+	for _, want := range []string{
+		"quality gate preflight failed:",
+		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
+		"expectation_capability[skill] unavailable, want >= 1 selected scenario",
+		"expectation_domain[memory] unavailable, want >= 1 selected scenario",
+	} {
+		if !strings.Contains(errOut, want) {
+			t.Fatalf("preflight stderr missing %q:\n%s", want, errOut)
+		}
+	}
+}
+
 func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	t.Setenv("AFFENTCTL_BASE_URL", "https://sentinel-base.example")
 	t.Setenv("AFFENTCTL_API_KEY", "sk-sentinel-secret")
@@ -1124,6 +1143,43 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if err := validateQualityGateConfig(overrideGates); err != nil {
 		t.Fatalf("validate debug brief tag gate override: %v", err)
 	}
+}
+
+func TestQualityGatePreflightFailures(t *testing.T) {
+	gates := qualityGateConfig{}
+	if err := applyQualityGateProfile(&gates, "longrun", nil); err != nil {
+		t.Fatalf("applyQualityGateProfile: %v", err)
+	}
+	longRunScenarios, err := agenteval.SelectBatchScenariosForSuite("long-run", nil)
+	if err != nil {
+		t.Fatalf("select long-run scenarios: %v", err)
+	}
+	if failures := qualityGatePreflightFailures(longRunScenarios, gates); len(failures) != 0 {
+		t.Fatalf("full long-run suite preflight failures = %#v", failures)
+	}
+	narrowScenarios, err := agenteval.SelectBatchScenariosForSuite("", []string{"longrun-stock-analysis-synthesis"})
+	if err != nil {
+		t.Fatalf("select narrow scenario: %v", err)
+	}
+	failures := qualityGatePreflightFailures(narrowScenarios, gates)
+	for _, want := range []string{
+		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
+		"expectation_capability[skill] unavailable, want >= 1 selected scenario",
+		"expectation_domain[memory] unavailable, want >= 1 selected scenario",
+	} {
+		if !testStringSliceContains(failures, want) {
+			t.Fatalf("preflight failures = %#v, want %q", failures, want)
+		}
+	}
+}
+
+func testStringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestBatchResultExpectationCapabilityOutcome(t *testing.T) {

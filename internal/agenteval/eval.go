@@ -530,6 +530,34 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	return names
 }
 
+// ScenarioExpectationCapabilityNames returns the broad capability families a
+// scenario is expected to exercise, using the same derivation as debug
+// manifests and batch summaries.
+func ScenarioExpectationCapabilityNames(s BatchScenario) []string {
+	return ExpectationCapabilityNames(debugScenarioExpectations(s))
+}
+
+// ScenarioExpectationDomains returns the task-domain labels a scenario
+// declares for coverage and quality-gate accounting.
+func ScenarioExpectationDomains(s BatchScenario) []string {
+	seen := map[string]bool{}
+	for _, domain := range s.Domains {
+		domain = strings.TrimSpace(domain)
+		if domain != "" {
+			seen[domain] = true
+		}
+	}
+	if len(seen) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(seen))
+	for domain := range seen {
+		out = append(out, domain)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func expectationRequiresDelegatedSourceEvidence(exp DebugScenarioExpectations) bool {
 	return len(exp.RequiredFocusedTaskSourceCounts) > 0 || len(exp.RequiredSubagentSourceCounts) > 0
 }

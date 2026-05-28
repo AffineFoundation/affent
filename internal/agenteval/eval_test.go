@@ -1587,10 +1587,10 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("scenario %s missing long-run suite marker", scenario.Name)
 		}
 		seen[scenario.Name] = scenario
-		for _, cap := range ExpectationCapabilityNames(debugScenarioExpectations(scenario)) {
+		for _, cap := range ScenarioExpectationCapabilityNames(scenario) {
 			suiteCapabilities[cap] = true
 		}
-		for _, domain := range scenario.Domains {
+		for _, domain := range ScenarioExpectationDomains(scenario) {
 			suiteDomains[domain] = true
 		}
 	}
@@ -1799,7 +1799,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(scratchProject.ProtectedFiles, ".affent/loops/scratch-project-loop/LOOP.md") {
 		t.Fatalf("scratch project ProtectedFiles = %#v, want LOOP.md", scratchProject.ProtectedFiles)
 	}
-	scratchProjectCaps := ExpectationCapabilityNames(debugScenarioExpectations(scratchProject))
+	scratchProjectCaps := ScenarioExpectationCapabilityNames(scratchProject)
 	for _, want := range []string{"loop_protocol", "skill", "trace", "verifier"} {
 		if !stringSliceContains(scratchProjectCaps, want) {
 			t.Fatalf("scratch project expectation capabilities = %#v, want %q", scratchProjectCaps, want)
@@ -1860,7 +1860,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(iterativeProject.ProtectedFiles, ".affent/loops/scratch-project-iterative-loop/LOOP.md") {
 		t.Fatalf("iterative scratch project ProtectedFiles = %#v, want LOOP.md", iterativeProject.ProtectedFiles)
 	}
-	iterativeProjectCaps := ExpectationCapabilityNames(debugScenarioExpectations(iterativeProject))
+	iterativeProjectCaps := ScenarioExpectationCapabilityNames(iterativeProject)
 	for _, want := range []string{"loop_protocol", "session", "skill", "trace", "verifier"} {
 		if !stringSliceContains(iterativeProjectCaps, want) {
 			t.Fatalf("iterative scratch project expectation capabilities = %#v, want %q", iterativeProjectCaps, want)
@@ -1961,7 +1961,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("integrated memory recovery ProtectedFiles = %#v, want %q", integrated.ProtectedFiles, want)
 		}
 	}
-	integratedCaps := ExpectationCapabilityNames(debugScenarioExpectations(integrated))
+	integratedCaps := ScenarioExpectationCapabilityNames(integrated)
 	for _, want := range []string{"loop_protocol", "memory", "session_search", "plan", "session", "skill", "trace", "workspace", "verifier"} {
 		if !stringSliceContains(integratedCaps, want) {
 			t.Fatalf("integrated memory recovery expectation capabilities = %#v, want %q", integratedCaps, want)

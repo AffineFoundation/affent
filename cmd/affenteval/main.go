@@ -424,6 +424,13 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
+	if failures := qualityGatePreflightFailures(scenarios, gates); len(failures) > 0 {
+		fmt.Fprintln(os.Stderr, "quality gate preflight failed:")
+		for _, failure := range failures {
+			fmt.Fprintf(os.Stderr, "  - %s\n", failure)
+		}
+		return 64
+	}
 	if err := validateRunConfig(
 		*temperature,
 		*topP,
@@ -4577,6 +4584,38 @@ func expectationDomainFamilyGateFailures(s batchSummary, threshold *float64) []s
 		}
 	}
 	sort.Strings(failures)
+	return failures
+}
+
+func qualityGatePreflightFailures(scenarios []agenteval.BatchScenario, g qualityGateConfig) []string {
+	if len(g.RequiredExpectationCapabilities) == 0 && len(g.RequiredExpectationDomains) == 0 {
+		return nil
+	}
+	availableCaps := map[string]bool{}
+	availableDomains := map[string]bool{}
+	for _, scenario := range scenarios {
+		for _, cap := range agenteval.ScenarioExpectationCapabilityNames(scenario) {
+			availableCaps[cap] = true
+		}
+		for _, domain := range agenteval.ScenarioExpectationDomains(scenario) {
+			availableDomains[domain] = true
+		}
+	}
+	var failures []string
+	for _, cap := range g.RequiredExpectationCapabilities {
+		cap = strings.TrimSpace(cap)
+		if cap == "" || availableCaps[cap] {
+			continue
+		}
+		failures = append(failures, fmt.Sprintf("expectation_capability[%s] unavailable, want >= 1 selected scenario", cap))
+	}
+	for _, domain := range g.RequiredExpectationDomains {
+		domain = strings.TrimSpace(domain)
+		if domain == "" || availableDomains[domain] {
+			continue
+		}
+		failures = append(failures, fmt.Sprintf("expectation_domain[%s] unavailable, want >= 1 selected scenario", domain))
+	}
 	return failures
 }
 
