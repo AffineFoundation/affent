@@ -58,7 +58,7 @@ export function buildWorkbenchNavItems({
   const memoryTabHasSignal = shouldShowWorkbenchMemoryPanel(memoryState, latestMemoryUpdate);
   const skillsTabHasSignal = shouldShowWorkbenchSkillsPanel(skillsState);
 
-  return [
+  const currentItems: WorkbenchNavItem[] = [
     {
       key: "context",
       label: "Context",
@@ -67,46 +67,60 @@ export function buildWorkbenchNavItems({
       badge: attention?.target === "context" ? attention.label : undefined,
       tone: attention?.target === "context" ? attention.tone : undefined,
     },
-    {
+  ];
+  if (changes.files.length > 0 || attention?.target === "changes") {
+    currentItems.push({
       key: "changes",
       label: "Changes",
       scope: "current",
       detail: changes.files.length > 0 ? changes.detail : "Changed file review",
       badge: changes.files.length > 0 ? String(changes.files.length) : undefined,
       tone: attention?.target === "changes" ? attention.tone : changes.tone,
-    },
-    {
+    });
+  }
+  if (run.commands.length > 0 || attention?.target === "run") {
+    currentItems.push({
       key: "run",
       label: "Run",
       scope: "current",
       detail: run.commands.length > 0 ? run.detail : "Command history",
       badge: run.commands.length > 0 ? String(run.commands.length) : undefined,
       tone: attention?.target === "run" ? attention.tone : run.tone,
-    },
-    {
+    });
+  }
+  if (files.items.length > 0 || attention?.target === "files") {
+    currentItems.push({
       key: "files",
       label: "Files",
       scope: "current",
       detail: files.items.length > 0 ? files.detail : "Task file evidence",
       badge: files.items.length > 0 ? String(files.items.length) : undefined,
       tone: attention?.target === "files" ? attention.tone : files.tone,
-    },
-    {
+    });
+  }
+  if (workspace.hasData || attention?.target === "workspace") {
+    currentItems.push({
       key: "workspace",
       label: "Workspace",
       scope: "current",
       detail: workspace.hasData ? workspace.summary : "No binding evidence",
       badge: workspace.issue ? "!" : undefined,
       tone: attention?.target === "workspace" ? attention.tone : workspace.tone,
-    },
-    {
+    });
+  }
+  if (automation || attention?.target === "automation") {
+    currentItems.push({
       key: "automation",
       label: "Automation",
       scope: "current",
       detail: automation?.title ?? "Loop and timers",
       badge: automation ? "active" : undefined,
       tone: attention?.target === "automation" ? attention.tone : undefined,
-    },
+    });
+  }
+
+  return [
+    ...currentItems,
     {
       key: "memory",
       label: "Memory",

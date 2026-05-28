@@ -1411,6 +1411,10 @@ export function App() {
   const activeWorkbenchNavItem = workbenchNavItems.find((item) => item.key === workbenchTab);
   const showWorkbenchInspector = workbenchTab !== "context";
 
+  useEffect(() => {
+    if (!workbenchNavItems.some((item) => item.key === workbenchTab)) setWorkbenchTab("context");
+  }, [workbenchNavItems, workbenchTab]);
+
   function openWorkbench(tab: WorkbenchTab = "context") {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);

@@ -12,7 +12,7 @@ const overview = {
 } as SessionOverview;
 
 describe("buildWorkbenchNavItems", () => {
-  it("keeps stable Workbench sections with short factual empty states", () => {
+  it("keeps empty current-work sections out of the primary nav while preserving platform access", () => {
     const items = buildWorkbenchNavItems({
       overview,
       changes: { summary: "No changed files", detail: "No changes", files: [] },
@@ -27,30 +27,15 @@ describe("buildWorkbenchNavItems", () => {
 
     expect(items.map((item) => item.key)).toEqual([
       "context",
-      "changes",
-      "run",
-      "files",
-      "workspace",
-      "automation",
       "memory",
       "skills",
       "config",
       "trace",
     ]);
     expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Review needed" });
-    expect(items.find((item) => item.key === "changes")).toMatchObject({ detail: "Changed file review" });
-    expect(items.find((item) => item.key === "run")).toMatchObject({ detail: "Command history" });
-    expect(items.find((item) => item.key === "files")).toMatchObject({ detail: "Task file evidence" });
-    expect(items.find((item) => item.key === "workspace")).toMatchObject({ detail: "No binding evidence" });
-    expect(items.find((item) => item.key === "automation")).toMatchObject({ detail: "Loop and timers" });
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
     expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
       "context",
-      "changes",
-      "run",
-      "files",
-      "workspace",
-      "automation",
     ]);
     expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
       "memory",
