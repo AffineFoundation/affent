@@ -3389,6 +3389,24 @@ func TestBuiltinGitCommitPushScenariosRequireCommandOrder(t *testing.T) {
 	}
 }
 
+func TestBuiltinGitCommitPushScenariosVerifyPushedRemoteContent(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresGitCommitAndPush(scenario) {
+			continue
+		}
+		for _, want := range []string{
+			`git ls-remote --heads origin main`,
+			`git remote get-url origin`,
+			`git clone --quiet --branch main`,
+			`git -C "$remote_check/repo" rev-parse HEAD`,
+		} {
+			if !strings.Contains(scenario.VerifyCommand, want) {
+				t.Fatalf("%s requires git commit/push but verifier does not prove pushed remote content; missing %q in %q", scenario.Name, want, scenario.VerifyCommand)
+			}
+		}
+	}
+}
+
 func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresGitCommitAndPush(scenario) || !scenarioRequiresCleanGitStatus(scenario) {
