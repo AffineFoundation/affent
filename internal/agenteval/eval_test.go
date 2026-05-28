@@ -2969,6 +2969,21 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		},
 		ToolCalls: 8,
 		Repair:    ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
+		Delegation: DelegationStats{
+			FocusedTaskCalls:                1,
+			FocusedTaskByType:               map[string]int{"research": 1},
+			FocusedTaskSourceFindingsByType: map[string]int{"research": 2},
+			SubagentCalls:                   1,
+			SubagentByMode:                  map[string]int{"review": 1},
+			SubagentSourceEvidenceByMode:    map[string]int{"review": 1},
+			SubagentErrors:                  1,
+			SubagentIncomplete:              1,
+		},
+		Plan: PlanStats{
+			Calls:    2,
+			ByAction: map[string]int{"set": 1, "update": 1},
+			Errors:   1,
+		},
 		ToolFailureExamples: map[string][]ToolFailureExample{
 			"dynamic_shell": {{
 				Kind:              "dynamic_shell",
@@ -3631,6 +3646,18 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.ToolRepairSucceeded != 1 ||
 		manifest.Metrics.ToolRepairNotes != 2 ||
 		manifest.Metrics.ToolRepairByKind["alias_rename"] != 1 ||
+		manifest.Metrics.FocusedTaskCalls != 1 ||
+		manifest.Metrics.FocusedTaskByType["research"] != 1 ||
+		manifest.Metrics.FocusedTaskSources["research"] != 2 ||
+		manifest.Metrics.SubagentCalls != 1 ||
+		manifest.Metrics.SubagentByMode["review"] != 1 ||
+		manifest.Metrics.SubagentSources["review"] != 1 ||
+		manifest.Metrics.SubagentErrors != 1 ||
+		manifest.Metrics.SubagentIncomplete != 1 ||
+		manifest.Metrics.PlanCalls != 2 ||
+		manifest.Metrics.PlanByAction["set"] != 1 ||
+		manifest.Metrics.PlanByAction["update"] != 1 ||
+		manifest.Metrics.PlanErrors != 1 ||
 		manifest.Metrics.InputTokens != 100 ||
 		manifest.Metrics.OutputTokens != 20 ||
 		manifest.Metrics.TraceEvents != 6 ||

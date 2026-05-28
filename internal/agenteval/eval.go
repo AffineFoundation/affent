@@ -832,6 +832,19 @@ type DebugMetrics struct {
 	ToolRepairNotes                 int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind                map[string]int `json:"tool_repair_by_kind,omitempty"`
 	ToolFailureByKind               map[string]int `json:"tool_failure_by_kind,omitempty"`
+	FocusedTaskCalls                int            `json:"focused_task_calls,omitempty"`
+	FocusedTaskByType               map[string]int `json:"focused_task_by_type,omitempty"`
+	FocusedTaskSources              map[string]int `json:"focused_task_sources,omitempty"`
+	FocusedTaskErrors               int            `json:"focused_task_errors,omitempty"`
+	FocusedTaskIncomplete           int            `json:"focused_task_incomplete,omitempty"`
+	SubagentCalls                   int            `json:"subagent_calls,omitempty"`
+	SubagentByMode                  map[string]int `json:"subagent_by_mode,omitempty"`
+	SubagentSources                 map[string]int `json:"subagent_sources,omitempty"`
+	SubagentErrors                  int            `json:"subagent_errors,omitempty"`
+	SubagentIncomplete              int            `json:"subagent_incomplete,omitempty"`
+	PlanCalls                       int            `json:"plan_calls,omitempty"`
+	PlanByAction                    map[string]int `json:"plan_by_action,omitempty"`
+	PlanErrors                      int            `json:"plan_errors,omitempty"`
 	LoopGuardInterventions          int            `json:"loop_guard_interventions"`
 	ForcedNoTools                   int            `json:"forced_no_tools"`
 	LoopTurnCheckpoints             int            `json:"loop_turn_checkpoints,omitempty"`
@@ -1281,6 +1294,19 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ToolRepairNotes:                 res.Repair.Notes,
 			ToolRepairByKind:                cloneStringIntMap(res.Repair.ByKind),
 			ToolFailureByKind:               cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+			FocusedTaskCalls:                res.Delegation.FocusedTaskCalls,
+			FocusedTaskByType:               cloneStringIntMap(res.Delegation.FocusedTaskByType),
+			FocusedTaskSources:              cloneStringIntMap(res.Delegation.FocusedTaskSourceFindingsByType),
+			FocusedTaskErrors:               res.Delegation.FocusedTaskErrors,
+			FocusedTaskIncomplete:           res.Delegation.FocusedTaskIncomplete,
+			SubagentCalls:                   res.Delegation.SubagentCalls,
+			SubagentByMode:                  cloneStringIntMap(res.Delegation.SubagentByMode),
+			SubagentSources:                 cloneStringIntMap(res.Delegation.SubagentSourceEvidenceByMode),
+			SubagentErrors:                  res.Delegation.SubagentErrors,
+			SubagentIncomplete:              res.Delegation.SubagentIncomplete,
+			PlanCalls:                       res.Plan.Calls,
+			PlanByAction:                    cloneStringIntMap(res.Plan.ByAction),
+			PlanErrors:                      res.Plan.Errors,
 			LoopGuardInterventions:          res.ToolStats.LoopGuardInterventions,
 			ForcedNoTools:                   res.ToolStats.ForcedNoTools,
 			LoopTurnCheckpoints:             res.LoopTurnCheckpoints.Count,
