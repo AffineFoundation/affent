@@ -2863,6 +2863,17 @@ button.workbench-context-runtime-item:focus-visible {
   max-height: 120px;
 }
 
+.account-settings-status {
+  justify-self: start;
+  color: var(--accent-strong);
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
+.account-settings-status[data-tone="error"] {
+  color: var(--c-error);
+}
+
 .account-env-item {
   display: flex;
   align-items: center;

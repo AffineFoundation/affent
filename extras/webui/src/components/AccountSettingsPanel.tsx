@@ -39,6 +39,7 @@ export function AccountSettingsPanel({
   const [value, setValue] = useState("");
   const [query, setQuery] = useState("");
   const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
+  const [mutationStatus, setMutationStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
   const ssh = settings?.ssh;
   const trimmedQuery = query.trim();
   const visibleEnv = useMemo(() => {
@@ -56,14 +57,38 @@ export function AccountSettingsPanel({
   async function submitEnv(event: FormEvent) {
     event.preventDefault();
     if (!canSubmit) return;
-    await onSetEnv?.(name.trim(), value);
-    setName("");
-    setValue("");
+    const envName = name.trim();
+    setMutationStatus(undefined);
+    try {
+      await onSetEnv?.(envName, value);
+      setName("");
+      setValue("");
+      setMutationStatus({ tone: "success", message: `${envName} saved.` });
+    } catch (err) {
+      setMutationStatus({ tone: "error", message: formatPanelError(err) });
+    }
   }
 
   async function deleteEnv(envName: string) {
-    await onDeleteEnv?.(envName);
-    setConfirmDeleteEnv(undefined);
+    setMutationStatus(undefined);
+    try {
+      await onDeleteEnv?.(envName);
+      setConfirmDeleteEnv(undefined);
+      setMutationStatus({ tone: "success", message: `${envName} deleted.` });
+    } catch (err) {
+      setMutationStatus({ tone: "error", message: formatPanelError(err) });
+    }
+  }
+
+  async function ensureSSHKey() {
+    if (!onEnsureSSHKey) return;
+    setMutationStatus(undefined);
+    try {
+      await onEnsureSSHKey();
+      setMutationStatus({ tone: "success", message: "SSH key ready." });
+    } catch (err) {
+      setMutationStatus({ tone: "error", message: formatPanelError(err) });
+    }
   }
 
   return (
@@ -136,7 +161,7 @@ export function AccountSettingsPanel({
               ) : (
                 <div className="session-loop-actions">
                   {onEnsureSSHKey ? (
-                    <button type="button" className="secondary-action" disabled={!!busy} onClick={() => void onEnsureSSHKey()}>
+                    <button type="button" className="secondary-action" disabled={!!busy} onClick={() => void ensureSSHKey()}>
                       {busy === "ssh" ? "Checking key" : "Generate SSH key"}
                     </button>
                   ) : null}
@@ -157,6 +182,11 @@ export function AccountSettingsPanel({
               </button>
               <p className="session-loop-setup-note">Values are injected into shell commands but are not shown back in the UI.</p>
             </form>
+            {mutationStatus ? (
+              <span className="account-settings-status" data-tone={mutationStatus.tone} role="status" aria-live="polite">
+                {mutationStatus.message}
+              </span>
+            ) : null}
             {settings && settings.env.length > 0 ? (
               <div className="session-skills-controls">
                 <label className="session-skills-search">
@@ -209,4 +239,9 @@ export function AccountSettingsPanel({
       </div>
     </details>
   );
+}
+
+function formatPanelError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Unknown error";
 }

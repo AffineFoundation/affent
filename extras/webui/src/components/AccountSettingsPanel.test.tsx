@@ -65,6 +65,7 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("2 envs");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
+    expect(screen.getByRole("status")).toHaveTextContent("GITLAB_TOKEN saved.");
     expect(screen.queryByText("gl_secret")).toBeNull();
 
     const envList = screen.getByTestId("account-env-list");
@@ -86,6 +87,7 @@ describe("AccountSettingsPanel", () => {
     const confirm = within(envList).getByRole("group", { name: "Confirm delete GITHUB_TOKEN" });
     await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
     expect(onDeleteEnv).toHaveBeenCalledWith("GITHUB_TOKEN");
+    expect(screen.getByRole("status")).toHaveTextContent("GITHUB_TOKEN deleted.");
   });
 
   it("offers SSH key generation when no key exists", async () => {
@@ -99,6 +101,32 @@ describe("AccountSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
 
     expect(onEnsureSSHKey).toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("SSH key ready.");
+  });
+
+  it("keeps config forms usable and shows server failures inline", async () => {
+    const user = userEvent.setup();
+    const onSetEnv = vi.fn().mockRejectedValue(new Error("settings storage is read-only"));
+    const onEnsureSSHKey = vi.fn().mockRejectedValue(new Error("ssh key path is not writable"));
+    render(
+      <AccountSettingsPanel
+        settings={{ env: [], ssh: { exists: false } }}
+        onSetEnv={onSetEnv}
+        onEnsureSSHKey={onEnsureSSHKey}
+        defaultOpen
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("GITHUB_TOKEN"), "GITHUB_TOKEN");
+    await user.type(screen.getByPlaceholderText("Stored server-side"), "secret-value");
+    await user.click(screen.getByRole("button", { name: "Save env" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("settings storage is read-only");
+    expect(screen.getByPlaceholderText("GITHUB_TOKEN")).toHaveValue("GITHUB_TOKEN");
+    expect(screen.getByPlaceholderText("Stored server-side")).toHaveValue("secret-value");
+
+    await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
+    expect(screen.getByRole("status")).toHaveTextContent("ssh key path is not writable");
   });
 
   it("does not offer generation when a private key exists but public key is unavailable", () => {
