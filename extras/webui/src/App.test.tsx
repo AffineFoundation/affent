@@ -1083,7 +1083,7 @@ describe("App", () => {
     }));
 
     const panel = await screen.findByTestId("session-loop-panel");
-    expect(panel).toHaveTextContent("Loop running");
+    expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("watch market evidence");
     expect(screen.queryByText("No loop or timers")).toBeNull();
   });
@@ -1244,7 +1244,7 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
     await selectWorkbenchTab(user, "Automation");
     let panel = await screen.findByTestId("session-loop-panel");
-    expect(panel).toHaveTextContent("Loop running");
+    expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("Keep LOOP.md compact");
     expect(panel).toHaveTextContent("watch market evidence for several days");
     expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");

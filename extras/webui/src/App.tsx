@@ -57,6 +57,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
+import { SessionAutomationPanel } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
@@ -1628,15 +1629,14 @@ export function App() {
     if (selectedSessionLoading) {
       return <WorkbenchEmpty title="Loading automation" detail="Reading loop and timer state for this chat." />;
     }
-    if (!showLoopContext && !showScheduleContext) {
-      return <WorkbenchEmpty title="No loop or timers" detail="This chat has no LOOP.md or scheduled follow-ups yet." />;
-    }
+    const automationTitle = automationContext?.title ?? "No automation";
+    const automationDetail = automationContext?.detail ?? "Start a loop or schedule a check-in when this chat needs follow-up.";
     return (
-      <>
+      <SessionAutomationPanel title={automationTitle} detail={automationDetail} defaultOpen>
         {showLoopContext ? (
           <SessionLoopPanel
-            embedded
             defaultOpen
+            suppressRunningCallout
             summary={selectedSession?.loop_protocol}
             state={selectedLoopState}
             disabling={loopProtocolBusy}
@@ -1651,14 +1651,20 @@ export function App() {
             onLoadProtocol={handleLoadLoopProtocol}
             onUseAsDraft={handleUseLoopProtocolDraft}
           />
-        ) : (
-          <WorkbenchEmpty title="No LOOP.md" detail="Timers can appear here, but this chat does not have a loop protocol file yet." />
-        )}
-        {showScheduleContext ? (
-          <SessionSchedulePanel
-            embedded
+        ) : !showScheduleContext ? (
+          <SessionLoopPanel
             defaultOpen
-            summary={selectedSession?.schedules}
+            defaultGoal={selectedSessionTitle ?? selectedSessionId}
+            starting={loopProtocolBusy || actionBusy || session.status === "running"}
+            onStart={handleStartLoop}
+          />
+        ) : (
+          null
+        )}
+        {showScheduleContext || (!showLoopContext && !showScheduleContext) ? (
+          <SessionSchedulePanel
+            defaultOpen
+            summary={selectedSession?.schedules ?? (!showLoopContext && !showScheduleContext ? { count: 0, enabled: 0 } : undefined)}
             schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
             busy={scheduleBusy}
             disabled={actionBusy || session.status === "running"}
@@ -1670,9 +1676,12 @@ export function App() {
             onLoadSchedules={handleLoadSchedules}
             onUpdateSchedule={handleUpdateSchedule}
             onDeleteSchedule={handleDeleteSchedule}
+            onScheduleCheckIn={() => handleCreateSchedule("checkin")}
+            onScheduleLoopTick={() => handleCreateSchedule("loop")}
+            onScheduleDaily={() => handleCreateSchedule("daily")}
           />
         ) : null}
-      </>
+      </SessionAutomationPanel>
     );
   }
 

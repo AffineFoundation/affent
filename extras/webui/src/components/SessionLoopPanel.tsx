@@ -14,6 +14,7 @@ export function SessionLoopPanel({
   defaultGoal,
   defaultOpen = false,
   embedded = false,
+  suppressRunningCallout = false,
   starting = false,
   onDisable,
   onStart,
@@ -30,6 +31,7 @@ export function SessionLoopPanel({
   defaultGoal?: string;
   defaultOpen?: boolean;
   embedded?: boolean;
+  suppressRunningCallout?: boolean;
   starting?: boolean;
   onDisable?: () => Promise<void> | void;
   onStart?: (goal: string) => Promise<void> | void;
@@ -113,7 +115,7 @@ export function SessionLoopPanel({
       detail={detail}
     >
       <div className="session-plan-body session-loop-body">
-        {!(embedded && status === "running") ? (
+        {!(status === "running" && (embedded || suppressRunningCallout)) ? (
           <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
         ) : null}
         <LoopNextStep
