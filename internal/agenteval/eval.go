@@ -2926,6 +2926,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	for _, field := range sortedStringMapKeys(scenario.RequiredToolStatsAtLeast) {
 		checks = append(checks, ToolStatsAtLeast(field, scenario.RequiredToolStatsAtLeast[field]))
 	}
+	if min := requiredMemoryUpdateMetadataMin(scenario.RequiredToolStatsAtLeast); min > 0 {
+		checks = append(checks, MemoryUpdateMetadataAtLeast(min))
+	}
 	for _, eventType := range sortedStringMapKeys(scenario.RequiredTraceEventCounts) {
 		checks = append(checks, TraceEventCountAtLeast(eventType, scenario.RequiredTraceEventCounts[eventType]))
 	}
@@ -3078,6 +3081,19 @@ func sortedStringMapKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func requiredMemoryUpdateMetadataMin(stats map[string]int) int {
+	if len(stats) == 0 {
+		return 0
+	}
+	min := stats["memory_updates"]
+	for _, field := range []string{"memory_update_add", "memory_update_replace", "memory_update_remove"} {
+		if stats[field] > min {
+			min = stats[field]
+		}
+	}
+	return min
 }
 
 func compactNonEmptyStrings(values []string) []string {

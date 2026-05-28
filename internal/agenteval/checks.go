@@ -590,6 +590,30 @@ func ToolStatsAtLeast(field string, min int) Check {
 	}
 }
 
+func MemoryUpdateMetadataAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("memory_update_metadata_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			got := 0
+			var examples []string
+			for i, c := range t.Tools {
+				ex, ok := memoryUpdateExampleFromMeta(i+1, c.CallID, c.MemoryUpdate)
+				if !ok {
+					continue
+				}
+				got++
+				if len(examples) < 3 {
+					examples = append(examples, fmt.Sprintf("%s %s", ex.Action, ex.Location))
+				}
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("memory_update_metadata=%d examples=%v", got, examples)}
+			}
+			return CheckResult{Pass: false, Detail: fmt.Sprintf("memory_update_metadata=%d, want >= %d; examples=%v", got, min, examples)}
+		},
+	}
+}
+
 func ToolRepairKindAtLeast(kind string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("tool_repair_kind_at_least:%s:%d", kind, min),

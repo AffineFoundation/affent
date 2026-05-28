@@ -547,6 +547,31 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 }
 
+func TestMemoryUpdateMetadataAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		CallID: "mem1",
+		Tool:   "memory",
+		MemoryUpdate: &sse.MemoryUpdateMeta{
+			Action:      "add",
+			Target:      "memory",
+			Topic:       "markets",
+			Location:    "memory:markets",
+			NextPreview: "Alpha Coast reports use marker MEM-STOCK-73.",
+		},
+	}, {
+		CallID: "legacy",
+		Tool:   "memory",
+		Args:   map[string]any{"action": "add", "target": "memory", "topic": "legacy", "content": "legacy only"},
+		Result: `{"ok":true,"mutated":true,"target":"memory","topic":"legacy"}`,
+	}}}
+	if res := MemoryUpdateMetadataAtLeast(1).Eval(trace); !res.Pass {
+		t.Fatalf("expected structured memory update metadata to pass: %+v", res)
+	}
+	if res := MemoryUpdateMetadataAtLeast(2).Eval(trace); res.Pass {
+		t.Fatalf("fallback memory result parsing must not count as structured metadata: %+v", res)
+	}
+}
+
 func TestSourceAccessMatchAtLeast(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{

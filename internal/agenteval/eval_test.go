@@ -1469,6 +1469,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_failure_kind_at_least:invalid_args:1",
 		"tool_failure_kind_at_most:loop_guard_call_cap:0",
 		"tool_stats_at_least:memory_updates:1",
+		"memory_update_metadata_at_least:1",
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
@@ -1763,6 +1764,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			}
 			if scenario.RequiredToolStatsAtLeast["memory_updates"] != 1 || scenario.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
 				t.Fatalf("memory-confirmed-write-stats stats = %#v, want memory update/add requirements", scenario.RequiredToolStatsAtLeast)
+			}
+			if !stringSliceContains(debugScenarioExpectations(scenario).CheckNames, "memory_update_metadata_at_least:1") {
+				t.Fatalf("memory-confirmed-write-stats checks = %#v, want structured memory update metadata check", debugScenarioExpectations(scenario).CheckNames)
 			}
 			if scenario.RequiredToolCounts["memory"] != 1 || scenario.MaxSuccessfulToolCallsByTool["memory"] != 1 {
 				t.Fatalf("memory-confirmed-write-stats tool counts = required:%#v max:%#v", scenario.RequiredToolCounts, scenario.MaxSuccessfulToolCallsByTool)
@@ -2974,6 +2978,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if memoryWrite.RequiredToolStatsAtLeast["memory_updates"] != 1 || memoryWrite.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
 		t.Fatalf("memory write stats constraints = %#v", memoryWrite.RequiredToolStatsAtLeast)
 	}
+	if !stringSliceContains(debugScenarioExpectations(memoryWrite).CheckNames, "memory_update_metadata_at_least:1") {
+		t.Fatalf("memory write checks = %#v, want structured memory update metadata check", debugScenarioExpectations(memoryWrite).CheckNames)
+	}
 
 	memoryAutonomousWrite, ok := seen["memory-autonomous-durable-rule"]
 	if !ok {
@@ -3003,6 +3010,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(memoryAutonomousWrite.Domains, memoryDomain) || !stringSliceContains(memoryAutonomousWrite.Domains, longRunRecoveryDomain) {
 		t.Fatalf("autonomous memory write Domains = %#v, want memory and longrun_recovery", memoryAutonomousWrite.Domains)
+	}
+	if !stringSliceContains(debugScenarioExpectations(memoryAutonomousWrite).CheckNames, "memory_update_metadata_at_least:1") {
+		t.Fatalf("autonomous memory write checks = %#v, want structured memory update metadata check", debugScenarioExpectations(memoryAutonomousWrite).CheckNames)
 	}
 
 	skillInstall, ok := seen["skill-reviewed-install-activation"]
@@ -4087,7 +4097,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				"old_text": "Use direct price labels from dynamic dashboards.",
 				"content":  "Use browser_network_read json_path before citing dynamic dashboard metrics.",
 			},
-			Result:   `{"ok":true,"target":"memory","topic":"markets","message":"replaced"}`,
+			Result: `{"ok":true,"target":"memory","topic":"markets","message":"replaced"}`,
+			MemoryUpdate: &sse.MemoryUpdateMeta{
+				Action:          "replace",
+				Target:          "memory",
+				Topic:           "markets",
+				Location:        "memory:markets",
+				PreviousPreview: "old dashboard rule",
+				NextPreview:     "prefer browser_network_read evidence",
+				Preview:         "old dashboard rule -> prefer browser_network_read evidence",
+			},
 			ExitCode: 0,
 		}, {
 			TurnID: "turn-debug",
@@ -4099,7 +4118,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				"topic":   "research",
 				"content": "Record network evidence gaps explicitly.",
 			},
-			Result:   `{"ok":true,"target":"memory","topic":"research","message":"added"}`,
+			Result: `{"ok":true,"target":"memory","topic":"research","message":"added"}`,
+			MemoryUpdate: &sse.MemoryUpdateMeta{
+				Action:      "add",
+				Target:      "memory",
+				Topic:       "research",
+				Location:    "memory:research",
+				NextPreview: "Record network evidence gaps explicitly.",
+				Preview:     "Record network evidence gaps explicitly.",
+			},
 			ExitCode: 0,
 		}, {
 			TurnID:   "turn-debug",
@@ -4734,7 +4761,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"evidence: `go test ./internal/agenteval`",
 		"## Memory Updates",
 		"tool#4 action=`replace` location=`memory:markets` call_id=`call-4`",
-		"Use direct price labels from dynamic dashboards. -> Use browser_network_read json_path before citing dynamic dashboard metrics.",
+		"old dashboard rule -> prefer browser_network_read evidence",
 		"tool#5 action=`add` location=`memory:research` call_id=`call-5`",
 		"Record network evidence gaps explicitly.",
 		"## Session Search",
