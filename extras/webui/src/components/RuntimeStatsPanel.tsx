@@ -13,14 +13,14 @@ export function RuntimeStatsPanel({
   error?: string;
   defaultOpen?: boolean;
 }) {
-  const summary = loading ? "Loading runtime" : error ? "Runtime unavailable" : runtimeSummary(stats);
+  const summary = loading ? "Loading diagnostics" : error ? "Runtime unavailable" : runtimeSummary(stats);
   const detail = loading ? "Reading server diagnostics." : error ? panelErrorSummary("Stats API", error) : runtimeDetail(stats);
   const metrics = stats ? runtimeMetrics(stats) : [];
 
   return (
     <details className="session-skills-panel runtime-stats-panel" data-testid="runtime-stats-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
-        <span className="session-skills-kicker">Runtime</span>
+        <span className="session-skills-kicker">Diagnostics</span>
         <strong>{summary}</strong>
         <span>{detail}</span>
       </summary>

@@ -1771,6 +1771,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-skills-panel")).not.toHaveAttribute("open");
     const runtime = await screen.findByTestId("runtime-stats-panel");
     expect(runtime.closest("[data-testid='workbench-more-panel']")).toBeNull();
+    expect(runtime).toHaveTextContent("Diagnostics");
     expect(runtime).toHaveTextContent("qwen-small");
     expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network");
@@ -1802,7 +1803,7 @@ describe("App", () => {
     expect(more).not.toHaveAttribute("open");
     expect(more).toHaveTextContent("On demand");
     expect(more).toHaveTextContent("More Workbench tools");
-    expect(more).toHaveTextContent("Runtime · Config · Memory · Skills");
+    expect(more).toHaveTextContent("Diagnostics · Config · Memory · Skills");
     expect(screen.getByTestId("runtime-stats-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
     expect(screen.getByTestId("account-settings-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
     expect(screen.getByTestId("session-memory-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);

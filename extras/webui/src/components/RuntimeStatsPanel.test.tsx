@@ -80,7 +80,8 @@ describe("RuntimeStatsPanel", () => {
   it("shows loading and error states without fake metrics", () => {
     const { rerender } = render(<RuntimeStatsPanel defaultOpen loading />);
 
-    expect(screen.getByTestId("runtime-stats-panel")).toHaveTextContent("Loading runtime");
+    expect(screen.getByTestId("runtime-stats-panel")).toHaveTextContent("Diagnostics");
+    expect(screen.getByTestId("runtime-stats-panel")).toHaveTextContent("Loading diagnostics");
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
 
     rerender(<RuntimeStatsPanel defaultOpen error="stats offline" />);
