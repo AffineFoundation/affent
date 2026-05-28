@@ -69,6 +69,12 @@ describe("WorkbenchContextPanel", () => {
     expect(panel).toHaveTextContent("Context");
     expect(panel).toHaveTextContent("Conversation context");
     expect(panel).not.toHaveTextContent("Review needed");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Current situation");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Fix failing checkout tests");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Verification");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Unresolved failure");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Best drilldown");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Run");
     expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Developer snapshot");
     expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Current task");
     expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Workspace");
@@ -142,6 +148,9 @@ describe("WorkbenchContextPanel", () => {
     expect(health).toHaveTextContent("80%");
     expect(health).toHaveTextContent("96 of 120 context messages are loaded.");
     expect(health).toHaveTextContent("24 messages before compaction");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Context");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("80% used");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("0.0015M tokens");
     expect(usageCard).toHaveTextContent("Token usage");
     expect(screen.queryByTestId("workbench-context-budget")).toBeNull();
     expect(usageCard).toHaveTextContent("0.0015M tokens");

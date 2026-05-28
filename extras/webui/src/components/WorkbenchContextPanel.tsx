@@ -1,9 +1,12 @@
 import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
 import type { SessionChangesView } from "../view/sessionChanges";
+import { changesReviewFocus } from "../view/sessionChanges";
 import type { SessionContextSummary } from "../api/sessions";
 import { formatByteCount } from "../view/byteFormat";
 import type { SessionFilesView } from "../view/sessionFiles";
+import { filesReviewFocus } from "../view/sessionFiles";
 import type { SessionRunView } from "../view/sessionRun";
+import { runReviewFocus } from "../view/sessionRun";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
 import type { TurnArtifact } from "../view/turnArtifacts";
 import {
@@ -56,6 +59,17 @@ export function WorkbenchContextPanel({
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
   const hasEvidence = evidence.length > 0;
+  const brief = hasSelectedSession ? buildContextBrief({
+    overview,
+    statusDetail,
+    workspace,
+    files,
+    changes,
+    artifacts,
+    run,
+    usage,
+    contextSummary,
+  }) : undefined;
   const snapshot = hasSelectedSession ? contextSnapshotCards({
     overview,
     statusDetail,
@@ -86,6 +100,7 @@ export function WorkbenchContextPanel({
             </span>
           </div>
         ) : null}
+        {brief ? <ContextBriefCard brief={brief} onSelectSection={onSelectSection} /> : null}
         {snapshot.length > 0 ? (
           <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Developer snapshot">
             <div className="workbench-context-snapshot-head">
@@ -156,6 +171,230 @@ interface ContextSnapshotCard {
   meta?: string;
   tone?: SessionOverview["tone"];
   target?: WorkbenchTab;
+}
+
+interface ContextBriefView {
+  title: string;
+  detail?: string;
+  facts: ContextBriefFact[];
+  drilldown?: ContextBriefFact & { target: WorkbenchTab };
+}
+
+interface ContextBriefFact {
+  label: string;
+  value: string;
+  detail?: string;
+  tone?: "ready" | "attention" | "error";
+  target?: WorkbenchTab;
+}
+
+function ContextBriefCard({
+  brief,
+  onSelectSection,
+}: {
+  brief: ContextBriefView;
+  onSelectSection?: (tab: WorkbenchTab) => void;
+}) {
+  return (
+    <section className="workbench-context-brief" data-testid="workbench-context-brief" aria-label="Current situation">
+      <div className="workbench-context-brief-main">
+        <span>Current situation</span>
+        <strong>{brief.title}</strong>
+        {brief.detail ? <p>{brief.detail}</p> : null}
+      </div>
+      <div className="workbench-context-brief-facts">
+        {brief.facts.map((fact) => {
+          const content = (
+            <>
+              <small>{fact.label}</small>
+              <strong>{fact.value}</strong>
+              {fact.detail ? <span>{fact.detail}</span> : null}
+            </>
+          );
+          return fact.target ? (
+            <button
+              key={`${fact.label}:${fact.value}`}
+              type="button"
+              className="workbench-context-brief-fact"
+              data-tone={fact.tone}
+              onClick={() => onSelectSection?.(fact.target ?? "context")}
+              aria-label={`Open ${fact.label}`}
+            >
+              {content}
+            </button>
+          ) : (
+            <div key={`${fact.label}:${fact.value}`} className="workbench-context-brief-fact" data-tone={fact.tone}>
+              {content}
+            </div>
+          );
+        })}
+      </div>
+      {brief.drilldown ? (
+        <button
+          type="button"
+          className="workbench-context-brief-drilldown"
+          data-tone={brief.drilldown.tone}
+          onClick={() => onSelectSection?.(brief.drilldown?.target ?? "context")}
+        >
+          <span>Best drilldown</span>
+          <strong>{brief.drilldown.value}</strong>
+          {brief.drilldown.detail ? <small>{brief.drilldown.detail}</small> : null}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+function buildContextBrief({
+  overview,
+  statusDetail,
+  workspace,
+  files,
+  changes,
+  artifacts,
+  run,
+  usage,
+  contextSummary,
+}: {
+  overview: SessionOverview;
+  statusDetail: string;
+  workspace?: SessionWorkspaceView;
+  files?: SessionFilesView;
+  changes?: SessionChangesView;
+  artifacts?: readonly TurnArtifact[];
+  run?: SessionRunView;
+  usage?: WorkbenchContextUsageView;
+  contextSummary?: SessionContextSummary;
+}): ContextBriefView {
+  const facts = compact([
+    workspaceBriefFact(workspace),
+    runBriefFact(run),
+    changesBriefFact(changes),
+    filesBriefFact(files),
+    artifactsBriefFact(artifacts),
+    contextBriefFact(contextSummary, usage),
+  ]).slice(0, 6);
+
+  return {
+    title: overview.headline || "Chat ready",
+    detail: statusDetail && statusDetail !== overview.headline ? statusDetail : undefined,
+    facts,
+    drilldown: bestContextDrilldown({ workspace, run, changes, files, artifacts, contextSummary }),
+  };
+}
+
+function workspaceBriefFact(workspace?: SessionWorkspaceView): ContextBriefFact | undefined {
+  if (!workspace?.hasData) return undefined;
+  const tone = workspace.verification === "mismatch" ? "error" : workspace.verification === "missing_binding" ? "attention" : "ready";
+  return {
+    label: "Workspace",
+    value: workspace.summary,
+    detail: workspace.path || workspace.lastAgentCwd || workspace.detail,
+    tone,
+    target: "workspace",
+  };
+}
+
+function runBriefFact(run?: SessionRunView): ContextBriefFact | undefined {
+  if (!run || run.commands.length === 0) return undefined;
+  const review = runReviewFocus(run.commands);
+  return {
+    label: "Verification",
+    value: review.label,
+    detail: review.title,
+    tone: review.tone === "danger" ? "error" : review.tone === "attention" ? "attention" : "ready",
+    target: "run",
+  };
+}
+
+function changesBriefFact(changes?: SessionChangesView): ContextBriefFact | undefined {
+  if (!changes || changes.files.length === 0) return undefined;
+  const review = changesReviewFocus(changes.files);
+  return {
+    label: "Changes",
+    value: review.title,
+    detail: review.detail,
+    tone: review.tone === "danger" ? "error" : review.tone === "attention" ? "attention" : "ready",
+    target: "changes",
+  };
+}
+
+function filesBriefFact(files?: SessionFilesView): ContextBriefFact | undefined {
+  if (!files || files.items.length === 0) return undefined;
+  const review = filesReviewFocus(files.items);
+  return {
+    label: "Files",
+    value: review.title,
+    detail: review.detail,
+    tone: review.tone === "danger" ? "error" : review.tone === "attention" ? "attention" : "ready",
+    target: "files",
+  };
+}
+
+function artifactsBriefFact(artifacts?: readonly TurnArtifact[]): ContextBriefFact | undefined {
+  if (!artifacts?.length) return undefined;
+  const latest = artifacts[artifacts.length - 1];
+  return {
+    label: "Artifacts",
+    value: `${artifacts.length} captured`,
+    detail: latest?.summary || latest?.path || "Latest generated output is available.",
+    tone: "ready",
+    target: "artifacts",
+  };
+}
+
+function contextBriefFact(context?: SessionContextSummary, usage?: WorkbenchContextUsageView): ContextBriefFact | undefined {
+  const tokens = workbenchContextUsageSummary(usage);
+  if (!context || context.compact_trigger <= 0) {
+    return tokens ? { label: "Context", value: tokens, detail: "Token total loaded from trace or session index.", tone: "ready" } : undefined;
+  }
+  const percent = Math.max(0, Math.min(100, Math.round(context.compact_percent)));
+  const tone = percent >= 95 ? "error" : percent >= 72 ? "attention" : "ready";
+  return {
+    label: "Context",
+    value: `${percent}% used`,
+    detail: tokens ? `${tokens} · ${formatContextCount(context.messages_until_compact)} messages before compaction` : `${formatContextCount(context.messages_until_compact)} messages before compaction`,
+    tone,
+  };
+}
+
+function bestContextDrilldown({
+  workspace,
+  run,
+  changes,
+  files,
+  artifacts,
+  contextSummary,
+}: {
+  workspace?: SessionWorkspaceView;
+  run?: SessionRunView;
+  changes?: SessionChangesView;
+  files?: SessionFilesView;
+  artifacts?: readonly TurnArtifact[];
+  contextSummary?: SessionContextSummary;
+}): (ContextBriefFact & { target: WorkbenchTab }) | undefined {
+  if (workspace?.hasData && (workspace.verification === "mismatch" || workspace.verification === "missing_binding")) {
+    return { label: "Best drilldown", value: "Workspace", detail: workspace.issue ?? "Confirm the real working directory before trusting file operations.", tone: "attention", target: "workspace" };
+  }
+  if (run?.commands.length) {
+    const review = runReviewFocus(run.commands);
+    if (review.tone === "danger" || review.tone === "attention") {
+      return { label: "Best drilldown", value: "Run", detail: review.detail, tone: review.tone === "danger" ? "error" : "attention", target: "run" };
+    }
+  }
+  if (changes?.files.length) {
+    const review = changesReviewFocus(changes.files);
+    if (review.tone === "danger" || review.tone === "attention") {
+      return { label: "Best drilldown", value: "Changes", detail: review.detail, tone: review.tone === "danger" ? "error" : "attention", target: "changes" };
+    }
+  }
+  if (contextSummary && contextSummary.compact_trigger > 0 && contextSummary.compact_percent >= 72) {
+    return { label: "Best drilldown", value: "Context", detail: "Context pressure is high; keep future turns concise or expect compaction.", tone: contextSummary.compact_percent >= 95 ? "error" : "attention", target: "context" };
+  }
+  if (files?.items.length) return { label: "Best drilldown", value: "Files", detail: files.summary, tone: "ready", target: "files" };
+  if (artifacts?.length) return { label: "Best drilldown", value: "Artifacts", detail: `${artifacts.length} captured`, tone: "ready", target: "artifacts" };
+  if (run?.commands.length) return { label: "Best drilldown", value: "Run", detail: run.summary, tone: "ready", target: "run" };
+  return undefined;
 }
 
 function contextSnapshotCards({
@@ -519,4 +758,8 @@ function formatTokenCountMillions(value: number): string {
   if (value < 10_000) return `${millions.toFixed(4)}M`;
   if (value < 100_000) return `${millions.toFixed(3)}M`;
   return `${millions.toFixed(2)}M`;
+}
+
+function compact<T>(items: readonly (T | undefined | null | false)[]): T[] {
+  return items.filter(Boolean) as T[];
 }
