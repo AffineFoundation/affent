@@ -1275,11 +1275,21 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	if len(b.loop.CompletionGuards) == 0 {
 		t.Fatal("active LOOP.md should install a completion guard")
 	}
-	guard := b.loop.CompletionGuards[0]()
-	if !guard.Blocked ||
-		guard.Trigger != "loop_protocol_running" ||
-		!strings.Contains(guard.RequiredAction, "loop_protocol action=close") {
-		t.Fatalf("loop protocol completion guard = %+v", guard)
+	var loopBlocked, planBlocked agent.CompletionGuardResult
+	for _, guard := range b.loop.CompletionGuards {
+		switch result := guard(); result.Trigger {
+		case "loop_protocol_running":
+			loopBlocked = result
+		case "active_plan_unfinished":
+			planBlocked = result
+		}
+	}
+	if !loopBlocked.Blocked ||
+		!strings.Contains(loopBlocked.RequiredAction, "loop_protocol action=close") {
+		t.Fatalf("loop protocol completion guard = %+v", loopBlocked)
+	}
+	if !planBlocked.Blocked || !strings.Contains(planBlocked.Reason, "plan:1/2:active") {
+		t.Fatalf("active plan completion guard = %+v", planBlocked)
 	}
 	if b.loopProtocolInitialized {
 		t.Fatal("existing active LOOP.md must not mark the next turn as loop setup")
@@ -1710,6 +1720,18 @@ func TestSetupLoop_SkillProviderInjectsActivePlan(t *testing.T) {
 	}
 	if !strings.Contains(got, "cmd/affentctl/common.go") {
 		t.Fatalf("active plan evidence missing, got %q", got)
+	}
+	var blocked agent.CompletionGuardResult
+	for _, guard := range b.loop.CompletionGuards {
+		if result := guard(); result.Trigger == "active_plan_unfinished" {
+			blocked = result
+			break
+		}
+	}
+	if !blocked.Blocked ||
+		!strings.Contains(blocked.Reason, "plan:0/1:active") ||
+		!strings.Contains(blocked.Prompt, "AFFENT COMPLETION GUARD:") {
+		t.Fatalf("active plan completion guard = %+v", blocked)
 	}
 }
 

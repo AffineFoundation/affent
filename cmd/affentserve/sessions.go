@@ -737,7 +737,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
-		loop.CompletionGuards = append(loop.CompletionGuards, activePlanCompletionGuard(planPath))
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.ActivePlanCompletionGuard(planPath))
 	}
 	if !p.cfg.EvalMode {
 		loop.LoopProtocolPath = loopProtocolPath
@@ -853,36 +853,6 @@ func loopProtocolPlanCheckpointProvider(planPath string) agent.LoopProtocolCheck
 	}
 	return func() loopstate.PlanCheckpoint {
 		return serveLoopProtocolCurrentPlanCheckpoint(planPath)
-	}
-}
-
-func activePlanCompletionGuard(planPath string) agent.CompletionGuard {
-	return func() agent.CompletionGuardResult {
-		summary, found := planstate.SummarizeFile(planPath)
-		if !found ||
-			summary.Error ||
-			summary.Label == planstate.LabelMissing ||
-			summary.Label == planstate.LabelEmpty ||
-			summary.Done {
-			return agent.CompletionGuardResult{}
-		}
-		reason := fmt.Sprintf("Persisted plan state is unfinished: %s.", summary.Label)
-		if summary.CurrentStepIndex > 0 {
-			reason = fmt.Sprintf("Persisted plan state is unfinished: %s; current step %d is %s.", summary.Label, summary.CurrentStepIndex, summary.CurrentStepStatus)
-		}
-		required := "Use the plan tool to update the authoritative plan state before finalizing; if work is blocked, mark the relevant step blocked with evidence."
-		prompt := "AFFENT COMPLETION GUARD:\n" +
-			reason + "\n" +
-			required + "\n" +
-			"Do not answer as complete while the persisted plan has unfinished steps. If the task is complete, call the plan tool and mark every finished step completed with concise evidence, then provide the final answer. If it is not complete, continue from the current step or mark the step blocked with evidence."
-		return agent.CompletionGuardResult{
-			Blocked:        true,
-			ID:             "active-plan-unfinished",
-			Trigger:        "active_plan_unfinished",
-			Reason:         reason,
-			RequiredAction: required,
-			Prompt:         prompt,
-		}
 	}
 }
 

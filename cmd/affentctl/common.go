@@ -1532,6 +1532,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.ActivePlanCompletionGuard(planPath))
 	}
 	loopProtocolInitialized := false
 	if c.loopProtocol {

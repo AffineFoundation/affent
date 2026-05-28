@@ -563,6 +563,40 @@ func TestWithActivePlanSkillProviderInjectsPersistedPlan(t *testing.T) {
 	}
 }
 
+func TestActivePlanCompletionGuardBlocksUnfinishedPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect resume state","status":"completed"},{"text":"continue implementation","status":"in_progress"}]}`)); err != nil {
+		t.Fatalf("set plan: %v", err)
+	}
+
+	got := ActivePlanCompletionGuard(path)()
+	if !got.Blocked ||
+		got.Trigger != "active_plan_unfinished" ||
+		!strings.Contains(got.Reason, "plan:1/2:active") ||
+		!strings.Contains(got.Reason, "current step 2 is in_progress") ||
+		!strings.Contains(got.Prompt, "AFFENT COMPLETION GUARD:") {
+		t.Fatalf("active plan completion guard = %+v", got)
+	}
+}
+
+func TestActivePlanCompletionGuardSkipsCompletedOrUnavailablePlan(t *testing.T) {
+	missing := ActivePlanCompletionGuard(filepath.Join(t.TempDir(), "missing.json"))()
+	if missing.Blocked {
+		t.Fatalf("missing plan should not block, got %+v", missing)
+	}
+
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","status":"completed"}]}`)); err != nil {
+		t.Fatalf("set plan: %v", err)
+	}
+	done := ActivePlanCompletionGuard(path)()
+	if done.Blocked {
+		t.Fatalf("completed plan should not block, got %+v", done)
+	}
+}
+
 func TestActivePlanCurrentStepPrefersInProgressThenPending(t *testing.T) {
 	steps := []planStep{
 		{Text: "done", Status: "completed"},

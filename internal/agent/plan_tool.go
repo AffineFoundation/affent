@@ -668,6 +668,37 @@ func WithActivePlanSkillProvider(planPath string, next SkillProvider) SkillProvi
 	}
 }
 
+func ActivePlanCompletionGuard(planPath string) CompletionGuard {
+	return func() CompletionGuardResult {
+		st, err := readPlanState(planPath)
+		if err != nil || len(st.Steps) == 0 || planStateDone(st) {
+			return CompletionGuardResult{}
+		}
+		label := activePlanStatusLabel(st.Steps)
+		if label == "" {
+			return CompletionGuardResult{}
+		}
+		reason := fmt.Sprintf("Persisted plan state is unfinished: %s.", label)
+		if current := activePlanCurrentStepIndex(st.Steps); current > 0 {
+			status := activePlanStepStatus(st.Steps[current-1])
+			reason = fmt.Sprintf("Persisted plan state is unfinished: %s; current step %d is %s.", label, current, status)
+		}
+		required := "Use the plan tool to update the authoritative plan state before finalizing; if work is blocked, mark the relevant step blocked with evidence."
+		prompt := "AFFENT COMPLETION GUARD:\n" +
+			reason + "\n" +
+			required + "\n" +
+			"Do not answer as complete while the persisted plan has unfinished steps. If the task is complete, call the plan tool and mark every finished step completed with concise evidence, then provide the final answer. If it is not complete, continue from the current step or mark the step blocked with evidence."
+		return CompletionGuardResult{
+			Blocked:        true,
+			ID:             "active-plan-unfinished",
+			Trigger:        "active_plan_unfinished",
+			Reason:         reason,
+			RequiredAction: required,
+			Prompt:         prompt,
+		}
+	}
+}
+
 func activePlanSkillBlock(planPath string) string {
 	if strings.TrimSpace(planPath) == "" {
 		return ""
@@ -807,4 +838,12 @@ func planStateDone(st planState) bool {
 
 func planStepCompleted(step planStep) bool {
 	return strings.TrimSpace(step.Status) == "completed"
+}
+
+func activePlanStepStatus(step planStep) string {
+	status := strings.ToLower(strings.TrimSpace(step.Status))
+	if status == "" {
+		return "pending"
+	}
+	return status
 }
