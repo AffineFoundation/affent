@@ -6788,6 +6788,123 @@ button.workbench-context-runtime-item:focus-visible {
   margin-left: 0;
 }
 
+.session-memory-review {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.84);
+  border-left-color: rgba(20, 184, 166, 0.64);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+  padding: 9px;
+}
+
+.session-memory-review-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.session-memory-review-head span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.session-memory-review-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-memory-review-kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-memory-review-kinds span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+  border: 1px solid rgba(217, 224, 232, 0.9);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--text-muted);
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.session-memory-review-kinds span[data-kind="sensitive"] {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(254, 242, 242, 0.78);
+  color: var(--c-error);
+}
+
+.session-memory-review-kinds strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.78);
+  color: var(--text-faint);
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.session-memory-review-list {
+  display: grid;
+  gap: 5px;
+  max-height: 138px;
+  overflow: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-memory-review-list li {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.34fr) minmax(0, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.74);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 252, 0.68);
+  padding: 6px 8px;
+}
+
+.session-memory-review-list strong,
+.session-memory-review-list span,
+.session-memory-review-list small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-memory-review-list strong {
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.session-memory-review-list span,
+.session-memory-review-list small {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
 .session-memory-stat {
   display: grid;
   gap: 3px;
@@ -14122,9 +14239,26 @@ html[data-theme="dark"] .session-memory-focus-entries p {
 }
 
 html[data-theme="dark"] .session-memory-toolbar,
+html[data-theme="dark"] .session-memory-review,
 html[data-theme="dark"] .session-memory-write {
   border-color: rgba(58, 68, 81, 0.86);
   background: rgba(14, 17, 22, 0.58);
+}
+
+html[data-theme="dark"] .session-memory-review {
+  border-left-color: rgba(45, 212, 191, 0.68);
+}
+
+html[data-theme="dark"] .session-memory-review-kinds span,
+html[data-theme="dark"] .session-memory-review-list li {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(14, 17, 22, 0.68);
+}
+
+html[data-theme="dark"] .session-memory-review-kinds span[data-kind="sensitive"] {
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(69, 10, 10, 0.24);
+  color: rgba(252, 165, 165, 0.92);
 }
 
 html[data-theme="dark"] .session-memory-write .session-memory-form {
@@ -14905,6 +15039,13 @@ html[data-theme="dark"] ::selection {
   }
   .session-skills-coverage {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .session-memory-review-head,
+  .session-memory-review-list li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .session-memory-review-head .ghost-action {
+    justify-self: start;
   }
   .session-skills-controls,
   .session-skill-form,

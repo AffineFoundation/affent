@@ -4,15 +4,18 @@ import type { SessionMemoryAddRequest, SessionMemoryBucket, SessionMemoryRemoveR
 import type { UseAsDraft } from "../view/draftSource";
 import {
   memoryActionLabel,
+  memoryBucketsNeedingReview,
   memoryBucketMatchesQuery,
   memoryBucketMatchingEntries,
   memoryBucketPreview,
   memoryBucketDraft,
   memoryBucketEvidenceText,
+  memoryBucketKey,
   memoryBucketLabel,
   memoryBuckets,
   memoryBucketUsage,
   memoryPressureLabel,
+  memoryReviewFindings,
   memoryScopeLabel,
   memorySuggestionDraft,
   memoryStats,
@@ -66,12 +69,14 @@ export function SessionMemoryPanel({
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | undefined>();
   const [scopeFilter, setScopeFilter] = useState<MemoryScopeFilter>("all");
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
+  const reviewFindings = useMemo(() => memoryReviewFindings(memory), [memory]);
+  const reviewBucketKeys = useMemo(() => memoryBucketsNeedingReview(memory), [memory]);
   const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
     return buckets
-      .filter((bucket) => memoryBucketMatchesScope(bucket, scopeFilter))
+      .filter((bucket) => memoryBucketMatchesScope(bucket, scopeFilter, reviewBucketKeys))
       .filter((bucket) => !trimmedQuery || memoryBucketMatchesQuery(bucket, trimmedQuery));
-  }, [buckets, scopeFilter, trimmedQuery]);
+  }, [buckets, reviewBucketKeys, scopeFilter, trimmedQuery]);
   const focusedBucket = useMemo(() => {
     if (filtered.length === 0) return undefined;
     const selected = selectedBucketKey ? filtered.find((bucket) => memoryBucketKey(bucket) === selectedBucketKey) : undefined;
@@ -209,6 +214,12 @@ export function SessionMemoryPanel({
         {!loading && !noSession && (!error || hasMemorySnapshot) ? (
           <>
             <MemoryDashboard memory={memory} stats={stats} canWrite={Boolean(onAddMemory)} canDraft={Boolean(onUseAsDraft)} />
+            {memory?.has_memory && reviewFindings.length > 0 ? (
+              <MemoryReviewQueue
+                findings={reviewFindings}
+                onShowBuckets={() => setScopeFilter("review")}
+              />
+            ) : null}
             <MemoryPanelActions
               memory={memory}
               hasSearch={hasSearch}
@@ -219,7 +230,7 @@ export function SessionMemoryPanel({
             {focusedBucket ? <MemoryBucketFocus bucket={focusedBucket} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
               <div className="session-skills-controls">
-                <MemoryScopeFilters buckets={buckets} value={scopeFilter} onChange={setScopeFilter} />
+                <MemoryScopeFilters buckets={buckets} reviewBucketKeys={reviewBucketKeys} value={scopeFilter} onChange={setScopeFilter} />
                 <label className="session-skills-search">
                   <span>Search memory</span>
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search entries or topics" />
@@ -422,14 +433,16 @@ export function SessionMemoryPanel({
   );
 }
 
-type MemoryScopeFilter = "all" | "session" | "user";
+type MemoryScopeFilter = "all" | "session" | "user" | "review";
 
 function MemoryScopeFilters({
   buckets,
+  reviewBucketKeys,
   value,
   onChange,
 }: {
   buckets: readonly SessionMemoryBucket[];
+  reviewBucketKeys: ReadonlySet<string>;
   value: MemoryScopeFilter;
   onChange: (value: MemoryScopeFilter) => void;
 }) {
@@ -437,11 +450,13 @@ function MemoryScopeFilters({
     all: buckets.length,
     session: buckets.filter((bucket) => bucket.target !== "user").length,
     user: buckets.filter((bucket) => bucket.target === "user").length,
+    review: buckets.filter((bucket) => reviewBucketKeys.has(memoryBucketKey(bucket))).length,
   };
   const options: Array<{ value: MemoryScopeFilter; label: string; count: number }> = [
     { value: "all", label: "All", count: counts.all },
     { value: "session", label: "Session", count: counts.session },
     { value: "user", label: "User", count: counts.user },
+    { value: "review", label: "Needs review", count: counts.review },
   ];
   return (
     <div className="session-filter-pills" role="group" aria-label="Filter memory buckets">
@@ -461,10 +476,59 @@ function MemoryScopeFilters({
   );
 }
 
-function memoryBucketMatchesScope(bucket: SessionMemoryBucket, scope: MemoryScopeFilter): boolean {
+function memoryBucketMatchesScope(bucket: SessionMemoryBucket, scope: MemoryScopeFilter, reviewBucketKeys: ReadonlySet<string>): boolean {
   if (scope === "user") return bucket.target === "user";
   if (scope === "session") return bucket.target !== "user";
+  if (scope === "review") return reviewBucketKeys.has(memoryBucketKey(bucket));
   return true;
+}
+
+function MemoryReviewQueue({
+  findings,
+  onShowBuckets,
+}: {
+  findings: ReturnType<typeof memoryReviewFindings>;
+  onShowBuckets: () => void;
+}) {
+  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
+    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+  const buckets = new Set(findings.map((finding) => finding.bucketKey)).size;
+  return (
+    <section className="session-memory-review" data-testid="session-memory-review" aria-label="Memory review queue">
+      <div className="session-memory-review-head">
+        <span>Review queue</span>
+        <strong>{findings.length} {findings.length === 1 ? "finding" : "findings"} · {buckets} {buckets === 1 ? "bucket" : "buckets"}</strong>
+        <button type="button" className="ghost-action" onClick={onShowBuckets}>Show buckets</button>
+      </div>
+      <div className="session-memory-review-kinds">
+        {Object.entries(counts).map(([kind, count]) => (
+          <span key={kind} data-kind={kind}>
+            {memoryFindingKindLabel(kind)}
+            <strong>{count}</strong>
+          </span>
+        ))}
+      </div>
+      <ul className="session-memory-review-list">
+        {findings.slice(0, 5).map((finding, index) => (
+          <li key={`${finding.kind}:${finding.bucketKey}:${index}`}>
+            <strong>{finding.bucketLabel}</strong>
+            <span>{finding.detail}</span>
+            {finding.entryPreview ? <small title={finding.entryPreview}>{finding.entryPreview}</small> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function memoryFindingKindLabel(kind: string): string {
+  if (kind === "sensitive") return "Sensitive";
+  if (kind === "duplicate") return "Duplicate";
+  if (kind === "capacity") return "Capacity";
+  if (kind === "large") return "Large";
+  return kind;
 }
 
 function MemoryBucketFocus({ bucket, onUseAsDraft }: { bucket: SessionMemoryBucket; onUseAsDraft?: UseAsDraft }) {
@@ -687,10 +751,6 @@ function formatTimestamp(value: string): string {
 
 function memoryEntryKey(target: string, topic: string | undefined, entry: string): string {
   return `${target}:${topic ?? ""}:${entry}`;
-}
-
-function memoryBucketKey(bucket: SessionMemoryBucket): string {
-  return `${bucket.target}:${bucket.topic ?? ""}`;
 }
 
 function formatPanelError(err: unknown): string {

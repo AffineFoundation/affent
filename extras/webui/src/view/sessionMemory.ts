@@ -11,6 +11,16 @@ export interface SessionMemoryStats {
   pressure: "empty" | "ok" | "watch" | "full";
 }
 
+export interface MemoryReviewFinding {
+  kind: "sensitive" | "duplicate" | "capacity" | "large";
+  bucketKey: string;
+  bucketLabel: string;
+  target: string;
+  topic?: string;
+  entryPreview?: string;
+  detail: string;
+}
+
 export function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBucket[] {
   if (!memory) return [];
   const out: SessionMemoryBucket[] = [];
@@ -74,6 +84,72 @@ export function memoryPressureLabel(stats: SessionMemoryStats): string {
 export function memoryScopeLabel(memory?: SessionMemoryResponse): string {
   if (!memory) return "No snapshot";
   return memory.shared_user_memory ? "Shared user + session" : "Session scoped";
+}
+
+export function memoryBucketKey(bucket: SessionMemoryBucket): string {
+  return `${bucket.target}:${bucket.topic ?? ""}`;
+}
+
+export function memoryReviewFindings(memory?: SessionMemoryResponse): MemoryReviewFinding[] {
+  const buckets = memoryBuckets(memory);
+  const findings: MemoryReviewFinding[] = [];
+  const duplicateEntries = duplicateMemoryEntries(buckets);
+  buckets.forEach((bucket) => {
+    const bucketKey = memoryBucketKey(bucket);
+    const bucketLabel = memoryBucketLabel(bucket);
+    if (bucket.percent !== undefined && bucket.percent >= 70) {
+      findings.push({
+        kind: "capacity",
+        bucketKey,
+        bucketLabel,
+        target: bucket.target,
+        topic: bucket.topic,
+        detail: `${bucket.percent}% capacity used`,
+      });
+    }
+    (bucket.entries ?? []).forEach((entry) => {
+      const normalized = normalizeMemoryEntry(entry);
+      if (!normalized) return;
+      if (looksSensitive(entry)) {
+        findings.push({
+          kind: "sensitive",
+          bucketKey,
+          bucketLabel,
+          target: bucket.target,
+          topic: bucket.topic,
+          entryPreview: redactSensitivePreview(entry),
+          detail: "possible secret or credential",
+        });
+      }
+      if (duplicateEntries.has(normalized)) {
+        findings.push({
+          kind: "duplicate",
+          bucketKey,
+          bucketLabel,
+          target: bucket.target,
+          topic: bucket.topic,
+          entryPreview: entryPreview(entry),
+          detail: "duplicate entry",
+        });
+      }
+      if (entry.length >= 1000) {
+        findings.push({
+          kind: "large",
+          bucketKey,
+          bucketLabel,
+          target: bucket.target,
+          topic: bucket.topic,
+          entryPreview: entryPreview(entry),
+          detail: `${entry.length} chars; consider splitting`,
+        });
+      }
+    });
+  });
+  return findings.slice(0, 20);
+}
+
+export function memoryBucketsNeedingReview(memory?: SessionMemoryResponse): Set<string> {
+  return new Set(memoryReviewFindings(memory).map((finding) => finding.bucketKey));
 }
 
 export function memoryBucketMatchesQuery(bucket: SessionMemoryBucket, query: string): boolean {
@@ -230,4 +306,36 @@ function memoryBucketSearchText(bucket: SessionMemoryBucket): string {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+}
+
+function duplicateMemoryEntries(buckets: readonly SessionMemoryBucket[]): Set<string> {
+  const counts = new Map<string, number>();
+  buckets.forEach((bucket) => {
+    (bucket.entries ?? []).forEach((entry) => {
+      const normalized = normalizeMemoryEntry(entry);
+      if (!normalized) return;
+      counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+    });
+  });
+  return new Set(Array.from(counts).filter(([, count]) => count > 1).map(([entry]) => entry));
+}
+
+function normalizeMemoryEntry(entry: string): string {
+  return entry.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function looksSensitive(entry: string): boolean {
+  return /\b(api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|secret|private key|ssh-rsa|BEGIN (?:OPENSSH |RSA |EC )?PRIVATE KEY)\b/i.test(entry);
+}
+
+function entryPreview(entry: string): string {
+  const compact = entry.trim().replace(/\s+/g, " ");
+  return compact.length > 120 ? `${compact.slice(0, 119).trimEnd()}...` : compact;
+}
+
+function redactSensitivePreview(entry: string): string {
+  const compact = entryPreview(entry);
+  return compact
+    .replace(/((?:api[_-]?key|access[_-]?token|auth[_-]?token|password|passwd|secret)\s*[:=]\s*)\S+/gi, "$1[redacted]")
+    .replace(/(BEGIN (?:OPENSSH |RSA |EC )?PRIVATE KEY)[\s\S]*/i, "$1 [redacted]");
 }

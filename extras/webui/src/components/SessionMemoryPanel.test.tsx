@@ -279,6 +279,58 @@ describe("SessionMemoryPanel", () => {
     expect(await screen.findByText("Memory updated.")).toBeInTheDocument();
   });
 
+  it("surfaces memory maintenance findings and filters affected buckets", async () => {
+    const user = userEvent.setup();
+    render(
+      <SessionMemoryPanel
+        defaultOpen
+        onReplaceMemory={vi.fn()}
+        onRemoveMemory={vi.fn()}
+        memory={{
+          session_id: "s1",
+          has_memory: true,
+          user: {
+            target: "user",
+            topic: "user",
+            entries: ["access_token=ghp_example should not be stored"],
+            entry_count: 1,
+            chars_used: 44,
+          },
+          topics: [
+            {
+              target: "memory",
+              topic: "project",
+              entries: ["Use Vite for WebUI development.", "Use Vite for WebUI development."],
+              entry_count: 2,
+              chars_used: 62,
+              chars_limit: 70,
+              percent: 89,
+            },
+            {
+              target: "memory",
+              topic: "research",
+              entries: ["CoinGecko pages require browser fallback."],
+              entry_count: 1,
+              chars_used: 40,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("4 findings");
+    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Sensitive");
+    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Duplicate");
+    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Capacity");
+    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("access_token=[redacted]");
+
+    await user.click(within(screen.getByTestId("session-memory-review")).getByRole("button", { name: "Show buckets" }));
+    expect(screen.getByTestId("session-memory-search-count")).toHaveTextContent("2 buckets");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("project");
+    expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("research");
+  });
+
   it("shows an empty selected-chat state", () => {
     render(<SessionMemoryPanel defaultOpen noSession />);
 

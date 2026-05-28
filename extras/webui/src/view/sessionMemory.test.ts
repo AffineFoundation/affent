@@ -4,9 +4,12 @@ import {
   memoryBucketMatchingEntries,
   memoryBucketDraft,
   memoryBucketEvidenceText,
+  memoryBucketKey,
   memoryBucketLabel,
   memoryBucketUsage,
+  memoryBucketsNeedingReview,
   memoryPressureLabel,
+  memoryReviewFindings,
   memoryScopeLabel,
   memoryStats,
   memorySnapshotDraft,
@@ -168,5 +171,40 @@ describe("sessionMemory view helpers", () => {
     expect(memoryUsageLabel(stats)).toBe("90/100 chars");
     expect(memoryPressureLabel(stats)).toBe("90% used");
     expect(memoryScopeLabel({ session_id: "s1", has_memory: false, shared_user_memory: true, topics: [] })).toBe("Shared user + session");
+  });
+
+  it("finds memory entries that need maintenance", () => {
+    const memory = {
+      session_id: "s1",
+      has_memory: true,
+      user: {
+        target: "user",
+        topic: "user",
+        entries: ["access_token=ghp_example should not be stored"],
+        entry_count: 1,
+        chars_used: 43,
+      },
+      topics: [
+        {
+          target: "memory",
+          topic: "project",
+          entries: ["Use Vite for WebUI development.", "Use Vite for WebUI development."],
+          entry_count: 2,
+          chars_used: 62,
+          chars_limit: 70,
+          percent: 89,
+        },
+      ],
+    };
+
+    expect(memoryBucketKey(memory.topics[0])).toBe("memory:project");
+    expect(memoryReviewFindings(memory).map((finding) => finding.kind)).toEqual([
+      "sensitive",
+      "capacity",
+      "duplicate",
+      "duplicate",
+    ]);
+    expect(memoryReviewFindings(memory)[0].entryPreview).toBe("access_token=[redacted] should not be stored");
+    expect(memoryBucketsNeedingReview(memory)).toEqual(new Set(["user:user", "memory:project"]));
   });
 });
