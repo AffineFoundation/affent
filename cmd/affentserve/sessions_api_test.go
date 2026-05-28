@@ -974,6 +974,34 @@ func TestSummarizeDurableSessionKeepsSpecificRuntimeErrorRecoveryHint(t *testing
 	}
 }
 
+func TestSummarizeDurableSessionWarnsAboutSkippedEventLogRecords(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "trace-gap-hint")
+	dir := pool.sessionDirPath("trace-gap-hint")
+
+	body := sessionEventLine(t, sse.TypeTraceMeta, sse.TraceMetaPayload{SchemaVersion: sse.TraceSchemaVersion}) +
+		strings.Repeat("x", maxSessionSummaryLineBytes+1) + "\n" +
+		"{not valid json}\n" +
+		sessionEventLine(t, sse.TypeTurnStart, sse.TurnStartPayload{TurnID: "after-gap"})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "trace-gap-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{"event log skipped 2", "skipped_lines", "oversized=1", "invalid=1"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
 func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	createDurableSessionDir(t, pool, "durable-tool-stats")

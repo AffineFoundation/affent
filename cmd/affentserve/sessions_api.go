@@ -1888,6 +1888,9 @@ func scanMemoryUpdatesFromEvents(r *bufio.Reader) (*sse.MemoryUpdateMeta, error)
 func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 	latest := ""
 	latestTurnID := ""
+	skippedLines := 0
+	oversizedLines := 0
+	invalidLines := 0
 	for {
 		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
 		if errors.Is(err, io.EOF) {
@@ -1897,6 +1900,8 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			return "", err
 		}
 		if tooLong {
+			skippedLines++
+			oversizedLines++
 			continue
 		}
 		setLatest := func(hint, turnID string) {
@@ -1909,6 +1914,8 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 		line = bytes.TrimRight(line, "\r\n")
 		var ev sse.Event
 		if err := json.Unmarshal(line, &ev); err != nil {
+			skippedLines++
+			invalidLines++
 			continue
 		}
 		if ev.Type == sse.TypeConversationRepaired {
@@ -1994,7 +2001,24 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			setLatest(hint, p.TurnID)
 		}
 	}
+	if latest == "" {
+		latest = recoveryHintFromEventLogIntegrity(skippedLines, oversizedLines, invalidLines)
+	}
 	return latest, nil
+}
+
+func recoveryHintFromEventLogIntegrity(skippedLines, oversizedLines, invalidLines int) string {
+	if skippedLines <= 0 {
+		return ""
+	}
+	parts := []string{fmt.Sprintf("event log skipped %d malformed or oversized record(s); inspect /history skipped_lines before trusting trace completeness", skippedLines)}
+	if oversizedLines > 0 {
+		parts = append(parts, fmt.Sprintf("oversized=%d", oversizedLines))
+	}
+	if invalidLines > 0 {
+		parts = append(parts, fmt.Sprintf("invalid=%d", invalidLines))
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
 }
 
 func recoveryHintFromToolArtifact(p sse.ToolResultPayload) string {
