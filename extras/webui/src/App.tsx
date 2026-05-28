@@ -1884,7 +1884,6 @@ export function App() {
               ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
               : undefined
           }
-          onUseAsDraft={handleUseAsDraft}
         />
       );
     }

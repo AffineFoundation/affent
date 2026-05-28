@@ -1,6 +1,4 @@
 import { useState } from "react";
-import type { UseAsDraft } from "../view/draftSource";
-import { artifactEvidenceDraft, artifactEvidenceText } from "../view/sessionArtifacts";
 import { artifactSizeLabel, type TurnArtifact } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
 
@@ -9,17 +7,16 @@ export function SessionArtifactsPanel({
   defaultOpen = false,
   downloadHref,
   onOpenArtifact,
-  onUseAsDraft,
 }: {
   artifacts: readonly TurnArtifact[];
   defaultOpen?: boolean;
   downloadHref?: (path: string) => string | undefined;
   onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
   const trimmedQuery = query.trim();
   const visibleArtifacts = trimmedQuery ? artifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : artifacts;
+  const focus = artifactFocus(artifacts);
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -28,6 +25,22 @@ export function SessionArtifactsPanel({
         <span>{artifactDetail(artifacts)}</span>
       </summary>
       <div className="session-skills-body">
+        {artifacts.length > 0 ? (
+          <div className="session-artifacts-overview" aria-label="Deliverable artifact summary">
+            <div>
+              <span>Deliverables</span>
+              <strong>{artifactSummary(artifacts)}</strong>
+              <small>{artifactDetail(artifacts)}</small>
+            </div>
+            {focus ? (
+              <span className="session-artifacts-focus">
+                <small>Latest</small>
+                <strong title={focus.path}>{focus.name}</strong>
+                <b>{artifactSizeLabel(focus) || "recorded"}</b>
+              </span>
+            ) : null}
+          </div>
+        ) : null}
         {artifacts.length > 1 ? (
           <div className="session-skills-controls">
             <label className="session-skills-search">
@@ -54,8 +67,6 @@ export function SessionArtifactsPanel({
                     <small title={artifact.path}>{artifact.path}</small>
                   </div>
                   <span className="session-evidence-actions">
-                    <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
-                    <CopyButton label="Copy details" value={artifactEvidenceText(artifact)} className="ghost-action" />
                     {onOpenArtifact ? (
                       <button type="button" className="ghost-action" onClick={() => onOpenArtifact(artifact.path)}>
                         Open
@@ -66,11 +77,7 @@ export function SessionArtifactsPanel({
                         Download
                       </a>
                     ) : null}
-                    {onUseAsDraft ? (
-                      <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
-                        Reference
-                      </button>
-                    ) : null}
+                    <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
                   </span>
                 </li>
               );
@@ -123,4 +130,8 @@ function artifactMeta(artifact: TurnArtifact): string {
     artifactSizeLabel(artifact) || undefined,
   ].filter(Boolean);
   return parts.join(" · ");
+}
+
+function artifactFocus(artifacts: readonly TurnArtifact[]): TurnArtifact | undefined {
+  return artifacts.at(-1);
 }
