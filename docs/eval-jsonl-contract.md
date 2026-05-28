@@ -137,6 +137,10 @@ Scenario records describe one eval case:
   research cases can additionally require `required_focused_task_source_counts`
   or `required_subagent_source_counts` so a child task must return
   source-backed findings/report lines, not just a successful delegation call.
+  Scenario expectations may also include `domains`, a curated task-domain list
+  such as `market`, `bittensor`, `code_pr`, `web_evidence`, or
+  `longrun_recovery`; these labels are not capability inference and are meant
+  for comparing realistic workload coverage.
 - `expectation_capability_names`, `expectation_capability_outcome`,
   `expectation_capability_passed_names`, and
   `expectation_capability_failed_names`: optional scenario-level derived
@@ -628,7 +632,10 @@ Summary records aggregate all scenario records from the same process:
   jump directly to representative artifacts.
 - Expectation coverage totals:
   `expectation_scenarios` counts scenarios that carried declarative
-  expectations; `expectation_suites` counts suite markers; `expectation_required_tools`
+  expectations; `expectation_suites` counts suite markers;
+  `expectation_domains` counts task-domain markers such as `market`,
+  `bittensor`, `code_pr`, `web_evidence`, and `longrun_recovery`;
+  `expectation_required_tools`
   counts tools mentioned or implied by scenario requirements, including shell
   command, session-search, and delegation requirements; `expectation_source_access`
   counts declared source-access statuses such as `network` or `verified`; and

@@ -1079,6 +1079,12 @@ Current built-in suites:
   agent must first find the most relevant captured response even when hidden
   API fields use names such as `marketCap` or `market_cap`.
 
+Scenarios may also carry task-domain labels such as `market`, `bittensor`,
+`code_pr`, `web_evidence`, `memory`, `session_recovery`,
+`context_compaction`, and `longrun_recovery`. Batch JSONL summaries aggregate
+these as `expectation_domains`, which lets model comparisons verify realistic
+workload coverage without parsing scenario names.
+
 Run scenarios:
 
 ```bash

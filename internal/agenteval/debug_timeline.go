@@ -406,6 +406,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if len(exp.Suites) > 0 {
 		fmt.Fprintf(b, "- suites: `%s`\n", strings.Join(exp.Suites, "`, `"))
 	}
+	if len(exp.Domains) > 0 {
+		fmt.Fprintf(b, "- domains: `%s`\n", strings.Join(exp.Domains, "`, `"))
+	}
 	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.MaxTurns > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
 		var parts []string
 		if exp.SessionID != "" {
@@ -693,6 +696,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 
 func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 	return len(exp.Suites) > 0 ||
+		len(exp.Domains) > 0 ||
 		len(exp.CheckNames) > 0 ||
 		exp.SessionID != "" ||
 		exp.ExecutePlan ||

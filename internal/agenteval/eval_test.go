@@ -1518,6 +1518,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(stock.RequiredTools, "repo_search") || !stringSliceContains(stock.RequiredTools, "read_file") {
 		t.Fatalf("stock scenario RequiredTools = %#v, want repo_search/read_file", stock.RequiredTools)
 	}
+	if !stringSliceContains(stock.Domains, marketDomain) {
+		t.Fatalf("stock scenario Domains = %#v, want market", stock.Domains)
+	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "read_file", Arg: "path", Substring: "data/prices.csv"},
 		{Tool: "read_file", Arg: "path", Substring: "data/analyst-estimates.md"},
@@ -1555,6 +1558,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(subnet.ForbiddenFinalText, "subnet price $277.32") {
 		t.Fatalf("Bittensor scenario ForbiddenFinalText = %#v, want TAO/subnet price conflation guard", subnet.ForbiddenFinalText)
+	}
+	if !stringSliceContains(subnet.Domains, bittensorDomain) {
+		t.Fatalf("Bittensor scenario Domains = %#v, want bittensor", subnet.Domains)
 	}
 
 	pr, ok := seen["longrun-code-implementation-pr-summary"]
@@ -1595,6 +1601,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") || !stringSliceContains(pr.RequiredFinalText, "queue/queue.go") || !stringSliceContains(pr.RequiredFinalText, "diff") {
 		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary, Tests, changed file, and diff", pr.RequiredFinalText)
+	}
+	if !stringSliceContains(pr.Domains, codePRDomain) {
+		t.Fatalf("code PR scenario Domains = %#v, want code_pr", pr.Domains)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]
@@ -2096,6 +2105,11 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if delegatedResearch.MaxParentToolCalls != 1 {
 		t.Fatalf("delegated research MaxParentToolCalls = %d, want 1", delegatedResearch.MaxParentToolCalls)
 	}
+	for _, want := range []string{webEvidenceDomain, longRunRecoveryDomain} {
+		if !stringSliceContains(delegatedResearch.Domains, want) {
+			t.Fatalf("delegated research Domains = %#v, want %q", delegatedResearch.Domains, want)
+		}
+	}
 
 	scenario, ok := seen["live-web-taostats-sn120-dynamic-evidence"]
 	if !ok {
@@ -2108,6 +2122,11 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	}
 	if stringSliceContains(scenario.RequiredTools, "browser_network") {
 		t.Fatalf("live-web RequiredTools = %#v, should allow direct browser_network_read from snapshot refs", scenario.RequiredTools)
+	}
+	for _, want := range []string{bittensorDomain, webEvidenceDomain} {
+		if !stringSliceContains(scenario.Domains, want) {
+			t.Fatalf("live-web Domains = %#v, want %q", scenario.Domains, want)
+		}
 	}
 	for _, field := range []string{"source_access_results", "source_access_verified", "source_access_network"} {
 		if scenario.RequiredToolStatsAtLeast[field] != 1 {
@@ -2762,6 +2781,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	scenario := BatchScenario{
 		Prompt:        "research with evidence",
 		Suites:        []string{longRunSuite, liveWebSuite},
+		Domains:       []string{"market", "web_evidence"},
 		MaxTurns:      12,
 		SetupCommands: []string{"git init"},
 		RequiredTools: []string{
@@ -2952,6 +2972,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		len(manifest.Expectations.RequiredLoopProtocolFeedMatches) != 1 ||
 		manifest.Expectations.RequiredLoopProtocolFeedMatches[0] != (DebugLoopProtocolFeedRequirement{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence", CurrentSituation: "dynamic source recovery", LastTurnEndReason: "completed", MinLastTurnMemorySearchCalls: 1}) ||
 		!manifest.Expectations.RequireLoopProtocolFullAfterCompact ||
+		!reflect.DeepEqual(manifest.Expectations.Domains, []string{"market", "web_evidence"}) ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"}) ||
 		len(manifest.Expectations.RequiredToolOrder) != 1 ||
 		manifest.Expectations.RequiredToolOrder[0] != (DebugToolOrderRequirement{Earlier: "web_fetch", Later: "browser_network_read"}) ||
@@ -3229,6 +3250,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"## Scenario Expectations",
 		"expectation_capabilities: `browser`, `context_compaction`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
+		"domains: `market`, `web_evidence`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
 		"checks: `turn_ended_cleanly`",
 		"required_tools: `web_fetch`, `browser_network_read`",

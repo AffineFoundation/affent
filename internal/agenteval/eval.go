@@ -134,6 +134,7 @@ type RecentSessionSearchRequirement struct {
 type BatchScenario struct {
 	Name                                    string
 	Suites                                  []string
+	Domains                                 []string
 	Prompt                                  string
 	Prompts                                 []string
 	SessionID                               string
@@ -346,6 +347,7 @@ type DebugRecoveryGuide struct {
 type DebugScenarioExpectations struct {
 	CheckNames                              []string                              `json:"check_names,omitempty"`
 	Suites                                  []string                              `json:"suites,omitempty"`
+	Domains                                 []string                              `json:"domains,omitempty"`
 	SessionID                               string                                `json:"session_id,omitempty"`
 	ExecutePlan                             bool                                  `json:"execute_plan,omitempty"`
 	EnableMemory                            bool                                  `json:"enable_memory,omitempty"`
@@ -1677,6 +1679,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 	return DebugScenarioExpectations{
 		CheckNames:                              checkNames,
 		Suites:                                  append([]string(nil), s.Suites...),
+		Domains:                                 append([]string(nil), s.Domains...),
 		SessionID:                               strings.TrimSpace(s.SessionID),
 		ExecutePlan:                             s.ExecutePlan,
 		EnableMemory:                            s.EnableMemory,

@@ -1449,6 +1449,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		},
 		Expectations: &agenteval.DebugScenarioExpectations{
 			Suites:        []string{"long-run"},
+			Domains:       []string{"market"},
 			SessionID:     "memory-writer",
 			EnableMemory:  true,
 			VerifyCommand: "go test ./...",
@@ -1634,6 +1635,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		TurnEndReason:      "max_turns",
 		Expectations: &agenteval.DebugScenarioExpectations{
 			Suites:      []string{"live-web"},
+			Domains:     []string{"longrun_recovery", "web_evidence"},
 			SessionID:   "history-reader",
 			ExecutePlan: true,
 			RequiredTools: []string{
@@ -1783,7 +1785,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		!strings.Contains(out.String(), "debug_manifest=/tmp/affenteval/taostats-rendered/affenteval-debug.json") {
 		t.Fatalf("summary output missing debug brief tag example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
+	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1 expectation_domains=longrun_recovery:1,market:1,web_evidence:1") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "expectation_capability_failure[browser]: scenario=taostats-rendered failure_kinds=missing_command:1,turn_end:1") ||
@@ -2019,6 +2021,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.ExpectationSuites, map[string]int{"long-run": 1, "live-web": 1}) {
 		t.Fatalf("ExpectationSuites = %#v", summary.ExpectationSuites)
+	}
+	if !reflect.DeepEqual(summary.ExpectationDomains, map[string]int{"longrun_recovery": 1, "market": 1, "web_evidence": 1}) {
+		t.Fatalf("ExpectationDomains = %#v", summary.ExpectationDomains)
 	}
 	if !reflect.DeepEqual(summary.ExpectationSourceAccess, map[string]int{"network": 2}) {
 		t.Fatalf("ExpectationSourceAccess = %#v", summary.ExpectationSourceAccess)
@@ -3588,6 +3593,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		},
 		ExpectationScenarios:      2,
 		ExpectationSuites:         map[string]int{"long-run": 1, "live-web": 1},
+		ExpectationDomains:        map[string]int{"bittensor": 1, "web_evidence": 1},
 		ExpectationCapabilities:   map[string]int{"browser": 2, "source_access": 2, "web": 1},
 		ExpectationCapabilityPass: map[string]int{"browser": 1, "source_access": 1},
 		ExpectationCapabilityFail: map[string]int{"browser": 1, "source_access": 1, "web": 1},
@@ -4043,6 +4049,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	expectationSuites, ok := got["expectation_suites"].(map[string]any)
 	if !ok || expectationSuites["long-run"] != float64(1) || expectationSuites["live-web"] != float64(1) {
 		t.Fatalf("expectation_suites = %#v\njson=%s", got["expectation_suites"], out.String())
+	}
+	expectationDomains, ok := got["expectation_domains"].(map[string]any)
+	if !ok || expectationDomains["bittensor"] != float64(1) || expectationDomains["web_evidence"] != float64(1) {
+		t.Fatalf("expectation_domains = %#v\njson=%s", got["expectation_domains"], out.String())
 	}
 	runtimeSurfaceTools, ok := got["runtime_surface_tools"].(map[string]any)
 	if !ok || runtimeSurfaceTools["web_fetch"] != float64(2) || runtimeSurfaceTools["browser_find"] != float64(1) {

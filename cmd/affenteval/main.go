@@ -834,6 +834,7 @@ type batchSummary struct {
 	DebugBriefTagExamples                map[string][]batchDebugBriefTagExample
 	ExpectationScenarios                 int
 	ExpectationSuites                    map[string]int
+	ExpectationDomains                   map[string]int
 	ExpectationCapabilities              map[string]int
 	ExpectationCapabilityPass            map[string]int
 	ExpectationCapabilityFail            map[string]int
@@ -1193,6 +1194,7 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 	exp := *res.Expectations
 	s.ExpectationScenarios++
 	addCountMapValues(&s.ExpectationSuites, exp.Suites)
+	addCountMapValues(&s.ExpectationDomains, exp.Domains)
 	addCountMapValues(&s.ExpectationRequiredTools, expectationRequiredToolNames(exp))
 	for _, req := range exp.RequiredSourceAccess {
 		status := strings.TrimSpace(req.Status)
@@ -1548,6 +1550,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 		if len(s.ExpectationSuites) > 0 {
 			fmt.Fprintf(w, " expectation_suites=%s", formatStringIntCounts(s.ExpectationSuites))
+		}
+		if len(s.ExpectationDomains) > 0 {
+			fmt.Fprintf(w, " expectation_domains=%s", formatStringIntCounts(s.ExpectationDomains))
 		}
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskSources, s.FocusedTaskErrors, s.FocusedTaskIncomplete, s.SubagentCalls, s.SubagentByMode, s.SubagentSources, s.SubagentErrors, s.SubagentIncomplete)
@@ -3310,6 +3315,7 @@ type batchSummaryRecord struct {
 	DebugBriefTagExamples                map[string][]batchDebugBriefTagExample           `json:"debug_brief_tag_examples,omitempty"`
 	ExpectationScenarios                 int                                              `json:"expectation_scenarios,omitempty"`
 	ExpectationSuites                    map[string]int                                   `json:"expectation_suites,omitempty"`
+	ExpectationDomains                   map[string]int                                   `json:"expectation_domains,omitempty"`
 	ExpectationCapabilities              map[string]int                                   `json:"expectation_capabilities,omitempty"`
 	ExpectationCapabilityPassed          map[string]int                                   `json:"expectation_capability_passed,omitempty"`
 	ExpectationCapabilityFailed          map[string]int                                   `json:"expectation_capability_failed,omitempty"`
@@ -3726,6 +3732,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		DebugBriefTagExamples:                cloneBatchDebugBriefTagExamples(s.DebugBriefTagExamples),
 		ExpectationScenarios:                 s.ExpectationScenarios,
 		ExpectationSuites:                    cloneStringIntMap(s.ExpectationSuites),
+		ExpectationDomains:                   cloneStringIntMap(s.ExpectationDomains),
 		ExpectationCapabilities:              cloneStringIntMap(s.ExpectationCapabilities),
 		ExpectationCapabilityPassed:          cloneStringIntMap(s.ExpectationCapabilityPass),
 		ExpectationCapabilityFailed:          cloneStringIntMap(s.ExpectationCapabilityFail),
