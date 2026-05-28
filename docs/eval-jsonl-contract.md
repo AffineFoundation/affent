@@ -680,6 +680,16 @@ Summary records aggregate all scenario records from the same process:
   `min_each_expectation_domain_pass_rate` when a profile must prove not only
   that realistic domains were present, but that each domain stayed above a
   minimum outcome bar.
+  `expectation_domain_metrics` is a map from domain to outcome, cost,
+  stability, and evidence-quality aggregates scoped to that workload domain:
+  scenario counts, pass rate, average duration, average tool calls, average
+  runtime errors, average total tokens, memory-update rate, tool error rate,
+  loop-guard intervention rate, SourceAccess verified/network/discovery-only/
+  dynamic-partial rates, and the raw supporting counts. When a scenario
+  declares multiple domains, its runtime costs and evidence counts are
+  intentionally attributed to each declared domain so dashboards can answer
+  which realistic workload is expensive, unstable, or producing weak source
+  evidence without parsing scenario names.
   `--require-expectation-domain` gates declared workload-domain coverage
   independently from capability coverage, so CI can require at least one
   realistic market, Bittensor, code/PR, web-evidence, or long-run recovery

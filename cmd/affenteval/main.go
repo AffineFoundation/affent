@@ -46,6 +46,54 @@ type expectationDomainFailureExample struct {
 	DebugManifestPath string         `json:"debug_manifest_path,omitempty"`
 }
 
+type expectationDomainRuntimeTotals struct {
+	Scenarios                  int
+	Passed                     int
+	Failed                     int
+	Duration                   time.Duration
+	ToolCalls                  int
+	ToolErrors                 int
+	LoopGuardInterventions     int
+	SourceAccessResults        int
+	SourceAccessVerified       int
+	SourceAccessNetwork        int
+	SourceAccessDiscoveryOnly  int
+	SourceAccessDynamicPartial int
+	MemoryUpdates              int
+	RuntimeErrors              int
+	InputTokens                int
+	OutputTokens               int
+}
+
+type expectationDomainMetrics struct {
+	Scenarios                  int      `json:"scenarios"`
+	Passed                     int      `json:"passed"`
+	Failed                     int      `json:"failed"`
+	PassRate                   float64  `json:"pass_rate"`
+	AvgDurationMS              float64  `json:"avg_duration_ms"`
+	AvgToolCalls               float64  `json:"avg_tool_calls"`
+	AvgRuntimeErrors           float64  `json:"avg_runtime_errors"`
+	AvgTotalTokens             float64  `json:"avg_total_tokens"`
+	MemoryUpdateRate           float64  `json:"memory_update_rate"`
+	ToolErrorRate              *float64 `json:"tool_error_rate,omitempty"`
+	LoopGuardInterventionRate  *float64 `json:"loop_guard_intervention_rate,omitempty"`
+	SourceAccessVerifiedRate   *float64 `json:"source_access_verified_rate,omitempty"`
+	SourceNetworkRate          *float64 `json:"source_network_rate,omitempty"`
+	SourceDiscoveryOnlyRate    *float64 `json:"source_discovery_only_rate,omitempty"`
+	SourceDynamicPartialRate   *float64 `json:"source_dynamic_partial_rate,omitempty"`
+	SourceAccessResults        int      `json:"source_access_results,omitempty"`
+	SourceAccessVerified       int      `json:"source_access_verified,omitempty"`
+	SourceAccessNetwork        int      `json:"source_access_network,omitempty"`
+	SourceAccessDiscoveryOnly  int      `json:"source_access_discovery_only,omitempty"`
+	SourceAccessDynamicPartial int      `json:"source_access_dynamic_partial,omitempty"`
+	ToolCalls                  int      `json:"tool_calls,omitempty"`
+	ToolErrors                 int      `json:"tool_errors,omitempty"`
+	LoopGuardInterventions     int      `json:"loop_guard_interventions,omitempty"`
+	RuntimeErrors              int      `json:"runtime_errors,omitempty"`
+	InputTokens                int      `json:"input_tokens,omitempty"`
+	OutputTokens               int      `json:"output_tokens,omitempty"`
+}
+
 type batchFailureExample struct {
 	Scenario          string `json:"scenario"`
 	Failure           string `json:"failure"`
@@ -878,6 +926,7 @@ type batchSummary struct {
 	ExpectationDomainPass                map[string]int
 	ExpectationDomainFail                map[string]int
 	ExpectationDomainFailureExamples     map[string][]expectationDomainFailureExample
+	ExpectationDomainRuntime             map[string]*expectationDomainRuntimeTotals
 	ExpectationCapabilities              map[string]int
 	ExpectationCapabilityPass            map[string]int
 	ExpectationCapabilityFail            map[string]int
@@ -1238,6 +1287,7 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 	s.ExpectationScenarios++
 	addCountMapValues(&s.ExpectationSuites, exp.Suites)
 	addCountMapValues(&s.ExpectationDomains, exp.Domains)
+	s.addExpectationDomainRuntime(exp.Domains, res)
 	if res.OK {
 		addCountMapValues(&s.ExpectationDomainPass, exp.Domains)
 	} else {
@@ -1259,6 +1309,44 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 	} else {
 		addCountMapValues(&s.ExpectationCapabilityFail, keys)
 		s.addExpectationCapabilityFailureExamples(keys, res)
+	}
+}
+
+func (s *batchSummary) addExpectationDomainRuntime(domains []string, res agenteval.BatchResult) {
+	domains = uniqueSortedStrings(domains)
+	if len(domains) == 0 {
+		return
+	}
+	for _, domain := range domains {
+		if s.ExpectationDomainRuntime == nil {
+			s.ExpectationDomainRuntime = map[string]*expectationDomainRuntimeTotals{}
+		}
+		totals := s.ExpectationDomainRuntime[domain]
+		if totals == nil {
+			totals = &expectationDomainRuntimeTotals{}
+			s.ExpectationDomainRuntime[domain] = totals
+		}
+		totals.Scenarios++
+		if res.OK {
+			totals.Passed++
+		} else {
+			totals.Failed++
+		}
+		totals.Duration += res.Duration
+		totals.ToolCalls += res.ToolCalls
+		totals.ToolErrors += res.ToolStats.ToolErrors
+		totals.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
+		totals.SourceAccessResults += res.ToolStats.SourceAccessResults
+		totals.SourceAccessVerified += res.ToolStats.SourceAccessVerified
+		totals.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
+		totals.SourceAccessDiscoveryOnly += res.ToolStats.SourceAccessDiscoveryOnly
+		totals.SourceAccessDynamicPartial += res.ToolStats.SourceAccessDynamicPartial
+		totals.MemoryUpdates += res.ToolStats.MemoryUpdates
+		for _, count := range res.RuntimeErrorByKind {
+			totals.RuntimeErrors += count
+		}
+		totals.InputTokens += res.Usage.InputTokens
+		totals.OutputTokens += res.Usage.OutputTokens
 	}
 }
 
@@ -3459,6 +3547,7 @@ type batchSummaryRecord struct {
 	ExpectationDomainPassed              map[string]int                                   `json:"expectation_domain_passed,omitempty"`
 	ExpectationDomainFailed              map[string]int                                   `json:"expectation_domain_failed,omitempty"`
 	ExpectationDomainRate                map[string]float64                               `json:"expectation_domain_pass_rate,omitempty"`
+	ExpectationDomainMetrics             map[string]expectationDomainMetrics              `json:"expectation_domain_metrics,omitempty"`
 	ExpectationDomainTotal               *int                                             `json:"expectation_domain_total,omitempty"`
 	ExpectationDomainPassedTotal         *int                                             `json:"expectation_domain_passed_total,omitempty"`
 	ExpectationDomainFailedTotal         *int                                             `json:"expectation_domain_failed_total,omitempty"`
@@ -3885,6 +3974,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ExpectationDomainPassed:              cloneStringIntMap(s.ExpectationDomainPass),
 		ExpectationDomainFailed:              cloneStringIntMap(s.ExpectationDomainFail),
 		ExpectationDomainRate:                expectationDomainPassRates(s.ExpectationDomains, s.ExpectationDomainPass),
+		ExpectationDomainMetrics:             expectationDomainRuntimeMetrics(s.ExpectationDomainRuntime),
 		ExpectationDomainTotal:               optionalInt(expectationDomainTotal, expectationDomainTotal > 0),
 		ExpectationDomainPassedTotal:         optionalInt(expectationDomainPassed, expectationDomainTotal > 0),
 		ExpectationDomainFailedTotal:         optionalInt(expectationDomainTotal-expectationDomainPassed, expectationDomainTotal > 0),
@@ -4032,6 +4122,50 @@ func expectationDomainPassRates(total, passed map[string]int) map[string]float64
 			continue
 		}
 		out[domain] = float64(passed[domain]) / float64(count)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func expectationDomainRuntimeMetrics(totals map[string]*expectationDomainRuntimeTotals) map[string]expectationDomainMetrics {
+	if len(totals) == 0 {
+		return nil
+	}
+	out := make(map[string]expectationDomainMetrics, len(totals))
+	for domain, total := range totals {
+		if total == nil || total.Scenarios <= 0 {
+			continue
+		}
+		out[domain] = expectationDomainMetrics{
+			Scenarios:                  total.Scenarios,
+			Passed:                     total.Passed,
+			Failed:                     total.Failed,
+			PassRate:                   batchRatio(total.Passed, total.Scenarios),
+			AvgDurationMS:              batchAverageInt64(total.Duration.Milliseconds(), total.Scenarios),
+			AvgToolCalls:               batchAverage(total.ToolCalls, total.Scenarios),
+			AvgRuntimeErrors:           batchAverage(total.RuntimeErrors, total.Scenarios),
+			AvgTotalTokens:             batchAverage(total.InputTokens+total.OutputTokens, total.Scenarios),
+			MemoryUpdateRate:           batchRatio(total.MemoryUpdates, total.Scenarios),
+			ToolErrorRate:              batchOptionalRatio(total.ToolErrors, total.ToolCalls),
+			LoopGuardInterventionRate:  batchOptionalRatio(total.LoopGuardInterventions, total.ToolCalls),
+			SourceAccessVerifiedRate:   batchOptionalRatio(total.SourceAccessVerified, total.SourceAccessResults),
+			SourceNetworkRate:          batchOptionalRatio(total.SourceAccessNetwork, total.SourceAccessResults),
+			SourceDiscoveryOnlyRate:    batchOptionalRatio(total.SourceAccessDiscoveryOnly, total.SourceAccessResults),
+			SourceDynamicPartialRate:   batchOptionalRatio(total.SourceAccessDynamicPartial, total.SourceAccessResults),
+			SourceAccessResults:        total.SourceAccessResults,
+			SourceAccessVerified:       total.SourceAccessVerified,
+			SourceAccessNetwork:        total.SourceAccessNetwork,
+			SourceAccessDiscoveryOnly:  total.SourceAccessDiscoveryOnly,
+			SourceAccessDynamicPartial: total.SourceAccessDynamicPartial,
+			ToolCalls:                  total.ToolCalls,
+			ToolErrors:                 total.ToolErrors,
+			LoopGuardInterventions:     total.LoopGuardInterventions,
+			RuntimeErrors:              total.RuntimeErrors,
+			InputTokens:                total.InputTokens,
+			OutputTokens:               total.OutputTokens,
+		}
 	}
 	if len(out) == 0 {
 		return nil

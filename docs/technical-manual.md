@@ -1152,7 +1152,13 @@ suites before pass-rate gates are interpreted. Explicit
 domains. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
-CI or model-comparison failures without stderr.
+CI or model-comparison failures without stderr. JSONL summaries also include
+`expectation_domain_metrics`, which breaks outcome, duration, tool calls,
+runtime errors, token cost, memory-update rate, loop-guard rate, tool error
+rate, and SourceAccess evidence rates down by realistic workload domain. This
+is the primary machine-readable view for answering whether market analysis,
+Bittensor research, code/PR work, web evidence, or long-run recovery is the
+expensive or unstable part of a run.
 The default text summary also prints the key normalized rates used for long-run
 debugging, including pass/completion, average scenario duration, memory update
 coverage, loop-protocol feed coverage, runtime-surface coverage, tool errors,

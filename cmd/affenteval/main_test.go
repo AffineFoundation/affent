@@ -2065,6 +2065,34 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !reflect.DeepEqual(summary.ExpectationDomainFail, map[string]int{"longrun_recovery": 1, "web_evidence": 1}) {
 		t.Fatalf("ExpectationDomainFail = %#v", summary.ExpectationDomainFail)
 	}
+	marketRuntime := summary.ExpectationDomainRuntime["market"]
+	if marketRuntime == nil ||
+		marketRuntime.Scenarios != 1 ||
+		marketRuntime.Passed != 1 ||
+		marketRuntime.ToolCalls != 2 ||
+		marketRuntime.ToolErrors != 0 ||
+		marketRuntime.SourceAccessResults != 2 ||
+		marketRuntime.SourceAccessVerified != 2 ||
+		marketRuntime.SourceAccessNetwork != 2 ||
+		marketRuntime.InputTokens != 20 ||
+		marketRuntime.OutputTokens != 5 {
+		t.Fatalf("market expectation domain runtime = %#v", marketRuntime)
+	}
+	webRuntime := summary.ExpectationDomainRuntime["web_evidence"]
+	if webRuntime == nil ||
+		webRuntime.Scenarios != 1 ||
+		webRuntime.Failed != 1 ||
+		webRuntime.ToolCalls != 3 ||
+		webRuntime.ToolErrors != 1 ||
+		webRuntime.LoopGuardInterventions != 2 ||
+		webRuntime.SourceAccessResults != 2 ||
+		webRuntime.SourceAccessVerified != 1 ||
+		webRuntime.SourceAccessNetwork != 1 ||
+		webRuntime.RuntimeErrors != 3 ||
+		webRuntime.InputTokens != 70 ||
+		webRuntime.OutputTokens != 15 {
+		t.Fatalf("web_evidence expectation domain runtime = %#v", webRuntime)
+	}
 	if !reflect.DeepEqual(summary.ExpectationSourceAccess, map[string]int{"network": 2}) {
 		t.Fatalf("ExpectationSourceAccess = %#v", summary.ExpectationSourceAccess)
 	}
@@ -3646,6 +3674,34 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				TimelinePath:   "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
 			}},
 		},
+		ExpectationDomainRuntime: map[string]*expectationDomainRuntimeTotals{
+			"bittensor": {
+				Scenarios:              1,
+				Passed:                 1,
+				Duration:               100 * time.Millisecond,
+				ToolCalls:              2,
+				SourceAccessResults:    2,
+				SourceAccessVerified:   2,
+				SourceAccessNetwork:    2,
+				LoopGuardInterventions: 1,
+				InputTokens:            20,
+				OutputTokens:           5,
+			},
+			"web_evidence": {
+				Scenarios:              1,
+				Failed:                 1,
+				Duration:               250 * time.Millisecond,
+				ToolCalls:              3,
+				ToolErrors:             1,
+				LoopGuardInterventions: 2,
+				SourceAccessResults:    2,
+				SourceAccessVerified:   1,
+				SourceAccessNetwork:    1,
+				RuntimeErrors:          3,
+				InputTokens:            70,
+				OutputTokens:           15,
+			},
+		},
 		ExpectationCapabilities:   map[string]int{"browser": 2, "source_access": 2, "web": 1},
 		ExpectationCapabilityPass: map[string]int{"browser": 1, "source_access": 1},
 		ExpectationCapabilityFail: map[string]int{"browser": 1, "source_access": 1, "web": 1},
@@ -4131,6 +4187,34 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			got["expectation_domain_pass_rate_total"],
 			out.String(),
 		)
+	}
+	expectationDomainMetrics, ok := got["expectation_domain_metrics"].(map[string]any)
+	if !ok {
+		t.Fatalf("expectation_domain_metrics = %#v\njson=%s", got["expectation_domain_metrics"], out.String())
+	}
+	bittensorMetrics, ok := expectationDomainMetrics["bittensor"].(map[string]any)
+	if !ok ||
+		bittensorMetrics["scenarios"] != float64(1) ||
+		bittensorMetrics["passed"] != float64(1) ||
+		bittensorMetrics["pass_rate"] != float64(1) ||
+		bittensorMetrics["avg_tool_calls"] != float64(2) ||
+		bittensorMetrics["avg_total_tokens"] != float64(25) ||
+		bittensorMetrics["source_access_verified_rate"] != float64(1) ||
+		bittensorMetrics["source_network_rate"] != float64(1) ||
+		bittensorMetrics["loop_guard_intervention_rate"] != float64(0.5) {
+		t.Fatalf("bittensor expectation domain metrics = %#v\njson=%s", expectationDomainMetrics["bittensor"], out.String())
+	}
+	webEvidenceMetrics, ok := expectationDomainMetrics["web_evidence"].(map[string]any)
+	if !ok ||
+		webEvidenceMetrics["scenarios"] != float64(1) ||
+		webEvidenceMetrics["failed"] != float64(1) ||
+		webEvidenceMetrics["pass_rate"] != float64(0) ||
+		webEvidenceMetrics["avg_runtime_errors"] != float64(3) ||
+		webEvidenceMetrics["avg_total_tokens"] != float64(85) ||
+		webEvidenceMetrics["tool_error_rate"] != float64(1.0/3.0) ||
+		webEvidenceMetrics["source_access_verified_rate"] != float64(0.5) ||
+		webEvidenceMetrics["source_network_rate"] != float64(0.5) {
+		t.Fatalf("web_evidence expectation domain metrics = %#v\njson=%s", expectationDomainMetrics["web_evidence"], out.String())
 	}
 	expectationDomainFailureExamples, ok := got["expectation_domain_failure_examples"].(map[string]any)
 	if !ok {
