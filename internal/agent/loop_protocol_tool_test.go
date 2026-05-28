@@ -501,6 +501,22 @@ func TestLoopProtocolToolRejectsActivationWithoutStatusFailureKind(t *testing.T)
 	}
 }
 
+func TestLoopProtocolFailureAlwaysIncludesNextGuidance(t *testing.T) {
+	err := loopProtocolFailure("activation validation failed", loopProtocolActivationInvalidFailureKind)
+	if err == nil ||
+		!strings.Contains(err.Error(), "activation validation failed") ||
+		!strings.Contains(err.Error(), "Next:") ||
+		!strings.Contains(err.Error(), "retry loop_protocol") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_invalid") {
+		t.Fatalf("loopProtocolFailure without next guidance = %v", err)
+	}
+
+	err = loopProtocolFailure("activation validation failed\nNext: ask one concise calibration question", loopProtocolActivationUnreadyFailureKind)
+	if err == nil || strings.Count(err.Error(), "Next:") != 1 || !strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_unready") {
+		t.Fatalf("loopProtocolFailure duplicated or lost next guidance = %v", err)
+	}
+}
+
 func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 	reg := NewRegistry()
 	RegisterBuiltins(reg, BuiltinDeps{

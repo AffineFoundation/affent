@@ -278,6 +278,9 @@ func loopProtocolFailure(message, kind string) error {
 	if message == "" {
 		message = "loop protocol operation failed"
 	}
+	if !strings.Contains(message, "Next:") {
+		message += "\nNext: inspect the saved loop protocol state, correct the failing input, then retry loop_protocol with the smallest necessary action."
+	}
 	kind = strings.TrimSpace(kind)
 	if kind == "" {
 		return errors.New(message)
