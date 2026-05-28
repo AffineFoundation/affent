@@ -5,11 +5,21 @@ export function SessionPlanPanel({
   summary,
   loading = false,
   error,
+  executeBusy = false,
+  runRemainingActive = false,
+  onExecuteCurrentStep,
+  onRunRemaining,
+  onStopRunRemaining,
 }: {
   plan?: unknown;
   summary?: SessionPlanSummary;
   loading?: boolean;
   error?: string;
+  executeBusy?: boolean;
+  runRemainingActive?: boolean;
+  onExecuteCurrentStep?: () => Promise<void> | void;
+  onRunRemaining?: () => Promise<void> | void;
+  onStopRunRemaining?: () => void;
 }) {
   if (!summary && !loading && !error) return null;
   const steps = normalizedSteps(plan);
@@ -20,6 +30,7 @@ export function SessionPlanPanel({
       ? "Loading plan"
       : "Plan unavailable";
   const detail = planDetail(summary, steps.length);
+  const canExecute = !!summary && summary.active && !summary.done && !summary.blocked && !loading && !error;
 
   return (
     <details className="session-plan-panel" data-testid="session-plan-panel" open={open}>
@@ -29,6 +40,24 @@ export function SessionPlanPanel({
         <span>{detail}</span>
       </summary>
       <div className="session-plan-body">
+        {canExecute && (onExecuteCurrentStep || onRunRemaining || runRemainingActive) ? (
+          <div className="session-plan-actions" data-testid="session-plan-actions">
+            {onExecuteCurrentStep ? (
+              <button type="button" className="ghost-action" disabled={executeBusy || runRemainingActive} onClick={() => void onExecuteCurrentStep()}>
+                Run current step
+              </button>
+            ) : null}
+            {runRemainingActive ? (
+              <button type="button" className="ghost-action" onClick={onStopRunRemaining}>
+                Stop after this step
+              </button>
+            ) : onRunRemaining ? (
+              <button type="button" className="ghost-action primary-run-action" disabled={executeBusy} onClick={() => void onRunRemaining()}>
+                Run remaining steps
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {loading ? <div className="session-plan-empty">Loading plan...</div> : null}
         {!loading && error ? (
           <div className="session-plan-empty error" role="alert">

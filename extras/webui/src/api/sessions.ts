@@ -467,6 +467,7 @@ export interface SessionCreateRequest {
 export interface SessionMessageRequest {
   content: string;
   display_text?: string;
+  mode?: "normal" | "plan_only" | "execute_plan";
 }
 
 export interface SessionMessageResponse {

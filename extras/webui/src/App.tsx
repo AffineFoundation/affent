@@ -83,6 +83,7 @@ import { buildWorkbenchAttachment, buildWorkbenchContextUsage } from "./view/wor
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
 import { buildSessionPlanFromToolResults } from "./view/sessionPlan";
+import { decidePlanRunContinuation, nextIssuedPlanRunState, type PlanRunState } from "./view/planRun";
 import {
   buildAutomationContext,
   shouldShowLoopContext,
@@ -183,6 +184,7 @@ export function App() {
   const [accountSettingsBusy, setAccountSettingsBusy] = useState<"env" | "ssh" | undefined>();
   const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
   const [planState, setPlanState] = useState<PlanState>({ state: "idle" });
+  const [planRunState, setPlanRunState] = useState<PlanRunState | undefined>();
   const [loopProtocolState, setLoopProtocolState] = useState<LoopProtocolState>({ state: "idle" });
   const [scheduleState, setScheduleState] = useState<ScheduleState>({ state: "idle" });
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | undefined>();
@@ -301,6 +303,7 @@ export function App() {
   const planPanelPlan = planState.state === "ready" ? planState.plan : derivedPlan?.plan;
   const planPanelLoading = planState.state === "loading" && !derivedPlan;
   const planPanelError = planState.state === "error" && !derivedPlan ? planState.error : undefined;
+  const planRunActive = !!planRunState && planRunState.sessionId === selectedSessionId;
   const capabilityView = useMemo(
     () => buildRuntimeCapabilityView(selectedSession?.capabilities, { selectedSessionId }),
     [selectedSession?.capabilities, selectedSessionId],
@@ -492,6 +495,7 @@ export function App() {
   useEffect(() => {
     setLivePlanSummary(undefined);
     setPlanState({ state: "idle" });
+    setPlanRunState(undefined);
     planFetchKeyRef.current = "";
     planFetchInFlightKeyRef.current = "";
   }, [selectedSessionId]);
@@ -554,6 +558,44 @@ export function App() {
       });
     return () => ac.abort();
   }, [client, demoActive, planMutationCount, selectedSession?.has_plan, selectedSession?.plan_summary?.label, selectedSessionId]);
+
+  useEffect(() => {
+    const decision = decidePlanRunContinuation({
+      state: planRunState,
+      sessionId: selectedSessionId,
+      busy: actionBusy,
+      sessionRunning: session.status === "running",
+      hasPendingMessage: !!pendingMessage,
+      planLoading: planState.state === "loading",
+      planMutationCount,
+      fetchedPlanKey: planFetchKeyRef.current,
+      summary: planPanelSummary,
+    });
+    if (decision.action === "idle" || decision.action === "wait") return;
+    if (decision.action === "clear") {
+      setPlanRunState(undefined);
+      return;
+    }
+    if (decision.action === "pause" || decision.action === "limit") {
+      setPlanRunState(undefined);
+      setStatus((current) => ({ ...current, detail: decision.detail }));
+      return;
+    }
+    void handleExecutePlanStep({ runRemaining: true });
+  }, [
+    actionBusy,
+    pendingMessage,
+    planPanelSummary?.active,
+    planPanelSummary?.blocked,
+    planPanelSummary?.completed_steps,
+    planPanelSummary?.current_step_index,
+    planPanelSummary?.done,
+    planMutationCount,
+    planRunState,
+    planState.state,
+    selectedSessionId,
+    session.status,
+  ]);
 
   const handleReadSkill = useCallback(
     async (name: string): Promise<SessionSkillInfo> => {
@@ -1292,6 +1334,62 @@ export function App() {
     await handleSend(content);
   }
 
+  async function handleExecutePlanStep(opts: { runRemaining?: boolean } = {}) {
+    if (!selectedSessionId || actionBusy || session.status === "running" || pendingMessage) return;
+    const summary = planPanelSummary;
+    const stepIndex = summary?.current_step_index ?? 0;
+    const displayText = stepIndex > 0 ? `Run plan step ${stepIndex}` : "Run plan step";
+    const content = "Proceed with the active persisted plan.";
+    const maxSteps = Math.max(summary?.total_steps ?? 1, 1) + 2;
+    sendInFlightRef.current = true;
+    sendFailedRef.current = false;
+    setPendingMessage({ text: content, displayText, kind: "task" });
+    setActionBusy(true);
+    if (opts.runRemaining) {
+      setPlanRunState((current) => nextIssuedPlanRunState({
+        current,
+        sessionId: selectedSessionId,
+        summary,
+        stepIndex,
+        maxSteps,
+        planMutationCount,
+      }));
+    }
+    try {
+      await sendSessionMessage(client, selectedSessionId, {
+        content,
+        display_text: displayText,
+        mode: "execute_plan",
+      });
+      sendInFlightRef.current = false;
+      markSessionLive(selectedSessionId, displayText);
+      const hasOpenStream = streamSessionIdRef.current === selectedSessionId && !streamClosedRef.current;
+      if (!hasOpenStream) {
+        const reconciled = await loadHistory(selectedSessionId);
+        releaseSettledTurn(reconciled.session, displayText);
+        setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
+      } else {
+        setStatus((current) => ({ ...current, state: "live", label: opts.runRemaining ? "Running plan" : "Running" }));
+      }
+    } catch (err) {
+      sendInFlightRef.current = false;
+      sendFailedRef.current = true;
+      if (opts.runRemaining) setPlanRunState(undefined);
+      setStatus({ state: "error", label: "Plan step failed", detail: formatError(err) });
+      setPendingMessage(undefined);
+      setActionBusy(false);
+      throw err;
+    }
+  }
+
+  function handleStopPlanRun() {
+    setPlanRunState(undefined);
+    setStatus((current) => ({
+      ...current,
+      detail: session.status === "running" ? "will stop after this plan step" : "plan run stopped",
+    }));
+  }
+
   async function handleOpenArtifact(path: string) {
     if (!selectedSessionId) return;
     setArtifact({ state: "loading", path });
@@ -1727,6 +1825,11 @@ export function App() {
                   plan={planPanelPlan}
                   loading={planPanelLoading}
                   error={planPanelError}
+                  executeBusy={actionBusy || session.status === "running" || !!pendingMessage}
+                  runRemainingActive={planRunActive}
+                  onExecuteCurrentStep={() => handleExecutePlanStep()}
+                  onRunRemaining={() => handleExecutePlanStep({ runRemaining: true })}
+                  onStopRunRemaining={handleStopPlanRun}
                 />
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>

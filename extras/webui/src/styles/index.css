@@ -1978,6 +1978,13 @@ button.workbench-context-runtime-item:focus-visible {
   padding: 0 9px 9px;
 }
 
+.session-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
 .session-loop-panel,
 .session-schedule-panel {
   background: rgba(248, 250, 252, 0.52);
