@@ -2,6 +2,7 @@ package agenteval
 
 import (
 	"testing"
+	"time"
 
 	"github.com/affinefoundation/affent/internal/sse"
 )
@@ -78,6 +79,82 @@ func TestBuildDebugBriefTagsBrowserLaunchFailure(t *testing.T) {
 		!stringSliceContains(brief.Tags, "runtime_error") ||
 		!stringSliceContains(brief.Tags, "runtime_error:browser_launch_failed") {
 		t.Fatalf("browser launch failure debug item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
+func TestBuildDebugBriefClassifiesVerifierFailures(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: false,
+		Verifier: VerifierResult{
+			Command:            "go test ./...",
+			Ran:                true,
+			OK:                 false,
+			ExitCode:           1,
+			Duration:           2500 * time.Millisecond,
+			OutputBytes:        4096,
+			OutputTruncated:    true,
+			OutputOmittedBytes: 2048,
+			OutputCapBytes:     2048,
+		},
+	})
+	item := debugBriefItemByKind(brief, "verifier")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "verifier command failed; inspect verifier result before trusting code-task output" ||
+		item.Counts["ran"] != 1 ||
+		item.Counts["exit_code"] != 1 ||
+		item.Counts["duration_ms"] != 2500 ||
+		item.Counts["output_bytes"] != 4096 ||
+		item.Counts["output_truncated"] != 1 ||
+		item.Counts["output_omitted_bytes"] != 2048 ||
+		item.Counts["output_cap_bytes"] != 2048 ||
+		!stringSliceContains(item.Inspect, "verifier") ||
+		!stringSliceContains(item.Inspect, "failures") ||
+		!stringSliceContains(brief.Tags, "verifier") ||
+		!stringSliceContains(brief.Tags, "verifier:failed") ||
+		!stringSliceContains(brief.Tags, "verifier:output_truncated") {
+		t.Fatalf("verifier failure item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: false,
+		Verifier: VerifierResult{
+			Command:  "go test ./...",
+			Ran:      true,
+			OK:       false,
+			ExitCode: -1,
+		},
+	})
+	item = debugBriefItemByKind(brief, "verifier")
+	if item == nil ||
+		item.Counts["abnormal_exit"] != 1 ||
+		!stringSliceContains(brief.Tags, "verifier:abnormal") ||
+		!stringSliceContains(brief.Tags, "verifier:failed") {
+		t.Fatalf("abnormal verifier item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK:       false,
+		Verifier: VerifierResult{Command: "go test ./..."},
+	})
+	item = debugBriefItemByKind(brief, "verifier")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "verifier command was configured but did not run; inspect runtime failure before trusting code-task outcome" ||
+		!stringSliceContains(brief.Tags, "verifier:not_run") {
+		t.Fatalf("not-run verifier item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		Verifier: VerifierResult{
+			Command:  "go test ./...",
+			Ran:      true,
+			OK:       true,
+			ExitCode: 0,
+		},
+	}); clean != nil {
+		t.Fatalf("clean verifier pass should not emit debug brief: %+v", clean)
 	}
 }
 

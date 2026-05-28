@@ -42,6 +42,49 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if res.TurnEndReason != "" && res.TurnEndReason != "completed" {
 		add("turn_end", "fail", fmt.Sprintf("turn ended with reason %q", res.TurnEndReason), []string{"final_text", "tool_timeline"}, map[string]int{res.TurnEndReason: 1}, "turn_end:"+res.TurnEndReason)
 	}
+	if strings.TrimSpace(res.Verifier.Command) != "" || res.Verifier.Ran {
+		tags := []string{"verifier"}
+		counts := map[string]int{
+			"duration_ms":          int(res.Verifier.Duration.Milliseconds()),
+			"output_bytes":         res.Verifier.OutputBytes,
+			"output_omitted_bytes": res.Verifier.OutputOmittedBytes,
+			"output_cap_bytes":     res.Verifier.OutputCapBytes,
+		}
+		severity := "info"
+		message := "verifier command ran; inspect verifier status when comparing code-task regressions"
+		emit := false
+		if res.Verifier.Ran {
+			counts["ran"] = 1
+		} else {
+			severity = "warn"
+			message = "verifier command was configured but did not run; inspect runtime failure before trusting code-task outcome"
+			tags = append(tags, "verifier:not_run")
+			emit = true
+		}
+		if res.Verifier.OK {
+			counts["ok"] = 1
+		} else if res.Verifier.Ran {
+			severity = "warn"
+			message = "verifier command failed; inspect verifier result before trusting code-task output"
+			tags = append(tags, "verifier:failed")
+			emit = true
+		}
+		if res.Verifier.ExitCode > 0 {
+			counts["exit_code"] = res.Verifier.ExitCode
+		} else if res.Verifier.Ran && res.Verifier.ExitCode < 0 {
+			counts["abnormal_exit"] = 1
+			tags = append(tags, "verifier:abnormal")
+			emit = true
+		}
+		if res.Verifier.OutputTruncated {
+			counts["output_truncated"] = 1
+			tags = append(tags, "verifier:output_truncated")
+			emit = true
+		}
+		if emit {
+			add("verifier", severity, message, []string{"verifier", "failures", "timeline"}, counts, tags...)
+		}
+	}
 	if counts := filteredPositiveCounts(res.ToolStats.ToolFailureByKind); len(counts) > 0 {
 		tags := []string{"tool_failure"}
 		for kind := range counts {

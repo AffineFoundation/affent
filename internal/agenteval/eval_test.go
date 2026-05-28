@@ -2672,6 +2672,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.DebugBrief.Tags, "memory_update:replace") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "context_compaction:reactive") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "browser_network:refs") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "verifier:failed") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "verifier:output_truncated") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "truncation") {
 		t.Fatalf("manifest debug brief tags = %+v", manifest.DebugBrief.Tags)
 	}

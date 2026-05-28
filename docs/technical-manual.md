@@ -1215,7 +1215,10 @@ turn-end/verifier/browser/memory/plan regression to the retained trace or
 timeline. The per-family expectation gate can fail a run when one capability
 family regresses even if the aggregate expectation pass rate is still
 acceptable. JSONL summary records also aggregate debug brief tags as
-`debug_brief_by_tag` for batch triage. Tool result truncation and model-context
+`debug_brief_by_tag` for batch triage. Verifier failures, abnormal verifier
+exits, configured-but-not-run verifiers, and truncated verifier output are
+tagged separately so code/PR batches can be grouped without opening each
+retained timeline. Tool result truncation and model-context
 trimming are split by tags such as `truncation:missing_artifact` and
 `truncation:tool_context`, so long-run regressions can separate lost raw output
 from output that existed but was shortened before re-entering the model.

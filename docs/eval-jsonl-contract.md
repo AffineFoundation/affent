@@ -220,6 +220,8 @@ Scenario records describe one eval case:
   `delegation_error:focused_task`, `plan_error`, `plan:unfinished`,
   `context_compaction:reactive`,
   `context_compaction:summary_missing`, `context_compaction:summary_empty`,
+  `verifier:failed`, `verifier:not_run`, `verifier:abnormal`,
+  `verifier:output_truncated`,
   `truncation`, `truncation:tool_context`, and
   `truncation:missing_artifact`, plus ordered `items` with a severity, message,
   inspect targets, and relevant counts. This is the compact "what to inspect
@@ -577,7 +579,10 @@ Summary records aggregate all scenario records from the same process:
   `context_injection_estimated_tokens`, plus bounded
   `context_injection_examples`.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
-  emitted each machine-readable triage tag.
+  emitted each machine-readable triage tag. Verifier tags such as
+  `verifier:failed`, `verifier:not_run`, `verifier:abnormal`, and
+  `verifier:output_truncated` let code/PR batches separate implementation or
+  test failures from browser, memory, plan, context, or tool-call regressions.
 - Expectation coverage totals:
   `expectation_scenarios` counts scenarios that carried declarative
   expectations; `expectation_suites` counts suite markers; `expectation_required_tools`
