@@ -573,9 +573,13 @@ type LoopDecision struct {
 	Reason         string `json:"reason,omitempty"`
 	RequiredAction string `json:"required_action,omitempty"`
 	TokenBudget    int    `json:"token_budget,omitempty"`
-	BudgetBytes    int    `json:"budget_bytes,omitempty"`
-	TurnID         string `json:"turn_id,omitempty"`
-	DecisionID     string `json:"decision_id,omitempty"`
+	// Input-token budget decisions preserve these raw fields so eval output
+	// can diagnose budget pressure without parsing human-readable reason text.
+	ObservedInputTokens  int    `json:"observed_input_tokens,omitempty"`
+	ProjectedInputTokens int    `json:"projected_input_tokens,omitempty"`
+	BudgetBytes          int    `json:"budget_bytes,omitempty"`
+	TurnID               string `json:"turn_id,omitempty"`
+	DecisionID           string `json:"decision_id,omitempty"`
 }
 
 type LoopDecisionStats struct {
@@ -1678,16 +1682,18 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, LoopDecision{
-			Kind:           decision.Kind,
-			Decision:       decision.Decision,
-			Trigger:        decision.Trigger,
-			Confidence:     decision.Confidence,
-			Reason:         compactOneLine(decision.Reason, 260),
-			RequiredAction: compactOneLine(decision.RequiredAction, 260),
-			TokenBudget:    decision.TokenBudget,
-			BudgetBytes:    decision.BudgetBytes,
-			TurnID:         decision.TurnID,
-			DecisionID:     decision.DecisionID,
+			Kind:                 decision.Kind,
+			Decision:             decision.Decision,
+			Trigger:              decision.Trigger,
+			Confidence:           decision.Confidence,
+			Reason:               compactOneLine(decision.Reason, 260),
+			RequiredAction:       compactOneLine(decision.RequiredAction, 260),
+			TokenBudget:          decision.TokenBudget,
+			ObservedInputTokens:  decision.ObservedInputTokens,
+			ProjectedInputTokens: decision.ProjectedInputTokens,
+			BudgetBytes:          decision.BudgetBytes,
+			TurnID:               decision.TurnID,
+			DecisionID:           decision.DecisionID,
 		})
 	}
 	return stats

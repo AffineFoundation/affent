@@ -251,16 +251,18 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			return false, nil
 		}
 		t.LoopDecisions = append(t.LoopDecisions, LoopDecision{
-			Kind:           p.Kind,
-			Decision:       p.Decision,
-			Trigger:        p.Trigger,
-			Confidence:     p.Confidence,
-			Reason:         p.Reason,
-			RequiredAction: p.RequiredAction,
-			TokenBudget:    p.TokenBudget,
-			BudgetBytes:    p.BudgetBytes,
-			TurnID:         p.TurnID,
-			DecisionID:     p.DecisionID,
+			Kind:                 p.Kind,
+			Decision:             p.Decision,
+			Trigger:              p.Trigger,
+			Confidence:           p.Confidence,
+			Reason:               p.Reason,
+			RequiredAction:       p.RequiredAction,
+			TokenBudget:          p.TokenBudget,
+			ObservedInputTokens:  p.ObservedInputTokens,
+			ProjectedInputTokens: p.ProjectedInputTokens,
+			BudgetBytes:          p.BudgetBytes,
+			TurnID:               p.TurnID,
+			DecisionID:           p.DecisionID,
 		})
 	case sse.TypeLoopProtocolFeed:
 		var p sse.LoopProtocolFeedPayload

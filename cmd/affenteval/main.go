@@ -2985,6 +2985,9 @@ func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecisio
 		if ex.RequiredAction != "" {
 			fmt.Fprintf(w, " action=%s", ex.RequiredAction)
 		}
+		if ex.TokenBudget > 0 || ex.ObservedInputTokens > 0 || ex.ProjectedInputTokens > 0 {
+			fmt.Fprintf(w, " input_budget=%d observed_input=%d projected_input=%d", ex.TokenBudget, ex.ObservedInputTokens, ex.ProjectedInputTokens)
+		}
 		fmt.Fprintln(w)
 	}
 }
