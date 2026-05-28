@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { manualRunDraft, runCommandDraft, runCommandMeta, runCommandRequest, runFocusCommand, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunFocus, type SessionRunView } from "../view/sessionRun";
+import { manualRunDraft, runCommandDraft, runCommandMeta, runCommandRequest, runFocusCommand, runReviewFacts, runReviewFocus, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunFocus, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 
 export type RunCommandAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -27,6 +27,8 @@ export function SessionRunPanel({
   const [filter, setFilter] = useState<RunFilter>("all");
   const trimmedQuery = query.trim();
   const stats = runStats(run.commands);
+  const review = runReviewFocus(run.commands);
+  const reviewFacts = runReviewFacts(run.commands);
   const filteredCommands = filter === "all" ? run.commands : run.commands.filter((command) => command.status === filter);
   const visibleCommands = trimmedQuery ? filteredCommands.filter((command) => runMatchesQuery(command, trimmedQuery)) : filteredCommands;
   const focus = runFocusCommand(visibleCommands);
@@ -57,6 +59,20 @@ export function SessionRunPanel({
             <span>Commands</span>
             <strong>{run.summary}</strong>
             <small>{run.detail || "No shell commands recorded."}</small>
+          </div>
+          <div className="session-run-review" data-tone={review.tone ?? "neutral"} data-testid="session-run-review">
+            <span>{review.label}</span>
+            <strong>{review.title}</strong>
+            <small>{review.detail}</small>
+          </div>
+          <div className="session-run-facts" aria-label="Run review facts">
+            {reviewFacts.map((fact) => (
+              <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+                <small>{fact.label}</small>
+                <strong>{fact.value}</strong>
+                <b>{fact.detail}</b>
+              </span>
+            ))}
           </div>
           <div className="session-run-filterbar" role="group" aria-label="Run filters">
             <RunFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />

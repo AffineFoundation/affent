@@ -18,6 +18,11 @@ describe("SessionRunPanel", () => {
     expect(panel).toHaveTextContent("2 commands");
     expect(screen.getByLabelText("Run summary")).toHaveTextContent("Failed");
     expect(screen.getByLabelText("Run summary")).toHaveTextContent("Passed");
+    expect(screen.getByTestId("session-run-review")).toHaveTextContent("Unresolved failure");
+    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("Failures");
+    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("unresolved");
+    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("Output");
+    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("1");
     expect(screen.getByLabelText("Search commands")).toBeInTheDocument();
     const focus = screen.getByTestId("session-run-focus");
     expect(focus).toHaveTextContent("Recovery needed");
@@ -132,6 +137,27 @@ describe("SessionRunPanel", () => {
     expect(focus).toHaveTextContent("Exit");
     expect(focus).toHaveTextContent("0");
     expect(screen.queryByTestId("session-run-list")).toBeNull();
+  });
+
+  it("treats earlier failures as recovered when a later command passes", () => {
+    render(
+      <SessionRunPanel
+        defaultOpen
+        run={{
+          ...run,
+          commands: [
+            { ...run.commands[0], turnNumber: 1, sequence: 1 },
+            { ...run.commands[1], turnNumber: 2, sequence: 2 },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId("session-run-review")).toHaveTextContent("Recovered");
+    expect(screen.getByTestId("session-run-review")).toHaveTextContent("1 earlier failure followed by a pass");
+    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("covered by later pass");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm run build");
   });
 });
 

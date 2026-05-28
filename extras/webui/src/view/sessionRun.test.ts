@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runFocusCommand } from "./sessionRun";
+import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runFocusCommand, runReviewFacts, runReviewFocus } from "./sessionRun";
 
 describe("buildSessionRun", () => {
   it("summarizes shell commands with failure recovery and artifacts", () => {
@@ -41,6 +41,15 @@ describe("buildSessionRun", () => {
       tone: "error",
       command: expect.objectContaining({ command: "npm test -- checkout.spec.ts" }),
     });
+    expect(runReviewFocus(run.commands)).toMatchObject({
+      label: "Unresolved failure",
+      tone: "danger",
+      title: "npm test -- checkout.spec.ts",
+    });
+    expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Failures", value: "1", detail: "unresolved", tone: "danger" }),
+      expect.objectContaining({ label: "Output", value: "1", detail: "artifact captured", tone: "ok" }),
+    ]));
     expect(runCommandEvidenceText(run.commands[0])).toBe(
       [
         "Run evidence for npm test -- checkout.spec.ts",
@@ -153,5 +162,63 @@ describe("buildSessionRun", () => {
       "npm run build",
       "npm run lint",
     ]);
+  });
+
+  it("does not keep an older failed command as focus after a later command passes", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "fail", tool: "shell", args: { command: "npm test" } } },
+      { id: 3, type: "tool.result", data: { call_id: "fail", exit_code: 1, result_summary: "tests failed", result: "tests failed" } },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "pass", tool: "shell", args: { command: "npm run build" } } },
+      { id: 7, type: "tool.result", data: { call_id: "pass", exit_code: 0, result_summary: "built", result: "built" } },
+    ]);
+
+    const run = buildSessionRun(session);
+    expect(runFocusCommand(run.commands)).toMatchObject({
+      label: "Latest verification",
+      tone: "success",
+      command: expect.objectContaining({ command: "npm run build" }),
+    });
+    expect(runReviewFocus(run.commands)).toMatchObject({
+      label: "Recovered",
+      tone: "ok",
+      title: "1 earlier failure followed by a pass",
+    });
+    expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Failures", value: "1", detail: "covered by later pass", tone: "ok" }),
+      expect.objectContaining({ label: "Latest", value: "passed", detail: "turn 2", tone: "ok" }),
+    ]));
+  });
+
+  it("keeps a newer failed command unresolved after an earlier pass", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "pass", tool: "shell", args: { command: "npm run build" } } },
+      { id: 3, type: "tool.result", data: { call_id: "pass", exit_code: 0, result_summary: "built", result: "built" } },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "fail", tool: "shell", args: { command: "npm test" } } },
+      { id: 7, type: "tool.result", data: { call_id: "fail", exit_code: 1, result_summary: "tests failed", result: "tests failed" } },
+    ]);
+
+    const run = buildSessionRun(session);
+
+    expect(runFocusCommand(run.commands)).toMatchObject({
+      label: "Recovery needed",
+      tone: "error",
+      command: expect.objectContaining({ command: "npm test", status: "failed", turnNumber: 2 }),
+    });
+    expect(runReviewFocus(run.commands)).toMatchObject({
+      label: "Unresolved failure",
+      title: "npm test",
+      detail: "tests failed",
+      tone: "danger",
+    });
+    expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Failures", value: "1", detail: "unresolved", tone: "danger" }),
+      expect.objectContaining({ label: "Latest", value: "failed", detail: "turn 2", tone: "danger" }),
+    ]));
   });
 });

@@ -8,6 +8,7 @@ export interface SessionRunCommand {
   cwd?: string;
   status: SessionRunStatus;
   turnNumber: number;
+  sequence?: number;
   exitCode?: number;
   durationMs?: number;
   detail?: string;
@@ -35,6 +36,20 @@ export interface SessionRunFocus {
   tone: "error" | "warning" | "success";
 }
 
+export interface SessionRunReview {
+  label: string;
+  title: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
+export interface SessionRunFact {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
 interface SessionRunCommandInternal extends SessionRunCommand {
   sequence: number;
 }
@@ -55,7 +70,7 @@ export function buildSessionRun(session: SessionState): SessionRunView {
   });
   const sorted = commands
     .sort((a, b) => commandPriority(a) - commandPriority(b) || b.turnNumber - a.turnNumber || b.sequence - a.sequence)
-    .map(({ sequence: _sequence, ...command }) => command);
+    .map((command) => command);
   const failed = sorted.filter((command) => command.status === "failed").length;
   const running = sorted.filter((command) => command.status === "running").length;
   const passed = sorted.filter((command) => command.status === "passed").length;
@@ -111,12 +126,12 @@ export function runCommandRequest(command: SessionRunCommand): RunCommandExecuti
 }
 
 export function runFocusCommand(commands: readonly SessionRunCommand[]): SessionRunFocus | undefined {
-  const failed = commands.find((command) => command.status === "failed");
-  if (failed) {
+  const unresolved = latestUnrecoveredFailedCommand(commands);
+  if (unresolved) {
     return {
-      command: failed,
+      command: unresolved,
       label: "Recovery needed",
-      detail: failed.next ?? failed.detail ?? "This command failed and needs review before trusting the run.",
+      detail: unresolved.next ?? unresolved.detail ?? "This command failed and needs review before trusting the run.",
       tone: "error",
     };
   }
@@ -141,6 +156,100 @@ export function runFocusCommand(commands: readonly SessionRunCommand[]): Session
   return undefined;
 }
 
+export function runReviewFocus(commands: readonly SessionRunCommand[]): SessionRunReview {
+  if (commands.length === 0) {
+    return {
+      label: "Idle",
+      title: "No commands recorded",
+      detail: "Shell commands and manual reruns will appear here.",
+      tone: "neutral",
+    };
+  }
+  const running = latestCommand(commands, (command) => command.status === "running");
+  if (running) {
+    return {
+      label: "Running",
+      title: commandLabel(running.command),
+      detail: running.cwd ? `Cwd ${running.cwd}` : "Command is still running.",
+      tone: "attention",
+    };
+  }
+  const unresolved = latestUnrecoveredFailedCommand(commands);
+  if (unresolved) {
+    return {
+      label: "Unresolved failure",
+      title: commandLabel(unresolved.command),
+      detail: unresolved.next ?? unresolved.detail ?? "Rerun or inspect output before trusting this session.",
+      tone: "danger",
+    };
+  }
+  const failedCount = commands.filter((command) => command.status === "failed").length;
+  const latestPassed = latestCommand(commands, (command) => command.status === "passed");
+  if (failedCount > 0 && latestPassed) {
+    return {
+      label: "Recovered",
+      title: `${failedCount} earlier ${plural("failure", failedCount)} followed by a pass`,
+      detail: `Latest passing command: ${commandLabel(latestPassed.command)}`,
+      tone: "ok",
+    };
+  }
+  if (latestPassed) {
+    return {
+      label: "Verified",
+      title: commandLabel(latestPassed.command),
+      detail: latestPassed.detail ?? "Latest command passed.",
+      tone: "ok",
+    };
+  }
+  return {
+    label: "Review",
+    title: `${commands.length} ${plural("command", commands.length)} recorded`,
+    detail: "Inspect command history before trusting the run.",
+    tone: "neutral",
+  };
+}
+
+export function runReviewFacts(commands: readonly SessionRunCommand[]): SessionRunFact[] {
+  const total = commands.length;
+  const failed = commands.filter((command) => command.status === "failed").length;
+  const passed = commands.filter((command) => command.status === "passed").length;
+  const artifactCount = commands.filter((command) => !!command.artifactPath).length;
+  const latest = latestCommand(commands);
+  const unresolved = latestUnrecoveredFailedCommand(commands);
+  return [
+    {
+      label: "Commands",
+      value: String(total),
+      detail: total === 1 ? "recorded command" : "recorded commands",
+      tone: total > 0 ? "neutral" : "neutral",
+    },
+    {
+      label: "Failures",
+      value: String(failed),
+      detail: unresolved ? "unresolved" : failed > 0 ? "covered by later pass" : "none",
+      tone: unresolved ? "danger" : failed > 0 ? "ok" : "neutral",
+    },
+    {
+      label: "Passed",
+      value: String(passed),
+      detail: passed > 0 ? "successful commands" : "no successful command",
+      tone: passed > 0 ? "ok" : total > 0 ? "attention" : "neutral",
+    },
+    {
+      label: "Output",
+      value: String(artifactCount),
+      detail: artifactCount === 1 ? "artifact captured" : "artifacts captured",
+      tone: artifactCount > 0 ? "ok" : "neutral",
+    },
+    {
+      label: "Latest",
+      value: latest ? runStatusLabel(latest.status) : "none",
+      detail: latest ? `turn ${latest.turnNumber}` : "no command",
+      tone: latest?.status === "failed" ? "danger" : latest?.status === "running" ? "attention" : latest?.status === "passed" ? "ok" : "neutral",
+    },
+  ];
+}
+
 export function manualRunDraft(command: string, cwd?: string): string {
   const lines = [
     "Run this command in the session workspace, then report the exit code, working directory, and relevant output:",
@@ -154,6 +263,30 @@ function commandPriority(command: SessionRunCommand): number {
   if (command.status === "failed") return 0;
   if (command.status === "running") return 1;
   return 2;
+}
+
+function latestUnrecoveredFailedCommand(commands: readonly SessionRunCommand[]): SessionRunCommand | undefined {
+  const failed = latestCommand(commands, (command) => command.status === "failed");
+  if (!failed) return undefined;
+  const failedOrder = commandOrder(failed);
+  const laterPass = commands.some((command) => command.status === "passed" && commandOrder(command) > failedOrder);
+  return laterPass ? undefined : failed;
+}
+
+function latestCommand(commands: readonly SessionRunCommand[], predicate: (command: SessionRunCommand) => boolean = () => true): SessionRunCommand | undefined {
+  return commands
+    .filter(predicate)
+    .sort((a, b) => commandOrder(b) - commandOrder(a))[0];
+}
+
+function commandOrder(command: SessionRunCommand): number {
+  return command.turnNumber * 1_000_000 + (command.sequence ?? 0);
+}
+
+function commandLabel(command: string): string {
+  const compacted = command.replace(/\s+/g, " ").trim();
+  if (compacted.length <= 140) return compacted;
+  return `${compacted.slice(0, 137)}...`;
 }
 
 function runStatusLabel(status: SessionRunStatus): string {
