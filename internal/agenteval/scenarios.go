@@ -968,9 +968,9 @@ func liveWebSkillURLInstallActivationScenario() BatchScenario {
 		Domains:   []string{webEvidenceDomain},
 		SessionID: "skill-url-install-activation",
 		Prompts: []string{
-			"请安装这个 GitHub skill URL,但本轮只准备安装提案,不要确认安装:" + source + "。必须调用 skill action=propose_url,source 使用这个 URL,triggers 必须只包含 playwright_eval;不要传 name、description 或 required_tools。最终答复必须包含 proposal_id=" + proposalID + "、playwright 和 propose_url。不要读写文件,不要运行 shell。",
-			"确认安装 proposal_id=" + proposalID + "。请调用 skill action=confirm_install 并使用这个 proposal_id。最终答复必须包含 installed skill、active_now=true、proposal_id=" + proposalID + " 和 playwright。不要读写文件,不要运行 shell。",
-			"playwright_eval: 不要调用任何工具。请只根据当前已激活的 skill 回答:这个 skill 的标题是什么,prerequisite check 的第一条命令是什么。最终答复必须包含 Playwright CLI Skill 和 command -v npx。",
+			"Install this GitHub skill URL, but only prepare the install proposal in this turn; do not confirm installation yet: " + source + ". You must call skill with action=propose_url and source set to this URL. The triggers field must contain only playwright_eval; do not pass name, description, or required_tools. The final answer must include proposal_id=" + proposalID + ", playwright, and propose_url. Do not read or write files, and do not run shell.",
+			"Confirm installation for proposal_id=" + proposalID + ". Call skill with action=confirm_install using exactly this proposal_id. The final answer must include installed skill, active_now=true, proposal_id=" + proposalID + ", and playwright. Do not read or write files, and do not run shell.",
+			"playwright_eval: Do not call any tools. Answer only from the currently active skill: what is this skill's title, and what is the first command in its prerequisite check? The final answer must include Playwright CLI Skill and command -v npx.",
 		},
 		Files: map[string]string{
 			"README.md": "# Skill URL Install Activation Eval\n\nThis scenario validates URL proposal, explicit confirmation, and same-session skill activation.\n",
@@ -2643,7 +2643,7 @@ func longRunCodeCommitPushScenario() BatchScenario {
 		Name:    "longrun-code-commit-push-local-remote",
 		Suites:  []string{longRunSuite},
 		Domains: []string{codePRDomain},
-		Prompt:  "这个 Go 项目有一个失败测试。请先运行测试复现失败，然后只修复 set/set.go 中的 Remove 行为，不要修改测试。修复后再次运行 go test ./... 确认，通过后创建一个与修复相关的 git commit，并 push 到 origin main。最终答复必须包含修改摘要、测试命令、commit hash 和 push 结果。",
+		Prompt:  "This Go project has a failing test. First run the tests to reproduce the failure, then fix only the Remove behavior in set/set.go. Do not modify tests. After the fix, run go test ./... again to confirm. When it passes, create a git commit related to the fix and push it to origin main. The final answer must include a change summary, the test command, the commit hash, and the push result.",
 		Files: map[string]string{
 			"go.mod": `module example.com/stringset
 
