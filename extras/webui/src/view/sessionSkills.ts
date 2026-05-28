@@ -5,6 +5,13 @@ export function skillKindLabel(skill: SessionSkillInfo): string {
   return skill.runtime ? "Custom" : "Built in";
 }
 
+export function skillOriginLabel(skill: SessionSkillInfo): string | undefined {
+  if (!skill.source) return undefined;
+  if (skill.source.startsWith("embed:")) return "Built-in library";
+  if (skill.runtime) return "Account skill";
+  return skill.source;
+}
+
 export function activationSummary(skill: SessionSkillInfo): string {
   const triggers = skill.triggers ?? skill.auto_activation?.any ?? [];
   if (triggers.length > 0) return `Triggers: ${triggers.slice(0, 3).join(", ")}${triggers.length > 3 ? "..." : ""}`;

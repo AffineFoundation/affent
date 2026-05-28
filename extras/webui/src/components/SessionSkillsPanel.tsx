@@ -8,6 +8,7 @@ import {
   skillEvidenceText,
   skillKindLabel,
   skillMatchesQuery,
+  skillOriginLabel,
   skillSearchMatches,
   skillSizeLabel,
   skillSummaryTags,
@@ -147,9 +148,9 @@ export function SessionSkillsPanel({
           <>
             <div className="session-runtime-fallback" data-testid="session-skills-fallback">
               <strong>Skills can still be drafted</strong>
-              <span>Prepare a reusable workflow in chat while the Skills API is unavailable.</span>
+              <span>Create a reusable workflow in chat while the Skills API is unavailable.</span>
               <button type="button" className="session-skills-add-toggle" onClick={() => setShowForm((open) => !open)}>
-                {showForm ? "Cancel" : "Draft skill"}
+                {showForm ? "Cancel" : "Create skill"}
               </button>
             </div>
             {showForm ? renderSkillForm({
@@ -158,7 +159,7 @@ export function SessionSkillsPanel({
               submitSkill,
               installError,
               installing,
-              submitLabel: "Use skill draft",
+              submitLabel: "Prepare skill draft",
             }) : null}
           </>
         ) : null}
@@ -231,19 +232,19 @@ export function SessionSkillsPanel({
                           </div>
                         ) : null}
                         <div className="session-skill-meta">
-                          {skill.source ? <span>Source: {skill.source}</span> : null}
+                          {skillOriginLabel(skill) ? <span>Origin: {skillOriginLabel(skill)}</span> : null}
                           <span>{skillSizeLabel(skill)}</span>
                           {activationSummary(skill) ? <span>{activationSummary(skill)}</span> : null}
                         </div>
                         <div className="session-skill-actions">
-                          <CopyButton label="Copy skill evidence" value={skillEvidenceText(skill, body)} className="node-action" />
+                          <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
                           {onUseAsDraft ? (
                             <>
                               <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
-                                Use skill as draft
+                                Start from skill
                               </button>
                               <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
-                                Update as draft
+                                Revise skill
                               </button>
                             </>
                           ) : null}
@@ -256,7 +257,14 @@ export function SessionSkillsPanel({
                             <pre className="session-skill-body">{body}</pre>
                           </>
                         ) : !bodyState?.loading && !bodyState?.error ? (
-                          <p className="session-skill-preview">{skill.body_preview || "No content preview."}</p>
+                          <>
+                            {onReadSkill ? (
+                              <button type="button" className="ghost-action" onClick={() => void loadBody(skill.name)}>
+                                Load full content
+                              </button>
+                            ) : null}
+                            <p className="session-skill-preview">{skill.body_preview || "No content preview."}</p>
+                          </>
                         ) : null}
                       </div>
                     </details>
