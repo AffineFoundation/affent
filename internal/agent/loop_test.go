@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1348,6 +1349,9 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	}
 	if len(payload.Capabilities.WorkspaceTools) != 1 || payload.Capabilities.WorkspaceTools[0] != "read_file" {
 		t.Fatalf("workspace tools = %#v, want read_file", payload.Capabilities.WorkspaceTools)
+	}
+	if payload.Tools[0].ArgPolicy == nil || !reflect.DeepEqual(payload.Tools[0].ArgPolicy.WorkspacePathArgs, []string{"path"}) {
+		t.Fatalf("read_file runtime arg policy = %+v, want workspace path", payload.Tools[0].ArgPolicy)
 	}
 	if payload.Capabilities.Browser || payload.Capabilities.Plan {
 		t.Fatalf("capabilities should not invent unavailable surfaces: %+v", payload.Capabilities)

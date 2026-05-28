@@ -8,9 +8,9 @@ import (
 )
 
 type sessionToolsResponse struct {
-	SessionID string     `json:"session_id"`
-	Count     int        `json:"count"`
-	Tools     []toolInfo `json:"tools"`
+	SessionID string      `json:"session_id"`
+	Count     int         `json:"count"`
+	Tools     []toolInfo  `json:"tools"`
 	Surface   toolSurface `json:"surface,omitempty"`
 }
 
@@ -24,12 +24,13 @@ type toolSurface struct {
 }
 
 type toolInfo struct {
-	Name        string          `json:"name"`
-	RawName     string          `json:"raw_name,omitempty"`
-	Description string          `json:"description"`
-	Parameters  json.RawMessage `json:"parameters"`
-	Group       string          `json:"group"`
-	Source      string          `json:"source,omitempty"`
+	Name        string               `json:"name"`
+	RawName     string               `json:"raw_name,omitempty"`
+	Description string               `json:"description"`
+	Parameters  json.RawMessage      `json:"parameters"`
+	Group       string               `json:"group"`
+	Source      string               `json:"source,omitempty"`
+	ArgPolicy   *agent.ToolArgPolicy `json:"arg_policy,omitempty"`
 }
 
 func handleSessionTools(pool *SessionPool, sessionID string, w http.ResponseWriter, _ *http.Request) {
@@ -56,6 +57,7 @@ func handleSessionTools(pool *SessionPool, sessionID string, w http.ResponseWrit
 			Parameters:  def.Parameters,
 			Group:       def.Group,
 			Source:      def.Source,
+			ArgPolicy:   def.ArgPolicy,
 		})
 	}
 	surface := buildToolSurface(sess, pool.cfg, tools)

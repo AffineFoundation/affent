@@ -65,6 +65,11 @@ export interface SessionToolInfo {
   parameters: unknown;
   group: string;
   source?: string;
+  arg_policy?: SessionToolArgPolicy;
+}
+
+export interface SessionToolArgPolicy {
+  workspace_path_args?: string[];
 }
 
 export interface SessionToolsSurfaceInfo {

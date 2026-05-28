@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -30,5 +31,11 @@ func TestRegistryCatalogGroupsByToolSource(t *testing.T) {
 	}
 	if catalog[2].Group != "MCP" || catalog[2].Source != "taostats" || catalog[2].RawName != "query" {
 		t.Fatalf("mcp catalog entry = %+v, want MCP/taostats/query", catalog[2])
+	}
+	if catalog[0].ArgPolicy == nil || !reflect.DeepEqual(catalog[0].ArgPolicy.WorkspacePathArgs, []string{"path"}) {
+		t.Fatalf("read_file arg policy = %+v, want workspace path", catalog[0].ArgPolicy)
+	}
+	if catalog[1].ArgPolicy != nil {
+		t.Fatalf("web_fetch arg policy = %+v, want nil", catalog[1].ArgPolicy)
 	}
 }

@@ -5,7 +5,7 @@ package agent
 // model-facing JSON schema: schemas validate shape, while policies describe how
 // Affent should reason about an argument after the model emits it.
 type ToolArgPolicy struct {
-	WorkspacePathArgs []string
+	WorkspacePathArgs []string `json:"workspace_path_args,omitempty"`
 }
 
 var toolArgPolicies = map[string]ToolArgPolicy{
@@ -65,4 +65,8 @@ func cloneToolArgPolicy(policy ToolArgPolicy) ToolArgPolicy {
 		out.WorkspacePathArgs = append([]string(nil), policy.WorkspacePathArgs...)
 	}
 	return out
+}
+
+func (policy ToolArgPolicy) empty() bool {
+	return len(policy.WorkspacePathArgs) == 0
 }

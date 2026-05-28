@@ -81,6 +81,11 @@ export interface RuntimeSurfaceTool {
   raw_name?: string;
   group?: string;
   source?: string;
+  arg_policy?: RuntimeToolArgPolicy;
+}
+
+export interface RuntimeToolArgPolicy {
+  workspace_path_args?: string[];
 }
 
 export interface RuntimeCapabilities {

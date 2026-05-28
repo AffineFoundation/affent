@@ -34,6 +34,7 @@ type ToolCatalogEntry struct {
 	Parameters  json.RawMessage `json:"parameters"`
 	Group       string          `json:"group"`
 	Source      string          `json:"source,omitempty"`
+	ArgPolicy   *ToolArgPolicy  `json:"arg_policy,omitempty"`
 }
 
 // ToolDef returns the OpenAI-shape definition the LLM sees.
@@ -53,6 +54,9 @@ func (t *Tool) CatalogEntry() ToolCatalogEntry {
 		Parameters:  t.Schema,
 		Group:       t.catalogGroup(),
 		Source:      strings.TrimSpace(t.CatalogSource),
+	}
+	if policy, ok := ToolArgPolicyForName(t.Name); ok && !policy.empty() {
+		entry.ArgPolicy = &policy
 	}
 	return entry
 }

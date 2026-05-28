@@ -2287,12 +2287,18 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		payload.ToolCount = len(catalog)
 		payload.Tools = make([]sse.RuntimeSurfaceTool, 0, len(catalog))
 		for _, tool := range catalog {
-			payload.Tools = append(payload.Tools, sse.RuntimeSurfaceTool{
+			surfaceTool := sse.RuntimeSurfaceTool{
 				Name:    tool.Name,
 				RawName: tool.RawName,
 				Group:   tool.Group,
 				Source:  tool.Source,
-			})
+			}
+			if tool.ArgPolicy != nil {
+				surfaceTool.ArgPolicy = &sse.RuntimeToolArgPolicy{
+					WorkspacePathArgs: append([]string(nil), tool.ArgPolicy.WorkspacePathArgs...),
+				}
+			}
+			payload.Tools = append(payload.Tools, surfaceTool)
 		}
 		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(catalog)
 		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)

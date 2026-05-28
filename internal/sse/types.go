@@ -86,10 +86,15 @@ type RuntimeSurfacePayload struct {
 }
 
 type RuntimeSurfaceTool struct {
-	Name    string `json:"name"`
-	RawName string `json:"raw_name,omitempty"`
-	Group   string `json:"group,omitempty"`
-	Source  string `json:"source,omitempty"`
+	Name      string                `json:"name"`
+	RawName   string                `json:"raw_name,omitempty"`
+	Group     string                `json:"group,omitempty"`
+	Source    string                `json:"source,omitempty"`
+	ArgPolicy *RuntimeToolArgPolicy `json:"arg_policy,omitempty"`
+}
+
+type RuntimeToolArgPolicy struct {
+	WorkspacePathArgs []string `json:"workspace_path_args,omitempty"`
 }
 
 type RuntimeToolCallCap struct {
