@@ -28,6 +28,13 @@ export interface SessionRunView {
   tone?: "warning" | "error";
 }
 
+export interface SessionRunFocus {
+  command: SessionRunCommand;
+  label: string;
+  detail: string;
+  tone: "error" | "warning" | "success";
+}
+
 interface SessionRunCommandInternal extends SessionRunCommand {
   sequence: number;
 }
@@ -101,6 +108,37 @@ export function runCommandRequest(command: SessionRunCommand): RunCommandExecuti
     command: command.command,
     cwd: command.cwd,
   };
+}
+
+export function runFocusCommand(commands: readonly SessionRunCommand[]): SessionRunFocus | undefined {
+  const failed = commands.find((command) => command.status === "failed");
+  if (failed) {
+    return {
+      command: failed,
+      label: "Recovery needed",
+      detail: failed.next ?? failed.detail ?? "This command failed and needs review before trusting the run.",
+      tone: "error",
+    };
+  }
+  const running = commands.find((command) => command.status === "running");
+  if (running) {
+    return {
+      command: running,
+      label: "Running now",
+      detail: running.detail ?? "Command is still running.",
+      tone: "warning",
+    };
+  }
+  const latestPassed = commands.find((command) => command.status === "passed");
+  if (latestPassed) {
+    return {
+      command: latestPassed,
+      label: "Latest verification",
+      detail: latestPassed.detail ?? "Most recent command passed.",
+      tone: "success",
+    };
+  }
+  return undefined;
 }
 
 export function manualRunDraft(command: string, cwd?: string): string {

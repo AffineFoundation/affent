@@ -22,7 +22,12 @@ describe("SessionRunPanel", () => {
     const focus = screen.getByTestId("session-run-focus");
     expect(focus).toHaveTextContent("Recovery needed");
     expect(focus).toHaveTextContent("npm test -- checkout.spec.ts");
-    expect(focus).toHaveTextContent("failed · exit 1 · 1.48s · turn 2");
+    expect(focus).toHaveTextContent("failed");
+    expect(focus).toHaveTextContent("1.48s");
+    expect(focus).toHaveTextContent("Turn");
+    expect(focus).toHaveTextContent("2");
+    expect(focus).toHaveTextContent("Status");
+    expect(focus).toHaveTextContent("Duration");
     expect(focus).toHaveTextContent("Cwd: extras/webui");
     expect(focus).toHaveTextContent("Next: update payment route then rerun");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
@@ -67,18 +72,18 @@ describe("SessionRunPanel", () => {
     );
 
     await user.type(screen.getByLabelText("Search commands"), "build");
-    expect(screen.queryByTestId("session-run-focus")).toBeNull();
-    expect(screen.getByTestId("session-run-list")).not.toHaveTextContent("npm test -- checkout.spec.ts");
-    expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm run build");
+    expect(screen.queryByTestId("session-run-list")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Recovery needed");
     expect(screen.getByTestId("session-run-list")).not.toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
 
     await user.click(within(screen.getByLabelText("Run filters")).getByRole("button", { name: /Passed/ }));
-    expect(screen.queryByTestId("session-run-focus")).toBeNull();
-    expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
-    expect(screen.getByTestId("session-run-list")).not.toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm run build");
+    expect(screen.queryByTestId("session-run-list")).toBeNull();
     await user.click(within(screen.getByLabelText("Run filters")).getByRole("button", { name: /All/ }));
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Recovery needed");
 
@@ -114,6 +119,19 @@ describe("SessionRunPanel", () => {
 
     await user.type(screen.getByLabelText("Command"), "npm run build");
     expect(screen.queryByRole("button", { name: "Use command as draft" })).toBeNull();
+  });
+
+  it("surfaces the latest passed command as verification focus", () => {
+    render(<SessionRunPanel defaultOpen run={{ ...run, summary: "1 passed command", detail: "1 passed", tone: undefined, commands: [run.commands[1]] }} />);
+
+    const focus = screen.getByTestId("session-run-focus");
+    expect(focus).toHaveTextContent("Latest verification");
+    expect(focus).toHaveTextContent("npm run build");
+    expect(focus).toHaveTextContent("production build passed");
+    expect(focus).toHaveTextContent("passed");
+    expect(focus).toHaveTextContent("Exit");
+    expect(focus).toHaveTextContent("0");
+    expect(screen.queryByTestId("session-run-list")).toBeNull();
   });
 });
 

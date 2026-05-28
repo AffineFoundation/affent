@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { manualRunDraft, runCommandDraft, runCommandMeta, runCommandRequest, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
+import { manualRunDraft, runCommandDraft, runCommandMeta, runCommandRequest, runFocusCommand, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunFocus, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 
 export type RunCommandAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -29,8 +29,8 @@ export function SessionRunPanel({
   const stats = runStats(run.commands);
   const filteredCommands = filter === "all" ? run.commands : run.commands.filter((command) => command.status === filter);
   const visibleCommands = trimmedQuery ? filteredCommands.filter((command) => runMatchesQuery(command, trimmedQuery)) : filteredCommands;
-  const focusCommand = visibleCommands.find((command) => command.status === "failed") ?? visibleCommands.find((command) => command.status === "running");
-  const historyCommands = focusCommand ? visibleCommands.filter((command) => command !== focusCommand) : visibleCommands;
+  const focus = runFocusCommand(visibleCommands);
+  const historyCommands = focus ? visibleCommands.filter((command) => command !== focus.command) : visibleCommands;
 
   async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,9 +65,9 @@ export function SessionRunPanel({
             <RunFilterButton label="Passed" value={stats.passed} active={filter === "passed"} onClick={() => setFilter("passed")} />
           </div>
         </div>
-        {focusCommand ? (
+        {focus ? (
           <RunFocus
-            command={focusCommand}
+            focus={focus}
             onOpenArtifact={onOpenArtifact}
             onRunCommand={onRunCommand}
             runCommandBusy={runCommandBusy}
@@ -199,26 +199,33 @@ function runMatchesQuery(command: SessionRunCommand, query: string): boolean {
 }
 
 function RunFocus({
-  command,
+  focus,
   onOpenArtifact,
   onRunCommand,
   runCommandBusy,
   onUseAsDraft,
 }: {
-  command: SessionRunCommand;
+  focus: SessionRunFocus;
   onOpenArtifact?: (path: string) => void;
   onRunCommand?: RunCommandAction;
   runCommandBusy?: boolean;
   onUseAsDraft?: UseAsDraft;
 }) {
+  const command = focus.command;
   return (
     <section className="session-run-focus" data-status={command.status} data-testid="session-run-focus" aria-label="Run focus">
       <div className="session-run-focus-main">
-        <span>{command.status === "failed" ? "Recovery needed" : "Running now"}</span>
+        <span>{focus.label}</span>
         <strong title={command.command}>{commandLabel(command.command)}</strong>
-        <small>{runCommandMeta(command)}</small>
+        <small>{focus.detail}</small>
+        <div className="session-run-focus-facts">
+          <RunFocusFact label="Status" value={command.status} />
+          {command.exitCode != null ? <RunFocusFact label="Exit" value={String(command.exitCode)} /> : null}
+          {command.durationMs != null ? <RunFocusFact label="Duration" value={commandDurationLabel(command.durationMs)} /> : null}
+          <RunFocusFact label="Turn" value={String(command.turnNumber)} />
+        </div>
         {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
-        {command.detail ? <p>{command.detail}</p> : null}
+        {command.detail && command.detail !== focus.detail ? <p>{command.detail}</p> : null}
         {command.next ? <p>Next: {command.next}</p> : null}
         {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
       </div>
@@ -242,6 +249,21 @@ function RunFocus({
       </div>
     </section>
   );
+}
+
+function RunFocusFact({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function commandDurationLabel(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const seconds = ms / 1000;
+  return `${seconds.toFixed(seconds < 10 ? 2 : 1)}s`;
 }
 
 function commandLabel(command: string): string {

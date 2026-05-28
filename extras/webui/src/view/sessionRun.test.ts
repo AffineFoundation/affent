@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta } from "./sessionRun";
+import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runFocusCommand } from "./sessionRun";
 
 describe("buildSessionRun", () => {
   it("summarizes shell commands with failure recovery and artifacts", () => {
@@ -36,6 +36,11 @@ describe("buildSessionRun", () => {
       artifactPath: ".affent/artifacts/tool-results/test.txt",
     });
     expect(runCommandMeta(run.commands[0])).toBe("failed · exit 1 · 1.48s · turn 1");
+    expect(runFocusCommand(run.commands)).toMatchObject({
+      label: "Recovery needed",
+      tone: "error",
+      command: expect.objectContaining({ command: "npm test -- checkout.spec.ts" }),
+    });
     expect(runCommandEvidenceText(run.commands[0])).toBe(
       [
         "Run evidence for npm test -- checkout.spec.ts",
@@ -122,7 +127,13 @@ describe("buildSessionRun", () => {
       { id: 5, type: "tool.result", data: { call_id: "second", exit_code: 0, result_summary: "built", result: "built" } },
     ]);
 
-    expect(buildSessionRun(session).commands.map((command) => command.command)).toEqual(["npm run build", "npm test"]);
+    const run = buildSessionRun(session);
+    expect(run.commands.map((command) => command.command)).toEqual(["npm run build", "npm test"]);
+    expect(runFocusCommand(run.commands)).toMatchObject({
+      label: "Latest verification",
+      tone: "success",
+      command: expect.objectContaining({ command: "npm run build" }),
+    });
   });
 
   it("prioritizes failed and running commands before passed history", () => {
