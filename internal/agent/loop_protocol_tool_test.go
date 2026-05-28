@@ -160,6 +160,47 @@ func TestLoopProtocolToolCompletesActivationFromSavedDraftWhenProtocolPayloadHas
 	}
 }
 
+func TestLoopProtocolToolMalformedActivationPayloadValidatesSavedDraft(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build and verify a small CLI project.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop after tests pass and the code is committed."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+
+	tool := loopProtocolTool(path)
+	_, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "complete_activation",
+		"protocol": "# Loop Protocol — stale payload without metadata\n\n## Goal\nBuild something else.",
+		"reason":   "calibration answered",
+	})))
+	if err == nil {
+		t.Fatal("complete_activation unexpectedly succeeded")
+	}
+	if !strings.Contains(err.Error(), loopProtocolActivationInvalidFailureKind) ||
+		!strings.Contains(err.Error(), "unresolved activation placeholder") ||
+		strings.Contains(err.Error(), loopProtocolActivationStatusFailureKind) {
+		t.Fatalf("complete_activation error should validate saved draft, got:\n%v", err)
+	}
+	got, found, readErr := loopstate.ReadProtocol(path)
+	if readErr != nil || !found {
+		t.Fatalf("ReadProtocol after failed activation found=%v err=%v", found, readErr)
+	}
+	if loopstate.ProtocolStatus(got) != "draft" || strings.Contains(got, "Build something else") {
+		t.Fatalf("failed activation should keep saved draft unchanged:\n%s", got)
+	}
+}
+
 func TestLoopProtocolToolClosesCompletedLoopAndDisablesFeed(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
@@ -569,7 +610,7 @@ func TestLoopProtocolToolDraftUpdateDoesNotActivate(t *testing.T) {
 	}
 }
 
-func TestLoopProtocolToolRejectsActivationWithoutStatusFailureKind(t *testing.T) {
+func TestLoopProtocolToolMalformedActivationPayloadUsesSavedDraft(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
 	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
@@ -591,9 +632,9 @@ func TestLoopProtocolToolRejectsActivationWithoutStatusFailureKind(t *testing.T)
 		"protocol": protocol,
 	})))
 	if err == nil ||
-		!strings.Contains(err.Error(), "metadata status: draft or running") ||
-		!strings.Contains(err.Error(), "tool performs the draft-to-running transition") ||
-		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
+		!strings.Contains(err.Error(), "unresolved activation placeholder") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_invalid") ||
+		strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
 		t.Fatalf("complete_activation without status err = %v", err)
 	}
 }

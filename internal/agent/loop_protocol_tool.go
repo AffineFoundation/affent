@@ -227,7 +227,7 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 	ignoredMalformedProtocol := false
 	if protocol != "" {
 		if loopstate.ProtocolStatus(protocol) == "" {
-			saved, ok, err := savedLoopProtocolActivationCandidate(protocolPath)
+			saved, ok, err := savedLoopProtocolForActivation(protocolPath)
 			if err != nil {
 				return "", err
 			}
@@ -306,7 +306,7 @@ func closeLoopProtocol(protocolPath string, p loopProtocolToolArgs) (string, err
 	return fmt.Sprintf("closed LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol feed is disabled unless reopened deliberately", state.Status, event.Seq, state.ProtocolUpdates), nil
 }
 
-func savedLoopProtocolActivationCandidate(protocolPath string) (string, bool, error) {
+func savedLoopProtocolForActivation(protocolPath string) (string, bool, error) {
 	saved, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil || !found {
 		return "", false, err
@@ -321,9 +321,6 @@ func savedLoopProtocolActivationCandidate(protocolPath string) (string, bool, er
 		}
 	case "running":
 	default:
-		return "", false, nil
-	}
-	if err := loopstate.ValidateProtocolActivation(saved); err != nil {
 		return "", false, nil
 	}
 	return saved, true, nil
