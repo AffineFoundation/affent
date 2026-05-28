@@ -609,8 +609,8 @@ Keep long-run work anchored to evidence.
 		}
 	}
 	got := provider("continue")
-	if !strings.Contains(got, "feed_mode=digest feed_number=4") {
-		t.Fatalf("fourth feed should be digest:\n%s", got)
+	if !strings.Contains(got, "feed_mode=digest feed_number=2") {
+		t.Fatalf("second feed should be digest:\n%s", got)
 	}
 	if !strings.Contains(got, "Keep long-run work anchored to evidence.") {
 		t.Fatalf("digest missing north star:\n%s", got)
@@ -627,7 +627,7 @@ Keep long-run work anchored to evidence.
 	if strings.Contains(got, "old archive detail old archive detail") {
 		t.Fatalf("digest should omit archive detail:\n%s", got)
 	}
-	for i := 5; i < loopProtocolFullEveryFeeds; i++ {
+	for i := 3; i < loopProtocolFullEveryFeeds; i++ {
 		_ = provider("continue")
 	}
 	got = provider("continue")
@@ -663,7 +663,7 @@ Reload the full protocol after compaction.
 		t.Fatalf("RecordContextCompaction: %v", err)
 	}
 	got := provider("continue")
-	if !strings.Contains(got, "feed_mode=full feed_number=4") ||
+	if !strings.Contains(got, "feed_mode=full feed_number=2") ||
 		!strings.Contains(got, "context_compactions=1") ||
 		!strings.Contains(got, "last_compaction=context_overflow") ||
 		!strings.Contains(got, "post compaction archive detail post compaction archive detail") {
@@ -673,7 +673,7 @@ Reload the full protocol after compaction.
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
-	if state.NeedsFullProtocolFeed || state.LastProtocolFeedMode != "full" || state.ProtocolFeeds != 4 {
+	if state.NeedsFullProtocolFeed || state.LastProtocolFeedMode != "full" || state.ProtocolFeeds != 2 {
 		t.Fatalf("state after recovery feed = %+v", state)
 	}
 }

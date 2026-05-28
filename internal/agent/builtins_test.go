@@ -33,6 +33,7 @@ func TestSafeWorkspacePath(t *testing.T) {
 	}{
 		{"relative", "cmd/root.go", "/app/cmd/root.go", false},
 		{"relative-with-dot", "./cmd/root.go", "/app/cmd/root.go", false},
+		{"dropped-absolute-workspace-prefix", "app/cmd/root.go", "/app/cmd/root.go", false},
 		{"absolute-inside-workspace", "/app/cmd/root.go", "/app/cmd/root.go", false},
 		{"absolute-equals-workspace", "/app", "/app", false},
 		{"empty-resolves-to-workspace", "", "/app", false},
@@ -153,6 +154,42 @@ func TestSafeWorkspacePath_NonStandardWorkspace(t *testing.T) {
 	}
 	if got != "/app/cmd/root.go" {
 		t.Errorf("got %q, want /app/cmd/root.go", got)
+	}
+}
+
+func TestFileToolsNormalizeWorkspacePathAliasesForModelContext(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "game2048.py"), []byte("print('ok')"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	deps := BuiltinDeps{HostWorkspaceDir: ws}
+	alias := strings.TrimPrefix(filepath.ToSlash(filepath.Join(ws, "game2048.py")), "/")
+
+	read := readFileTool(deps)
+	got, err := read.Execute(context.Background(), json.RawMessage(fmt.Sprintf(`{"path":%q}`, alias)))
+	if err != nil {
+		t.Fatalf("read_file alias: %v", err)
+	}
+	if got != "print('ok')" {
+		t.Fatalf("read_file alias output = %q", got)
+	}
+
+	write := writeFileTool(deps)
+	out, err := write.Execute(context.Background(), json.RawMessage(fmt.Sprintf(`{"path":%q,"content":"done"}`, filepath.Join(ws, "nested", "out.txt"))))
+	if err != nil {
+		t.Fatalf("write_file absolute path: %v", err)
+	}
+	if strings.Contains(out, ws) || !strings.Contains(out, "nested/out.txt") {
+		t.Fatalf("write_file should report workspace-relative path, got %q", out)
+	}
+
+	edit := editFileTool(deps)
+	out, err = edit.Execute(context.Background(), json.RawMessage(`{"path":"nested/out.txt","old":"done","new":"DONE"}`))
+	if err != nil {
+		t.Fatalf("edit_file: %v", err)
+	}
+	if strings.Contains(out, ws) || !strings.Contains(out, "nested/out.txt") {
+		t.Fatalf("edit_file should report workspace-relative path, got %q", out)
 	}
 }
 
@@ -917,6 +954,20 @@ func TestShellTool_OutputCaptureIsBounded(t *testing.T) {
 	}
 	if rec.gotOpts.MaxOutputBytes != maxShellOutputBytes {
 		t.Fatalf("max output bytes = %d, want %d", rec.gotOpts.MaxOutputBytes, maxShellOutputBytes)
+	}
+}
+
+func TestShellToolNormalizesWorkspacePathAliasCWD(t *testing.T) {
+	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	rec := &recordingExec{}
+	tool := shellTool(BuiltinDeps{Executor: rec, HostWorkspaceDir: ws})
+	alias := strings.TrimPrefix(filepath.ToSlash(filepath.Join(ws, "subdir")), "/")
+	args, _ := json.Marshal(map[string]any{"command": "pwd", "cwd": alias})
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if rec.gotOpts.WorkingDir != "subdir" {
+		t.Fatalf("cwd = %q, want subdir", rec.gotOpts.WorkingDir)
 	}
 }
 

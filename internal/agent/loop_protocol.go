@@ -16,7 +16,7 @@ import (
 const (
 	maxActiveLoopProtocolFullBytes   = 12 * 1024
 	maxActiveLoopProtocolDigestBytes = 4 * 1024
-	loopProtocolFullFirstFeeds       = 3
+	loopProtocolFullFirstFeeds       = 1
 	loopProtocolFullEveryFeeds       = 6
 )
 

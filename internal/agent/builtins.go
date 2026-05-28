@@ -534,6 +534,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 			if strings.TrimSpace(p.Command) == "" {
 				return "", errors.New("command is required\nNext: retry shell with one concrete command, or use read_file/list_files for ordinary workspace inspection")
 			}
+			p.Cwd = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Cwd))
 			if len(p.Command) > maxShellCommandBytes {
 				return "", fmt.Errorf("command is %d bytes; shell command supports up to %d bytes. Put long scripts in a workspace file and run that file instead\nNext: write the script to a workspace file, then retry shell with a short command that runs it", len(p.Command), maxShellCommandBytes)
 			}
@@ -725,6 +726,7 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	if strings.TrimSpace(deps.HostWorkspaceDir) == "" {
 		return "", errors.New("workspace is not configured; file tools require HostWorkspaceDir or a container FileOps executor\nNext: restart affent with a workspace root or a docker/sandbox executor before retrying file tools")
 	}
+	p = normalizeWorkspacePathAlias(deps, p)
 	if p == "" {
 		return deps.HostWorkspaceDir, nil
 	}
@@ -749,6 +751,70 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 		return "", fmt.Errorf("path %q escapes workspace %q\nNext: retry with a workspace-relative path under the workspace, or call list_files on . to discover valid paths", p, deps.HostWorkspaceDir)
 	}
 	return full, nil
+}
+
+func normalizeWorkspacePathAlias(deps BuiltinDeps, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || filepath.IsAbs(p) || strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+		return p
+	}
+	aliasParts := pathComponents(filepath.ToSlash(filepath.Clean(p)))
+	if len(aliasParts) == 0 {
+		return p
+	}
+	ws := filepath.ToSlash(filepath.Clean(deps.HostWorkspaceDir))
+	ws = strings.TrimPrefix(ws, "/")
+	wsParts := pathComponents(ws)
+	if len(wsParts) == 0 || len(aliasParts) < len(wsParts) {
+		return p
+	}
+	for i := range wsParts {
+		if aliasParts[i] != wsParts[i] {
+			return p
+		}
+	}
+	rest := aliasParts[len(wsParts):]
+	if len(rest) == 0 {
+		return "."
+	}
+	return filepath.FromSlash(strings.Join(rest, "/"))
+}
+
+func pathComponents(p string) []string {
+	p = strings.Trim(p, "/")
+	if p == "" || p == "." {
+		return nil
+	}
+	raw := strings.Split(p, "/")
+	parts := raw[:0]
+	for _, part := range raw {
+		if part == "" || part == "." {
+			continue
+		}
+		parts = append(parts, part)
+	}
+	return parts
+}
+
+func workspaceRelativeDisplayPath(deps BuiltinDeps, full, fallback string) string {
+	fallback = strings.TrimSpace(fallback)
+	if strings.TrimSpace(deps.HostWorkspaceDir) == "" || strings.TrimSpace(full) == "" {
+		if fallback == "" {
+			return "."
+		}
+		return fallback
+	}
+	rel, err := filepath.Rel(filepath.Clean(deps.HostWorkspaceDir), filepath.Clean(full))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		if fallback == "" {
+			return "."
+		}
+		return fallback
+	}
+	if rel == "." {
+		return "."
+	}
+	return filepath.ToSlash(rel)
 }
 
 // resolveAncestorSymlinks walks up `full` to the longest existing
@@ -855,7 +921,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = strings.TrimSpace(p.Path)
+			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" {
 				return "", requiredFileToolPathError("read_file")
 			}
@@ -1020,7 +1086,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = strings.TrimSpace(p.Path)
+			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" {
 				return "", requiredFileToolPathError("write_file")
 			}
@@ -1046,7 +1112,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			if err := os.WriteFile(full, []byte(p.Content), 0o644); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), p.Path), nil
+			return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), workspaceRelativeDisplayPath(deps, full, p.Path)), nil
 		},
 	}
 }
@@ -1077,7 +1143,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = strings.TrimSpace(p.Path)
+			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" || strings.TrimSpace(p.Old) == "" {
 				return "", errors.New("path and old are required\nNext: call read_file on the target file, copy the exact current text into old, then retry edit_file with a non-empty path")
 			}
@@ -1123,7 +1189,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			if err := os.WriteFile(full, []byte(updated), 0o644); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("replaced %d occurrence(s) in %s", n, p.Path), nil
+			return fmt.Sprintf("replaced %d occurrence(s) in %s", n, workspaceRelativeDisplayPath(deps, full, p.Path)), nil
 		},
 	}
 }
@@ -1160,7 +1226,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = strings.TrimSpace(p.Path)
+			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" {
 				p.Path = "."
 			}
