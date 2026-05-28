@@ -82,6 +82,26 @@ export function memoryBucketDraft(bucket: SessionMemoryBucket): string {
   ].join("\n");
 }
 
+export function manualMemoryDraft({
+  content,
+  target = "memory",
+  topic,
+}: {
+  content: string;
+  target?: string;
+  topic?: string;
+}): string {
+  const lines = [
+    "Add or update durable memory if this is useful, accurate, and non-secret:",
+    "",
+    `Target: ${target.trim() || "memory"}`,
+    topic?.trim() ? `Topic: ${topic.trim()}` : undefined,
+    "Content:",
+    content.trim(),
+  ];
+  return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
+
 export function totalMemoryChars(buckets: readonly SessionMemoryBucket[]): number {
   return buckets.reduce((sum, bucket) => sum + bucket.chars_used, 0);
 }

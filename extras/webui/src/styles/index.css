@@ -2651,6 +2651,10 @@ body {
   line-height: 1.45;
 }
 
+.session-memory-form textarea {
+  min-height: 86px;
+}
+
 .session-skills-add-toggle,
 .session-skills-add-submit {
   min-height: 32px;

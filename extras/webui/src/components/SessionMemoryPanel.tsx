@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionMemoryResponse } from "../api/sessions";
 import type { UseAsDraft } from "../view/draftSource";
@@ -13,6 +13,7 @@ import {
   memoryUpdateEvidenceText,
   memoryUpdateLocation,
   memoryUpdatePreview,
+  manualMemoryDraft,
   totalMemoryChars,
 } from "../view/sessionMemory";
 import { CopyButton } from "./CopyButton";
@@ -37,6 +38,9 @@ export function SessionMemoryPanel({
 }) {
   const [query, setQuery] = useState("");
   const [panelOpen, setPanelOpen] = useState(defaultOpen);
+  const [memoryTarget, setMemoryTarget] = useState("memory");
+  const [memoryTopic, setMemoryTopic] = useState("");
+  const [memoryContent, setMemoryContent] = useState("");
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const filtered = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -70,6 +74,13 @@ export function SessionMemoryPanel({
         : memory?.has_memory
           ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalMemoryChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";
+
+  function handleManualMemorySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = memoryContent.trim();
+    if (!content || !onUseAsDraft) return;
+    onUseAsDraft(manualMemoryDraft({ content, target: memoryTarget, topic: memoryTopic }), "memory");
+  }
 
   return (
     <details
@@ -145,6 +156,25 @@ export function SessionMemoryPanel({
                 <div className="session-skills-empty">{buckets.length > 0 ? "No matching memory." : "No memory buckets."}</div>
               )}
             </div>
+            {onUseAsDraft ? (
+              <form className="session-skill-form session-memory-form" data-testid="session-memory-form" onSubmit={handleManualMemorySubmit}>
+                <label>
+                  <span>Target</span>
+                  <input value={memoryTarget} onChange={(event) => setMemoryTarget(event.target.value)} placeholder="memory" />
+                </label>
+                <label>
+                  <span>Topic</span>
+                  <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" />
+                </label>
+                <label className="session-skill-form-body">
+                  <span>Content</span>
+                  <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} placeholder="Fact to remember" />
+                </label>
+                <button type="submit" className="session-skills-add-submit" disabled={!memoryContent.trim()}>
+                  Use memory draft
+                </button>
+              </form>
+            ) : null}
           </>
         ) : null}
       </div>

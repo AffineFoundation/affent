@@ -4,6 +4,7 @@ import {
   memoryBucketEvidenceText,
   memoryBucketLabel,
   memoryBucketUsage,
+  manualMemoryDraft,
   memoryUpdateDraft,
   memoryUpdateEvidenceText,
 } from "./sessionMemory";
@@ -54,5 +55,19 @@ describe("sessionMemory view helpers", () => {
       "- taostats pages are dynamic",
     ].join("\n"));
     expect(memoryBucketDraft(bucket)).toContain("relevant, stale, or needs correction");
+  });
+
+  it("builds a manual memory draft", () => {
+    expect(manualMemoryDraft({
+      target: " memory ",
+      topic: " research ",
+      content: " CoinGecko pages require a browser fallback. ",
+    })).toBe([
+      "Add or update durable memory if this is useful, accurate, and non-secret:",
+      "Target: memory",
+      "Topic: research",
+      "Content:",
+      "CoinGecko pages require a browser fallback.",
+    ].join("\n"));
   });
 });

@@ -85,6 +85,20 @@ describe("SessionMemoryPanel", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory bucket evidence for research"));
     await user.click(within(list).getByRole("button", { name: "Use memory as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this memory evidence"), "memory");
+
+    await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic"), "research");
+    await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "CoinGecko pages require a browser fallback.");
+    await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Use memory draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      [
+        "Add or update durable memory if this is useful, accurate, and non-secret:",
+        "Target: memory",
+        "Topic: research",
+        "Content:",
+        "CoinGecko pages require a browser fallback.",
+      ].join("\n"),
+      "memory",
+    );
   });
 
   it("shows an empty selected-chat state", () => {
@@ -103,6 +117,7 @@ describe("SessionMemoryPanel", () => {
     expect(panel).toHaveTextContent("No user, core, or topic entries saved.");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No memory buckets.");
     expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
+    expect(screen.queryByTestId("session-memory-form")).toBeNull();
     expect(panel).not.toHaveTextContent("No matching memory.");
   });
 
