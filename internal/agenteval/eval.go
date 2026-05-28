@@ -173,6 +173,7 @@ type BatchScenario struct {
 	RequiredLoopDecisionKinds                      map[string]int
 	RequiredLoopDecisionResults                    map[string]int
 	RequiredLoopDecisionMatches                    []LoopDecisionRequirement
+	RequiredMessageRejected                        map[string]int
 	RequiredLoopProtocolFeeds                      int
 	RequiredLoopProtocolCalibrationRequests        int
 	RequiredLoopProtocolCalibrations               int
@@ -414,6 +415,7 @@ type DebugScenarioExpectations struct {
 	RequiredLoopDecisionKinds                      map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
 	RequiredLoopDecisionResults                    map[string]int                        `json:"required_loop_decision_results,omitempty"`
 	RequiredLoopDecisionMatches                    []DebugLoopDecisionRequirement        `json:"required_loop_decision_matches,omitempty"`
+	RequiredMessageRejected                        map[string]int                        `json:"required_message_rejected,omitempty"`
 	RequiredLoopProtocolFeeds                      int                                   `json:"required_loop_protocol_feeds,omitempty"`
 	RequiredLoopProtocolCalibrationRequests        int                                   `json:"required_loop_protocol_calibration_requests,omitempty"`
 	RequiredLoopProtocolCalibrations               int                                   `json:"required_loop_protocol_calibrations,omitempty"`
@@ -546,6 +548,17 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		len(exp.RequiredRecentSessionSearch) > 0 &&
 		expectationRequiresToolOrder(exp, agent.SessionSearchToolName, agent.MemoryToolName) {
 		caps["longrun_recovery"] = true
+	}
+	if len(exp.RequiredMessageRejected) > 0 {
+		caps["trace"] = true
+		for trigger := range exp.RequiredMessageRejected {
+			switch {
+			case strings.Contains(trigger, "loop_protocol"):
+				caps["loop_protocol"] = true
+			case strings.Contains(trigger, "plan"):
+				caps["plan"] = true
+			}
+		}
 	}
 	if expectationRequiresResearchCheckpoint(exp) {
 		caps["research_checkpoint"] = true
@@ -1053,6 +1066,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCodeCloneCommitPushScenario(),
 		longRunCodeSourceRepoCommitPushScenario(),
 		longRunScratchProjectLoopPushScenario(),
+		longRunLoopFinalClosureGuardScenario(),
 		longRunScratchProjectIterativeLoopPushScenario(),
 		longRunIntegratedMemoryRecoveryScenario(),
 		longRunFocusedTaskRecoveryScenario(),
@@ -2014,6 +2028,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopDecisionKinds:               cloneStringIntMap(s.RequiredLoopDecisionKinds),
 		RequiredLoopDecisionResults:             cloneStringIntMap(s.RequiredLoopDecisionResults),
 		RequiredLoopDecisionMatches:             loopReqs,
+		RequiredMessageRejected:                 cloneStringIntMap(s.RequiredMessageRejected),
 		RequiredLoopProtocolFeeds:               s.RequiredLoopProtocolFeeds,
 		RequiredLoopProtocolCalibrationRequests: s.RequiredLoopProtocolCalibrationRequests,
 		RequiredLoopProtocolCalibrations:        s.RequiredLoopProtocolCalibrations,
@@ -3175,6 +3190,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, mode := range sortedStringMapKeys(scenario.RequiredSubagentSourceCounts) {
 		checks = append(checks, SubagentSourceEvidenceAtLeast(mode, scenario.RequiredSubagentSourceCounts[mode]))
+	}
+	for _, trigger := range sortedStringMapKeys(scenario.RequiredMessageRejected) {
+		checks = append(checks, MessageRejectedAtLeast(trigger, scenario.RequiredMessageRejected[trigger]))
 	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())

@@ -1981,8 +1981,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 26 {
-		t.Fatalf("long-run suite size = %d, want 26", len(scenarios))
+	if len(scenarios) != 27 {
+		t.Fatalf("long-run suite size = %d, want 27", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2373,6 +2373,42 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !scratchProject.ForbidWorkspaceAbsolutePaths || scratchProject.MaxLoopTurnInputTokens != 300000 || scratchProject.MaxLoopTurnTotalTokens != 320000 {
 		t.Fatalf("scratch project path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", scratchProject.ForbidWorkspaceAbsolutePaths, scratchProject.MaxLoopTurnInputTokens, scratchProject.MaxLoopTurnTotalTokens)
+	}
+
+	closureGuard, ok := seen["longrun-loop-final-closure-guard"]
+	if !ok {
+		t.Fatalf("long-run suite missing loop final closure guard scenario")
+	}
+	if closureGuard.SessionID != "loop-final-closure-guard" || !closureGuard.EnableLoopProtocol {
+		t.Fatalf("closure guard fields = session:%q loop:%v", closureGuard.SessionID, closureGuard.EnableLoopProtocol)
+	}
+	if closureGuard.RequiredMessageRejected["loop_protocol_running"] != 1 ||
+		closureGuard.RequiredTraceEventCounts["message.rejected"] != 1 {
+		t.Fatalf("closure guard rejected message requirements = rejected:%#v trace:%#v", closureGuard.RequiredMessageRejected, closureGuard.RequiredTraceEventCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+		{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
+	} {
+		if !toolArgRequirementContains(closureGuard.RequiredToolArgContains, want) {
+			t.Fatalf("closure guard RequiredToolArgContains = %#v, want %#v", closureGuard.RequiredToolArgContains, want)
+		}
+	}
+	if closureGuard.RequiredLoopProtocolFinalStatus != "completed" {
+		t.Fatalf("closure guard RequiredLoopProtocolFinalStatus = %q, want completed", closureGuard.RequiredLoopProtocolFinalStatus)
+	}
+	closureGuardChecks := checkNamesFor(BatchScenarioChecks(closureGuard))
+	if !stringSliceContains(closureGuardChecks, "message_rejected_at_least:loop_protocol_running:1") {
+		t.Fatalf("closure guard checks = %#v, want loop protocol message rejected check", closureGuardChecks)
+	}
+	closureGuardCaps := ScenarioExpectationCapabilityNames(closureGuard)
+	for _, want := range []string{"loop_protocol", "trace"} {
+		if !stringSliceContains(closureGuardCaps, want) {
+			t.Fatalf("closure guard expectation capabilities = %#v, want %q", closureGuardCaps, want)
+		}
+	}
+	if !closureGuard.ForbidWorkspaceAbsolutePaths || closureGuard.MaxLoopTurnInputTokens != 300000 || closureGuard.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("closure guard path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", closureGuard.ForbidWorkspaceAbsolutePaths, closureGuard.MaxLoopTurnInputTokens, closureGuard.MaxLoopTurnTotalTokens)
 	}
 
 	iterativeProject, ok := seen["longrun-scratch-project-iterative-loop-push"]

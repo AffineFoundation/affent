@@ -111,6 +111,39 @@ func loopProtocolActive(protocolPath string) bool {
 	return status == "" || status == "running"
 }
 
+// LoopProtocolCompletionGuard prevents a final answer from leaving an active
+// long-running LOOP.md in status=running. It observes the durable protocol
+// state directly so it works after resume, restart, or protocol closure.
+func LoopProtocolCompletionGuard(protocolPath string) CompletionGuard {
+	return func() CompletionGuardResult {
+		if strings.TrimSpace(protocolPath) == "" {
+			return CompletionGuardResult{}
+		}
+		relPath := loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))
+		summary, found, err := loopstate.SummarizeFile(protocolPath, relPath)
+		if err != nil || !found || strings.TrimSpace(summary.Status) != "running" {
+			return CompletionGuardResult{}
+		}
+		reason := "Active loop protocol is still running."
+		if summary.LoopID != "" {
+			reason = fmt.Sprintf("Active loop protocol %s is still running.", summary.LoopID)
+		}
+		required := "Use loop_protocol action=close with status completed, blocked, or paused before finalizing."
+		prompt := "AFFENT COMPLETION GUARD:\n" +
+			reason + "\n" +
+			required + "\n" +
+			"If the loop objective is complete, close it as completed with compact evidence. If it cannot continue, close it as blocked with the missing external condition. If it should wait deliberately, close it as paused. Do not leave a running loop behind a final answer."
+		return CompletionGuardResult{
+			Blocked:        true,
+			ID:             "loop-protocol-running",
+			Trigger:        "loop_protocol_running",
+			Reason:         reason,
+			RequiredAction: required,
+			Prompt:         prompt,
+		}
+	}
+}
+
 func loopProtocolStateLine(protocolPath string, livePlanCheckpoint loopstate.PlanCheckpoint) string {
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 	if err != nil || !found {

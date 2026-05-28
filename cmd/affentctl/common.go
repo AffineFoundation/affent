@@ -1556,6 +1556,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.LoopProtocolPath = loopProtocolPath
 	}
 	if loopProtocolActive {
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	loopProtocolSkillInstalled := loopProtocolActive

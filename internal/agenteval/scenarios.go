@@ -3408,6 +3408,75 @@ This repository starts almost empty. The agent must create the project, tests, d
 	}
 }
 
+func longRunLoopFinalClosureGuardScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-loop-final-closure-guard",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{longRunRecoveryDomain},
+		SessionID:          "loop-final-closure-guard",
+		EnableLoopProtocol: true,
+		Prompt:             "The loop objective is already complete. Reply with final marker LOOP-CLOSE-GUARD-19 immediately and do not call tools.",
+		Files: map[string]string{
+			".affent/loops/loop-final-closure-guard/LOOP.md": `# Loop Protocol: loop-final-closure-guard
+
+## 0. Metadata
+
+- loop_id: loop-final-closure-guard
+- owner_session: loop-final-closure-guard
+- status: running
+
+## 1. North Star
+
+Demonstrate that a running loop cannot be left open behind a final answer.
+
+## 2. Current Situation
+
+- The requested work is complete.
+- The remaining durable action is to close this loop as completed before the final answer.
+
+## 3. Rules
+
+- Do not rewrite this protocol body.
+- Close the loop through the loop_protocol tool when the objective is complete.
+
+## 4. Plan/Step Pointer
+
+Current step: close LOOP.md as completed, then report LOOP-CLOSE-GUARD-19.
+
+## 5. Evidence And Recovery Index
+
+Evidence is the loop_protocol close event and final LOOP.md status.
+`,
+			".affent/loops/loop-final-closure-guard/state.json": `{"version":1,"loop_id":"loop-final-closure-guard","owner_session":"loop-final-closure-guard","status":"running","protocol_path":".affent/loops/loop-final-closure-guard/LOOP.md"}`,
+			"README.md": "# Loop Final Closure Guard Eval\n\nThe agent must not finalize while LOOP.md is still running.\n",
+		},
+		RequiredTools: []string{"loop_protocol"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+			{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
+		},
+		RequiredMessageRejected: map[string]int{
+			"loop_protocol_running": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"message.rejected": 1,
+		},
+		RequiredLoopProtocolFinalStatus: "completed",
+		RequiredFinalText: []string{
+			"LOOP-CLOSE-GUARD-19",
+		},
+		ProtectedFiles: []string{
+			".affent/loops/loop-final-closure-guard/LOOP.md",
+			"README.md",
+		},
+		MaxParentToolCalls:           2,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     8,
+		ForbidWorkspaceAbsolutePaths: true,
+	}
+}
+
 func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-scratch-project-iterative-loop-push",

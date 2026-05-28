@@ -1272,6 +1272,15 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	if b.loop.LoopProtocolPath != protocolPath {
 		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, protocolPath)
 	}
+	if len(b.loop.CompletionGuards) == 0 {
+		t.Fatal("active LOOP.md should install a completion guard")
+	}
+	guard := b.loop.CompletionGuards[0]()
+	if !guard.Blocked ||
+		guard.Trigger != "loop_protocol_running" ||
+		!strings.Contains(guard.RequiredAction, "loop_protocol action=close") {
+		t.Fatalf("loop protocol completion guard = %+v", guard)
+	}
 	if b.loopProtocolInitialized {
 		t.Fatal("existing active LOOP.md must not mark the next turn as loop setup")
 	}

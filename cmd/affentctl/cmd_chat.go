@@ -570,6 +570,7 @@ func finalizeCurrentSessionLoopActivation(b *loopBundle) {
 	}
 	b.loop.LoopProtocolPath = b.loopProtocolPath
 	if !b.loopProtocolSkillInstalled {
+		b.loop.CompletionGuards = append(b.loop.CompletionGuards, agent.LoopProtocolCompletionGuard(b.loopProtocolPath))
 		b.loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(b.loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(b.planPath), b.loop.SkillProvider)
 		b.loopProtocolSkillInstalled = true
 	}

@@ -741,7 +741,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if !p.cfg.EvalMode {
 		loop.LoopProtocolPath = loopProtocolPath
-		loop.CompletionGuards = append(loop.CompletionGuards, loopProtocolCompletionGuard(loopProtocolPath))
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	if p.cfg.EnableBuiltins && !p.cfg.EvalMode {
@@ -879,35 +879,6 @@ func activePlanCompletionGuard(planPath string) agent.CompletionGuard {
 			Blocked:        true,
 			ID:             "active-plan-unfinished",
 			Trigger:        "active_plan_unfinished",
-			Reason:         reason,
-			RequiredAction: required,
-			Prompt:         prompt,
-		}
-	}
-}
-
-func loopProtocolCompletionGuard(protocolPath string) agent.CompletionGuard {
-	return func() agent.CompletionGuardResult {
-		if strings.TrimSpace(protocolPath) == "" {
-			return agent.CompletionGuardResult{}
-		}
-		summary, found, err := loopstate.SummarizeFile(protocolPath, loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath))))
-		if err != nil || !found || strings.TrimSpace(summary.Status) != "running" {
-			return agent.CompletionGuardResult{}
-		}
-		reason := "Active loop protocol is still running."
-		if summary.LoopID != "" {
-			reason = fmt.Sprintf("Active loop protocol %s is still running.", summary.LoopID)
-		}
-		required := "Use loop_protocol action=close with status completed, blocked, or paused before finalizing."
-		prompt := "AFFENT COMPLETION GUARD:\n" +
-			reason + "\n" +
-			required + "\n" +
-			"If the loop objective is complete, close it as completed with compact evidence. If it cannot continue, close it as blocked with the missing external condition. If it should wait deliberately, close it as paused. Do not leave a running loop behind a final answer."
-		return agent.CompletionGuardResult{
-			Blocked:        true,
-			ID:             "loop-protocol-running",
-			Trigger:        "loop_protocol_running",
 			Reason:         reason,
 			RequiredAction: required,
 			Prompt:         prompt,
