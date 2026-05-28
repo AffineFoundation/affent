@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -85,7 +86,7 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 		t.Fatalf("first ssh = %+v, want generated public key", first.SSH)
 	}
 	privatePath, publicPath := accountSSHKeyPaths(pool)
-	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), privatePath) {
+	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), strconv.Quote(privatePath)) {
 		t.Fatalf("generate ssh response leaked private key path: %s", w.Body.String())
 	}
 	privateInfo, err := os.Stat(privatePath)
@@ -97,6 +98,12 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	}
 	if _, err := os.Stat(publicPath); err != nil {
 		t.Fatalf("stat public key: %v", err)
+	}
+	if first.SSH.PublicKeyPath != publicPath {
+		t.Fatalf("public key path = %q, want %q", first.SSH.PublicKeyPath, publicPath)
+	}
+	if !strings.Contains(w.Body.String(), `"public_key_path"`) || !strings.Contains(w.Body.String(), publicPath) {
+		t.Fatalf("generate ssh response missing public key path: %s", w.Body.String())
 	}
 
 	r = httptest.NewRequest(http.MethodPost, "/v1/settings/ssh-key", nil)
@@ -115,7 +122,10 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	if second.SSH.PublicKey != first.SSH.PublicKey {
 		t.Fatalf("public key changed on second ensure:\nfirst=%s\nsecond=%s", first.SSH.PublicKey, second.SSH.PublicKey)
 	}
-	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), privatePath) {
+	if second.SSH.PublicKeyPath != publicPath {
+		t.Fatalf("second public key path = %q, want %q", second.SSH.PublicKeyPath, publicPath)
+	}
+	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), strconv.Quote(privatePath)) {
 		t.Fatalf("existing ssh response leaked private key path: %s", w.Body.String())
 	}
 	pairs := pool.accountEnvPairs()
