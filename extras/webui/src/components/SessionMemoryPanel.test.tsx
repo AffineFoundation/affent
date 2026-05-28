@@ -72,6 +72,10 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:research");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("taostats pages require browser network evidence");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("research");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("Topic memory");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("taostats pages are dynamic");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("CoinGecko has API fallback");
     await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Copy update evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory update evidence"));
     await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Review update" }));
@@ -90,6 +94,7 @@ describe("SessionMemoryPanel", () => {
     expect(list).toHaveTextContent("1 matched");
     expect(list).toHaveTextContent("taostats pages are dynamic");
     expect(list).not.toHaveTextContent("CoinGecko has API fallback");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("taostats pages are dynamic");
 
     await user.click(within(list).getByRole("button", { name: "Copy details" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory bucket evidence for research"));
@@ -185,8 +190,8 @@ describe("SessionMemoryPanel", () => {
       />,
     );
 
-    await user.click(screen.getByText("research"));
-    const obsoleteEntry = screen.getAllByText("obsolete browser fallback rule").find((node) => node.closest("li"));
+    await user.click(within(screen.getByTestId("session-memory-list")).getByText("research"));
+    const obsoleteEntry = within(screen.getByTestId("session-memory-list")).getAllByText("obsolete browser fallback rule").find((node) => node.closest("li"));
     expect(obsoleteEntry).toBeDefined();
     await user.click(within(obsoleteEntry!.closest("li")!).getByRole("button", { name: "Remove" }));
     expect(onRemoveMemory).not.toHaveBeenCalled();
@@ -240,8 +245,8 @@ describe("SessionMemoryPanel", () => {
       />,
     );
 
-    await user.click(screen.getByText("research"));
-    const staleEntry = screen.getAllByText("stale browser fallback rule").find((node) => node.closest("li"));
+    await user.click(within(screen.getByTestId("session-memory-list")).getByText("research"));
+    const staleEntry = within(screen.getByTestId("session-memory-list")).getAllByText("stale browser fallback rule").find((node) => node.closest("li"));
     expect(staleEntry).toBeDefined();
     await user.click(within(staleEntry!.closest("li")!).getByRole("button", { name: "Edit" }));
     const editBox = screen.getByLabelText("Edit memory 1");

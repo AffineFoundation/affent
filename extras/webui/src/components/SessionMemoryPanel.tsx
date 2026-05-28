@@ -62,12 +62,21 @@ export function SessionMemoryPanel({
   const [memorySaveState, setMemorySaveState] = useState<{ state: "idle" | "saving" | "saved" | "error"; message?: string }>({ state: "idle" });
   const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | undefined>();
   const [editingEntry, setEditingEntry] = useState<{ key: string; value: string } | undefined>();
+  const [selectedBucketKey, setSelectedBucketKey] = useState<string | undefined>();
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
     if (!trimmedQuery) return buckets;
     return buckets.filter((bucket) => memoryBucketMatchesQuery(bucket, trimmedQuery));
   }, [buckets, trimmedQuery]);
+  const focusedBucket = useMemo(() => {
+    if (filtered.length === 0) return undefined;
+    const selected = selectedBucketKey ? filtered.find((bucket) => memoryBucketKey(bucket) === selectedBucketKey) : undefined;
+    if (selected) return selected;
+    return filtered.find((bucket) => bucket.target === "memory" && bucket.topic && bucket.topic !== "core")
+      ?? filtered.find((bucket) => bucket.target === "memory")
+      ?? filtered[0];
+  }, [filtered, selectedBucketKey]);
   const matchingEntryCount = useMemo(() => {
     if (!trimmedQuery) return 0;
     return filtered.reduce((sum, bucket) => sum + memoryBucketMatchingEntries(bucket, trimmedQuery).length, 0);
@@ -204,6 +213,7 @@ export function SessionMemoryPanel({
               onUseAsDraft={onUseAsDraft}
             />
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
+            {focusedBucket ? <MemoryBucketFocus bucket={focusedBucket} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
               <div className="session-skills-controls">
                 <label className="session-skills-search">
@@ -228,9 +238,18 @@ export function SessionMemoryPanel({
                 filtered.map((bucket) => {
                   const matchingEntries = trimmedQuery ? memoryBucketMatchingEntries(bucket, trimmedQuery) : [];
                   const entriesToShow = matchingEntries.length > 0 ? matchingEntries : bucket.entries;
+                  const bucketKey = memoryBucketKey(bucket);
                   return (
-                    <details key={`${bucket.target}:${bucket.topic ?? ""}`} className="session-skill-item" open={trimmedQuery ? true : undefined}>
-                      <summary>
+                    <details
+                      key={bucketKey}
+                      className="session-skill-item"
+                      data-selected={focusedBucket && memoryBucketKey(focusedBucket) === bucketKey ? "true" : "false"}
+                      open={trimmedQuery ? true : undefined}
+                      onToggle={(event) => {
+                        if (event.currentTarget.open) setSelectedBucketKey(bucketKey);
+                      }}
+                    >
+                      <summary onClick={() => setSelectedBucketKey(bucketKey)}>
                         <span className="session-skill-title">
                           <strong>{memoryBucketLabel(bucket)}</strong>
                           <span>{bucket.entry_count} entries</span>
@@ -393,6 +412,55 @@ export function SessionMemoryPanel({
         ) : null}
       </div>
     </details>
+  );
+}
+
+function MemoryBucketFocus({ bucket, onUseAsDraft }: { bucket: SessionMemoryBucket; onUseAsDraft?: UseAsDraft }) {
+  const entries = bucket.entries ?? [];
+  const previewEntries = entries.slice(0, 4);
+  return (
+    <section className="session-memory-focus" data-testid="session-memory-focus" aria-label={`Memory bucket ${memoryBucketLabel(bucket)}`}>
+      <div className="session-memory-focus-head">
+        <span>{bucket.target === "user" ? "User memory" : bucket.topic === "core" ? "Core memory" : "Topic memory"}</span>
+        <strong>{memoryBucketLabel(bucket)}</strong>
+        <small>{memoryBucketPreview(bucket)}</small>
+      </div>
+      <div className="session-memory-focus-grid">
+        <MemoryFocusFact label="Target" value={bucket.target} />
+        <MemoryFocusFact label="Entries" value={String(bucket.entry_count)} />
+        <MemoryFocusFact label="Usage" value={memoryBucketUsage(bucket)} />
+        <MemoryFocusFact label="Updated" value={bucket.newest_at ? formatTimestamp(bucket.newest_at) : "Unknown"} />
+      </div>
+      <div className="session-memory-focus-entries">
+        <span>Entries</span>
+        {previewEntries.length > 0 ? (
+          <ul>
+            {previewEntries.map((entry, index) => <li key={`${index}:${entry}`}>{entry}</li>)}
+          </ul>
+        ) : (
+          <p>No entries in this bucket.</p>
+        )}
+        {entries.length > previewEntries.length ? <small>{entries.length - previewEntries.length} more entries in the bucket list.</small> : null}
+      </div>
+      <div className="session-memory-actions">
+        <CopyButton label="Copy details" value={memoryBucketEvidenceText(bucket)} className="node-action" />
+        <CopyButton label="Copy entries" value={entries.join("\n\n")} className="node-action" />
+        {onUseAsDraft ? (
+          <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
+            Start from memory
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function MemoryFocusFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="session-memory-focus-fact">
+      <span>{label}</span>
+      <strong title={value}>{value}</strong>
+    </div>
   );
 }
 
@@ -562,6 +630,10 @@ function formatTimestamp(value: string): string {
 
 function memoryEntryKey(target: string, topic: string | undefined, entry: string): string {
   return `${target}:${topic ?? ""}:${entry}`;
+}
+
+function memoryBucketKey(bucket: SessionMemoryBucket): string {
+  return `${bucket.target}:${bucket.topic ?? ""}`;
 }
 
 function formatPanelError(err: unknown): string {
