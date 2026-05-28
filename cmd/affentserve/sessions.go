@@ -1063,6 +1063,7 @@ func (s *Session) Unsubscribe(id int) {
 // publish-on-closed-channel would panic. The events channel becomes
 // unreferenced after fanout exits and is GC'd.
 func (s *Session) fanout() {
+	toolByCallID := map[string]string{}
 	defer func() {
 		s.subsMu.Lock()
 		for id, ch := range s.subs {
@@ -1080,32 +1081,84 @@ func (s *Session) fanout() {
 			if !ok {
 				return
 			}
-			ev.ID = s.nextEventLine
-			s.nextEventLine++
-			if s.trace != nil {
-				if err := s.trace.Write(ev); err != nil {
-					s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("event log write")
-				}
+			derived, hasDerived := s.derivedLoopProtocolActivationEvent(ev, toolByCallID)
+			s.dispatchSessionEvent(ev)
+			if hasDerived {
+				s.dispatchSessionEvent(derived)
 			}
-			s.touch()
-			s.observeForStats(ev)
-			if ev.Type == sse.TypeTurnEnd {
-				s.endTurn()
-			}
-			s.subsMu.Lock()
-			for _, ch := range s.subs {
-				select {
-				case ch <- ev:
-				default:
-					// Subscriber is behind. Skip rather than block
-					// the loop. SSE clients see this as a missing
-					// event id and reconnect with Last-Event-ID for
-					// replay once that feature lands.
-				}
-			}
-			s.subsMu.Unlock()
 		}
 	}
+}
+
+func (s *Session) dispatchSessionEvent(ev sse.Event) {
+	ev.ID = s.nextEventLine
+	s.nextEventLine++
+	if s.trace != nil {
+		if err := s.trace.Write(ev); err != nil {
+			s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("event log write")
+		}
+	}
+	s.touch()
+	s.observeForStats(ev)
+	if ev.Type == sse.TypeTurnEnd {
+		s.endTurn()
+	}
+	s.subsMu.Lock()
+	for _, ch := range s.subs {
+		select {
+		case ch <- ev:
+		default:
+			// Subscriber is behind. Skip rather than block the loop.
+			// SSE clients can reconnect with Last-Event-ID for replay.
+		}
+	}
+	s.subsMu.Unlock()
+}
+
+func (s *Session) derivedLoopProtocolActivationEvent(ev sse.Event, toolByCallID map[string]string) (sse.Event, bool) {
+	switch ev.Type {
+	case sse.TypeToolRequest:
+		var p sse.ToolRequestPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return sse.Event{}, false
+		}
+		if strings.TrimSpace(p.CallID) != "" {
+			toolByCallID[p.CallID] = p.Tool
+		}
+	case sse.TypeToolResult:
+		var p sse.ToolResultPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return sse.Event{}, false
+		}
+		tool := toolByCallID[p.CallID]
+		delete(toolByCallID, p.CallID)
+		if tool != agent.LoopProtocolToolName ||
+			p.ExitCode != 0 ||
+			!strings.Contains(p.ResultSummary+"\n"+p.Result, "activated LOOP.md status=running") ||
+			strings.TrimSpace(s.loopProtocolPath) == "" {
+			return sse.Event{}, false
+		}
+		state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(s.loopProtocolPath), loopstate.StateFileName))
+		if err != nil || !found || state.Status != "running" || state.LastEventType != "loop.protocol_activate" {
+			return sse.Event{}, false
+		}
+		out, err := sse.NewEvent(sse.TypeLoopActivation, sse.LoopProtocolActivationPayload{
+			TurnID:          p.TurnID,
+			LoopID:          state.LoopID,
+			Status:          state.Status,
+			ProtocolUpdates: state.ProtocolUpdates,
+			ProtocolPath:    loopstate.ProtocolRelPath(s.ID),
+			EventSeq:        state.EventCount,
+		})
+		if err != nil {
+			if s.loop != nil {
+				s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("encode loop activation event")
+			}
+			return sse.Event{}, false
+		}
+		return out, true
+	}
+	return sse.Event{}, false
 }
 
 // Close releases all session resources. Idempotent and safe under
@@ -1529,20 +1582,12 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 		if state.CalibrationAnswers >= state.CalibrationQuestions {
 			return
 		}
-	} else if state.CalibrationAnswers > 0 {
-		return
-	}
-	question, hasQuestion := latestLoopCalibrationQuestion(s.conv.Snapshot())
-	if !hasQuestion {
-		return
-	}
-	if state.CalibrationQuestions == 0 {
-		state, event, err = loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, question)
+		state, event, err = loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
 		if err != nil {
-			s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration question")
+			s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration")
 			return
 		}
-		s.publishSessionEvent(sse.TypeLoopCalibrationRequest, sse.LoopProtocolCalibrationPayload{
+		s.publishSessionEvent(sse.TypeLoopCalibration, sse.LoopProtocolCalibrationPayload{
 			LoopID:                  state.LoopID,
 			Status:                  state.Status,
 			CalibrationQuestions:    state.CalibrationQuestions,
@@ -1552,38 +1597,8 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 			ProtocolPath:            loopstate.ProtocolRelPath(s.ID),
 			EventSeq:                event.Seq,
 		})
-	}
-	state, event, err = loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
-	if err != nil {
-		s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration")
 		return
 	}
-	s.publishSessionEvent(sse.TypeLoopCalibration, sse.LoopProtocolCalibrationPayload{
-		LoopID:                  state.LoopID,
-		Status:                  state.Status,
-		CalibrationQuestions:    state.CalibrationQuestions,
-		LastCalibrationQuestion: state.LastCalibrationQuestion,
-		CalibrationAnswers:      state.CalibrationAnswers,
-		LastCalibrationAnswer:   state.LastCalibrationAnswer,
-		ProtocolPath:            loopstate.ProtocolRelPath(s.ID),
-		EventSeq:                event.Seq,
-	})
-}
-
-func latestLoopCalibrationQuestion(messages []agent.ChatMessage) (string, bool) {
-	for i := len(messages) - 1; i >= 0; i-- {
-		msg := messages[i]
-		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
-			text := strings.TrimSpace(msg.Content)
-			return text, looksLikeLoopCalibrationQuestion(text)
-		}
-	}
-	return "", false
-}
-
-func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
-	_, ok := latestLoopCalibrationQuestion(messages)
-	return ok
 }
 
 func (s *Session) publishSessionEvent(eventType string, payload any) {
@@ -1604,31 +1619,6 @@ func (s *Session) publishSessionEvent(eventType string, payload any) {
 			s.loop.Log.Warn().Str("type", eventType).Msg("session event channel full; dropped")
 		}
 	}
-}
-
-func looksLikeLoopCalibrationQuestion(text string) bool {
-	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
-	if normalized == "" || (!strings.Contains(normalized, "?") && !strings.Contains(normalized, "？")) {
-		return false
-	}
-	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "activation", "draft", "protocol", "长期", "循环", "激活", "草案", "协议"}
-	if !containsAny(normalized, loopishMarkers) {
-		return false
-	}
-	calibrationMarkers := []string{
-		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule", "scope", "cadence", "frequency", "output",
-		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时", "范围", "频率", "产出", "目录", "位置",
-	}
-	return containsAny(normalized, calibrationMarkers)
-}
-
-func containsAny(text string, markers []string) bool {
-	for _, marker := range markers {
-		if strings.Contains(text, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func generatedLoopCalibrationPrompt(text string) bool {

@@ -26,6 +26,7 @@ const (
 	TypeLoopProtocolFeed       = "loop.protocol_feed"
 	TypeLoopCalibrationRequest = "loop.protocol_calibration_request"
 	TypeLoopCalibration        = "loop.protocol_calibration"
+	TypeLoopActivation         = "loop.protocol_activate"
 	TypeLoopDecision           = "loop.decision"
 	TypeLoopTurnCheckpoint     = "loop.turn_checkpoint"
 	TypeContextCompact         = "context.compacted"
@@ -342,6 +343,17 @@ type LoopProtocolCalibrationPayload struct {
 	LastCalibrationAnswer   string `json:"last_calibration_answer_preview,omitempty"`
 	ProtocolPath            string `json:"protocol_path,omitempty"`
 	EventSeq                int    `json:"event_seq,omitempty"`
+}
+
+// LoopProtocolActivationPayload mirrors successful draft-to-running LOOP.md
+// activation into the normal session trace/SSE stream.
+type LoopProtocolActivationPayload struct {
+	TurnID          string `json:"turn_id,omitempty"`
+	LoopID          string `json:"loop_id,omitempty"`
+	Status          string `json:"status,omitempty"`
+	ProtocolUpdates int    `json:"protocol_updates,omitempty"`
+	ProtocolPath    string `json:"protocol_path,omitempty"`
+	EventSeq        int    `json:"event_seq,omitempty"`
 }
 
 // LoopDecisionPayload records one short protocol decision made outside the

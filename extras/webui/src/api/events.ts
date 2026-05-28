@@ -26,6 +26,7 @@ export const EventType = {
   LoopProtocolFeed: "loop.protocol_feed",
   LoopProtocolCalibrationRequest: "loop.protocol_calibration_request",
   LoopProtocolCalibration: "loop.protocol_calibration",
+  LoopProtocolActivation: "loop.protocol_activate",
   LoopDecision: "loop.decision",
   ContextCompacted: "context.compacted",
   Error: "error",
@@ -257,6 +258,15 @@ export interface LoopProtocolCalibrationPayload {
   event_seq?: number;
 }
 
+export interface LoopProtocolActivationPayload {
+  turn_id?: string;
+  loop_id?: string;
+  status?: string;
+  protocol_updates?: number;
+  protocol_path?: string;
+  event_seq?: number;
+}
+
 export interface LoopDecisionPayload {
   turn_id?: string;
   loop_id?: string;
@@ -309,6 +319,7 @@ export interface PayloadByType {
   [EventType.LoopProtocolFeed]: LoopProtocolFeedPayload;
   [EventType.LoopProtocolCalibrationRequest]: LoopProtocolCalibrationPayload;
   [EventType.LoopProtocolCalibration]: LoopProtocolCalibrationPayload;
+  [EventType.LoopProtocolActivation]: LoopProtocolActivationPayload;
   [EventType.LoopDecision]: LoopDecisionPayload;
   [EventType.ContextCompacted]: ContextCompactedPayload;
   [EventType.Error]: ErrorPayload;

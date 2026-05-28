@@ -169,7 +169,7 @@ func TestHandleSessionMessage_LoopSetupMarkerCreatesDraftBeforeTurn(t *testing.T
 func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"What should pause this loop?"},"finish_reason":"stop"}]}` + "\n\n"))
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"Which implementation language should I use?"},"finish_reason":"stop"}]}` + "\n\n"))
 	}))
 	defer srv.Close()
 	pool := newTestPool(t, 4, "5m")
@@ -213,6 +213,8 @@ func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 	}
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"display_text":"Set up loop: market monitor"`)
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"mode":"loop_setup"`)
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"type":"loop.protocol_calibration_request"`)
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `Which implementation language should I use?`)
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"type":"turn.end"`)
 }
 

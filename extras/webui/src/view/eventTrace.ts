@@ -292,6 +292,8 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       return { label: "Loop calibration asked", meta: loopProtocolCalibrationRequestEventMeta(event), badges: loopProtocolCalibrationBadges(event) };
     case EventType.LoopProtocolCalibration:
       return { label: "Loop calibration recorded", meta: loopProtocolCalibrationEventMeta(event), badges: loopProtocolCalibrationBadges(event) };
+    case EventType.LoopProtocolActivation:
+      return { label: "Loop activated", meta: loopProtocolActivationEventMeta(event, request), badges: loopProtocolActivationBadges(event) };
     case EventType.LoopDecision:
       return { label: "Loop decision", meta: loopDecisionMeta(event, request), badges: loopDecisionBadges(event) };
     case EventType.ContextCompacted:
@@ -583,7 +585,25 @@ function loopProtocolCalibrationRequestEventMeta(event: NormalizedEvent): string
   ]);
 }
 
+function loopProtocolActivationEventMeta(event: NormalizedEvent, turn: string | undefined): string[] {
+  const updates = readNumber(event.data, "protocol_updates");
+  const seq = readNumber(event.data, "event_seq");
+  return compact([
+    turn,
+    readString(event.data, "loop_id"),
+    updates ? `${updates} updates` : undefined,
+    seq ? `event ${seq}` : undefined,
+    readString(event.data, "protocol_path"),
+  ]);
+}
+
 function loopProtocolCalibrationBadges(event: NormalizedEvent): string[] {
+  return compact([
+    readString(event.data, "status"),
+  ]);
+}
+
+function loopProtocolActivationBadges(event: NormalizedEvent): string[] {
   return compact([
     readString(event.data, "status"),
   ]);

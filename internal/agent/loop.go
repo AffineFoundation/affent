@@ -250,6 +250,11 @@ type TurnOptions struct {
 	// normal, plan_only, execute_plan, or loop_setup. It is trace/UI-only
 	// metadata and is not fed back into the model.
 	UserMode string
+	// ForceLoopCalibrationQuestion records the next visible assistant answer
+	// as a loop setup calibration request when LOOP.md is still a draft. UI
+	// loop setup is a stateful activation flow; it must not depend on guessing
+	// whether a domain-specific question contains magic keywords.
+	ForceLoopCalibrationQuestion bool
 	// ScheduleID identifies the session schedule that fired this turn, when
 	// UserSource == "schedule".
 	ScheduleID string
@@ -1112,7 +1117,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		if forceNoToolsNext {
 			toolDefs = nil
 		}
-		final, reason, err := l.runStep(ctx, turnID, toolDefs)
+		final, reason, err := l.runStep(ctx, turnID, toolDefs, opts)
 		if err != nil {
 			endReason = reason
 			break
@@ -1455,6 +1460,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			omitted := l.publishAndAppendToolResultWithContextMeta(turnID, callID, toolName, result, isErr, toolDuration, delegation, toolContextBudget, memoryUpdate)
 			recordContextOmission(omitted)
+			if l.loopProtocolStartSetupCreatedDraft(toolName, args, isErr) {
+				opts.ForceLoopCalibrationQuestion = true
+			}
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
 			for _, state := range postToolPolicies {
@@ -2143,7 +2151,7 @@ func skippedToolResultContent(content string) string {
 // the loop uses it to decide whether a stream-cut error is safe to
 // retry. (Reasoning deltas don't count: they're the model's hidden
 // thinking, not user-visible output.)
-func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-chan StreamEvent) (*FinishInfo, bool, error) {
+func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-chan StreamEvent, opts TurnOptions) (*FinishInfo, bool, error) {
 	var lastErr error
 	var finish *FinishInfo
 	var sawText bool
@@ -2207,7 +2215,7 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 			Text:         visibleText,
 			FinishReason: finish.Reason,
 		})
-		l.recordLoopProtocolCalibrationQuestionIfReady(turnID, visibleText)
+		l.recordLoopProtocolCalibrationQuestionIfReady(turnID, visibleText, opts)
 	}
 	// Backfill any tool_call IDs the model omitted. Done HERE — before
 	// the persistent Append — so the dispatch path, the eventual wire
@@ -2466,7 +2474,7 @@ func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append final no-tools prompt")
 		return nil, sse.TurnEndError, err
 	}
-	return l.runStep(ctx, turnID, nil)
+	return l.runStep(ctx, turnID, nil, TurnOptions{})
 }
 
 func (l *Loop) publishFinalEvidenceDigestInjected(turnID, digest string) {
@@ -2553,7 +2561,7 @@ func (l *Loop) toolResultMaxBytesInContextFor(toolName string) int {
 	return l.toolResultMaxBytesInContext()
 }
 
-func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (*FinishInfo, string, error) {
+func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, opts TurnOptions) (*FinishInfo, string, error) {
 	timeout := l.perCallTimeout()
 	maxRetries := l.maxTransientRetries()
 	backoff := l.transientBackoff()
@@ -2577,7 +2585,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 		if err != nil {
 			code = "llm_request"
 		} else {
-			final, sawMessage, perr = l.consumeAndPersist(callCtx, turnID, stream)
+			final, sawMessage, perr = l.consumeAndPersist(callCtx, turnID, stream, opts)
 			if perr != nil {
 				code = "llm_stream"
 				err = perr

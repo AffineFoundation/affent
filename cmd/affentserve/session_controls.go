@@ -211,6 +211,9 @@ func normalizeSessionMessageMode(raw string) (string, error) {
 }
 
 func sessionMessageTurnOptions(sess *Session, mode string, executePlanStepIndex int) (agent.TurnOptions, error) {
+	if mode == sessionMessageModeLoopSetup {
+		return agent.TurnOptions{UserMode: agent.UserModeLoopSetup, ForceLoopCalibrationQuestion: true}, nil
+	}
 	if !sessionMessageModeRequiresPlanTool(mode) {
 		return agent.TurnOptions{}, nil
 	}

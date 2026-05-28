@@ -2029,8 +2029,8 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if state.CalibrationAnswers != 0 {
 		t.Fatalf("synthetic setup prompt recorded calibration state = %+v", state)
 	}
-	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "What stop condition should pause this loop?"}); err != nil {
-		t.Fatalf("append assistant: %v", err)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
 	s.recordLoopProtocolCalibrationAnswerIfReady("Pause if source quality is weak or weekly report is complete.")
 	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
@@ -2047,22 +2047,13 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 		t.Fatalf("read history: %v", err)
 	}
 	var sawCalibration bool
-	var sawCalibrationRequest bool
 	for _, ev := range history.Events {
-		if ev.Type != sse.TypeLoopCalibration && ev.Type != sse.TypeLoopCalibrationRequest {
+		if ev.Type != sse.TypeLoopCalibration {
 			continue
 		}
 		var payload sse.LoopProtocolCalibrationPayload
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			t.Fatalf("decode calibration payload: %v", err)
-		}
-		if ev.Type == sse.TypeLoopCalibrationRequest &&
-			payload.CalibrationQuestions == 1 &&
-			payload.EventSeq == state.EventCount-1 &&
-			payload.ProtocolPath == loopstate.ProtocolRelPath("loop-calibration") &&
-			strings.Contains(payload.LastCalibrationQuestion, "stop condition") {
-			sawCalibrationRequest = true
-			continue
 		}
 		if payload.CalibrationAnswers == 1 &&
 			payload.EventSeq == state.EventCount &&
@@ -2071,11 +2062,120 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 			sawCalibration = true
 		}
 	}
-	if !sawCalibrationRequest {
-		t.Fatalf("history missing synthesized loop calibration request event: %+v", history.Events)
-	}
 	if !sawCalibration {
 		t.Fatalf("history missing loop calibration mirror event: %+v", history.Events)
+	}
+}
+
+func TestSessionRecordsLoopProtocolAnswerFromPendingCalibrationState(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-calibration-pending-state")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if err := s.ensureLoopProtocolInitialized("Build a CLI puzzle game."); err != nil {
+		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
+	}
+
+	question := "Which implementation language should I use?"
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, question); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-pending-state"))
+	if err != nil || !found {
+		t.Fatalf("ReadState after pending question found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.LastEventType != "loop.protocol_calibration_request" ||
+		!strings.Contains(state.LastCalibrationQuestion, "implementation language") {
+		t.Fatalf("pending calibration question state = %+v", state)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("Python")
+	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-pending-state"))
+	if err != nil || !found {
+		t.Fatalf("ReadState after answer found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		state.LastEventType != "loop.protocol_calibration" ||
+		state.LastCalibrationAnswer != "Python" {
+		t.Fatalf("pending calibration answer state = %+v", state)
+	}
+	tracePath := filepath.Join(pool.sessionDirPath("loop-calibration-pending-state"), "events.jsonl")
+	waitForFileSubstring(t, tracePath, `"type":"loop.protocol_calibration"`)
+}
+
+func TestSessionMirrorsLoopProtocolActivationIntoTrace(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-activation-mirror")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if err := s.ensureLoopProtocolInitialized("Mirror loop activation into the session event trace."); err != nil {
+		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(s.loopProtocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol, ok := loopstate.ProtocolWithStatus(protocol, "running")
+	if !ok {
+		t.Fatalf("ProtocolWithStatus failed")
+	}
+	if err := loopstate.WriteProtocol(s.loopProtocolPath, protocol); err != nil {
+		t.Fatalf("WriteProtocol: %v", err)
+	}
+	state, activationEvent, err := loopstate.RecordProtocolActivation(s.loopProtocolPath, "test activation")
+	if err != nil {
+		t.Fatalf("RecordProtocolActivation: %v", err)
+	}
+	if state.Status != "running" || state.LastEventType != "loop.protocol_activate" {
+		t.Fatalf("activation state = %+v", state)
+	}
+
+	subID, ch := s.Subscribe(16)
+	defer s.Unsubscribe(subID)
+	s.events <- mustSSEEvent(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t1",
+		CallID: "lp1",
+		Tool:   agent.LoopProtocolToolName,
+		Args:   map[string]any{"action": "complete_activation"},
+	})
+	s.events <- mustSSEEvent(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:        "t1",
+		CallID:        "lp1",
+		ExitCode:      0,
+		ResultSummary: "activated LOOP.md status=running event_seq=2",
+		Result:        "activated LOOP.md status=running event_seq=2",
+	})
+
+	deadline := time.After(2 * time.Second)
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Type != sse.TypeLoopActivation {
+				continue
+			}
+			var payload sse.LoopProtocolActivationPayload
+			if err := json.Unmarshal(ev.Data, &payload); err != nil {
+				t.Fatalf("decode activation payload: %v", err)
+			}
+			if payload.TurnID != "t1" ||
+				payload.LoopID != "loop-activation-mirror" ||
+				payload.Status != "running" ||
+				payload.ProtocolPath != loopstate.ProtocolRelPath("loop-activation-mirror") ||
+				payload.EventSeq != activationEvent.Seq {
+				t.Fatalf("activation payload = %+v, event=%+v", payload, activationEvent)
+			}
+			waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-activation-mirror"), "events.jsonl"), `"type":"loop.protocol_activate"`)
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for loop activation event")
+		}
 	}
 }
 
@@ -2090,8 +2190,8 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterActivationScopeQuestion
 	if err := s.ensureLoopProtocolInitialized("Set up recurring global situation reporting."); err != nil {
 		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
 	}
-	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "草案已就绪。在激活之前，我需要确认：分析范围和产出频率是什么？"}); err != nil {
-		t.Fatalf("append assistant: %v", err)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, "草案已就绪。在激活之前，我需要确认：分析范围和产出频率是什么？"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
 	s.recordLoopProtocolCalibrationAnswerIfReady("全面覆盖；每天更新一次，每周进行一次深度分析。")
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-activation-scope"))
@@ -2117,9 +2217,6 @@ func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing
 	if err := s.ensureLoopProtocolInitialized("Set up long-running subnet analysis."); err != nil {
 		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
 	}
-	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "I can help with market analysis."}); err != nil {
-		t.Fatalf("append assistant: %v", err)
-	}
 	s.recordLoopProtocolCalibrationAnswerIfReady("Please check whether the subnet page is reachable.")
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-strict"))
 	if err != nil || !found {
@@ -2128,8 +2225,8 @@ func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing
 	if state.CalibrationAnswers != 0 {
 		t.Fatalf("generic assistant message recorded calibration state = %+v", state)
 	}
-	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "什么条件应该暂停这个 loop？"}); err != nil {
-		t.Fatalf("append calibration assistant: %v", err)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, "什么条件应该暂停这个 loop？"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
 	s.recordLoopProtocolCalibrationAnswerIfReady("当网页证据不足或者用户目标改变时暂停。")
 	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-strict"))

@@ -153,6 +153,7 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			}
 			userText = sessionLoopSetupPrompt(loopSetupGoal)
 			turnOpts.UserMode = sessionMessageModeLoopSetup
+			turnOpts.ForceLoopCalibrationQuestion = true
 			turnOpts.UserDisplayText = sessionLoopSetupDisplayText(loopSetupGoal)
 		}
 

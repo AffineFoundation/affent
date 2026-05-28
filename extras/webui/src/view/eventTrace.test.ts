@@ -84,6 +84,18 @@ describe("eventTrace view model", () => {
       },
       {
         id: 6,
+        type: "loop.protocol_activate",
+        data: {
+          turn_id: "t1",
+          loop_id: "longrun",
+          status: "running",
+          protocol_updates: 3,
+          protocol_path: ".affent/loops/longrun/LOOP.md",
+          event_seq: 4,
+        },
+      },
+      {
+        id: 7,
         type: "runtime.surface",
         data: {
           turn_id: "t1",
@@ -94,7 +106,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 7,
+        id: 8,
         type: "loop.decision",
         data: {
           turn_id: "t1",
@@ -106,7 +118,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 8,
+        id: 9,
         type: "context.compacted",
         data: {
           turn_id: "t1",
@@ -121,7 +133,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 9,
+        id: 10,
         type: "turn.end",
         data: {
           turn_id: "t1",
@@ -141,11 +153,11 @@ describe("eventTrace view model", () => {
         },
       },
     ]));
-    const [request, result, feed, question, calibration, surface, decision, compacted, finished] = model.items;
+    const [request, result, feed, question, calibration, activation, surface, decision, compacted, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(9);
+    expect(model.items).toHaveLength(10);
     expect(request).toMatchObject({
       kind: "event",
       display: {
@@ -192,6 +204,14 @@ describe("eventTrace view model", () => {
         label: "Loop calibration recorded",
         meta: ["longrun", "calibration 1", "Stop when source evidence is weak.", "event 3", ".affent/loops/longrun/LOOP.md"],
         badges: ["draft"],
+      },
+    });
+    expect(activation).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop activated",
+        meta: ["Request 1", "longrun", "3 updates", "event 4", ".affent/loops/longrun/LOOP.md"],
+        badges: ["running"],
       },
     });
     expect(decision).toMatchObject({

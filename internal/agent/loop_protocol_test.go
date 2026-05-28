@@ -43,6 +43,46 @@ func TestWithLoopProtocolSkillProviderInjectsWhenFileExists(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolForcedCalibrationQuestionDoesNotDependOnTextHeuristics(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build a CLI puzzle game.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	loop := &Loop{
+		LoopProtocolPath: protocolPath,
+		Events:           make(chan sse.Event, 4),
+	}
+	question := "Which implementation language should I use?"
+	loop.recordLoopProtocolCalibrationQuestionIfReady("turn_1", question, TurnOptions{})
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState before forced question found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 0 {
+		t.Fatalf("unforced domain question should not depend on broad keyword matching: %+v", state)
+	}
+
+	loop.recordLoopProtocolCalibrationQuestionIfReady("turn_2", question, TurnOptions{
+		UserMode:                     UserModeLoopSetup,
+		ForceLoopCalibrationQuestion: true,
+	})
+	state, found, err = loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState after forced question found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.LastEventType != "loop.protocol_calibration_request" ||
+		!strings.Contains(state.LastCalibrationQuestion, "implementation language") {
+		t.Fatalf("forced calibration question state = %+v", state)
+	}
+}
+
 func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "uncalibrated")
@@ -122,7 +162,10 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 	if err := loop.EnsureSystemPrompt("base"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loop.SendUser(context.Background(), "Set up a loop for market analysis"); err != nil {
+	if _, err := loop.SendUserWithOptions(context.Background(), "Set up a loop for market analysis", TurnOptions{
+		UserMode:                     UserModeLoopSetup,
+		ForceLoopCalibrationQuestion: true,
+	}); err != nil {
 		t.Fatal(err)
 	}
 

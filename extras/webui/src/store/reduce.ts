@@ -295,6 +295,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
     }
     case EventType.LoopProtocolCalibrationRequest:
     case EventType.LoopProtocolCalibration:
+    case EventType.LoopProtocolActivation:
       return state;
     case EventType.LoopDecision: {
       const p = ev.data as LoopDecisionPayload;

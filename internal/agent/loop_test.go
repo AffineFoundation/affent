@@ -949,7 +949,7 @@ func TestConsumeAndPersist_ReasoningOnlyTerminalEmitsMessageDone(t *testing.T) {
 	}}
 	close(stream)
 
-	finish, sawText, err := l.consumeAndPersist(context.Background(), "turn-1", stream)
+	finish, sawText, err := l.consumeAndPersist(context.Background(), "turn-1", stream, TurnOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

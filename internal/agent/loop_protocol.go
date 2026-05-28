@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -314,13 +315,13 @@ func markdownSectionBody(section string) string {
 	return strings.Join(strings.Fields(strings.Join(out, " ")), " ")
 }
 
-func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string) {
+func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string, opts TurnOptions) {
 	if l == nil {
 		return
 	}
 	path := strings.TrimSpace(l.LoopProtocolPath)
 	question := strings.TrimSpace(text)
-	if path == "" || !looksLikeLoopProtocolCalibrationQuestion(question) {
+	if path == "" || !opts.ForceLoopCalibrationQuestion {
 		return
 	}
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
@@ -348,29 +349,19 @@ func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string)
 	})
 }
 
-func looksLikeLoopProtocolCalibrationQuestion(text string) bool {
-	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
-	if normalized == "" || (!strings.Contains(normalized, "?") && !strings.Contains(normalized, "？")) {
+func (l *Loop) loopProtocolStartSetupCreatedDraft(toolName string, args json.RawMessage, isErr bool) bool {
+	if l == nil || isErr || toolName != LoopProtocolToolName || strings.TrimSpace(l.LoopProtocolPath) == "" {
 		return false
 	}
-	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "长期", "循环"}
-	if !loopProtocolContainsAny(normalized, loopishMarkers) {
+	var parsed loopProtocolToolArgs
+	if err := json.Unmarshal(args, &parsed); err != nil {
 		return false
 	}
-	calibrationMarkers := []string{
-		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule",
-		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时",
+	if strings.ToLower(strings.TrimSpace(parsed.Action)) != "start_setup" {
+		return false
 	}
-	return loopProtocolContainsAny(normalized, calibrationMarkers)
-}
-
-func loopProtocolContainsAny(text string, markers []string) bool {
-	for _, marker := range markers {
-		if strings.Contains(text, marker) {
-			return true
-		}
-	}
-	return false
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(l.LoopProtocolPath), loopstate.StateFileName))
+	return err == nil && found && state.Status == "draft"
 }
 
 func loopProtocolPlanStateLine(checkpoint loopstate.PlanCheckpoint) string {
