@@ -276,6 +276,12 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
         meta: compact([request, finishReason(event)]),
         badges: [],
       };
+    case EventType.MessageRejected:
+      return {
+        label: "Assistant answer deferred",
+        meta: compact([request, readString(event.data, "trigger"), streamSummary(readString(event.data, "reason") ?? "")]),
+        badges: ["completion guard"],
+      };
     case EventType.ThinkingDone:
       return { label: "Thinking saved", meta: compact([request]), badges: [] };
     case EventType.ToolRequest:

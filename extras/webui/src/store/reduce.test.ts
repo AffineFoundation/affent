@@ -78,6 +78,34 @@ describe("reduce — message deltas accumulate before done", () => {
     expect(state.turns[0].assistantMessages).toEqual(["First status", "Second status"]);
     expect(state.turns[0].assistantText).toBe("First status\n\nSecond status");
   });
+
+  it("drops a rejected completion-guard candidate from final assistant text", () => {
+    const state = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "finish the task" } },
+      { id: 3, type: "message.delta", data: { turn_id: "t1", delta: "All done." } },
+      {
+        id: 4,
+        type: "message.rejected",
+        data: {
+          turn_id: "t1",
+          text: "All done.",
+          trigger: "active_plan_unfinished",
+          reason: "plan:0/1:active",
+        },
+      },
+      { id: 5, type: "loop.decision", data: { turn_id: "t1", kind: "completion_guard", trigger: "active_plan_unfinished", decision: "defer" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t1", call_id: "p1", tool: "plan", args: { action: "update" } } },
+      { id: 7, type: "tool.result", data: { turn_id: "t1", call_id: "p1", exit_code: 0, result_summary: "plan updated" } },
+      { id: 8, type: "message.delta", data: { turn_id: "t1", delta: "Now complete." } },
+      { id: 9, type: "message.done", data: { turn_id: "t1", text: "Now complete.", finish_reason: "stop" } },
+      { id: 10, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    expect(state.turns[0].assistantText).toBe("Now complete.");
+    expect(state.turns[0].assistantMessages).toEqual(["Now complete."]);
+    expect(state.turns[0].messageStreaming).toBe(false);
+  });
 });
 
 describe("reduce — user display text", () => {

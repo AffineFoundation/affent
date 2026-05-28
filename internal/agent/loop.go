@@ -1128,8 +1128,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 				if guard, blocked := l.completionGuardBlocker(turnID); blocked {
 					l.publishCompletionGuardDecision(turnID, guard)
+					l.publishMessageRejectedForFinish(turnID, final, guard)
 					return false, "", nil
 				}
+				l.publishAcceptedMessageDone(turnID, final, opts)
 				return true, "", nil
 			}
 			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, nextSkippedReason)
@@ -1225,6 +1227,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					totalOut += recovered.OutputTokens
 					if len(recovered.Final.ToolCalls) == 0 {
 						toolStats.ForcedNoTools++
+						l.publishAcceptedMessageDone(turnID, recovered, opts)
 						finishedNaturally = true
 						break
 					}
@@ -1247,6 +1250,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					totalOut += recovered.OutputTokens
 					toolStats.ForcedNoTools++
 					if len(recovered.Final.ToolCalls) == 0 {
+						l.publishAcceptedMessageDone(turnID, recovered, opts)
 						finishedNaturally = true
 						break
 					}
@@ -1259,6 +1263,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			if guard, blocked := l.completionGuardBlocker(turnID); blocked {
 				l.publishCompletionGuardDecision(turnID, guard)
+				l.publishMessageRejectedForFinish(turnID, final, guard)
 				completionGuardInterventions++
 				if completionGuardInterventions > maxCompletionGuardInterventions {
 					endReason = sse.TurnEndMaxTurns
@@ -1270,6 +1275,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 				continue
 			}
+			l.publishAcceptedMessageDone(turnID, final, opts)
 			finishedNaturally = true
 			break
 		}
@@ -2459,13 +2465,8 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 	if visibleText != "" {
 		// Close the streaming bubble so the UI's accumulator marks the
 		// assistant text done before the next assistant message starts.
-		l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
-			TurnID:       turnID,
-			Text:         visibleText,
-			FinishReason: finish.Reason,
-		})
-		if finish.Reason != "tool_calls" {
-			l.recordLoopProtocolCalibrationQuestionIfReady(turnID, visibleText, opts)
+		if !l.deferMessageDoneUntilCompletionGuard(finish) {
+			l.publishMessageDone(turnID, visibleText, finish.Reason, opts)
 		}
 	}
 	// Backfill any tool_call IDs the model omitted. Done HERE — before
@@ -2491,6 +2492,48 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append assistant message")
 	}
 	return finish, sawText, nil
+}
+
+func (l *Loop) deferMessageDoneUntilCompletionGuard(finish *FinishInfo) bool {
+	return finish != nil && len(finish.Final.ToolCalls) == 0 && len(l.CompletionGuards) > 0
+}
+
+func (l *Loop) publishAcceptedMessageDone(turnID string, finish *FinishInfo, opts TurnOptions) {
+	if !l.deferMessageDoneUntilCompletionGuard(finish) {
+		return
+	}
+	text := strings.TrimSpace(finish.Final.Content)
+	if text == "" {
+		return
+	}
+	l.publishMessageDone(turnID, text, finish.Reason, opts)
+}
+
+func (l *Loop) publishMessageDone(turnID, text, finishReason string, opts TurnOptions) {
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
+		TurnID:       turnID,
+		Text:         text,
+		FinishReason: finishReason,
+	})
+	if finishReason != "tool_calls" {
+		l.recordLoopProtocolCalibrationQuestionIfReady(turnID, text, opts)
+	}
+}
+
+func (l *Loop) publishMessageRejectedForFinish(turnID string, finish *FinishInfo, guard CompletionGuardResult) {
+	if !l.deferMessageDoneUntilCompletionGuard(finish) {
+		return
+	}
+	l.publish(sse.TypeMessageRejected, sse.MessageRejectedPayload{
+		TurnID:         turnID,
+		Text:           strings.TrimSpace(finish.Final.Content),
+		Reason:         guard.Reason,
+		Trigger:        guard.Trigger,
+		RequiredAction: guard.RequiredAction,
+	})
 }
 
 func (l *Loop) publish(t string, payload any) {

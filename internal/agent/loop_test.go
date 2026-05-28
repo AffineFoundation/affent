@@ -1116,7 +1116,8 @@ func TestRunTurnCompletionGuardDefersPrematureFinalAnswer(t *testing.T) {
 	}
 
 	var sawDecision, sawPlanCall bool
-	var finalText string
+	var messageDoneTexts []string
+	var rejectedText string
 	var endReason string
 	deadline := time.After(10 * time.Second)
 	for endReason == "" {
@@ -1139,12 +1140,18 @@ func TestRunTurnCompletionGuardDefersPrematureFinalAnswer(t *testing.T) {
 				if p.Tool == PlanToolName {
 					sawPlanCall = true
 				}
+			case sse.TypeMessageRejected:
+				var p sse.MessageRejectedPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				rejectedText = p.Text
 			case sse.TypeMessageDone:
 				var p sse.MessageDonePayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatal(err)
 				}
-				finalText = p.Text
+				messageDoneTexts = append(messageDoneTexts, p.Text)
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -1162,8 +1169,11 @@ func TestRunTurnCompletionGuardDefersPrematureFinalAnswer(t *testing.T) {
 	if endReason != sse.TurnEndCompleted {
 		t.Fatalf("turn end reason = %q, want completed", endReason)
 	}
-	if finalText != "Now complete with plan evidence." {
-		t.Fatalf("final text = %q", finalText)
+	if rejectedText != "All done." {
+		t.Fatalf("rejected text = %q, want initial premature final", rejectedText)
+	}
+	if len(messageDoneTexts) != 1 || messageDoneTexts[0] != "Now complete with plan evidence." {
+		t.Fatalf("message.done texts = %#v, want only accepted final", messageDoneTexts)
 	}
 	if calls != 3 {
 		t.Fatalf("LLM calls = %d, want 3", calls)

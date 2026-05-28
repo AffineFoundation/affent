@@ -17,6 +17,7 @@ const (
 	TypeContextInjected        = "context.injected"
 	TypeMessageDelta           = "message.delta"
 	TypeMessageDone            = "message.done"
+	TypeMessageRejected        = "message.rejected"
 	TypeThinkingDelta          = "thinking.delta"
 	TypeThinkingDone           = "thinking.done"
 	TypeToolRequest            = "tool.request"
@@ -149,6 +150,14 @@ type MessageDonePayload struct {
 	// done" — otherwise a length-truncated reply looks identical to a
 	// short complete one and confuses UIs and eval rigs alike.
 	FinishReason string `json:"finish_reason,omitempty"`
+}
+
+type MessageRejectedPayload struct {
+	TurnID         string `json:"turn_id"`
+	Text           string `json:"text,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	Trigger        string `json:"trigger,omitempty"`
+	RequiredAction string `json:"required_action,omitempty"`
 }
 
 type ThinkingDeltaPayload struct {

@@ -8,6 +8,7 @@ import {
   type LoopProtocolFeedPayload,
   type MessageDeltaPayload,
   type MessageDonePayload,
+  type MessageRejectedPayload,
   type RawEvent,
   type RuntimeSurfacePayload,
   type ThinkingDeltaPayload,
@@ -205,6 +206,15 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         assistantText: composeAssistantText(appendAssistantMessage(t.assistantMessages ?? completedAssistantMessages(t), p.text)),
         messageStreaming: false,
         finishReason: p.finish_reason,
+      }));
+    }
+    case EventType.MessageRejected: {
+      const p = ev.data as MessageRejectedPayload;
+      return updateTurn(state, p.turn_id, (t) => ({
+        ...t,
+        assistantTextDraft: "",
+        assistantText: composeAssistantText(t.assistantMessages ?? completedAssistantMessages(t)),
+        messageStreaming: false,
       }));
     }
     case EventType.ToolRequest: {

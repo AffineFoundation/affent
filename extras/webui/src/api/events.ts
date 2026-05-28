@@ -17,6 +17,7 @@ export const EventType = {
   ContextInjected: "context.injected",
   MessageDelta: "message.delta",
   MessageDone: "message.done",
+  MessageRejected: "message.rejected",
   ThinkingDelta: "thinking.delta",
   ThinkingDone: "thinking.done",
   ToolRequest: "tool.request",
@@ -140,6 +141,14 @@ export interface MessageDonePayload {
   text: string;
   /** "stop" | "length" | "tool_calls" | "content_filter" | provider ext. */
   finish_reason?: string;
+}
+
+export interface MessageRejectedPayload {
+  turn_id: string;
+  text?: string;
+  reason?: string;
+  trigger?: string;
+  required_action?: string;
 }
 
 export interface ThinkingDeltaPayload {
@@ -317,6 +326,7 @@ export interface PayloadByType {
   [EventType.ContextInjected]: ContextInjectedPayload;
   [EventType.MessageDelta]: MessageDeltaPayload;
   [EventType.MessageDone]: MessageDonePayload;
+  [EventType.MessageRejected]: MessageRejectedPayload;
   [EventType.ThinkingDelta]: ThinkingDeltaPayload;
   [EventType.ThinkingDone]: ThinkingDonePayload;
   [EventType.ToolRequest]: ToolRequestPayload;
