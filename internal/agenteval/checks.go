@@ -2238,10 +2238,10 @@ func ShellCommandLacksUnguarded(forbidden string) Check {
 	}
 }
 
-// ShellCommandLacksWorkspaceAbsolutePath passes when shell command arguments
-// stay workspace-relative. It checks both the command text and optional cwd
-// arg against the trace's actual workspace path, so it catches regressions
-// where prompt guidance makes the model paste a per-session absolute path.
+// ShellCommandLacksWorkspaceAbsolutePath passes when workspace tool arguments
+// stay workspace-relative. The historical check name is kept for manifest
+// compatibility; the guard now covers shell command/cwd plus common workspace
+// file/search path arguments in both parent traces and child transcripts.
 func ShellCommandLacksWorkspaceAbsolutePath() Check {
 	return Check{
 		Name: "shell_command_lacks_workspace_absolute_path",
@@ -2250,27 +2250,10 @@ func ShellCommandLacksWorkspaceAbsolutePath() Check {
 			if len(needles) == 0 {
 				return CheckResult{Pass: true, Detail: "workspace path unavailable; skipped absolute-path check"}
 			}
-			for _, c := range t.Tools {
-				if c.Tool != "shell" {
-					continue
-				}
-				for _, argName := range []string{"command", "cwd"} {
-					value, ok := c.Args[argName]
-					if !ok {
-						continue
-					}
-					text := fmt.Sprint(value)
-					for _, needle := range needles {
-						if strings.Contains(text, needle) {
-							return CheckResult{
-								Pass:   false,
-								Detail: fmt.Sprintf("shell call_id=%s used workspace absolute path in %s: %q", c.CallID, argName, previewSubstr(text, 160)),
-							}
-						}
-					}
-				}
+			if res := workspaceToolCallsLackNeedles(t.Tools, needles); !res.Pass {
+				return res
 			}
-			if res := childTranscriptShellCommandsLackNeedles(t, needles); !res.Pass {
+			if res := childTranscriptWorkspaceToolCallsLackNeedles(t, needles); !res.Pass {
 				return res
 			}
 			return CheckResult{Pass: true}
@@ -2278,7 +2261,26 @@ func ShellCommandLacksWorkspaceAbsolutePath() Check {
 	}
 }
 
-func childTranscriptShellCommandsLackNeedles(t Trace, needles []string) CheckResult {
+func workspaceToolCallsLackNeedles(calls []ToolCall, needles []string) CheckResult {
+	for _, c := range calls {
+		for argName, text := range workspaceAbsoluteArgTexts(c.Tool, c.Args) {
+			if text == "" {
+				continue
+			}
+			for _, needle := range needles {
+				if strings.Contains(text, needle) {
+					return CheckResult{
+						Pass:   false,
+						Detail: fmt.Sprintf("%s call_id=%s used workspace absolute path in %s: %q", c.Tool, c.CallID, argName, previewSubstr(text, 160)),
+					}
+				}
+			}
+		}
+	}
+	return CheckResult{Pass: true}
+}
+
+func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string) CheckResult {
 	for _, ref := range t.ChildTranscripts {
 		path, ok := resolveChildTranscriptPath(t.WorkspaceDir, ref.Path)
 		if !ok {
@@ -2293,10 +2295,9 @@ func childTranscriptShellCommandsLackNeedles(t Trace, needles []string) CheckRes
 			if line == "" {
 				continue
 			}
-			calls := childTranscriptShellCalls(line)
+			calls := childTranscriptWorkspaceToolCalls(line)
 			for _, call := range calls {
-				for _, argName := range []string{"command", "cwd"} {
-					text := call.Args[argName]
+				for argName, text := range workspaceAbsoluteArgTexts(call.Tool, call.Args) {
 					if text == "" {
 						continue
 					}
@@ -2304,7 +2305,7 @@ func childTranscriptShellCommandsLackNeedles(t Trace, needles []string) CheckRes
 						if strings.Contains(text, needle) {
 							return CheckResult{
 								Pass:   false,
-								Detail: fmt.Sprintf("%s child transcript %s:%d shell call_id=%s used workspace absolute path in %s: %q", ref.Kind, ref.Path, lineNo+1, call.CallID, argName, previewSubstr(text, 160)),
+								Detail: fmt.Sprintf("%s child transcript %s:%d %s call_id=%s used workspace absolute path in %s: %q", ref.Kind, ref.Path, lineNo+1, call.Tool, call.CallID, argName, previewSubstr(text, 160)),
 							}
 						}
 					}
@@ -2313,6 +2314,33 @@ func childTranscriptShellCommandsLackNeedles(t Trace, needles []string) CheckRes
 		}
 	}
 	return CheckResult{Pass: true}
+}
+
+func workspaceAbsoluteArgTexts(tool string, args map[string]any) map[string]string {
+	names := workspacePathArgNames(tool)
+	if len(names) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, name := range names {
+		if value, ok := args[name]; ok {
+			out[name] = stringArgValue(value)
+		}
+	}
+	return out
+}
+
+func workspacePathArgNames(tool string) []string {
+	switch tool {
+	case "shell":
+		return []string{"command", "cwd"}
+	case "read_file", "write_file", "edit_file", "list_files", "file_context", "repo_search", "symbol_context":
+		return []string{"path"}
+	case "browser_screenshot":
+		return []string{"save_path"}
+	default:
+		return nil
+	}
 }
 
 func resolveChildTranscriptPath(workspace, relPath string) (string, bool) {
@@ -2331,12 +2359,13 @@ func resolveChildTranscriptPath(workspace, relPath string) (string, bool) {
 	return cleanFull, true
 }
 
-type childTranscriptShellCall struct {
+type childTranscriptWorkspaceToolCall struct {
 	CallID string
-	Args   map[string]string
+	Tool   string
+	Args   map[string]any
 }
 
-func childTranscriptShellCalls(line string) []childTranscriptShellCall {
+func childTranscriptWorkspaceToolCalls(line string) []childTranscriptWorkspaceToolCall {
 	var msg struct {
 		ToolCalls []struct {
 			ID       string `json:"id"`
@@ -2349,19 +2378,17 @@ func childTranscriptShellCalls(line string) []childTranscriptShellCall {
 	if err := json.Unmarshal([]byte(line), &msg); err != nil || len(msg.ToolCalls) == 0 {
 		return nil
 	}
-	var out []childTranscriptShellCall
+	var out []childTranscriptWorkspaceToolCall
 	for _, call := range msg.ToolCalls {
-		if call.Function.Name != "shell" {
+		if len(workspacePathArgNames(call.Function.Name)) == 0 {
 			continue
 		}
 		args := map[string]any{}
 		_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
-		out = append(out, childTranscriptShellCall{
+		out = append(out, childTranscriptWorkspaceToolCall{
 			CallID: call.ID,
-			Args: map[string]string{
-				"command": stringArgValue(args["command"]),
-				"cwd":     stringArgValue(args["cwd"]),
-			},
+			Tool:   call.Function.Name,
+			Args:   args,
 		})
 	}
 	return out

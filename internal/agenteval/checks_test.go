@@ -1865,6 +1865,20 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 		}
 	})
 
+	t.Run("fails for workspace file tool absolute path", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID: "c1",
+				Tool:   "read_file",
+				Args:   map[string]any{"path": filepath.Join(workspace, "data/value.txt")},
+			}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path in read_file should fail: %+v", res)
+		}
+	})
+
 	t.Run("fails for child transcript shell absolute workspace path", func(t *testing.T) {
 		transcriptRel := filepath.ToSlash(filepath.Join(".affentctl", "subagents", "parent", "subagent_child.jsonl"))
 		transcriptPath := filepath.Join(workspace, filepath.FromSlash(transcriptRel))
@@ -1881,6 +1895,25 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 		}
 		if res := check.Eval(trace); res.Pass {
 			t.Fatalf("absolute workspace path in child transcript should fail: %+v", res)
+		}
+	})
+
+	t.Run("fails for child transcript file tool absolute workspace path", func(t *testing.T) {
+		transcriptRel := filepath.ToSlash(filepath.Join(".affentctl", "focused-tasks", "parent", "focused_child.jsonl"))
+		transcriptPath := filepath.Join(workspace, filepath.FromSlash(transcriptRel))
+		if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		line := `{"role":"assistant","tool_calls":[{"id":"child1","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"` + filepath.ToSlash(filepath.Join(workspace, "docs/runtime.md")) + `\"}"}}]}`
+		if err := os.WriteFile(transcriptPath, []byte(line+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		trace := Trace{
+			WorkspaceDir:     workspace,
+			ChildTranscripts: []DebugTranscriptRef{{Kind: "focused_task", Path: transcriptRel}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path in child read_file should fail: %+v", res)
 		}
 	})
 }
