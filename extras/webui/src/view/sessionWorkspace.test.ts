@@ -22,6 +22,7 @@ describe("buildSessionWorkspace", () => {
       summary: "affent",
       shortStatus: "affent · main · dirty",
       detail: "/repo/affent · branch main · dirty · cwd extras/webui",
+      verification: "verified",
       path: "/repo/affent",
       lastAgentCwd: "extras/webui",
     });
@@ -37,6 +38,7 @@ describe("buildSessionWorkspace", () => {
       hasData: true,
       summary: "Workspace mismatch",
       shortStatus: "Workspace mismatch",
+      verification: "mismatch",
       tone: "warning",
       issue: "Latest command cwd is outside the session workspace.",
     });
@@ -49,6 +51,24 @@ describe("buildSessionWorkspace", () => {
       "Last agent cwd: /tmp",
     ].join("\n"));
     expect(workspaceDraft(workspace)).toContain("Verify this workspace mismatch before making more file changes or running commands");
+  });
+
+  it("marks historical command cwd evidence as missing an active workspace binding", () => {
+    const workspace = buildSessionWorkspace(
+      session({ last_agent_cwd: "/workspace/sessions/sess_123" }),
+      run(),
+    );
+
+    expect(workspace).toMatchObject({
+      hasData: true,
+      summary: "Workspace binding missing",
+      shortStatus: "Workspace binding missing",
+      detail: "cwd /workspace/sessions/sess_123",
+      verification: "missing_binding",
+      lastAgentCwd: "/workspace/sessions/sess_123",
+    });
+    expect(workspaceEvidenceText(workspace)).toContain("Last agent cwd: /workspace/sessions/sess_123");
+    expect(workspaceDraft(workspace)).toContain("Use this historical command cwd as workspace evidence");
   });
 
   it("uses the chronologically latest command cwd instead of the prioritized Run list", () => {
@@ -79,6 +99,7 @@ describe("buildSessionWorkspace", () => {
       hasData: false,
       summary: "No workspace evidence",
       shortStatus: "No workspace evidence",
+      verification: "unknown",
     });
   });
 });

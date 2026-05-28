@@ -15,6 +15,7 @@ describe("WorkspaceStatusPill", () => {
           summary: "affent",
           shortStatus: "affent · main · dirty",
           detail: "/repo/affent · branch main · dirty",
+          verification: "bound",
           label: "affent",
           path: "/repo/affent",
           branch: "main",
@@ -38,6 +39,7 @@ describe("WorkspaceStatusPill", () => {
           summary: "No workspace evidence",
           shortStatus: "No workspace evidence",
           detail: "No workspace binding or command cwd recorded.",
+          verification: "unknown",
         }}
         onOpen={vi.fn()}
       />,

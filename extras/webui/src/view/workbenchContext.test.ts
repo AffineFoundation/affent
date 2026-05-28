@@ -56,6 +56,7 @@ describe("workbenchContext", () => {
         summary: "affent",
         shortStatus: "affent · main",
         detail: "/home/claudeuser/work/affent · branch main",
+        verification: "bound" as const,
         label: "affent",
         path: "/home/claudeuser/work/affent",
         branch: "main",

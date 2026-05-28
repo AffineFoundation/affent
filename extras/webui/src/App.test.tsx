@@ -2510,10 +2510,10 @@ describe("App", () => {
     expect(workspace).toHaveTextContent("Workspace mismatch");
     expect(workspace).toHaveTextContent("Latest command cwd is outside the session workspace.");
     expect(workspace).toHaveTextContent("affent");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Workspace");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/repo/affent");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Last cwd");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp/outside");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Session workspace");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/repo/affent");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Latest command cwd");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/tmp/outside");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Branch");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("main");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("State");

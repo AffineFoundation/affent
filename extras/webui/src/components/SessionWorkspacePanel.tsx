@@ -23,13 +23,25 @@ export function SessionWorkspacePanel({
         <div className="session-workspace-card" data-tone={workspace.tone} data-testid="session-workspace-card">
           <div className="session-workspace-main">
             <div className="session-workspace-hero" data-tone={workspace.tone ?? "ok"}>
-              <span>{workspace.issue ? "Check cwd" : "Boundary verified"}</span>
-              <strong title={workspace.path ?? workspace.label}>{workspace.label ?? displayPath(workspace.path) ?? "Workspace recorded"}</strong>
-              <small>{workspace.issue ?? "Commands and file actions are inside the session workspace."}</small>
+              <span>{verificationLabel(workspace.verification)}</span>
+              <strong title={workspace.path ?? workspace.lastAgentCwd ?? workspace.label}>{workspace.label ?? workspaceNameFromPath(workspace.path ?? workspace.lastAgentCwd) ?? "Workspace evidence"}</strong>
+              <small>{workspace.issue ?? verificationDetail(workspace.verification)}</small>
+            </div>
+            <div className="session-workspace-boundary" data-testid="session-workspace-boundary">
+              <BoundaryField
+                label="Session workspace"
+                value={workspace.path}
+                fallback={workspace.path ? undefined : "Not recorded"}
+                tone={workspace.verification === "mismatch" ? "warning" : undefined}
+              />
+              <BoundaryField
+                label="Latest command cwd"
+                value={workspace.lastAgentCwd}
+                fallback={workspace.lastAgentCwd ? undefined : "No shell cwd recorded"}
+                tone={workspace.issue ? "warning" : undefined}
+              />
             </div>
             <div className="session-workspace-fields" aria-label="Workspace fields">
-              {workspace.path ? <WorkspaceField label="Workspace" value={displayPath(workspace.path)} title={workspace.path} mono /> : null}
-              {workspace.lastAgentCwd ? <WorkspaceField label="Last cwd" value={displayPath(workspace.lastAgentCwd)} title={workspace.lastAgentCwd} mono tone={workspace.issue ? "warning" : undefined} /> : null}
               {workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
                 <WorkspaceField label="Command cwd" value={displayPath(workspace.latestCommandCwd)} title={workspace.latestCommandCwd} mono />
               ) : null}
@@ -43,7 +55,7 @@ export function SessionWorkspacePanel({
             <CopyButton label="Copy workspace evidence" value={workspaceEvidenceText(workspace)} className="ghost-action" />
             {onUseAsDraft ? (
               <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceDraft(workspace), "workspace")}>
-                {workspace.issue ? "Resolve as draft" : "Use workspace as draft"}
+                {workspaceActionLabel(workspace)}
               </button>
             ) : null}
           </span>
@@ -75,6 +87,25 @@ function WorkspaceField({
   );
 }
 
+function BoundaryField({
+  label,
+  value,
+  fallback,
+  tone,
+}: {
+  label: string;
+  value?: string;
+  fallback?: string;
+  tone?: "warning";
+}) {
+  return (
+    <div className="session-workspace-boundary-field" data-tone={tone}>
+      <span>{label}</span>
+      {value ? <code title={value}>{value}</code> : <strong>{fallback ?? "Not recorded"}</strong>}
+    </div>
+  );
+}
+
 function displayPath(path: string | undefined): string | undefined {
   if (!path) return undefined;
   const normalized = path.replace(/\\/g, "/");
@@ -82,4 +113,32 @@ function displayPath(path: string | undefined): string | undefined {
   if (normalized.length <= 48) return path;
   if (parts.length >= 2) return `.../${parts.slice(-2).join("/")}`;
   return `...${normalized.slice(-45)}`;
+}
+
+function workspaceNameFromPath(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts.at(-1) ?? path;
+}
+
+function verificationLabel(verification: SessionWorkspaceView["verification"]): string {
+  if (verification === "mismatch") return "Check cwd";
+  if (verification === "missing_binding") return "Binding missing";
+  if (verification === "bound") return "Workspace bound";
+  if (verification === "verified") return "Boundary verified";
+  return "Evidence missing";
+}
+
+function verificationDetail(verification: SessionWorkspaceView["verification"]): string {
+  if (verification === "missing_binding") return "This history has command cwd evidence, but no active session workspace path.";
+  if (verification === "bound") return "Session workspace is recorded; no shell cwd has been observed yet.";
+  if (verification === "verified") return "Latest command cwd is inside the session workspace.";
+  return "No workspace binding or command cwd has been recorded.";
+}
+
+function workspaceActionLabel(workspace: SessionWorkspaceView): string {
+  if (workspace.verification === "mismatch") return "Ask to verify";
+  if (workspace.verification === "missing_binding") return "Use cwd in chat";
+  return "Use workspace in chat";
 }

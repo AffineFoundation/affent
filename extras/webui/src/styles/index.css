@@ -2112,6 +2112,14 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-workspace-boundary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.session-workspace-boundary-field,
 .session-workspace-field {
   display: grid;
   gap: 3px;
@@ -2122,11 +2130,13 @@ button.workbench-context-runtime-item:focus-visible {
   padding: 8px;
 }
 
+.session-workspace-boundary-field[data-tone="warning"],
 .session-workspace-field[data-tone="warning"] {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(255, 251, 235, 0.72);
 }
 
+.session-workspace-boundary-field span,
 .session-workspace-field span {
   color: var(--text-muted);
   font-size: 10.5px;
@@ -2135,17 +2145,34 @@ button.workbench-context-runtime-item:focus-visible {
   text-transform: uppercase;
 }
 
+.session-workspace-boundary-field strong,
+.session-workspace-boundary-field code,
 .session-workspace-field strong,
 .session-workspace-field code {
   min-width: 0;
-  overflow: hidden;
   color: var(--text);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.session-workspace-field strong,
+.session-workspace-field code {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.session-workspace-boundary-field code {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.session-workspace-boundary-field strong {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.session-workspace-boundary-field code,
 .session-workspace-field code {
   font-family: var(--font-mono);
 }
@@ -10941,11 +10968,13 @@ html[data-theme="dark"] .session-workspace-hero[data-tone="warning"] {
   background: rgba(120, 53, 15, 0.16);
 }
 
+html[data-theme="dark"] .session-workspace-boundary-field,
 html[data-theme="dark"] .session-workspace-field {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(17, 20, 24, 0.72);
 }
 
+html[data-theme="dark"] .session-workspace-boundary-field[data-tone="warning"],
 html[data-theme="dark"] .session-workspace-field[data-tone="warning"] {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(120, 53, 15, 0.14);
@@ -12152,6 +12181,9 @@ html[data-theme="dark"] ::selection {
   }
   .session-run-focus,
   .session-run-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .session-workspace-boundary {
     grid-template-columns: minmax(0, 1fr);
   }
   .session-files-actions,

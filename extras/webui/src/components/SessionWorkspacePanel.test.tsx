@@ -17,10 +17,10 @@ describe("SessionWorkspacePanel", () => {
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("Workspace mismatch");
     expect(panel).toHaveTextContent("Latest command cwd is outside the session workspace.");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Workspace");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/repo/affent");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Last cwd");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Session workspace");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/repo/affent");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Latest command cwd");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/tmp");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Command cwd");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp/extras/webui");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Branch");
@@ -34,11 +34,31 @@ describe("SessionWorkspacePanel", () => {
     expect(writeText).toHaveBeenCalledWith("/tmp");
     await user.click(within(panel).getByRole("button", { name: "Copy workspace evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Issue: Latest command cwd is outside the session workspace."));
-    await user.click(within(panel).getByRole("button", { name: "Resolve as draft" }));
+    await user.click(within(panel).getByRole("button", { name: "Ask to verify" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       expect.stringContaining("Verify this workspace mismatch before making more file changes or running commands"),
       "workspace",
     );
+  });
+
+  it("does not mark historical cwd-only sessions as verified", () => {
+    const onUseAsDraft = vi.fn();
+    render(<SessionWorkspacePanel defaultOpen workspace={{
+      hasData: true,
+      summary: "Workspace binding missing",
+      shortStatus: "Workspace binding missing",
+      detail: "cwd /workspace/sessions/sess_123",
+      verification: "missing_binding",
+      lastAgentCwd: "/workspace/sessions/sess_123",
+    }} onUseAsDraft={onUseAsDraft} />);
+
+    const panel = screen.getByTestId("session-workspace-panel");
+    expect(panel).toHaveTextContent("Binding missing");
+    expect(panel).not.toHaveTextContent("Boundary verified");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Session workspace");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Not recorded");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/workspace/sessions/sess_123");
+    expect(panel).toHaveTextContent("Use cwd in chat");
   });
 });
 
@@ -47,6 +67,7 @@ const workspace: SessionWorkspaceView = {
   summary: "Workspace mismatch",
   shortStatus: "Workspace mismatch",
   detail: "/repo/affent · branch main · dirty · cwd /tmp",
+  verification: "mismatch",
   tone: "warning",
   label: "affent",
   path: "/repo/affent",

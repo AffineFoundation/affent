@@ -6,6 +6,7 @@ export interface SessionWorkspaceView {
   summary: string;
   shortStatus: string;
   detail: string;
+  verification: "verified" | "bound" | "missing_binding" | "mismatch" | "unknown";
   tone?: "warning" | "error";
   label?: string;
   path?: string;
@@ -35,15 +36,18 @@ export function buildSessionWorkspace(
       summary: "No workspace evidence",
       shortStatus: "No workspace evidence",
       detail: "No workspace binding or command cwd recorded.",
+      verification: "unknown",
     };
   }
 
-  const summary = issue ? "Workspace mismatch" : label ?? "Workspace recorded";
+  const verification = workspaceVerification(path, lastAgentCwd, issue);
+  const summary = workspaceSummary(verification, label);
   return {
     hasData: true,
     summary,
     shortStatus: workspaceShortStatus({ summary, label, path, branch, dirtyState }),
     detail: workspaceDetail({ path, branch, dirtyState, lastAgentCwd }),
+    verification,
     tone: issue ? "warning" : undefined,
     label,
     path,
@@ -71,8 +75,10 @@ export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
 }
 
 export function workspaceDraft(workspace: SessionWorkspaceView): string {
-  const lead = workspace.issue
+  const lead = workspace.verification === "mismatch"
     ? "Verify this workspace mismatch before making more file changes or running commands:"
+    : workspace.verification === "missing_binding"
+      ? "Use this historical command cwd as workspace evidence for the next step:"
     : "Use this workspace boundary for the next step:";
   return [
     lead,
@@ -125,6 +131,25 @@ function workspaceIssue(path?: string, cwd?: string): string | undefined {
   if (!path || !cwd || !isAbsolutePath(path) || !isAbsolutePath(cwd)) return undefined;
   if (cwd === path || cwd.startsWith(`${path.replace(/\/+$/, "")}/`)) return undefined;
   return "Latest command cwd is outside the session workspace.";
+}
+
+function workspaceVerification(
+  path?: string,
+  cwd?: string,
+  issue?: string,
+): SessionWorkspaceView["verification"] {
+  if (issue === "Latest command cwd is outside the session workspace.") return "mismatch";
+  if (!path && cwd) return "missing_binding";
+  if (path && cwd) return "verified";
+  if (path) return "bound";
+  return "unknown";
+}
+
+function workspaceSummary(verification: SessionWorkspaceView["verification"], label?: string): string {
+  if (verification === "mismatch") return "Workspace mismatch";
+  if (verification === "missing_binding") return "Workspace binding missing";
+  if (verification === "bound") return label ? `${label} bound` : "Workspace bound";
+  return label ?? "Workspace recorded";
 }
 
 function workspaceLabel(path?: string): string | undefined {
