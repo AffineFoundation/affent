@@ -209,6 +209,25 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		}
 	})
 
+	t.Run("session search no-hit result keeps checkpoint recovery anchors", func(t *testing.T) {
+		raw := `{"query":"missing checkpoint recovery","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"checkpoint-recovery","mod_time":"2026-05-28T08:00:00Z","latest_user":"Run long loop until recovery","recovery":"loop_turn_checkpoint; end=max_turns; loop=longrun; tool_errors=2; loop_guards=1; forced_no_tools=1; memory_misses=1; session_search=1"}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: SessionSearchToolName, Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[session_search]",
+			"query: missing checkpoint recovery",
+			"recent_sessions:",
+			"session=checkpoint-recovery mod_time=2026-05-28T08:00:00Z user=Run long loop until recovery",
+			"recovery=loop_turn_checkpoint; end=max_turns; loop=longrun; tool_errors=2; loop_guards=1; forced_no_tools=1; memory_misses=1; session_search=1",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact session_search checkpoint recovery result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"recent_sessions"`) || strings.Contains(got, `"session_id"`) {
+			t.Fatalf("compact session_search checkpoint recovery result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
+
 	t.Run("web source result keeps source access and bounded evidence", func(t *testing.T) {
 		raw := "SourceAccess: fetched_url=https://metrics.example/affine; requested_url=https://dashboard.example/affine; linked_urls_in_content=discovered_unverified_until_fetched\n" +
 			"Affine SN120 metrics as of 2026-05-24T12:00:00Z: price $0.0632, market cap $195094, 24h volume $5001.\n" +
