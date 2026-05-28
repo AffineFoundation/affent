@@ -1,17 +1,23 @@
 import type { UseAsDraft } from "../view/draftSource";
+import type { RunCommandExecutionRequest } from "../view/sessionRun";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
-import { workspaceDraft, workspaceEvidenceText } from "../view/sessionWorkspace";
+import { workspaceDraft, workspaceEvidenceText, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
 import { CopyButton } from "./CopyButton";
+
+type WorkspaceVerifyAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
 
 export function SessionWorkspacePanel({
   workspace,
   defaultOpen = false,
+  onVerifyWorkspace,
   onUseAsDraft,
 }: {
   workspace: SessionWorkspaceView;
   defaultOpen?: boolean;
+  onVerifyWorkspace?: WorkspaceVerifyAction;
   onUseAsDraft?: UseAsDraft;
 }) {
+  const canVerify = workspace.hasData && (onVerifyWorkspace || onUseAsDraft);
   return (
     <details className="session-skills-panel session-workspace-panel" data-testid="session-workspace-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -53,6 +59,21 @@ export function SessionWorkspacePanel({
             {workspace.path ? <CopyButton label="Copy path" value={workspace.path} className="ghost-action" /> : null}
             {workspace.lastAgentCwd ? <CopyButton label="Copy cwd" value={workspace.lastAgentCwd} className="ghost-action" /> : null}
             <CopyButton label="Copy workspace evidence" value={workspaceEvidenceText(workspace)} className="ghost-action" />
+            {canVerify ? (
+              <button
+                type="button"
+                className={onVerifyWorkspace ? "ghost-action primary-run-action" : "ghost-action"}
+                onClick={() => {
+                  if (onVerifyWorkspace) {
+                    void onVerifyWorkspace(workspaceVerifyRequest(workspace));
+                    return;
+                  }
+                  onUseAsDraft?.(workspaceVerifyDraft(workspace), "run_command");
+                }}
+              >
+                {onVerifyWorkspace ? "Verify workspace" : "Draft verification"}
+              </button>
+            ) : null}
             {onUseAsDraft ? (
               <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceDraft(workspace), "workspace")}>
                 {workspaceActionLabel(workspace)}

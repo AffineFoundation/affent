@@ -3,7 +3,7 @@ import type { SessionSummary } from "../api/sessions";
 import { reduceRawEvents } from "../store/reduce";
 import { buildSessionRun } from "./sessionRun";
 import type { SessionRunView } from "./sessionRun";
-import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText } from "./sessionWorkspace";
+import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
 
 describe("buildSessionWorkspace", () => {
   it("summarizes a recorded workspace binding with the latest command cwd", () => {
@@ -51,6 +51,11 @@ describe("buildSessionWorkspace", () => {
       "Last agent cwd: /tmp",
     ].join("\n"));
     expect(workspaceDraft(workspace)).toContain("Verify this workspace mismatch before making more file changes or running commands");
+    expect(workspaceVerifyRequest(workspace)).toEqual({
+      command: "pwd; git status --short --branch 2>/dev/null || true",
+      cwd: "/repo/affent",
+    });
+    expect(workspaceVerifyDraft(workspace)).toContain("Working directory: /repo/affent");
   });
 
   it("marks historical command cwd evidence as missing an active workspace binding", () => {

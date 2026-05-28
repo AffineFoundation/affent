@@ -9,9 +9,10 @@ describe("SessionWorkspacePanel", () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     const onUseAsDraft = vi.fn();
+    const onVerifyWorkspace = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
-    render(<SessionWorkspacePanel defaultOpen workspace={workspace} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionWorkspacePanel defaultOpen workspace={workspace} onVerifyWorkspace={onVerifyWorkspace} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-workspace-panel");
     expect(panel).toHaveAttribute("open");
@@ -34,6 +35,11 @@ describe("SessionWorkspacePanel", () => {
     expect(writeText).toHaveBeenCalledWith("/tmp");
     await user.click(within(panel).getByRole("button", { name: "Copy workspace evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Issue: Latest command cwd is outside the session workspace."));
+    await user.click(within(panel).getByRole("button", { name: "Verify workspace" }));
+    expect(onVerifyWorkspace).toHaveBeenCalledWith({
+      command: "pwd; git status --short --branch 2>/dev/null || true",
+      cwd: "/repo/affent",
+    });
     await user.click(within(panel).getByRole("button", { name: "Ask to verify" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       expect.stringContaining("Verify this workspace mismatch before making more file changes or running commands"),
@@ -41,7 +47,8 @@ describe("SessionWorkspacePanel", () => {
     );
   });
 
-  it("does not mark historical cwd-only sessions as verified", () => {
+  it("does not mark historical cwd-only sessions as verified and can draft verification", async () => {
+    const user = userEvent.setup();
     const onUseAsDraft = vi.fn();
     render(<SessionWorkspacePanel defaultOpen workspace={{
       hasData: true,
@@ -59,6 +66,11 @@ describe("SessionWorkspacePanel", () => {
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Not recorded");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/workspace/sessions/sess_123");
     expect(panel).toHaveTextContent("Use cwd in chat");
+    await user.click(within(panel).getByRole("button", { name: "Draft verification" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Working directory: /workspace/sessions/sess_123"),
+      "run_command",
+    );
   });
 });
 

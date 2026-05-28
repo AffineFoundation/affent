@@ -1,5 +1,5 @@
 import type { SessionSummary } from "../api/sessions";
-import type { SessionRunView } from "./sessionRun";
+import type { RunCommandExecutionRequest, SessionRunView } from "./sessionRun";
 
 export interface SessionWorkspaceView {
   hasData: boolean;
@@ -85,6 +85,24 @@ export function workspaceDraft(workspace: SessionWorkspaceView): string {
     "",
     workspaceEvidenceText(workspace),
   ].join("\n");
+}
+
+export function workspaceVerifyRequest(workspace: SessionWorkspaceView): RunCommandExecutionRequest {
+  return {
+    command: "pwd; git status --short --branch 2>/dev/null || true",
+    cwd: workspace.path ?? workspace.lastAgentCwd,
+  };
+}
+
+export function workspaceVerifyDraft(workspace: SessionWorkspaceView): string {
+  const request = workspaceVerifyRequest(workspace);
+  return [
+    "Verify the current workspace boundary, then report pwd, git branch/state, and whether commands are running in the expected directory:",
+    request.command,
+    request.cwd ? `Working directory: ${request.cwd}` : undefined,
+    "",
+    workspaceEvidenceText(workspace),
+  ].filter((line): line is string => Boolean(line)).join("\n");
 }
 
 function workspaceShortStatus({
