@@ -232,9 +232,10 @@ func recordMemoryUpdateStats(stats *sse.ToolRuntimeStats, tool string, args json
 		return
 	}
 	var resp struct {
-		OK bool `json:"ok"`
+		OK      bool `json:"ok"`
+		Mutated bool `json:"mutated"`
 	}
-	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK {
+	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK || !resp.Mutated {
 		return
 	}
 	stats.MemoryUpdates++
@@ -288,11 +289,12 @@ func memoryUpdateMetaForResult(tool string, args json.RawMessage, result string,
 		return nil
 	}
 	var resp struct {
-		OK     bool   `json:"ok"`
-		Target string `json:"target"`
-		Topic  string `json:"topic"`
+		OK      bool   `json:"ok"`
+		Mutated bool   `json:"mutated"`
+		Target  string `json:"target"`
+		Topic   string `json:"topic"`
 	}
-	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK {
+	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK || !resp.Mutated {
 		return nil
 	}
 	target := strings.TrimSpace(resp.Target)

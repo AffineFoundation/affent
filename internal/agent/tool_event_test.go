@@ -86,12 +86,13 @@ func TestRecordSourceAccessStats(t *testing.T) {
 
 func TestRecordMemoryUpdateStats(t *testing.T) {
 	var stats sse.ToolRuntimeStats
-	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","target":"memory","topic":"markets"}`), `{"ok":true,"target":"memory","topic":"markets","message":"added"}`, false)
-	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"replace","target":"user"}`), `{"ok":true,"target":"user","message":"replaced"}`, false)
-	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"remove","target":"memory","topic":"old"}`), `{"ok":true,"target":"memory","topic":"old","message":"removed"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","target":"memory","topic":"markets"}`), `{"ok":true,"mutated":true,"target":"memory","topic":"markets","message":"added"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"replace","target":"user"}`), `{"ok":true,"mutated":true,"target":"user","message":"replaced"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"remove","target":"memory","topic":"old"}`), `{"ok":true,"mutated":true,"target":"memory","topic":"old","message":"removed"}`, false)
 
 	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"search","query":"markets"}`), `{"ok":true}`, false)
 	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","content":"blocked"}`), `{"ok":false,"message":"blocked"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","content":"duplicate"}`), `{"ok":true,"message":"entry already exists"}`, false)
 	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","content":"failed"}`), `{"ok":true}`, true)
 	recordMemoryUpdateStats(&stats, "read_file", []byte(`{"action":"add"}`), `{"ok":true}`, false)
 
@@ -121,7 +122,7 @@ func TestRecordMemorySearchStatsCountsSearchCallsAndNoHitSearches(t *testing.T) 
 func TestMemoryUpdateMetaForResult(t *testing.T) {
 	add := memoryUpdateMetaForResult("memory",
 		[]byte(`{"action":"add","target":"memory","topic":"markets","content":"Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence."}`),
-		`{"ok":true,"target":"memory","topic":"markets","message":"added"}`,
+		`{"ok":true,"mutated":true,"target":"memory","topic":"markets","message":"added"}`,
 		false,
 	)
 	if add == nil {
@@ -135,7 +136,7 @@ func TestMemoryUpdateMetaForResult(t *testing.T) {
 
 	replace := memoryUpdateMetaForResult("memory",
 		[]byte(`{"action":"replace","target":"user","old_text":"prefers terse answers","content":"prefers concise answers with test evidence"}`),
-		`{"ok":true,"target":"user","message":"replaced"}`,
+		`{"ok":true,"mutated":true,"target":"user","message":"replaced"}`,
 		false,
 	)
 	if replace == nil || replace.Topic != "user" || replace.Location != "user:user" ||
@@ -147,6 +148,9 @@ func TestMemoryUpdateMetaForResult(t *testing.T) {
 
 	if got := memoryUpdateMetaForResult("memory", []byte(`{"action":"search","query":"markets"}`), `{"ok":true}`, false); got != nil {
 		t.Fatalf("search should not produce memory update meta: %+v", got)
+	}
+	if got := memoryUpdateMetaForResult("memory", []byte(`{"action":"add","content":"duplicate"}`), `{"ok":true,"message":"entry already exists"}`, false); got != nil {
+		t.Fatalf("non-mutating add should not produce memory update meta: %+v", got)
 	}
 	if got := memoryUpdateMetaForResult("memory", []byte(`{"action":"add","content":"blocked"}`), `{"ok":false}`, false); got != nil {
 		t.Fatalf("failed memory response should not produce memory update meta: %+v", got)

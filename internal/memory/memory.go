@@ -146,6 +146,7 @@ type MemoryStore interface {
 // Results is set by Search. Topics is set by ListTopics.
 type MemoryResponse struct {
 	OK      bool                 `json:"ok"`
+	Mutated bool                 `json:"mutated,omitempty"`
 	Message string               `json:"message,omitempty"`
 	Target  MemoryTarget         `json:"target"`
 	Topic   string               `json:"topic,omitempty"`
@@ -501,7 +502,7 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 		cap := s.topicCountLimit()
 		have := s.countTopicsLocked()
 		if have >= cap {
-			return s.respondLocked(target, topic, false,
+			return s.respondLocked(target, topic, false, false,
 				fmt.Sprintf("at %d/%d topics; creating a new topic %q would push past the limit. Either merge this fact into an existing topic (use action=add with that topic name) or remove an obsolete topic first (action=remove on every entry leaves the topic file gone).",
 					have, cap, topic),
 				nil, nil), nil
@@ -525,14 +526,14 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 		// Compare on content only — a legacy unstamped duplicate of
 		// new stamped content shouldn't be double-saved.
 		if normalizedMemoryContentKey(entryContent(e)) == contentKey {
-			return s.respondLocked(target, topic, true, "entry already exists (no duplicate added)", entries, nil), nil
+			return s.respondLocked(target, topic, true, false, "entry already exists (no duplicate added)", entries, nil), nil
 		}
 	}
 	stamped := stampMemoryEntry(content)
 	limit := s.limitFor(target, topic)
 	newEntries := append(append([]string{}, entries...), stamped)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
-		return s.respondLocked(target, topic, false,
+		return s.respondLocked(target, topic, false, false,
 			fmt.Sprintf("at %d/%d chars; the new %d-char entry would push past the limit. Consolidate existing entries (use replace to merge related ones into one denser entry) or remove obsolete ones, THEN retry this add — don't just delete and lose information.",
 				joinedLen(entries), limit, len(content)),
 			entries, nil), nil
@@ -540,7 +541,7 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 	if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, topic, true, "entry added", newEntries, nil), nil
+	return s.respondLocked(target, topic, true, true, "entry added", newEntries, nil), nil
 }
 
 // Replace substitutes newContent for the single entry containing
@@ -574,7 +575,7 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	// non-existent topic before lockFile creates the sidecar that
 	// nobody's around to clean up.
 	if !fileExists(path) {
-		return s.respondLocked(target, topic, false,
+		return s.respondLocked(target, topic, false, false,
 			fmt.Sprintf("no entry matched %q (topic does not exist)", oldText),
 			nil, nil), nil
 	}
@@ -594,11 +595,11 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	idx, matches := findUnique(entries, oldText)
 	if idx < 0 {
 		if len(matches) > 1 {
-			return s.respondLocked(target, topic, false,
+			return s.respondLocked(target, topic, false, false,
 				fmt.Sprintf("multiple entries matched %q; pass a more specific old_text", oldText),
 				entries, matches), nil
 		}
-		return s.respondLocked(target, topic, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
+		return s.respondLocked(target, topic, false, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
 	}
 
 	newEntries := append([]string{}, entries...)
@@ -612,7 +613,7 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 			if err := writeMemoryFile(path, newEntries); err != nil {
 				return MemoryResponse{}, err
 			}
-			return s.respondLocked(target, topic, true, "entry already exists (removed duplicate)", newEntries, nil), nil
+			return s.respondLocked(target, topic, true, true, "entry already exists (removed duplicate)", newEntries, nil), nil
 		}
 	}
 	// Re-stamp on replace so the entry's freshness reflects this
@@ -621,7 +622,7 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	newEntries[idx] = stampMemoryEntry(newContent)
 	limit := s.limitFor(target, topic)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
-		return s.respondLocked(target, topic, false,
+		return s.respondLocked(target, topic, false, false,
 			fmt.Sprintf("replacement would put bucket at %d/%d chars. shorten the new content or remove other entries first",
 				total, limit),
 			entries, nil), nil
@@ -629,7 +630,7 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, topic, true, "entry replaced", newEntries, nil), nil
+	return s.respondLocked(target, topic, true, true, "entry replaced", newEntries, nil), nil
 }
 
 // Remove drops the entry containing oldText as a substring.
@@ -661,7 +662,7 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, topic, oldText string) (Me
 	// to remove an entry that didn't exist at the moment we checked,
 	// "no entry matched" is still the right answer.
 	if !fileExists(path) {
-		return s.respondLocked(target, topic, false,
+		return s.respondLocked(target, topic, false, false,
 			fmt.Sprintf("no entry matched %q (topic does not exist)", oldText),
 			nil, nil), nil
 	}
@@ -681,11 +682,11 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, topic, oldText string) (Me
 	idx, matches := findUnique(entries, oldText)
 	if idx < 0 {
 		if len(matches) > 1 {
-			return s.respondLocked(target, topic, false,
+			return s.respondLocked(target, topic, false, false,
 				fmt.Sprintf("multiple entries matched %q; pass a more specific old_text", oldText),
 				entries, matches), nil
 		}
-		return s.respondLocked(target, topic, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
+		return s.respondLocked(target, topic, false, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
 	}
 	newEntries := append(entries[:idx:idx], entries[idx+1:]...)
 	if len(newEntries) == 0 {
@@ -699,7 +700,7 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, topic, oldText string) (Me
 	} else if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, topic, true, "entry removed", newEntries, nil), nil
+	return s.respondLocked(target, topic, true, true, "entry removed", newEntries, nil), nil
 }
 
 // Search returns up to topK entries matching query across the
@@ -958,7 +959,7 @@ func (s *FileMemoryStore) Inspect(target MemoryTarget, topic string) (MemoryResp
 	if err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, topic, true, "bucket inspected", entries, nil), nil
+	return s.respondLocked(target, topic, true, false, "bucket inspected", entries, nil), nil
 }
 
 // migrateLegacyLocked moves a pre-v2 .affent/MEMORY.md into
@@ -1305,7 +1306,7 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok bool, msg string, entries, matches []string) MemoryResponse {
+func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok, mutated bool, msg string, entries, matches []string) MemoryResponse {
 	limit := s.limitFor(target, topic)
 	current := joinedLen(entries)
 	// Strip timestamp prefixes and cap per-entry previews so the
@@ -1318,6 +1319,7 @@ func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok bo
 	}
 	return MemoryResponse{
 		OK:      ok,
+		Mutated: ok && mutated,
 		Target:  target,
 		Topic:   topic,
 		Message: msg,

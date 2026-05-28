@@ -36,7 +36,7 @@ func TestMemoryAddReadWrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !resp.OK {
+	if !resp.OK || !resp.Mutated {
 		t.Fatalf("add failed: %+v", resp)
 	}
 	if len(resp.Entries) != 1 || !strings.Contains(resp.Entries[0], "sqlc") {
@@ -65,6 +65,9 @@ func TestMemoryAddRejectsDuplicate(t *testing.T) {
 	if !resp.OK {
 		t.Fatalf("duplicate should not error: %+v", resp)
 	}
+	if resp.Mutated {
+		t.Fatalf("duplicate add should not report a mutation: %+v", resp)
+	}
 	if !strings.Contains(resp.Message, "duplicate") {
 		t.Fatalf("expected duplicate message, got %q", resp.Message)
 	}
@@ -84,6 +87,9 @@ func TestMemoryAddRejectsNormalizedDuplicate(t *testing.T) {
 	}
 	if !resp.OK {
 		t.Fatalf("duplicate should not error: %+v", resp)
+	}
+	if resp.Mutated {
+		t.Fatalf("normalized duplicate add should not report a mutation: %+v", resp)
 	}
 	if !strings.Contains(resp.Message, "duplicate") {
 		t.Fatalf("expected duplicate message, got %q", resp.Message)
@@ -830,6 +836,9 @@ func TestMemoryResponse_UsagePresentOnSuccess(t *testing.T) {
 	}
 	if resp.Usage == nil {
 		t.Fatal("Usage should be present on successful add")
+	}
+	if !resp.Mutated {
+		t.Fatalf("successful add should report mutation: %+v", resp)
 	}
 	if resp.Usage.EntryCount != 1 {
 		t.Fatalf("Usage.EntryCount = %d, want 1", resp.Usage.EntryCount)
