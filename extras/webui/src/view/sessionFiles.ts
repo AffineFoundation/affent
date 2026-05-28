@@ -154,7 +154,7 @@ function fileEvidenceFromCall(
 ): SessionFileEvidenceInternal | undefined {
   const action = fileAction(call.tool);
   if (!action) return undefined;
-  const path = stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename");
+  const path = normalizeFilePath(stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename"));
   if (!path) return undefined;
   const detailSource = call.resultSummary || call.result || call.failureKind;
   const contentPreview =
@@ -180,12 +180,13 @@ function mergeEvidence(
   previous: SessionFileEvidenceInternal,
   next: SessionFileEvidenceInternal,
 ): SessionFileEvidenceInternal {
+  const nextResolved = next.status === "available";
   return {
     ...next,
     actions: mergeActions(previous.actions, next.actions),
     actionCount: previous.actionCount + 1,
     artifactPath: next.artifactPath ?? previous.artifactPath,
-    next: next.next ?? previous.next,
+    next: nextResolved ? next.next : next.next ?? previous.next,
     contentPreview: next.contentPreview ?? previous.contentPreview,
     contentSource: next.contentSource ?? previous.contentSource,
     contentTruncated: next.contentPreview ? next.contentTruncated : previous.contentTruncated,
@@ -262,6 +263,13 @@ function filesStats(items: SessionFileEvidence[]): SessionFilesStats {
 function stringArg(call: ToolCallState, key: string): string | undefined {
   const value = call.args[key];
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeFilePath(path: string | undefined): string | undefined {
+  if (!path) return undefined;
+  const normalized = path.trim().replace(/\\/g, "/");
+  const workspaceMatch = normalized.match(/^(?:\/)?workspace\/sessions\/[^/]+\/(.+)$/);
+  return workspaceMatch?.[1] || normalized;
 }
 
 function boundedDraftContent(text: string): string {

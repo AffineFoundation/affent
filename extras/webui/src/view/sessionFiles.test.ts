@@ -75,6 +75,47 @@ describe("buildSessionFiles", () => {
     });
   });
 
+  it("merges workspace-absolute, workspace-relative, and relative evidence for the same file", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "write", tool: "write_file", args: { path: "/workspace/sessions/sess_123-456/game2048.py" } } },
+      { id: 3, type: "tool.result", data: { call_id: "write", exit_code: 0, result_summary: "wrote file", result: "wrote file" } },
+      { id: 4, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 5, type: "tool.request", data: { turn_id: "t2", call_id: "bad-read", tool: "read_file", args: { path: "workspace/sessions/sess_123-456/game2048.py" } } },
+      {
+        id: 6,
+        type: "tool.result",
+        data: {
+          call_id: "bad-read",
+          exit_code: 1,
+          result_summary: "not found\nNext: list workspace root\nFailure: kind=not_found",
+          result: "not found\nNext: list workspace root\nFailure: kind=not_found",
+        },
+      },
+      { id: 7, type: "turn.start", data: { turn_id: "t3" } },
+      { id: 8, type: "tool.request", data: { turn_id: "t3", call_id: "read", tool: "read_file", args: { path: "game2048.py" } } },
+      { id: 9, type: "tool.result", data: { call_id: "read", exit_code: 0, result_summary: "loaded game", result: "print('2048')" } },
+    ]);
+
+    const files = buildSessionFiles(session);
+
+    expect(files).toMatchObject({
+      summary: "1 file reference",
+      detail: "1 read · 1 changed",
+      tone: undefined,
+    });
+    expect(files.items).toHaveLength(1);
+    expect(files.items[0]).toMatchObject({
+      path: "game2048.py",
+      actions: ["read", "changed"],
+      status: "available",
+      actionCount: 3,
+      detail: "loaded game",
+      next: undefined,
+      contentPreview: "print('2048')",
+    });
+  });
+
   it("stays empty when no file tools ran", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
