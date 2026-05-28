@@ -2164,7 +2164,8 @@ describe("App", () => {
     expect(configPanel).toHaveTextContent("No config");
     expect(configPanel).toHaveAttribute("data-surface", "true");
     await user.click(within(configPanel).getByText("Config"));
-    expect(screen.getByTestId("account-env-list")).toBeVisible();
+    expect(screen.getByTestId("account-config-dashboard")).toBeVisible();
+    expect(screen.getByText("Environment variables")).toBeVisible();
     expect(requestedUrls()).toContain("/v1/settings");
     expect(requestedUrls()).not.toContain("/v1/skills");
     await selectWorkbenchTab(user, "Skills");

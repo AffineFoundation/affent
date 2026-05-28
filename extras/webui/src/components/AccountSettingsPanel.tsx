@@ -127,9 +127,17 @@ export function AccountSettingsPanel({
         {!loading && (!error || settings || onSetEnv || onEnsureSSHKey) ? (
           <>
             {settings ? (
-              <div className="account-settings-actions">
-                <CopyButton label="Copy config evidence" value={accountConfigEvidenceText(settings)} className="node-action" />
-              </div>
+              <>
+                <ConfigDashboard settings={settings} />
+                <div className="account-settings-actions">
+                  <CopyButton label="Copy config evidence" value={accountConfigEvidenceText(settings)} className="node-action" />
+                  {onRefresh ? (
+                    <button type="button" className="node-action" disabled={!!busy} onClick={() => void onRefresh()}>
+                      Refresh
+                    </button>
+                  ) : null}
+                </div>
+              </>
             ) : null}
             <div className="account-settings-section">
               <div>
@@ -148,11 +156,6 @@ export function AccountSettingsPanel({
                   <pre className="session-loop-protocol account-public-key" data-testid="account-public-key">{ssh.public_key}</pre>
                   <div className="session-loop-actions">
                     <CopyButton label="Copy public key" value={ssh.public_key} className="ghost-action" />
-                    {onRefresh ? (
-                      <button type="button" className="ghost-action" disabled={!!busy} onClick={() => void onRefresh()}>
-                        Refresh
-                      </button>
-                    ) : null}
                   </div>
                 </>
               ) : ssh?.exists ? (
@@ -178,20 +181,26 @@ export function AccountSettingsPanel({
                 </div>
               )}
             </div>
-            <form className="session-loop-setup account-env-form" onSubmit={submitEnv}>
-              <label>
-                <span>Environment variable</span>
-                <input value={name} onChange={(event) => setName(event.target.value)} placeholder="GITHUB_TOKEN" disabled={!!busy} />
-              </label>
-              <label>
-                <span>Value</span>
-                <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Stored server-side" type="password" disabled={!!busy} />
-              </label>
-              <button type="submit" className="secondary-action" disabled={!canSubmit}>
-                {busy === "env" ? "Saving" : "Save env"}
-              </button>
-              <p className="session-loop-setup-note">Values are injected into shell commands but are not shown back in the UI.</p>
-            </form>
+            <details className="account-env-write" open={!settings || settings.env.length === 0}>
+              <summary>
+                <strong>Environment variables</strong>
+                <span>{settings?.env.length ? `${settings.env.length} configured` : "No variables configured"}</span>
+              </summary>
+              <form className="session-loop-setup account-env-form" onSubmit={submitEnv}>
+                <label>
+                  <span>Environment variable</span>
+                  <input value={name} onChange={(event) => setName(event.target.value)} placeholder="GITHUB_TOKEN" disabled={!!busy} />
+                </label>
+                <label>
+                  <span>Value</span>
+                  <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="Stored server-side" type="password" disabled={!!busy} />
+                </label>
+                <button type="submit" className="secondary-action" disabled={!canSubmit}>
+                  {busy === "env" ? "Saving" : "Save env"}
+                </button>
+                <p className="session-loop-setup-note">Values are injected into shell commands but are not shown back in the UI.</p>
+              </form>
+            </details>
             {mutationStatus ? (
               <span className="account-settings-status" data-tone={mutationStatus.tone} role="status" aria-live="polite">
                 {mutationStatus.message}
@@ -215,35 +224,35 @@ export function AccountSettingsPanel({
                 ) : null}
               </div>
             ) : null}
-            <div className="session-skills-list" data-testid="account-env-list">
-              {settings && visibleEnv.length > 0 ? visibleEnv.map((entry) => (
-                <div key={entry.name} className="session-skill-item account-env-item">
-                  <span className="session-skill-title">
-                    <strong>{entry.name}</strong>
-                    <span>{entry.configured ? "configured" : "empty"}</span>
-                  </span>
-                  {onDeleteEnv ? confirmDeleteEnv === entry.name ? (
-                    <div className="account-env-confirm" role="group" aria-label={`Confirm delete ${entry.name}`}>
-                      <span>Delete {entry.name}?</span>
-                      <button type="button" disabled={!!busy} onClick={() => setConfirmDeleteEnv(undefined)}>
-                        Cancel
+            {settings && settings.env.length > 0 ? (
+              <div className="session-skills-list" data-testid="account-env-list">
+                {visibleEnv.length > 0 ? visibleEnv.map((entry) => (
+                  <div key={entry.name} className="session-skill-item account-env-item">
+                    <span className="session-skill-title">
+                      <strong>{entry.name}</strong>
+                      <span>{entry.configured ? "configured" : "empty"}</span>
+                    </span>
+                    {onDeleteEnv ? confirmDeleteEnv === entry.name ? (
+                      <div className="account-env-confirm" role="group" aria-label={`Confirm delete ${entry.name}`}>
+                        <span>Delete {entry.name}?</span>
+                        <button type="button" disabled={!!busy} onClick={() => setConfirmDeleteEnv(undefined)}>
+                          Cancel
+                        </button>
+                        <button type="button" className="danger" disabled={!!busy} onClick={() => void deleteEnv(entry.name)}>
+                          Confirm
+                        </button>
+                      </div>
+                    ) : (
+                      <button type="button" className="ghost-action danger-action" disabled={!!busy} onClick={() => setConfirmDeleteEnv(entry.name)}>
+                        Delete
                       </button>
-                      <button type="button" className="danger" disabled={!!busy} onClick={() => void deleteEnv(entry.name)}>
-                        Confirm
-                      </button>
-                    </div>
-                  ) : (
-                    <button type="button" className="ghost-action danger-action" disabled={!!busy} onClick={() => setConfirmDeleteEnv(entry.name)}>
-                      Delete
-                    </button>
-                  ) : null}
-                </div>
-              )) : settings && settings.env.length > 0 ? (
-                <div className="session-skills-empty">No environment variables matching "{trimmedQuery}".</div>
-              ) : (
-                <div className="session-skills-empty">No environment variables configured.</div>
-              )}
-            </div>
+                    ) : null}
+                  </div>
+                )) : (
+                  <div className="session-skills-empty">No environment variables matching "{trimmedQuery}".</div>
+                )}
+              </div>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -251,7 +260,44 @@ export function AccountSettingsPanel({
   );
 }
 
+function ConfigDashboard({ settings }: { settings: AccountSettingsResponse }) {
+  const latestEnvUpdate = settings.env
+    .map((entry) => entry.updated_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const ssh = settings.ssh;
+  const keyPath = ssh.public_key_path ?? (ssh.exists ? "Path not reported" : "No key");
+  const sshState = ssh.public_key ? "Ready" : ssh.exists ? "Issue" : "Missing";
+  const pathState = ssh.public_key_path?.includes("/.ssh/") ? "standard .ssh" : ssh.exists ? "unknown path" : "not configured";
+  return (
+    <div className="account-config-dashboard" data-testid="account-config-dashboard">
+      <div className="account-config-card">
+        <span>SSH</span>
+        <strong>{sshState}</strong>
+        <small>{ssh.public_key ? "public key available" : ssh.exists ? "public key unavailable" : "no key"}</small>
+      </div>
+      <div className="account-config-card">
+        <span>Key path</span>
+        <strong title={keyPath}>{keyPath}</strong>
+        <small>{pathState}</small>
+      </div>
+      <div className="account-config-card">
+        <span>Env</span>
+        <strong>{settings.env.length}</strong>
+        <small>{latestEnvUpdate ? `updated ${formatTimestamp(latestEnvUpdate)}` : "no saved values"}</small>
+      </div>
+    </div>
+  );
+}
+
 function formatPanelError(err: unknown): string {
   if (err instanceof Error) return err.message;
   return "Unknown error";
+}
+
+function formatTimestamp(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
