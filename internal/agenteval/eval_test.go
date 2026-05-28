@@ -3459,6 +3459,18 @@ func TestBuiltinSkillInstallScenariosRequireSameSessionActivationEvidence(t *tes
 	}
 }
 
+func TestBuiltinContextInjectionScenariosRequireTraceEvents(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		required := sumStringIntMap(scenario.RequiredContextInjectionSources)
+		if required == 0 {
+			continue
+		}
+		if got := scenario.RequiredTraceEventCounts["context.injected"]; got < required {
+			t.Fatalf("%s requires %d context injection source event(s) but only %d raw context.injected trace event(s); sources=%#v trace=%#v", scenario.Name, required, got, scenario.RequiredContextInjectionSources, scenario.RequiredTraceEventCounts)
+		}
+	}
+}
+
 func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresDurableMemoryWrite(scenario) || !scenarioRequiresGitCommitAndPush(scenario) {
