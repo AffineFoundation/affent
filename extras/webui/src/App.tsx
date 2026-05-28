@@ -2308,11 +2308,12 @@ function automationWorkbenchMetrics(
   schedulePanelState: ScheduleState,
   _context: { title: string; detail: string } | undefined,
 ): SessionAutomationMetric[] {
-  return [
+  return compactArray([
     automationLoopMetric(session, loopState, loopPanelState),
+    automationProtocolMetric(session, loopState, loopPanelState),
     automationTimerMetric(session, schedulePanelState),
     automationNextRunMetric(session, loopState, schedulePanelState),
-  ];
+  ]);
 }
 
 function automationWorkbenchFocus(
@@ -2445,6 +2446,35 @@ function automationLoopMetric(
   return { label: "Loop", value: automationStatusLabel(status), detail: "Review LOOP.md status", tone: "neutral" };
 }
 
+function automationProtocolMetric(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  panelState: LoopProtocolState,
+): SessionAutomationMetric | undefined {
+  if (panelState.state === "loading") return { label: "Protocol", value: "Loading", detail: "Reading LOOP.md and events", tone: "neutral" };
+  if (panelState.state === "error") return { label: "Protocol", value: "Error", detail: automationCompact(panelState.error) ?? "LOOP.md unavailable", tone: "danger" };
+  const path = automationCompact(session?.loop_protocol?.path ?? loopState?.protocol_path);
+  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
+  if (!path && !loopState && !session?.has_loop_protocol) return undefined;
+  const feeds = loopState?.protocol_feeds ?? session?.loop_protocol?.state?.protocol_feeds ?? 0;
+  const updates = loopState?.protocol_updates ?? session?.loop_protocol?.state?.protocol_updates ?? 0;
+  const decisions = loopState?.loop_decisions ?? session?.loop_protocol?.state?.loop_decisions ?? 0;
+  const events = loopState?.event_count ?? session?.loop_protocol?.state?.event_count ?? 0;
+  const detail = [
+    feeds > 0 ? `${feeds} ${feeds === 1 ? "feed" : "feeds"}` : undefined,
+    updates > 0 ? `${updates} ${updates === 1 ? "update" : "updates"}` : undefined,
+    decisions > 0 ? `${decisions} ${decisions === 1 ? "decision" : "decisions"}` : undefined,
+    events > 0 ? `${events} ${events === 1 ? "event" : "events"}` : undefined,
+    automationCompact(loopState?.last_event_summary ?? session?.loop_protocol?.state?.last_event_summary),
+  ].filter(Boolean).join(" · ");
+  return {
+    label: "Protocol",
+    value: path ? automationFileLabel(path) : "LOOP.md",
+    detail: detail || "Protocol file detected",
+    tone: status === "running" ? "ok" : status === "draft" ? "attention" : status === "disabled" ? "danger" : "neutral",
+  };
+}
+
 function automationTimerMetric(session: SessionSummary | undefined, panelState: ScheduleState): SessionAutomationMetric {
   if (panelState.state === "loading") return { label: "Timers", value: "Loading", detail: "Reading saved timers", tone: "neutral" };
   if (panelState.state === "error") return { label: "Timers", value: "Error", detail: automationCompact(panelState.error) ?? "Timer details unavailable", tone: "danger" };
@@ -2518,6 +2548,15 @@ function automationStatusLabel(status: string): string {
     .filter(Boolean)
     .map((part) => part[0]?.toUpperCase() + part.slice(1))
     .join(" ") || "Unknown";
+}
+
+function automationFileLabel(path: string): string {
+  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
+  return parts.at(-1) ?? path;
+}
+
+function compactArray<T>(items: readonly (T | undefined)[]): T[] {
+  return items.filter((item): item is T => item !== undefined);
 }
 
 function latestChatMeta(updated: string): string | undefined {

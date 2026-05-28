@@ -1190,6 +1190,9 @@ describe("App", () => {
                   initial_goal_preview: "watch market evidence for several days",
                   protocol_updates: 1,
                   protocol_feeds: 2,
+                  loop_decisions: 1,
+                  event_count: 6,
+                  last_event_summary: "Updated LOOP.md",
                 },
               },
             },
@@ -1216,6 +1219,11 @@ describe("App", () => {
             loop_id: "loop-control",
             status: "running",
             initial_goal_preview: "watch market evidence for several days",
+            protocol_updates: 1,
+            protocol_feeds: 2,
+            loop_decisions: 1,
+            event_count: 6,
+            last_event_summary: "Updated LOOP.md",
           },
           events: [],
         });
@@ -1248,6 +1256,12 @@ describe("App", () => {
     expect(panel).toHaveTextContent("Keep LOOP.md compact");
     expect(panel).toHaveTextContent("watch market evidence for several days");
     expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");
+    const dashboard = screen.getByTestId("session-automation-dashboard");
+    expect(dashboard).toHaveTextContent("Protocol");
+    expect(dashboard).toHaveTextContent("LOOP.md");
+    expect(dashboard).toHaveTextContent("2 feeds");
+    expect(dashboard).toHaveTextContent("1 update");
+    expect(dashboard).toHaveTextContent("1 decision");
 
     expect(await screen.findByTestId("session-loop-protocol")).toHaveTextContent("# Loop Protocol: loop-control");
     await user.click(within(panel).getByRole("button", { name: "Update LOOP.md" }));

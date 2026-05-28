@@ -4286,7 +4286,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-automation-dashboard {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 7px;
   min-width: 0;
 }
