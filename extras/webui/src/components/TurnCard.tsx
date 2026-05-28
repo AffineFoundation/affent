@@ -1455,7 +1455,7 @@ function ErrorBlock({ error, onUseAsDraft }: { error: TurnError; onUseAsDraft?: 
       <div className="error-actions">
         {onUseAsDraft ? (
           <button type="button" className="node-action" onClick={() => onUseAsDraft(`Continue after ${error.code}: ${error.message}`, "error")}>
-            Continue with this
+            Use diagnostic as draft
           </button>
         ) : null}
         <CopyButton label="Copy diagnostic" value={diagnostic} />

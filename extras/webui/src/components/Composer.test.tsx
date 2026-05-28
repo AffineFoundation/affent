@@ -513,6 +513,21 @@ describe("Composer", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
   });
 
+  it("labels imported error diagnostics as draft context", () => {
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        draft={{ id: 1, content: "Continue after upstream_5xx: provider returned 503", source: "error" }}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Continue after upstream_5xx: provider returned 503");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using error diagnostic");
+  });
+
   it("removes imported draft context with the draft", async () => {
     const user = userEvent.setup();
     const props = {

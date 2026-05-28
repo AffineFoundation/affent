@@ -1530,7 +1530,7 @@ describe("Timeline", () => {
     expect(card).toHaveTextContent("continue from the message box below");
     expect(card).toHaveTextContent("details stay attached to this chat");
 
-    await user.click(screen.getByRole("button", { name: "Continue with this" }));
+    await user.click(screen.getByRole("button", { name: "Use diagnostic as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith("Continue after upstream_5xx: provider returned 503", "error");
 
     await user.click(screen.getByRole("button", { name: "Copy diagnostic" }));

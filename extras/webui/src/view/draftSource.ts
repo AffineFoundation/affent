@@ -28,7 +28,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   changed_file: "Using changed file",
   continuation: "Requesting final answer",
   evidence: "Using evidence",
-  error: "Continuing after error",
+  error: "Using error diagnostic",
   file_evidence: "Using file evidence",
   guidance_receipt: "Editing sent guidance",
   previous_message: "Editing previous message",
