@@ -81,6 +81,11 @@ Shared metadata fields:
   This is a coverage guard for CI and model comparisons: it catches a run that
   accidentally skipped, filtered, or misconfigured the scenario family a gate
   was meant to exercise.
+- `required_expectation_domains`: optional list of realistic task-domain labels
+  that must be represented by at least one scenario in the batch. This guards
+  against a nominal long-run or web batch passing while accidentally omitting
+  key workloads such as market analysis, Bittensor research, code/PR execution,
+  web evidence, or long-run recovery.
 
 ## Scenario Record
 
@@ -662,6 +667,10 @@ Summary records aggregate all scenario records from the same process:
   `min_each_expectation_capability_pass_rate` gates each family in
   `expectation_capability_pass_rate` independently, so a memory or browser
   regression cannot be hidden by unrelated passing capabilities.
+  `--require-expectation-domain` gates declared workload-domain coverage
+  independently from capability coverage, so CI can require at least one
+  realistic market, Bittensor, code/PR, web-evidence, or long-run recovery
+  workload before interpreting aggregate pass rates.
 - Quality gate outcome: `quality_profile` identifies any built-in profile used,
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and

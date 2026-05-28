@@ -158,44 +158,45 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("affenteval", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
-		debugBriefTagGates  stringFloatMapFlag
-		expectationCapGates stringSetFlag
-		list                = fs.Bool("list", false, "list built-in scenarios and exit")
-		listSuites          = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
-		listQualityProfiles = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
-		suite               = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
-		scenarioCSV         = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
-		prompt              = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
-		promptFile          = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
-		adHocName           = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
-		adHocSessionID      = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
-		adHocMaxTurns       = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
-		adHocVerify         = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
-		repoRoot            = fs.String("repo-root", ".", "Affent repository root")
-		workRoot            = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
-		baseURL             = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
-		apiKey              = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
-		model               = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
-		providerLabel       = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
-		temperature         = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
-		topP                = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
-		maxTokens           = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
-		seed                = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
-		executor            = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
-		runtimeEvalMode     = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
-		runtimeTools        = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
-		runtimeAllTools     = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
-		runtimeMemory       = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
-		runtimeWeb          = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
-		runtimeBrowser      = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
-		runtimeMCPConfig    = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful to opt into MCP only")
-		traceDeltas         = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
-		timeout             = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
-		verifierOutputCap   = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
-		jsonl               = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
-		keepWorkspaces      = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
-		qualityProfile      = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
-		gates               = qualityGateConfig{
+		debugBriefTagGates     stringFloatMapFlag
+		expectationCapGates    stringSetFlag
+		expectationDomainGates stringSetFlag
+		list                   = fs.Bool("list", false, "list built-in scenarios and exit")
+		listSuites             = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
+		listQualityProfiles    = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
+		suite                  = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
+		scenarioCSV            = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
+		prompt                 = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
+		promptFile             = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
+		adHocName              = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
+		adHocSessionID         = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
+		adHocMaxTurns          = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
+		adHocVerify            = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
+		repoRoot               = fs.String("repo-root", ".", "Affent repository root")
+		workRoot               = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
+		baseURL                = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
+		apiKey                 = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
+		model                  = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
+		providerLabel          = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
+		temperature            = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		topP                   = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
+		maxTokens              = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
+		seed                   = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
+		executor               = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
+		runtimeEvalMode        = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
+		runtimeTools           = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
+		runtimeAllTools        = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
+		runtimeMemory          = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
+		runtimeWeb             = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
+		runtimeBrowser         = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
+		runtimeMCPConfig       = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful to opt into MCP only")
+		traceDeltas            = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
+		timeout                = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
+		verifierOutputCap      = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
+		jsonl                  = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
+		keepWorkspaces         = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
+		qualityProfile         = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
+		gates                  = qualityGateConfig{
 			MinPassRate:                           fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:                     fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:                   fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
@@ -238,6 +239,7 @@ func run(args []string) int {
 	)
 	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
 	fs.Var(&expectationCapGates, "require-expectation-capability", "optional repeatable quality gate: require at least one scenario declaring this expectation capability; accepts comma-separated values")
+	fs.Var(&expectationDomainGates, "require-expectation-domain", "optional repeatable quality gate: require at least one scenario declaring this task domain; accepts comma-separated values")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
 
@@ -256,6 +258,9 @@ success and trace-level process quality.`)
 	}
 	if len(expectationCapGates) > 0 {
 		gates.RequiredExpectationCapabilities = expectationCapGates.values()
+	}
+	if len(expectationDomainGates) > 0 {
+		gates.RequiredExpectationDomains = expectationDomainGates.values()
 	}
 	if *listQualityProfiles {
 		printQualityGateProfiles(os.Stdout)
@@ -442,6 +447,7 @@ type qualityGateConfig struct {
 	MaxAvgTotalTokens                     *float64
 	MaxDebugBriefTagRates                 map[string]float64
 	RequiredExpectationCapabilities       []string
+	RequiredExpectationDomains            []string
 }
 
 type qualityGateProfileDefinition struct {
@@ -487,6 +493,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgDurationMS:                      float64Ptr(180000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
 				RequiredExpectationCapabilities:       []string{"longrun_recovery", "loop_protocol", "session_search"},
+				RequiredExpectationDomains:            []string{"bittensor", "code_pr", "longrun_recovery", "market"},
 				MaxDebugBriefTagRates: map[string]float64{
 					"empty_recall:no_recent_sessions": 0,
 					"loop_protocol:fixture":           0,
@@ -534,6 +541,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgDurationMS:                      float64Ptr(240000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
 				RequiredExpectationCapabilities:       []string{"browser", "source_access", "web"},
+				RequiredExpectationDomains:            []string{"web_evidence"},
 				MaxDebugBriefTagRates: map[string]float64{
 					"browser_network:unread_refs":                 0,
 					"browser_scroll:stuck_without_network":        0,
@@ -616,6 +624,9 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	if len(g.RequiredExpectationCapabilities) > 0 {
 		lines = append(lines, fmt.Sprintf("require-expectation-capability=%s", strings.Join(g.RequiredExpectationCapabilities, ",")))
 	}
+	if len(g.RequiredExpectationDomains) > 0 {
+		lines = append(lines, fmt.Sprintf("require-expectation-domain=%s", strings.Join(g.RequiredExpectationDomains, ",")))
+	}
 	return lines
 }
 
@@ -690,6 +701,13 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 			profileCapabilities = append(profileCapabilities, g.RequiredExpectationCapabilities...)
 		}
 		g.RequiredExpectationCapabilities = uniqueSortedStrings(profileCapabilities)
+	}
+	if len(profileConfig.RequiredExpectationDomains) > 0 {
+		profileDomains := cloneStringSlice(profileConfig.RequiredExpectationDomains)
+		if flagSet != nil && flagSet("require-expectation-domain") {
+			profileDomains = append(profileDomains, g.RequiredExpectationDomains...)
+		}
+		g.RequiredExpectationDomains = uniqueSortedStrings(profileDomains)
 	}
 	return nil
 }
@@ -1933,6 +1951,11 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 			return fmt.Errorf("--require-expectation-capability value must be non-empty")
 		}
 	}
+	for _, domain := range g.RequiredExpectationDomains {
+		if strings.TrimSpace(domain) == "" {
+			return fmt.Errorf("--require-expectation-domain value must be non-empty")
+		}
+	}
 	return nil
 }
 
@@ -1975,6 +1998,11 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	for _, cap := range g.RequiredExpectationCapabilities {
 		if s.ExpectationCapabilities[cap] == 0 {
 			failures = append(failures, fmt.Sprintf("expectation_capability[%s] unavailable, want >= 1 scenario", cap))
+		}
+	}
+	for _, domain := range g.RequiredExpectationDomains {
+		if s.ExpectationDomains[domain] == 0 {
+			failures = append(failures, fmt.Sprintf("expectation_domain[%s] unavailable, want >= 1 scenario", domain))
 		}
 	}
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
@@ -2921,6 +2949,7 @@ type evalJSONLMetadata struct {
 	MaxAvgTotalTokens                     *float64           `json:"max_avg_total_tokens,omitempty"`
 	MaxDebugBriefTagRates                 map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
 	RequiredExpectationCapabilities       []string           `json:"required_expectation_capabilities,omitempty"`
+	RequiredExpectationDomains            []string           `json:"required_expectation_domains,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -2992,6 +3021,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgTotalTokens:                     enabledQualityGateValue(gates.MaxAvgTotalTokens),
 		MaxDebugBriefTagRates:                 enabledQualityGateMap(gates.MaxDebugBriefTagRates),
 		RequiredExpectationCapabilities:       cloneStringSlice(gates.RequiredExpectationCapabilities),
+		RequiredExpectationDomains:            cloneStringSlice(gates.RequiredExpectationDomains),
 	}
 }
 
@@ -3813,7 +3843,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgDurationMS != nil ||
 		meta.MaxAvgTotalTokens != nil ||
 		len(meta.MaxDebugBriefTagRates) > 0 ||
-		len(meta.RequiredExpectationCapabilities) > 0
+		len(meta.RequiredExpectationCapabilities) > 0 ||
+		len(meta.RequiredExpectationDomains) > 0
 }
 
 func expectationCapabilityPassRates(total, passed map[string]int) map[string]float64 {

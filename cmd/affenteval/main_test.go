@@ -64,6 +64,8 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
 		"require-expectation-capability=longrun_recovery,loop_protocol,session_search",
 		"require-expectation-capability=browser,source_access,web",
+		"require-expectation-domain=bittensor,code_pr,longrun_recovery,market",
+		"require-expectation-domain=web_evidence",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--list-quality-profiles output missing %q:\n%s", want, out)
@@ -116,8 +118,10 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
-	if !strings.Contains(help, "-require-expectation-capability") {
-		t.Fatalf("--help missing expectation capability coverage gate:\n%s", help)
+	for _, want := range []string{"-require-expectation-capability", "-require-expectation-domain"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("--help missing expectation coverage gate %q:\n%s", want, help)
+		}
 	}
 }
 
@@ -586,6 +590,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextInjectionEstimatedTokens: 2250,
 		ExpectationCapabilities:         map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:       map[string]int{"browser": 1, "memory": 1},
+		ExpectationDomains:              map[string]int{"market": 1},
 		DebugBriefByTag:                 map[string]int{"browser_scroll:stuck_without_network": 1, "source_dynamic_without_network": 1, "verifier:not_run": 1},
 	}
 	failures := qualityGateFailures(summary, qualityGateConfig{
@@ -629,6 +634,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgTotalTokens:                     ptr(40),
 		MaxDebugBriefTagRates:                 map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0, "verifier:not_run": 0},
 		RequiredExpectationCapabilities:       []string{"browser", "delegated_source_evidence"},
+		RequiredExpectationDomains:            []string{"bittensor", "market"},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -653,6 +659,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"expectation_capability_pass_rate[web] 0.000 < min 0.750",
 		"expectation_capability_pass_rate 0.500 < min 0.750",
 		"expectation_capability[delegated_source_evidence] unavailable, want >= 1 scenario",
+		"expectation_domain[bittensor] unavailable, want >= 1 scenario",
 		"focused_task_error_rate 0.500 > max 0.250",
 		"forced_no_tools_rate 0.200 > max 0.100",
 		"loop_guard_intervention_rate 0.400 > max 0.300",
@@ -851,6 +858,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"longrun_recovery", "loop_protocol", "session_search"}) {
 		t.Fatalf("longrun required expectation capabilities = %#v", gates.RequiredExpectationCapabilities)
 	}
+	if !reflect.DeepEqual(gates.RequiredExpectationDomains, []string{"bittensor", "code_pr", "longrun_recovery", "market"}) {
+		t.Fatalf("longrun required expectation domains = %#v", gates.RequiredExpectationDomains)
+	}
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
 		t.Fatalf("longrun profile should not require source evidence for non-web suites: %#v", gates.MinSourceAccessVerifiedRate)
 	}
@@ -903,7 +913,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["research_checkpoint:no_external_evidence"] != 0 ||
 		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
-		!reflect.DeepEqual(webGates.RequiredExpectationCapabilities, []string{"browser", "source_access", "web"}) {
+		!reflect.DeepEqual(webGates.RequiredExpectationCapabilities, []string{"browser", "source_access", "web"}) ||
+		!reflect.DeepEqual(webGates.RequiredExpectationDomains, []string{"web_evidence"}) {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}
 	if err := applyQualityGateProfile(&qualityGateConfig{}, "unknown", nil); err == nil || !strings.Contains(err.Error(), "--quality-profile") {
@@ -916,9 +927,10 @@ func TestApplyQualityGateProfile(t *testing.T) {
 			"recall:no_context":              0.25,
 		},
 		RequiredExpectationCapabilities: []string{"delegated_source_evidence", "web"},
+		RequiredExpectationDomains:      []string{"bittensor"},
 	}
 	if err := applyQualityGateProfile(&overrideGates, "web-evidence", func(name string) bool {
-		return name == "max-debug-brief-tag-rate" || name == "require-expectation-capability"
+		return name == "max-debug-brief-tag-rate" || name == "require-expectation-capability" || name == "require-expectation-domain"
 	}); err != nil {
 		t.Fatalf("apply web-evidence profile with debug tag overrides: %v", err)
 	}
@@ -931,6 +943,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	}
 	if !reflect.DeepEqual(overrideGates.RequiredExpectationCapabilities, []string{"browser", "delegated_source_evidence", "source_access", "web"}) {
 		t.Fatalf("required expectation capabilities not merged: %#v", overrideGates.RequiredExpectationCapabilities)
+	}
+	if !reflect.DeepEqual(overrideGates.RequiredExpectationDomains, []string{"bittensor", "web_evidence"}) {
+		t.Fatalf("required expectation domains not merged: %#v", overrideGates.RequiredExpectationDomains)
 	}
 	if err := validateQualityGateConfig(overrideGates); err != nil {
 		t.Fatalf("validate debug brief tag gate override: %v", err)
@@ -4249,6 +4264,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgTotalTokens := 120000.0
 	maxDebugBriefTagRates := map[string]float64{"source_dynamic_without_network": 0}
 	requiredExpectationCapabilities := []string{"delegated_source_evidence", "source_access"}
+	requiredExpectationDomains := []string{"bittensor", "market"}
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                           &minPassRate,
 		MinMemoryUpdateRate:                   &minMemoryUpdateRate,
@@ -4288,6 +4304,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxAvgTotalTokens:                     &maxAvgTotalTokens,
 		MaxDebugBriefTagRates:                 maxDebugBriefTagRates,
 		RequiredExpectationCapabilities:       requiredExpectationCapabilities,
+		RequiredExpectationDomains:            requiredExpectationDomains,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
@@ -4300,6 +4317,9 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	}
 	if !reflect.DeepEqual(meta.RequiredExpectationCapabilities, requiredExpectationCapabilities) {
 		t.Fatalf("required expectation capability metadata = %#v, want %#v", meta.RequiredExpectationCapabilities, requiredExpectationCapabilities)
+	}
+	if !reflect.DeepEqual(meta.RequiredExpectationDomains, requiredExpectationDomains) {
+		t.Fatalf("required expectation domain metadata = %#v, want %#v", meta.RequiredExpectationDomains, requiredExpectationDomains)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
 		t.Fatalf("disabled quality gate metadata should be omitted: %+v", meta)

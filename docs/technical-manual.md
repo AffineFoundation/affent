@@ -1083,7 +1083,10 @@ Scenarios may also carry task-domain labels such as `market`, `bittensor`,
 `code_pr`, `web_evidence`, `memory`, `session_recovery`,
 `context_compaction`, and `longrun_recovery`. Batch JSONL summaries aggregate
 these as `expectation_domains`, which lets model comparisons verify realistic
-workload coverage without parsing scenario names.
+workload coverage without parsing scenario names. Use
+`--require-expectation-domain DOMAIN` when a CI batch must prove it actually
+included at least one realistic workload domain such as `market`, `bittensor`,
+`code_pr`, `web_evidence`, or `longrun_recovery`.
 
 Run scenarios:
 
@@ -1113,7 +1116,10 @@ observability, shared memory, tool recovery, loop-guard no-tool fallback, and
 cross-session recovery regressions fail the batch. It also requires the batch
 to include `longrun_recovery`, `loop_protocol`, and `session_search`
 expectation capabilities, so a filtered run cannot pass the profile without
-exercising durable recovery. No-hit session recall is
+exercising durable recovery. The profile also requires `market`, `bittensor`,
+`code_pr`, and `longrun_recovery` task-domain coverage so broad pass rates do
+not hide that realistic stock analysis, Bittensor subnet research, code/PR
+execution, or long-running recovery workloads were skipped. No-hit session recall is
 allowed only when `recent_sessions` exposes recovery anchors; no-hit recall
 without recent anchors trips the `empty_recall:no_recent_sessions` debug tag
 gate. Memory search misses are not gated merely for missing once, but misses
@@ -1128,7 +1134,9 @@ network-backed reads, browser network refs that were not followed by
 `browser_network_read`, or dynamic gaps without an explicit evidence-quality
 defer decision. The profile requires `browser`, `source_access`, and `web`
 expectation capability coverage so accidental non-web batches fail before their
-source-quality rates are interpreted.
+source-quality rates are interpreted, and it requires the `web_evidence`
+task-domain label so source-quality gates are tied to at least one current-web
+workload.
 Explicit `--max-debug-brief-tag-rate tag=rate` flags merge with profile
 defaults and can disable one profile tag with `tag=-1`. Other explicit gate
 flags override the profile defaults. Use
@@ -1136,7 +1144,9 @@ flags override the profile defaults. Use
 actually included at least one scenario for a capability family such as
 `delegated_source_evidence`; these explicit requirements are added to any
 profile-provided coverage requirements and catch filtered or misconfigured
-suites before pass-rate gates are interpreted. JSONL summary records also
+suites before pass-rate gates are interpreted. Explicit
+`--require-expectation-domain DOMAIN` flags work the same way for workload
+domains. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr.
