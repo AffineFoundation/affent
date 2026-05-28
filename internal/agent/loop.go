@@ -1628,6 +1628,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		endReason = sse.TurnEndMaxTurns
 	}
 	l.publishEvidenceQualityDecisions(turnID, toolStats)
+	if budget := l.maxTurnInputTokensForTurn(opts); budget > 0 && totalIn >= budget && !inputBudgetDecisionPublished {
+		l.publishInputBudgetLoopDecision(turnID, "turn_input_tokens_observed_after_step", totalIn, 0, budget, &inputBudgetDecisionPublished)
+	}
 	l.recordLoopTurnCheckpoint(turnID, endReason, totalIn, totalOut, toolStats)
 	l.publish(sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: totalIn, OutputTokens: totalOut})
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason, ToolStats: toolRuntimeStatsPtr(toolStats)})

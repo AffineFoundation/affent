@@ -2939,6 +2939,101 @@ func TestRunTurn_ProjectedInputBudgetChecksFirstRequest(t *testing.T) {
 	}
 }
 
+func TestRunTurn_PostTurnInputBudgetDecisionWhenFinalUsageExceedsBudget(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		atomic.AddInt32(&calls, 1)
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"done after expensive context"},"finish_reason":"stop"}],"usage":{"prompt_tokens":120,"completion_tokens":5}}` + "\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Conv: conv, Events: events,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 55, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "answer directly"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawFinal bool
+	var sawDecision bool
+	var usage sse.UsagePayload
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == "done after expensive context" {
+					sawFinal = true
+				}
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				if p.Kind == "input_budget" {
+					sawDecision = true
+					if p.Trigger != "turn_input_tokens_observed_after_step" || p.TokenBudget != 55 || p.ObservedInputTokens != 120 || p.ProjectedInputTokens != 0 {
+						t.Fatalf("unexpected post-turn input-budget decision: %+v", p)
+					}
+					if p.VisibleInUI == nil || !*p.VisibleInUI {
+						t.Fatalf("post-turn input-budget decision should be visible: %+v", p)
+					}
+				}
+			case sse.TypeUsage:
+				if err := json.Unmarshal(ev.Data, &usage); err != nil {
+					t.Fatalf("decode usage: %v", err)
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed", p.Reason)
+				}
+				if !sawFinal || !sawDecision {
+					t.Fatalf("sawFinal=%t sawDecision=%t", sawFinal, sawDecision)
+				}
+				if usage.InputTokens != 120 || usage.OutputTokens != 5 {
+					t.Fatalf("usage = %+v, want 120/5", usage)
+				}
+				if got := atomic.LoadInt32(&calls); got != 1 {
+					t.Fatalf("LLM calls = %d, want 1", got)
+				}
+				if p.ToolStats != nil && (p.ToolStats.ForcedNoTools != 0 || p.ToolStats.ToolRequests != 0 || p.ToolStats.ToolErrors != 0) {
+					t.Fatalf("tool stats = %+v, want no forced tool transition for already-final response", p.ToolStats)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_InputBudgetCompactsBeforeNoToolFinal(t *testing.T) {
 	var calls int32
 	var finalBody string
