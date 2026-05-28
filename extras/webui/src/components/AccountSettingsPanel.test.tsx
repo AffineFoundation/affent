@@ -22,6 +22,11 @@ describe("AccountSettingsPanel", () => {
     expect(panel).toHaveTextContent("Config");
     expect(panel).toHaveTextContent("1 env · SSH key");
     expect(panel).toHaveTextContent("SSH ready · 1 env");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Private Git ready");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Public key");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("~/.ssh/id_ed25519.pub");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("1 env");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Run tasks normally");
     expect(panel).toHaveTextContent("Existing keys are never overwritten");
     expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
@@ -95,6 +100,8 @@ describe("AccountSettingsPanel", () => {
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No config");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No env vars or SSH key configured");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("SSH key missing");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Generate an SSH key only when this runtime needs private repo access");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate a key when this runtime needs private Git access");
     await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
 
@@ -143,6 +150,9 @@ describe("AccountSettingsPanel", () => {
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("SSH key issue");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("SSH key found; public key unavailable");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("SSH key needs review");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Blocked");
+    expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Fix or derive the public key in ~/.ssh");
     expect(screen.getByRole("alert")).toHaveTextContent("could not be derived");
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
   });

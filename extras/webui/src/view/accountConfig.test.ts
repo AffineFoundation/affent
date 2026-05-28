@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountConfigDetail,
   accountConfigEvidenceText,
+  accountConfigReview,
   accountConfigSummary,
   accountEnvMatchesQuery,
   sshAccessDescription,
@@ -36,6 +37,13 @@ describe("accountConfig view helpers", () => {
       "SSH public key path: /state/.affentserve/ssh/id_ed25519.pub",
     ].join("\n"));
     expect(accountConfigEvidenceText(settings)).not.toContain("ssh-ed25519 AAAA affent");
+    expect(accountConfigReview(settings)).toMatchObject({
+      tone: "ready",
+      headline: "Private Git ready",
+      keyPath: "/state/.affentserve/ssh/id_ed25519.pub",
+      keyPathDetail: "custom path",
+      envCount: "2 envs",
+    });
     expect(sshStorageDescription(settings.ssh)).toBe("/state/.affentserve/ssh/id_ed25519.pub");
     expect(sshPathDisplay("/workspace/.home/.ssh/id_ed25519.pub")).toBe("~/.ssh/id_ed25519.pub");
     expect(sshPathState("/workspace/.home/.ssh/id_ed25519.pub", true)).toBe("standard ~/.ssh");
@@ -56,6 +64,12 @@ describe("accountConfig view helpers", () => {
 
     expect(accountConfigSummary(settings)).toBe("SSH key issue");
     expect(accountConfigDetail(settings)).toBe("SSH key found; public key unavailable");
+    expect(accountConfigReview(settings)).toMatchObject({
+      tone: "attention",
+      privateGit: "Blocked",
+      publicKey: "Unavailable",
+      nextAction: "Fix or derive the public key in ~/.ssh, then refresh config before cloning private repositories.",
+    });
     expect(sshStorageDescription(settings.ssh)).toBe("Storage path not reported by this server build.");
     expect(accountConfigEvidenceText(settings)).toContain("SSH issue: could not derive public key");
   });

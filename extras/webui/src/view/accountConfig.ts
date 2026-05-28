@@ -1,5 +1,18 @@
 import type { AccountEnvSummary, AccountSettingsResponse } from "../api/settings";
 
+export type AccountConfigReview = {
+  tone: "ready" | "attention" | "missing";
+  headline: string;
+  detail: string;
+  privateGit: string;
+  publicKey: string;
+  keyPath: string;
+  keyPathDetail: string;
+  envCount: string;
+  latestEnvUpdate?: string;
+  nextAction: string;
+};
+
 export function accountConfigSummary(settings?: AccountSettingsResponse): string {
   if (!settings) return "No config";
   const env = settings.env.length > 0 ? `${settings.env.length} env${settings.env.length === 1 ? "" : "s"}` : undefined;
@@ -42,6 +55,7 @@ export function sshPathDisplay(path?: string): string {
 
 export function sshPathState(path?: string, exists = false): string {
   if (path?.includes("/.ssh/") || path?.startsWith(".ssh/")) return "standard ~/.ssh";
+  if (path) return "custom path";
   if (exists) return "path not reported";
   return "not configured";
 }
@@ -63,6 +77,61 @@ export function accountEnvMatchesQuery(entry: AccountEnvSummary, query: string):
     entry.configured ? "configured" : "empty",
     entry.updated_at,
   ].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase());
+}
+
+export function accountConfigReview(settings: AccountSettingsResponse): AccountConfigReview {
+  const latestEnvUpdate = settings.env
+    .map((entry) => entry.updated_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const envCount = settings.env.length;
+  const envLabel = `${envCount} env${envCount === 1 ? "" : "s"}`;
+  const keyPath = sshPathDisplay(settings.ssh.public_key_path) || (settings.ssh.exists ? "Not reported" : "Not generated");
+  const keyPathDetail = sshPathState(settings.ssh.public_key_path, settings.ssh.exists);
+
+  if (settings.ssh.public_key) {
+    return {
+      tone: "ready",
+      headline: "Private Git ready",
+      detail: "SSH public key is available. Add it to the Git provider account that owns private repositories.",
+      privateGit: "Ready",
+      publicKey: "Available",
+      keyPath,
+      keyPathDetail,
+      envCount: envLabel,
+      latestEnvUpdate,
+      nextAction: envCount > 0 ? "Run tasks normally; add or rotate secrets only when the next job needs them." : "Add only the secrets required by the next private workflow.",
+    };
+  }
+
+  if (settings.ssh.exists) {
+    return {
+      tone: "attention",
+      headline: "SSH key needs review",
+      detail: settings.ssh.public_key_error || "A private key exists, but the public key cannot be read.",
+      privateGit: "Blocked",
+      publicKey: "Unavailable",
+      keyPath,
+      keyPathDetail,
+      envCount: envLabel,
+      latestEnvUpdate,
+      nextAction: "Fix or derive the public key in ~/.ssh, then refresh config before cloning private repositories.",
+    };
+  }
+
+  return {
+    tone: "missing",
+    headline: "SSH key missing",
+    detail: "This runtime cannot clone private Git repositories until an SSH key exists and its public key is registered.",
+    privateGit: "Not ready",
+    publicKey: "Missing",
+    keyPath,
+    keyPathDetail,
+    envCount: envLabel,
+    latestEnvUpdate,
+    nextAction: "Generate an SSH key only when this runtime needs private repo access.",
+  };
 }
 
 function envEvidenceLine(entry: AccountEnvSummary): string {

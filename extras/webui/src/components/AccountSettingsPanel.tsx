@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
 import {
   accountConfigDetail,
+  accountConfigReview,
   accountConfigSummary,
   accountEnvMatchesQuery,
   sshAccessDescription,
@@ -130,6 +131,12 @@ export function AccountSettingsPanel({
             {settings ? (
               <>
                 <ConfigDashboard settings={settings} />
+                <AccountConfigFocus
+                  settings={settings}
+                  busy={busy}
+                  onRefresh={onRefresh}
+                  onEnsureSSHKey={onEnsureSSHKey ? ensureSSHKey : undefined}
+                />
                 <div className="account-settings-actions">
                   {onRefresh ? (
                     <button type="button" className="node-action" disabled={!!busy} onClick={() => void onRefresh()}>
@@ -171,13 +178,7 @@ export function AccountSettingsPanel({
                   </div>
                 </>
               ) : (
-                <div className="session-loop-actions">
-                  {onEnsureSSHKey ? (
-                    <button type="button" className="secondary-action" disabled={!!busy} onClick={() => void ensureSSHKey()}>
-                      {busy === "ssh" ? "Checking key" : "Generate SSH key"}
-                    </button>
-                  ) : null}
-                </div>
+                <div className="session-skills-empty">No SSH key is configured.</div>
               )}
             </div>
             <details className="account-env-write" open={!settings || settings.env.length === 0}>
@@ -256,6 +257,61 @@ export function AccountSettingsPanel({
         ) : null}
       </div>
     </details>
+  );
+}
+
+function AccountConfigFocus({
+  settings,
+  busy,
+  onRefresh,
+  onEnsureSSHKey,
+}: {
+  settings: AccountSettingsResponse;
+  busy?: string;
+  onRefresh?: () => Promise<void> | void;
+  onEnsureSSHKey?: () => Promise<void> | void;
+}) {
+  const review = accountConfigReview(settings);
+  return (
+    <section className="account-config-focus" data-testid="account-config-focus" data-tone={review.tone} aria-label="Runtime config review">
+      <div className="account-config-focus-head">
+        <span>{review.tone === "ready" ? "Runtime ready" : review.tone === "attention" ? "Review needed" : "Setup needed"}</span>
+        <strong>{review.headline}</strong>
+        <small>{review.detail}</small>
+      </div>
+      <div className="account-config-focus-grid">
+        <ConfigFocusFact label="Private Git" value={review.privateGit} />
+        <ConfigFocusFact label="Public key" value={review.publicKey} />
+        <ConfigFocusFact label="Key path" value={review.keyPath} detail={review.keyPathDetail} />
+        <ConfigFocusFact label="Secrets" value={review.envCount} detail={review.latestEnvUpdate ? `updated ${formatTimestamp(review.latestEnvUpdate)}` : "none updated"} />
+      </div>
+      <div className="account-config-next">
+        <span>Next action</span>
+        <p>{review.nextAction}</p>
+      </div>
+      <div className="account-config-focus-actions">
+        {!settings.ssh.exists && onEnsureSSHKey ? (
+          <button type="button" className="secondary-action" disabled={!!busy} onClick={() => void onEnsureSSHKey()}>
+            {busy === "ssh" ? "Checking key" : "Generate SSH key"}
+          </button>
+        ) : null}
+        {settings.ssh.exists && !settings.ssh.public_key && onRefresh ? (
+          <button type="button" className="node-action" disabled={!!busy} onClick={() => void onRefresh()}>
+            Refresh after fix
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function ConfigFocusFact({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="account-config-focus-fact">
+      <span>{label}</span>
+      <strong title={detail || value}>{value}</strong>
+      {detail ? <small title={detail}>{detail}</small> : null}
+    </div>
   );
 }
 
