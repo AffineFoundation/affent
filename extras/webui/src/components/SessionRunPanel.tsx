@@ -29,10 +29,12 @@ export function SessionRunPanel({
   const stats = runStats(run.commands);
   const review = runReviewFocus(run.commands);
   const reviewFacts = runReviewFacts(run.commands);
+  const latestFailedCommand = run.commands.find((command) => command.status === "failed");
   const filteredCommands = filter === "all" ? run.commands : run.commands.filter((command) => command.status === filter);
   const visibleCommands = trimmedQuery ? filteredCommands.filter((command) => runMatchesQuery(command, trimmedQuery)) : filteredCommands;
   const focus = runFocusCommand(visibleCommands);
   const historyCommands = focus ? visibleCommands.filter((command) => command !== focus.command) : visibleCommands;
+  const canInspectRecoveredFailure = !!latestFailedCommand && focus?.command !== latestFailedCommand;
 
   async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -64,6 +66,35 @@ export function SessionRunPanel({
             <span>{review.label}</span>
             <strong>{review.title}</strong>
             <small>{review.detail}</small>
+            {canInspectRecoveredFailure ? (
+              <div className="session-run-review-actions">
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => {
+                    setFilter("failed");
+                    setQuery("");
+                  }}
+                >
+                  Inspect latest failure
+                </button>
+                {latestFailedCommand.artifactPath && onOpenArtifact ? (
+                  <button type="button" className="ghost-action" onClick={() => onOpenArtifact(latestFailedCommand.artifactPath ?? "")}>
+                    Open failure output
+                  </button>
+                ) : null}
+                {onRunCommand ? (
+                  <button
+                    type="button"
+                    className="ghost-action primary-run-action"
+                    disabled={runCommandBusy}
+                    onClick={() => onRunCommand(runCommandRequest(latestFailedCommand))}
+                  >
+                    Rerun latest failure
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
           <div className="session-run-facts" aria-label="Run review facts">
             {reviewFacts.map((fact) => (

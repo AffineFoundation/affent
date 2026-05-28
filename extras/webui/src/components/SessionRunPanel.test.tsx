@@ -139,7 +139,8 @@ describe("SessionRunPanel", () => {
     expect(screen.queryByTestId("session-run-list")).toBeNull();
   });
 
-  it("treats earlier failures as recovered when a later command passes", () => {
+  it("treats earlier failures as recovered and can jump back to failure evidence", async () => {
+    const user = userEvent.setup();
     render(
       <SessionRunPanel
         defaultOpen
@@ -158,6 +159,12 @@ describe("SessionRunPanel", () => {
     expect(screen.getByLabelText("Run review facts")).toHaveTextContent("covered by later pass");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm run build");
+
+    await user.click(screen.getByRole("button", { name: "Inspect latest failure" }));
+
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Recovery needed");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(screen.queryByTestId("session-run-list")).toBeNull();
   });
 });
 
