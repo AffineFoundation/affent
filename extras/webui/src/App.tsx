@@ -1526,6 +1526,11 @@ export function App() {
     }
   }
 
+  async function handleConfigVerifyGitAccess(request: SessionCommandRequest) {
+    await handleRunCommandRequest(request);
+    if (selectedSessionId) setWorkbenchTab("run");
+  }
+
   async function handleExecutePlanStep(opts: { runRemaining?: boolean } = {}) {
     if (!selectedSessionId || actionBusy || session.status === "running" || pendingMessage) return;
     const summary = planPanelSummary;
@@ -1760,7 +1765,7 @@ export function App() {
         onSetEnv={handleSetAccountEnv}
         onDeleteEnv={handleDeleteAccountEnv}
         onEnsureSSHKey={handleEnsureAccountSSHKey}
-        onVerifyGitAccess={handleRunCommandRequest}
+        onVerifyGitAccess={handleConfigVerifyGitAccess}
       />
     );
   }

@@ -2191,6 +2191,96 @@ describe("App", () => {
     expect(requestedUrls()).toContain("/v1/skills");
   });
 
+  it("routes Config SSH verification results to the Run evidence surface", async () => {
+    const user = userEvent.setup();
+    let commandRan = false;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{
+            id: "config-run",
+            active: true,
+            durable: true,
+            topic_user_message: "verify private Git access",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/config-run/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "config-run",
+          events: commandRan ? [
+            { id: 1, type: "trace.meta", data: { schema_version: 1 } },
+            { id: 2, type: "turn.start", data: { turn_id: "cmd1" } },
+            {
+              id: 3,
+              type: "tool.request",
+              data: {
+                turn_id: "cmd1",
+                call_id: "ssh-test",
+                tool: "shell",
+                args: { command: "host='gitlab.com'; ssh -T git@$host" },
+              },
+            },
+            { id: 4, type: "tool.result", data: { call_id: "ssh-test", exit_code: 0, result_summary: "Welcome to GitLab" } },
+            { id: 5, type: "turn.end", data: { turn_id: "cmd1", reason: "completed" } },
+          ] : [
+            { id: 1, type: "trace.meta", data: { schema_version: 1 } },
+          ],
+          next_after: commandRan ? 5 : 1,
+          has_more: false,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/config-run/events") return eventStreamResponse("");
+      if (url === "/v1/settings") {
+        return jsonResponse({
+          env: [],
+          ssh: {
+            exists: true,
+            public_key: "ssh-ed25519 AAAA affent",
+            public_key_path: "/workspace/.home/.ssh/id_ed25519.pub",
+          },
+        });
+      }
+      if (url === "/v1/sessions/config-run/commands" && init?.method === "POST") {
+        commandRan = true;
+        return jsonResponse({
+          session_id: "config-run",
+          turn_id: "cmd1",
+          call_id: "ssh-test",
+          exit_code: 0,
+          result: "Welcome to GitLab",
+          completed_at: "2026-05-28T00:00:00Z",
+        });
+      }
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await user.click(await screen.findByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Config");
+    await screen.findByTestId("account-settings-panel");
+    await user.clear(screen.getByPlaceholderText("github.com"));
+    await user.type(screen.getByPlaceholderText("github.com"), "git@gitlab.com:team/repo.git");
+    await user.click(screen.getByRole("button", { name: "Test SSH" }));
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/config-run/commands", expect.objectContaining({ method: "POST" })));
+    const tab = await screen.findByTestId("workbench-tab-surface");
+    await waitFor(() => expect(tab).toHaveTextContent("Latest verification"));
+    expect(tab).toHaveTextContent("gitlab.com");
+    expect(tab).toHaveTextContent("Welcome to GitLab");
+  });
+
   it("auto-hides chats for Workbench and lets them reopen without closing Workbench", async () => {
     window.history.replaceState(null, "", "/?sessionId=s1");
     const user = userEvent.setup();
