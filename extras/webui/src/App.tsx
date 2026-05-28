@@ -1881,6 +1881,7 @@ export function App() {
           artifacts={workbenchArtifacts}
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
           downloadHref={
             selectedSessionId
               ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))

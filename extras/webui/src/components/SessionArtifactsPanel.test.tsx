@@ -9,6 +9,7 @@ describe("SessionArtifactsPanel", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const onOpenArtifact = vi.fn();
+    const onUseAsDraft = vi.fn();
 
     render(
       <SessionArtifactsPanel
@@ -35,16 +36,19 @@ describe("SessionArtifactsPanel", () => {
         ]}
         downloadHref={(path) => `/v1/sessions/s1/artifacts/${path}`}
         onOpenArtifact={onOpenArtifact}
+        onUseAsDraft={onUseAsDraft}
       />,
     );
 
     const panel = screen.getByTestId("session-artifacts-panel");
     expect(panel).toHaveAttribute("open");
-    expect(panel).toHaveTextContent("2 artifacts");
-    expect(panel).toHaveTextContent("2 files · 1 full-output · 10 KiB recorded");
-    expect(screen.getByLabelText("Deliverable artifact summary")).toHaveTextContent("Deliverables");
-    expect(screen.getByLabelText("Deliverable artifact summary")).toHaveTextContent("Latest");
-    expect(screen.getByLabelText("Deliverable artifact summary")).toHaveTextContent("checkout-report.md");
+    expect(panel).toHaveTextContent("1 deliverable · 1 full output");
+    expect(panel).toHaveTextContent("2 files · 10 KiB recorded");
+    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Evidence files");
+    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Full output");
+    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByText("Deliverables").closest("button")).toHaveTextContent("1");
+    expect(within(screen.getByLabelText("Artifact filters")).getByText("Full output").closest("button")).toHaveTextContent("1");
     expect(screen.getByLabelText("Search artifacts")).toBeInTheDocument();
     const list = screen.getByTestId("session-artifacts-list");
     expect(list).toHaveTextContent("000001-test.txt");
@@ -61,9 +65,16 @@ describe("SessionArtifactsPanel", () => {
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
     await user.click(within(firstArtifact).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    expect(within(firstArtifact).queryByRole("button", { name: "Copy details" })).toBeNull();
-    expect(within(firstArtifact).queryByRole("button", { name: "Reference" })).toBeNull();
+    await user.click(within(firstArtifact).getByRole("button", { name: "Copy details" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Full output available as artifact"));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Reference" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Artifact evidence for .affent/artifacts/tool-results/000001-test.txt"), "artifact");
 
+    await user.click(screen.getByText("Deliverables").closest("button")!);
+    expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
+    await user.click(screen.getByText("All").closest("button")!);
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
     await user.type(screen.getByLabelText("Search artifacts"), "report");
     expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("000001-test.txt");
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
@@ -81,8 +92,8 @@ describe("SessionArtifactsPanel", () => {
 
     const panel = screen.getByTestId("session-artifacts-panel");
     expect(panel).toHaveTextContent("No artifacts");
-    expect(panel).toHaveTextContent("No deliverable artifacts");
-    expect(panel).toHaveTextContent("Raw command outputs are in Run. File reads and edits are in Files.");
+    expect(panel).toHaveTextContent("No artifacts yet");
+    expect(panel).toHaveTextContent("When a tool stores a full output or the agent creates a deliverable");
     expect(screen.queryByLabelText("Search artifacts")).toBeNull();
   });
 });

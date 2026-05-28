@@ -1,44 +1,68 @@
 import { useState } from "react";
+import type { UseAsDraft } from "../view/draftSource";
+import {
+  artifactEvidenceDraft,
+  artifactEvidenceText,
+  artifactKind,
+  artifactKindLabel,
+  artifactReviewDetail,
+  artifactReviewFocus,
+  artifactReviewStats,
+  artifactReviewSummary,
+  type SessionArtifactKind,
+} from "../view/sessionArtifacts";
 import { artifactSizeLabel, type TurnArtifact } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
+
+type ArtifactFilter = "all" | SessionArtifactKind;
 
 export function SessionArtifactsPanel({
   artifacts,
   defaultOpen = false,
   downloadHref,
   onOpenArtifact,
+  onUseAsDraft,
 }: {
   artifacts: readonly TurnArtifact[];
   defaultOpen?: boolean;
   downloadHref?: (path: string) => string | undefined;
   onOpenArtifact?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<ArtifactFilter>("all");
   const trimmedQuery = query.trim();
-  const visibleArtifacts = trimmedQuery ? artifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : artifacts;
-  const focus = artifactFocus(artifacts);
+  const stats = artifactReviewStats(artifacts);
+  const filteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
+  const visibleArtifacts = trimmedQuery ? filteredArtifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : filteredArtifacts;
+  const focus = artifactReviewFocus(artifacts);
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
         <span className="session-skills-kicker">Artifacts</span>
-        <strong>{artifactSummary(artifacts)}</strong>
-        <span>{artifactDetail(artifacts)}</span>
+        <strong>{artifactReviewSummary(artifacts)}</strong>
+        <span>{artifactReviewDetail(artifacts)}</span>
       </summary>
       <div className="session-skills-body">
         {artifacts.length > 0 ? (
-          <div className="session-artifacts-overview" aria-label="Deliverable artifact summary">
+          <div className="session-artifacts-overview" aria-label="Artifact evidence summary">
             <div>
-              <span>Deliverables</span>
-              <strong>{artifactSummary(artifacts)}</strong>
-              <small>{artifactDetail(artifacts)}</small>
+              <span>Evidence files</span>
+              <strong>{artifactReviewSummary(artifacts)}</strong>
+              <small>{artifactReviewDetail(artifacts)}</small>
             </div>
             {focus ? (
               <span className="session-artifacts-focus">
-                <small>Latest</small>
+                <small>{artifactKindLabel(focus)}</small>
                 <strong title={focus.path}>{focus.name}</strong>
                 <b>{artifactSizeLabel(focus) || "recorded"}</b>
               </span>
             ) : null}
+            <div className="session-artifacts-filterbar" role="group" aria-label="Artifact filters">
+              <ArtifactFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
+              <ArtifactFilterButton label="Deliverables" value={stats.deliverables} active={filter === "deliverable"} onClick={() => setFilter("deliverable")} />
+              <ArtifactFilterButton label="Full output" value={stats.fullOutputs} active={filter === "full_output"} onClick={() => setFilter("full_output")} />
+            </div>
           </div>
         ) : null}
         {artifacts.length > 1 ? (
@@ -78,21 +102,47 @@ export function SessionArtifactsPanel({
                       </a>
                     ) : null}
                     <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
+                    <CopyButton label="Copy details" value={artifactEvidenceText(artifact)} className="ghost-action" />
+                    {onUseAsDraft ? (
+                      <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
+                        Reference
+                      </button>
+                    ) : null}
                   </span>
                 </li>
               );
             })}
           </ol>
         ) : artifacts.length > 0 ? (
-          <div className="session-skills-empty">No artifacts matching "{trimmedQuery}".</div>
+          <div className="session-skills-empty">No {filter === "all" ? "artifacts" : artifactFilterLabel(filter).toLowerCase()} matching "{trimmedQuery}".</div>
         ) : (
           <div className="session-artifacts-empty">
-            <strong>No deliverable artifacts</strong>
-            <span>Raw command outputs are in Run. File reads and edits are in Files.</span>
+            <strong>No artifacts yet</strong>
+            <span>When a tool stores a full output or the agent creates a deliverable, it will appear here with open, download, and reference actions.</span>
           </div>
         )}
       </div>
     </details>
+  );
+}
+
+function ArtifactFilterButton({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  if (value === 0 && !active) return null;
+  return (
+    <button type="button" className="session-artifacts-filter" data-active={active ? "true" : "false"} onClick={onClick}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </button>
   );
 }
 
@@ -102,36 +152,23 @@ function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
     artifact.path,
     artifact.source,
     artifact.summary,
-    artifact.truncated ? "full output" : "file",
+    artifactKindLabel(artifact),
     artifactSizeLabel(artifact),
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
 }
 
-function artifactSummary(artifacts: readonly TurnArtifact[]): string {
-  if (artifacts.length === 0) return "No artifacts";
-  return `${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`;
-}
-
-function artifactDetail(artifacts: readonly TurnArtifact[]): string {
-  if (artifacts.length === 0) return "No generated files in this chat.";
-  const truncated = artifacts.filter((artifact) => artifact.truncated).length;
-  const totalBytes = artifacts.reduce((sum, artifact) => sum + (artifact.bytes ?? 0), 0);
-  const parts = [`${artifacts.length} ${artifacts.length === 1 ? "file" : "files"}`];
-  if (truncated > 0) parts.push(`${truncated} full-output`);
-  if (totalBytes > 0) parts.push(`${Math.ceil(totalBytes / 1024)} KiB recorded`);
-  return parts.join(" · ");
-}
-
 function artifactMeta(artifact: TurnArtifact): string {
   const parts = [
-    artifact.truncated ? "Full output" : "File",
+    artifactKindLabel(artifact),
     artifact.source,
     artifactSizeLabel(artifact) || undefined,
   ].filter(Boolean);
   return parts.join(" · ");
 }
 
-function artifactFocus(artifacts: readonly TurnArtifact[]): TurnArtifact | undefined {
-  return artifacts.at(-1);
+function artifactFilterLabel(filter: ArtifactFilter): string {
+  if (filter === "full_output") return "Full output";
+  if (filter === "deliverable") return "Deliverables";
+  return "Artifacts";
 }

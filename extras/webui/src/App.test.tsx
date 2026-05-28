@@ -3237,7 +3237,8 @@ describe("App", () => {
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
-    expect(screen.getByRole("navigation", { name: "Workbench sections" })).not.toHaveTextContent("Artifacts");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("Artifacts");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("1 artifact file · 1 full output");
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     const backToChat = screen.queryByRole("button", { name: "Back to chat" });

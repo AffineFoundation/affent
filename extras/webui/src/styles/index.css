@@ -1598,6 +1598,10 @@ button.workbench-context-runtime-item:focus-visible {
   padding: 9px;
 }
 
+.session-artifacts-overview > .session-artifacts-filterbar {
+  grid-column: 1 / -1;
+}
+
 .session-artifacts-overview > div,
 .session-artifacts-focus {
   display: grid;
@@ -1647,6 +1651,52 @@ button.workbench-context-runtime-item:focus-visible {
   font-size: 11px;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
+}
+
+.session-artifacts-filterbar {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-artifacts-filter {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.86);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  padding: 5px 8px;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.session-artifacts-filter:hover,
+.session-artifacts-filter:focus-visible,
+.session-artifacts-filter[data-active="true"] {
+  border-color: rgba(20, 184, 166, 0.38);
+  background: rgba(240, 253, 250, 0.82);
+  box-shadow: 0 1px 0 rgba(20, 184, 166, 0.1);
+  outline: none;
+}
+
+.session-artifacts-filter span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0;
+}
+
+.session-artifacts-filter strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1;
 }
 
 .session-files-overview {
@@ -11907,6 +11957,18 @@ html[data-theme="dark"] .session-artifacts-overview {
 html[data-theme="dark"] .session-artifacts-focus {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(15, 23, 42, 0.52);
+}
+
+html[data-theme="dark"] .session-artifacts-filter {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(17, 20, 24, 0.72);
+}
+
+html[data-theme="dark"] .session-artifacts-filter:hover,
+html[data-theme="dark"] .session-artifacts-filter:focus-visible,
+html[data-theme="dark"] .session-artifacts-filter[data-active="true"] {
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(45, 212, 191, 0.1);
 }
 
 html[data-theme="dark"] .session-run-filter {

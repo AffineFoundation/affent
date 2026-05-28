@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { artifactEvidenceDraft, artifactEvidenceText, buildSessionArtifacts, buildWorkbenchArtifacts, sessionArtifactLabel } from "./sessionArtifacts";
+import { artifactEvidenceDraft, artifactEvidenceText, artifactKind, artifactReviewDetail, artifactReviewSummary, buildSessionArtifacts, buildWorkbenchArtifacts, sessionArtifactLabel } from "./sessionArtifacts";
 
 describe("sessionArtifacts", () => {
   it("deduplicates artifacts across turns and summarizes their size", () => {
@@ -75,8 +75,11 @@ describe("sessionArtifacts", () => {
 
     const artifacts = buildSessionArtifacts(session);
     expect(artifacts).toHaveLength(1);
-    expect(buildWorkbenchArtifacts(session)).toHaveLength(0);
+    expect(buildWorkbenchArtifacts(session)).toHaveLength(1);
     expect(sessionArtifactLabel(session)).toBe("1 file (8 KiB, 1 MiB omitted)");
+    expect(artifactKind(artifacts[0])).toBe("full_output");
+    expect(artifactReviewSummary(artifacts)).toBe("1 full output");
+    expect(artifactReviewDetail(artifacts)).toBe("1 file · 8 KiB recorded");
     expect(artifactEvidenceText(artifacts[0])).toBe(
       [
         "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
@@ -89,7 +92,7 @@ describe("sessionArtifacts", () => {
     expect(artifactEvidenceDraft(artifacts[0])).toContain("Reference this artifact in the next step:\nArtifact evidence");
   });
 
-  it("keeps deliverable artifacts in Workbench while excluding raw tool result files", () => {
+  it("keeps deliverable artifacts and full-output files in Workbench", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "write_file", args: { path: "report.md" } } },
@@ -127,6 +130,8 @@ describe("sessionArtifacts", () => {
     ]);
     expect(buildWorkbenchArtifacts(session).map((artifact) => artifact.path)).toEqual([
       ".affent/artifacts/reports/report.md",
+      ".affent/artifacts/tool-results/000002-c2.txt",
     ]);
+    expect(buildWorkbenchArtifacts(session).map(artifactKind)).toEqual(["deliverable", "full_output"]);
   });
 });

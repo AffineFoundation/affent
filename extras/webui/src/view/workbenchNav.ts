@@ -7,6 +7,7 @@ import type { SessionRunView } from "./sessionRun";
 import type { SessionTraceView } from "./sessionTrace";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
 import type { TurnArtifact } from "./turnArtifacts";
+import { artifactKind } from "./sessionArtifacts";
 import type { WorkbenchAttention, WorkbenchAttentionTarget, WorkbenchAttentionTone } from "./workbenchAttention";
 import { workbenchContextUsageSummary, type WorkbenchContextUsageView } from "./workbenchContext";
 import {
@@ -192,10 +193,10 @@ function toneForAttention(tone: SessionOverview["tone"] | WorkbenchAttentionTone
 }
 
 function artifactNavDetail(artifacts: readonly TurnArtifact[]): string {
-  const truncated = artifacts.filter((artifact) => artifact.truncated).length;
+  const fullOutputs = artifacts.filter((artifact) => artifactKind(artifact) === "full_output").length;
   const totalBytes = artifacts.reduce((sum, artifact) => sum + (artifact.bytes ?? 0), 0);
-  const parts = [`${artifacts.length} ${artifacts.length === 1 ? "generated file" : "generated files"}`];
-  if (truncated > 0) parts.push(`${truncated} full output`);
+  const parts = [`${artifacts.length} ${artifacts.length === 1 ? "artifact file" : "artifact files"}`];
+  if (fullOutputs > 0) parts.push(`${fullOutputs} full output`);
   if (totalBytes > 0) parts.push(`${Math.ceil(totalBytes / 1024)} KiB`);
   return parts.join(" · ");
 }

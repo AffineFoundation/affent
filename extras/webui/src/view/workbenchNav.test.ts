@@ -118,7 +118,7 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "0.0015M tokens" });
     expect(items.find((item) => item.key === "changes")).toMatchObject({ badge: "1" });
     expect(items.find((item) => item.key === "run")).toMatchObject({ badge: "1", tone: "error" });
-    expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 generated file · 1 full output · 4 KiB" });
+    expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 artifact file · 1 full output · 4 KiB" });
     expect(items.find((item) => item.key === "workspace")).toMatchObject({ badge: "!" });
     expect(items.find((item) => item.key === "workspace")?.tone).toBeUndefined();
     expect(items.find((item) => item.key === "loop")).toMatchObject({
