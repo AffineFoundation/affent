@@ -263,12 +263,14 @@ Keep the long-running task recoverable.`); err != nil {
 		LastCompactionReactive: true,
 		ContextCompactions:     1,
 		LastCalibrationAnswer:  "Pause if dashboard evidence cannot be verified.",
+		LastEventType:          "loop.protocol_update",
+		LastEventSummary:       "Updated LOOP.md after evidence-quality rule change",
 	}); err != nil {
 		t.Fatalf("WriteState: %v", err)
 	}
 
 	tool := sessionSearchTool(dir, "current")
-	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"browser_network_read dashboard"}`))
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"protocol update evidence-quality"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +285,7 @@ Keep the long-running task recoverable.`); err != nil {
 	if hit.SessionID != sessionID || hit.Role != "loop" {
 		t.Fatalf("unexpected loop-state hit: %+v", hit)
 	}
-	for _, want := range []string{"browser_network_read", "dashboard"} {
+	for _, want := range []string{"loop.protocol_update", "evidence-quality"} {
 		if !strings.Contains(hit.Snippet, want) {
 			t.Fatalf("loop-state hit missing %q:\n%+v\nraw=%s", want, hit, out)
 		}

@@ -961,6 +961,10 @@ func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {
 		"feeds="+stateSearchInt(state.ProtocolFeeds),
 		"calibration_answers="+stateSearchInt(state.CalibrationAnswers),
 	)
+	appendLoopStateLine(b, "last_event",
+		"type="+stateSearchValue(state.LastEventType),
+		"summary="+stateSearchValue(state.LastEventSummary),
+	)
 	appendLoopStateLine(b, "last_plan",
 		"label="+stateSearchValue(state.LastPlanLabel),
 		"step_index="+stateSearchInt(state.LastPlanStepIndex),
