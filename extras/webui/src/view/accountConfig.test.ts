@@ -5,6 +5,7 @@ import {
   accountConfigReview,
   accountConfigSummary,
   accountEnvMatchesQuery,
+  accountGitAccessVerifyRequest,
   sshAccessDescription,
   sshPathDisplay,
   sshPathState,
@@ -51,6 +52,19 @@ describe("accountConfig view helpers", () => {
     expect(accountEnvMatchesQuery(settings.env[0], "configured")).toBe(true);
     expect(accountEnvMatchesQuery(settings.env[1], "empty")).toBe(true);
     expect(accountEnvMatchesQuery(settings.env[0], "secret-value")).toBe(false);
+  });
+
+  it("builds a bounded SSH verification command for private Git hosts", () => {
+    const request = accountGitAccessVerifyRequest("git@GitLab.com:team/private-repo.git");
+
+    expect(request.cwd).toBeUndefined();
+    expect(request.command).toContain("host='gitlab.com'");
+    expect(request.command).toContain("ssh -T");
+    expect(request.command).toContain("BatchMode=yes");
+    expect(request.command).toContain("ConnectTimeout=12");
+    expect(request.command).toContain("git@$host");
+    expect(request.command).toContain("successfully authenticated");
+    expect(request.command).not.toContain("team/private-repo");
   });
 
   it("surfaces SSH key issues as runtime config evidence", () => {

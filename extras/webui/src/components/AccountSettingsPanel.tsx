@@ -1,6 +1,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
 import {
+  accountGitAccessVerifyRequest,
   accountConfigDetail,
   accountConfigReview,
   accountConfigSummary,
@@ -10,6 +11,7 @@ import {
   sshPathState,
   sshStorageDescription,
 } from "../view/accountConfig";
+import type { RunCommandExecutionRequest } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
 
@@ -24,6 +26,7 @@ export function AccountSettingsPanel({
   onSetEnv,
   onDeleteEnv,
   onEnsureSSHKey,
+  onVerifyGitAccess,
 }: {
   settings?: AccountSettingsResponse;
   loading?: boolean;
@@ -35,10 +38,12 @@ export function AccountSettingsPanel({
   onSetEnv?: (name: string, value: string) => Promise<void> | void;
   onDeleteEnv?: (name: string) => Promise<void> | void;
   onEnsureSSHKey?: () => Promise<void> | void;
+  onVerifyGitAccess?: (request: RunCommandExecutionRequest) => Promise<void> | void;
 }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [query, setQuery] = useState("");
+  const [gitHost, setGitHost] = useState("github.com");
   const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
   const [mutationStatus, setMutationStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
   const ssh = settings?.ssh;
@@ -136,6 +141,9 @@ export function AccountSettingsPanel({
                   busy={busy}
                   onRefresh={onRefresh}
                   onEnsureSSHKey={onEnsureSSHKey ? ensureSSHKey : undefined}
+                  gitHost={gitHost}
+                  setGitHost={setGitHost}
+                  onVerifyGitAccess={onVerifyGitAccess}
                 />
                 <div className="account-settings-actions">
                   {onRefresh ? (
@@ -265,13 +273,20 @@ function AccountConfigFocus({
   busy,
   onRefresh,
   onEnsureSSHKey,
+  gitHost,
+  setGitHost,
+  onVerifyGitAccess,
 }: {
   settings: AccountSettingsResponse;
   busy?: string;
   onRefresh?: () => Promise<void> | void;
   onEnsureSSHKey?: () => Promise<void> | void;
+  gitHost: string;
+  setGitHost: (value: string) => void;
+  onVerifyGitAccess?: (request: RunCommandExecutionRequest) => Promise<void> | void;
 }) {
   const review = accountConfigReview(settings);
+  const canVerifyGit = Boolean(settings.ssh.public_key && onVerifyGitAccess);
   return (
     <section className="account-config-focus" data-testid="account-config-focus" data-tone={review.tone} aria-label="Runtime config review">
       <div className="account-config-focus-head">
@@ -289,6 +304,22 @@ function AccountConfigFocus({
         <span>Next action</span>
         <p>{review.nextAction}</p>
       </div>
+      {settings.ssh.public_key ? (
+        <div className="account-config-verify" data-testid="account-config-verify">
+          <label>
+            <span>Test private Git host</span>
+            <input value={gitHost} onChange={(event) => setGitHost(event.target.value)} placeholder="github.com" disabled={!!busy || !canVerifyGit} />
+          </label>
+          <button
+            type="button"
+            className="secondary-action"
+            disabled={!!busy || !canVerifyGit}
+            onClick={() => onVerifyGitAccess?.(accountGitAccessVerifyRequest(gitHost))}
+          >
+            Test SSH
+          </button>
+        </div>
+      ) : null}
       <div className="account-config-focus-actions">
         {!settings.ssh.exists && onEnsureSSHKey ? (
           <button type="button" className="secondary-action" disabled={!!busy} onClick={() => void onEnsureSSHKey()}>

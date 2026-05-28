@@ -4879,6 +4879,49 @@ button.workbench-context-runtime-item:focus-visible {
   padding: 8px 9px;
 }
 
+.account-config-verify {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+  padding: 8px;
+}
+
+.account-config-verify label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.account-config-verify label span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.account-config-verify input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.88);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 7px 9px;
+}
+
 .account-config-focus-actions {
   display: flex;
   flex-wrap: wrap;
@@ -12652,6 +12695,17 @@ html[data-theme="dark"] .account-config-focus[data-tone="missing"] .account-conf
   border-color: rgba(96, 165, 250, 0.3);
   background: rgba(30, 58, 138, 0.28);
   color: rgba(191, 219, 254, 0.9);
+}
+
+html[data-theme="dark"] .account-config-verify {
+  border-color: rgba(45, 212, 191, 0.22);
+  background: rgba(14, 17, 22, 0.58);
+}
+
+html[data-theme="dark"] .account-config-verify input {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(9, 12, 17, 0.74);
+  color: rgba(232, 236, 241, 0.95);
 }
 
 html[data-theme="dark"] .session-skills-focus-chips span[data-kind="tool"] {

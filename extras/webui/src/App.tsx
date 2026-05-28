@@ -1760,6 +1760,7 @@ export function App() {
         onSetEnv={handleSetAccountEnv}
         onDeleteEnv={handleDeleteAccountEnv}
         onEnsureSSHKey={handleEnsureAccountSSHKey}
+        onVerifyGitAccess={handleRunCommandRequest}
       />
     );
   }

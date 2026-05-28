@@ -7,6 +7,7 @@ describe("AccountSettingsPanel", () => {
   it("shows an existing SSH public key and safe config evidence actions", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
+    const onVerifyGitAccess = vi.fn();
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(
       <AccountSettingsPanel
@@ -14,6 +15,7 @@ describe("AccountSettingsPanel", () => {
           env: [{ name: "GITHUB_TOKEN", configured: true, updated_at: "2026-05-27T10:00:00Z" }],
           ssh: { exists: true, public_key: "ssh-ed25519 AAAA affent", public_key_path: "/workspace/.home/.ssh/id_ed25519.pub" },
         }}
+        onVerifyGitAccess={onVerifyGitAccess}
         defaultOpen
       />,
     );
@@ -30,6 +32,7 @@ describe("AccountSettingsPanel", () => {
     expect(panel).toHaveTextContent("Existing keys are never overwritten");
     expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
+    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Test private Git host");
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use config as draft" })).toBeNull();
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("GITHUB_TOKEN");
@@ -39,6 +42,16 @@ describe("AccountSettingsPanel", () => {
     expect(writeText).toHaveBeenCalledWith("/workspace/.home/.ssh/id_ed25519.pub");
     await user.click(screen.getByRole("button", { name: "Copy public key" }));
     expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
+
+    await user.clear(screen.getByPlaceholderText("github.com"));
+    await user.type(screen.getByPlaceholderText("github.com"), "git@gitlab.com:team/repo.git");
+    await user.click(screen.getByRole("button", { name: "Test SSH" }));
+    expect(onVerifyGitAccess).toHaveBeenCalledWith(expect.objectContaining({
+      command: expect.stringContaining("host='gitlab.com'"),
+    }));
+    expect(onVerifyGitAccess.mock.calls[0][0].command).toContain("BatchMode=yes");
+    expect(onVerifyGitAccess.mock.calls[0][0].command).toContain("git@$host");
+    expect(onVerifyGitAccess.mock.calls[0][0].command).not.toContain("team/repo");
   });
 
   it("saves and confirms deletion for environment variables without displaying the value", async () => {
