@@ -1563,6 +1563,21 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "loop_guard:forced_no_tools") {
 		add("For loop_guard:forced_no_tools, inspect loop_guard_examples and the previous successful evidence before retrying tools; change the tool sequence or finish with a marked gap instead of repeating the blocked call.")
 	}
+	if containsString(tags, "tool_failure:loop_guard_call_cap") || containsString(tags, "plan_error") {
+		add("For plan/tool-call-cap failures, inspect plan_examples and loop_guard_examples; continue from the current persisted plan instead of rewriting it or spending more planning calls.")
+	}
+	if containsString(tags, "tool_failure:invalid_args") {
+		add("For tool_failure:invalid_args, inspect tool_failure_examples and the exact tool schema; fix malformed arguments or schema guidance before treating the task result as model reasoning failure.")
+	}
+	if containsString(tags, "tool_failure:loop_guard_no_budget") {
+		add("For tool_failure:loop_guard_no_budget, inspect the requested-but-unrun tools and rerun the scenario with a smaller tool sequence or a higher turn budget before trusting the final synthesis.")
+	}
+	if containsString(tags, "tool_failure:blocked") {
+		add("For tool_failure:blocked, switch to a canonical source, rendered browser path, API/text endpoint, or explicitly mark the source gap instead of retrying the blocked URL.")
+	}
+	if containsString(tags, "delegation_error") {
+		add("For delegation_error, inspect child_transcripts and delegation examples; decide whether the parent should use direct evidence, a narrower child task, or a larger child budget.")
+	}
 	if containsString(tags, "browser_network:unread_refs") {
 		add("For browser_network:unread_refs, inspect browser_network_examples and source_evidence, then call browser_network_read on the listed ref before citing hidden dynamic values; browser_network refs/checks are not citable SourceAccess evidence.")
 	}
@@ -1602,6 +1617,12 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"loop_protocol:fixture",
 		"research_checkpoint:no_external_evidence",
 		"loop_guard:forced_no_tools",
+		"tool_failure:loop_guard_call_cap",
+		"tool_failure:loop_guard_no_budget",
+		"tool_failure:invalid_args",
+		"tool_failure:blocked",
+		"plan_error",
+		"delegation_error",
 		"source_dynamic_without_network",
 		"source_dynamic_without_decision",
 		"browser_network:unread_refs",

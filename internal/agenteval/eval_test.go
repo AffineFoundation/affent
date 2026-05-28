@@ -4044,6 +4044,66 @@ func TestBuildDebugRecoveryGuideCleanPassWithoutBrief(t *testing.T) {
 	}
 }
 
+func TestBuildDebugRecoveryGuidePrioritizesManualLongRunToolFailures(t *testing.T) {
+	res := BatchResult{
+		OK:                true,
+		Workspace:         "/tmp/affent-eval/manual-longrun",
+		TimelinePath:      "/tmp/affent-eval/manual-longrun/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/manual-longrun/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/manual-longrun/events.jsonl",
+		ToolStats: ToolRuntimeStats{
+			ToolFailureByKind: map[string]int{
+				"blocked":              1,
+				"invalid_args":         1,
+				"loop_guard_call_cap":  1,
+				"loop_guard_no_budget": 3,
+			},
+			LoopGuardInterventions: 1,
+		},
+		Plan: PlanStats{
+			Calls:  14,
+			Errors: 5,
+			ByAction: map[string]int{
+				"set":     4,
+				"update":  5,
+				"unknown": 3,
+			},
+		},
+		Delegation: DelegationStats{
+			SubagentCalls:  1,
+			SubagentErrors: 1,
+			SubagentByMode: map[string]int{"research": 1},
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"tool_failure:loop_guard_call_cap",
+		"tool_failure:loop_guard_no_budget",
+		"tool_failure:invalid_args",
+		"tool_failure:blocked",
+		"plan/tool-call-cap failures",
+		"inspect tool_failure_examples and the exact tool schema",
+		"requested-but-unrun tools",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	for _, want := range []string{
+		"tool_failure_examples",
+		"loop_guard_examples",
+		"plan_calls",
+		"child_transcripts",
+	} {
+		if !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
+		}
+	}
+}
+
 func TestBuildDebugRecoveryGuideAddsLongRunRecallRecoveryActions(t *testing.T) {
 	res := BatchResult{
 		Workspace:         "/tmp/affent-eval/longrun-recall",
