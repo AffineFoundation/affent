@@ -1241,6 +1241,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
+				l.maybeCompactForBudgetPressure(ctx, turnID)
 				done, reason, err := runBudgetFinal(forceNoToolsFinalPrompt, "(tools are disabled; final no-tool answer requested)")
 				if err != nil {
 					endReason = reason

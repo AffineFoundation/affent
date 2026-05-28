@@ -2939,6 +2939,147 @@ func TestRunTurn_ProjectedInputBudgetChecksFirstRequest(t *testing.T) {
 	}
 }
 
+func TestRunTurn_InputBudgetCompactsBeforeNoToolFinal(t *testing.T) {
+	var calls int32
+	var finalBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			if !strings.Contains(body, "OLD_CONTEXT_TOKEN") {
+				t.Fatalf("first request should include seeded old context, body=%s", body)
+			}
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"budgeted","type":"function","function":{"name":"expensive","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":60,"completion_tokens":4}}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		finalBody = body
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"compacted budget summary"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8,"completion_tokens":2}}` + "\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "expensive", Description: "expensive", Schema: json.RawMessage(`{"type":"object","properties":{}}`), Execute: func(context.Context, json.RawMessage) (string, error) {
+		t.Fatal("tool should not run after input budget is exhausted")
+		return "", nil
+	}})
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	compactor := &inputBudgetTestCompactor{}
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 55, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+		Compactor:              compactor,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Append(ChatMessage{Role: "user", Content: strings.Repeat("OLD_CONTEXT_TOKEN ", 100)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawCompact bool
+	var sawFinal bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeContextCompact:
+				var p sse.ContextCompactPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode context.compacted: %v", err)
+				}
+				if p.Reason == "input_budget_pressure" {
+					sawCompact = true
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == "compacted budget summary" {
+					sawFinal = true
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed after compacted no-tool final", p.Reason)
+				}
+				if atomic.LoadInt32(&compactor.replacements) != 1 {
+					t.Fatalf("compactor replacements = %d, want 1", atomic.LoadInt32(&compactor.replacements))
+				}
+				if !sawCompact || !sawFinal {
+					t.Fatalf("sawCompact=%t sawFinal=%t", sawCompact, sawFinal)
+				}
+				if strings.Contains(finalBody, "OLD_CONTEXT_TOKEN") {
+					t.Fatalf("final no-tool request should use compacted context, body=%s", finalBody)
+				}
+				if !strings.Contains(finalBody, "COMPACTED_BUDGET_SUMMARY") {
+					t.Fatalf("final no-tool request missing compacted summary, body=%s", finalBody)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+type inputBudgetTestCompactor struct {
+	calls        int32
+	replacements int32
+}
+
+func (c *inputBudgetTestCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
+	atomic.AddInt32(&c.calls, 1)
+	for _, msg := range msgs {
+		if strings.Contains(msg.Content, "COMPACTED_BUDGET_SUMMARY") {
+			return msgs, nil
+		}
+	}
+	if len(msgs) < 5 {
+		return msgs, nil
+	}
+	atomic.AddInt32(&c.replacements, 1)
+	out := make([]ChatMessage, 0, 4)
+	for _, msg := range msgs {
+		if msg.Role != "system" {
+			break
+		}
+		out = append(out, msg)
+	}
+	out = append(out, ChatMessage{Role: "user", Content: "ROLLING SUMMARY: COMPACTED_BUDGET_SUMMARY"})
+	if len(msgs) >= 2 {
+		out = append(out, msgs[len(msgs)-2:]...)
+	}
+	return out, nil
+}
+
 func TestRunTurn_SubagentExternalResearchPolicyRejectsDirectCall(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
