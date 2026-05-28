@@ -1947,6 +1947,16 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			}
 			continue
 		}
+		if ev.Type == sse.TypeLoopProtocolFeed {
+			var p sse.LoopProtocolFeedPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if hint := recoveryHintFromLoopProtocolFeed(p); hint != "" {
+				setLatest(hint, p.TurnID)
+			}
+			continue
+		}
 		if ev.Type == sse.TypeLoopDecision {
 			var p sse.LoopDecisionPayload
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -2091,6 +2101,37 @@ func topToolFailureKind(counts map[string]int) (string, int) {
 		}
 	}
 	return top, topCount
+}
+
+func recoveryHintFromLoopProtocolFeed(p sse.LoopProtocolFeedPayload) string {
+	endReason := strings.TrimSpace(p.LastTurnEndReason)
+	hasRecoverySignal := endReason == sse.TurnEndMaxTurns ||
+		endReason == sse.TurnEndError ||
+		p.LastTurnLoopGuards > 0 ||
+		p.LastTurnMemorySearchMisses > 0
+	if !hasRecoverySignal {
+		return ""
+	}
+	parts := []string{"loop feed recovery"}
+	if endReason != "" {
+		parts = append(parts, "end="+endReason)
+	}
+	if p.LastTurnLoopGuards > 0 {
+		parts = append(parts, fmt.Sprintf("guards=%d", p.LastTurnLoopGuards))
+	}
+	if p.LastTurnMemorySearchMisses > 0 {
+		parts = append(parts, fmt.Sprintf("mem_miss=%d", p.LastTurnMemorySearchMisses))
+	}
+	if p.LastTurnSessionSearchCalls > 0 {
+		parts = append(parts, fmt.Sprintf("sess_search=%d", p.LastTurnSessionSearchCalls))
+	}
+	if step := strings.TrimSpace(p.PlanCurrentStep); step != "" {
+		parts = append(parts, "step="+step)
+	} else if label := strings.TrimSpace(p.PlanLabel); label != "" {
+		parts = append(parts, "plan="+label)
+	}
+	parts = append(parts, "inspect LOOP/plan")
+	return recoveryHintFromText(strings.Join(parts, "; "))
 }
 
 func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {

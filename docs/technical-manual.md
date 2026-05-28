@@ -676,6 +676,8 @@ timeline.
 Session summaries expose `latest_recovery_hint` from recent
 failed tool events, `conversation.repaired` events, visible `loop.decision`
 required actions, runtime `error` events, `turn.end` budget/runtime failures,
+`loop.protocol_feed` checkpoints that preserve a previous max-turn/error,
+loop-guard, or memory-miss recovery signal,
 truncated tool results with artifact paths or missing-artifact warnings,
 successful no-hit `session_search` results that returned recent-session
 recovery anchors, successful `session_search` results whose hits lack adjacent

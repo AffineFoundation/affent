@@ -593,6 +593,82 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromVisibleLoopDecision(t *t
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopProtocolFeed(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-feed-hint")
+	dir := pool.sessionDirPath("loop-feed-hint")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeLoopProtocolFeed, sse.LoopProtocolFeedPayload{
+			TurnID:                     "t2",
+			LoopID:                     "longrun",
+			Mode:                       "digest",
+			FeedNumber:                 8,
+			PlanLabel:                  "plan:2/5:active",
+			PlanCurrentStep:            "continue RECOVERY-FEED-88 through browser_network_read evidence",
+			LastTurnEndReason:          sse.TurnEndMaxTurns,
+			LastTurnLoopGuards:         2,
+			LastTurnMemorySearchMisses: 1,
+			LastTurnSessionSearchCalls: 1,
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-feed-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{
+		"loop feed recovery",
+		"RECOVERY-FEED-88",
+		"browser_network_read",
+		"end=max_turns",
+		"guards=2",
+		"mem_miss=1",
+		"sess_search=1",
+		"inspect LOOP/plan",
+	} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestSummarizeDurableSessionIgnoresRoutineLoopProtocolFeedHint(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-feed-routine")
+	dir := pool.sessionDirPath("loop-feed-routine")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeLoopProtocolFeed, sse.LoopProtocolFeedPayload{
+			TurnID:          "t1",
+			LoopID:          "longrun",
+			Mode:            "digest",
+			FeedNumber:      3,
+			PlanCurrentStep: "continue normal task",
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-feed-routine")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "" {
+		t.Fatalf("latest_recovery_hint = %q, want no routine loop feed hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromMaxTurns(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
