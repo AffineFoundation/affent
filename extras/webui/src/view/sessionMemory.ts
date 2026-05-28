@@ -134,6 +134,36 @@ export function memoryBucketEvidenceText(bucket: SessionMemoryBucket): string {
   return lines.join("\n");
 }
 
+export function memorySnapshotEvidenceText(memory: SessionMemoryResponse): string {
+  const stats = memoryStats(memory);
+  const buckets = memoryBuckets(memory);
+  const lines = [
+    "Memory snapshot evidence",
+    `Session: ${memory.session_id}`,
+    `Scope: ${memoryScopeLabel(memory)}`,
+    `Entries: ${stats.entryCount}`,
+    `Buckets: ${stats.bucketCount}`,
+    `Topics: ${stats.topicCount}`,
+    `Usage: ${memoryUsageLabel(stats)}`,
+  ];
+  if (stats.percent !== undefined) lines.push(`Capacity: ${stats.percent}% used`);
+  if (buckets.length === 0) {
+    lines.push("No durable memory entries are saved.");
+    return lines.join("\n");
+  }
+  lines.push("");
+  lines.push(...buckets.map(memoryBucketEvidenceText).join("\n\n").split("\n"));
+  return lines.join("\n");
+}
+
+export function memorySnapshotDraft(memory: SessionMemoryResponse): string {
+  return [
+    "Use this durable memory snapshot as context for the next step. Treat stale or irrelevant entries as candidates to correct:",
+    "",
+    memorySnapshotEvidenceText(memory),
+  ].join("\n");
+}
+
 export function memoryBucketDraft(bucket: SessionMemoryBucket): string {
   return [
     "Use this memory evidence to continue the chat. Verify whether it is relevant, stale, or needs correction:",

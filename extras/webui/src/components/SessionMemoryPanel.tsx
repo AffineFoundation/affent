@@ -14,6 +14,8 @@ import {
   memoryPressureLabel,
   memoryScopeLabel,
   memoryStats,
+  memorySnapshotDraft,
+  memorySnapshotEvidenceText,
   memoryUsageLabel,
   memoryUpdateDraft,
   memoryUpdateEvidenceText,
@@ -194,6 +196,12 @@ export function SessionMemoryPanel({
         {!loading && !noSession && (!error || hasMemorySnapshot) ? (
           <>
             <MemoryDashboard memory={memory} stats={stats} canWrite={Boolean(onAddMemory)} canDraft={Boolean(onUseAsDraft)} />
+            <MemoryPanelActions
+              memory={memory}
+              hasSearch={hasSearch}
+              onRefresh={onRefresh}
+              onUseAsDraft={onUseAsDraft}
+            />
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
               <div className="session-skills-controls">
@@ -212,17 +220,6 @@ export function SessionMemoryPanel({
                     {matchingEntryCount > 0 ? ` · ${matchingEntryCount} ${matchingEntryCount === 1 ? "entry" : "entries"}` : ""}
                   </span>
                 ) : null}
-                {onRefresh ? (
-                  <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
-                    Refresh
-                  </button>
-                ) : null}
-              </div>
-            ) : onRefresh ? (
-              <div className="session-skills-controls">
-                <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
-                  Refresh
-                </button>
               </div>
             ) : null}
             <div className="session-skills-list" data-testid="session-memory-list">
@@ -369,23 +366,61 @@ export function SessionMemoryPanel({
               <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
             ) : null}
             {onAddMemory || onUseAsDraft ? (
-              <MemoryDraftForm
-                memoryTarget={memoryTarget}
-                memoryTopic={memoryTopic}
-                memoryContent={memoryContent}
-                busy={memorySaveState.state === "saving"}
-                status={memorySaveState}
-                submitLabel={onAddMemory ? "Save memory" : "Prepare memory draft"}
-                setMemoryTarget={setMemoryTarget}
-                setMemoryTopic={setMemoryTopic}
-                setMemoryContent={setMemoryContent}
-                onSubmit={handleManualMemorySubmit}
-              />
+              <details className="session-memory-write" open={!memory?.has_memory}>
+                <summary>
+                  <strong>{onAddMemory ? "Add memory" : "Prepare memory draft"}</strong>
+                  <span>{onAddMemory ? "Write a durable fact into this chat's memory." : "Prepare an agent instruction to write memory."}</span>
+                </summary>
+                <MemoryDraftForm
+                  memoryTarget={memoryTarget}
+                  memoryTopic={memoryTopic}
+                  memoryContent={memoryContent}
+                  busy={memorySaveState.state === "saving"}
+                  status={memorySaveState}
+                  submitLabel={onAddMemory ? "Save memory" : "Prepare memory draft"}
+                  setMemoryTarget={setMemoryTarget}
+                  setMemoryTopic={setMemoryTopic}
+                  setMemoryContent={setMemoryContent}
+                  onSubmit={handleManualMemorySubmit}
+                />
+              </details>
             ) : null}
           </>
         ) : null}
       </div>
     </details>
+  );
+}
+
+function MemoryPanelActions({
+  memory,
+  hasSearch,
+  onRefresh,
+  onUseAsDraft,
+}: {
+  memory?: SessionMemoryResponse;
+  hasSearch: boolean;
+  onRefresh?: () => Promise<void> | void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  if (!memory && !onRefresh) return null;
+  const hasSavedMemory = Boolean(memory?.has_memory);
+  const minimal = !hasSavedMemory && !hasSearch;
+  return (
+    <div className="session-memory-toolbar" data-mode={minimal ? "minimal" : undefined} data-testid="session-memory-toolbar">
+      {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="ghost-action" /> : null}
+      {memory && hasSavedMemory && onUseAsDraft ? (
+        <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySnapshotDraft(memory), "memory")}>
+          Use snapshot
+        </button>
+      ) : null}
+      {hasSearch ? <span>Searchable durable memory</span> : null}
+      {onRefresh ? (
+        <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
+          Refresh
+        </button>
+      ) : null}
+    </div>
   );
 }
 

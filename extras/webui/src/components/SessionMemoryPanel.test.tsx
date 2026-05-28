@@ -63,6 +63,11 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Shared user + session");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("104/7975 chars");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
+    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Searchable durable memory");
+    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
+    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Use snapshot" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("durable memory snapshot"), "memory");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:research");

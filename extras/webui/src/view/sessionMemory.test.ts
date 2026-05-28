@@ -9,6 +9,8 @@ import {
   memoryPressureLabel,
   memoryScopeLabel,
   memoryStats,
+  memorySnapshotDraft,
+  memorySnapshotEvidenceText,
   memoryUsageLabel,
   manualMemoryDraft,
   memoryUpdateDraft,
@@ -64,6 +66,41 @@ describe("sessionMemory view helpers", () => {
     expect(memoryBucketMatchesQuery(bucket, "TAOSTATS")).toBe(true);
     expect(memoryBucketMatchingEntries(bucket, "dynamic")).toEqual(["taostats pages are dynamic"]);
     expect(memoryBucketMatchingEntries(bucket, "research")).toEqual([]);
+  });
+
+  it("builds a complete memory snapshot", () => {
+    const snapshot = {
+      session_id: "s1",
+      has_memory: true,
+      shared_user_memory: true,
+      user: {
+        target: "user",
+        topic: "user",
+        entries: ["prefers concise reports"],
+        entry_count: 1,
+        chars_used: 23,
+        chars_limit: 1375,
+        percent: 1,
+      },
+      topics: [
+        {
+          target: "memory",
+          topic: "research",
+          entries: ["taostats pages are dynamic"],
+          entry_count: 1,
+          chars_used: 27,
+          chars_limit: 4400,
+          percent: 1,
+        },
+      ],
+    };
+
+    expect(memorySnapshotEvidenceText(snapshot)).toContain("Memory snapshot evidence");
+    expect(memorySnapshotEvidenceText(snapshot)).toContain("Session: s1");
+    expect(memorySnapshotEvidenceText(snapshot)).toContain("Scope: Shared user + session");
+    expect(memorySnapshotEvidenceText(snapshot)).toContain("Memory bucket evidence for User");
+    expect(memorySnapshotEvidenceText(snapshot)).toContain("Memory bucket evidence for research");
+    expect(memorySnapshotDraft(snapshot)).toContain("durable memory snapshot");
   });
 
   it("builds a manual memory draft", () => {
