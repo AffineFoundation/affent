@@ -936,6 +936,7 @@ func loopSearchContent(path, sid string) (string, bool, error) {
 		fmt.Fprintf(&b, "owner_session: %s\n", summary.OwnerSession)
 	}
 	appendLoopStateSearchContent(&b, summary.State)
+	appendLoopEventSearchContent(&b, filepath.Join(filepath.Dir(path), loopstate.EventsFileName))
 	if current := markdownSection(protocol, "## 2. Current Situation"); current != "" {
 		b.WriteString("current_situation:\n")
 		b.WriteString(current)
@@ -949,6 +950,31 @@ func loopSearchContent(path, sid string) (string, bool, error) {
 	b.WriteString("protocol:\n")
 	b.WriteString(protocol)
 	return b.String(), true, nil
+}
+
+func appendLoopEventSearchContent(b *strings.Builder, path string) {
+	if b == nil || strings.TrimSpace(path) == "" {
+		return
+	}
+	events, found, err := loopstate.ReadRecentEvents(path, 3)
+	if err != nil || !found || len(events) == 0 {
+		return
+	}
+	b.WriteString("recent_loop_events:")
+	for _, ev := range events {
+		b.WriteString("\n- ")
+		appendLoopStateLine(b, "event",
+			"type="+stateSearchValue(ev.Type),
+			"summary="+stateSearchValue(ev.Summary),
+			"reason="+stateSearchValue(ev.Reason),
+			"mode="+stateSearchValue(ev.Mode),
+			"feed="+stateSearchInt(ev.FeedNumber),
+			"decision="+stateSearchValue(ev.Decision),
+			"action="+stateSearchValue(ev.RequiredAction),
+			"calibration="+stateSearchValue(ev.Calibration),
+		)
+	}
+	b.WriteByte('\n')
 }
 
 func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {

@@ -223,6 +223,49 @@ Keep subnet research grounded in source evidence.
 	requireMatchedTerms(t, hit.MatchedTerms, "bittensor", "subnet", "120", "validator")
 }
 
+func TestSearchFindsRecentLoopSidecarEvents(t *testing.T) {
+	dir := t.TempDir()
+	sessionID := "loop-events"
+	writeDurableLoop(t, dir, sessionID, `# Loop Protocol: loop-events
+
+## 0. Metadata
+
+- loop_id: loop-events
+- owner_session: loop-events
+- status: running
+
+## 1. North Star
+
+Keep browser evidence recoverable.`)
+	if _, err := loopstate.AppendEvent(loopstate.EventsPath(filepath.Join(dir, sessionID), sessionID), loopstate.Event{
+		Type:       "loop.protocol_feed",
+		Summary:    "Fed LOOP.md digest before browser evidence recovery",
+		Reason:     "loop protocol feed policy",
+		Mode:       "digest",
+		FeedNumber: 4,
+	}); err != nil {
+		t.Fatalf("AppendEvent: %v", err)
+	}
+
+	hits, err := Search(context.Background(), dir, "", "digest browser evidence", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected loop sidecar event hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != sessionID || hit.Role != "loop" {
+		t.Fatalf("expected loop hit from sidecar event, got %+v", hit)
+	}
+	for _, want := range []string{"recent_loop_events", "loop.protocol_feed", "digest", "browser evidence"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("loop event hit snippet missing %q:\n%+v", want, hit)
+		}
+	}
+	requireMatchedTerms(t, hit.MatchedTerms, "digest", "browser", "evidence")
+}
+
 func TestSearchFindsRecoveryEventAnchors(t *testing.T) {
 	dir := t.TempDir()
 	writeDurableEvents(t, dir, "stalled-loop",
