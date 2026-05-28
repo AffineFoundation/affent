@@ -75,7 +75,7 @@ import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
-import { buildWorkbenchAttention } from "./view/workbenchAttention";
+import { buildWorkbenchAttention, type WorkbenchAttentionTarget } from "./view/workbenchAttention";
 import {
   buildAutomationContext,
   shouldShowLoopContext,
@@ -101,6 +101,15 @@ interface StatusBanner {
 }
 
 type ThemeMode = "light" | "dark";
+type WorkbenchTab = "context" | "changes" | "run" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
+
+interface WorkbenchNavItem {
+  key: WorkbenchTab;
+  label: string;
+  detail: string;
+  badge?: string;
+  tone?: "error" | "warning" | "attention";
+}
 
 interface HistoryLoadResult {
   session: SessionState;
@@ -180,6 +189,7 @@ export function App() {
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | undefined>();
   const [updatingScheduleId, setUpdatingScheduleId] = useState<string | undefined>();
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("context");
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
@@ -1334,23 +1344,25 @@ export function App() {
     );
   }
 
-  function renderRuntimeStatsPanel() {
+  function renderRuntimeStatsPanel(defaultOpen = false) {
     return (
       <RuntimeStatsPanel
         stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
         loading={runtimeStatsState.state === "loading"}
         error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
+        defaultOpen={defaultOpen}
       />
     );
   }
 
-  function renderAccountSettingsPanel() {
+  function renderAccountSettingsPanel(defaultOpen = false) {
     return (
       <AccountSettingsPanel
         settings={accountSettingsState.state === "ready" ? accountSettingsState.settings : accountSettingsState.state === "error" ? accountSettingsState.settings : undefined}
         loading={accountSettingsState.state === "loading"}
         error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
         busy={accountSettingsBusy}
+        defaultOpen={defaultOpen}
         onRefresh={handleRefreshAccountSettings}
         onSetEnv={handleSetAccountEnv}
         onDeleteEnv={handleDeleteAccountEnv}
@@ -1359,7 +1371,7 @@ export function App() {
     );
   }
 
-  function renderMemoryPanel() {
+  function renderMemoryPanel(defaultOpen = false) {
     return (
       <SessionMemoryPanel
         memory={memoryState.state === "ready" ? memoryState.memory : undefined}
@@ -1367,16 +1379,18 @@ export function App() {
         loading={memoryState.state === "loading"}
         error={memoryState.state === "error" ? memoryState.error : undefined}
         noSession={memoryState.state === "empty"}
+        defaultOpen={defaultOpen}
       />
     );
   }
 
-  function renderSkillsPanel() {
+  function renderSkillsPanel(defaultOpen = false) {
     return (
       <SessionSkillsPanel
         skills={skillsState.state === "ready" ? skillsState.skills : undefined}
         loading={skillsState.state === "loading"}
         error={skillsState.state === "error" ? skillsState.error : undefined}
+        defaultOpen={defaultOpen}
         installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
         onReadSkill={handleReadSkill}
         onInstallSkill={handleInstallSkill}
@@ -1384,18 +1398,158 @@ export function App() {
     );
   }
 
-  const secondaryWorkbenchPanels = [
-    { key: "runtime", label: "Diagnostics", direct: shouldShowWorkbenchRuntimePanel(runtimeStatsState), render: renderRuntimeStatsPanel },
-    { key: "access", label: "Config", direct: shouldShowWorkbenchAccessPanel(accountSettingsState), render: renderAccountSettingsPanel },
-    { key: "memory", label: "Memory", direct: shouldShowWorkbenchMemoryPanel(memoryState, selectedSession?.latest_memory_update), render: renderMemoryPanel },
-    { key: "skills", label: "Skills", direct: shouldShowWorkbenchSkillsPanel(skillsState), render: renderSkillsPanel },
+  const runtimeTabHasSignal = shouldShowWorkbenchRuntimePanel(runtimeStatsState);
+  const configTabHasSignal = shouldShowWorkbenchAccessPanel(accountSettingsState);
+  const memoryTabHasSignal = shouldShowWorkbenchMemoryPanel(memoryState, selectedSession?.latest_memory_update);
+  const skillsTabHasSignal = shouldShowWorkbenchSkillsPanel(skillsState);
+  const workbenchNavItems: WorkbenchNavItem[] = [
+    {
+      key: "context",
+      label: "Context",
+      detail: overview.stateLabel || "Current session",
+      badge: workbenchAttention?.target === "context" ? workbenchAttention.label : undefined,
+      tone: workbenchAttention?.target === "context" ? workbenchAttention.tone : undefined,
+    },
+    {
+      key: "changes",
+      label: "Changes",
+      detail: changesNavDetail(sessionChanges.files.length, sessionChanges.detail),
+      badge: sessionChanges.files.length > 0 ? String(sessionChanges.files.length) : undefined,
+      tone: workbenchAttention?.target === "changes" ? workbenchAttention.tone : sessionChanges.tone,
+    },
+    {
+      key: "run",
+      label: "Run",
+      detail: sessionRun.commands.length > 0 ? sessionRun.detail : "Command history",
+      badge: sessionRun.commands.length > 0 ? String(sessionRun.commands.length) : undefined,
+      tone: workbenchAttention?.target === "run" ? workbenchAttention.tone : sessionRun.tone,
+    },
+    {
+      key: "files",
+      label: "Files",
+      detail: sessionFiles.items.length > 0 ? sessionFiles.detail : "Task file evidence",
+      badge: sessionFiles.items.length > 0 ? String(sessionFiles.items.length) : undefined,
+      tone: workbenchAttention?.target === "files" ? workbenchAttention.tone : sessionFiles.tone,
+    },
+    {
+      key: "workspace",
+      label: "Workspace",
+      detail: sessionWorkspace.hasData ? sessionWorkspace.summary : "No binding evidence",
+      badge: sessionWorkspace.issue ? "!" : undefined,
+      tone: workbenchAttention?.target === "workspace" ? workbenchAttention.tone : sessionWorkspace.tone,
+    },
+    {
+      key: "automation",
+      label: "Automation",
+      detail: automationContext?.title ?? "Loop and timers",
+      badge: automationContext ? "active" : undefined,
+      tone: workbenchAttention?.target === "automation" ? workbenchAttention.tone : undefined,
+    },
+    {
+      key: "memory",
+      label: "Memory",
+      detail: memoryNavDetail(memoryState),
+      badge: memoryTabHasSignal ? memoryBadge(memoryState, selectedSession?.latest_memory_update) : undefined,
+      tone: memoryState.state === "error" ? "error" : undefined,
+    },
+    {
+      key: "skills",
+      label: "Skills",
+      detail: skillsNavDetail(skillsState),
+      badge: skillsTabHasSignal ? skillsBadge(skillsState) : undefined,
+      tone: skillsState.state === "error" ? "error" : undefined,
+    },
+    {
+      key: "config",
+      label: "Config",
+      detail: configNavDetail(accountSettingsState),
+      badge: configTabHasSignal ? configBadge(accountSettingsState) : undefined,
+      tone: accountSettingsState.state === "error" ? "error" : undefined,
+    },
+    {
+      key: "trace",
+      label: "Trace",
+      detail: runtimeNavDetail(runtimeStatsState),
+      badge: runtimeTabHasSignal ? runtimeBadge(runtimeStatsState) : undefined,
+      tone: runtimeStatsState.state === "error" ? "error" : undefined,
+    },
   ];
-  const hiddenWorkbenchPanels = secondaryWorkbenchPanels.filter((panel) => !panel.direct);
+
+  function openWorkbench(tab: WorkbenchTab = "context") {
+    setWorkbenchTab(tab);
+    setWorkbenchOpen(true);
+  }
+
+  function renderWorkbenchTab() {
+    if (workbenchTab === "context") {
+      return (
+        <WorkbenchContextPanel
+          overview={overview}
+          hasSelectedSession={!!selectedSessionId}
+          attention={workbenchAttention?.target === "context" ? workbenchAttention : undefined}
+          workspace={sessionWorkspace}
+          files={sessionFiles}
+          changes={sessionChanges}
+          run={sessionRun}
+          automationTitle={automationContext?.title}
+          automationDetail={automationContext?.detail}
+          defaultOpen
+        />
+      );
+    }
+    if (workbenchTab === "changes") {
+      return (
+        <SessionChangesPanel
+          changes={sessionChanges}
+          defaultOpen
+          onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
+        />
+      );
+    }
+    if (workbenchTab === "run") {
+      return (
+        <SessionRunPanel
+          run={sessionRun}
+          defaultOpen
+          onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
+        />
+      );
+    }
+    if (workbenchTab === "files") {
+      return (
+        <SessionFilesPanel
+          files={sessionFiles}
+          defaultOpen
+          onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
+        />
+      );
+    }
+    if (workbenchTab === "workspace") {
+      return sessionWorkspace.hasData ? (
+        <SessionWorkspacePanel workspace={sessionWorkspace} defaultOpen />
+      ) : (
+        <WorkbenchEmpty title="No workspace evidence" detail="Open or start a chat with workspace-bound file or command activity." />
+      );
+    }
+    if (workbenchTab === "automation") {
+      return renderAutomationPanel(true, "workbench-automation-panel") ?? (
+        <WorkbenchEmpty title="No active automation" detail="Loop and timer controls appear here when this chat has long-running work." />
+      );
+    }
+    if (workbenchTab === "memory") return renderMemoryPanel(true);
+    if (workbenchTab === "skills") return renderSkillsPanel(true);
+    if (workbenchTab === "config") return renderAccountSettingsPanel(true);
+    return renderRuntimeStatsPanel(true);
+  }
 
   return (
     <div
       className="app"
       data-theme={theme}
+      data-workbench={workbenchOpen ? "open" : "closed"}
       data-mobile-topbar={mobileTopbarHidden ? "hidden" : "visible"}
       data-testid="app-shell"
     >
@@ -1430,112 +1584,32 @@ export function App() {
               Black
             </button>
           </div>
-          <details
-            className="workbench-menu"
-            open={workbenchOpen}
-            onToggle={(event) => setWorkbenchOpen(event.currentTarget.open)}
+          <button
+            type="button"
+            className="workbench-trigger"
+            aria-label="Workbench"
+            aria-expanded={workbenchOpen}
+            title={workbenchAttention ? `${workbenchAttention.label} · ${workbenchAttention.detail}` : undefined}
+            onClick={() => {
+              if (workbenchOpen) {
+                setWorkbenchOpen(false);
+              } else {
+                openWorkbench(workbenchAttention ? workbenchTabFromAttention(workbenchAttention.target) : workbenchTab);
+              }
+            }}
           >
-            <summary aria-label="Workbench" title={workbenchAttention ? `${workbenchAttention.label} · ${workbenchAttention.detail}` : undefined}>
-              <span className="workbench-icon" aria-hidden="true">
-                <span />
-                <span />
-                <span />
+            <span className="workbench-icon" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+            </span>
+            <span className="workbench-label">Workbench</span>
+            {workbenchAttention ? (
+              <span className="workbench-attention" data-tone={workbenchAttention.tone}>
+                {workbenchAttention.label}
               </span>
-              <span className="workbench-label">Workbench</span>
-              {workbenchAttention ? (
-                <span className="workbench-attention" data-tone={workbenchAttention.tone}>
-                  {workbenchAttention.label}
-                </span>
-              ) : null}
-            </summary>
-            {workbenchOpen ? (
-              <div className="workbench-panel" data-testid="workbench-panel">
-                <div className="workbench-panel-head">
-                  <strong>Workbench</strong>
-                  <button
-                    type="button"
-                    className="workbench-close"
-                    aria-label="Close Workbench"
-                    onClick={() => setWorkbenchOpen(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-                <WorkbenchContextPanel
-                  overview={overview}
-                  hasSelectedSession={!!selectedSessionId}
-                  attention={workbenchAttention?.target === "context" ? workbenchAttention : undefined}
-                  automationTitle={automationContext?.title}
-                  automationDetail={automationContext?.detail}
-                  defaultOpen
-                />
-                {sessionWorkspace.hasData ? (
-                  <SessionWorkspacePanel
-                    workspace={sessionWorkspace}
-                    defaultOpen={workbenchAttention?.target === "workspace"}
-                  />
-                ) : null}
-                {showAutomationContext ? renderAutomationPanel(workbenchAttention?.target === "automation", "workbench-automation-panel") : null}
-                {sessionFiles.items.length > 0 ? (
-                  <SessionFilesPanel
-                    files={sessionFiles}
-                    defaultOpen={workbenchAttention?.target === "files"}
-                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                    onUseAsDraft={handleUseAsDraft}
-                  />
-                ) : null}
-                {sessionChanges.files.length > 0 ? (
-                  <SessionChangesPanel
-                    changes={sessionChanges}
-                    defaultOpen={workbenchAttention?.target === "changes"}
-                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                    onUseAsDraft={handleUseAsDraft}
-                  />
-                ) : null}
-                {sessionRun.commands.length > 0 ? (
-                  <SessionRunPanel
-                    run={sessionRun}
-                    defaultOpen={workbenchAttention?.target === "run"}
-                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                    onUseAsDraft={handleUseAsDraft}
-                  />
-                ) : null}
-                {sessionArtifacts.length > 0 ? (
-                  <SessionArtifactsPanel
-                    artifacts={sessionArtifacts}
-                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                    downloadHref={
-                      selectedSessionId
-                        ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
-                        : undefined
-                    }
-                    onUseAsDraft={handleUseAsDraft}
-                  />
-                ) : null}
-                {secondaryWorkbenchPanels.filter((panel) => panel.direct).map((panel) => (
-                  <div key={panel.key} className="workbench-secondary-panel">
-                    {panel.render()}
-                  </div>
-                ))}
-                {hiddenWorkbenchPanels.length > 0 ? (
-                  <details className="session-skills-panel workbench-more-panel" data-testid="workbench-more-panel">
-                    <summary className="session-skills-summary">
-                      <span className="session-skills-kicker">On demand</span>
-                      <strong>More Workbench tools</strong>
-                      <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(" · ")}</span>
-                    </summary>
-                    <div className="session-skills-body workbench-more-body">
-                      {hiddenWorkbenchPanels.map((panel) => (
-                        <div key={panel.key} className="workbench-secondary-panel">
-                          {panel.render()}
-                        </div>
-                      ))}
-                    </div>
-                  </details>
-                ) : null}
-              </div>
             ) : null}
-          </details>
+          </button>
           {showHeaderNewChat ? (
             <button type="button" className="header-new-chat" disabled={actionBusy} onClick={() => void handleNewSession()}>
               New chat
@@ -1548,6 +1622,7 @@ export function App() {
           className="workspace-shell"
           data-compact-nav={compactNav}
           data-session-nav={showSessionNav ? (sessionsCollapsed ? "collapsed" : "visible") : "hidden"}
+          data-workbench={workbenchOpen ? "open" : "closed"}
           data-testid="workspace-shell"
         >
           {showSessionNav && sessionsCollapsed ? (
@@ -1639,6 +1714,57 @@ export function App() {
               onCancel={handleCancel}
             />
           </section>
+          {workbenchOpen ? (
+            <aside className="workbench-panel" data-testid="workbench-panel" aria-label="Workbench">
+              <div className="workbench-panel-head">
+                <div>
+                  <strong>Workbench</strong>
+                  <span>{selectedSessionTitle ?? "Global runtime workspace"}</span>
+                </div>
+                <button
+                  type="button"
+                  className="workbench-close"
+                  aria-label="Close Workbench"
+                  onClick={() => setWorkbenchOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <nav className="workbench-nav" aria-label="Workbench sections">
+                {workbenchNavItems.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className="workbench-nav-item"
+                    data-active={workbenchTab === item.key ? "true" : "false"}
+                    data-tone={item.tone}
+                    onClick={() => setWorkbenchTab(item.key)}
+                  >
+                    <span className="workbench-nav-main">
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                    {item.badge ? <span className="workbench-nav-badge">{item.badge}</span> : null}
+                  </button>
+                ))}
+              </nav>
+              <div className="workbench-tab-surface" data-testid="workbench-tab-surface">
+                {renderWorkbenchTab()}
+                {workbenchTab === "context" && sessionArtifacts.length > 0 ? (
+                  <SessionArtifactsPanel
+                    artifacts={sessionArtifacts}
+                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                    downloadHref={
+                      selectedSessionId
+                        ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
+                        : undefined
+                    }
+                    onUseAsDraft={handleUseAsDraft}
+                  />
+                ) : null}
+              </div>
+            </aside>
+          ) : null}
         </div>
       </main>
     </div>
@@ -1658,6 +1784,89 @@ function initialTheme(): ThemeMode {
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
+}
+
+function workbenchTabFromAttention(target: WorkbenchAttentionTarget): WorkbenchTab {
+  return target;
+}
+
+function changesNavDetail(count: number, detail: string): string {
+  return count > 0 ? detail : "Changed file review";
+}
+
+function runtimeNavDetail(state: RuntimeStatsState): string {
+  if (state.state === "loading") return "Loading diagnostics";
+  if (state.state === "error") return "Diagnostics unavailable";
+  if (state.state === "ready") return state.stats.model?.trim() || "Runtime diagnostics";
+  return "Runtime diagnostics";
+}
+
+function runtimeBadge(state: RuntimeStatsState): string | undefined {
+  if (state.state === "loading") return "...";
+  if (state.state === "error") return "!";
+  if (state.state !== "ready") return undefined;
+  const issues = (state.stats.aggregate?.blocked_by_type ?? 0)
+    + (state.stats.aggregate?.blocked_by_domain ?? 0)
+    + (state.stats.aggregate?.tools?.tool_errors ?? 0)
+    + (state.stats.aggregate?.runtime?.runtime_errors ?? 0);
+  if (issues > 0) return String(issues);
+  if ((state.stats.running_turns ?? 0) > 0) return "run";
+  return "on";
+}
+
+function configNavDetail(state: AccountSettingsState): string {
+  if (state.state === "loading") return "Loading env and SSH";
+  if (state.state === "error") return "Config unavailable";
+  if (state.state === "ready") return state.settings.env.length > 0 ? `${state.settings.env.length} env configured` : "Env and SSH";
+  return "Env and SSH";
+}
+
+function configBadge(state: AccountSettingsState): string | undefined {
+  if (state.state === "loading") return "...";
+  if (state.state === "error") return "!";
+  if (state.state !== "ready") return undefined;
+  if (state.settings.env.length > 0) return String(state.settings.env.length);
+  if (state.settings.ssh.exists || state.settings.ssh.public_key) return "ssh";
+  return undefined;
+}
+
+function memoryNavDetail(state: MemoryState): string {
+  if (state.state === "loading") return "Loading memory";
+  if (state.state === "error") return "Memory unavailable";
+  if (state.state === "empty") return "Open a chat";
+  if (state.state === "ready") return state.memory.has_memory ? `${state.memory.topics?.length ?? 0} topics` : "No durable memory";
+  return "Durable memory";
+}
+
+function memoryBadge(state: MemoryState, latestUpdate?: SessionSummary["latest_memory_update"]): string | undefined {
+  if (latestUpdate) return "updated";
+  if (state.state === "loading") return "...";
+  if (state.state === "error") return "!";
+  if (state.state === "ready" && state.memory.has_memory) return String(state.memory.topics?.length ?? 0);
+  return undefined;
+}
+
+function skillsNavDetail(state: SkillsState): string {
+  if (state.state === "loading") return "Loading skills";
+  if (state.state === "error") return "Skills unavailable";
+  if (state.state === "ready") return state.skills.length > 0 ? `${state.skills.length} reusable workflows` : "No reusable workflows";
+  return "Reusable workflows";
+}
+
+function skillsBadge(state: SkillsState): string | undefined {
+  if (state.state === "loading") return "...";
+  if (state.state === "error") return "!";
+  if (state.state === "ready" && state.skills.length > 0) return String(state.skills.length);
+  return undefined;
+}
+
+function WorkbenchEmpty({ title, detail }: { title: string; detail: string }) {
+  return (
+    <section className="workbench-empty" data-testid="workbench-empty">
+      <strong>{title}</strong>
+      <span>{detail}</span>
+    </section>
+  );
 }
 
 function webLoopActivationPrompt(goal: string): string {

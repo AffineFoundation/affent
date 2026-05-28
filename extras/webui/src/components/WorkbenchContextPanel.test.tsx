@@ -20,6 +20,40 @@ describe("WorkbenchContextPanel", () => {
             { label: "Artifact", value: "1 file (8 KiB)" },
           ],
         })}
+        workspace={{
+          hasData: true,
+          summary: "affent",
+          detail: "/work/affent · branch main · dirty",
+          label: "affent",
+          path: "/work/affent",
+          branch: "main",
+          dirtyState: "dirty",
+        }}
+        changes={{
+          summary: "2 changed files",
+          detail: "2 changed",
+          files: [
+            { path: "src/payments.ts", operation: "edit", status: "changed", turnNumber: 1, actionCount: 1 },
+            { path: "src/routes.ts", operation: "edit", status: "changed", turnNumber: 1, actionCount: 1 },
+          ],
+        }}
+        files={{
+          summary: "3 file references",
+          detail: "2 read · 1 changed",
+          items: [
+            { path: "src/payments.ts", actions: ["read", "changed"], status: "available", turnNumber: 1, actionCount: 2 },
+            { path: "src/routes.ts", actions: ["read"], status: "available", turnNumber: 1, actionCount: 1 },
+            { path: "README.md", actions: ["read"], status: "available", turnNumber: 1, actionCount: 1 },
+          ],
+        }}
+        run={{
+          summary: "1 failed command",
+          detail: "1 failed",
+          tone: "error",
+          commands: [
+            { command: "npm test -- checkout.spec.ts", status: "failed", turnNumber: 1, exitCode: 1 },
+          ],
+        }}
       />,
     );
 
@@ -31,6 +65,14 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Recovery rerun checkout spec");
     expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Artifact 1 file");
     expect(screen.getByTestId("workbench-context-details")).not.toHaveTextContent("Tokens 12k");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("affent");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Changes");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("2 changed files");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Files");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("3 file references");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Run");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("1 failed command");
   });
 
   it("links automation only when the current session has automation attention", () => {

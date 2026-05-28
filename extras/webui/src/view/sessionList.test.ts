@@ -155,7 +155,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
-  it("surfaces loop guard interventions in row stats and search", () => {
+  it("surfaces recovery guard interventions in row stats and search", () => {
     const rows = buildSessionRows([
       session({
         id: "guard-session",
@@ -172,9 +172,9 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Guard 2, 1 no-tools");
-    expect(rows[0].stats).toBe("2 issues · Guard 2, 1 no-tools");
-    expect(rows[0].searchText).toContain("guard 2, 1 no-tools");
+    expect(rows[0].metrics).toContain("Recovery guard 2, 1 tool-free");
+    expect(rows[0].stats).toBe("2 issues · Recovery guard 2, 1 tool-free");
+    expect(rows[0].searchText).toContain("recovery guard 2, 1 tool-free");
   });
 
   it("surfaces persisted plan progress in row stats and search", () => {
@@ -1145,7 +1145,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
-  it("surfaces live loop guard interventions in the selected chat row stats", () => {
+  it("surfaces live recovery guard interventions in the selected chat row stats", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -1169,8 +1169,8 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 issue · Guard 2, 1 no-tools");
-    expect(rows[0].searchText).toContain("guard 2, 1 no-tools");
+    expect(rows[0].stats).toBe("1 issue · Recovery guard 2, 1 tool-free");
+    expect(rows[0].searchText).toContain("recovery guard 2, 1 tool-free");
   });
 
   it("surfaces unknown events as an unclassified chip in the chat list", () => {

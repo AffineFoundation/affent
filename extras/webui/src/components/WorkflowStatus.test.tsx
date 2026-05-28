@@ -314,9 +314,9 @@ describe("WorkflowStatus", () => {
     })} />);
 
     const summary = screen.getByTestId("workflow-status").querySelector("summary") as HTMLElement;
-    expect(summary).toHaveTextContent("1 max-turn · 2 guards · 1 no-tools");
-    expect(within(summary).getByText("1 max-turn · 2 guards · 1 no-tools")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Automation 1 max-turn · 2 guards · 1 no-tools");
+    expect(summary).toHaveTextContent("1 action limit · 2 recovery guards · 1 tool-free");
+    expect(within(summary).getByText("1 action limit · 2 recovery guards · 1 tool-free")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Automation 1 action limit · 2 recovery guards · 1 tool-free");
   });
 
   it("turns recovery metrics into a draft action", async () => {

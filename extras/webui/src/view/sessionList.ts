@@ -498,7 +498,7 @@ function hasEvidenceMetric(row: SessionRowView): boolean {
 }
 
 function hasGuardMetric(row: SessionRowView): boolean {
-  return row.metrics.some((metric) => metric.startsWith("Guard "));
+  return row.metrics.some((metric) => metric.startsWith("Recovery guard "));
 }
 
 function needsAttention(row: SessionRowView): boolean {
@@ -555,8 +555,8 @@ function loopGuardMetric(stats: LoopGuardStats | undefined): string | undefined 
   const interventions = stats?.loop_guard_interventions ?? 0;
   if (interventions <= 0) return undefined;
   const forced = stats?.forced_no_tools ?? 0;
-  const parts = [`Guard ${interventions}`];
-  if (forced > 0) parts.push(`${forced} no-tools`);
+  const parts = [`Recovery guard ${interventions}`];
+  if (forced > 0) parts.push(`${forced} tool-free`);
   return parts.join(", ");
 }
 

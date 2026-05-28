@@ -629,9 +629,9 @@ describe("SessionList", () => {
     expect(screen.getByTestId("session-list")).toHaveTextContent("Evidence 1/2 verified");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("Planned chat");
 
-    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Guard/ }));
+    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Recovery/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("repeated web fetch failures");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("Guard 1");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Recovery guard 1");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("taostats subnet metrics");
 
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Issues/ }));

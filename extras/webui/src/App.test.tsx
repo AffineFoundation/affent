@@ -9,6 +9,10 @@ async function openMessageOptions(user: ReturnType<typeof userEvent.setup>, scop
   await user.click(within(scope).getByRole("button", { name: "Message options" }));
 }
 
+async function selectWorkbenchTab(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(within(screen.getByRole("navigation", { name: "Workbench sections" })).getByRole("button", { name: new RegExp(`^${label}\\b`) }));
+}
+
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -312,6 +316,7 @@ describe("App", () => {
   });
 
   it("surfaces runtime capabilities before a real task is sent", async () => {
+    const user = userEvent.setup();
     const history = deferred<Response>();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -431,19 +436,21 @@ describe("App", () => {
     expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
-    await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
+    await user.type(input, "Analyze Affine recent market trends and Twitter reaction");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs, docs, or files");
-    await userEvent.clear(input);
-    await userEvent.type(input, "help me install a skill from github");
+    await user.clear(input);
+    await user.type(input, "help me install a skill from github");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("inspect a skill source");
     expect(screen.getByTestId("composer-task-hint")).not.toHaveTextContent("propose_install");
-    await userEvent.click(screen.getByLabelText("Workbench"));
+    await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Memory");
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("2 entries");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:core");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("project facts are durable");
+    await selectWorkbenchTab(user, "Skills");
     expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("coding_repair_workflow");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
@@ -643,6 +650,7 @@ describe("App", () => {
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("complete_activation");
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Draft");
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("Setup pending");
@@ -707,6 +715,7 @@ describe("App", () => {
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop review · Open automation");
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop review");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Activation review");
@@ -782,6 +791,7 @@ describe("App", () => {
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop waiting · Open automation");
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Waiting for your calibration answer");
@@ -875,6 +885,7 @@ describe("App", () => {
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Running");
@@ -1031,6 +1042,7 @@ describe("App", () => {
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("do not claim the timer is operationally calibrated");
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("1 timer active");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Check in 1h: long running subnet analysis");
@@ -1159,6 +1171,7 @@ describe("App", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Ask the user one concise question now");
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running · 1 timer active");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
@@ -1766,11 +1779,11 @@ describe("App", () => {
     const context = screen.getByTestId("workbench-context-panel");
     expect(context).toHaveAttribute("open");
     expect(context).toHaveTextContent("Fresh task");
-    expect(screen.getByTestId("runtime-stats-panel")).not.toHaveAttribute("open");
-    expect(screen.getByTestId("account-settings-panel")).not.toHaveAttribute("open");
-    expect(screen.getByTestId("session-skills-panel")).not.toHaveAttribute("open");
+    expect(screen.queryByTestId("runtime-stats-panel")).toBeNull();
+    expect(screen.queryByTestId("account-settings-panel")).toBeNull();
+    expect(screen.queryByTestId("session-skills-panel")).toBeNull();
+    await selectWorkbenchTab(user, "Trace");
     const runtime = await screen.findByTestId("runtime-stats-panel");
-    expect(runtime.closest("[data-testid='workbench-more-panel']")).toBeNull();
     expect(runtime).toHaveTextContent("Diagnostics");
     expect(runtime).toHaveTextContent("qwen-small");
     expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
@@ -1782,7 +1795,7 @@ describe("App", () => {
     expect(screen.queryByTestId("workbench-panel")).toBeNull();
   });
 
-  it("keeps empty secondary Workbench panels folded under More", async () => {
+  it("keeps global Workbench sections stable without rendering every panel at once", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1799,15 +1812,20 @@ describe("App", () => {
     expect(await screen.findByTestId("connection-pill")).toHaveTextContent("Connected");
     await user.click(screen.getByLabelText("Workbench"));
 
-    const more = await screen.findByTestId("workbench-more-panel");
-    expect(more).not.toHaveAttribute("open");
-    expect(more).toHaveTextContent("On demand");
-    expect(more).toHaveTextContent("More Workbench tools");
-    expect(more).toHaveTextContent("Diagnostics · Config · Memory · Skills");
-    expect(screen.getByTestId("runtime-stats-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
-    expect(screen.getByTestId("account-settings-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
-    expect(screen.getByTestId("session-memory-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
-    expect(screen.getByTestId("session-skills-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
+    const nav = screen.getByRole("navigation", { name: "Workbench sections" });
+    expect(nav).toHaveTextContent("Trace");
+    expect(nav).toHaveTextContent("Config");
+    expect(nav).toHaveTextContent("Memory");
+    expect(nav).toHaveTextContent("Skills");
+    expect(screen.queryByTestId("runtime-stats-panel")).toBeNull();
+    expect(screen.queryByTestId("account-settings-panel")).toBeNull();
+    expect(screen.queryByTestId("session-memory-panel")).toBeNull();
+    expect(screen.queryByTestId("session-skills-panel")).toBeNull();
+
+    await selectWorkbenchTab(user, "Config");
+    expect(await screen.findByTestId("account-settings-panel")).toHaveTextContent("No config");
+    await selectWorkbenchTab(user, "Skills");
+    expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("No reusable workflows");
   });
 
   it("surfaces changed files inside Workbench without adding default Chat noise", async () => {
@@ -1973,8 +1991,9 @@ describe("App", () => {
 
     await user.click(screen.getByLabelText("Workbench"));
 
+    await selectWorkbenchTab(user, "Files");
     const files = await screen.findByTestId("session-files-panel");
-    expect(files).not.toHaveAttribute("open");
+    expect(files).toHaveAttribute("open");
     expect(files).toHaveTextContent("2 file references");
     await user.click(within(files).getByText("Files"));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
@@ -2308,6 +2327,7 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything()));
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Memory");
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("No durable memory");
 
     live.send([

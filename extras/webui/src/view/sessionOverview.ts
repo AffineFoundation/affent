@@ -294,9 +294,9 @@ function buildAutomationMetric(session: SessionState): SessionOverviewMetric | u
   const loopFeeds = session.loopProtocolFeeds;
   if (stats.interventions <= 0 && stats.forcedNoTools <= 0 && stats.maxTurns <= 0 && visibleDecisions.length === 0 && loopFeeds.length === 0) return undefined;
   const parts: string[] = [];
-  if (stats.maxTurns > 0) parts.push(`${stats.maxTurns} max-turn${stats.maxTurns === 1 ? "" : "s"}`);
-  if (stats.interventions > 0) parts.push(`${stats.interventions} guard${stats.interventions === 1 ? "" : "s"}`);
-  if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} no-tools`);
+  if (stats.maxTurns > 0) parts.push(`${stats.maxTurns} action limit${stats.maxTurns === 1 ? "" : "s"}`);
+  if (stats.interventions > 0) parts.push(`${stats.interventions} recovery guard${stats.interventions === 1 ? "" : "s"}`);
+  if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} tool-free`);
   if (loopFeeds.length > 0) parts.push(loopProtocolFeedMetric(loopFeeds));
   if (visibleDecisions.length > 0) {
     const latest = visibleDecisions.at(-1);

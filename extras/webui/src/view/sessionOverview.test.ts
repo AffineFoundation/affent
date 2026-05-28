@@ -457,7 +457,7 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
-  it("surfaces loop guard interventions in the session overview", () => {
+  it("surfaces recovery guard interventions in the session overview", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated tool calls" } },
@@ -481,7 +481,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Automation", value: "1 max-turn · 2 guards · 1 no-tools", tone: "warning" },
+      { label: "Automation", value: "1 action limit · 2 recovery guards · 1 tool-free", tone: "warning" },
     ]));
   });
 
@@ -687,7 +687,7 @@ describe("buildSessionOverview", () => {
     expect(overview.stateLabel).toBe("Result ready");
     expect(overview.tone).toBe("success");
     expect(overview.metrics).toEqual([
-      { label: "Automation", value: "1 max-turn", tone: "warning" },
+      { label: "Automation", value: "1 action limit", tone: "warning" },
       { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Earlier work", value: "1 action" },
       { label: "Turn tokens", value: "1.2k" },

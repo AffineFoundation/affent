@@ -19,7 +19,7 @@ const filters: { mode: SessionListFilter; label: string }[] = [
   { mode: "plan", label: "Plan" },
   { mode: "automation", label: "Automation" },
   { mode: "evidence", label: "Evidence" },
-  { mode: "guard", label: "Guard" },
+  { mode: "guard", label: "Recovery" },
   { mode: "issues", label: "Issues" },
 ];
 
