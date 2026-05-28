@@ -1027,6 +1027,67 @@ describe("App", () => {
     expect(draft).not.toContain("Ask one concise calibration question before changing the protocol");
   });
 
+  it("does not show an empty automation state while URL session metadata is loading", async () => {
+    window.history.replaceState(null, "", "/?sessionId=loop-url");
+    const user = userEvent.setup();
+    const sessionsRequest = deferred<Response>();
+    const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") return sessionsRequest.promise;
+      if (url === "/v1/sessions/loop-url/history?after=-1&limit=500") {
+        return Promise.resolve(jsonResponse({ session_id: "loop-url", events: [], next_after: -1, has_more: false, trace_schema_detected: false }));
+      }
+      if (url === "/v1/sessions/loop-url/events") return Promise.resolve(eventStreamResponse(""));
+      if (url === "/v1/sessions/loop-url/loop-protocol" && (!init?.method || init.method === "GET")) {
+        return Promise.resolve(jsonResponse({
+          session_id: "loop-url",
+          protocol: "# Loop Protocol\n\n- status: running",
+          summary: { path: ".affent/loops/loop-url/LOOP.md", status: "running", bytes: 36 },
+          state: { version: 1, loop_id: "loop-url", status: "running", initial_goal_preview: "watch market evidence" },
+          events: [],
+        }));
+      }
+      return Promise.resolve(jsonResponse({ error: { message: `unexpected ${url}` } }, 404));
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
+    expect(screen.getByTestId("workbench-empty")).toHaveTextContent("Loading automation");
+    expect(screen.queryByText("No loop or timers")).toBeNull();
+
+    sessionsRequest.resolve(jsonResponse({
+      sessions: [
+        {
+          id: "loop-url",
+          active: true,
+          durable: true,
+          has_conversation: true,
+          has_events: true,
+          has_artifacts: false,
+          has_memory: false,
+          has_runtime_skills: false,
+          has_loop_protocol: true,
+          loop_protocol: {
+            path: ".affent/loops/loop-url/LOOP.md",
+            status: "running",
+            bytes: 36,
+            preview: "watch market evidence",
+            state: { version: 1, loop_id: "loop-url", status: "running", initial_goal_preview: "watch market evidence" },
+          },
+        },
+      ],
+      has_more: false,
+    }));
+
+    const panel = await screen.findByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Running");
+    expect(panel).toHaveTextContent("watch market evidence");
+    expect(screen.queryByText("No loop or timers")).toBeNull();
+  });
+
   it("prefills the pending loop calibration question as a direct answer draft", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
@@ -2372,7 +2433,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file as draft" })[0]);
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Inspect file" })[0]);
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file evidence");
     const draft = screen.getByPlaceholderText("Message Affent...");
     expect(draft).toHaveValue();

@@ -281,6 +281,7 @@ export function App() {
     () => sessions.find((candidate) => candidate.id === selectedSessionId),
     [selectedSessionId, sessions],
   );
+  const selectedSessionLoading = !demoActive && !!selectedSessionId && !selectedSession && (!sessionIndexReady || status.state === "loading");
   const selectedSessionTitle = useMemo(() => {
     return selectedSessionDisplayTitle(selectedSession, session);
   }, [selectedSession, session]);
@@ -1624,6 +1625,9 @@ export function App() {
   }
 
   function renderLoopWorkbenchTab() {
+    if (selectedSessionLoading) {
+      return <WorkbenchEmpty title="Loading automation" detail="Reading loop and timer state for this chat." />;
+    }
     if (!showLoopContext && !showScheduleContext) {
       return <WorkbenchEmpty title="No loop or timers" detail="This chat has no LOOP.md or scheduled follow-ups yet." />;
     }
@@ -1753,6 +1757,28 @@ export function App() {
     if (selectedLoopProtocolState.state !== "idle") return;
     void handleLoadLoopProtocol();
   }, [selectedLoopProtocolState.state, selectedSession?.has_loop_protocol, showLoopContext, workbenchOpen, workbenchTab]);
+
+  useEffect(() => {
+    if (!workbenchOpen || workbenchTab !== "loop") return;
+    if (!showScheduleContext) return;
+    if (selectedScheduleState.state !== "idle") return;
+    const summary = selectedSession?.schedules;
+    const hasScheduleEvidence = selectedSession?.has_schedules
+      || (summary?.count ?? 0) > 0
+      || (summary?.enabled ?? 0) > 0
+      || (summary?.pending_loop_ticks ?? 0) > 0
+      || (summary?.error_count ?? 0) > 0
+      || !!summary?.last_error;
+    if (!hasScheduleEvidence) return;
+    void handleLoadSchedules();
+  }, [
+    selectedScheduleState.state,
+    selectedSession?.has_schedules,
+    selectedSession?.schedules,
+    showScheduleContext,
+    workbenchOpen,
+    workbenchTab,
+  ]);
 
   function openWorkbench(tab: WorkbenchTab = "context") {
     setWorkbenchTab(tab);
