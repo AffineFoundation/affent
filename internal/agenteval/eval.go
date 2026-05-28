@@ -181,6 +181,7 @@ type BatchScenario struct {
 	RequiredLoopProtocolFeedModes                  map[string]int
 	RequiredLoopProtocolFeedMatches                []LoopProtocolFeedRequirement
 	RequireLoopProtocolFullAfterCompact            bool
+	RequiredLoopProtocolFinalStatus                string
 	RequiredSourceAccess                           []SourceAccessRequirement
 	RequiredSessionSearch                          []SessionSearchRequirement
 	RequiredRecentSessionSearch                    []RecentSessionSearchRequirement
@@ -418,6 +419,7 @@ type DebugScenarioExpectations struct {
 	RequiredLoopProtocolFeedModes                  map[string]int                        `json:"required_loop_protocol_feed_modes,omitempty"`
 	RequiredLoopProtocolFeedMatches                []DebugLoopProtocolFeedRequirement    `json:"required_loop_protocol_feed_matches,omitempty"`
 	RequireLoopProtocolFullAfterCompact            bool                                  `json:"require_loop_protocol_full_after_compaction,omitempty"`
+	RequiredLoopProtocolFinalStatus                string                                `json:"required_loop_protocol_final_status,omitempty"`
 	RequiredToolResultText                         map[string][]string                   `json:"required_tool_result_text,omitempty"`
 	RequiredToolArgContains                        []DebugToolArgContainsRequirement     `json:"required_tool_arg_contains,omitempty"`
 	ForbiddenToolArgContains                       []DebugToolArgContainsRequirement     `json:"forbidden_tool_arg_contains,omitempty"`
@@ -526,7 +528,8 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		len(exp.RequiredLoopProtocolCalibrationStatuses) > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
-		exp.RequireLoopProtocolFullAfterCompact {
+		exp.RequireLoopProtocolFullAfterCompact ||
+		strings.TrimSpace(exp.RequiredLoopProtocolFinalStatus) != "" {
 		caps["loop_protocol"] = true
 		for _, req := range exp.RequiredLoopProtocolFeedMatches {
 			if req.PlanLabelContains != "" || req.PlanCurrentStepStatus != "" || req.PlanCurrentStep != "" {
@@ -1203,7 +1206,10 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("affentctl run failed: exit=%d err=%v stderr=%s", exitCode, err, trimOneLine(stderr, 800)))
 	}
-	if err := verifyProtectedFiles(workspace, protected); err != nil {
+	if err := verifyProtectedFiles(workspace, protected, scenario); err != nil {
+		res.Failures = append(res.Failures, err.Error())
+	}
+	if err := verifyRequiredLoopProtocolFinalStatus(workspace, scenario); err != nil {
 		res.Failures = append(res.Failures, err.Error())
 	}
 	if err := verifyRequiredFileSubstrings(workspace, scenario.RequiredFileSubstrings); err != nil {
@@ -2006,6 +2012,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopProtocolFeedModes:                  cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
 		RequiredLoopProtocolFeedMatches:                loopFeedReqs,
 		RequireLoopProtocolFullAfterCompact:            s.RequireLoopProtocolFullAfterCompact,
+		RequiredLoopProtocolFinalStatus:                strings.TrimSpace(s.RequiredLoopProtocolFinalStatus),
 		RequiredToolResultText:                         cloneStringSliceMap(s.RequiredToolResultText),
 		RequiredToolArgContains:                        reqArgs,
 		ForbiddenToolArgContains:                       forbiddenArgs,
@@ -2655,17 +2662,135 @@ func readProtectedFiles(root string, names []string) (map[string]string, error) 
 	return out, nil
 }
 
-func verifyProtectedFiles(root string, protected map[string]string) error {
+func verifyProtectedFiles(root string, protected map[string]string, scenario BatchScenario) error {
 	for name, want := range protected {
 		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
 		if err != nil {
 			return fmt.Errorf("protected file %s missing: %w", name, err)
 		}
-		if string(raw) != want {
+		got := string(raw)
+		if got != want {
+			if protectedLoopProtocolStatusOnlyChangeAllowed(name, want, got, scenario) {
+				continue
+			}
 			return fmt.Errorf("protected file changed: %s", name)
 		}
 	}
 	return nil
+}
+
+func verifyRequiredLoopProtocolFinalStatus(root string, scenario BatchScenario) error {
+	if strings.TrimSpace(scenario.RequiredLoopProtocolFinalStatus) == "" {
+		return nil
+	}
+	want := evalLoopProtocolKnownStatus(scenario.RequiredLoopProtocolFinalStatus)
+	if want == "" {
+		return fmt.Errorf("scenario %q requires unknown loop protocol final status %q", scenario.Name, scenario.RequiredLoopProtocolFinalStatus)
+	}
+	sessionID := strings.TrimSpace(scenario.SessionID)
+	if sessionID == "" {
+		return fmt.Errorf("scenario %q requires loop protocol final status %q but has no SessionID", scenario.Name, want)
+	}
+	name := filepath.ToSlash(filepath.Join(".affent", "loops", sessionID, "LOOP.md"))
+	path := filepath.Join(root, filepath.FromSlash(name))
+	got := evalLoopProtocolStatusFromFile(path)
+	if got != want {
+		return fmt.Errorf("scenario %q requires loop protocol final status %q but %s has status %q", scenario.Name, want, name, got)
+	}
+	stateStatus, found, err := evalLoopProtocolStateStatus(filepath.Join(filepath.Dir(path), "state.json"))
+	if err != nil {
+		return fmt.Errorf("read loop protocol state for %s: %w", name, err)
+	}
+	if found && stateStatus != "" && stateStatus != want {
+		return fmt.Errorf("scenario %q requires loop protocol final status %q but state for %s has status %q", scenario.Name, want, name, stateStatus)
+	}
+	return nil
+}
+
+func protectedLoopProtocolStatusOnlyChangeAllowed(name, before, after string, scenario BatchScenario) bool {
+	wantStatus := evalLoopProtocolKnownStatus(scenario.RequiredLoopProtocolFinalStatus)
+	if wantStatus == "" || !protectedLoopProtocolPathMatchesScenario(name, scenario) {
+		return false
+	}
+	beforeStatus := evalLoopProtocolStatus(before)
+	afterStatus := evalLoopProtocolStatus(after)
+	if beforeStatus == "" || afterStatus != wantStatus {
+		return false
+	}
+	beforeComparable, beforeOK := normalizeLoopProtocolMetadataStatus(before, wantStatus)
+	afterComparable, afterOK := normalizeLoopProtocolMetadataStatus(after, wantStatus)
+	return beforeOK && afterOK && beforeComparable == afterComparable
+}
+
+func protectedLoopProtocolPathMatchesScenario(name string, scenario BatchScenario) bool {
+	sessionID := strings.TrimSpace(scenario.SessionID)
+	if sessionID == "" {
+		return false
+	}
+	cleanName := filepath.ToSlash(filepath.Clean(name))
+	wantName := filepath.ToSlash(filepath.Join(".affent", "loops", sessionID, "LOOP.md"))
+	return cleanName == wantName
+}
+
+func normalizeLoopProtocolMetadataStatus(content, status string) (string, bool) {
+	lines := strings.Split(content, "\n")
+	inMetadata := false
+	metadataLevel := 0
+	for i, line := range lines {
+		if level, title, ok := markdownHeading(line); ok {
+			if inMetadata && level <= metadataLevel {
+				inMetadata = false
+			}
+			if level == 2 && normalizeNumberedHeadingTitle(title) == "metadata" {
+				inMetadata = true
+				metadataLevel = level
+			}
+			continue
+		}
+		if !inMetadata {
+			continue
+		}
+		prefix, _, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		key := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(prefix), "-"))
+		if strings.EqualFold(key, "status") {
+			lines[i] = prefix + ": " + status
+			return strings.Join(lines, "\n"), true
+		}
+	}
+	return content, false
+}
+
+func markdownHeading(line string) (int, string, bool) {
+	trimmed := strings.TrimSpace(line)
+	level := 0
+	for level < len(trimmed) && trimmed[level] == '#' {
+		level++
+	}
+	if level == 0 || level == len(trimmed) || trimmed[level] != ' ' {
+		return 0, "", false
+	}
+	return level, strings.TrimSpace(trimmed[level+1:]), true
+}
+
+func normalizeNumberedHeadingTitle(title string) string {
+	title = strings.TrimSpace(title)
+	if i := strings.Index(title, "."); i > 0 {
+		number := strings.TrimSpace(title[:i])
+		allDigits := true
+		for _, r := range number {
+			if r < '0' || r > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			title = strings.TrimSpace(title[i+1:])
+		}
+	}
+	return strings.ToLower(title)
 }
 
 func verifyRequiredFileSubstrings(root string, required map[string][]string) error {

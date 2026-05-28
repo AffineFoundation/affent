@@ -2312,10 +2312,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
 		{Tool: "write_file", Arg: "path", Substring: "tests/test_store.py"},
+		{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+		{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
 	} {
 		if !toolArgRequirementContains(scratchProject.RequiredToolArgContains, want) {
 			t.Fatalf("scratch project RequiredToolArgContains = %#v, want %#v", scratchProject.RequiredToolArgContains, want)
 		}
+	}
+	if !stringSliceContains(scratchProject.RequiredTools, "loop_protocol") {
+		t.Fatalf("scratch project RequiredTools = %#v, want loop_protocol", scratchProject.RequiredTools)
 	}
 	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(scratchProject.VerifyCommand, want) {
@@ -2328,6 +2333,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!strings.Contains(scratchProject.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "no source package or tests exist yet") ||
 		!strings.Contains(scratchProject.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "create tests and implementation") {
 		t.Fatalf("scratch project loop protocol constraints = feeds:%d modes:%#v matches:%#v", scratchProject.RequiredLoopProtocolFeeds, scratchProject.RequiredLoopProtocolFeedModes, scratchProject.RequiredLoopProtocolFeedMatches)
+	}
+	if scratchProject.RequiredLoopProtocolFinalStatus != "completed" {
+		t.Fatalf("scratch project RequiredLoopProtocolFinalStatus = %q, want completed", scratchProject.RequiredLoopProtocolFinalStatus)
 	}
 	if scratchProject.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 {
 		t.Fatalf("scratch project trace event requirements = %#v, want loop.turn_checkpoint=1", scratchProject.RequiredTraceEventCounts)
@@ -3829,8 +3837,83 @@ func TestProtectedFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "test.py"), []byte("changed"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyProtectedFiles(dir, snap); err == nil {
+	if err := verifyProtectedFiles(dir, snap, BatchScenario{}); err == nil {
 		t.Fatal("expected protected file change to be detected")
+	}
+}
+
+func TestProtectedLoopProtocolAllowsFinalStatusOnlyChange(t *testing.T) {
+	dir := t.TempDir()
+	const rel = ".affent/loops/scratch-project-loop/LOOP.md"
+	before := `# Loop Protocol: scratch-project-loop
+
+## 0. Metadata
+
+- loop_id: scratch-project-loop
+- owner_session: scratch-project-loop
+- status: running
+
+## 1. North Star
+
+Keep the durable protocol stable.
+`
+	after := strings.Replace(before, "- status: running", "- status: completed", 1)
+	if err := writeScenarioFiles(dir, map[string]string{rel: before}); err != nil {
+		t.Fatal(err)
+	}
+	snap, err := readProtectedFiles(dir, []string{rel})
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenario := BatchScenario{
+		Name:                            "status-close",
+		SessionID:                       "scratch-project-loop",
+		RequiredLoopProtocolFinalStatus: "completed",
+	}
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(rel)), []byte(after), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyProtectedFiles(dir, snap, scenario); err != nil {
+		t.Fatalf("status-only LOOP.md close should be allowed: %v", err)
+	}
+	changedBody := strings.Replace(after, "Keep the durable protocol stable.", "Rewrite the durable protocol.", 1)
+	if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(rel)), []byte(changedBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyProtectedFiles(dir, snap, scenario); err == nil || !strings.Contains(err.Error(), "protected file changed") {
+		t.Fatalf("expected non-status LOOP.md change to fail, got %v", err)
+	}
+}
+
+func TestRequiredLoopProtocolFinalStatus(t *testing.T) {
+	dir := t.TempDir()
+	const rel = ".affent/loops/scratch-project-loop/LOOP.md"
+	body := `# Loop Protocol: scratch-project-loop
+
+## 0. Metadata
+
+- loop_id: scratch-project-loop
+- owner_session: scratch-project-loop
+- status: completed
+`
+	if err := writeScenarioFiles(dir, map[string]string{
+		rel: body,
+		".affent/loops/scratch-project-loop/state.json":      `{"status":"completed"}`,
+		".affent/loops/scratch-project-loop/irrelevant.json": `{}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	scenario := BatchScenario{
+		Name:                            "final-status",
+		SessionID:                       "scratch-project-loop",
+		RequiredLoopProtocolFinalStatus: "completed",
+	}
+	if err := verifyRequiredLoopProtocolFinalStatus(dir, scenario); err != nil {
+		t.Fatalf("final status should pass: %v", err)
+	}
+	scenario.RequiredLoopProtocolFinalStatus = "blocked"
+	if err := verifyRequiredLoopProtocolFinalStatus(dir, scenario); err == nil || !strings.Contains(err.Error(), "requires loop protocol final status") {
+		t.Fatalf("expected final status mismatch, got %v", err)
 	}
 }
 

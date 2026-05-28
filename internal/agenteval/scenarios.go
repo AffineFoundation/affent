@@ -3274,7 +3274,7 @@ func longRunScratchProjectLoopPushScenario() BatchScenario {
 		Domains:            []string{codePRDomain, longRunRecoveryDomain},
 		SessionID:          "scratch-project-loop",
 		EnableLoopProtocol: true,
-		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, and leave git status clean. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
+		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
 		Files: map[string]string{
 			".affent/loops/scratch-project-loop/LOOP.md": `# Loop Protocol: scratch-project-loop
 
@@ -3298,7 +3298,7 @@ Build a tiny but complete software project from a nearly empty repository, keep 
 
 - Use Python stdlib unittest; do not add third-party dependencies.
 - Keep generated files focused: todo_core/, tests/, and README.md are enough.
-- Do not modify this LOOP.md.
+- Do not modify this LOOP.md except by closing it through the loop_protocol tool after the project is complete.
 
 ## 4. Plan/Step Pointer
 
@@ -3335,11 +3335,13 @@ This repository starts almost empty. The agent must create the project, tests, d
 		RequiredCommandCounts: map[string]int{
 			`python3 -m unittest`: 2,
 		},
-		RequiredTools: []string{"write_file"},
+		RequiredTools: []string{"write_file", "loop_protocol"},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
 			{Tool: "write_file", Arg: "path", Substring: "todo_core/__init__.py"},
 			{Tool: "write_file", Arg: "path", Substring: "tests/test_store.py"},
+			{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+			{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `python3 -m unittest`, Tool: "write_file"},
@@ -3360,6 +3362,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 				PlanCurrentStep:  "create tests and implementation",
 			},
 		},
+		RequiredLoopProtocolFinalStatus: "completed",
 		RequiredTraceEventCounts: map[string]int{
 			"loop.turn_checkpoint": 1,
 		},
