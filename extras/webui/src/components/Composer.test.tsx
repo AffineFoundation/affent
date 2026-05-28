@@ -67,7 +67,13 @@ describe("Composer", () => {
 
     expect(screen.queryByTestId("composer-automation")).toBeNull();
 
-    await user.type(screen.getByPlaceholderText("Message Affent..."), "long running market monitor");
+    const input = screen.getByPlaceholderText("Message Affent...");
+    await user.type(input, "fix the failing checkout test");
+
+    expect(screen.queryByTestId("composer-automation")).toBeNull();
+
+    await user.clear(input);
+    await user.type(input, "long running market monitor");
 
     expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));

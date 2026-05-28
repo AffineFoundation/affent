@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { automationActionLabel } from "./automationActions";
+import { automationActionLabel, shouldOfferLoopSetupAction } from "./automationActions";
 
 describe("automationActionLabel", () => {
   it("uses one action vocabulary for loop setup and timers", () => {
@@ -12,5 +12,12 @@ describe("automationActionLabel", () => {
   it("keeps transient busy states short", () => {
     expect(automationActionLabel("loop_setup", true)).toBe("Setting up");
     expect(automationActionLabel("loop_tick", true)).toBe("Scheduling");
+  });
+
+  it("only offers loop setup for explicit long-running automation intent", () => {
+    expect(shouldOfferLoopSetupAction("fix the failing checkout test")).toBe(false);
+    expect(shouldOfferLoopSetupAction("keep improving the web workbench")).toBe(true);
+    expect(shouldOfferLoopSetupAction("analyze market data for several days")).toBe(true);
+    expect(shouldOfferLoopSetupAction("每天检查一次构建状态并提醒我")).toBe(true);
   });
 });

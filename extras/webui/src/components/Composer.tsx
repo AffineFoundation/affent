@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { buildComposerTaskHint } from "../view/composerTaskHint";
-import { automationActionLabel } from "../view/automationActions";
+import { automationActionLabel, shouldOfferLoopSetupAction } from "../view/automationActions";
 import { draftMergeMode, draftSourceLabel, type DraftSource } from "../view/draftSource";
 import type { RuntimeCapabilityView } from "../view/runtimeCapabilities";
 
@@ -200,7 +200,7 @@ export function Composer({
   const composerMeta = composerMetaLabel({ contentText, lineCount, draftContext, busy, cancelling, hasSession, resumeSession });
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
-  const hasLoopAutomation = !!onStartLoop && hasContent;
+  const hasLoopAutomation = !!onStartLoop && hasContent && shouldOfferLoopSetupAction(contentText);
   const canShowScheduleAutomation = hasSession && automationAvailable;
   const hasScheduleLoopTick = canShowScheduleAutomation && !!onScheduleLoopTick && !hasLoopAutomation;
   const hasScheduleAutomation = canShowScheduleAutomation && !!(hasScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
