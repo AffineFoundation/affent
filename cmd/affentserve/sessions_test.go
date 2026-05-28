@@ -18,6 +18,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -62,6 +63,24 @@ func TestSessionPool_GetOrCreate_FailsAfterShutdown(t *testing.T) {
 	}
 	if err != ErrShuttingDown {
 		t.Fatalf("expected ErrShuttingDown, got %v", err)
+	}
+}
+
+func TestSessionPoolBuildSessionWritesMetadata(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("metadata-session")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	meta, found, err := sessionstate.ReadMetadata(pool.sessionDirPath("metadata-session"))
+	if err != nil {
+		t.Fatalf("ReadMetadata: %v", err)
+	}
+	if !found {
+		t.Fatal("session metadata not written")
+	}
+	if meta.SessionID != "metadata-session" || meta.WorkspacePath != s.workspace {
+		t.Fatalf("metadata = %+v, want session id and workspace %q", meta, s.workspace)
 	}
 }
 

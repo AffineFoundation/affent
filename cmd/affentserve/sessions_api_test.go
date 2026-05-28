@@ -20,6 +20,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -221,6 +222,28 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 	got = mergeSessionSummaries(sessionSummary{ID: "active", Active: true}, sessionSummary{ID: "active", Durable: true, ContextCompactions: compactions})
 	if got.ContextCompactions != compactions {
 		t.Fatalf("context compactions = %+v, want durable compactions carried over", got.ContextCompactions)
+	}
+}
+
+func TestSummarizeDurableSessionReadsMetadataWorkspace(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "archived-workspace")
+	workspace := "/workspace/sessions/archived-workspace-123"
+	if err := sessionstate.WriteMetadata(pool.sessionDirPath("archived-workspace"), sessionstate.Metadata{
+		SessionID:     "archived-workspace",
+		WorkspacePath: workspace,
+	}); err != nil {
+		t.Fatalf("WriteMetadata: %v", err)
+	}
+	summary, found, err := summarizeDurableSession(pool, "archived-workspace")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session not found")
+	}
+	if summary.WorkspacePath != workspace || summary.WorkspaceLabel != filepath.Base(workspace) {
+		t.Fatalf("workspace summary = %q/%q, want %q/%q", summary.WorkspacePath, summary.WorkspaceLabel, workspace, filepath.Base(workspace))
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/agenteval"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
@@ -425,6 +426,15 @@ success and trace-level process quality.`)
 		}
 	}
 	if tracePath != "" {
+		traceWorkspaceValue := strings.TrimSpace(*traceWorkspace)
+		if traceWorkspaceValue == "" {
+			inferred, err := traceWorkspaceFromSessionMetadata(filepath.Dir(tracePath))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
+				return 64
+			}
+			traceWorkspaceValue = inferred
+		}
 		var scenarioForTrace *agenteval.BatchScenario
 		if strings.TrimSpace(*suite) != "" || strings.TrimSpace(*scenarioCSV) != "" {
 			scenarios, err := selectedEvalScenarios(*suite, *scenarioCSV, "", "", "", "", 1, "")
@@ -447,7 +457,7 @@ success and trace-level process quality.`)
 			OutputDir:    strings.TrimSpace(*traceOutputDir),
 			Name:         traceName,
 			Scenario:     scenarioForTrace,
-			WorkspaceDir: strings.TrimSpace(*traceWorkspace),
+			WorkspaceDir: traceWorkspaceValue,
 		})
 		if err != nil && strings.TrimSpace(res.BatchScenario) == "" {
 			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
@@ -6193,6 +6203,17 @@ func resolveSessionTracePath(sessionID, sessionStateRoot, repoRoot string) (stri
 		return "", fmt.Errorf("session %q trace not found; set --session-state-root or AFFENTSERVE_MEMORY_ROOT", sessionID)
 	}
 	return "", fmt.Errorf("session %q trace not found; inspected: %s", sessionID, strings.Join(inspected, ", "))
+}
+
+func traceWorkspaceFromSessionMetadata(sessionDir string) (string, error) {
+	meta, found, err := sessionstate.ReadMetadata(sessionDir)
+	if err != nil {
+		return "", fmt.Errorf("read session metadata: %w", err)
+	}
+	if !found {
+		return "", nil
+	}
+	return strings.TrimSpace(meta.WorkspacePath), nil
 }
 
 func repoLocalSessionStateRoot(repoRoot string) string {

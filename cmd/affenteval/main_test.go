@@ -14,6 +14,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/agenteval"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -411,6 +412,54 @@ func TestRunTraceFileAppliesSelectedScenarioWithWorkspace(t *testing.T) {
 		!manifest.Expectations.ForbidWorkspaceAbsolutePaths ||
 		!testStringSliceContains(manifest.Expectations.CheckNames, "shell_command_lacks_workspace_absolute_path") {
 		t.Fatalf("trace-file scenario manifest expectations = %+v", manifest.Expectations)
+	}
+}
+
+func TestRunSessionIDAppliesScenarioWithMetadataWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	sessionID := "sess_metadata_workspace"
+	sessionRoot := filepath.Join(dir, "session-state")
+	sessionDir := filepath.Join(sessionRoot, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	workspace := "/workspace/sessions/" + sessionID + "-123"
+	if err := sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
+		SessionID:     sessionID,
+		WorkspacePath: workspace,
+	}); err != nil {
+		t.Fatalf("WriteMetadata: %v", err)
+	}
+	alias := strings.TrimPrefix(filepath.ToSlash(filepath.Join(workspace, "data", "value.txt")), "/")
+	tracePath := filepath.Join(sessionDir, "events.jsonl")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"tool.request","data":{"turn_id":"turn-1","call_id":"c1","tool":"shell","args":{"command":"pwd; cat ` + alias + `"}}}`,
+		`{"type":"tool.result","data":{"turn_id":"turn-1","call_id":"c1","exit_code":0,"result":"marker=RELATIVE-WORKSPACE-OK"}}`,
+		`{"type":"message.done","data":{"turn_id":"turn-1","text":"RELATIVE-WORKSPACE-OK","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":1,"tool_errors":0}}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := captureStdout(t, func() int {
+		return run([]string{
+			"--session-id", sessionID,
+			"--session-state-root", sessionRoot,
+			"--scenario", "small-tools-workspace-relative-shell",
+			"--trace-output-dir", filepath.Join(dir, "debug"),
+		})
+	})
+	if code != 1 {
+		t.Fatalf("run --session-id scenario exit = %d\n%s", code, out)
+	}
+	for _, want := range []string{
+		"FAIL small-tools-workspace-relative-shell",
+		"used workspace absolute path",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--session-id scenario output missing %q:\n%s", want, out)
+		}
 	}
 }
 

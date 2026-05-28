@@ -24,6 +24,7 @@ import (
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/planstate"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -505,6 +506,13 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if err != nil {
 		_ = os.RemoveAll(workspace)
 		return nil, fmt.Errorf("alloc session dir: %w", err)
+	}
+	if err := sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
+		SessionID:     id,
+		WorkspacePath: workspace,
+	}); err != nil {
+		_ = os.RemoveAll(workspace)
+		return nil, fmt.Errorf("session metadata: %w", err)
 	}
 	conv, err := agent.OpenConversationAt(filepath.Join(sessionDir, "conversation.jsonl"))
 	if err != nil {

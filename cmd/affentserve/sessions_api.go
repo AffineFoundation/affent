@@ -22,6 +22,7 @@ import (
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sessionsearch"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
@@ -677,6 +678,12 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		ID:         id,
 		Durable:    true,
 		LastUsedAt: formatTime(info.ModTime()),
+	}
+	if meta, found, err := sessionstate.ReadMetadata(dir); err != nil {
+		return sessionSummary{}, false, err
+	} else if found && strings.TrimSpace(meta.WorkspacePath) != "" {
+		summary.WorkspacePath = strings.TrimSpace(meta.WorkspacePath)
+		summary.WorkspaceLabel = workspaceLabel(summary.WorkspacePath)
 	}
 	newest := info.ModTime()
 	mergeStat := func(path string) (bool, error) {
