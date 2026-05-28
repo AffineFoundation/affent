@@ -54,7 +54,6 @@ import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
-import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
@@ -1570,17 +1569,6 @@ export function App() {
     );
   }
 
-  function renderRuntimeStatsPanel(defaultOpen = false) {
-    return (
-      <RuntimeStatsPanel
-        stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
-        loading={runtimeStatsState.state === "loading"}
-        error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
-        defaultOpen={defaultOpen}
-      />
-    );
-  }
-
   function renderAccountSettingsPanel(defaultOpen = false) {
     return (
       <AccountSettingsPanel
@@ -1782,15 +1770,12 @@ export function App() {
     if (workbenchTab === "skills") return renderSkillsPanel(true);
     if (workbenchTab === "config") return renderAccountSettingsPanel(true);
     return (
-      <>
-        <SessionTracePanel
-          trace={sessionTrace}
-          events={session.events}
-          defaultOpen
-          onOpenArtifact={(path) => void handleOpenArtifact(path)}
-        />
-        {renderRuntimeStatsPanel(sessionTrace.eventCount === 0)}
-      </>
+      <SessionTracePanel
+        trace={sessionTrace}
+        events={session.events}
+        defaultOpen
+        onOpenArtifact={(path) => void handleOpenArtifact(path)}
+      />
     );
   }
 

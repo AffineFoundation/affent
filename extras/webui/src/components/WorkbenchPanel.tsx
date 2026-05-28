@@ -87,7 +87,7 @@ export function WorkbenchPanel({
         ))}
       </nav>
       {children ? (
-        <div className="workbench-tab-surface" data-testid="workbench-tab-surface">
+        <div className="workbench-tab-surface" data-tab={activeTab} data-testid="workbench-tab-surface">
           {children}
         </div>
       ) : null}

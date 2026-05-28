@@ -90,7 +90,9 @@ export function SessionTracePanel({
               </div>
             ) : null}
             {visibleEvents.length > 0 ? (
-              <EventTrace events={visibleEvents} onOpenArtifact={onOpenArtifact} />
+              <div className="session-trace-results">
+                <EventTrace events={visibleEvents} onOpenArtifact={onOpenArtifact} />
+              </div>
             ) : (
               <div className="session-skills-empty">No trace entries matching {emptyStateLabel(filter, trimmedQuery)}.</div>
             )}

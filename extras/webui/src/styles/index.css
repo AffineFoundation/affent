@@ -714,6 +714,11 @@ body[data-resizing="true"] {
   padding-right: 2px;
 }
 
+.workbench-tab-surface[data-tab="trace"] {
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .workbench-tab-surface > .session-skills-panel,
 .workbench-tab-surface > .session-plan-panel,
 .workbench-tab-surface > .artifact-viewer {
@@ -8775,6 +8780,7 @@ pre.code {
   display: grid;
   gap: 6px;
   padding: 10px;
+  min-width: 0;
 }
 
 .event-trace-actions {
@@ -8818,6 +8824,11 @@ pre.code {
 
 .session-trace-controls .session-trace-filter-group {
   grid-column: 1;
+}
+
+.session-trace-body {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .session-trace-metrics {
@@ -8905,6 +8916,38 @@ pre.code {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.session-trace-results {
+  min-height: 220px;
+  max-height: min(58vh, 680px);
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(217, 224, 232, 0.78);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(248, 250, 252, 0.62)),
+    rgba(255, 255, 255, 0.84);
+  scrollbar-width: thin;
+}
+
+.session-trace-results .event-trace {
+  padding: 8px;
+}
+
+.workbench-tab-surface > .session-trace-panel[open] > .session-trace-body {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 330px);
+  max-height: none;
+  overflow: hidden;
+}
+
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-results {
+  flex: 1 1 0;
+  max-height: none;
+  min-height: 180px;
 }
 
 .event-chip {
