@@ -2,9 +2,11 @@ import type { SessionState, ToolCallState } from "../store/sessionState";
 import { summarizePreview } from "./textPreview";
 
 export type SessionRunStatus = "running" | "passed" | "failed";
+export type SessionRunCommandKind = "test" | "build" | "lint" | "typecheck" | "git" | "shell";
 
 export interface SessionRunCommand {
   command: string;
+  kind?: SessionRunCommandKind;
   cwd?: string;
   status: SessionRunStatus;
   turnNumber: number;
@@ -86,6 +88,7 @@ export function buildSessionRun(session: SessionState): SessionRunView {
 
 export function runCommandMeta(command: SessionRunCommand): string {
   const parts = [
+    runCommandKind(command),
     runStatusLabel(command.status),
     command.exitCode != null ? `exit ${command.exitCode}` : undefined,
     command.durationMs != null ? formatDuration(command.durationMs) : undefined,
@@ -98,6 +101,7 @@ export function runCommandEvidenceText(command: SessionRunCommand): string {
   const lines = [
     `Run evidence for ${command.command}`,
     `Status: ${runStatusLabel(command.status)}`,
+    `Kind: ${runCommandKind(command)}`,
     command.exitCode != null ? `Exit: ${command.exitCode}` : undefined,
     command.durationMs != null ? `Duration: ${formatDuration(command.durationMs)}` : undefined,
     `Turn: ${command.turnNumber}`,
@@ -126,6 +130,17 @@ export function runCommandRequest(command: SessionRunCommand): RunCommandExecuti
   };
 }
 
+export function runCommandKind(command: SessionRunCommand | string): SessionRunCommandKind {
+  const text = typeof command === "string" ? command : command.kind ?? command.command;
+  const normalized = text.replace(/\s+/g, " ").trim().toLowerCase();
+  if (/\b(?:test|pytest|vitest|jest|playwright|go test|cargo test|mvn test|gradle test)\b/.test(normalized)) return "test";
+  if (/\b(?:typecheck|tsc|mypy|pyright|go vet)\b/.test(normalized)) return "typecheck";
+  if (/\b(?:lint|eslint|ruff|golangci-lint|clippy)\b/.test(normalized)) return "lint";
+  if (/\b(?:build|vite build|tsup|webpack|rollup|cargo build|go build|mvn package|gradle build)\b/.test(normalized)) return "build";
+  if (/^(?:git|gh)\b/.test(normalized)) return "git";
+  return "shell";
+}
+
 export function runFocusCommand(commands: readonly SessionRunCommand[]): SessionRunFocus | undefined {
   const unresolved = latestUnrecoveredFailedCommand(commands);
   if (unresolved) {
@@ -147,10 +162,11 @@ export function runFocusCommand(commands: readonly SessionRunCommand[]): Session
   }
   const latestPassed = commands.find((command) => command.status === "passed");
   if (latestPassed) {
+    const verification = isVerificationKind(runCommandKind(latestPassed));
     return {
       command: latestPassed,
-      label: "Latest verification",
-      detail: latestPassed.detail ?? "Most recent command passed.",
+      label: verification ? "Latest verification" : "Latest command",
+      detail: latestPassed.detail ?? (verification ? "Most recent verification command passed." : "Most recent command passed."),
       tone: "success",
     };
   }
@@ -187,18 +203,20 @@ export function runReviewFocus(commands: readonly SessionRunCommand[]): SessionR
   const failedCount = commands.filter((command) => command.status === "failed").length;
   const latestPassed = latestCommand(commands, (command) => command.status === "passed");
   if (failedCount > 0 && latestPassed) {
+    const latestVerification = latestCommand(commands, (command) => command.status === "passed" && isVerificationKind(runCommandKind(command)));
     return {
       label: "Recovered",
       title: `${failedCount} earlier ${plural("failure", failedCount)} followed by a pass`,
-      detail: `Latest passing command: ${commandLabel(latestPassed.command)}`,
+      detail: latestVerification ? `Latest verification: ${commandLabel(latestVerification.command)}` : `Latest passing command: ${commandLabel(latestPassed.command)}`,
       tone: "ok",
     };
   }
   if (latestPassed) {
+    const verification = isVerificationKind(runCommandKind(latestPassed));
     return {
-      label: "Verified",
+      label: verification ? "Verified" : "Passed",
       title: commandLabel(latestPassed.command),
-      detail: latestPassed.detail ?? "Latest command passed.",
+      detail: latestPassed.detail ?? (verification ? "Latest verification command passed." : "Latest command passed."),
       tone: "ok",
     };
   }
@@ -214,6 +232,8 @@ export function runReviewFacts(commands: readonly SessionRunCommand[]): SessionR
   const total = commands.length;
   const failed = commands.filter((command) => command.status === "failed").length;
   const passed = commands.filter((command) => command.status === "passed").length;
+  const verification = commands.filter((command) => isVerificationKind(runCommandKind(command)));
+  const verificationPassed = verification.filter((command) => command.status === "passed").length;
   const artifactCount = commands.filter((command) => !!command.artifactPath).length;
   const latest = latestCommand(commands);
   const unresolved = latestUnrecoveredFailedCommand(commands);
@@ -235,6 +255,12 @@ export function runReviewFacts(commands: readonly SessionRunCommand[]): SessionR
       value: String(passed),
       detail: passed > 0 ? "successful commands" : "no successful command",
       tone: passed > 0 ? "ok" : total > 0 ? "attention" : "neutral",
+    },
+    {
+      label: "Verification",
+      value: verification.length > 0 ? `${verificationPassed}/${verification.length}` : "0/0",
+      detail: verification.length > 0 ? "test/build/lint/typecheck" : "none recorded",
+      tone: verification.length === 0 ? (total > 0 ? "attention" : "neutral") : verificationPassed === verification.length ? "ok" : "attention",
     },
     {
       label: "Output",
@@ -270,8 +296,23 @@ function latestUnrecoveredFailedCommand(commands: readonly SessionRunCommand[]):
   const failed = latestCommand(commands, (command) => command.status === "failed");
   if (!failed) return undefined;
   const failedOrder = commandOrder(failed);
-  const laterPass = commands.some((command) => command.status === "passed" && commandOrder(command) > failedOrder);
+  const laterPass = commands.some((command) => command.status === "passed" && commandOrder(command) > failedOrder && recoversFailure(failed, command));
   return laterPass ? undefined : failed;
+}
+
+function recoversFailure(failed: SessionRunCommand, passed: SessionRunCommand): boolean {
+  if (normalizedCommand(failed.command) === normalizedCommand(passed.command)) return true;
+  const failedKind = runCommandKind(failed);
+  const passedKind = runCommandKind(passed);
+  return isVerificationKind(failedKind) && failedKind === passedKind;
+}
+
+function isVerificationKind(kind: SessionRunCommandKind): boolean {
+  return kind === "test" || kind === "build" || kind === "lint" || kind === "typecheck";
+}
+
+function normalizedCommand(command: string): string {
+  return command.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function latestCommand(commands: readonly SessionRunCommand[], predicate: (command: SessionRunCommand) => boolean = () => true): SessionRunCommand | undefined {
@@ -309,6 +350,7 @@ function commandFromCall(call: ToolCallState, turnNumber: number, sequence: numb
   const detail = commandDetail(call);
   return {
     command,
+    kind: runCommandKind(command),
     cwd: stringArg(call, "cwd"),
     status: commandStatus(call),
     turnNumber,

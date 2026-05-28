@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { manualRunDraft, runCommandDraft, runCommandMeta, runCommandRequest, runFocusCommand, runReviewFacts, runReviewFocus, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunFocus, type SessionRunView } from "../view/sessionRun";
+import { manualRunDraft, runCommandDraft, runCommandKind, runCommandMeta, runCommandRequest, runFocusCommand, runReviewFacts, runReviewFocus, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunFocus, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 
 export type RunCommandAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -267,6 +267,7 @@ function RunFocus({
         <small>{focus.detail}</small>
         <div className="session-run-focus-facts">
           <RunFocusFact label="Status" value={command.status} />
+          <RunFocusFact label="Kind" value={runCommandKind(command)} />
           {command.exitCode != null ? <RunFocusFact label="Exit" value={String(command.exitCode)} /> : null}
           {command.durationMs != null ? <RunFocusFact label="Duration" value={commandDurationLabel(command.durationMs)} /> : null}
           <RunFocusFact label="Turn" value={String(command.turnNumber)} />

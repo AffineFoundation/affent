@@ -32,6 +32,8 @@ describe("SessionRunPanel", () => {
     expect(focus).toHaveTextContent("Turn");
     expect(focus).toHaveTextContent("2");
     expect(focus).toHaveTextContent("Status");
+    expect(focus).toHaveTextContent("Kind");
+    expect(focus).toHaveTextContent("test");
     expect(focus).toHaveTextContent("Duration");
     expect(focus).toHaveTextContent("Cwd: extras/webui");
     expect(focus).toHaveTextContent("Next: update payment route then rerun");
@@ -52,6 +54,7 @@ describe("SessionRunPanel", () => {
         "",
         "Run evidence for npm test -- checkout.spec.ts",
         "Status: failed",
+        "Kind: test",
         "Exit: 1",
         "Duration: 1.48s",
         "Turn: 2",
@@ -148,7 +151,7 @@ describe("SessionRunPanel", () => {
           ...run,
           commands: [
             { ...run.commands[0], turnNumber: 1, sequence: 1 },
-            { ...run.commands[1], turnNumber: 2, sequence: 2 },
+            { ...run.commands[1], command: "npm test -- checkout.spec.ts", detail: "checkout spec passed", turnNumber: 2, sequence: 2 },
           ],
         }}
       />,
@@ -158,7 +161,7 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-review")).toHaveTextContent("1 earlier failure followed by a pass");
     expect(screen.getByLabelText("Run review facts")).toHaveTextContent("covered by later pass");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
-    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm run build");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm test -- checkout.spec.ts");
 
     await user.click(screen.getByRole("button", { name: "Inspect latest failure" }));
 

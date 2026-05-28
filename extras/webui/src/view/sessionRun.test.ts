@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runFocusCommand, runReviewFacts, runReviewFocus } from "./sessionRun";
+import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandKind, runCommandMeta, runFocusCommand, runReviewFacts, runReviewFocus } from "./sessionRun";
 
 describe("buildSessionRun", () => {
   it("summarizes shell commands with failure recovery and artifacts", () => {
@@ -27,6 +27,7 @@ describe("buildSessionRun", () => {
     expect(run.latestCommandCwd).toBe("extras/webui");
     expect(run.commands[0]).toMatchObject({
       command: "npm test -- checkout.spec.ts",
+      kind: "test",
       cwd: "extras/webui",
       status: "failed",
       exitCode: 1,
@@ -35,7 +36,7 @@ describe("buildSessionRun", () => {
       next: "update payment route then rerun",
       artifactPath: ".affent/artifacts/tool-results/test.txt",
     });
-    expect(runCommandMeta(run.commands[0])).toBe("failed · exit 1 · 1.48s · turn 1");
+    expect(runCommandMeta(run.commands[0])).toBe("test · failed · exit 1 · 1.48s · turn 1");
     expect(runFocusCommand(run.commands)).toMatchObject({
       label: "Recovery needed",
       tone: "error",
@@ -48,12 +49,14 @@ describe("buildSessionRun", () => {
     });
     expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Failures", value: "1", detail: "unresolved", tone: "danger" }),
+      expect.objectContaining({ label: "Verification", value: "0/1", detail: "test/build/lint/typecheck", tone: "attention" }),
       expect.objectContaining({ label: "Output", value: "1", detail: "artifact captured", tone: "ok" }),
     ]));
     expect(runCommandEvidenceText(run.commands[0])).toBe(
       [
         "Run evidence for npm test -- checkout.spec.ts",
         "Status: failed",
+        "Kind: test",
         "Exit: 1",
         "Duration: 1.48s",
         "Turn: 1",
@@ -113,6 +116,14 @@ describe("buildSessionRun", () => {
     );
   });
 
+  it("classifies common developer command kinds", () => {
+    expect(runCommandKind("npm test -- checkout.spec.ts")).toBe("test");
+    expect(runCommandKind("npm run typecheck")).toBe("typecheck");
+    expect(runCommandKind("npm run lint")).toBe("lint");
+    expect(runCommandKind("npm run build")).toBe("build");
+    expect(runCommandKind("git push -u origin main")).toBe("git");
+  });
+
   it("tracks running commands before a result arrives", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -164,15 +175,15 @@ describe("buildSessionRun", () => {
     ]);
   });
 
-  it("does not keep an older failed command as focus after a later command passes", () => {
+  it("does not keep an older failed command as focus after a matching later command passes", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "fail", tool: "shell", args: { command: "npm test" } } },
       { id: 3, type: "tool.result", data: { call_id: "fail", exit_code: 1, result_summary: "tests failed", result: "tests failed" } },
       { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
       { id: 5, type: "turn.start", data: { turn_id: "t2" } },
-      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "pass", tool: "shell", args: { command: "npm run build" } } },
-      { id: 7, type: "tool.result", data: { call_id: "pass", exit_code: 0, result_summary: "built", result: "built" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "pass", tool: "shell", args: { command: "npm test" } } },
+      { id: 7, type: "tool.result", data: { call_id: "pass", exit_code: 0, result_summary: "tests passed", result: "tests passed" } },
     ]);
 
     const run = buildSessionRun(session);
@@ -184,7 +195,7 @@ describe("buildSessionRun", () => {
     expect(runFocusCommand(run.commands)).toMatchObject({
       label: "Latest verification",
       tone: "success",
-      command: expect.objectContaining({ command: "npm run build" }),
+      command: expect.objectContaining({ command: "npm test" }),
     });
     expect(runReviewFocus(run.commands)).toMatchObject({
       label: "Recovered",
@@ -193,7 +204,55 @@ describe("buildSessionRun", () => {
     });
     expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Failures", value: "1", detail: "covered by later pass", tone: "ok" }),
+      expect.objectContaining({ label: "Verification", value: "1/2", detail: "test/build/lint/typecheck", tone: "attention" }),
       expect.objectContaining({ label: "Latest", value: "passed", detail: "turn 2", tone: "ok" }),
+    ]));
+  });
+
+  it("does not treat unrelated later success as recovery for a failed verification", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "fail", tool: "shell", args: { command: "npm test" } } },
+      { id: 3, type: "tool.result", data: { call_id: "fail", exit_code: 1, result_summary: "tests failed", result: "tests failed" } },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "push", tool: "shell", args: { command: "git push -u origin main" } } },
+      { id: 7, type: "tool.result", data: { call_id: "push", exit_code: 0, result_summary: "pushed", result: "pushed" } },
+    ]);
+
+    const run = buildSessionRun(session);
+
+    expect(run).toMatchObject({ summary: "1 failed command", tone: "error" });
+    expect(runFocusCommand(run.commands)).toMatchObject({
+      label: "Recovery needed",
+      command: expect.objectContaining({ command: "npm test" }),
+    });
+    expect(runReviewFocus(run.commands)).toMatchObject({
+      label: "Unresolved failure",
+      detail: "tests failed",
+      tone: "danger",
+    });
+  });
+
+  it("does not label non-verification shell success as verification", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "push", tool: "shell", args: { command: "git push -u origin main" } } },
+      { id: 3, type: "tool.result", data: { call_id: "push", exit_code: 0, result_summary: "pushed", result: "pushed" } },
+    ]);
+
+    const run = buildSessionRun(session);
+
+    expect(runFocusCommand(run.commands)).toMatchObject({
+      label: "Latest command",
+      command: expect.objectContaining({ command: "git push -u origin main", kind: "git" }),
+    });
+    expect(runReviewFocus(run.commands)).toMatchObject({
+      label: "Passed",
+      title: "git push -u origin main",
+    });
+    expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Verification", value: "0/0", detail: "none recorded", tone: "attention" }),
     ]));
   });
 

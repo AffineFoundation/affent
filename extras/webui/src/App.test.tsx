@@ -2276,7 +2276,7 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/config-run/commands", expect.objectContaining({ method: "POST" })));
     const tab = await screen.findByTestId("workbench-tab-surface");
-    await waitFor(() => expect(tab).toHaveTextContent("Latest verification"));
+    await waitFor(() => expect(tab).toHaveTextContent("Latest command"));
     expect(tab).toHaveTextContent("gitlab.com");
     expect(tab).toHaveTextContent("Welcome to GitLab");
   });
