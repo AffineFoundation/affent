@@ -1290,7 +1290,7 @@ function ArtifactStrip({
           <div className="artifact-pill-actions">
             {onUseAsDraft ? (
               <button type="button" className="artifact-pill-action" onClick={() => onUseAsDraft(artifactDraft(artifact.path), "artifact")}>
-                Use artifact
+                Use artifact as draft
               </button>
             ) : null}
             {onOpenArtifact && sessionId ? (

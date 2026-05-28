@@ -49,7 +49,7 @@ export function SessionArtifactsPanel({
                     ) : null}
                     {onUseAsDraft ? (
                       <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactDraft(artifact.path), "artifact")}>
-                        Use artifact
+                        Use artifact as draft
                       </button>
                     ) : null}
                   </span>

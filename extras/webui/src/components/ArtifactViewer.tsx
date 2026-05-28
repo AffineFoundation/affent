@@ -94,7 +94,7 @@ export function ArtifactViewer({
                   className="node-action"
                   onClick={() => onUseAsDraft(artifactDraft(artifact.chunk.path), "artifact")}
                 >
-                  Use artifact
+                  Use artifact as draft
                 </button>
                 <button
                   type="button"

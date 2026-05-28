@@ -2740,7 +2740,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Use artifact" }));
+    await user.click(await screen.findByRole("button", { name: "Use artifact as draft" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
@@ -2755,7 +2755,7 @@ describe("App", () => {
       "href",
       "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt",
     );
-    await user.click(within(artifacts).getByRole("button", { name: "Use artifact" }));
+    await user.click(within(artifacts).getByRole("button", { name: "Use artifact as draft" }));
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
     );
