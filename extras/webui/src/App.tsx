@@ -57,7 +57,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
-import { SessionAutomationPanel } from "./components/SessionAutomationPanel";
+import { SessionAutomationPanel, type SessionAutomationMetric } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
@@ -1631,11 +1631,15 @@ export function App() {
     }
     const automationTitle = automationContext?.title ?? "No automation";
     const automationDetail = automationContext?.detail ?? "Start a loop or schedule a check-in when this chat needs follow-up.";
+    const automationMetrics = automationWorkbenchMetrics(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
+    const emptyScheduleSummary = { count: 0, enabled: 0 };
+    const scheduleSummary = selectedSession?.schedules ?? emptyScheduleSummary;
+    const loadedSchedules = selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined;
     return (
-      <SessionAutomationPanel title={automationTitle} detail={automationDetail} defaultOpen>
+      <SessionAutomationPanel title={automationTitle} detail={automationDetail} metrics={automationMetrics} defaultOpen>
         {showLoopContext ? (
           <SessionLoopPanel
-            defaultOpen
+            embedded
             suppressRunningCallout
             summary={selectedSession?.loop_protocol}
             state={selectedLoopState}
@@ -1653,7 +1657,7 @@ export function App() {
           />
         ) : !showScheduleContext ? (
           <SessionLoopPanel
-            defaultOpen
+            embedded
             defaultGoal={selectedSessionTitle ?? selectedSessionId}
             starting={loopProtocolBusy || actionBusy || session.status === "running"}
             onStart={handleStartLoop}
@@ -1661,26 +1665,24 @@ export function App() {
         ) : (
           null
         )}
-        {showScheduleContext || (!showLoopContext && !showScheduleContext) ? (
-          <SessionSchedulePanel
-            defaultOpen
-            summary={selectedSession?.schedules ?? (!showLoopContext && !showScheduleContext ? { count: 0, enabled: 0 } : undefined)}
-            schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
-            busy={scheduleBusy}
-            disabled={actionBusy || session.status === "running"}
-            loading={selectedScheduleState.state === "loading"}
-            error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
-            deletingId={deletingScheduleId}
-            updatingId={updatingScheduleId}
-            loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
-            onLoadSchedules={handleLoadSchedules}
-            onUpdateSchedule={handleUpdateSchedule}
-            onDeleteSchedule={handleDeleteSchedule}
-            onScheduleCheckIn={() => handleCreateSchedule("checkin")}
-            onScheduleLoopTick={() => handleCreateSchedule("loop")}
-            onScheduleDaily={() => handleCreateSchedule("daily")}
-          />
-        ) : null}
+        <SessionSchedulePanel
+          embedded
+          summary={scheduleSummary}
+          schedules={loadedSchedules}
+          busy={scheduleBusy}
+          disabled={actionBusy || session.status === "running"}
+          loading={selectedScheduleState.state === "loading"}
+          error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
+          deletingId={deletingScheduleId}
+          updatingId={updatingScheduleId}
+          loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
+          onLoadSchedules={handleLoadSchedules}
+          onUpdateSchedule={handleUpdateSchedule}
+          onDeleteSchedule={handleDeleteSchedule}
+          onScheduleCheckIn={() => handleCreateSchedule("checkin")}
+          onScheduleLoopTick={() => handleCreateSchedule("loop")}
+          onScheduleDaily={() => handleCreateSchedule("daily")}
+        />
       </SessionAutomationPanel>
     );
   }
@@ -2223,6 +2225,94 @@ function trackResize(event: ReactPointerEvent<HTMLElement>, onMove: (event: Poin
   document.addEventListener("pointermove", handleMove);
   document.addEventListener("pointerup", handleEnd, { once: true });
   document.addEventListener("pointercancel", handleEnd, { once: true });
+}
+
+function automationWorkbenchMetrics(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  loopPanelState: LoopProtocolState,
+  schedulePanelState: ScheduleState,
+  context: { title: string; detail: string } | undefined,
+): SessionAutomationMetric[] {
+  return [
+    automationLoopMetric(session, loopState, loopPanelState),
+    automationTimerMetric(session, schedulePanelState),
+    automationNextMetric(context),
+  ];
+}
+
+function automationLoopMetric(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  panelState: LoopProtocolState,
+): SessionAutomationMetric {
+  if (panelState.state === "loading") return { label: "Loop", value: "Loading", detail: "Reading LOOP.md", tone: "neutral" };
+  if (panelState.state === "error") return { label: "Loop", value: "Error", detail: automationCompact(panelState.error) ?? "LOOP.md unavailable", tone: "danger" };
+  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
+  const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
+  const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
+  const goal = automationCompact(loopState?.initial_goal_preview ?? session?.loop_protocol?.state?.initial_goal_preview);
+  if (!status || status === "off") return { label: "Loop", value: "Off", detail: "No LOOP.md for this chat", tone: "neutral" };
+  if (status === "draft") {
+    if (answers > 0) return { label: "Loop", value: "Review", detail: "Calibration recorded; activate from chat", tone: "attention" };
+    if (questions > 0) return { label: "Loop", value: "Draft", detail: "Answer setup question", tone: "attention" };
+    return { label: "Loop", value: "Draft", detail: "Waiting for calibration question", tone: "attention" };
+  }
+  if (status === "running") return { label: "Loop", value: "Running", detail: goal ?? "LOOP.md active", tone: "ok" };
+  if (status === "disabled") return { label: "Loop", value: "Disabled", detail: "LOOP.md will not feed future turns", tone: "danger" };
+  return { label: "Loop", value: automationStatusLabel(status), detail: "Review LOOP.md status", tone: "neutral" };
+}
+
+function automationTimerMetric(session: SessionSummary | undefined, panelState: ScheduleState): SessionAutomationMetric {
+  if (panelState.state === "loading") return { label: "Timers", value: "Loading", detail: "Reading saved timers", tone: "neutral" };
+  if (panelState.state === "error") return { label: "Timers", value: "Error", detail: automationCompact(panelState.error) ?? "Timer details unavailable", tone: "danger" };
+  const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
+  const visibleEnabled = visibleSchedules.filter((schedule) => schedule.enabled).length;
+  const summary = session?.schedules;
+  const pending = summary?.pending_loop_ticks ?? 0;
+  const errors = summary?.error_count ?? 0;
+  if (pending > 0) return { label: "Timers", value: `${pending} pending`, detail: "Waiting for LOOP.md activation", tone: "attention" };
+  if (errors > 0 || summary?.last_error) return { label: "Timers", value: `${Math.max(errors, 1)} error`, detail: automationCompact(summary?.last_error) ?? "Inspect timer history", tone: "danger" };
+  const enabled = Math.max(summary?.enabled ?? 0, visibleEnabled);
+  const count = Math.max(summary?.count ?? 0, visibleSchedules.length);
+  if (enabled > 0) return { label: "Timers", value: `${enabled} active`, detail: summary?.next_run_at ? `Next ${automationFormatTime(summary.next_run_at)}` : "Load details to inspect next run", tone: "ok" };
+  if (count > 0) return { label: "Timers", value: `${count} paused`, detail: "Resume or delete saved timers", tone: "neutral" };
+  return { label: "Timers", value: "Off", detail: "No scheduled follow-ups", tone: "neutral" };
+}
+
+function automationNextMetric(context: { title: string; detail: string } | undefined): SessionAutomationMetric {
+  if (!context) return { label: "Next", value: "Manual", detail: "Start loop or schedule a timer when needed", tone: "neutral" };
+  const title = automationCompact(context.title) ?? "Review";
+  return {
+    label: "Next",
+    value: title.length > 24 ? `${title.slice(0, 21).trimEnd()}...` : title,
+    detail: automationCompact(context.detail),
+    tone: /error|failed|waiting|pending|review/i.test(`${context.title} ${context.detail}`) ? "attention" : "neutral",
+  };
+}
+
+function automationFormatTime(value: string): string {
+  const time = Date.parse(value);
+  if (!Number.isFinite(time)) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(time));
+}
+
+function automationCompact(value?: string): string | undefined {
+  const next = value?.replace(/\s+/g, " ").trim();
+  return next || undefined;
+}
+
+function automationStatusLabel(status: string): string {
+  return status
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ") || "Unknown";
 }
 
 function latestChatMeta(updated: string): string | undefined {

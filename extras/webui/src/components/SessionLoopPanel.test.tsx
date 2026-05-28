@@ -23,7 +23,7 @@ describe("SessionLoopPanel", () => {
 
     const panel = screen.getByTestId("session-loop-panel");
     expect(panel.tagName).toBe("SECTION");
-    expect(panel).toHaveAccessibleName("Automation");
+    expect(panel).toHaveAccessibleName("Loop");
     expect(panel).toHaveTextContent("Set up long-running work only when this chat needs it");
     expect(panel).not.toHaveAttribute("open");
   });
@@ -44,7 +44,7 @@ describe("SessionLoopPanel", () => {
     );
 
     const panel = screen.getByTestId("session-loop-panel");
-    expect(panel).toHaveTextContent("Automation");
+    expect(panel).toHaveTextContent("Loop");
     expect(panel).toHaveTextContent("Loop running");
     expect(panel).not.toHaveTextContent("Running protocol");
     expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Keep LOOP.md compact");

@@ -51,7 +51,7 @@ export function SessionLoopPanel({
         testId="session-loop-panel"
         embedded={embedded}
         defaultOpen={defaultOpen}
-        kicker={embedded ? "Automation" : "Loop"}
+        kicker="Loop"
         title="Off"
         detail="Set up long-running work only when this chat needs it"
       >
@@ -110,7 +110,7 @@ export function SessionLoopPanel({
       testId="session-loop-panel"
       embedded={embedded}
       defaultOpen={defaultOpen}
-      kicker={embedded ? "Automation" : "Loop"}
+      kicker="Loop"
       title={embedded ? loopEmbeddedTitle(title) : title}
       detail={detail}
     >
