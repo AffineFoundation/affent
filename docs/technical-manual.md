@@ -1150,8 +1150,11 @@ effective tool names, broad capability flags, partial workspace tool lists, and
 key tool-result limits. The manifest includes `recovery_guide`, which orders
 the files and sections to inspect, keeps the exact redacted rerun command, adds
 a full-trace rerun command when the compact trace skipped streaming deltas, and
-provides a continuation prompt for handing the failure back to an agent. The
-manifest and JSONL scenario record also include a machine-readable
+provides a continuation prompt for handing the failure back to an agent. When
+truncated tool output has either result artifacts or model-context artifacts,
+the recovery guide points at the retained artifact directory so the operator or
+next agent can inspect the full output instead of trusting the bounded preview.
+The manifest and JSONL scenario record also include a machine-readable
 `debug_brief` with stable tags and inspection hints; loop guard hints route
 first to `loop_guard_examples` so the blocked call, guard reason, and suggested
 next step are visible before opening full traces. The debug manifest, timeline,

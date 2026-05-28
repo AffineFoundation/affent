@@ -1277,7 +1277,7 @@ func debugRecoveryInspect(res BatchResult, brief *DebugBrief) []string {
 		addPath(res.StderrPath)
 		addPath(res.StdoutPath)
 	}
-	addLabel(filepath.Join(res.Workspace, ".affent", "artifacts"), res.ToolTruncation.ResultArtifacts > 0)
+	addLabel(filepath.Join(res.Workspace, ".affent", "artifacts"), res.ToolTruncation.ResultArtifacts > 0 || res.ToolTruncation.ContextArtifacts > 0)
 	addLabel(filepath.Join(res.Workspace, ".affentctl"), len(res.ChildTranscripts) > 0 || res.Delegation.HasAny())
 	if brief != nil {
 		for _, item := range brief.Items {

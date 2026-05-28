@@ -2916,6 +2916,28 @@ func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
 	}
 }
 
+func TestBuildDebugRecoveryGuideIncludesContextArtifactDir(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/context-artifact",
+		TimelinePath:      "/tmp/affent-eval/context-artifact/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/context-artifact/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/context-artifact/trace.jsonl",
+		Failures:          []string{"context-truncated tool result needs artifact inspection"},
+		ToolTruncation: ToolTruncationStats{
+			ContextTruncated: 1,
+			ContextArtifacts: 1,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	artifactDir := filepath.Join(res.Workspace, ".affent", "artifacts")
+	if !stringSliceContains(guide.Inspect, artifactDir) {
+		t.Fatalf("recovery guide inspect = %#v, want context artifact dir %q", guide.Inspect, artifactDir)
+	}
+}
+
 func TestRedactedCommandArgvHidesAPIKey(t *testing.T) {
 	got := redactedCommandArgv("go", []string{
 		"run", "./cmd/affentctl", "run",
