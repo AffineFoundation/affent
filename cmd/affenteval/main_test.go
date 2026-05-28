@@ -103,6 +103,54 @@ func TestRunListSuiteScenarios(t *testing.T) {
 	}
 }
 
+func TestRunListCoverageForLongRunSuite(t *testing.T) {
+	out, code := captureStdout(t, func() int {
+		return run([]string{"--list-coverage", "--suite", "long-run"})
+	})
+	if code != 0 {
+		t.Fatalf("run --list-coverage --suite exit = %d", code)
+	}
+	for _, want := range []string{
+		"COVERAGE scenarios=",
+		"suites=long-run:",
+		"capabilities=",
+		"longrun_recovery:",
+		"memory:",
+		"session_search:",
+		"skill_install:",
+		"source_repo:",
+		"domains=",
+		"code_pr:",
+		"context_compaction:",
+		"CAPABILITY_SCENARIOS",
+		"  memory:",
+		"  source_repo:",
+		"DOMAIN_SCENARIOS",
+		"  code_pr:",
+		"SCENARIOS",
+		"longrun-integrated-memory-recovery",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--list-coverage output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "coding-go-median") {
+		t.Fatalf("--list-coverage leaked non-suite scenario:\n%s", out)
+	}
+}
+
+func TestRunListCoverageRejectsAdHocPrompt(t *testing.T) {
+	errOut, code := captureStderr(t, func() int {
+		return run([]string{"--list-coverage", "--prompt", "hello"})
+	})
+	if code != 64 {
+		t.Fatalf("run --list-coverage --prompt exit = %d, stderr:\n%s", code, errOut)
+	}
+	if !strings.Contains(errOut, "--list-coverage cannot be combined with --prompt or --prompt-file") {
+		t.Fatalf("coverage prompt rejection stderr missing diagnostic:\n%s", errOut)
+	}
+}
+
 func TestRunQualityProfilePreflightRejectsNarrowScenarioSelection(t *testing.T) {
 	errOut, code := captureStderr(t, func() int {
 		return run([]string{"--quality-profile=longrun", "--scenario=longrun-stock-analysis-synthesis"})
@@ -720,6 +768,9 @@ func TestExpectationRequiredToolNamesIncludesImplicitTools(t *testing.T) {
 		},
 		RequiredSubagentSourceCounts: map[string]int{
 			"review": 1,
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"web_fetch": 0,
 		},
 	})
 	want := []string{"edit_file", agent.FocusedTaskToolName, agent.SessionSearchToolName, "shell", agent.SubagentToolName}

@@ -730,9 +730,6 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 	for _, tool := range exp.RequiredResultArtifacts {
 		add(tool)
 	}
-	for tool := range exp.MaxSuccessfulToolCallsByTool {
-		add(tool)
-	}
 	out := make([]string, 0, len(tools))
 	for tool := range tools {
 		out = append(out, tool)

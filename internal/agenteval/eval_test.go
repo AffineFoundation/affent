@@ -66,6 +66,18 @@ func TestExpectationCapabilityNamesIncludesSkillInstall(t *testing.T) {
 	}
 }
 
+func TestExpectationCapabilityNamesIgnoresMaxOnlyToolCaps(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"browser_navigate": 0,
+			"web_fetch":        0,
+		},
+	})
+	if len(caps) != 0 {
+		t.Fatalf("ExpectationCapabilityNames = %#v, want no required capability from max-only tool caps", caps)
+	}
+}
+
 func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch

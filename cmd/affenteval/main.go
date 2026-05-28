@@ -226,6 +226,7 @@ func run(args []string) int {
 		expectationDomainMaxToolErrorGates        stringFloatMapFlag
 		expectationDomainMaxLoopGuardGates        stringFloatMapFlag
 		list                                      = fs.Bool("list", false, "list built-in scenarios and exit")
+		listCoverage                              = fs.Bool("list-coverage", false, "list selected scenario expectation coverage and exit")
 		listSuites                                = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
 		listQualityProfiles                       = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
 		suite                                     = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
@@ -392,6 +393,19 @@ success and trace-level process quality.`)
 				fmt.Println(scenario.Name)
 			}
 		}
+		return 0
+	}
+	if *listCoverage {
+		if strings.TrimSpace(*prompt) != "" || strings.TrimSpace(*promptFile) != "" {
+			fmt.Fprintln(os.Stderr, "coverage: --list-coverage cannot be combined with --prompt or --prompt-file")
+			return 64
+		}
+		scenarios, err := selectedEvalScenarios(*suite, *scenarioCSV, "", "", "", "", 1, "")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "coverage: %v\n", err)
+			return 64
+		}
+		printScenarioCoverage(os.Stdout, scenarios)
 		return 0
 	}
 	if strings.TrimSpace(*traceFile) != "" {
@@ -1694,9 +1708,6 @@ func expectationRequiredToolNames(exp agenteval.DebugScenarioExpectations) []str
 		add(tool)
 	}
 	for _, tool := range exp.RequiredResultArtifacts {
-		add(tool)
-	}
-	for tool := range exp.MaxSuccessfulToolCallsByTool {
 		add(tool)
 	}
 	out := make([]string, 0, len(tools))
@@ -4703,6 +4714,67 @@ func qualityGatePreflightFailures(scenarios []agenteval.BatchScenario, g quality
 		failures = append(failures, fmt.Sprintf("expectation_domain[%s] unavailable, want >= 1 selected scenario", domain))
 	}
 	return failures
+}
+
+func printScenarioCoverage(w io.Writer, scenarios []agenteval.BatchScenario) {
+	suiteCounts := map[string]int{}
+	capabilityCounts := map[string]int{}
+	domainCounts := map[string]int{}
+	capabilityScenarios := map[string][]string{}
+	domainScenarios := map[string][]string{}
+	for _, scenario := range scenarios {
+		for _, suite := range uniqueSortedStrings(scenario.Suites) {
+			suiteCounts[suite]++
+		}
+		for _, cap := range agenteval.ScenarioExpectationCapabilityNames(scenario) {
+			capabilityCounts[cap]++
+			capabilityScenarios[cap] = append(capabilityScenarios[cap], scenario.Name)
+		}
+		for _, domain := range agenteval.ScenarioExpectationDomains(scenario) {
+			domainCounts[domain]++
+			domainScenarios[domain] = append(domainScenarios[domain], scenario.Name)
+		}
+	}
+	fmt.Fprintf(w, "COVERAGE scenarios=%d suites=%s capabilities=%s domains=%s\n",
+		len(scenarios),
+		formatStringIntCounts(suiteCounts),
+		formatStringIntCounts(capabilityCounts),
+		formatStringIntCounts(domainCounts),
+	)
+	printScenarioCoverageIndex(w, "CAPABILITY_SCENARIOS", capabilityScenarios)
+	printScenarioCoverageIndex(w, "DOMAIN_SCENARIOS", domainScenarios)
+	fmt.Fprintln(w, "SCENARIOS")
+	for _, scenario := range scenarios {
+		fmt.Fprintf(w, "  %s suites=%s capabilities=%s domains=%s\n",
+			scenario.Name,
+			formatStringList(uniqueSortedStrings(scenario.Suites)),
+			formatStringList(agenteval.ScenarioExpectationCapabilityNames(scenario)),
+			formatStringList(agenteval.ScenarioExpectationDomains(scenario)),
+		)
+	}
+}
+
+func printScenarioCoverageIndex(w io.Writer, title string, index map[string][]string) {
+	fmt.Fprintln(w, title)
+	if len(index) == 0 {
+		fmt.Fprintln(w, "  none")
+		return
+	}
+	keys := make([]string, 0, len(index))
+	for key := range index {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(w, "  %s: %s\n", key, formatStringList(uniqueSortedStrings(index[key])))
+	}
+}
+
+func formatStringList(values []string) string {
+	if len(values) == 0 {
+		return "none"
+	}
+	return strings.Join(values, ",")
 }
 
 func expectationDomainMetricGateFailures(s batchSummary, g qualityGateConfig) []string {
