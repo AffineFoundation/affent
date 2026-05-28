@@ -16,6 +16,7 @@ describe("SessionChangesPanel", () => {
     const panel = screen.getByTestId("session-changes-panel");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("2 changed files");
+    expect(screen.getByLabelText("Search changes")).toBeInTheDocument();
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Edit · changed · +2 -1 · turn 2");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Updated payment route");
@@ -38,6 +39,22 @@ describe("SessionChangesPanel", () => {
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: src/payments.ts"), "changed_file");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"), "changed_file");
+
+    await user.type(screen.getByLabelText("Search changes"), "spec");
+    expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("tests/payments.spec.ts");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("tests/payments.spec.ts");
+
+    await user.type(screen.getByLabelText("Search changes"), "return enabled");
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("tests/payments.spec.ts");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    await user.type(screen.getByLabelText("Search changes"), "missing.ts");
+    expect(screen.queryByTestId("session-changes-list")).toBeNull();
+    expect(panel).toHaveTextContent('No changed files matching "missing.ts".');
   });
 
   it("keeps the panel folded by default", () => {
