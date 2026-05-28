@@ -308,6 +308,7 @@ type DebugManifest struct {
 	ExpectationCapabilityPassedNames       []string                          `json:"expectation_capability_passed_names,omitempty"`
 	ExpectationCapabilityFailedNames       []string                          `json:"expectation_capability_failed_names,omitempty"`
 	Failures                               []string                          `json:"failures,omitempty"`
+	Verifier                               *DebugVerifierResult              `json:"verifier,omitempty"`
 	DebugBrief                             *DebugBrief                       `json:"debug_brief,omitempty"`
 	RecoveryGuide                          *DebugRecoveryGuide               `json:"recovery_guide,omitempty"`
 	ToolRepairExamples                     []ToolRepairExample               `json:"tool_repair_examples,omitempty"`
@@ -785,6 +786,18 @@ type VerifierResult struct {
 	OutputCapBytes     int
 }
 
+type DebugVerifierResult struct {
+	Command            string `json:"command,omitempty"`
+	Ran                bool   `json:"ran,omitempty"`
+	OK                 bool   `json:"ok,omitempty"`
+	ExitCode           int    `json:"exit_code,omitempty"`
+	DurationMS         int64  `json:"duration_ms,omitempty"`
+	OutputBytes        int    `json:"output_bytes,omitempty"`
+	OutputTruncated    bool   `json:"output_truncated,omitempty"`
+	OutputOmittedBytes int    `json:"output_omitted_bytes,omitempty"`
+	OutputCapBytes     int    `json:"output_cap_bytes,omitempty"`
+}
+
 func BuiltinBatchScenarios() []BatchScenario {
 	return []BatchScenario{
 		goMedianScenario(),
@@ -1153,6 +1166,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ExpectationCapabilityPassedNames:       ExpectationCapabilityPassedNames(res.OK, expectationCapabilities),
 		ExpectationCapabilityFailedNames:       ExpectationCapabilityFailedNames(res.OK, expectationCapabilities),
 		Failures:                               append([]string(nil), res.Failures...),
+		Verifier:                               debugVerifierResult(res.Verifier),
 		DebugBrief:                             BuildDebugBrief(*res),
 		RecoveryGuide:                          BuildDebugRecoveryGuide(*res),
 		ToolRepairExamples:                     append([]ToolRepairExample(nil), res.ToolRepairExamples...),
@@ -1274,6 +1288,23 @@ func BuildDebugRecoveryGuide(res BatchResult) *DebugRecoveryGuide {
 		return nil
 	}
 	return guide
+}
+
+func debugVerifierResult(v VerifierResult) *DebugVerifierResult {
+	if !v.Ran && strings.TrimSpace(v.Command) == "" {
+		return nil
+	}
+	return &DebugVerifierResult{
+		Command:            v.Command,
+		Ran:                v.Ran,
+		OK:                 v.OK,
+		ExitCode:           v.ExitCode,
+		DurationMS:         v.Duration.Milliseconds(),
+		OutputBytes:        v.OutputBytes,
+		OutputTruncated:    v.OutputTruncated,
+		OutputOmittedBytes: v.OutputOmittedBytes,
+		OutputCapBytes:     v.OutputCapBytes,
+	}
 }
 
 func debugRecoverySummary(res BatchResult) string {

@@ -2166,8 +2166,19 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RunExitCode:      3,
 		TraceDeltas:      true,
 		TurnEndReason:    "completed",
-		ToolCalls:        8,
-		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
+		Verifier: VerifierResult{
+			Command:            "go test ./... && git diff --name-only -- queue/queue.go",
+			Ran:                true,
+			OK:                 false,
+			ExitCode:           1,
+			Duration:           1500 * time.Millisecond,
+			OutputBytes:        2048,
+			OutputTruncated:    true,
+			OutputOmittedBytes: 512,
+			OutputCapBytes:     1536,
+		},
+		ToolCalls: 8,
+		Repair:    ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolFailureExamples: map[string][]ToolFailureExample{
 			"dynamic_shell": {{
 				Kind:              "dynamic_shell",
@@ -2549,6 +2560,18 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
 	}
+	if manifest.Verifier == nil ||
+		manifest.Verifier.Command != "go test ./... && git diff --name-only -- queue/queue.go" ||
+		!manifest.Verifier.Ran ||
+		manifest.Verifier.OK ||
+		manifest.Verifier.ExitCode != 1 ||
+		manifest.Verifier.DurationMS != 1500 ||
+		manifest.Verifier.OutputBytes != 2048 ||
+		!manifest.Verifier.OutputTruncated ||
+		manifest.Verifier.OutputOmittedBytes != 512 ||
+		manifest.Verifier.OutputCapBytes != 1536 {
+		t.Fatalf("manifest verifier = %+v", manifest.Verifier)
+	}
 	wantCapabilities := []string{"browser", "context_compaction", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
@@ -2829,6 +2852,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"--api-key '<redacted>'",
 		"## Debug Brief",
 		"## Recovery Guide",
+		"## Verifier",
+		"status: `failed`",
+		"command: `go test ./... && git diff --name-only -- queue/queue.go`",
+		"exit_code: `1`",
+		"duration_ms: `1500`",
+		"output_bytes: `2048`",
+		"output_truncated: `true`",
+		"output_omitted_bytes: `512`",
+		"output_cap_bytes: `1536`",
 		"summary: scenario failed; inspect the ordered artifacts below before trusting final text or rerunning",
 		"inspect_order:",
 		"affenteval-debug.json",

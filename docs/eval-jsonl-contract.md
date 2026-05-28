@@ -463,6 +463,13 @@ Verifier output text is not written to JSONL. Failure reports may include a
 bounded preview in `failures`; the structured verifier fields are the stable
 surface for trend analysis.
 
+Retained debug artifacts expose the same verifier status as a compact
+`verifier` object in `affenteval-debug.json`, with command, ran/ok booleans,
+exit code, duration milliseconds, and output byte/truncation counters. The
+human-readable `affenteval-timeline.md` also includes a `Verifier` section so
+code/PR scenarios can be triaged from retained artifacts without opening the
+raw JSONL first.
+
 ## Summary Record
 
 Summary records aggregate all scenario records from the same process:

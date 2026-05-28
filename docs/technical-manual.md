@@ -1155,8 +1155,9 @@ they are cleaned unless `--keep-workspaces` is set. `--keep-workspaces` also
 keeps passing runs for local inspection. The timeline is the human-readable
 index for debugging: it links the raw trace, starts with a `Recovery Guide` and
 `Debug Brief` for failed or diagnostic-heavy runs, shows the redacted
-`affentctl` command argv, trace event type counts, effective runtime surface,
-tool calls with args/result previews, child transcript refs,
+`affentctl` command argv, verifier status for code/PR checks, trace event type
+counts, effective runtime surface, tool calls with args/result previews,
+child transcript refs,
 truncation/artifact pointers, loop protocol feeds, loop decisions, context
 compactions, and runtime errors. Browser network searches are listed separately from `SourceAccess`
 evidence: `browser_network` entries are refs/checks only, include compact

@@ -65,6 +65,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 			fmt.Fprintf(&b, "- %s\n", timelineInline(failure, timelineErrorPreviewBytes))
 		}
 	}
+	renderTimelineVerifier(&b, res.Verifier)
 	renderTimelineRecoveryGuide(&b, res)
 	renderTimelineDebugBrief(&b, res)
 	renderTimelineChildTranscripts(&b, res.ChildTranscripts)
@@ -100,6 +101,38 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
+}
+
+func renderTimelineVerifier(b *strings.Builder, verifier VerifierResult) {
+	if !verifier.Ran && strings.TrimSpace(verifier.Command) == "" {
+		return
+	}
+	b.WriteString("\n## Verifier\n\n")
+	status := "not_run"
+	if verifier.Ran {
+		if verifier.OK {
+			status = "passed"
+		} else {
+			status = "failed"
+		}
+	}
+	fmt.Fprintf(b, "- status: `%s`\n", status)
+	if verifier.Command != "" {
+		fmt.Fprintf(b, "- command: `%s`\n", timelineInline(verifier.Command, timelineArgsPreviewBytes))
+	}
+	if !verifier.Ran {
+		return
+	}
+	fmt.Fprintf(b, "- exit_code: `%d`\n", verifier.ExitCode)
+	fmt.Fprintf(b, "- duration_ms: `%d`\n", verifier.Duration.Milliseconds())
+	fmt.Fprintf(b, "- output_bytes: `%d`\n", verifier.OutputBytes)
+	fmt.Fprintf(b, "- output_truncated: `%t`\n", verifier.OutputTruncated)
+	if verifier.OutputTruncated || verifier.OutputOmittedBytes > 0 {
+		fmt.Fprintf(b, "- output_omitted_bytes: `%d`\n", verifier.OutputOmittedBytes)
+	}
+	if verifier.OutputCapBytes > 0 {
+		fmt.Fprintf(b, "- output_cap_bytes: `%d`\n", verifier.OutputCapBytes)
+	}
 }
 
 func renderTimelineRecoveryGuide(b *strings.Builder, res BatchResult) {
