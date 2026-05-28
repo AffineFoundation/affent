@@ -44,6 +44,14 @@ export function accountConfigDraft(settings: AccountSettingsResponse): string {
   ].join("\n");
 }
 
+export function accountEnvMatchesQuery(entry: AccountEnvSummary, query: string): boolean {
+  return [
+    entry.name,
+    entry.configured ? "configured" : "empty",
+    entry.updated_at,
+  ].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase());
+}
+
 function envEvidenceLine(entry: AccountEnvSummary): string {
   const parts = [
     `- ${entry.name}: ${entry.configured ? "configured" : "empty"}`,

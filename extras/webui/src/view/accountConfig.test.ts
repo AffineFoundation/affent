@@ -4,6 +4,7 @@ import {
   accountConfigDraft,
   accountConfigEvidenceText,
   accountConfigSummary,
+  accountEnvMatchesQuery,
   sshAccessDescription,
 } from "./accountConfig";
 
@@ -34,6 +35,10 @@ describe("accountConfig view helpers", () => {
     ].join("\n"));
     expect(accountConfigEvidenceText(settings)).not.toContain("ssh-ed25519 AAAA affent");
     expect(accountConfigDraft(settings)).toContain("Do not ask for or expose secret values");
+    expect(accountEnvMatchesQuery(settings.env[0], "github")).toBe(true);
+    expect(accountEnvMatchesQuery(settings.env[0], "configured")).toBe(true);
+    expect(accountEnvMatchesQuery(settings.env[1], "empty")).toBe(true);
+    expect(accountEnvMatchesQuery(settings.env[0], "secret-value")).toBe(false);
   });
 
   it("surfaces SSH key issues as runtime config evidence", () => {

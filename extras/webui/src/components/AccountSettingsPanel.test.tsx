@@ -45,7 +45,10 @@ describe("AccountSettingsPanel", () => {
     render(
       <AccountSettingsPanel
         settings={{
-          env: [{ name: "GITHUB_TOKEN", configured: true }],
+          env: [
+            { name: "GITHUB_TOKEN", configured: true },
+            { name: "EMPTY_TOKEN", configured: false },
+          ],
           ssh: { exists: false },
         }}
         onSetEnv={onSetEnv}
@@ -60,19 +63,26 @@ describe("AccountSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Save env" }));
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
-    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("1 env");
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("2 envs");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
     expect(screen.queryByText("gl_secret")).toBeNull();
 
     const envList = screen.getByTestId("account-env-list");
-    await user.click(within(envList).getByRole("button", { name: "Delete" }));
+    await user.type(screen.getByPlaceholderText("name, configured, or empty"), "github");
+    expect(screen.getByTestId("account-env-search-count")).toHaveTextContent('1 variable matching "github"');
+    expect(envList).toHaveTextContent("GITHUB_TOKEN");
+    expect(envList).not.toHaveTextContent("EMPTY_TOKEN");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(envList).toHaveTextContent("EMPTY_TOKEN");
+
+    await user.click(within(envList).getAllByRole("button", { name: "Delete" })[0]);
     expect(onDeleteEnv).not.toHaveBeenCalled();
     const firstConfirm = within(envList).getByRole("group", { name: "Confirm delete GITHUB_TOKEN" });
     expect(firstConfirm).toHaveTextContent("Delete GITHUB_TOKEN?");
     await user.click(within(firstConfirm).getByRole("button", { name: "Cancel" }));
     expect(within(envList).queryByRole("group", { name: "Confirm delete GITHUB_TOKEN" })).toBeNull();
 
-    await user.click(within(envList).getByRole("button", { name: "Delete" }));
+    await user.click(within(envList).getAllByRole("button", { name: "Delete" })[0]);
     const confirm = within(envList).getByRole("group", { name: "Confirm delete GITHUB_TOKEN" });
     await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
     expect(onDeleteEnv).toHaveBeenCalledWith("GITHUB_TOKEN");

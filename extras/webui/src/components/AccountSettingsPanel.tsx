@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
 import type { UseAsDraft } from "../view/draftSource";
 import {
@@ -6,6 +6,7 @@ import {
   accountConfigDraft,
   accountConfigEvidenceText,
   accountConfigSummary,
+  accountEnvMatchesQuery,
   sshAccessDescription,
 } from "../view/accountConfig";
 import { CopyButton } from "./CopyButton";
@@ -36,8 +37,15 @@ export function AccountSettingsPanel({
 }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  const [query, setQuery] = useState("");
   const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
   const ssh = settings?.ssh;
+  const trimmedQuery = query.trim();
+  const visibleEnv = useMemo(() => {
+    const env = settings?.env ?? [];
+    if (!trimmedQuery) return env;
+    return env.filter((entry) => accountEnvMatchesQuery(entry, trimmedQuery));
+  }, [settings?.env, trimmedQuery]);
   const title = loading ? "Loading" : error ? "Unavailable" : accountConfigSummary(settings);
   const detail = error
     ? panelErrorSummary("Config API", error)
@@ -138,8 +146,26 @@ export function AccountSettingsPanel({
               </button>
               <p className="session-loop-setup-note">Values are injected into shell commands but are not shown back in the UI.</p>
             </form>
+            {settings && settings.env.length > 0 ? (
+              <div className="session-skills-controls">
+                <label className="session-skills-search">
+                  <span>Search env</span>
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="name, configured, or empty" />
+                </label>
+                {trimmedQuery ? (
+                  <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                    Clear
+                  </button>
+                ) : null}
+                {trimmedQuery ? (
+                  <span className="session-search-count" data-testid="account-env-search-count">
+                    {visibleEnv.length} {visibleEnv.length === 1 ? "variable" : "variables"} matching "{trimmedQuery}"
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="session-skills-list" data-testid="account-env-list">
-              {settings && settings.env.length > 0 ? settings.env.map((entry) => (
+              {settings && visibleEnv.length > 0 ? visibleEnv.map((entry) => (
                 <div key={entry.name} className="session-skill-item account-env-item">
                   <span className="session-skill-title">
                     <strong>{entry.name}</strong>
@@ -161,7 +187,9 @@ export function AccountSettingsPanel({
                     </button>
                   ) : null}
                 </div>
-              )) : (
+              )) : settings && settings.env.length > 0 ? (
+                <div className="session-skills-empty">No environment variables matching "{trimmedQuery}".</div>
+              ) : (
                 <div className="session-skills-empty">No environment variables configured.</div>
               )}
             </div>
