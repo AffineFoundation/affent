@@ -323,6 +323,41 @@ func TestSearchFindsRecoveryEventAnchors(t *testing.T) {
 	}
 }
 
+func TestSearchFindsLoopTurnCheckpointRecoveryEventAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "checkpoint-loop",
+		mustEvent(t, "loop.turn_checkpoint", map[string]any{
+			"turn_id":              "turn-checkpoint",
+			"loop_id":              "longrun",
+			"status":               "running",
+			"end_reason":           sse.TurnEndMaxTurns,
+			"tool_errors":          2,
+			"loop_guards":          1,
+			"forced_no_tools":      1,
+			"memory_search_misses": 1,
+			"session_search_calls": 1,
+		}),
+	)
+
+	hits, err := Search(context.Background(), dir, "", "checkpoint max_turns forced no tools", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected loop checkpoint event hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != "checkpoint-loop" || hit.Role != "event" {
+		t.Fatalf("expected event hit from checkpoint session, got %+v", hit)
+	}
+	for _, want := range []string{"loop_turn_checkpoint", "end=max_turns", "loop=longrun", "tool_errors=2", "loop_guards=1", "forced_no_tools=1", "memory_misses=1", "session_search=1"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("checkpoint event hit snippet missing %q:\n%+v", want, hit)
+		}
+	}
+	requireMatchedTerms(t, hit.MatchedTerms, "checkpoint", "max", "turns", "forced", "tools")
+}
+
 func TestSearchExcludesCurrentAndSkipsNonConversationRoles(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "current", []testMessage{
@@ -679,6 +714,39 @@ func TestRecentSessionsIncludesRecoveryAnchorsFromEvents(t *testing.T) {
 	}
 	if strings.Contains(fmt.Sprint(recent), "current") {
 		t.Fatalf("current session events leaked into recent anchors: %+v", recent)
+	}
+}
+
+func TestRecentSessionsIncludesLoopTurnCheckpointRecoveryAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "checkpoint-recovery",
+		mustEvent(t, "loop.turn_checkpoint", map[string]any{
+			"turn_id":              "turn-checkpoint",
+			"loop_id":              "longrun",
+			"end_reason":           sse.TurnEndMaxTurns,
+			"tool_errors":          2,
+			"loop_guards":          1,
+			"forced_no_tools":      1,
+			"memory_search_misses": 1,
+			"session_search_calls": 1,
+		}),
+	)
+
+	recent, err := RecentSessions(context.Background(), dir, "", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 {
+		t.Fatalf("expected one recent checkpoint anchor, got %+v", recent)
+	}
+	got := recent[0]
+	if got.SessionID != "checkpoint-recovery" || got.Recovery == "" {
+		t.Fatalf("checkpoint recovery anchor missing: %+v", got)
+	}
+	for _, want := range []string{"loop_turn_checkpoint", "end=max_turns", "loop=longrun", "tool_errors=2", "loop_guards=1", "forced_no_tools=1", "memory_misses=1", "session_search=1"} {
+		if !strings.Contains(got.Recovery, want) {
+			t.Fatalf("checkpoint recovery preview missing %q: %+v", want, got)
+		}
 	}
 }
 

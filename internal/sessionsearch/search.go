@@ -916,6 +916,52 @@ func recoveryPreviewFromEvent(ev eventRecord) string {
 			}
 		}
 		return strings.Join(parts, "; ")
+	case "loop.turn_checkpoint":
+		var p struct {
+			TurnID             string `json:"turn_id"`
+			LoopID             string `json:"loop_id,omitempty"`
+			Status             string `json:"status,omitempty"`
+			EndReason          string `json:"end_reason,omitempty"`
+			ToolErrors         int    `json:"tool_errors,omitempty"`
+			LoopGuards         int    `json:"loop_guards,omitempty"`
+			ForcedNoTools      int    `json:"forced_no_tools,omitempty"`
+			MemoryMisses       int    `json:"memory_search_misses,omitempty"`
+			SessionSearchCalls int    `json:"session_search_calls,omitempty"`
+		}
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return ""
+		}
+		endReason := strings.TrimSpace(p.EndReason)
+		if endReason != "max_turns" && endReason != "error" &&
+			p.ToolErrors <= 0 &&
+			p.LoopGuards <= 0 &&
+			p.ForcedNoTools <= 0 &&
+			p.MemoryMisses <= 0 {
+			return ""
+		}
+		parts := []string{"loop_turn_checkpoint"}
+		if endReason != "" {
+			parts = append(parts, "end="+endReason)
+		}
+		if loopID := strings.TrimSpace(p.LoopID); loopID != "" {
+			parts = append(parts, "loop="+loopID)
+		}
+		if p.ToolErrors > 0 {
+			parts = append(parts, fmt.Sprintf("tool_errors=%d", p.ToolErrors))
+		}
+		if p.LoopGuards > 0 {
+			parts = append(parts, fmt.Sprintf("loop_guards=%d", p.LoopGuards))
+		}
+		if p.ForcedNoTools > 0 {
+			parts = append(parts, fmt.Sprintf("forced_no_tools=%d", p.ForcedNoTools))
+		}
+		if p.MemoryMisses > 0 {
+			parts = append(parts, fmt.Sprintf("memory_misses=%d", p.MemoryMisses))
+		}
+		if p.SessionSearchCalls > 0 {
+			parts = append(parts, fmt.Sprintf("session_search=%d", p.SessionSearchCalls))
+		}
+		return strings.Join(parts, "; ")
 	case "loop.decision":
 		var p struct {
 			Kind           string `json:"kind"`
