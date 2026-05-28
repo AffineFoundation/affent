@@ -1039,7 +1039,7 @@ describe("Timeline", () => {
     renderTimeline(completedSubagentTree, undefined, undefined, onUseAsDraft);
 
     await user.click(screen.getByRole("button", { name: /What Affent did/ }));
-    await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Use next step" }));
+    await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Use next step as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
       "Continue: Replace result parsing with explicit child trace events when backend exposes them.",

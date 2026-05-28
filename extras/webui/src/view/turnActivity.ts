@@ -380,7 +380,7 @@ function nextBrief(
     const value = summarize(suggested, 132);
     return {
       value,
-      action: { label: "Use next step", draft: `Continue: ${value}`, source: "tool_guidance" },
+      action: { label: "Use next step as draft", draft: `Continue: ${value}`, source: "tool_guidance" },
     };
   }
   if (turn.status === "running") {
@@ -404,7 +404,7 @@ function nextBrief(
     const value = summarize(failed.nextHint, 132);
     return {
       value,
-      action: { label: "Use next step", draft: `Continue: ${value}`, source: "tool_guidance" },
+      action: { label: "Use next step as draft", draft: `Continue: ${value}`, source: "tool_guidance" },
     };
   }
   if (turn.error?.recoverable) {

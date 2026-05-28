@@ -431,7 +431,7 @@ describe("buildTurnActivity", () => {
         value: "Replace result parsing with explicit child trace events when backend exposes them.",
         tone: "muted",
         action: {
-          label: "Use next step",
+          label: "Use next step as draft",
           draft: "Continue: Replace result parsing with explicit child trace events when backend exposes them.",
           source: "tool_guidance",
         },
