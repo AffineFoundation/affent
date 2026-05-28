@@ -1580,11 +1580,43 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("long-run suite size = %d, want 21", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
+	suiteCapabilities := map[string]bool{}
+	suiteDomains := map[string]bool{}
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "long-run") {
 			t.Fatalf("scenario %s missing long-run suite marker", scenario.Name)
 		}
 		seen[scenario.Name] = scenario
+		for _, cap := range ExpectationCapabilityNames(debugScenarioExpectations(scenario)) {
+			suiteCapabilities[cap] = true
+		}
+		for _, domain := range scenario.Domains {
+			suiteDomains[domain] = true
+		}
+	}
+	for _, want := range []string{
+		"context_compaction",
+		"delegation",
+		"longrun_recovery",
+		"loop_protocol",
+		"memory",
+		"plan",
+		"research_checkpoint",
+		"session",
+		"session_search",
+		"skill",
+		"trace",
+		"verifier",
+		"workspace",
+	} {
+		if !suiteCapabilities[want] {
+			t.Fatalf("long-run suite expectation capabilities missing %q: %#v", want, suiteCapabilities)
+		}
+	}
+	for _, want := range []string{bittensorDomain, codePRDomain, contextCompactionDomain, longRunRecoveryDomain, marketDomain, memoryDomain, sessionRecoveryDomain} {
+		if !suiteDomains[want] {
+			t.Fatalf("long-run suite domains missing %q: %#v", want, suiteDomains)
+		}
 	}
 
 	stock, ok := seen["longrun-stock-analysis-synthesis"]
@@ -1768,7 +1800,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("scratch project ProtectedFiles = %#v, want LOOP.md", scratchProject.ProtectedFiles)
 	}
 	scratchProjectCaps := ExpectationCapabilityNames(debugScenarioExpectations(scratchProject))
-	for _, want := range []string{"loop_protocol", "trace", "verifier"} {
+	for _, want := range []string{"loop_protocol", "skill", "trace", "verifier"} {
 		if !stringSliceContains(scratchProjectCaps, want) {
 			t.Fatalf("scratch project expectation capabilities = %#v, want %q", scratchProjectCaps, want)
 		}
@@ -1829,7 +1861,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("iterative scratch project ProtectedFiles = %#v, want LOOP.md", iterativeProject.ProtectedFiles)
 	}
 	iterativeProjectCaps := ExpectationCapabilityNames(debugScenarioExpectations(iterativeProject))
-	for _, want := range []string{"loop_protocol", "trace", "verifier", "session"} {
+	for _, want := range []string{"loop_protocol", "session", "skill", "trace", "verifier"} {
 		if !stringSliceContains(iterativeProjectCaps, want) {
 			t.Fatalf("iterative scratch project expectation capabilities = %#v, want %q", iterativeProjectCaps, want)
 		}
@@ -1930,7 +1962,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		}
 	}
 	integratedCaps := ExpectationCapabilityNames(debugScenarioExpectations(integrated))
-	for _, want := range []string{"loop_protocol", "memory", "session_search", "plan", "trace", "workspace", "verifier", "session"} {
+	for _, want := range []string{"loop_protocol", "memory", "session_search", "plan", "session", "skill", "trace", "workspace", "verifier"} {
 		if !stringSliceContains(integratedCaps, want) {
 			t.Fatalf("integrated memory recovery expectation capabilities = %#v, want %q", integratedCaps, want)
 		}

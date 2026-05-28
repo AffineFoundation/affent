@@ -437,6 +437,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if exp.EnableMemory {
 		caps["memory"] = true
 	}
+	if strings.TrimSpace(exp.ExpectedSkill) != "" {
+		caps["skill"] = true
+	}
 	if exp.VerifyCommand != "" {
 		caps["verifier"] = true
 	}

@@ -76,9 +76,9 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=source_network:missing_response_diagnostics=0.000",
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
-		"require-expectation-capability=longrun_recovery,loop_protocol,session_search",
+		"require-expectation-capability=context_compaction,delegation,longrun_recovery,loop_protocol,memory,plan,research_checkpoint,session,session_search,skill,trace,verifier,workspace",
 		"require-expectation-capability=browser,delegated_source_evidence,source_access,web",
-		"require-expectation-domain=bittensor,code_pr,longrun_recovery,market",
+		"require-expectation-domain=bittensor,code_pr,context_compaction,longrun_recovery,market,memory,session_recovery",
 		"require-expectation-domain=web_evidence",
 	} {
 		if !strings.Contains(out, want) {
@@ -1008,10 +1008,10 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinEachExpectationDomainPassRate == nil || *gates.MinEachExpectationDomainPassRate != 0.50 {
 		t.Fatalf("longrun min each expectation domain pass rate = %#v, want 0.50", gates.MinEachExpectationDomainPassRate)
 	}
-	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"longrun_recovery", "loop_protocol", "session_search"}) {
+	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "trace", "verifier", "workspace"}) {
 		t.Fatalf("longrun required expectation capabilities = %#v", gates.RequiredExpectationCapabilities)
 	}
-	if !reflect.DeepEqual(gates.RequiredExpectationDomains, []string{"bittensor", "code_pr", "longrun_recovery", "market"}) {
+	if !reflect.DeepEqual(gates.RequiredExpectationDomains, []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "session_recovery"}) {
 		t.Fatalf("longrun required expectation domains = %#v", gates.RequiredExpectationDomains)
 	}
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
@@ -1132,10 +1132,11 @@ func TestBatchResultExpectationCapabilityOutcome(t *testing.T) {
 		Expectations: &agenteval.DebugScenarioExpectations{
 			RequiredTools: []string{"browser_network_read", "memory"},
 			ExecutePlan:   true,
+			ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		},
 	}
 	names := batchResultExpectationCapabilityNames(res)
-	wantNames := []string{"browser", "memory", "plan", "source_access"}
+	wantNames := []string{"browser", "memory", "plan", "skill", "source_access"}
 	if !reflect.DeepEqual(names, wantNames) {
 		t.Fatalf("capability names = %#v, want %#v", names, wantNames)
 	}
