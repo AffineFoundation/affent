@@ -305,6 +305,60 @@ func TestValidateProtocolActivationRejectsUnresolvedTemplatePlaceholders(t *test
 	}
 }
 
+func TestApplyProtocolSectionPatches(t *testing.T) {
+	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
+		LoopID: "loop",
+		Goal:   "Keep work recoverable.",
+		Status: "draft",
+	})
+	patched, changed, err := ApplyProtocolSectionPatches(protocol, []ProtocolSectionPatch{
+		{
+			Heading: "## 2. Current Situation",
+			Body: strings.Join([]string{
+				"- current intent: keep work recoverable",
+				"- hard constraints: cite evidence",
+				"- known evidence: user requested loop setup",
+				"- current risk or blocker: none",
+				"- next recovery anchor: inspect plan and trace",
+			}, "\n"),
+		},
+		{
+			Heading: "## 7. Evidence And Recovery Index",
+			Body: strings.Join([]string{
+				"- loop state: state.json",
+				"- memory lookup: use stable memory only",
+				"- important artifacts: none yet",
+				"- important trace spans: setup",
+				"- last known recovery note: resume from plan",
+			}, "\n"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("ApplyProtocolSectionPatches: %v", err)
+	}
+	if len(changed) != 2 || changed[0] != "## 2. Current Situation" || changed[1] != "## 7. Evidence And Recovery Index" {
+		t.Fatalf("changed = %#v", changed)
+	}
+	if !strings.Contains(patched, "- known evidence: user requested loop setup") ||
+		!strings.Contains(patched, "- important trace spans: setup") ||
+		strings.Contains(patched, "- known evidence:\n") {
+		t.Fatalf("patched protocol:\n%s", patched)
+	}
+	if !strings.Contains(patched, "## 3. Evolution Protocol") {
+		t.Fatalf("patch lost following sections:\n%s", patched)
+	}
+}
+
+func TestApplyProtocolSectionPatchesRejectsMissingSection(t *testing.T) {
+	_, _, err := ApplyProtocolSectionPatches("# Loop\n\n## Known\n\nbody", []ProtocolSectionPatch{{
+		Heading: "## Missing",
+		Body:    "new body",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "was not found") {
+		t.Fatalf("ApplyProtocolSectionPatches missing section err = %v", err)
+	}
+}
+
 func TestValidateProtocolActivationRequiresPlanPointers(t *testing.T) {
 	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
 		LoopID:       "longrun",

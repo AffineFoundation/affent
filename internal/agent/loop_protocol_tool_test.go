@@ -152,6 +152,109 @@ func TestLoopProtocolToolCompletesActivationFromSavedDraft(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolPatchesDraftBeforeActivation(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build and maintain a small CLI project until verified.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop after tests pass and changes are committed."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action": "patch_draft",
+		"reason": "calibration answered; fill activation placeholders without resending full LOOP.md",
+		"patches": []map[string]string{
+			{
+				"heading": "## 2. Current Situation",
+				"body": strings.Join([]string{
+					"Keep this section short: at most 8 bullets or about 1200 characters. It is the compact global snapshot used after long runs, compaction, or session recovery.",
+					"",
+					"- current intent: build and verify the CLI project",
+					"- hard constraints: stop after tests pass and code is committed",
+					"- known evidence: user answered the loop stop condition",
+					"- current risk or blocker: implementation has not started",
+					"- next recovery anchor: inspect plan state, LOOP.md, and recent trace before continuing",
+				}, "\n"),
+			},
+			{
+				"heading": "## 7. Evidence And Recovery Index",
+				"body": strings.Join([]string{
+					"Keep this section short. Store detailed history in artifacts or trace.",
+					"",
+					"- loop state: state.json and events.jsonl",
+					"- memory lookup: use memory only for stable facts and lessons",
+					"- important artifacts: none yet",
+					"- important trace spans: loop setup calibration answered",
+					"- last known recovery note: continue from plan state and verify before claiming completion",
+				}, "\n"),
+			},
+		},
+	})))
+	if err != nil {
+		t.Fatalf("patch_draft: %v", err)
+	}
+	if !strings.Contains(out, "patched LOOP.md draft status=draft") ||
+		!strings.Contains(out, "complete_activation without protocol") {
+		t.Fatalf("patch output = %q", out)
+	}
+	out, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"complete_activation","reason":"calibration answered and placeholders resolved"}`))
+	if err != nil {
+		t.Fatalf("complete_activation after patch: %v", err)
+	}
+	if !strings.Contains(out, "activated LOOP.md status=running") {
+		t.Fatalf("activation output = %q", out)
+	}
+	written, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(written) != "running" ||
+		!strings.Contains(written, "loop setup calibration answered") ||
+		strings.Contains(written, "- known evidence:\n") {
+		t.Fatalf("patched protocol not activated cleanly:\n%s", written)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.ProtocolUpdates != 3 || state.Status != "running" {
+		t.Fatalf("state after patch+activation = %+v, want updates=3 running", state)
+	}
+}
+
+func TestLoopProtocolToolPatchDraftRejectsUnknownHeading(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID: "longrun",
+		Goal:   "Keep a loop recoverable.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	_, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action": "patch_draft",
+		"patches": []map[string]string{{
+			"heading": "## 9. Unknown",
+			"body":    "details",
+		}},
+	})))
+	if err == nil || !strings.Contains(err.Error(), "unsupported patch heading") {
+		t.Fatalf("patch_draft unknown heading err = %v", err)
+	}
+}
+
 func TestLoopProtocolToolCompletesActivationFromRecordedCalibrationSection(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
@@ -411,6 +514,7 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
 		!strings.Contains(prompt, "ordinary chat") ||
 		!strings.Contains(prompt, "action=start_setup") ||
+		!strings.Contains(prompt, "patch_draft") ||
 		!strings.Contains(prompt, "Do not tell the user to press the UI button") ||
 		!strings.Contains(prompt, "exactly one concise calibration question") ||
 		!strings.Contains(prompt, "one focused follow-up in a later turn") ||

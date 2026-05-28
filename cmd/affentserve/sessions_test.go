@@ -1877,6 +1877,7 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	prompt := messages[0].Content
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
 		!strings.Contains(prompt, "action=start_setup") ||
+		!strings.Contains(prompt, "patch_draft") ||
 		!strings.Contains(prompt, "exactly one concise calibration question") ||
 		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "complete_activation") {

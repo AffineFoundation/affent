@@ -43,6 +43,11 @@ type Summary struct {
 	State        *State `json:"state,omitempty"`
 }
 
+type ProtocolSectionPatch struct {
+	Heading string
+	Body    string
+}
+
 func ProtocolDir(sessionDir, loopID string) string {
 	return filepath.Join(sessionDir, ".affent", "loops", loopID)
 }
@@ -378,6 +383,57 @@ func protocolSectionBody(protocol, heading string) (string, bool) {
 		body = body[:next]
 	}
 	return strings.TrimSpace(body), true
+}
+
+func ApplyProtocolSectionPatches(protocol string, patches []ProtocolSectionPatch) (string, []string, error) {
+	out := strings.TrimSpace(protocol)
+	if out == "" {
+		return "", nil, errors.New("protocol content is required")
+	}
+	changed := make([]string, 0, len(patches))
+	for _, patch := range patches {
+		heading := strings.TrimSpace(patch.Heading)
+		body := strings.TrimSpace(patch.Body)
+		if heading == "" || body == "" {
+			return "", nil, errors.New("protocol section patch requires heading and body")
+		}
+		next, ok := replaceProtocolSection(out, heading, body)
+		if !ok {
+			return "", nil, fmt.Errorf("LOOP.md section %q was not found", heading)
+		}
+		out = next
+		changed = append(changed, heading)
+	}
+	return out, changed, nil
+}
+
+func replaceProtocolSection(protocol, heading, body string) (string, bool) {
+	lines := strings.Split(protocol, "\n")
+	start := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == heading {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return protocol, false
+	}
+	end := len(lines)
+	for i := start + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "## ") {
+			end = i
+			break
+		}
+	}
+	replacement := []string{lines[start], ""}
+	replacement = append(replacement, strings.Split(strings.TrimSpace(body), "\n")...)
+	replacement = append(replacement, "")
+	next := make([]string, 0, len(lines)-end+start+len(replacement))
+	next = append(next, lines[:start]...)
+	next = append(next, replacement...)
+	next = append(next, lines[end:]...)
+	return strings.TrimSpace(strings.Join(next, "\n")), true
 }
 
 func protocolSectionBodyByHeadingMarkers(protocol string, markers []string) (string, bool) {
