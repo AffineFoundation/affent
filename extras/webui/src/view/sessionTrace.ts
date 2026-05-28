@@ -20,11 +20,13 @@ export interface SessionTraceView {
 export interface TraceToolIssueView {
   id: string;
   query: string;
+  requestQuery: string;
   title: string;
   tool: string;
   detail: string;
   badges: string[];
   turnNumber: number;
+  turnId?: string;
   exitCode?: number;
   durationMs?: number;
   artifactPath?: string;
@@ -77,6 +79,7 @@ function buildTraceToolIssues(session: SessionState): TraceToolIssueView[] {
       issues.push({
         id: call.callId,
         query: `call:${call.callId}`,
+        requestQuery: turn.id ? `request:${turnIndex + 1}` : `call:${call.callId}`,
         title: `Request ${turnIndex + 1} · ${call.tool}`,
         tool: call.tool,
         detail,
@@ -85,6 +88,7 @@ function buildTraceToolIssues(session: SessionState): TraceToolIssueView[] {
           ...failureKinds,
         ]),
         turnNumber: turnIndex + 1,
+        turnId: turn.id,
         exitCode: call.exitCode,
         durationMs: call.durationMs,
         artifactPath: call.resultArtifactPath,

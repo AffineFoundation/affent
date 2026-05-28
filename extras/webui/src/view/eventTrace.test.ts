@@ -242,11 +242,12 @@ describe("eventTrace view model", () => {
   it("filters trace events by display text, raw payload, and unclassified status", () => {
     const events = normalizeEvents([
       { id: 0, type: "trace.meta", data: { schema_version: 1 } },
+      { id: 4, type: "turn.start", data: { turn_id: "t2" } },
       {
         id: 1,
         type: "tool.request",
         data: {
-          turn_id: "t1",
+          turn_id: "t2",
           call_id: "c1",
           tool: "read_file",
           args: { path: "README.md" },
@@ -256,6 +257,7 @@ describe("eventTrace view model", () => {
         id: 2,
         type: "tool.result",
         data: {
+          turn_id: "t2",
           call_id: "c1",
           exit_code: 1,
           result_summary: "file missing",
@@ -269,6 +271,9 @@ describe("eventTrace view model", () => {
     expect(filterEventTraceEvents(events, "file missing").map((event) => event.id)).toEqual([2]);
     expect(filterEventTraceEvents(events, "schema v1").map((event) => event.id)).toEqual([0]);
     expect(filterEventTraceEvents(events, "unclassified").map((event) => event.id)).toEqual([3]);
+    expect(filterEventTraceEvents(events, "request:1").map((event) => event.id)).toEqual([4, 1, 2]);
+    expect(filterEventTraceEvents(events, "req:t2").map((event) => event.id)).toEqual([4, 1, 2]);
+    expect(filterEventTraceEvents(events, "request:99")).toHaveLength(0);
   });
 
   it("labels research checkpoint loop decisions in event trace metadata", () => {

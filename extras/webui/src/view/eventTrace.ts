@@ -366,6 +366,10 @@ function eventTraceFieldMatches(
     case "turn":
     case "turn_id":
       return (event.turnId ?? "").toLowerCase().includes(value);
+    case "request":
+      return (requestLabel(context, event.turnId) ?? "").toLowerCase().includes(value);
+    case "req":
+      return (event.turnId ?? "").toLowerCase().includes(value);
     case "id":
       return String(event.id) === value || String(event.id).includes(value);
     case "status":

@@ -59,11 +59,13 @@ describe("buildSessionTrace", () => {
       {
         id: "shell",
         query: "call:shell",
+        requestQuery: "request:1",
         title: "Request 1 · shell",
         tool: "shell",
         detail: "invalid_args · failed",
         badges: ["exit 1", "invalid_args"],
         turnNumber: 1,
+        turnId: "t1",
         exitCode: 1,
         durationMs: 340,
         artifactPath: ".affent/artifacts/tool-results/000001-shell.txt",

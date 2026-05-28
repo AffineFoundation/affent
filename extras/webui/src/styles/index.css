@@ -12055,6 +12055,49 @@ pre.code {
   padding: 2px 0;
 }
 
+.session-trace-selection {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-trace-selection span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.76);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.66);
+  padding: 6px 7px;
+}
+
+.session-trace-selection span[data-kind="tools"] {
+  grid-column: span 2;
+}
+
+.session-trace-selection small {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.session-trace-selection strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-trace-latest {
   min-width: 0;
   border: 1px solid rgba(217, 224, 232, 0.78);
@@ -13442,6 +13485,7 @@ html[data-theme="dark"] .session-trace-query-tools button,
 html[data-theme="dark"] .session-trace-resultbar,
 html[data-theme="dark"] .session-trace-resultbar > span,
 html[data-theme="dark"] .session-trace-resultbar button,
+html[data-theme="dark"] .session-trace-selection span,
 html[data-theme="dark"] .session-trace-issues,
 html[data-theme="dark"] .session-trace-issue,
 html[data-theme="dark"] .session-trace-issue-focus,

@@ -39,6 +39,11 @@ describe("SessionTracePanel", () => {
     expect(screen.queryByTestId("session-trace-focus")).toBeNull();
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Span");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("#5-#6");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Request 1");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Failures");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Tools");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · shell");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("invalid_args");
@@ -83,10 +88,21 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Exit");
     expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("1");
     expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("rerun npm test after fixing checkout");
+    await user.click(within(screen.getByTestId("session-trace-issue-focus")).getByRole("button", { name: "Show request" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: request:1");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Inspect trace");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Request 1");
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await user.click(within(screen.getByTestId("session-trace-issues")).getByRole("button", { name: /Request 1/ }));
     await user.click(within(screen.getByTestId("session-trace-issue-focus")).getByRole("button", { name: "Open artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-shell.txt");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("SourceAccess");
+    await user.click(within(screen.getByTestId("session-trace-issue-focus")).getByRole("button", { name: "Show request" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: request:1");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Inspect trace");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("https://example.test/source");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("npm test");
     await user.click(screen.getByRole("button", { name: "Clear" }));
     await user.click(screen.getByRole("button", { name: "Tool issues 1" }));
 

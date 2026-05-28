@@ -35,6 +35,7 @@ export function SessionTracePanel({
     },
     [events, filter, trimmedQuery],
   );
+  const selectionSummary = useMemo(() => traceSelectionSummary(events, visibleEvents), [events, visibleEvents]);
   const applySearch = (nextQuery: string, nextFilter: TraceFilter = "all") => {
     setFilter(nextFilter);
     setQuery(nextQuery);
@@ -112,6 +113,7 @@ export function SessionTracePanel({
                 </button>
               ) : null}
             </div>
+            <TraceSelectionSummaryView summary={selectionSummary} />
             <div className="session-trace-metrics" data-testid="session-trace-metrics">
               <span><strong>Records</strong>{trace.recordCount}</span>
               {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
@@ -192,6 +194,16 @@ export function SessionTracePanel({
                       >
                         Show event pair
                       </button>
+                      <button
+                        type="button"
+                        className="ghost-action"
+                        onClick={() => {
+                          setFilter("all");
+                          setQuery(activeIssue.requestQuery);
+                        }}
+                      >
+                        Show request
+                      </button>
                       {activeIssue.artifactPath && onOpenArtifact ? (
                         <button type="button" className="ghost-action" onClick={() => onOpenArtifact(activeIssue.artifactPath ?? "")}>
                           Open artifact
@@ -238,6 +250,17 @@ interface TraceToolIssueGroup {
   count: number;
 }
 
+interface TraceSelectionSummary {
+  eventSpan: string;
+  requestSpan: string;
+  failedActions: number;
+  actionResults: number;
+  toolCount: number;
+  topTools: string[];
+  artifactCount: number;
+  unclassifiedCount: number;
+}
+
 function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceToolIssueGroup[] {
   const counts = new Map<string, number>();
   for (const issue of issues) {
@@ -248,6 +271,29 @@ function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceTool
     .sort((a, b) => b.count - a.count || a.tool.localeCompare(b.tool));
 }
 
+function TraceSelectionSummaryView({ summary }: { summary: TraceSelectionSummary }) {
+  return (
+    <div className="session-trace-selection" data-testid="session-trace-selection">
+      <TraceSelectionMetric label="Span" value={summary.eventSpan} />
+      <TraceSelectionMetric label="Requests" value={summary.requestSpan} />
+      <TraceSelectionMetric label="Failures" value={String(summary.failedActions)} />
+      <TraceSelectionMetric label="Results" value={String(summary.actionResults)} />
+      <TraceSelectionMetric label="Tools" value={summary.toolCount ? `${summary.toolCount} · ${summary.topTools.join(", ")}` : "0"} kind="tools" />
+      <TraceSelectionMetric label="Artifacts" value={String(summary.artifactCount)} />
+      {summary.unclassifiedCount > 0 ? <TraceSelectionMetric label="Unclassified" value={String(summary.unclassifiedCount)} /> : null}
+    </div>
+  );
+}
+
+function TraceSelectionMetric({ label, value, kind }: { label: string; value: string; kind?: string }) {
+  return (
+    <span data-kind={kind}>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
 function TraceIssueFact({ label, value }: { label: string; value: string }) {
   return (
     <span>
@@ -255,6 +301,71 @@ function TraceIssueFact({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </span>
   );
+}
+
+function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEvents: readonly NormalizedEvent[]): TraceSelectionSummary {
+  const requestLabels = requestLabelsByTurnId(allEvents);
+  const toolCounts = new Map<string, number>();
+  const callTools = toolNamesByCallId(allEvents);
+  const requestSet = new Set<string>();
+  let failedActions = 0;
+  let actionResults = 0;
+  let artifactCount = 0;
+  let unclassifiedCount = 0;
+  let firstId: number | undefined;
+  let lastId: number | undefined;
+
+  for (const event of visibleEvents) {
+    if (typeof event.id === "number") {
+      firstId = firstId == null ? event.id : Math.min(firstId, event.id);
+      lastId = lastId == null ? event.id : Math.max(lastId, event.id);
+    }
+    if (event.turnId) requestSet.add(event.turnId);
+    if (!event.known) unclassifiedCount += 1;
+    if (eventHasArtifact(event)) artifactCount += 1;
+    if (event.type === EventType.ToolRequest || event.type === EventType.ToolResult) {
+      const tool = toolName(event, callTools);
+      if (tool) toolCounts.set(tool, (toolCounts.get(tool) ?? 0) + 1);
+    }
+    if (event.type === EventType.ToolResult) {
+      actionResults += 1;
+      const data = event.data as ToolResultPayload;
+      if ((data.exit_code ?? 0) !== 0 || data.failure_kind || data.failure_kinds?.length) failedActions += 1;
+    }
+  }
+
+  const topTools = [...toolCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 3)
+    .map(([tool, count]) => `${tool} ${count}`);
+  const requestNumbers = [...requestSet]
+    .map((turnId) => requestLabels.get(turnId))
+    .filter((label): label is number => typeof label === "number")
+    .sort((a, b) => a - b);
+
+  return {
+    eventSpan: firstId == null || lastId == null ? "none" : firstId === lastId ? `#${firstId}` : `#${firstId}-#${lastId}`,
+    requestSpan: requestNumbers.length === 0
+      ? "none"
+      : requestNumbers.length === 1
+        ? `Request ${requestNumbers[0]}`
+        : `Request ${requestNumbers[0]}-${requestNumbers[requestNumbers.length - 1]} · ${requestNumbers.length}`,
+    failedActions,
+    actionResults,
+    toolCount: toolCounts.size,
+    topTools,
+    artifactCount,
+    unclassifiedCount,
+  };
+}
+
+function requestLabelsByTurnId(events: readonly NormalizedEvent[]): Map<string, number> {
+  const labels = new Map<string, number>();
+  for (const event of events) {
+    if (!event.turnId || labels.has(event.turnId)) continue;
+    labels.set(event.turnId, labels.size + 1);
+  }
+  return labels;
 }
 
 function formatTraceDuration(ms: number): string {
