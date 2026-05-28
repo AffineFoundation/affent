@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   fileContentText,
+  fileEvidenceDraft,
   fileLines,
   fileRangeDraft,
   filesReviewFacts,
@@ -119,7 +120,7 @@ export function SessionFilesPanel({
               <strong title={focus.item.path}>{displayPath(focus.item.path)}</strong>
               <small>{focus.detail}</small>
             </div>
-            {focus.item.contentPreview || (focus.item.artifactPath && onOpenArtifact) || onOpenWorkspacePath ? (
+            {focus.item.contentPreview || (focus.item.artifactPath && onOpenArtifact) || onOpenWorkspacePath || onUseAsDraft ? (
               <span className="session-files-focus-actions">
                 {onOpenWorkspacePath ? (
                   <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(focus.item.path)}>
@@ -134,6 +135,11 @@ export function SessionFilesPanel({
                 {focus.item.artifactPath && onOpenArtifact ? (
                   <button type="button" className="ghost-action" onClick={() => onOpenArtifact(focus.item.artifactPath ?? "")}>
                     Open evidence
+                  </button>
+                ) : null}
+                {onUseAsDraft ? (
+                  <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(focus.item), "file_evidence")}>
+                    {fileDraftActionLabel(focus.item)}
                   </button>
                 ) : null}
               </span>
@@ -253,6 +259,11 @@ export function SessionFilesPanel({
                   {item.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
                       Open evidence
+                    </button>
+                  ) : null}
+                  {onUseAsDraft ? (
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
+                      {fileDraftActionLabel(item)}
                     </button>
                   ) : null}
                   <CopyButton label="Copy path" value={item.path} className="ghost-action" />
@@ -486,6 +497,15 @@ function fileMatchesFilter(item: SessionFileEvidence, filter: FileFilter): boole
   if (filter === "issues") return item.status === "failed" || item.status === "running";
   if (filter === "listed") return item.actions.includes("listed");
   return true;
+}
+
+function fileDraftActionLabel(item: SessionFileEvidence): string {
+  if (item.status === "failed") return "Recover path";
+  if (item.status === "running") return "Check status";
+  if (item.actions.includes("changed")) return "Review file";
+  if (item.actions.includes("listed")) return "Use listing";
+  if (item.contentPreview) return "Use snapshot";
+  return "Use evidence";
 }
 
 function fileStats(files: SessionFilesView) {

@@ -62,6 +62,9 @@ describe("SessionFilesPanel", () => {
 
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
+    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Review file" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review this changed file in the next step"), "file_evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
     expect(screen.queryByRole("button", { name: "Copy all evidence" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use all as draft" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy evidence" })).toBeNull();
@@ -71,6 +74,8 @@ describe("SessionFilesPanel", () => {
     await user.type(screen.getByLabelText("Search files"), "listed");
     expect(screen.getByTestId("session-files-list")).not.toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
+    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Use listing" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this listed directory in the next step"), "file_evidence");
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
