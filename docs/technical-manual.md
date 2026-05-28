@@ -880,6 +880,11 @@ Affent stores durable state as inspectable files:
   `loop.protocol_activate`. This lets ordinary chat requests and WebUI buttons
   share the same calibration-first setup path, and avoids asking the model to
   edit server-managed session state through ordinary workspace file tools.
+  One-shot `affentctl run` resumes the same draft-session calibration state as
+  chat: when a previous assistant message asked a loop calibration question,
+  the next run prompt is recorded as a `loop.protocol_calibration` event before
+  the turn starts, so multi-turn eval traces can prove setup asked, waited, and
+  received an answer before activation.
   `affentctl` resolves the file under the configured workspace and, when a
   persisted `.affentctl/<session_id>.plan.json` exists, includes the current
   plan checkpoint in the feed metadata. Session list/detail responses expose

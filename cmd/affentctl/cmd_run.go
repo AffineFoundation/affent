@@ -103,6 +103,9 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		b.log.Error().Err(err).Msg("write startup trace events")
 		return exitRuntime
 	}
+	if !*planOnly && !*executePlan {
+		recordCurrentSessionLoopCalibrationAnswerIfReady(b, prompt)
+	}
 
 	turnID, err := b.loop.SendUserWithOptions(ctx, prompt, turnOpts)
 	if err != nil {

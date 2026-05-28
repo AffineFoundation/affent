@@ -363,6 +363,13 @@ loop context pressure
 without separately reading loop files. Plan checkpoint fields are recovery
 pointers only; the persisted plan state remains the step authority.
 
+### `loop.protocol_calibration_request`
+
+Records that the assistant asked the required setup question for a draft
+`LOOP.md`. If a resumed `affentctl run` sees an older assistant question that
+was not yet mirrored into loop state, it may emit this event immediately before
+the matching `loop.protocol_calibration` answer event.
+
 ### `loop.protocol_calibration`
 
 - `loop_id`: optional loop identity, usually the owning session id.
@@ -375,11 +382,11 @@ pointers only; the persisted plan state remains the step authority.
 - `event_seq`: sequence number of the sidecar loop event mirrored into the
   session trace.
 
-This event is emitted when `affentserve` accepts a human reply as the required
-calibration answer for a draft `LOOP.md`. It mirrors the sidecar
-`.affent/loops/<id>/events.jsonl` calibration record into normal history/SSE so
-WebUI and replay tools can show that activation may proceed without polling the
-loop file directly.
+This event is emitted when `affentserve` or resumed `affentctl run` accepts a
+human reply as the required calibration answer for a draft `LOOP.md`. It mirrors
+the sidecar `.affent/loops/<id>/events.jsonl` calibration record into normal
+history/SSE so WebUI, replay tools, and multi-turn evals can show that
+activation may proceed without polling the loop file directly.
 
 ### `loop.decision`
 

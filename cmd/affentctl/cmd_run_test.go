@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
 func TestEnableRunPlanOnlyInstallsPlanPolicyAndBudget(t *testing.T) {
@@ -78,6 +82,78 @@ func TestPlanOnlyTurnOptionsNarrowsToolSurface(t *testing.T) {
 	defs := opts.Tools.Defs()
 	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
 		t.Fatalf("plan-only defs = %+v, want only plan", defs)
+	}
+}
+
+func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "run-loop-answer"
+	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "keep a long-running market evidence loop aligned",
+		Workspace:    workspace,
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	conv, err := agent.OpenConversationAt(filepath.Join(workspace, ".affentctl", sessionID+".jsonl"))
+	if err != nil {
+		t.Fatalf("OpenConversationAt: %v", err)
+	}
+	if err := conv.Append(agent.ChatMessage{Role: "assistant", Content: "For this loop, what stop condition should pause work?"}); err != nil {
+		t.Fatalf("append assistant question: %v", err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Recorded the calibration answer.\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	tracePath := filepath.Join(workspace, "trace.jsonl")
+	out := captureStdout(t, func() {
+		code := runCmd([]string{
+			"--workspace", workspace,
+			"--session-id", sessionID,
+			"--model", "fake-model",
+			"--base-url", srv.URL,
+			"--prompt", "Pause if source quality is weak or the market report is complete.",
+			"--trace", tracePath,
+			"--trace-skip-deltas",
+			"--quiet",
+			"--max-turns", "1",
+		})
+		if code != 0 {
+			t.Fatalf("runCmd exit = %d", code)
+		}
+	})
+	if !strings.Contains(out, "Recorded the calibration answer.") {
+		t.Fatalf("runCmd stdout = %q", out)
+	}
+	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		!strings.Contains(state.LastCalibrationQuestion, "stop condition") ||
+		!strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
+		t.Fatalf("calibration state = %+v", state)
+	}
+	trace, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatalf("read trace: %v", err)
+	}
+	for _, want := range []string{
+		`"type":"loop.protocol_calibration_request"`,
+		`"type":"loop.protocol_calibration"`,
+		`"last_calibration_answer_preview":"Pause if source quality is weak or the market report is complete."`,
+	} {
+		if !strings.Contains(string(trace), want) {
+			t.Fatalf("trace missing %q:\n%s", want, trace)
+		}
 	}
 }
 

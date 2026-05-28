@@ -605,9 +605,49 @@ func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string
 			fmt.Fprintf(os.Stderr, "[loop] calibration question record failed: %v\n", err)
 			return
 		}
+		publishCurrentSessionLoopCalibrationEvent(b, sse.TypeLoopCalibrationRequest, state)
 	}
-	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, text); err != nil {
+	state, _, err = loopstate.RecordProtocolCalibrationAnswer(path, text)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "[loop] calibration record failed: %v\n", err)
+		return
+	}
+	publishCurrentSessionLoopCalibrationEvent(b, sse.TypeLoopCalibration, state)
+}
+
+func publishCurrentSessionLoopCalibrationEvent(b *loopBundle, typ string, state loopstate.State) {
+	if b == nil {
+		return
+	}
+	loopID := strings.TrimSpace(state.LoopID)
+	if loopID == "" {
+		loopID = strings.TrimSpace(b.sessionID)
+	}
+	if loopID == "" {
+		loopID = "loop"
+	}
+	ev, err := sse.NewEvent(typ, sse.LoopProtocolCalibrationPayload{
+		LoopID:                  loopID,
+		Status:                  state.Status,
+		CalibrationQuestions:    state.CalibrationQuestions,
+		LastCalibrationQuestion: state.LastCalibrationQuestion,
+		CalibrationAnswers:      state.CalibrationAnswers,
+		LastCalibrationAnswer:   state.LastCalibrationAnswer,
+		ProtocolPath:            loopstate.ProtocolRelPath(loopID),
+		EventSeq:                state.EventCount,
+	})
+	if err != nil {
+		return
+	}
+	if b.events != nil {
+		select {
+		case b.events <- ev:
+			return
+		default:
+		}
+	}
+	if b.recorder != nil {
+		_ = b.recorder.Write(ev)
 	}
 }
 
