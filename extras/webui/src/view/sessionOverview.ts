@@ -177,8 +177,8 @@ function buildMetrics(
   if (summaryRecoveryMetric) metrics.push(summaryRecoveryMetric);
   const artifactMetric = buildArtifactMetric(session);
   if (artifactMetric) metrics.push(artifactMetric);
-  const loopMetric = buildLoopMetric(session);
-  if (loopMetric) metrics.push(loopMetric);
+  const automationMetric = buildAutomationMetric(session);
+  if (automationMetric) metrics.push(automationMetric);
   const compactMetric = buildContextCompactionMetric(session);
   if (compactMetric) metrics.push(compactMetric);
   const toolContextMetric = buildToolContextMetric(session);
@@ -283,7 +283,7 @@ function buildMemoryUpdateMetric(session: SessionState): SessionOverviewMetric |
   return { label: "Memory", value: parts.join(" · "), tone: "success" };
 }
 
-function buildLoopMetric(session: SessionState): SessionOverviewMetric | undefined {
+function buildAutomationMetric(session: SessionState): SessionOverviewMetric | undefined {
   const stats = session.turns.reduce((acc, turn) => {
     acc.interventions += turn.toolStats?.loop_guard_interventions ?? 0;
     acc.forcedNoTools += turn.toolStats?.forced_no_tools ?? 0;
@@ -302,7 +302,7 @@ function buildLoopMetric(session: SessionState): SessionOverviewMetric | undefin
     const latest = visibleDecisions.at(-1);
     parts.push(`${visibleDecisions.length} ${loopDecisionMetricName(latest)}${visibleDecisions.length === 1 ? "" : "s"}${latest?.decision ? ` ${latest.decision}` : ""}`);
   }
-  return { label: "Loop", value: parts.join(" · "), tone: stats.maxTurns > 0 || stats.interventions > 0 ? "warning" : undefined };
+  return { label: "Automation", value: parts.join(" · "), tone: stats.maxTurns > 0 || stats.interventions > 0 ? "warning" : undefined };
 }
 
 function loopDecisionMetricName(decision: SessionState["loopDecisions"][number] | undefined): string {

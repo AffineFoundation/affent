@@ -63,13 +63,13 @@ function recoveryDraft(metric: SessionOverviewMetric): string {
 function pinnedWorkflowMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
   const pinned: SessionOverviewMetric[] = [];
   const context = metrics.find((metric) => metric.label === "Context");
-  const loop = metrics.find((metric) => metric.label === "Loop");
+  const automation = metrics.find((metric) => metric.label === "Automation");
   const memory = metrics.find((metric) => metric.label === "Memory");
   const recall = metrics.find((metric) => metric.label === "Recall");
   const compaction = metrics.find((metric) => metric.label === "Compaction" || metric.label === "Compactions");
   const artifact = metrics.find((metric) => metric.label === "Artifact" || metric.label === "Artifacts");
   if (context && context.tone) pinned.push(context);
-  if (loop) pinned.push(loop);
+  if (automation) pinned.push(automation);
   if (memory) pinned.push(memory);
   if (recall) pinned.push(recall);
   if (compaction) pinned.push(compaction);

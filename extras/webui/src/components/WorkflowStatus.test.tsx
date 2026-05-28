@@ -289,7 +289,7 @@ describe("WorkflowStatus", () => {
     expect(screen.getByTestId("workflow-details")).toHaveTextContent("Recall 2 hits · 1 context · 3 terms");
   });
 
-  it("pins loop pressure in the collapsed workflow summary", () => {
+  it("pins automation pressure in the collapsed workflow summary", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "user.message", data: { turn_id: "t1", text: "keep investigating" } },
@@ -316,7 +316,7 @@ describe("WorkflowStatus", () => {
     const summary = screen.getByTestId("workflow-status").querySelector("summary") as HTMLElement;
     expect(summary).toHaveTextContent("1 max-turn · 2 guards · 1 no-tools");
     expect(within(summary).getByText("1 max-turn · 2 guards · 1 no-tools")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Loop 1 max-turn · 2 guards · 1 no-tools");
+    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Automation 1 max-turn · 2 guards · 1 no-tools");
   });
 
   it("turns recovery metrics into a draft action", async () => {

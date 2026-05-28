@@ -250,7 +250,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Loop", value: "1 decision defer", tone: undefined },
+      { label: "Automation", value: "1 decision defer", tone: undefined },
     ]));
   });
 
@@ -282,7 +282,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Loop", value: "1 feed full plan:1/3:active step 2 in_progress situation current risk: browser values need network refs", tone: undefined },
+      { label: "Automation", value: "1 feed full plan:1/3:active step 2 in_progress situation current risk: browser values need network refs", tone: undefined },
     ]));
   });
 
@@ -309,7 +309,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Loop", value: "1 research checkpoint trigger", tone: undefined },
+      { label: "Automation", value: "1 research checkpoint trigger", tone: undefined },
     ]));
   });
 
@@ -481,7 +481,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Loop", value: "1 max-turn · 2 guards · 1 no-tools", tone: "warning" },
+      { label: "Automation", value: "1 max-turn · 2 guards · 1 no-tools", tone: "warning" },
     ]));
   });
 
@@ -687,7 +687,7 @@ describe("buildSessionOverview", () => {
     expect(overview.stateLabel).toBe("Result ready");
     expect(overview.tone).toBe("success");
     expect(overview.metrics).toEqual([
-      { label: "Loop", value: "1 max-turn", tone: "warning" },
+      { label: "Automation", value: "1 max-turn", tone: "warning" },
       { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Earlier work", value: "1 action" },
       { label: "Turn tokens", value: "1.2k" },
