@@ -112,6 +112,28 @@ func TestToolArgContainsAtLeast(t *testing.T) {
 	}
 }
 
+func TestToolArgContainsAtMost(t *testing.T) {
+	trace := Trace{
+		Tools: []ToolCall{
+			{CallID: "m1", Tool: "memory", Args: map[string]any{"content": "Durable JSON outputs include AUTO-MEM-64"}},
+			{CallID: "m2", Tool: "memory", Args: map[string]any{"content": "Repeat AUTO-MEM-64 JSON convention"}},
+			{CallID: "m3", Tool: "memory", Args: map[string]any{"content": "Different durable convention"}},
+		},
+	}
+	if res := ToolArgContainsAtMost("memory", "content", "Different", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected single different convention to pass: %+v", res)
+	}
+	res := ToolArgContainsAtMost("memory", "content", "AUTO-MEM-64", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected duplicate memory convention check to fail")
+	}
+	for _, want := range []string{"at most 1", "memory", "content", "AUTO-MEM-64", "m1", "m2"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail missing %q: %s", want, res.Detail)
+		}
+	}
+}
+
 func TestToolArgLacksSubstring(t *testing.T) {
 	trace := Trace{
 		Tools: []ToolCall{

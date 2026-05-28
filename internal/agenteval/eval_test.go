@@ -1071,6 +1071,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		ForbiddenToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "memory", Arg: "content", Substring: "commit hash"},
 		},
+		MaxToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64", Max: 1},
+		},
 		RequiredTruncatedResults: []string{"shell"},
 		RequiredResultArtifacts:  []string{"shell"},
 		RequiredToolOrder: []ToolOrderRequirement{
@@ -1158,6 +1161,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_contains:subagent_run:report",
 		"tool_arg_contains_at_least:web_search:query:Bittensor:2",
 		"tool_arg_lacks:memory:content:commit hash",
+		"tool_arg_contains_at_most:memory:content:AUTO-MEM-64:1",
 		"tool_result_truncated:shell",
 		"tool_result_artifact:shell",
 		"tool_called_before:read_file->edit_file",
@@ -1273,6 +1277,20 @@ func TestBatchScenarioChecks_ForbiddenToolArgContains(t *testing.T) {
 	}
 	if !strings.HasPrefix(checks[1].Name, "tool_arg_lacks:memory:content:commit hash") {
 		t.Fatalf("forbidden arg check name = %q", checks[1].Name)
+	}
+}
+
+func TestBatchScenarioChecks_MaxToolArgContainsDefaultsToOne(t *testing.T) {
+	checks := BatchScenarioChecks(BatchScenario{
+		MaxToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
+		},
+	})
+	if len(checks) != 2 {
+		t.Fatalf("checks count = %d, want turn-end + max arg check: %+v", len(checks), checks)
+	}
+	if !strings.HasPrefix(checks[1].Name, "tool_arg_contains_at_most:memory:content:AUTO-MEM-64:1") {
+		t.Fatalf("max arg check name = %q", checks[1].Name)
 	}
 }
 
@@ -1866,6 +1884,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		if !toolArgRequirementContains(integrated.ForbiddenToolArgContains, want) {
 			t.Fatalf("integrated memory recovery ForbiddenToolArgContains = %#v, want %#v", integrated.ForbiddenToolArgContains, want)
 		}
+	}
+	if !toolArgRequirementContains(integrated.MaxToolArgContains, ToolArgContainsRequirement{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64", Max: 1}) {
+		t.Fatalf("integrated memory recovery MaxToolArgContains = %#v, want AUTO-MEM-64 max=1", integrated.MaxToolArgContains)
 	}
 	for _, field := range []string{"memory_updates", "memory_update_add", "memory_search_calls", "session_search_calls", "session_search_results"} {
 		if integrated.RequiredToolStatsAtLeast[field] != 1 {

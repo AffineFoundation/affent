@@ -3202,6 +3202,9 @@ if __name__ == "__main__":
 			{Tool: "memory", Arg: "content", Substring: "commit hash"},
 			{Tool: "memory", Arg: "content", Substring: "push result"},
 		},
+		MaxToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64", Max: 1},
+		},
 		RequiredToolResultText: map[string][]string{
 			"memory": {
 				"AUTO-MEM-64",

@@ -238,6 +238,46 @@ func ToolArgContainsAtLeast(toolName, argName, substr string, min int) Check {
 	}
 }
 
+// ToolArgContainsAtMost passes when at most max calls to toolName have an
+// argument field whose string representation contains substr.
+func ToolArgContainsAtMost(toolName, argName, substr string, max int) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_arg_contains_at_most:%s:%s:%s:%d", toolName, argName, previewSubstr(substr, 24), max),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var callIDs []string
+			var observed []string
+			for _, c := range t.Tools {
+				if c.Tool != toolName {
+					continue
+				}
+				value, ok := c.Args[argName]
+				if !ok {
+					if len(observed) < 3 {
+						observed = append(observed, fmt.Sprintf("%s=<missing>", c.CallID))
+					}
+					continue
+				}
+				text := fmt.Sprint(value)
+				if len(observed) < 3 {
+					observed = append(observed, fmt.Sprintf("%s=%q", c.CallID, previewSubstr(text, 80)))
+				}
+				if strings.Contains(text, substr) {
+					count++
+					callIDs = append(callIDs, c.CallID)
+				}
+			}
+			if count <= max {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s.%s contains %q in %d call(s); observed=%v", toolName, argName, substr, count, observed)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at most %d %q call(s) with arg %q containing %q, got %d call_ids=%v", max, toolName, argName, substr, count, callIDs),
+			}
+		},
+	}
+}
+
 // ToolArgLacksSubstring passes when no calls to toolName have argName
 // containing substr. It is useful for pollution guards, for example ensuring
 // memory writes do not persist one-turn progress details.
