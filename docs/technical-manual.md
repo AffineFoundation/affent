@@ -1050,9 +1050,13 @@ Current built-in suites:
   recovery only exposes generic chat text instead of actionable continuation
   state.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
-  direct-reader recovery, and browser network evidence quality. These scenarios
-  intentionally depend on public sites and should be run with web/browser tools
-  enabled. Browser network evidence scenarios require final answers to preserve
+  direct-reader recovery, browser network evidence quality, and externally
+  evidenced research checkpoints. These scenarios intentionally depend on
+  public sites and should be run with web/browser tools enabled. The research
+  checkpoint evidence case requires an active `LOOP.md`, a visible
+  `research_checkpoint` loop decision, and verified `web_fetch` SourceAccess
+  from official Claude Code documentation before any loop-route conclusion.
+  Browser network evidence scenarios require final answers to preserve
   `browser_network_url`, `requested_url`, `ref=...`, `status=...`, and
   `content_type=...`, so operators can distinguish the response actually read
   from the user-facing page being verified and audit response quality. They

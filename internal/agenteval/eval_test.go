@@ -1965,13 +1965,66 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 4 {
-		t.Fatalf("live-web suite size = %d, want 4", len(scenarios))
+	if len(scenarios) != 5 {
+		t.Fatalf("live-web suite size = %d, want 5", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
 		seen[scenario.Name] = scenario
 	}
+	researchEvidence, ok := seen["live-web-research-checkpoint-evidence"]
+	if !ok {
+		t.Fatalf("live-web suite missing research checkpoint evidence scenario")
+	}
+	if researchEvidence.SessionID != "live-web-research-checkpoint-evidence" {
+		t.Fatalf("research evidence SessionID = %q", researchEvidence.SessionID)
+	}
+	if !stringSliceContains(researchEvidence.RequiredTools, "web_fetch") ||
+		researchEvidence.RequiredToolCounts["web_fetch"] != 1 {
+		t.Fatalf("research evidence web_fetch requirements = tools:%#v counts:%#v", researchEvidence.RequiredTools, researchEvidence.RequiredToolCounts)
+	}
+	if !toolArgRequirementContains(researchEvidence.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "web_fetch", Arg: "url", Substring: "code.claude.com/docs/en/overview"}) {
+		t.Fatalf("research evidence RequiredToolArgContains = %#v", researchEvidence.RequiredToolArgContains)
+	}
+	if researchEvidence.RequiredLoopDecisionKinds["research_checkpoint"] != 1 ||
+		researchEvidence.RequiredLoopDecisionResults["trigger"] != 1 ||
+		len(researchEvidence.RequiredLoopDecisionMatches) != 1 ||
+		researchEvidence.RequiredLoopDecisionMatches[0] != (LoopDecisionRequirement{Kind: "research_checkpoint", Decision: "trigger", Trigger: "external_calibration_requested"}) {
+		t.Fatalf("research evidence loop decision constraints = kinds:%#v results:%#v matches:%#v", researchEvidence.RequiredLoopDecisionKinds, researchEvidence.RequiredLoopDecisionResults, researchEvidence.RequiredLoopDecisionMatches)
+	}
+	if researchEvidence.RequiredLoopProtocolFeeds != 1 || researchEvidence.RequiredLoopProtocolFeedModes["full"] != 1 {
+		t.Fatalf("research evidence loop protocol constraints = feeds:%d modes:%#v", researchEvidence.RequiredLoopProtocolFeeds, researchEvidence.RequiredLoopProtocolFeedModes)
+	}
+	for _, field := range []string{"source_access_results", "source_access_verified"} {
+		if researchEvidence.RequiredToolStatsAtLeast[field] != 1 {
+			t.Fatalf("research evidence source access requirements = %#v, want %s=1", researchEvidence.RequiredToolStatsAtLeast, field)
+		}
+	}
+	if len(researchEvidence.RequiredSourceAccess) != 1 ||
+		researchEvidence.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "verified", Tool: "web_fetch", URLContains: "code.claude.com/docs/en/overview"}) {
+		t.Fatalf("research evidence RequiredSourceAccess = %#v", researchEvidence.RequiredSourceAccess)
+	}
+	for _, want := range []string{"SourceAccess:", "fetched_url=", "requested_url="} {
+		if !stringSliceContains(researchEvidence.RequiredToolResultText["web_fetch"], want) {
+			t.Fatalf("research evidence web_fetch result requirements = %#v, want %q", researchEvidence.RequiredToolResultText["web_fetch"], want)
+		}
+	}
+	for _, want := range []string{"RESEARCH-EVIDENCE-42", "Claude Code", "code.claude.com", "external calibration", "fetched_url", "requested_url"} {
+		if !stringSliceContains(researchEvidence.RequiredFinalText, want) {
+			t.Fatalf("research evidence RequiredFinalText = %#v, want %q", researchEvidence.RequiredFinalText, want)
+		}
+	}
+	researchEvidenceCaps := ExpectationCapabilityNames(debugScenarioExpectations(researchEvidence))
+	for _, want := range []string{"loop_protocol", "research_checkpoint", "source_access", "web"} {
+		if !stringSliceContains(researchEvidenceCaps, want) {
+			t.Fatalf("research evidence expectation capabilities = %#v, want %q", researchEvidenceCaps, want)
+		}
+	}
+	if !stringSliceContains(researchEvidence.ForbiddenTools, "browser_navigate") ||
+		!stringSliceContains(researchEvidence.ForbiddenTools, "run_task") {
+		t.Fatalf("research evidence ForbiddenTools = %#v, want browser and delegation forbidden", researchEvidence.ForbiddenTools)
+	}
+
 	scenario, ok := seen["live-web-taostats-sn120-dynamic-evidence"]
 	if !ok {
 		t.Fatalf("live-web suite missing dynamic evidence scenario")

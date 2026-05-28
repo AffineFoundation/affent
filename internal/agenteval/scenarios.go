@@ -1966,6 +1966,87 @@ func longRunResearchCheckpointScenario() BatchScenario {
 	}
 }
 
+func liveWebResearchCheckpointEvidenceScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "live-web-research-checkpoint-evidence",
+		Suites:    []string{liveWebSuite},
+		SessionID: "live-web-research-checkpoint-evidence",
+		Prompt:    "你正在维护 Affent 的长期 loop 协议。请从全局角度结合主流 agent 的官方资料，对当前 loop protocol 的外部校准路线做一次很窄的核验。必须用 web_fetch 读取 https://code.claude.com/docs/en/overview 作为外部证据；不要只凭内置知识判断。最终回答必须包含 RESEARCH-EVIDENCE-42、Claude Code、code.claude.com、external calibration、fetched_url 和 requested_url，并说明这个证据是否改变当前路线。不要修改文件，不要运行 shell，不要使用浏览器工具。",
+		Files: map[string]string{
+			".affent/loops/live-web-research-checkpoint-evidence/LOOP.md": "# Loop Protocol: live-web-research-checkpoint-evidence\n\n## 0. Metadata\n\n- loop_id: live-web-research-checkpoint-evidence\n- owner_session: live-web-research-checkpoint-evidence\n- status: running\n\n## 1. North Star\n\nKeep Affent's long-run loop protocol grounded in real external evidence before durable route changes.\n\n## 2. Current Situation\n\n- The active question is whether external calibration is actually performed when a high-impact loop route review asks for mainstream agent evidence.\n- The model must read official Claude Code documentation through web_fetch before making a route claim.\n\n## 3. Evolution Protocol\n\nUse narrow external evidence first, then keep or adjust the durable route only when the evidence changes the decision.\n\n## 4. Self-Attack\n\nReject self-confirming analysis that cites no external source after a research checkpoint.\n\n## 5. Rules\n\nDo not treat the research checkpoint reminder itself as evidence.\n\n## 6. Plan/Step Pointer\n\nNo active plan is required for this evidence-only checkpoint.\n\n## 7. Evidence And Recovery Index\n\nThe trace must contain loop.decision research_checkpoint and SourceAccess from web_fetch.\n",
+			"README.md": "# Live Web Research Checkpoint Eval\n\nThis scenario validates that an active loop research checkpoint can be paired with real external SourceAccess evidence.\n",
+		},
+		RequiredTools: []string{"web_fetch"},
+		RequiredToolCounts: map[string]int{
+			"web_fetch": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "web_fetch", Arg: "url", Substring: "code.claude.com/docs/en/overview"},
+		},
+		RequiredLoopDecisionKinds: map[string]int{
+			"research_checkpoint": 1,
+		},
+		RequiredLoopDecisionResults: map[string]int{
+			"trigger": 1,
+		},
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{
+				Kind:     "research_checkpoint",
+				Decision: "trigger",
+				Trigger:  "external_calibration_requested",
+			},
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"source_access_results":  1,
+			"source_access_verified": 1,
+		},
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{
+				Status:      "verified",
+				Tool:        "web_fetch",
+				URLContains: "code.claude.com/docs/en/overview",
+			},
+		},
+		RequiredToolResultText: map[string][]string{
+			"web_fetch": {
+				"SourceAccess:",
+				"fetched_url=",
+				"requested_url=",
+			},
+		},
+		RequiredFinalText: []string{
+			"RESEARCH-EVIDENCE-42",
+			"Claude Code",
+			"code.claude.com",
+			"external calibration",
+			"fetched_url",
+			"requested_url",
+		},
+		ForbiddenFinalText: []string{
+			"无需外部证据",
+			"no external evidence needed",
+		},
+		ForbiddenTools: []string{
+			"read_file", "repo_search", "shell", "write_file", "edit_file",
+			"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read",
+			"run_task", "subagent_run",
+		},
+		ProtectedFiles: []string{
+			".affent/loops/live-web-research-checkpoint-evidence/LOOP.md",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"web_fetch": 2,
+		},
+		MaxParentToolCalls: 3,
+		MaxTurns:           8,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",
