@@ -2863,14 +2863,16 @@ button.workbench-context-runtime-item:focus-visible {
   max-height: 120px;
 }
 
-.account-settings-status {
+.account-settings-status,
+.session-skills-status {
   justify-self: start;
   color: var(--accent-strong);
   font-size: 11.5px;
   font-weight: 750;
 }
 
-.account-settings-status[data-tone="error"] {
+.account-settings-status[data-tone="error"],
+.session-skills-status[data-tone="error"] {
   color: var(--c-error);
 }
 

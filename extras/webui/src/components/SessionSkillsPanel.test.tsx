@@ -91,7 +91,23 @@ describe("SessionSkillsPanel", () => {
       triggers: ["manual demo"],
       required_tools: ["workspace", "browser"],
     });
+    expect(screen.getByRole("status")).toHaveTextContent("manual_demo saved.");
     expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
+  });
+
+  it("keeps the manual skill form populated and reports install failures", async () => {
+    const user = userEvent.setup();
+    const onInstallSkill = vi.fn().mockRejectedValue(new Error("skill directory is read-only"));
+    render(<SessionSkillsPanel skills={[]} installEnabled onReadSkill={vi.fn()} onInstallSkill={onInstallSkill} defaultOpen />);
+
+    await user.click(screen.getByRole("button", { name: "Add skill" }));
+    await user.type(screen.getByLabelText("Name"), "manual_demo");
+    await user.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.");
+    await user.click(screen.getByRole("button", { name: "Save skill" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("skill directory is read-only");
+    expect(screen.getByLabelText("Name")).toHaveValue("manual_demo");
+    expect(screen.getByLabelText("Full content")).toHaveValue("AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.");
   });
 
   it("keeps empty skills state factual and avoids unusable search", () => {
@@ -210,5 +226,6 @@ describe("SessionSkillsPanel", () => {
     await userEvent.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: trace_debugging\nFilter failures first.");
     await userEvent.click(screen.getByRole("button", { name: "Prepare skill draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("trace_debugging"), "skill");
+    expect(screen.getByRole("status")).toHaveTextContent("trace_debugging draft prepared.");
   });
 });

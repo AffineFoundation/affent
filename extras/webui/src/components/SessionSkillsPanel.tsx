@@ -50,6 +50,7 @@ export function SessionSkillsPanel({
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
   const [installError, setInstallError] = useState<string | undefined>();
+  const [skillActionStatus, setSkillActionStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
   const [installing, setInstalling] = useState(false);
   const allSkills = skills ?? [];
   const hasSearch = allSkills.length > 0;
@@ -94,13 +95,16 @@ export function SessionSkillsPanel({
     if (installing) return;
     if (!onInstallSkill) {
       if (onUseAsDraft && form.name.trim() && form.body.trim()) {
+        setSkillActionStatus(undefined);
         onUseAsDraft(manualSkillDraft(form), "skill");
         setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
         setShowForm(false);
+        setSkillActionStatus({ tone: "success", message: `${form.name.trim()} draft prepared.` });
       }
       return;
     }
     setInstallError(undefined);
+    setSkillActionStatus(undefined);
     setInstalling(true);
     try {
       const installed = await onInstallSkill({
@@ -113,8 +117,11 @@ export function SessionSkillsPanel({
       setBodyByName((current) => ({ ...current, [installed.name]: { body: installed.body ?? form.body } }));
       setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
       setShowForm(false);
+      setSkillActionStatus({ tone: "success", message: `${installed.name} saved.` });
     } catch (err) {
-      setInstallError(formatPanelError(err));
+      const message = formatPanelError(err);
+      setInstallError(message);
+      setSkillActionStatus({ tone: "error", message });
     } finally {
       setInstalling(false);
     }
@@ -162,6 +169,11 @@ export function SessionSkillsPanel({
               submitLabel: "Prepare skill draft",
             }) : null}
           </>
+        ) : null}
+        {skillActionStatus ? (
+          <span className="session-skills-status" data-tone={skillActionStatus.tone} role="status" aria-live="polite">
+            {skillActionStatus.message}
+          </span>
         ) : null}
         {!loading && !error ? (
           <>
