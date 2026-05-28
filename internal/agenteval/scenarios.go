@@ -1,5 +1,7 @@
 package agenteval
 
+import "strings"
+
 const (
 	smallModelToolsSuite = "small-model-tools"
 	hardAgentSuite       = "hard-agent"
@@ -24,6 +26,36 @@ var defaultForbiddenCommands = []string{
 	"|| true",
 	"; echo \"EXIT:$?\"",
 	"pip install",
+}
+
+const (
+	localBareRemoteSetupCommand   = "git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main"
+	pythonUnittestDiscoverCommand = "python3 -m unittest discover -s tests"
+)
+
+// These helpers describe eval outcomes, not agent workflows. Keep
+// runtime behavior autonomous; use shared contracts only to avoid
+// copy-pasted verifier shells across realistic task fixtures.
+func shellAnd(commands ...string) string {
+	return strings.Join(commands, " && ")
+}
+
+func cleanPushedNonInitialVerifyCommand(commands ...string) string {
+	commands = append(commands,
+		`test -z "$(git status --porcelain)"`,
+		`test "$(git log -1 --format=%s)" != "initial"`,
+		`git ls-remote --heads origin main | grep -q "$(git rev-parse HEAD)"`,
+	)
+	return shellAnd(commands...)
+}
+
+func cleanPushedMinCommitsVerifyCommand(minCommits string, commands ...string) string {
+	commands = append(commands,
+		`test -z "$(git status --porcelain)"`,
+		`test "$(git rev-list --count HEAD)" -ge `+minCommits,
+		`git ls-remote --heads origin main | grep -q "$(git rev-parse HEAD)"`,
+	)
+	return shellAnd(commands...)
 }
 
 func goMedianScenario() BatchScenario {
@@ -2715,9 +2747,9 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 `,
 		},
 		SetupCommands: []string{
-			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
+			localBareRemoteSetupCommand,
 		},
-		VerifyCommand:    "go test ./... && test -z \"$(git status --porcelain)\" && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		VerifyCommand:    cleanPushedNonInitialVerifyCommand("go test ./..."),
 		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{`go test`, `git commit`, `git push`},
 		RequiredCommandCounts: map[string]int{
@@ -2793,12 +2825,20 @@ This repository starts almost empty. The agent must create the project, tests, d
 `,
 		},
 		SetupCommands: []string{
-			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
+			localBareRemoteSetupCommand,
 		},
-		VerifyCommand: "python3 -m unittest discover -s tests && test -f todo_core/store.py && test -f todo_core/__init__.py && test -f tests/test_store.py && grep -R \"class TodoStore\" todo_core/store.py && grep -R \"mark_done\" tests/test_store.py && grep -R \"SCRATCH-LOOP-31\" README.md && test -z \"$(git status --porcelain)\" && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		VerifyCommand: cleanPushedNonInitialVerifyCommand(
+			pythonUnittestDiscoverCommand,
+			`test -f todo_core/store.py`,
+			`test -f todo_core/__init__.py`,
+			`test -f tests/test_store.py`,
+			`grep -R "class TodoStore" todo_core/store.py`,
+			`grep -R "mark_done" tests/test_store.py`,
+			`grep -R "SCRATCH-LOOP-31" README.md`,
+		),
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
-			`python3 -m unittest discover -s tests`,
+			pythonUnittestDiscoverCommand,
 			`git commit`,
 			`git push`,
 		},
@@ -2831,7 +2871,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 		},
 		RequiredFinalText: []string{
 			"SCRATCH-LOOP-31",
-			"python3 -m unittest discover -s tests",
+			pythonUnittestDiscoverCommand,
 			"todo_core/store.py",
 			"tests/test_store.py",
 			"commit",
@@ -2870,8 +2910,8 @@ func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 		SessionID:          "scratch-project-iterative-loop",
 		EnableLoopProtocol: true,
 		Prompts: []string{
-			"Iteration 1: build the initial Python project from this nearly empty repository. Use the active loop protocol as durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark items done, list all items, and list open items. Run python3 -m unittest discover -s tests once after creating tests and again after implementation. Update README.md with the usage summary and marker ITER-LOOP-57. Commit iteration 1, push it to origin main, and leave git status clean. The final answer for this turn must include ITER-LOOP-57, iteration 1, the test command, created files, commit hash, and push result.",
-			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence, update README.md with the persistence usage, run python3 -m unittest discover -s tests before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
+			"Iteration 1: build the initial Python project from this nearly empty repository. Use the active loop protocol as durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark items done, list all items, and list open items. Run " + pythonUnittestDiscoverCommand + " once after creating tests and again after implementation. Update README.md with the usage summary and marker ITER-LOOP-57. Commit iteration 1, push it to origin main, and leave git status clean. The final answer for this turn must include ITER-LOOP-57, iteration 1, the test command, created files, commit hash, and push result.",
+			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence, update README.md with the persistence usage, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
 		},
 		Files: map[string]string{
 			".affent/loops/scratch-project-iterative-loop/LOOP.md": `# Loop Protocol: scratch-project-iterative-loop
@@ -2914,12 +2954,24 @@ This repository starts almost empty. The agent must create the project over two 
 `,
 		},
 		SetupCommands: []string{
-			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
+			localBareRemoteSetupCommand,
 		},
-		VerifyCommand: "python3 -m unittest discover -s tests && test -f todo_core/store.py && test -f todo_core/__init__.py && test -f tests/test_store.py && grep -R \"class TodoStore\" todo_core/store.py && grep -R \"def save_json\" todo_core/store.py && grep -R \"def load_json\" todo_core/store.py && grep -R \"save_json\" tests/test_store.py && grep -R \"load_json\" tests/test_store.py && grep -R \"ITER-LOOP-57\" README.md && grep -R \"JSON\" README.md && test -z \"$(git status --porcelain)\" && test \"$(git rev-list --count HEAD)\" -ge 3 && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		VerifyCommand: cleanPushedMinCommitsVerifyCommand("3",
+			pythonUnittestDiscoverCommand,
+			`test -f todo_core/store.py`,
+			`test -f todo_core/__init__.py`,
+			`test -f tests/test_store.py`,
+			`grep -R "class TodoStore" todo_core/store.py`,
+			`grep -R "def save_json" todo_core/store.py`,
+			`grep -R "def load_json" todo_core/store.py`,
+			`grep -R "save_json" tests/test_store.py`,
+			`grep -R "load_json" tests/test_store.py`,
+			`grep -R "ITER-LOOP-57" README.md`,
+			`grep -R "JSON" README.md`,
+		),
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
-			`python3 -m unittest discover -s tests`,
+			pythonUnittestDiscoverCommand,
 			`git commit`,
 			`git push`,
 		},
@@ -2957,7 +3009,7 @@ This repository starts almost empty. The agent must create the project over two 
 			"iteration 2",
 			"save_json",
 			"load_json",
-			"python3 -m unittest discover -s tests",
+			pythonUnittestDiscoverCommand,
 			"commit",
 			"push",
 			"clean",
