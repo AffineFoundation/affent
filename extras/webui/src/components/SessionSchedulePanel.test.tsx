@@ -175,6 +175,10 @@ describe("SessionSchedulePanel", () => {
     const onLoadSchedules = () => undefined;
     const { rerender } = render(<SessionSchedulePanel summary={{ count: 1, enabled: 1 }} defaultOpen onLoadSchedules={onLoadSchedules} />);
 
+    const panel = screen.getByTestId("session-schedule-panel");
+    expect(panel).toHaveTextContent("1 active");
+    expect(panel).toHaveTextContent("1 active timer; load details to inspect the next run.");
+    expect(panel).not.toHaveTextContent("No scheduled follow-ups for this chat.");
     expect(screen.getByRole("button", { name: "Load timer details" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "View timers" })).toBeNull();
 
@@ -200,5 +204,14 @@ describe("SessionSchedulePanel", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Refresh timer details" })).toBeInTheDocument();
+  });
+
+  it("keeps paused timer summaries actionable when next-run metadata is absent", () => {
+    render(<SessionSchedulePanel summary={{ count: 2, enabled: 0 }} defaultOpen onLoadSchedules={() => undefined} />);
+
+    const panel = screen.getByTestId("session-schedule-panel");
+    expect(panel).toHaveTextContent("2 paused");
+    expect(panel).toHaveTextContent("2 paused timers; load details before resuming or deleting.");
+    expect(panel).not.toHaveTextContent("No scheduled follow-ups for this chat.");
   });
 });

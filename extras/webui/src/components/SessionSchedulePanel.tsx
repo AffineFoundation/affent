@@ -233,6 +233,8 @@ function schedulePanelDetail(
   if (lastError) return `${summary.error_count ?? 1} error${summary.error_count === 1 ? "" : "s"} · ${lastError}`;
   if (pendingLoopTimers > 0) return "Loop timer waits for LOOP.md activation";
   if (next) return `Next ${next}${preview ? ` · ${preview}` : ""}`;
+  if (summary.enabled > 0) return `${summary.enabled} active ${plural("timer", summary.enabled)}; load details to inspect the next run.`;
+  if (summary.count > 0) return `${summary.count} paused ${plural("timer", summary.count)}; load details before resuming or deleting.`;
   return "No scheduled follow-ups for this chat.";
 }
 
@@ -286,6 +288,10 @@ function loopTimerPendingCalibration(schedule: SessionSchedule, loopStatus?: str
 
 function loopProtocolRunning(loopStatus?: string): boolean {
   return compact(loopStatus)?.toLowerCase() === "running";
+}
+
+function plural(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
 }
 
 function scheduleKindLabel(kind: SessionSchedule["kind"]): string {
