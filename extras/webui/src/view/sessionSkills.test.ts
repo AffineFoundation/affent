@@ -5,6 +5,8 @@ import {
   skillDraft,
   skillEvidenceText,
   skillKindLabel,
+  skillMatchesQuery,
+  skillSearchMatches,
   skillSizeLabel,
   skillSummaryTags,
   skillUpdateDraft,
@@ -27,6 +29,13 @@ describe("sessionSkills view helpers", () => {
     expect(skillSizeLabel(skill)).toBe("96 B");
     expect(activationSummary(skill)).toBe("Triggers: fix, repair");
     expect(skillSummaryTags(skill)).toEqual(["Built in", "2 triggers", "1 tool"]);
+    expect(skillMatchesQuery(skill, "workspace")).toBe(true);
+    expect(skillSearchMatches(skill, "repair")).toEqual([
+      "Name: coding_repair_workflow",
+      "Summary: Repair code by reproducing failures first.",
+      "Trigger: repair",
+    ]);
+    expect(skillSearchMatches(skill, "workspace")).toEqual(["Tool: workspace"]);
     expect(skillEvidenceText(skill, "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.")).toBe([
       "Skill evidence for coding_repair_workflow",
       "Kind: Built in",

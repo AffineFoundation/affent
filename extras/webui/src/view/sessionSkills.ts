@@ -30,6 +30,28 @@ export function skillSummaryTags(skill: SessionSkillInfo): string[] {
   return tags;
 }
 
+export function skillMatchesQuery(skill: SessionSkillInfo, query: string): boolean {
+  return skillSearchText(skill).includes(query.trim().toLowerCase());
+}
+
+export function skillSearchMatches(skill: SessionSkillInfo, query: string): string[] {
+  const search = query.trim().toLowerCase();
+  if (!search) return [];
+  const matches = [
+    skill.name.toLowerCase().includes(search) ? `Name: ${skill.name}` : undefined,
+    skill.description?.toLowerCase().includes(search) ? `Summary: ${skill.description}` : undefined,
+    skill.source?.toLowerCase().includes(search) ? `Source: ${skill.source}` : undefined,
+    ...skillTriggers(skill)
+      .filter((trigger) => trigger.toLowerCase().includes(search))
+      .map((trigger) => `Trigger: ${trigger}`),
+    ...(skill.required_tools ?? [])
+      .filter((tool) => tool.toLowerCase().includes(search))
+      .map((tool) => `Tool: ${tool}`),
+    skill.body_preview?.toLowerCase().includes(search) ? `Preview: ${skill.body_preview}` : undefined,
+  ].filter((match): match is string => Boolean(match));
+  return [...new Set(matches)].slice(0, 3);
+}
+
 export function skillSizeLabel(skill: SessionSkillInfo): string {
   return formatByteCount(skill.body_bytes);
 }
@@ -68,4 +90,15 @@ export function skillUpdateDraft(skill: SessionSkillInfo, body?: string): string
 
 function skillTriggers(skill: SessionSkillInfo): string[] {
   return skill.triggers ?? skill.auto_activation?.any ?? [];
+}
+
+function skillSearchText(skill: SessionSkillInfo): string {
+  return [
+    skill.name,
+    skill.description,
+    skill.source,
+    skill.body_preview,
+    ...skillTriggers(skill),
+    ...(skill.required_tools ?? []),
+  ].filter(Boolean).join(" ").toLowerCase();
 }

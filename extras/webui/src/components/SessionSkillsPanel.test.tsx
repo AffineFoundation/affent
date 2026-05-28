@@ -140,6 +140,48 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("No skills returned by this runtime.");
   });
 
+  it("shows why a skill matched search and clears the filter", async () => {
+    const user = userEvent.setup();
+    const onReadSkill = vi.fn();
+    render(
+      <SessionSkillsPanel
+        defaultOpen
+        skills={[
+          {
+            name: "coding_repair_workflow",
+            description: "Repair code by reproducing failures first.",
+            source: "embed:skill",
+            runtime: false,
+            required_tools: ["workspace"],
+            body_bytes: 96,
+          },
+          {
+            name: "browser_source_workflow",
+            description: "Verify browser network evidence.",
+            source: "embed:skill",
+            runtime: false,
+            triggers: ["browser"],
+            body_bytes: 88,
+          },
+        ]}
+        onReadSkill={onReadSkill}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Search title or summary"), "workspace");
+
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent('1 skill matching "workspace"');
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("browser_source_workflow");
+    expect(screen.getByTestId("skill-search-matches-coding_repair_workflow")).toHaveTextContent("Tool: workspace");
+    expect(onReadSkill).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("browser_source_workflow");
+  });
+
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
     const diagnostic = "API route /v1/skills returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
     render(<SessionSkillsPanel error={diagnostic} />);

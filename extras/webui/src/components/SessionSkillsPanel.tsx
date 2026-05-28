@@ -7,6 +7,8 @@ import {
   skillDraft,
   skillEvidenceText,
   skillKindLabel,
+  skillMatchesQuery,
+  skillSearchMatches,
   skillSizeLabel,
   skillSummaryTags,
   skillUpdateDraft,
@@ -49,17 +51,11 @@ export function SessionSkillsPanel({
   const allSkills = skills ?? [];
   const hasSearch = allSkills.length > 0;
   const canInstall = installEnabled && !!onInstallSkill;
+  const trimmedQuery = query.trim();
   const filteredSkills = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    if (!search) return allSkills;
-    return allSkills.filter((skill) =>
-      [skill.name, skill.description, skill.source, skill.body_preview, ...(skill.triggers ?? []), ...(skill.required_tools ?? [])]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(search),
-    );
-  }, [allSkills, query]);
+    if (!trimmedQuery) return allSkills;
+    return allSkills.filter((skill) => skillMatchesQuery(skill, trimmedQuery));
+  }, [allSkills, trimmedQuery]);
   const runtimeCount = allSkills.filter((skill) => skill.runtime).length;
   const summary = loading
     ? "Loading skills"
@@ -141,10 +137,20 @@ export function SessionSkillsPanel({
                     <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title or summary" />
                   </label>
                 ) : null}
+                {trimmedQuery ? (
+                  <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                    Clear
+                  </button>
+                ) : null}
                 {canInstall ? (
                   <button type="button" className="session-skills-add-toggle" onClick={() => setShowForm((open) => !open)}>
                     {showForm ? "Cancel" : "Add skill"}
                   </button>
+                ) : null}
+                {trimmedQuery ? (
+                  <span className="session-search-count" data-testid="session-skills-search-count">
+                    {filteredSkills.length} {filteredSkills.length === 1 ? "skill" : "skills"} matching "{trimmedQuery}"
+                  </span>
                 ) : null}
               </div>
             ) : null}
@@ -198,12 +204,14 @@ export function SessionSkillsPanel({
                 filteredSkills.map((skill) => {
                   const bodyState = bodyByName[skill.name];
                   const body = bodyState?.body ?? skill.body;
+                  const searchMatches = trimmedQuery ? skillSearchMatches(skill, trimmedQuery) : [];
                   return (
                     <details
                       key={skill.name}
                       className="session-skill-item"
+                      open={trimmedQuery ? true : undefined}
                       onToggle={(event) => {
-                        if (event.currentTarget.open) void loadBody(skill.name);
+                        if (event.currentTarget.open && !trimmedQuery) void loadBody(skill.name);
                       }}
                     >
                       <summary>
@@ -219,6 +227,11 @@ export function SessionSkillsPanel({
                         </span>
                       </summary>
                       <div className="session-skill-detail">
+                        {searchMatches.length > 0 ? (
+                          <div className="session-skill-matches" data-testid={`skill-search-matches-${skill.name}`}>
+                            {searchMatches.map((match) => <span key={match}>{match}</span>)}
+                          </div>
+                        ) : null}
                         <div className="session-skill-meta">
                           {skill.source ? <span>Source: {skill.source}</span> : null}
                           <span>{skillSizeLabel(skill)}</span>
