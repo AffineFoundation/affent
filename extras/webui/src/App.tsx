@@ -21,6 +21,7 @@ import {
   sessionArtifactPath,
   readSkill,
   removeSessionMemory,
+  replaceSessionMemory,
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
@@ -32,6 +33,7 @@ import {
   type SessionMemoryResponse,
   type SessionMemoryAddRequest,
   type SessionMemoryRemoveRequest,
+  type SessionMemoryReplaceRequest,
   type SessionPlanSummary,
   type SessionContextSummary,
   type SessionSkillInfo,
@@ -683,6 +685,23 @@ export function App() {
     setMemoryState({ state: "loading" });
     try {
       const memory = await removeSessionMemory(client, selectedSessionId, request);
+      setMemoryState({ state: "ready", memory });
+      setSessions((current) => current.map((item) => item.id === selectedSessionId ? { ...item, has_memory: memory.has_memory } : item));
+      return memory;
+    } catch (err) {
+      setMemoryState({ state: "error", error: formatError(err) });
+      throw err;
+    }
+  }, [client, selectedSessionId]);
+
+  const handleReplaceMemory = useCallback(async (request: SessionMemoryReplaceRequest): Promise<SessionMemoryResponse> => {
+    if (!selectedSessionId) {
+      setMemoryState({ state: "empty" });
+      throw new Error("Open a saved chat before editing memory.");
+    }
+    setMemoryState({ state: "loading" });
+    try {
+      const memory = await replaceSessionMemory(client, selectedSessionId, request);
       setMemoryState({ state: "ready", memory });
       setSessions((current) => current.map((item) => item.id === selectedSessionId ? { ...item, has_memory: memory.has_memory } : item));
       return memory;
@@ -1598,6 +1617,7 @@ export function App() {
         onRefresh={handleRefreshMemory}
         onAddMemory={handleAddMemory}
         onRemoveMemory={handleRemoveMemory}
+        onReplaceMemory={handleReplaceMemory}
         onUseAsDraft={handleUseAsDraft}
       />
     );

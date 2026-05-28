@@ -190,6 +190,63 @@ describe("SessionMemoryPanel", () => {
     expect(await screen.findByText("Memory removed.")).toBeInTheDocument();
   });
 
+  it("edits memory entries inline when the runtime supports replace", async () => {
+    const user = userEvent.setup();
+    const onReplaceMemory = vi.fn(async () => ({
+      session_id: "s1",
+      has_memory: true,
+      topics: [
+        {
+          target: "memory",
+          topic: "research",
+          entries: ["current browser fallback rule"],
+          entry_count: 1,
+          chars_used: 29,
+          chars_limit: 4400,
+          percent: 1,
+        },
+      ],
+    }));
+    render(
+      <SessionMemoryPanel
+        defaultOpen
+        onReplaceMemory={onReplaceMemory}
+        memory={{
+          session_id: "s1",
+          has_memory: true,
+          topics: [
+            {
+              target: "memory",
+              topic: "research",
+              entries: ["stale browser fallback rule"],
+              entry_count: 1,
+              chars_used: 27,
+              chars_limit: 4400,
+              percent: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByText("research"));
+    await user.click(within(screen.getByText("stale browser fallback rule").closest("li")!).getByRole("button", { name: "Edit" }));
+    const editBox = screen.getByLabelText("Edit memory 1");
+    expect(editBox).toHaveValue("stale browser fallback rule");
+    await user.clear(editBox);
+    await user.type(editBox, "current browser fallback rule");
+    await user.click(screen.getByRole("button", { name: "Save edit" }));
+
+    expect(onReplaceMemory).toHaveBeenCalledWith({
+      action: "replace",
+      target: "memory",
+      topic: "research",
+      old_text: "stale browser fallback rule",
+      new_content: "current browser fallback rule",
+    });
+    expect(await screen.findByText("Memory updated.")).toBeInTheDocument();
+  });
+
   it("shows an empty selected-chat state", () => {
     render(<SessionMemoryPanel defaultOpen noSession />);
 

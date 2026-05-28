@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
-import type { SessionMemoryAddRequest, SessionMemoryBucket, SessionMemoryRemoveRequest, SessionMemoryResponse } from "../api/sessions";
+import type { SessionMemoryAddRequest, SessionMemoryBucket, SessionMemoryRemoveRequest, SessionMemoryReplaceRequest, SessionMemoryResponse } from "../api/sessions";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   memoryActionLabel,
@@ -31,6 +31,7 @@ export function SessionMemoryPanel({
   onRefresh,
   onAddMemory,
   onRemoveMemory,
+  onReplaceMemory,
   onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
@@ -42,6 +43,7 @@ export function SessionMemoryPanel({
   onRefresh?: () => Promise<void> | void;
   onAddMemory?: (request: SessionMemoryAddRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
   onRemoveMemory?: (request: SessionMemoryRemoveRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
+  onReplaceMemory?: (request: SessionMemoryReplaceRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
@@ -51,6 +53,7 @@ export function SessionMemoryPanel({
   const [memoryContent, setMemoryContent] = useState("");
   const [memorySaveState, setMemorySaveState] = useState<{ state: "idle" | "saving" | "saved" | "error"; message?: string }>({ state: "idle" });
   const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | undefined>();
+  const [editingEntry, setEditingEntry] = useState<{ key: string; value: string } | undefined>();
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
@@ -110,6 +113,20 @@ export function SessionMemoryPanel({
       await onRemoveMemory({ action: "remove", target: bucket.target, topic: bucket.topic, old_text: entry });
       setConfirmRemoveKey(undefined);
       setMemorySaveState({ state: "saved", message: "Memory removed." });
+    } catch (err) {
+      setMemorySaveState({ state: "error", message: formatPanelError(err) });
+    }
+  }
+
+  async function handleReplaceMemory(bucket: SessionMemoryBucket, entry: string) {
+    if (!onReplaceMemory || !editingEntry) return;
+    const next = editingEntry.value.trim();
+    if (!next || next === entry.trim()) return;
+    setMemorySaveState({ state: "saving" });
+    try {
+      await onReplaceMemory({ action: "replace", target: bucket.target, topic: bucket.topic, old_text: entry, new_content: next });
+      setEditingEntry(undefined);
+      setMemorySaveState({ state: "saved", message: "Memory updated." });
     } catch (err) {
       setMemorySaveState({ state: "error", message: formatPanelError(err) });
     }
@@ -231,10 +248,44 @@ export function SessionMemoryPanel({
                             <ul className="session-memory-entries" data-filtered={matchingEntries.length > 0 ? "true" : "false"}>
                               {(entriesToShow ?? []).map((entry, index) => {
                                 const entryKey = memoryEntryKey(bucket.target, bucket.topic, entry);
+                                const isEditing = editingEntry?.key === entryKey;
                                 return (
                                   <li key={`${index}:${entry}`} className="session-memory-entry-row">
-                                    <span>{entry}</span>
-                                    {onRemoveMemory ? (
+                                    {isEditing ? (
+                                      <form className="session-memory-entry-edit" onSubmit={(event) => {
+                                        event.preventDefault();
+                                        void handleReplaceMemory(bucket, entry);
+                                      }}>
+                                        <label>
+                                          <span>Edit memory {index + 1}</span>
+                                          <textarea
+                                            value={editingEntry.value}
+                                            disabled={memorySaveState.state === "saving"}
+                                            onChange={(event) => setEditingEntry({ key: entryKey, value: event.target.value })}
+                                          />
+                                        </label>
+                                        <div className="session-memory-entry-actions">
+                                          <button
+                                            type="button"
+                                            className="ghost-action"
+                                            disabled={memorySaveState.state === "saving"}
+                                            onClick={() => setEditingEntry(undefined)}
+                                          >
+                                            Cancel
+                                          </button>
+                                          <button
+                                            type="submit"
+                                            className="ghost-action"
+                                            disabled={memorySaveState.state === "saving" || !editingEntry.value.trim() || editingEntry.value.trim() === entry.trim()}
+                                          >
+                                            Save edit
+                                          </button>
+                                        </div>
+                                      </form>
+                                    ) : (
+                                      <span>{entry}</span>
+                                    )}
+                                    {!isEditing && (onRemoveMemory || onReplaceMemory) ? (
                                       confirmRemoveKey === entryKey ? (
                                         <span className="session-memory-entry-actions" role="group" aria-label={`Confirm remove memory ${index + 1}`}>
                                           <button type="button" className="ghost-action" disabled={memorySaveState.state === "saving"} onClick={() => setConfirmRemoveKey(undefined)}>
@@ -250,14 +301,34 @@ export function SessionMemoryPanel({
                                           </button>
                                         </span>
                                       ) : (
-                                        <button
-                                          type="button"
-                                          className="ghost-action danger-action"
-                                          disabled={memorySaveState.state === "saving"}
-                                          onClick={() => setConfirmRemoveKey(entryKey)}
-                                        >
-                                          Remove
-                                        </button>
+                                        <span className="session-memory-entry-actions">
+                                          {onReplaceMemory ? (
+                                            <button
+                                              type="button"
+                                              className="ghost-action"
+                                              disabled={memorySaveState.state === "saving"}
+                                              onClick={() => {
+                                                setConfirmRemoveKey(undefined);
+                                                setEditingEntry({ key: entryKey, value: entry });
+                                              }}
+                                            >
+                                              Edit
+                                            </button>
+                                          ) : null}
+                                          {onRemoveMemory ? (
+                                            <button
+                                              type="button"
+                                              className="ghost-action danger-action"
+                                              disabled={memorySaveState.state === "saving"}
+                                              onClick={() => {
+                                                setEditingEntry(undefined);
+                                                setConfirmRemoveKey(entryKey);
+                                              }}
+                                            >
+                                              Remove
+                                            </button>
+                                          ) : null}
+                                        </span>
                                       )
                                     ) : null}
                                   </li>

@@ -12,6 +12,7 @@ import {
   listSessions,
   readSessionArtifact,
   removeSessionMemory,
+  replaceSessionMemory,
   sendSessionMessage,
   sessionArtifactPath,
   streamSessionEvents,
@@ -60,6 +61,7 @@ describe("session API helpers", () => {
     await updateSessionSchedule(client, "s/1", "sched/1", { enabled: false });
     await addSessionMemory(client, "s/1", { target: "memory", topic: "research", content: "remember this" });
     await removeSessionMemory(client, "s/1", { action: "remove", target: "memory", topic: "research", old_text: "remember this" });
+    await replaceSessionMemory(client, "s/1", { action: "replace", target: "memory", topic: "research", old_text: "remember this", new_content: "remember this updated" });
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
@@ -84,6 +86,15 @@ describe("session API helpers", () => {
     expect(fetchImpl.mock.calls[9][0]).toBe("/v1/sessions/s%2F1/memory");
     expect((fetchImpl.mock.calls[9][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[9][1] as RequestInit).body).toBe(JSON.stringify({ action: "remove", target: "memory", topic: "research", old_text: "remember this" }));
+    expect(fetchImpl.mock.calls[10][0]).toBe("/v1/sessions/s%2F1/memory");
+    expect((fetchImpl.mock.calls[10][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[10][1] as RequestInit).body).toBe(JSON.stringify({
+      action: "replace",
+      target: "memory",
+      topic: "research",
+      old_text: "remember this",
+      new_content: "remember this updated",
+    }));
   });
 
   it("streams native affent session events", async () => {

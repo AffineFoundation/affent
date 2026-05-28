@@ -3565,6 +3565,41 @@ button.workbench-context-runtime-item:focus-visible {
   justify-content: flex-end;
 }
 
+.session-memory-entry-edit {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.session-memory-entry-edit label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-memory-entry-edit label span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.session-memory-entry-edit textarea {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-raised);
+  color: var(--text);
+  padding: 8px 9px;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.42;
+}
+
 .session-skills-add-toggle,
 .session-skills-add-submit {
   min-height: 32px;

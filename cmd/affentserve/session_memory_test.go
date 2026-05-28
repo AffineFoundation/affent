@@ -134,6 +134,40 @@ func TestHandleSessionMemoryRemovesDurableMemory(t *testing.T) {
 	}
 }
 
+func TestHandleSessionMemoryReplacesDurableMemory(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	createDurableSessionDir(t, pool, "memory-replace")
+	store := memory.NewFileMemoryStore("")
+	store.MemoryDir = pool.sessionDirPath("memory-replace")
+	if resp, err := store.Add(memory.TargetMemory, "research", "stale browser fallback rule"); err != nil || !resp.OK {
+		t.Fatalf("add topic memory: resp=%+v err=%v", resp, err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-replace/memory", bytes.NewBufferString(`{
+		"action": "replace",
+		"target": "memory",
+		"topic": "research",
+		"old_text": "stale browser fallback",
+		"new_content": "current browser fallback rule"
+	}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	var out sessionMemoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, w.Body.String())
+	}
+	if !out.HasMemory || len(out.Topics) != 1 || out.Topics[0].EntryCount != 1 {
+		t.Fatalf("memory response = %+v", out)
+	}
+	gotEntries := strings.Join(out.Topics[0].Entries, "\n")
+	if strings.Contains(gotEntries, "stale browser fallback") || !strings.Contains(gotEntries, "current browser fallback rule") {
+		t.Fatalf("topic entries after replace = %q", gotEntries)
+	}
+}
+
 func TestHandleSessionMemoryAddRejectsInvalidContent(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	createDurableSessionDir(t, pool, "memory-add-invalid")

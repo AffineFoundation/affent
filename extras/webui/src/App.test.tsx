@@ -1819,13 +1819,8 @@ describe("App", () => {
     expect(await screen.findByTestId("workbench-tab-surface")).toHaveTextContent("Trace");
     expect(screen.getByTestId("conversation-scroll")).toBeVisible();
     expect(screen.getByTestId("composer")).toBeVisible();
-    const runtime = await screen.findByTestId("runtime-stats-panel");
-    expect(runtime).toHaveTextContent("Diagnostics");
-    expect(runtime).toHaveTextContent("qwen-small");
-    expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
-    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network");
-    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
-    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs");
+    expect(screen.queryByTestId("runtime-stats-panel")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("qwen-small");
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
     await user.click(screen.getByRole("button", { name: "Close Workbench" }));
     expect(screen.queryByTestId("workbench-panel")).toBeNull();
