@@ -363,6 +363,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("turn-title")).toHaveTextContent("summarize the repo");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Starting");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("events");
+    expect(screen.getByTestId("pending-turn").querySelector(".message-bubble-row")).toHaveAttribute("data-side", "user");
+    expect(screen.getByTestId("pending-turn").querySelector(".message-side-actions")).toHaveAttribute("data-side", "user");
 
     await openMessageOptions(user, screen.getByTestId("pending-turn"));
     await user.click(screen.getByRole("button", { name: "Copy" }));
@@ -395,6 +397,8 @@ describe("Timeline", () => {
     expect(screen.getByLabelText("Guidance for current run")).toHaveTextContent("check tests first");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Applying your guidance to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
+    expect(screen.getByTestId("pending-turn").querySelector(".message-bubble-row")).toHaveAttribute("data-side", "user");
+    expect(screen.getByTestId("pending-turn").querySelector(".message-side-actions")).toHaveAttribute("data-side", "user");
 
     await openMessageOptions(user, screen.getByTestId("pending-turn"));
     await user.click(screen.getByRole("button", { name: "Copy" }));
@@ -418,6 +422,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("check tests first");
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Affent will use this in the current run.");
     expect(screen.queryByTestId("pending-turn")).toBeNull();
+    expect(screen.getByTestId("guidance-receipt").querySelector(".message-bubble-row")).toHaveAttribute("data-side", "user");
+    expect(screen.getByTestId("guidance-receipt").querySelector(".message-side-actions")).toHaveAttribute("data-side", "user");
 
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
