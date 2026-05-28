@@ -1,14 +1,5 @@
 import type { ReactNode } from "react";
-
-export type WorkbenchTab = "context" | "changes" | "run" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
-
-export interface WorkbenchNavItem {
-  key: WorkbenchTab;
-  label: string;
-  detail: string;
-  badge?: string;
-  tone?: "error" | "warning" | "attention";
-}
+import type { WorkbenchNavItem, WorkbenchTab } from "../view/workbenchNav";
 
 export function WorkbenchPanel({
   title,

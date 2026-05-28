@@ -517,6 +517,17 @@ body {
   min-width: 0;
 }
 
+.workbench-tab-surface .session-files-item,
+.workbench-tab-surface .session-changes-item,
+.workbench-tab-surface .session-artifacts-item,
+.workbench-tab-surface .session-run-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workbench-tab-surface .session-evidence-actions {
+  justify-content: flex-start;
+}
+
 .workbench-empty {
   display: grid;
   gap: 3px;

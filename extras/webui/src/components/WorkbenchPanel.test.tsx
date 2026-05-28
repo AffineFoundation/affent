@@ -1,7 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { WorkbenchEmpty, WorkbenchPanel, type WorkbenchNavItem } from "./WorkbenchPanel";
+import type { WorkbenchNavItem } from "../view/workbenchNav";
+import { WorkbenchEmpty, WorkbenchPanel } from "./WorkbenchPanel";
 
 const navItems: WorkbenchNavItem[] = [
   { key: "context", label: "Context", detail: "Result ready" },

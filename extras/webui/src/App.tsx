@@ -59,7 +59,7 @@ import { SessionFilesPanel } from "./components/SessionFilesPanel";
 import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
 import { SessionWorkspacePanel } from "./components/SessionWorkspacePanel";
-import { WorkbenchEmpty, WorkbenchPanel, type WorkbenchNavItem, type WorkbenchTab } from "./components/WorkbenchPanel";
+import { WorkbenchEmpty, WorkbenchPanel } from "./components/WorkbenchPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -76,7 +76,8 @@ import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
-import { buildWorkbenchAttention, type WorkbenchAttentionTarget } from "./view/workbenchAttention";
+import { buildWorkbenchAttention } from "./view/workbenchAttention";
+import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
 import {
   buildAutomationContext,
   shouldShowLoopContext,
@@ -84,12 +85,6 @@ import {
   type AutomationLoopPanelState,
   type AutomationSchedulePanelState,
 } from "./view/automationContext";
-import {
-  shouldShowWorkbenchAccessPanel,
-  shouldShowWorkbenchMemoryPanel,
-  shouldShowWorkbenchRuntimePanel,
-  shouldShowWorkbenchSkillsPanel,
-} from "./view/workbenchPanels";
 import { isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
 
@@ -1390,82 +1385,20 @@ export function App() {
     );
   }
 
-  const runtimeTabHasSignal = shouldShowWorkbenchRuntimePanel(runtimeStatsState);
-  const configTabHasSignal = shouldShowWorkbenchAccessPanel(accountSettingsState);
-  const memoryTabHasSignal = shouldShowWorkbenchMemoryPanel(memoryState, selectedSession?.latest_memory_update);
-  const skillsTabHasSignal = shouldShowWorkbenchSkillsPanel(skillsState);
-  const workbenchNavItems: WorkbenchNavItem[] = [
-    {
-      key: "context",
-      label: "Context",
-      detail: overview.stateLabel || "Current session",
-      badge: workbenchAttention?.target === "context" ? workbenchAttention.label : undefined,
-      tone: workbenchAttention?.target === "context" ? workbenchAttention.tone : undefined,
-    },
-    {
-      key: "changes",
-      label: "Changes",
-      detail: changesNavDetail(sessionChanges.files.length, sessionChanges.detail),
-      badge: sessionChanges.files.length > 0 ? String(sessionChanges.files.length) : undefined,
-      tone: workbenchAttention?.target === "changes" ? workbenchAttention.tone : sessionChanges.tone,
-    },
-    {
-      key: "run",
-      label: "Run",
-      detail: sessionRun.commands.length > 0 ? sessionRun.detail : "Command history",
-      badge: sessionRun.commands.length > 0 ? String(sessionRun.commands.length) : undefined,
-      tone: workbenchAttention?.target === "run" ? workbenchAttention.tone : sessionRun.tone,
-    },
-    {
-      key: "files",
-      label: "Files",
-      detail: sessionFiles.items.length > 0 ? sessionFiles.detail : "Task file evidence",
-      badge: sessionFiles.items.length > 0 ? String(sessionFiles.items.length) : undefined,
-      tone: workbenchAttention?.target === "files" ? workbenchAttention.tone : sessionFiles.tone,
-    },
-    {
-      key: "workspace",
-      label: "Workspace",
-      detail: sessionWorkspace.hasData ? sessionWorkspace.summary : "No binding evidence",
-      badge: sessionWorkspace.issue ? "!" : undefined,
-      tone: workbenchAttention?.target === "workspace" ? workbenchAttention.tone : sessionWorkspace.tone,
-    },
-    {
-      key: "automation",
-      label: "Automation",
-      detail: automationContext?.title ?? "Loop and timers",
-      badge: automationContext ? "active" : undefined,
-      tone: workbenchAttention?.target === "automation" ? workbenchAttention.tone : undefined,
-    },
-    {
-      key: "memory",
-      label: "Memory",
-      detail: memoryNavDetail(memoryState),
-      badge: memoryTabHasSignal ? memoryBadge(memoryState, selectedSession?.latest_memory_update) : undefined,
-      tone: memoryState.state === "error" ? "error" : undefined,
-    },
-    {
-      key: "skills",
-      label: "Skills",
-      detail: skillsNavDetail(skillsState),
-      badge: skillsTabHasSignal ? skillsBadge(skillsState) : undefined,
-      tone: skillsState.state === "error" ? "error" : undefined,
-    },
-    {
-      key: "config",
-      label: "Config",
-      detail: configNavDetail(accountSettingsState),
-      badge: configTabHasSignal ? configBadge(accountSettingsState) : undefined,
-      tone: accountSettingsState.state === "error" ? "error" : undefined,
-    },
-    {
-      key: "trace",
-      label: "Trace",
-      detail: runtimeNavDetail(runtimeStatsState),
-      badge: runtimeTabHasSignal ? runtimeBadge(runtimeStatsState) : undefined,
-      tone: runtimeStatsState.state === "error" ? "error" : undefined,
-    },
-  ];
+  const workbenchNavItems = buildWorkbenchNavItems({
+    overview,
+    changes: sessionChanges,
+    run: sessionRun,
+    files: sessionFiles,
+    workspace: sessionWorkspace,
+    automation: automationContext,
+    attention: workbenchAttention,
+    runtimeState: runtimeStatsState,
+    configState: accountSettingsState,
+    memoryState,
+    skillsState,
+    latestMemoryUpdate: selectedSession?.latest_memory_update,
+  });
 
   function openWorkbench(tab: WorkbenchTab = "context") {
     setWorkbenchTab(tab);
@@ -1749,80 +1682,6 @@ function initialTheme(): ThemeMode {
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
-}
-
-function workbenchTabFromAttention(target: WorkbenchAttentionTarget): WorkbenchTab {
-  return target;
-}
-
-function changesNavDetail(count: number, detail: string): string {
-  return count > 0 ? detail : "Changed file review";
-}
-
-function runtimeNavDetail(state: RuntimeStatsState): string {
-  if (state.state === "loading") return "Loading diagnostics";
-  if (state.state === "error") return "Diagnostics unavailable";
-  if (state.state === "ready") return state.stats.model?.trim() || "Runtime diagnostics";
-  return "Runtime diagnostics";
-}
-
-function runtimeBadge(state: RuntimeStatsState): string | undefined {
-  if (state.state === "loading") return "...";
-  if (state.state === "error") return "!";
-  if (state.state !== "ready") return undefined;
-  const issues = (state.stats.aggregate?.blocked_by_type ?? 0)
-    + (state.stats.aggregate?.blocked_by_domain ?? 0)
-    + (state.stats.aggregate?.tools?.tool_errors ?? 0)
-    + (state.stats.aggregate?.runtime?.runtime_errors ?? 0);
-  if (issues > 0) return String(issues);
-  if ((state.stats.running_turns ?? 0) > 0) return "run";
-  return "on";
-}
-
-function configNavDetail(state: AccountSettingsState): string {
-  if (state.state === "loading") return "Loading env and SSH";
-  if (state.state === "error") return "Config unavailable";
-  if (state.state === "ready") return state.settings.env.length > 0 ? `${state.settings.env.length} env configured` : "Env and SSH";
-  return "Env and SSH";
-}
-
-function configBadge(state: AccountSettingsState): string | undefined {
-  if (state.state === "loading") return "...";
-  if (state.state === "error") return "!";
-  if (state.state !== "ready") return undefined;
-  if (state.settings.env.length > 0) return String(state.settings.env.length);
-  if (state.settings.ssh.exists || state.settings.ssh.public_key) return "ssh";
-  return undefined;
-}
-
-function memoryNavDetail(state: MemoryState): string {
-  if (state.state === "loading") return "Loading memory";
-  if (state.state === "error") return "Memory unavailable";
-  if (state.state === "empty") return "Open a chat";
-  if (state.state === "ready") return state.memory.has_memory ? `${state.memory.topics?.length ?? 0} topics` : "No durable memory";
-  return "Durable memory";
-}
-
-function memoryBadge(state: MemoryState, latestUpdate?: SessionSummary["latest_memory_update"]): string | undefined {
-  if (latestUpdate) return "updated";
-  if (state.state === "loading") return "...";
-  if (state.state === "error") return "!";
-  if (state.state === "ready" && state.memory.has_memory) return String(state.memory.topics?.length ?? 0);
-  return undefined;
-}
-
-function skillsNavDetail(state: SkillsState): string {
-  if (state.state === "loading") return "Loading skills";
-  if (state.state === "error") return "Skills unavailable";
-  if (state.state === "ready") return state.skills.length > 0 ? `${state.skills.length} reusable workflows` : "No reusable workflows";
-  return "Reusable workflows";
-}
-
-function skillsBadge(state: SkillsState): string | undefined {
-  if (state.state === "loading") return "...";
-  if (state.state === "error") return "!";
-  if (state.state === "ready" && state.skills.length > 0) return String(state.skills.length);
-  return undefined;
 }
 
 function webLoopActivationPrompt(goal: string): string {
