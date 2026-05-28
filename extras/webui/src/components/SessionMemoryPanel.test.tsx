@@ -107,6 +107,17 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.queryByTestId("session-memory-search-count")).toBeNull();
 
+    await user.click(screen.getByRole("button", { name: /User\s+1/ }));
+    expect(screen.getByTestId("session-memory-search-count")).toHaveTextContent("1 bucket");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("prefers concise reports");
+    expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("project runs in containers");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("button", { name: /Session\s+2/ }));
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("research");
+    expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("prefers concise reports");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic"), "research");
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "CoinGecko pages require a browser fallback.");
     await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Prepare memory draft" }));

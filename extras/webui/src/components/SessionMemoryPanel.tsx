@@ -64,12 +64,14 @@ export function SessionMemoryPanel({
   const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | undefined>();
   const [editingEntry, setEditingEntry] = useState<{ key: string; value: string } | undefined>();
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | undefined>();
+  const [scopeFilter, setScopeFilter] = useState<MemoryScopeFilter>("all");
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
-    if (!trimmedQuery) return buckets;
-    return buckets.filter((bucket) => memoryBucketMatchesQuery(bucket, trimmedQuery));
-  }, [buckets, trimmedQuery]);
+    return buckets
+      .filter((bucket) => memoryBucketMatchesScope(bucket, scopeFilter))
+      .filter((bucket) => !trimmedQuery || memoryBucketMatchesQuery(bucket, trimmedQuery));
+  }, [buckets, scopeFilter, trimmedQuery]);
   const focusedBucket = useMemo(() => {
     if (filtered.length === 0) return undefined;
     const selected = selectedBucketKey ? filtered.find((bucket) => memoryBucketKey(bucket) === selectedBucketKey) : undefined;
@@ -217,16 +219,20 @@ export function SessionMemoryPanel({
             {focusedBucket ? <MemoryBucketFocus bucket={focusedBucket} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
               <div className="session-skills-controls">
+                <MemoryScopeFilters buckets={buckets} value={scopeFilter} onChange={setScopeFilter} />
                 <label className="session-skills-search">
                   <span>Search memory</span>
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search entries or topics" />
                 </label>
-                {trimmedQuery ? (
-                  <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                {trimmedQuery || scopeFilter !== "all" ? (
+                  <button type="button" className="ghost-action" onClick={() => {
+                    setQuery("");
+                    setScopeFilter("all");
+                  }}>
                     Clear
                   </button>
                 ) : null}
-                {trimmedQuery ? (
+                {trimmedQuery || scopeFilter !== "all" ? (
                   <span className="session-search-count" data-testid="session-memory-search-count">
                     {filtered.length} {filtered.length === 1 ? "bucket" : "buckets"}
                     {matchingEntryCount > 0 ? ` · ${matchingEntryCount} ${matchingEntryCount === 1 ? "entry" : "entries"}` : ""}
@@ -382,7 +388,7 @@ export function SessionMemoryPanel({
               ) : (
                 <div className="session-memory-empty-state">
                   <strong>{buckets.length > 0 ? "No matching memory" : "No durable memory saved"}</strong>
-                  <span>{buckets.length > 0 ? "Clear or narrow the search to inspect another bucket." : "Store stable project facts, user preferences, or recurring workflow rules below."}</span>
+                  <span>{buckets.length > 0 ? "Clear the filters or search to inspect another bucket." : "Store stable project facts, user preferences, or recurring workflow rules below."}</span>
                 </div>
               )}
             </div>
@@ -414,6 +420,51 @@ export function SessionMemoryPanel({
       </div>
     </details>
   );
+}
+
+type MemoryScopeFilter = "all" | "session" | "user";
+
+function MemoryScopeFilters({
+  buckets,
+  value,
+  onChange,
+}: {
+  buckets: readonly SessionMemoryBucket[];
+  value: MemoryScopeFilter;
+  onChange: (value: MemoryScopeFilter) => void;
+}) {
+  const counts = {
+    all: buckets.length,
+    session: buckets.filter((bucket) => bucket.target !== "user").length,
+    user: buckets.filter((bucket) => bucket.target === "user").length,
+  };
+  const options: Array<{ value: MemoryScopeFilter; label: string; count: number }> = [
+    { value: "all", label: "All", count: counts.all },
+    { value: "session", label: "Session", count: counts.session },
+    { value: "user", label: "User", count: counts.user },
+  ];
+  return (
+    <div className="session-filter-pills" role="group" aria-label="Filter memory buckets">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          disabled={option.count === 0 && value !== option.value}
+          onClick={() => onChange(option.value)}
+        >
+          <span>{option.label}</span>
+          <strong>{option.count}</strong>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function memoryBucketMatchesScope(bucket: SessionMemoryBucket, scope: MemoryScopeFilter): boolean {
+  if (scope === "user") return bucket.target === "user";
+  if (scope === "session") return bucket.target !== "user";
+  return true;
 }
 
 function MemoryBucketFocus({ bucket, onUseAsDraft }: { bucket: SessionMemoryBucket; onUseAsDraft?: UseAsDraft }) {

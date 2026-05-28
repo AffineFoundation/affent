@@ -51,6 +51,12 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("trigger:fix");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("tool:workspace");
+    await user.click(screen.getByRole("button", { name: /Tool-bound\s+1/ }));
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getByRole("button", { name: /Custom\s+0/ }));
+    expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
 
     await user.click(within(screen.getByTestId("session-skills-list")).getByText("coding_repair_workflow"));
 

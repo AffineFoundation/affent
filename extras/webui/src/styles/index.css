@@ -5828,6 +5828,60 @@ button.workbench-context-runtime-item:focus-visible {
   align-items: end;
 }
 
+.session-filter-pills {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-filter-pills button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  border: 1px solid rgba(217, 224, 232, 0.9);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--text-muted);
+  padding: 0 9px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.session-filter-pills button[aria-pressed="true"] {
+  border-color: rgba(20, 184, 166, 0.42);
+  background: rgba(240, 253, 250, 0.92);
+  color: var(--text);
+}
+
+.session-filter-pills button:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.session-filter-pills strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.78);
+  color: var(--text-faint);
+  padding: 0 5px;
+  font-size: 10.5px;
+  line-height: 1;
+}
+
+.session-filter-pills button[aria-pressed="true"] strong {
+  background: rgba(20, 184, 166, 0.16);
+  color: var(--accent-strong);
+}
+
 .session-skills-search,
 .session-skill-form label {
   display: grid;
@@ -13774,6 +13828,28 @@ html[data-theme="dark"] .session-skill-matches span {
   border-color: rgba(45, 212, 191, 0.28);
   background: rgba(13, 40, 38, 0.5);
   color: rgba(226, 232, 240, 0.78);
+}
+
+html[data-theme="dark"] .session-filter-pills button {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(14, 17, 22, 0.72);
+  color: rgba(226, 232, 240, 0.68);
+}
+
+html[data-theme="dark"] .session-filter-pills button[aria-pressed="true"] {
+  border-color: rgba(45, 212, 191, 0.34);
+  background: rgba(13, 40, 38, 0.54);
+  color: rgba(232, 236, 241, 0.94);
+}
+
+html[data-theme="dark"] .session-filter-pills strong {
+  background: rgba(51, 65, 85, 0.76);
+  color: rgba(203, 213, 225, 0.72);
+}
+
+html[data-theme="dark"] .session-filter-pills button[aria-pressed="true"] strong {
+  background: rgba(45, 212, 191, 0.16);
+  color: rgba(153, 246, 228, 0.92);
 }
 
 html[data-theme="dark"] .session-memory-dashboard .session-memory-stat,

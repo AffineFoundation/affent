@@ -61,14 +61,16 @@ export function SessionSkillsPanel({
   const [deleteConfirmName, setDeleteConfirmName] = useState<string | undefined>();
   const [deletingSkillName, setDeletingSkillName] = useState<string | undefined>();
   const [selectedSkillName, setSelectedSkillName] = useState<string | undefined>();
+  const [skillFilter, setSkillFilter] = useState<SkillFilter>("all");
   const allSkills = skills ?? [];
   const hasSearch = allSkills.length > 0;
   const canInstall = installEnabled && !!onInstallSkill;
   const trimmedQuery = query.trim();
   const filteredSkills = useMemo(() => {
-    if (!trimmedQuery) return allSkills;
-    return allSkills.filter((skill) => skillMatchesQuery(skill, trimmedQuery));
-  }, [allSkills, trimmedQuery]);
+    return allSkills
+      .filter((skill) => skillMatchesFilter(skill, skillFilter))
+      .filter((skill) => !trimmedQuery || skillMatchesQuery(skill, trimmedQuery));
+  }, [allSkills, skillFilter, trimmedQuery]);
   const focusedSkill = useMemo(() => {
     if (filteredSkills.length === 0) return undefined;
     const selected = selectedSkillName ? filteredSkills.find((skill) => skill.name === selectedSkillName) : undefined;
@@ -260,14 +262,18 @@ export function SessionSkillsPanel({
             <SkillsDashboard skills={allSkills} installEnabled={installEnabled} />
             {hasSearch || canInstall || onRefresh ? (
               <div className="session-skills-controls">
+                {hasSearch ? <SkillFilters skills={allSkills} value={skillFilter} onChange={setSkillFilter} /> : null}
                 {hasSearch ? (
                   <label className="session-skills-search">
                     <span>Search skills</span>
                     <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title or summary" />
                   </label>
                 ) : null}
-                {trimmedQuery ? (
-                  <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                {trimmedQuery || skillFilter !== "all" ? (
+                  <button type="button" className="ghost-action" onClick={() => {
+                    setQuery("");
+                    setSkillFilter("all");
+                  }}>
                     Clear
                   </button>
                 ) : null}
@@ -281,9 +287,10 @@ export function SessionSkillsPanel({
                     Refresh
                   </button>
                 ) : null}
-                {trimmedQuery ? (
+                {trimmedQuery || skillFilter !== "all" ? (
                   <span className="session-search-count" data-testid="session-skills-search-count">
-                    {filteredSkills.length} {filteredSkills.length === 1 ? "skill" : "skills"} matching "{trimmedQuery}"
+                    {filteredSkills.length} {filteredSkills.length === 1 ? "skill" : "skills"}
+                    {trimmedQuery ? ` matching "${trimmedQuery}"` : ""}
                   </span>
                 ) : null}
               </div>
@@ -420,6 +427,57 @@ export function SessionSkillsPanel({
       </div>
     </details>
   );
+}
+
+type SkillFilter = "all" | "custom" | "built-in" | "triggerable" | "tool-bound";
+
+function SkillFilters({
+  skills,
+  value,
+  onChange,
+}: {
+  skills: readonly SessionSkillInfo[];
+  value: SkillFilter;
+  onChange: (value: SkillFilter) => void;
+}) {
+  const counts = {
+    all: skills.length,
+    custom: skills.filter((skill) => skill.runtime).length,
+    "built-in": skills.filter((skill) => !skill.runtime).length,
+    triggerable: skills.filter((skill) => skillTriggers(skill).length > 0).length,
+    "tool-bound": skills.filter((skill) => (skill.required_tools?.length ?? 0) > 0).length,
+  };
+  const options: Array<{ value: SkillFilter; label: string; count: number }> = [
+    { value: "all", label: "All", count: counts.all },
+    { value: "custom", label: "Custom", count: counts.custom },
+    { value: "built-in", label: "Built in", count: counts["built-in"] },
+    { value: "triggerable", label: "Triggerable", count: counts.triggerable },
+    { value: "tool-bound", label: "Tool-bound", count: counts["tool-bound"] },
+  ];
+  return (
+    <div className="session-filter-pills" role="group" aria-label="Filter skills">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          disabled={option.count === 0 && value !== option.value}
+          onClick={() => onChange(option.value)}
+        >
+          <span>{option.label}</span>
+          <strong>{option.count}</strong>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function skillMatchesFilter(skill: SessionSkillInfo, filter: SkillFilter): boolean {
+  if (filter === "custom") return Boolean(skill.runtime);
+  if (filter === "built-in") return !skill.runtime;
+  if (filter === "triggerable") return skillTriggers(skill).length > 0;
+  if (filter === "tool-bound") return (skill.required_tools?.length ?? 0) > 0;
+  return true;
 }
 
 function SkillReviewFocus({
