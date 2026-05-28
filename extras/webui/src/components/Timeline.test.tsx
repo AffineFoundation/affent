@@ -1468,7 +1468,7 @@ describe("Timeline", () => {
 
     await user.click(screen.getByRole("button", { name: /Action details|Run summary/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /List current directory/ }));
-    await user.click(screen.getByRole("button", { name: "Use output" }));
+    await user.click(screen.getByRole("button", { name: "Use output as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [

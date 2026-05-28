@@ -265,7 +265,7 @@ function NodeDetails({
         {primaryResult ? <CopyButton label="Copy output" value={primaryResult} /> : null}
         {primaryResult && onUseAsDraft ? (
           <button type="button" className="node-action" onClick={() => onUseAsDraft(resultDraft(node, primaryResult), "tool_result")}>
-            Use output
+            Use output as draft
           </button>
         ) : null}
         {node.status === "error" && onUseAsDraft ? (

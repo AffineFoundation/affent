@@ -2631,7 +2631,7 @@ describe("App", () => {
 
     await user.click(await screen.findByRole("button", { name: /Run summary/ }));
     await user.click(screen.getByRole("button", { name: /List current directory/ }));
-    await user.click(screen.getByRole("button", { name: "Use output" }));
+    await user.click(screen.getByRole("button", { name: "Use output as draft" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       [
