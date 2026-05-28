@@ -179,6 +179,19 @@ func TestBrowserNavigateTimeoutErrorHasRecoveryHint(t *testing.T) {
 	}
 }
 
+func TestShouldSettleAfterNavigateLoad(t *testing.T) {
+	for _, waitUntil := range []string{"", "load", "domcontentloaded"} {
+		if !shouldSettleAfterNavigateLoad(waitUntil) {
+			t.Fatalf("shouldSettleAfterNavigateLoad(%q) = false, want true", waitUntil)
+		}
+	}
+	for _, waitUntil := range []string{"networkidle"} {
+		if shouldSettleAfterNavigateLoad(waitUntil) {
+			t.Fatalf("shouldSettleAfterNavigateLoad(%q) = true, want false", waitUntil)
+		}
+	}
+}
+
 func TestIsBlockedByClientNavigateError(t *testing.T) {
 	cases := []struct {
 		err  error

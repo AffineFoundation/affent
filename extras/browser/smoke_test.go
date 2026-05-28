@@ -362,6 +362,59 @@ func TestSession_NetworkEvidenceCapturesDashboardXHR(t *testing.T) {
 	}
 }
 
+func TestSession_DefaultNavigateSettlesLateXHR(t *testing.T) {
+	bin := findChromium(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<!doctype html>
+<html>
+<body>
+  <h1>Late XHR dashboard</h1>
+  <div id="status">booting</div>
+  <script>
+    setTimeout(() => {
+      fetch('/api/later')
+        .then((r) => r.json())
+        .then(() => { document.getElementById('status').textContent = 'loaded'; });
+    }, 150);
+  </script>
+</body>
+</html>`))
+		case "/api/later":
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = w.Write([]byte(`{"subnet":"Affine","netuid":120,"late_metric":"captured after load"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	sess, err := NewSession(SessionConfig{
+		BinaryPath: bin,
+		NoSandbox:  true,
+		Intercept:  InterceptConfig{AllowPrivateNetwork: true},
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	defer sess.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out, err := runNavigate(ctx, sess, srv.URL+"/", "")
+	if err != nil {
+		t.Fatalf("runNavigate: %v", err)
+	}
+	for _, want := range []string{"Late XHR dashboard", "CAPTURED NETWORK RESPONSES", "/api/later", "browser_network_read"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("default navigate output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestSession_RelaxDomainBlockingKeepsBrowserUsable(t *testing.T) {
 	bin := findChromium(t)
 	sess, err := NewSession(SessionConfig{

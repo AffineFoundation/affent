@@ -44,7 +44,7 @@ func NavigateTool(s *Session) *agent.Tool {
                 "type": "string",
                 "enum": ["load", "domcontentloaded", "networkidle"],
                 "default": "load",
-                "description": "What event ends the navigation. Default 'load'. Use 'networkidle' for SPAs whose content arrives via XHR after load."
+                "description": "What event ends the navigation. Default 'load' plus a brief post-load network settle. Use 'networkidle' for SPAs whose content arrives slowly via XHR after load."
             }
         }
     }`, maxBrowserURLBytes))
@@ -84,6 +84,9 @@ func NavigateTool(s *Session) *agent.Tool {
 
 const (
 	navigationLoadTimeout       = 30 * time.Second
+	navigateSettleAfterLoadMin  = 300 * time.Millisecond
+	navigateSettleAfterLoadMax  = 1500 * time.Millisecond
+	navigateSettleAfterLoadIdle = 100 * time.Millisecond
 	minBrowserWaitTimeoutMS     = 100
 	defaultBrowserWaitTimeoutMS = 10000
 	maxBrowserWaitTimeoutMS     = 60000
@@ -139,6 +142,7 @@ func finishNavigate(ctx context.Context, s *Session, url, waitUntil, recoveryNot
 		formatted = prependBrowserRecoveryNote(formatted, recoveryNote)
 		return formatted, blockErr
 	}
+	settleAfterNavigateLoad(ctx, s, waitUntil)
 	snap, err := s.TakeSnapshot(ctx)
 	if err != nil {
 		return "", fmt.Errorf("snapshot: %w", err)
@@ -148,6 +152,31 @@ func finishNavigate(ctx context.Context, s *Session, url, waitUntil, recoveryNot
 		return formatted, err
 	}
 	return prependBrowserRecoveryNote(formatted, recoveryNote), nil
+}
+
+func settleAfterNavigateLoad(ctx context.Context, s *Session, waitUntil string) {
+	if s == nil || s.network == nil || !shouldSettleAfterNavigateLoad(waitUntil) {
+		return
+	}
+	timer := time.NewTimer(navigateSettleAfterLoadMin)
+	select {
+	case <-ctx.Done():
+		if !timer.Stop() {
+			<-timer.C
+		}
+		return
+	case <-timer.C:
+	}
+	s.network.WaitIdle(ctx, navigateSettleAfterLoadMax, navigateSettleAfterLoadIdle)
+}
+
+func shouldSettleAfterNavigateLoad(waitUntil string) bool {
+	switch waitUntil {
+	case "", "load", "domcontentloaded":
+		return true
+	default:
+		return false
+	}
 }
 
 func prependBrowserRecoveryNote(out, note string) string {
