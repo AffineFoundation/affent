@@ -6,9 +6,11 @@ import {
   artifactKind,
   artifactKindLabel,
   artifactLineageLabel,
+  artifactOutcomeLabel,
   artifactReviewDetail,
   artifactReviewFocus,
   artifactReviewFacts,
+  artifactReviewQueue,
   artifactReviewStats,
   artifactReviewSummary,
   artifactSourceGroupKey,
@@ -42,6 +44,7 @@ export function SessionArtifactsPanel({
   const kindFilteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
   const focus = artifactReviewFocus(artifacts);
   const reviewFacts = artifactReviewFacts(artifacts);
+  const reviewQueue = artifactReviewQueue(artifacts);
   const sourceGroups = artifactSourceGroups(artifacts);
   const activeSource = sourceGroups.find((group) => group.key === sourceKey);
   const sourceFilteredArtifacts = sourceKey
@@ -105,6 +108,24 @@ export function SessionArtifactsPanel({
                 </span>
               ))}
             </div>
+            {reviewQueue.length > 0 ? (
+              <div className="session-artifacts-review-queue" data-testid="session-artifacts-review-queue" aria-label="Artifact review queue">
+                <span>Review queue</span>
+                {reviewQueue.slice(0, 4).map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    data-tone={item.tone ?? "neutral"}
+                    onClick={() => onOpenArtifact?.(item.artifact.path)}
+                    disabled={!onOpenArtifact}
+                  >
+                    <small>{item.label}</small>
+                    <strong title={item.artifact.path}>{item.title}</strong>
+                    <b>{item.detail}</b>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {sourceGroups.length > 1 ? (
               <div className="session-artifacts-source-index" aria-label="Artifact source index">
                 <span>
@@ -238,6 +259,7 @@ function artifactMeta(artifact: TurnArtifact): string {
   const parts = [
     artifactKindLabel(artifact),
     artifactLineageLabel(artifact),
+    artifactOutcomeLabel(artifact),
     artifact.source,
     artifactSizeLabel(artifact) || undefined,
   ].filter(Boolean);

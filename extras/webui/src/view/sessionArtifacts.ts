@@ -8,6 +8,8 @@ export interface SessionArtifactStats {
   total: number;
   deliverables: number;
   fullOutputs: number;
+  failedOutputs: number;
+  partialOutputs: number;
   recordedBytes: number;
   latestTurn?: number;
   sourceCount: number;
@@ -28,6 +30,15 @@ export interface SessionArtifactSourceGroup {
   turns: string;
   sizeLabel?: string;
   latestArtifact: TurnArtifact;
+}
+
+export interface SessionArtifactReviewItem {
+  id: string;
+  label: string;
+  title: string;
+  detail: string;
+  artifact: TurnArtifact;
+  tone?: "ok" | "attention" | "danger" | "neutral";
 }
 
 export function buildSessionArtifacts(session: SessionState): TurnArtifact[] {
@@ -60,6 +71,8 @@ export function artifactEvidenceText(artifact: TurnArtifact): string {
   const size = artifactSizeLabel(artifact);
   if (size) lines.push(`Size: ${size}`);
   if (artifact.truncated) lines.push("Full output available as artifact");
+  const outcome = artifactOutcomeLabel(artifact);
+  if (outcome) lines.push(`Outcome: ${outcome}`);
   if (artifact.summary) lines.push(`Summary: ${artifact.summary}`);
   return lines.join("\n");
 }
@@ -93,6 +106,20 @@ export function artifactLineageLabel(artifact: TurnArtifact): string | undefined
   return parts.join(" · ") || undefined;
 }
 
+export function artifactOutcomeLabel(artifact: TurnArtifact): string | undefined {
+  const parts = [
+    artifactFailed(artifact) ? "failed" : artifact.exitCode === 0 ? "passed" : undefined,
+    artifact.exitCode != null ? `exit ${artifact.exitCode}` : undefined,
+    artifact.durationMs != null ? formatDuration(artifact.durationMs) : undefined,
+    artifact.failureKinds?.length ? artifact.failureKinds.join(", ") : artifact.failureKind,
+  ].filter(Boolean);
+  return parts.join(" · ") || undefined;
+}
+
+export function artifactFailed(artifact: TurnArtifact): boolean {
+  return artifact.status === "error" || (artifact.exitCode != null && artifact.exitCode !== 0) || !!artifact.failureKind || !!artifact.failureKinds?.length;
+}
+
 export function artifactReviewStats(artifacts: readonly TurnArtifact[]): SessionArtifactStats {
   const latestTurn = artifacts
     .map((artifact) => artifact.turnNumber)
@@ -104,6 +131,8 @@ export function artifactReviewStats(artifacts: readonly TurnArtifact[]): Session
     total: artifacts.length,
     deliverables: artifacts.filter((artifact) => artifactKind(artifact) === "deliverable").length,
     fullOutputs: artifacts.filter((artifact) => artifactKind(artifact) === "full_output").length,
+    failedOutputs: artifacts.filter(artifactFailed).length,
+    partialOutputs: artifacts.filter((artifact) => artifact.truncated || (artifact.omittedBytes ?? 0) > 0).length,
     recordedBytes: artifacts.reduce((sum, artifact) => sum + (artifact.bytes ?? 0), 0),
     latestTurn,
     sourceCount: sources.size,
@@ -119,6 +148,12 @@ export function artifactReviewFacts(artifacts: readonly TurnArtifact[]): Session
       detail: stats.total === 1 ? "artifact" : "artifacts",
       tone: stats.total > 0 ? "ok" : "neutral",
     },
+    ...(stats.failedOutputs > 0 ? [{
+      label: "Failures",
+      value: String(stats.failedOutputs),
+      detail: "needs review",
+      tone: "attention" as const,
+    }] : []),
     {
       label: "Full output",
       value: String(stats.fullOutputs),
@@ -137,6 +172,12 @@ export function artifactReviewFacts(artifacts: readonly TurnArtifact[]): Session
       detail: "known size",
       tone: "neutral",
     },
+    ...(stats.partialOutputs > 0 ? [{
+      label: "Partial",
+      value: String(stats.partialOutputs),
+      detail: "open full file",
+      tone: "attention" as const,
+    }] : []),
     {
       label: "Latest turn",
       value: stats.latestTurn != null ? String(stats.latestTurn) : "n/a",
@@ -210,7 +251,65 @@ export function artifactReviewDetail(artifacts: readonly TurnArtifact[]): string
 }
 
 export function artifactReviewFocus(artifacts: readonly TurnArtifact[]): TurnArtifact | undefined {
-  return [...artifacts].reverse().find((artifact) => artifactKind(artifact) === "full_output") ?? artifacts.at(-1);
+  return [...artifacts].reverse().find(artifactFailed)
+    ?? [...artifacts].reverse().find((artifact) => artifactKind(artifact) === "full_output")
+    ?? artifacts.at(-1);
+}
+
+export function artifactReviewQueue(artifacts: readonly TurnArtifact[]): SessionArtifactReviewItem[] {
+  const items = artifacts.flatMap((artifact) => artifactReviewItem(artifact) ?? []);
+  return items.sort((a, b) => reviewPriority(a) - reviewPriority(b) || latestTurnNumber(b.artifact) - latestTurnNumber(a.artifact));
+}
+
+function artifactReviewItem(artifact: TurnArtifact): SessionArtifactReviewItem | undefined {
+  if (artifactFailed(artifact)) {
+    return {
+      id: `${artifact.path}:failed`,
+      label: "Failure evidence",
+      title: artifact.name,
+      detail: [artifactOutcomeLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
+      artifact,
+      tone: "danger",
+    };
+  }
+  if (artifact.truncated || (artifact.omittedBytes ?? 0) > 0) {
+    return {
+      id: `${artifact.path}:partial`,
+      label: "Full output",
+      title: artifact.name,
+      detail: [artifactSizeLabel(artifact), "Open the artifact to inspect omitted output"].filter(Boolean).join(" · "),
+      artifact,
+      tone: "attention",
+    };
+  }
+  if (artifactKind(artifact) === "deliverable") {
+    return {
+      id: `${artifact.path}:deliverable`,
+      label: "Deliverable",
+      title: artifact.name,
+      detail: [artifactLineageLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
+      artifact,
+      tone: "ok",
+    };
+  }
+  if (artifactKind(artifact) === "full_output") {
+    return {
+      id: `${artifact.path}:output`,
+      label: "Output evidence",
+      title: artifact.name,
+      detail: [artifactOutcomeLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
+      artifact,
+      tone: "neutral",
+    };
+  }
+  return undefined;
+}
+
+function reviewPriority(item: SessionArtifactReviewItem): number {
+  if (item.tone === "danger") return 0;
+  if (item.tone === "attention") return 1;
+  if (item.tone === "ok") return 2;
+  return 3;
 }
 
 function artifactSourceLabel(tool: string | undefined, source: string): string {
@@ -221,6 +320,11 @@ function artifactSourceLabel(tool: string | undefined, source: string): string {
 
 function latestTurnNumber(artifact: TurnArtifact): number {
   return artifact.turnNumber ?? 0;
+}
+
+function formatDuration(durationMs: number): string {
+  if (durationMs < 1000) return `${durationMs} ms`;
+  return `${(durationMs / 1000).toFixed(durationMs < 10_000 ? 1 : 0)} s`;
 }
 
 function turnRangeLabel(artifacts: readonly TurnArtifact[]): string {

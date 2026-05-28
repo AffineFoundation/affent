@@ -3,10 +3,14 @@ import { reduceRawEvents } from "../store/reduce";
 import {
   artifactEvidenceDraft,
   artifactEvidenceText,
+  artifactFailed,
   artifactKind,
   artifactLineageLabel,
+  artifactOutcomeLabel,
   artifactReviewDetail,
   artifactReviewFacts,
+  artifactReviewFocus,
+  artifactReviewQueue,
   artifactReviewSummary,
   artifactSourceGroups,
   buildSessionArtifacts,
@@ -91,6 +95,8 @@ describe("sessionArtifacts", () => {
     expect(sessionArtifactLabel(session)).toBe("1 file (8 KiB, 1 MiB omitted)");
     expect(artifactKind(artifacts[0])).toBe("full_output");
     expect(artifactLineageLabel(artifacts[0])).toBe("turn 1 · web_fetch · call 1");
+    expect(artifactOutcomeLabel(artifacts[0])).toBe("passed · exit 0 · 10 ms");
+    expect(artifactFailed(artifacts[0])).toBe(false);
     expect(artifactReviewSummary(artifacts)).toBe("1 full output");
     expect(artifactReviewDetail(artifacts)).toBe("1 file · 8 KiB recorded");
     expect(artifactReviewFacts(artifacts)).toEqual(expect.arrayContaining([
@@ -112,6 +118,7 @@ describe("sessionArtifacts", () => {
         "Origin: turn 1 · web_fetch · call 1",
         "Size: (8 KiB, cap 256 KiB, 1 MiB omitted)",
         "Full output available as artifact",
+        "Outcome: passed · exit 0 · 10 ms",
         "Summary: saved output",
       ].join("\n"),
     );
@@ -141,7 +148,8 @@ describe("sessionArtifacts", () => {
         data: {
           turn_id: "t1",
           call_id: "c2",
-          exit_code: 0,
+          exit_code: 2,
+          duration_ms: 340,
           result_summary: "read snapshot",
           result_artifact_path: ".affent/artifacts/tool-results/000002-c2.txt",
           result_bytes: 2048,
@@ -159,6 +167,12 @@ describe("sessionArtifacts", () => {
       ".affent/artifacts/tool-results/000002-c2.txt",
     ]);
     expect(buildWorkbenchArtifacts(session).map(artifactKind)).toEqual(["deliverable", "full_output"]);
+    expect(artifactFailed(buildWorkbenchArtifacts(session)[1])).toBe(true);
+    expect(artifactReviewFocus(buildWorkbenchArtifacts(session))?.path).toBe(".affent/artifacts/tool-results/000002-c2.txt");
+    expect(artifactReviewQueue(buildWorkbenchArtifacts(session)).map((item) => [item.label, item.title])).toEqual([
+      ["Failure evidence", "000002-c2.txt"],
+      ["Deliverable", "report.md"],
+    ]);
     expect(artifactSourceGroups(buildWorkbenchArtifacts(session)).map((group) => [group.label, group.count, group.kindLabel])).toEqual([
       ["read_file: report.md", 1, "Full output"],
       ["write_file", 1, "Deliverable"],

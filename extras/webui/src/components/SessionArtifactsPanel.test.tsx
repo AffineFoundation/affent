@@ -24,6 +24,9 @@ describe("SessionArtifactsPanel", () => {
             callIndex: 2,
             summary: `checkout spec failed ${"log line ".repeat(40)}unreachable tail marker`,
             truncated: true,
+            status: "error",
+            exitCode: 1,
+            durationMs: 1480,
             bytes: 8192,
             omittedBytes: 1024,
             capBytes: 4096,
@@ -54,6 +57,14 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Full output");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Latest turn");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("4");
+    expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Failures");
+    expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Partial");
+    const reviewQueue = screen.getByTestId("session-artifacts-review-queue");
+    expect(reviewQueue).toHaveTextContent("Review queue");
+    expect(reviewQueue).toHaveTextContent("Failure evidence");
+    expect(reviewQueue).toHaveTextContent("failed · exit 1 · 1.5 s");
+    await user.click(within(reviewQueue).getByRole("button", { name: /Failure evidence/ }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
     const sourceIndex = screen.getByLabelText("Artifact source index");
     expect(sourceIndex).toHaveTextContent("Sources");
     expect(sourceIndex).toHaveTextContent("shell: npm test -- checkout.spec.ts");
@@ -82,7 +93,7 @@ describe("SessionArtifactsPanel", () => {
     const list = screen.getByTestId("session-artifacts-list");
     expect(list).toHaveTextContent("000001-test.txt");
     expect(list).toHaveTextContent("checkout-report.md");
-    expect(list).toHaveTextContent("Full output · turn 3 · shell · call 2 · npm test -- checkout.spec.ts");
+    expect(list).toHaveTextContent("Full output · turn 3 · shell · call 2 · failed · exit 1 · 1.5 s · npm test -- checkout.spec.ts");
     expect(list).not.toHaveTextContent("unreachable tail marker");
     const firstArtifact = within(list).getAllByRole("listitem")[0];
     expect(within(firstArtifact).getByRole("link", { name: "Download" })).toHaveAttribute(

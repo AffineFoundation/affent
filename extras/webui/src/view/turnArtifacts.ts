@@ -10,6 +10,11 @@ export interface TurnArtifact {
   callIndex?: number;
   summary?: string;
   truncated: boolean;
+  status?: ToolCallState["status"];
+  exitCode?: number;
+  durationMs?: number;
+  failureKind?: string;
+  failureKinds?: string[];
   bytes?: number;
   omittedBytes?: number;
   capBytes?: number;
@@ -31,6 +36,11 @@ export function buildTurnArtifacts(turn: TurnState, context: { turnNumber?: numb
       callIndex: index + 1,
       summary: call.resultSummary,
       truncated: call.resultTruncated,
+      status: call.status,
+      exitCode: call.exitCode,
+      durationMs: call.durationMs,
+      failureKind: call.failureKind,
+      failureKinds: call.failureKinds,
       bytes: call.resultBytes,
       omittedBytes: call.resultOmittedBytes,
       capBytes: call.resultCapBytes,
