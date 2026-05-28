@@ -31,7 +31,7 @@ describe("buildSessionTrace", () => {
     expect(sessionTraceDraft(trace)).toContain("Inspect this session trace");
   });
 
-  it("builds trace-backed tool issue summaries with next-step detail", () => {
+  it("builds concise trace-backed tool issue summaries without raw next-step noise", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "user.message", data: { turn_id: "t1", text: "Run tests" } },
@@ -58,11 +58,13 @@ describe("buildSessionTrace", () => {
         id: "shell",
         query: "call:shell",
         title: "Request 1 · shell",
-        detail: "invalid_args · Next: rerun npm test after fixing checkout",
+        tool: "shell",
+        detail: "invalid_args · failed",
         badges: ["exit 1", "invalid_args"],
       },
     ]);
-    expect(sessionTraceEvidenceText(trace)).toContain("Tool issue: Request 1 · shell · invalid_args · Next: rerun npm test after fixing checkout");
+    expect(sessionTraceEvidenceText(trace)).toContain("Tool issue: Request 1 · shell · invalid_args · failed");
+    expect(sessionTraceEvidenceText(trace)).not.toContain("Next: rerun npm test after fixing checkout");
   });
 
   it("returns an empty state for sessions without trace", () => {

@@ -22,6 +22,7 @@ export function SessionTracePanel({
   const [filter, setFilter] = useState<TraceFilter>("all");
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
+  const issueGroups = useMemo(() => traceToolIssueGroups(trace.toolIssues), [trace.toolIssues]);
   const visibleEvents = useMemo(
     () => {
       const source = filterEventsByTraceFilter(events, filter);
@@ -85,7 +86,25 @@ export function SessionTracePanel({
             </div>
             {trace.toolIssues.length > 0 ? (
               <div className="session-trace-issues" data-testid="session-trace-issues">
-                <strong>Tool issues</strong>
+                <div className="session-trace-issues-head">
+                  <strong>Tool issues</strong>
+                  <span>{trace.toolIssueCount} {trace.toolIssueCount === 1 ? "issue" : "issues"} across {issueGroups.length} {issueGroups.length === 1 ? "tool" : "tools"}</span>
+                </div>
+                <div className="session-trace-issue-groups" role="group" aria-label="Tool issue groups">
+                  {issueGroups.map((group) => (
+                    <button
+                      key={group.tool}
+                      type="button"
+                      onClick={() => {
+                        setFilter("issues");
+                        setQuery(`tool:${group.tool}`);
+                      }}
+                    >
+                      <strong>{group.tool}</strong>
+                      <span>{group.count}</span>
+                    </button>
+                  ))}
+                </div>
                 <div>
                   {trace.toolIssues.map((issue) => (
                     <button
@@ -137,6 +156,21 @@ interface TraceFilterItem {
   key: TraceFilter;
   label: string;
   count: number;
+}
+
+interface TraceToolIssueGroup {
+  tool: string;
+  count: number;
+}
+
+function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceToolIssueGroup[] {
+  const counts = new Map<string, number>();
+  for (const issue of issues) {
+    counts.set(issue.tool, (counts.get(issue.tool) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([tool, count]) => ({ tool, count }))
+    .sort((a, b) => b.count - a.count || a.tool.localeCompare(b.tool));
 }
 
 function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number): TraceFilterItem[] {

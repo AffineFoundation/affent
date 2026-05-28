@@ -21,6 +21,7 @@ export interface TraceToolIssueView {
   id: string;
   query: string;
   title: string;
+  tool: string;
   detail: string;
   badges: string[];
 }
@@ -62,16 +63,16 @@ function buildTraceToolIssues(session: SessionState): TraceToolIssueView[] {
     for (const call of turn.toolCalls) {
       if (!isToolIssue(call)) continue;
       const failureKinds = compactStrings([...(call.failureKinds ?? []), call.failureKind]);
-      const next = nextHint(call.resultSummary, call.result);
-      const summary = compactWhitespace(call.resultSummary || call.result || "");
+      const summary = issueSummary(call.resultSummary, call.result);
       const detail = compactStrings([
         failureKinds.length > 0 ? failureKinds.join(", ") : call.exitCode != null && call.exitCode !== 0 ? `exit ${call.exitCode}` : "failed",
-        next ? `Next: ${next}` : summary ? streamSummary(summary) : undefined,
+        summary ? streamSummary(summary) : undefined,
       ]).join(" · ");
       issues.push({
         id: call.callId,
         query: `call:${call.callId}`,
         title: `Request ${turnIndex + 1} · ${call.tool}`,
+        tool: call.tool,
         detail,
         badges: compactStrings([
           call.exitCode != null && call.exitCode !== 0 ? `exit ${call.exitCode}` : undefined,
@@ -122,18 +123,18 @@ function latestTraceRecord(items: readonly EventTraceItem[]): SessionTraceView["
   if (item.kind === "event") {
     return {
       label: item.display.label,
-      detail: item.display.meta.join(" · "),
+      detail: traceSummaryDetail(item.display.meta),
     };
   }
   if (item.kind === "eventGroup") {
     return {
       label: item.label,
-      detail: item.meta.join(" · "),
+      detail: traceSummaryDetail(item.meta),
     };
   }
   return {
     label: item.label,
-    detail: [item.turnLabel, streamSummary(item.text)].filter(Boolean).join(" · "),
+    detail: traceSummaryDetail([item.turnLabel, stripTraceNextBlocks(streamSummary(item.text))]),
   };
 }
 
@@ -142,10 +143,36 @@ function traceItemHasSignal(item: EventTraceItem): boolean {
   return item.display.label !== "Token usage";
 }
 
-function nextHint(summary?: string, result?: string): string | undefined {
+function issueSummary(summary?: string, result?: string): string | undefined {
   const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
-  const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
-  return match?.[1]?.trim() || undefined;
+  const stripped = stripTraceNextBlocks(text)
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line && !/^Failure:/i.test(line))
+    .join(" ");
+  return compactWhitespace(stripped);
+}
+
+function stripTraceNextBlocks(value: string): string {
+  let out = value;
+  let next = stripOneNextBlock(out);
+  while (next !== out) {
+    out = next;
+    next = stripOneNextBlock(out);
+  }
+  return out;
+}
+
+function stripOneNextBlock(value: string): string {
+  return value.replace(/(?:^|\n|\s)Next:\s*[\s\S]*?(?=\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/i, "\n");
+}
+
+function traceSummaryDetail(parts: Array<string | undefined>): string {
+  return compactStrings(parts.map((part) => {
+    const stripped = stripTraceNextBlocks(part ?? "");
+    if (/^next\b/i.test(stripped.trim())) return undefined;
+    return compactWhitespace(stripped);
+  })).join(" · ");
 }
 
 function compactWhitespace(value: string): string {
