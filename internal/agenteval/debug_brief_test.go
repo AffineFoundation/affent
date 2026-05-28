@@ -530,6 +530,47 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 			Status:       "network",
 			URLField:     "browser_network_url",
 			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    200,
+			BodyOffset:   0,
+			ShowingBytes: 80,
+			OmittedAfter: 120,
+			NextOffset:   80,
+			HasMore:      true,
+		}, {
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    200,
+			BodyOffset:   80,
+			ShowingBytes: 80,
+			OmittedAfter: 40,
+			NextOffset:   160,
+			HasMore:      true,
+		}},
+	})
+	if !stringSliceContains(brief.Tags, "source_network:partial_read") {
+		t.Fatalf("continued but still-truncated network read should remain tagged partial: %+v", brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  2,
+			SourceAccessVerified: 2,
+			SourceAccessNetwork:  2,
+		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
 			Ref:          "n2",
 			HTTPStatus:   "200",
 			ContentType:  "application/json",

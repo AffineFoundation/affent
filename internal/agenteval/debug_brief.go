@@ -552,7 +552,7 @@ func sourceNetworkPartialReadResolved(partial SourceAccessExample, later []Sourc
 		if ex.JSONPath != "" && !ex.HasMore {
 			return true
 		}
-		if partial.NextOffset > 0 && ex.BodyOffset >= partial.NextOffset {
+		if partial.NextOffset > 0 && ex.BodyOffset >= partial.NextOffset && !ex.HasMore {
 			return true
 		}
 		if partial.NextOffset == 0 && !ex.HasMore {
