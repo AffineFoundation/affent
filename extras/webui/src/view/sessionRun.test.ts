@@ -75,4 +75,23 @@ describe("buildSessionRun", () => {
 
     expect(buildSessionRun(session).commands.map((command) => command.command)).toEqual(["npm run build", "npm test"]);
   });
+
+  it("prioritizes failed and running commands before passed history", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "fail", tool: "shell", args: { command: "npm test" } } },
+      { id: 3, type: "tool.result", data: { call_id: "fail", exit_code: 1, result_summary: "tests failed", result: "tests failed" } },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "pass", tool: "shell", args: { command: "npm run lint" } } },
+      { id: 7, type: "tool.result", data: { call_id: "pass", exit_code: 0, result_summary: "ok", result: "ok" } },
+      { id: 8, type: "tool.request", data: { turn_id: "t2", call_id: "running", tool: "shell", args: { command: "npm run build" } } },
+    ]);
+
+    expect(buildSessionRun(session).commands.map((command) => command.command)).toEqual([
+      "npm test",
+      "npm run build",
+      "npm run lint",
+    ]);
+  });
 });

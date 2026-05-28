@@ -20,17 +20,25 @@ export interface SessionChangesView {
   tone?: "warning" | "error";
 }
 
+interface SessionChangedFileInternal extends SessionChangedFile {
+  sequence: number;
+}
+
 export function buildSessionChanges(session: SessionState): SessionChangesView {
-  const byPath = new Map<string, SessionChangedFile>();
+  const byPath = new Map<string, SessionChangedFileInternal>();
+  let sequence = 0;
   session.turns.forEach((turn, turnIndex) => {
     for (const call of turn.toolCalls) {
-      const change = changeFromCall(call, turnIndex + 1);
+      sequence += 1;
+      const change = changeFromCall(call, turnIndex + 1, sequence);
       if (!change) continue;
       const previous = byPath.get(change.path);
       byPath.set(change.path, previous ? mergeChange(previous, change) : change);
     }
   });
-  const files = [...byPath.values()].sort((a, b) => b.turnNumber - a.turnNumber || a.path.localeCompare(b.path));
+  const files = [...byPath.values()]
+    .sort((a, b) => changePriority(a) - changePriority(b) || b.turnNumber - a.turnNumber || b.sequence - a.sequence || a.path.localeCompare(b.path))
+    .map(({ sequence: _sequence, ...file }) => file);
   const failed = files.filter((file) => file.status === "failed").length;
   const running = files.filter((file) => file.status === "running").length;
   const changed = files.filter((file) => file.status === "changed").length;
@@ -42,7 +50,13 @@ export function buildSessionChanges(session: SessionState): SessionChangesView {
   };
 }
 
-function changeFromCall(call: ToolCallState, turnNumber: number): SessionChangedFile | undefined {
+function changePriority(file: SessionChangedFile): number {
+  if (file.status === "failed") return 0;
+  if (file.status === "running") return 1;
+  return 2;
+}
+
+function changeFromCall(call: ToolCallState, turnNumber: number, sequence: number): SessionChangedFileInternal | undefined {
   const operation = changeOperation(call.tool);
   if (!operation) return undefined;
   const path = stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename");
@@ -52,13 +66,14 @@ function changeFromCall(call: ToolCallState, turnNumber: number): SessionChanged
     operation,
     status: changeStatus(call),
     turnNumber,
+    sequence,
     actionCount: 1,
     detail: changeDetail(call),
     artifactPath: call.resultArtifactPath,
   };
 }
 
-function mergeChange(previous: SessionChangedFile, next: SessionChangedFile): SessionChangedFile {
+function mergeChange(previous: SessionChangedFileInternal, next: SessionChangedFileInternal): SessionChangedFileInternal {
   return {
     ...next,
     actionCount: previous.actionCount + 1,

@@ -71,4 +71,29 @@ describe("buildSessionFiles", () => {
       detail: "No read, list, write, or edit actions in this chat.",
     });
   });
+
+  it("prioritizes failed, running, and changed files before passive reads", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "missing", tool: "read_file", args: { path: "docs/missing.md" } } },
+      { id: 3, type: "tool.result", data: { call_id: "missing", exit_code: 1, result_summary: "missing", result: "missing" } },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "read", tool: "read_file", args: { path: "src/readme.ts" } } },
+      { id: 7, type: "tool.result", data: { call_id: "read", exit_code: 0, result_summary: "read", result: "read" } },
+      { id: 8, type: "tool.request", data: { turn_id: "t2", call_id: "edit", tool: "edit_file", args: { path: "src/payments.ts" } } },
+      { id: 9, type: "tool.result", data: { call_id: "edit", exit_code: 0, result_summary: "changed", result: "changed" } },
+      { id: 10, type: "tool.request", data: { turn_id: "t2", call_id: "running", tool: "read_file", args: { path: "src/current.ts" } } },
+      { id: 11, type: "tool.request", data: { turn_id: "t2", call_id: "list", tool: "list_files", args: { path: "src" } } },
+      { id: 12, type: "tool.result", data: { call_id: "list", exit_code: 0, result_summary: "listed", result: "listed" } },
+    ]);
+
+    expect(buildSessionFiles(session).items.map((item) => item.path)).toEqual([
+      "docs/missing.md",
+      "src/current.ts",
+      "src/payments.ts",
+      "src/readme.ts",
+      "src",
+    ]);
+  });
 });

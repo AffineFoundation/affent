@@ -40,7 +40,7 @@ export function buildSessionFiles(session: SessionState): SessionFilesView {
   });
 
   const items = [...byPath.values()]
-    .sort((a, b) => b.turnNumber - a.turnNumber || b.sequence - a.sequence || a.path.localeCompare(b.path))
+    .sort((a, b) => filePriority(a) - filePriority(b) || b.turnNumber - a.turnNumber || b.sequence - a.sequence || a.path.localeCompare(b.path))
     .map(({ sequence: _sequence, ...item }) => item);
   const failed = items.filter((item) => item.status === "failed").length;
   const running = items.filter((item) => item.status === "running").length;
@@ -50,6 +50,14 @@ export function buildSessionFiles(session: SessionState): SessionFilesView {
     detail: filesDetail(items),
     tone: failed > 0 ? "error" : running > 0 ? "warning" : undefined,
   };
+}
+
+function filePriority(item: SessionFileEvidence): number {
+  if (item.status === "failed") return 0;
+  if (item.status === "running") return 1;
+  if (item.actions.includes("changed")) return 2;
+  if (item.actions.includes("read")) return 3;
+  return 4;
 }
 
 function fileEvidenceFromCall(

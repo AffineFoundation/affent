@@ -37,7 +37,7 @@ export function buildSessionRun(session: SessionState): SessionRunView {
     }
   });
   const sorted = commands
-    .sort((a, b) => b.turnNumber - a.turnNumber || b.sequence - a.sequence)
+    .sort((a, b) => commandPriority(a) - commandPriority(b) || b.turnNumber - a.turnNumber || b.sequence - a.sequence)
     .map(({ sequence: _sequence, ...command }) => command);
   const failed = sorted.filter((command) => command.status === "failed").length;
   const running = sorted.filter((command) => command.status === "running").length;
@@ -48,6 +48,12 @@ export function buildSessionRun(session: SessionState): SessionRunView {
     detail: runDetail(sorted.length, { failed, running, passed }),
     tone: failed > 0 ? "error" : running > 0 ? "warning" : undefined,
   };
+}
+
+function commandPriority(command: SessionRunCommand): number {
+  if (command.status === "failed") return 0;
+  if (command.status === "running") return 1;
+  return 2;
 }
 
 function commandFromCall(call: ToolCallState, turnNumber: number, sequence: number): SessionRunCommandInternal | undefined {

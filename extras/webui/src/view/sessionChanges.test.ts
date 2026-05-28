@@ -21,8 +21,8 @@ describe("buildSessionChanges", () => {
     expect(changes.summary).toBe("2 changed files");
     expect(changes.detail).toBe("2 changed");
     expect(changes.files).toEqual([
-      expect.objectContaining({ path: "src/payments.ts", operation: "edit", status: "changed", turnNumber: 1, detail: "Updated payment route" }),
       expect.objectContaining({ path: "tests/payments.spec.ts", operation: "write", status: "changed", artifactPath: ".affent/artifacts/tool-results/write.txt" }),
+      expect.objectContaining({ path: "src/payments.ts", operation: "edit", status: "changed", turnNumber: 1, detail: "Updated payment route" }),
     ]);
   });
 
@@ -54,5 +54,24 @@ describe("buildSessionChanges", () => {
       summary: "No file changes",
       detail: "No write or edit actions in this chat.",
     });
+  });
+
+  it("prioritizes failed and running changes before completed edits", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "failed", tool: "edit_file", args: { path: "src/old.ts" } } },
+      { id: 3, type: "tool.result", data: { call_id: "failed", exit_code: 1, result_summary: "file moved", result: "file moved" } },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t2", call_id: "changed", tool: "write_file", args: { path: "src/new.ts" } } },
+      { id: 7, type: "tool.result", data: { call_id: "changed", exit_code: 0, result_summary: "wrote file", result: "wrote file" } },
+      { id: 8, type: "tool.request", data: { turn_id: "t2", call_id: "running", tool: "edit_file", args: { path: "src/current.ts" } } },
+    ]);
+
+    expect(buildSessionChanges(session).files.map((file) => file.path)).toEqual([
+      "src/old.ts",
+      "src/current.ts",
+      "src/new.ts",
+    ]);
   });
 });
