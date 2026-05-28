@@ -60,6 +60,9 @@ describe("SessionMemoryPanel", () => {
 
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("4 entries");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("shared user");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Shared user + session");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("104/7975 chars");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:research");
@@ -261,7 +264,9 @@ describe("SessionMemoryPanel", () => {
     const panel = screen.getByTestId("session-memory-panel");
     expect(panel).toHaveTextContent("No durable memory");
     expect(panel).toHaveTextContent("No user, core, or topic entries saved.");
-    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No memory buckets.");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Session scoped");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Read only");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No durable memory saved");
     expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
     expect(screen.queryByTestId("session-memory-form")).toBeNull();
     expect(panel).not.toHaveTextContent("No matching memory.");

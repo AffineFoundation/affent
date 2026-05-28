@@ -11,12 +11,15 @@ import {
   memoryBucketLabel,
   memoryBuckets,
   memoryBucketUsage,
+  memoryPressureLabel,
+  memoryScopeLabel,
+  memoryStats,
+  memoryUsageLabel,
   memoryUpdateDraft,
   memoryUpdateEvidenceText,
   memoryUpdateLocation,
   memoryUpdatePreview,
   manualMemoryDraft,
-  totalMemoryChars,
 } from "../view/sessionMemory";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
@@ -68,8 +71,7 @@ export function SessionMemoryPanel({
   }, [filtered, trimmedQuery]);
   const hasSearch = buckets.length > 0;
   const hasMemorySnapshot = !!memory;
-  const entryCount = buckets.reduce((sum, bucket) => sum + bucket.entry_count, 0);
-  const topicCount = memory?.topics?.length ?? 0;
+  const stats = useMemo(() => memoryStats(memory), [memory]);
   const summary = noSession
     ? "Session memory unavailable"
     : loading
@@ -77,7 +79,7 @@ export function SessionMemoryPanel({
       : error && !hasMemorySnapshot
         ? "Memory unavailable"
         : memory?.has_memory
-          ? `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`
+          ? `${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"}`
           : "No durable memory";
   const summaryDetail = noSession
     ? "Open a saved chat before inspecting session memory."
@@ -88,7 +90,7 @@ export function SessionMemoryPanel({
           ? `${panelErrorSummary("Memory API", error)} · showing last loaded memory`
           : panelErrorSummary("Memory API", error)
         : memory?.has_memory
-          ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalMemoryChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
+          ? `${stats.topicCount} ${stats.topicCount === 1 ? "topic" : "topics"} · ${memoryUsageLabel(stats)}${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";
 
   async function handleManualMemorySubmit(event: FormEvent<HTMLFormElement>) {
@@ -191,6 +193,7 @@ export function SessionMemoryPanel({
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
         {!loading && !noSession && (!error || hasMemorySnapshot) ? (
           <>
+            <MemoryDashboard memory={memory} stats={stats} canWrite={Boolean(onAddMemory)} canDraft={Boolean(onUseAsDraft)} />
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
               <div className="session-skills-controls">
@@ -356,7 +359,10 @@ export function SessionMemoryPanel({
                   );
                 })
               ) : (
-                <div className="session-skills-empty">{buckets.length > 0 ? "No matching memory." : "No memory buckets."}</div>
+                <div className="session-memory-empty-state">
+                  <strong>{buckets.length > 0 ? "No matching memory" : "No durable memory saved"}</strong>
+                  <span>{buckets.length > 0 ? "Clear or narrow the search to inspect another bucket." : "Store stable project facts, user preferences, or recurring workflow rules below."}</span>
+                </div>
               )}
             </div>
             {memorySaveState.message && !(onAddMemory || onUseAsDraft) ? (
@@ -383,6 +389,45 @@ export function SessionMemoryPanel({
   );
 }
 
+function MemoryDashboard({
+  memory,
+  stats,
+  canWrite,
+  canDraft,
+}: {
+  memory?: SessionMemoryResponse;
+  stats: ReturnType<typeof memoryStats>;
+  canWrite: boolean;
+  canDraft: boolean;
+}) {
+  const writeMode = canWrite ? "Direct write" : canDraft ? "Draft only" : "Read only";
+  const pressureTone = stats.pressure === "full" || stats.pressure === "watch" ? "watch" : "normal";
+  return (
+    <div className="session-memory-dashboard" data-testid="session-memory-dashboard">
+      <div className="session-memory-stat">
+        <span>Scope</span>
+        <strong>{memoryScopeLabel(memory)}</strong>
+        <small>{writeMode}</small>
+      </div>
+      <div className="session-memory-stat">
+        <span>Entries</span>
+        <strong>{stats.entryCount}</strong>
+        <small>{stats.bucketCount} {stats.bucketCount === 1 ? "bucket" : "buckets"}</small>
+      </div>
+      <div className="session-memory-stat">
+        <span>Topics</span>
+        <strong>{stats.topicCount}</strong>
+        <small>{memory?.core ? "Core present" : "No core bucket"}</small>
+      </div>
+      <div className="session-memory-stat" data-tone={pressureTone}>
+        <span>Usage</span>
+        <strong>{memoryUsageLabel(stats)}</strong>
+        <small>{memoryPressureLabel(stats)}</small>
+      </div>
+    </div>
+  );
+}
+
 function MemoryDraftForm({
   memoryTarget,
   memoryTopic,
@@ -406,12 +451,29 @@ function MemoryDraftForm({
   setMemoryContent: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const targetOptions = [
+    { value: "memory", label: "Session", description: "Project or task fact" },
+    { value: "user", label: "User", description: "Stable preference" },
+  ];
   return (
     <form className="session-skill-form session-memory-form" data-testid="session-memory-form" onSubmit={onSubmit}>
-      <label>
-        <span>Target</span>
-        <input value={memoryTarget} onChange={(event) => setMemoryTarget(event.target.value)} placeholder="memory" disabled={busy} />
-      </label>
+      <fieldset className="session-memory-targets">
+        <legend>Target</legend>
+        <div>
+          {targetOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              disabled={busy}
+              aria-pressed={memoryTarget === option.value}
+              onClick={() => setMemoryTarget(option.value)}
+            >
+              <strong>{option.label}</strong>
+              <span>{option.description}</span>
+            </button>
+          ))}
+        </div>
+      </fieldset>
       <label>
         <span>Topic</span>
         <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" disabled={busy} />

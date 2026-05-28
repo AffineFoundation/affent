@@ -6,6 +6,10 @@ import {
   memoryBucketEvidenceText,
   memoryBucketLabel,
   memoryBucketUsage,
+  memoryPressureLabel,
+  memoryScopeLabel,
+  memoryStats,
+  memoryUsageLabel,
   manualMemoryDraft,
   memoryUpdateDraft,
   memoryUpdateEvidenceText,
@@ -74,5 +78,36 @@ describe("sessionMemory view helpers", () => {
       "Content:",
       "CoinGecko pages require a browser fallback.",
     ].join("\n"));
+  });
+
+  it("summarizes memory scope and capacity pressure", () => {
+    const stats = memoryStats({
+      session_id: "s1",
+      has_memory: true,
+      shared_user_memory: true,
+      core: {
+        target: "memory",
+        topic: "core",
+        entries: ["current repository facts"],
+        entry_count: 1,
+        chars_used: 90,
+        chars_limit: 100,
+        percent: 90,
+      },
+      topics: [],
+    });
+
+    expect(stats).toMatchObject({
+      bucketCount: 1,
+      entryCount: 1,
+      topicCount: 0,
+      charsUsed: 90,
+      charsLimit: 100,
+      percent: 90,
+      pressure: "full",
+    });
+    expect(memoryUsageLabel(stats)).toBe("90/100 chars");
+    expect(memoryPressureLabel(stats)).toBe("90% used");
+    expect(memoryScopeLabel({ session_id: "s1", has_memory: false, shared_user_memory: true, topics: [] })).toBe("Shared user + session");
   });
 });

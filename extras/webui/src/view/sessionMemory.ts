@@ -1,6 +1,16 @@
 import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionMemoryBucket, SessionMemoryResponse } from "../api/sessions";
 
+export interface SessionMemoryStats {
+  bucketCount: number;
+  entryCount: number;
+  topicCount: number;
+  charsUsed: number;
+  charsLimit?: number;
+  percent?: number;
+  pressure: "empty" | "ok" | "watch" | "full";
+}
+
 export function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBucket[] {
   if (!memory) return [];
   const out: SessionMemoryBucket[] = [];
@@ -8,6 +18,28 @@ export function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBuck
   if (memory.core) out.push(memory.core);
   out.push(...(memory.topics ?? []));
   return out;
+}
+
+export function memoryStats(memory?: SessionMemoryResponse): SessionMemoryStats {
+  const buckets = memoryBuckets(memory);
+  const charsUsed = totalMemoryChars(buckets);
+  const limits = buckets.map((bucket) => bucket.chars_limit ?? 0).filter((limit) => limit > 0);
+  const charsLimit = limits.length > 0 ? limits.reduce((sum, limit) => sum + limit, 0) : undefined;
+  const explicitPercent = buckets.map((bucket) => bucket.percent ?? 0).filter((percent) => percent > 0);
+  const percent = charsLimit
+    ? Math.min(100, Math.round((charsUsed / charsLimit) * 100))
+    : explicitPercent.length > 0
+      ? Math.max(...explicitPercent)
+      : undefined;
+  return {
+    bucketCount: buckets.length,
+    entryCount: buckets.reduce((sum, bucket) => sum + bucket.entry_count, 0),
+    topicCount: memory?.topics?.length ?? 0,
+    charsUsed,
+    charsLimit,
+    percent,
+    pressure: memoryPressure(percent, buckets.length),
+  };
 }
 
 export function memoryBucketLabel(bucket: SessionMemoryBucket): string {
@@ -19,6 +51,24 @@ export function memoryBucketLabel(bucket: SessionMemoryBucket): string {
 export function memoryBucketUsage(bucket: SessionMemoryBucket): string {
   const base = bucket.chars_limit ? `${bucket.chars_used}/${bucket.chars_limit} chars` : `${bucket.chars_used} chars`;
   return bucket.percent ? `${base} · ${bucket.percent}%` : base;
+}
+
+export function memoryUsageLabel(stats: SessionMemoryStats): string {
+  if (stats.charsLimit) return `${stats.charsUsed}/${stats.charsLimit} chars`;
+  return `${stats.charsUsed} chars`;
+}
+
+export function memoryPressureLabel(stats: SessionMemoryStats): string {
+  if (stats.pressure === "empty") return "No pressure";
+  if (stats.percent === undefined) return "Capacity unknown";
+  if (stats.pressure === "full") return `${stats.percent}% used`;
+  if (stats.pressure === "watch") return `${stats.percent}% used`;
+  return `${stats.percent}% used`;
+}
+
+export function memoryScopeLabel(memory?: SessionMemoryResponse): string {
+  if (!memory) return "No snapshot";
+  return memory.shared_user_memory ? "Shared user + session" : "Session scoped";
 }
 
 export function memoryBucketMatchesQuery(bucket: SessionMemoryBucket, query: string): boolean {
@@ -114,6 +164,14 @@ export function manualMemoryDraft({
 
 export function totalMemoryChars(buckets: readonly SessionMemoryBucket[]): number {
   return buckets.reduce((sum, bucket) => sum + bucket.chars_used, 0);
+}
+
+function memoryPressure(percent: number | undefined, bucketCount: number): SessionMemoryStats["pressure"] {
+  if (bucketCount === 0) return "empty";
+  if (percent === undefined) return "ok";
+  if (percent >= 90) return "full";
+  if (percent >= 70) return "watch";
+  return "ok";
 }
 
 function memoryBucketSearchText(bucket: SessionMemoryBucket): string {
