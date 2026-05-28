@@ -154,6 +154,21 @@ export function workspaceVerifyDraft(workspace: SessionWorkspaceView): string {
   ].filter((line): line is string => Boolean(line)).join("\n");
 }
 
+export function workspaceCwdBrowserPath(workspace: SessionWorkspaceView): string | undefined {
+  if (!workspace.path) return undefined;
+  const cwd = workspace.latestCommandCwd ?? workspace.lastAgentCwd;
+  if (!cwd) return undefined;
+  const workspacePath = normalizePath(workspace.path);
+  const cwdPath = normalizePath(cwd);
+  if (!workspacePath || !cwdPath) return undefined;
+  if (!isAbsolutePath(cwdPath)) return cwdPath === "." ? undefined : cwdPath.replace(/^\.\//, "");
+  const root = workspacePath.replace(/\/+$/, "");
+  if (cwdPath === root) return undefined;
+  if (!cwdPath.startsWith(`${root}/`)) return undefined;
+  const rel = cwdPath.slice(root.length + 1);
+  return rel || undefined;
+}
+
 function workspaceShortStatus({
   summary,
   label,
@@ -232,6 +247,10 @@ function compactPath(path: string): string {
 
 function clean(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "") || "/";
 }
 
 function isAbsolutePath(path: string): boolean {

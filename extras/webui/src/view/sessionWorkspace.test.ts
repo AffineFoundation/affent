@@ -3,7 +3,7 @@ import type { SessionSummary } from "../api/sessions";
 import { reduceRawEvents } from "../store/reduce";
 import { buildSessionRun } from "./sessionRun";
 import type { SessionRunView } from "./sessionRun";
-import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
+import { buildSessionWorkspace, workspaceCwdBrowserPath, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
 
 describe("buildSessionWorkspace", () => {
   it("summarizes a recorded workspace binding with the latest command cwd", () => {
@@ -30,6 +30,7 @@ describe("buildSessionWorkspace", () => {
       expect.objectContaining({ label: "Binding", value: "Recorded", tone: "ok" }),
       expect.objectContaining({ label: "Agent cwd", value: "Inside", detail: "inside session", tone: "ok" }),
     ]));
+    expect(workspaceCwdBrowserPath(workspace)).toBe("extras/webui");
   });
 
   it("flags absolute command cwd outside the session workspace", () => {
@@ -63,6 +64,7 @@ describe("buildSessionWorkspace", () => {
       cwd: "/repo/affent",
     });
     expect(workspaceVerifyDraft(workspace)).toContain("Working directory: /repo/affent");
+    expect(workspaceCwdBrowserPath(workspace)).toBeUndefined();
   });
 
   it("marks historical command cwd evidence as missing an active workspace binding", () => {
@@ -86,6 +88,7 @@ describe("buildSessionWorkspace", () => {
       expect.objectContaining({ label: "Agent cwd", value: "Recorded", detail: "historical cwd", tone: "ok" }),
     ]));
     expect(workspaceDraft(workspace)).toContain("Use this historical command cwd as workspace evidence");
+    expect(workspaceCwdBrowserPath(workspace)).toBeUndefined();
   });
 
   it("uses the chronologically latest command cwd instead of the prioritized Run list", () => {
@@ -109,6 +112,10 @@ describe("buildSessionWorkspace", () => {
       latestCommandCwd: "/repo/affent/extras/webui",
       issue: undefined,
     });
+    expect(workspaceCwdBrowserPath(buildSessionWorkspace(
+      session({ workspace_path: "/repo/affent", workspace_label: "affent" }),
+      run,
+    ))).toBe("extras/webui");
   });
 
   it("stays absent when no workspace evidence exists", () => {

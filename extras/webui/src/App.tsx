@@ -1973,6 +1973,10 @@ export function App() {
         <SessionWorkspacePanel
           workspace={sessionWorkspace}
           defaultOpen
+          onOpenWorkspacePath={sessionWorkspace.path ? (path) => {
+            setWorkbenchTab("files");
+            void handleOpenWorkspacePath(path);
+          } : undefined}
           onVerifyWorkspace={handleRunCommandRequest}
           onUseAsDraft={handleUseAsDraft}
         />

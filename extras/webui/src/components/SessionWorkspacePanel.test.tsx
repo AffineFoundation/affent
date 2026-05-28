@@ -10,9 +10,10 @@ describe("SessionWorkspacePanel", () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const onUseAsDraft = vi.fn();
     const onVerifyWorkspace = vi.fn().mockResolvedValue(undefined);
+    const onOpenWorkspacePath = vi.fn();
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
-    render(<SessionWorkspacePanel defaultOpen workspace={workspace} onVerifyWorkspace={onVerifyWorkspace} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionWorkspacePanel defaultOpen workspace={workspace} onVerifyWorkspace={onVerifyWorkspace} onOpenWorkspacePath={onOpenWorkspacePath} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-workspace-panel");
     expect(panel).toHaveAttribute("open");
@@ -39,6 +40,9 @@ describe("SessionWorkspacePanel", () => {
     expect(writeText).toHaveBeenCalledWith("/tmp");
     await user.click(within(panel).getByRole("button", { name: "Copy workspace evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Issue: Latest command cwd is outside the session workspace."));
+    await user.click(within(panel).getByRole("button", { name: "Browse root" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith(".");
+    expect(within(panel).queryByRole("button", { name: "Open cwd" })).toBeNull();
     await user.click(within(panel).getByRole("button", { name: "Verify workspace" }));
     expect(onVerifyWorkspace).toHaveBeenCalledWith({
       command: "pwd; git status --short --branch 2>/dev/null || true",
@@ -79,6 +83,27 @@ describe("SessionWorkspacePanel", () => {
       expect.stringContaining("Working directory: /workspace/sessions/sess_123"),
       "run_command",
     );
+  });
+
+  it("opens the latest in-workspace command cwd from the workspace boundary", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspacePath = vi.fn();
+    render(<SessionWorkspacePanel defaultOpen workspace={{
+      hasData: true,
+      summary: "affent",
+      shortStatus: "affent · main",
+      detail: "/repo/affent · branch main · cwd /repo/affent/extras/webui",
+      verification: "verified",
+      label: "affent",
+      path: "/repo/affent",
+      branch: "main",
+      lastAgentCwd: "/repo/affent/extras/webui",
+      latestCommandCwd: "/repo/affent/extras/webui",
+    }} onOpenWorkspacePath={onOpenWorkspacePath} />);
+
+    const panel = screen.getByTestId("session-workspace-panel");
+    await user.click(within(panel).getByRole("button", { name: "Open cwd" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("extras/webui");
   });
 });
 

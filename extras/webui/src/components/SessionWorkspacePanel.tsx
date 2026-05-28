@@ -1,7 +1,7 @@
 import type { UseAsDraft } from "../view/draftSource";
 import type { RunCommandExecutionRequest } from "../view/sessionRun";
 import type { SessionWorkspaceFact, SessionWorkspaceView } from "../view/sessionWorkspace";
-import { workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
+import { workspaceCwdBrowserPath, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
 import { CopyButton } from "./CopyButton";
 
 type WorkspaceVerifyAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -10,15 +10,18 @@ export function SessionWorkspacePanel({
   workspace,
   defaultOpen = false,
   onVerifyWorkspace,
+  onOpenWorkspacePath,
   onUseAsDraft,
 }: {
   workspace: SessionWorkspaceView;
   defaultOpen?: boolean;
   onVerifyWorkspace?: WorkspaceVerifyAction;
+  onOpenWorkspacePath?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
   const canVerify = workspace.hasData && (onVerifyWorkspace || onUseAsDraft);
   const reviewFacts = workspaceReviewFacts(workspace);
+  const cwdBrowserPath = workspaceCwdBrowserPath(workspace);
   const tone = workspace.tone ?? (workspace.verification === "mismatch" || workspace.verification === "missing_binding" ? "warning" : undefined);
   return (
     <details className="session-skills-panel session-workspace-panel" data-testid="session-workspace-panel" open={defaultOpen}>
@@ -66,6 +69,16 @@ export function SessionWorkspacePanel({
             {workspace.path ? <CopyButton label="Copy path" value={workspace.path} className="ghost-action" /> : null}
             {workspace.lastAgentCwd ? <CopyButton label="Copy cwd" value={workspace.lastAgentCwd} className="ghost-action" /> : null}
             <CopyButton label="Copy workspace evidence" value={workspaceEvidenceText(workspace)} className="ghost-action" />
+            {workspace.path && onOpenWorkspacePath ? (
+              <button type="button" className="ghost-action primary-run-action" onClick={() => onOpenWorkspacePath(".")}>
+                Browse root
+              </button>
+            ) : null}
+            {cwdBrowserPath && onOpenWorkspacePath ? (
+              <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(cwdBrowserPath)}>
+                Open cwd
+              </button>
+            ) : null}
             {canVerify ? (
               <button
                 type="button"
