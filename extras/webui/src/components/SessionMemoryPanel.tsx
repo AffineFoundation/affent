@@ -4,6 +4,8 @@ import type { SessionMemoryResponse } from "../api/sessions";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   memoryActionLabel,
+  memoryBucketMatchesQuery,
+  memoryBucketMatchingEntries,
   memoryBucketDraft,
   memoryBucketEvidenceText,
   memoryBucketLabel,
@@ -42,17 +44,15 @@ export function SessionMemoryPanel({
   const [memoryTopic, setMemoryTopic] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
+  const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
-    const search = query.trim().toLowerCase();
-    if (!search) return buckets;
-    return buckets.filter((bucket) =>
-      [memoryBucketLabel(bucket), bucket.target, bucket.topic, ...(bucket.entries ?? [])]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(search),
-    );
-  }, [buckets, query]);
+    if (!trimmedQuery) return buckets;
+    return buckets.filter((bucket) => memoryBucketMatchesQuery(bucket, trimmedQuery));
+  }, [buckets, trimmedQuery]);
+  const matchingEntryCount = useMemo(() => {
+    if (!trimmedQuery) return 0;
+    return filtered.reduce((sum, bucket) => sum + memoryBucketMatchingEntries(bucket, trimmedQuery).length, 0);
+  }, [filtered, trimmedQuery]);
   const hasSearch = buckets.length > 0;
   const entryCount = buckets.reduce((sum, bucket) => sum + bucket.entry_count, 0);
   const topicCount = memory?.topics?.length ?? 0;
@@ -111,47 +111,67 @@ export function SessionMemoryPanel({
                   <span>Search memory</span>
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search entries or topics" />
                 </label>
+                {trimmedQuery ? (
+                  <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                    Clear
+                  </button>
+                ) : null}
+                {trimmedQuery ? (
+                  <span className="session-search-count" data-testid="session-memory-search-count">
+                    {filtered.length} {filtered.length === 1 ? "bucket" : "buckets"}
+                    {matchingEntryCount > 0 ? ` · ${matchingEntryCount} ${matchingEntryCount === 1 ? "entry" : "entries"}` : ""}
+                  </span>
+                ) : null}
               </div>
             ) : null}
             <div className="session-skills-list" data-testid="session-memory-list">
               {filtered.length > 0 ? (
-                filtered.map((bucket) => (
-                  <details key={`${bucket.target}:${bucket.topic ?? ""}`} className="session-skill-item">
-                    <summary>
-                      <span className="session-skill-title">
-                        <strong>{memoryBucketLabel(bucket)}</strong>
-                        <span>{bucket.entry_count} entries</span>
-                      </span>
-                      <span className="session-skill-desc">{memoryBucketUsage(bucket)}</span>
-                    </summary>
-                    <div className="session-skill-detail">
-                      <div className="session-skill-meta">
-                        <span>{bucket.target}</span>
-                        {bucket.newest_at ? <span>Updated {formatTimestamp(bucket.newest_at)}</span> : null}
+                filtered.map((bucket) => {
+                  const matchingEntries = trimmedQuery ? memoryBucketMatchingEntries(bucket, trimmedQuery) : [];
+                  const entriesToShow = matchingEntries.length > 0 ? matchingEntries : bucket.entries;
+                  return (
+                    <details key={`${bucket.target}:${bucket.topic ?? ""}`} className="session-skill-item" open={trimmedQuery ? true : undefined}>
+                      <summary>
+                        <span className="session-skill-title">
+                          <strong>{memoryBucketLabel(bucket)}</strong>
+                          <span>{bucket.entry_count} entries</span>
+                        </span>
+                        <span className="session-skill-desc">{memoryBucketUsage(bucket)}</span>
+                        {trimmedQuery && matchingEntries.length > 0 ? (
+                          <span className="session-skill-status">
+                            <span>{matchingEntries.length} matched</span>
+                          </span>
+                        ) : null}
+                      </summary>
+                      <div className="session-skill-detail">
+                        <div className="session-skill-meta">
+                          <span>{bucket.target}</span>
+                          {bucket.newest_at ? <span>Updated {formatTimestamp(bucket.newest_at)}</span> : null}
+                        </div>
+                        {bucket.entries && bucket.entries.length > 0 ? (
+                          <>
+                            <div className="session-memory-actions">
+                              <CopyButton label="Copy entries" value={bucket.entries.join("\n\n")} className="node-action" />
+                              <CopyButton label="Copy evidence" value={memoryBucketEvidenceText(bucket)} className="node-action" />
+                              {onUseAsDraft ? (
+                                <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
+                                  Use memory as draft
+                                </button>
+                              ) : null}
+                            </div>
+                            <ul className="session-memory-entries" data-filtered={matchingEntries.length > 0 ? "true" : "false"}>
+                              {(entriesToShow ?? []).map((entry, index) => (
+                                <li key={`${index}:${entry}`}>{entry}</li>
+                              ))}
+                            </ul>
+                          </>
+                        ) : (
+                          <p className="session-skill-preview">No entries in this bucket.</p>
+                        )}
                       </div>
-                      {bucket.entries && bucket.entries.length > 0 ? (
-                        <>
-                          <div className="session-memory-actions">
-                            <CopyButton label="Copy entries" value={bucket.entries.join("\n\n")} className="node-action" />
-                            <CopyButton label="Copy evidence" value={memoryBucketEvidenceText(bucket)} className="node-action" />
-                            {onUseAsDraft ? (
-                              <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
-                                Use memory as draft
-                              </button>
-                            ) : null}
-                          </div>
-                          <ul className="session-memory-entries">
-                            {bucket.entries.map((entry, index) => (
-                              <li key={`${index}:${entry}`}>{entry}</li>
-                            ))}
-                          </ul>
-                        </>
-                      ) : (
-                        <p className="session-skill-preview">No entries in this bucket.</p>
-                      )}
-                    </div>
-                  </details>
-                ))
+                    </details>
+                  );
+                })
               ) : (
                 <div className="session-skills-empty">{buckets.length > 0 ? "No matching memory." : "No memory buckets."}</div>
               )}

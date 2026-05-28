@@ -46,9 +46,9 @@ describe("SessionMemoryPanel", () => {
             {
               target: "memory",
               topic: "research",
-              entries: ["taostats pages are dynamic"],
-              entry_count: 1,
-              chars_used: 27,
+              entries: ["taostats pages are dynamic", "CoinGecko has API fallback"],
+              entry_count: 2,
+              chars_used: 55,
               chars_limit: 4400,
               percent: 1,
               newest_at: "2026-05-26T10:00:00Z",
@@ -58,7 +58,7 @@ describe("SessionMemoryPanel", () => {
       />,
     );
 
-    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("3 entries");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("4 entries");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("shared user");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
@@ -75,16 +75,20 @@ describe("SessionMemoryPanel", () => {
     await user.type(screen.getByPlaceholderText("Search entries or topics"), "taostats");
 
     const list = screen.getByTestId("session-memory-list");
+    expect(screen.getByTestId("session-memory-search-count")).toHaveTextContent("1 bucket · 1 entry");
     expect(list).toHaveTextContent("research");
     expect(list).not.toHaveTextContent("Core");
-
-    await user.click(within(list).getByText("research"));
+    expect(list).toHaveTextContent("1 matched");
     expect(list).toHaveTextContent("taostats pages are dynamic");
+    expect(list).not.toHaveTextContent("CoinGecko has API fallback");
 
     await user.click(within(list).getByRole("button", { name: "Copy evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory bucket evidence for research"));
     await user.click(within(list).getByRole("button", { name: "Use memory as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this memory evidence"), "memory");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
+    expect(screen.queryByTestId("session-memory-search-count")).toBeNull();
 
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic"), "research");
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "CoinGecko pages require a browser fallback.");

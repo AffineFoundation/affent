@@ -2778,6 +2778,13 @@ body {
   font-weight: 650;
 }
 
+.session-search-count {
+  grid-column: 1 / -1;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
 .session-skills-search input,
 .session-skill-form input,
 .session-skill-form textarea {

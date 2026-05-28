@@ -21,6 +21,16 @@ export function memoryBucketUsage(bucket: SessionMemoryBucket): string {
   return bucket.percent ? `${base} · ${bucket.percent}%` : base;
 }
 
+export function memoryBucketMatchesQuery(bucket: SessionMemoryBucket, query: string): boolean {
+  return memoryBucketSearchText(bucket).includes(query.trim().toLowerCase());
+}
+
+export function memoryBucketMatchingEntries(bucket: SessionMemoryBucket, query: string): string[] {
+  const search = query.trim().toLowerCase();
+  if (!search) return bucket.entries ?? [];
+  return (bucket.entries ?? []).filter((entry) => entry.toLowerCase().includes(search));
+}
+
 export function memoryActionLabel(action: string): string {
   if (action === "add") return "Added";
   if (action === "replace") return "Replaced";
@@ -104,4 +114,11 @@ export function manualMemoryDraft({
 
 export function totalMemoryChars(buckets: readonly SessionMemoryBucket[]): number {
   return buckets.reduce((sum, bucket) => sum + bucket.chars_used, 0);
+}
+
+function memoryBucketSearchText(bucket: SessionMemoryBucket): string {
+  return [memoryBucketLabel(bucket), bucket.target, bucket.topic, ...(bucket.entries ?? [])]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }

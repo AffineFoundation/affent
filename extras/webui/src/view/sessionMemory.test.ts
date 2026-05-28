@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  memoryBucketMatchesQuery,
+  memoryBucketMatchingEntries,
   memoryBucketDraft,
   memoryBucketEvidenceText,
   memoryBucketLabel,
@@ -55,6 +57,9 @@ describe("sessionMemory view helpers", () => {
       "- taostats pages are dynamic",
     ].join("\n"));
     expect(memoryBucketDraft(bucket)).toContain("relevant, stale, or needs correction");
+    expect(memoryBucketMatchesQuery(bucket, "TAOSTATS")).toBe(true);
+    expect(memoryBucketMatchingEntries(bucket, "dynamic")).toEqual(["taostats pages are dynamic"]);
+    expect(memoryBucketMatchingEntries(bucket, "research")).toEqual([]);
   });
 
   it("builds a manual memory draft", () => {
