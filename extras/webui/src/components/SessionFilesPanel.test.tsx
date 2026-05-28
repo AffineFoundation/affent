@@ -84,6 +84,95 @@ describe("SessionFilesPanel", () => {
 
     expect(screen.getByTestId("session-files-panel")).not.toHaveAttribute("open");
   });
+
+  it("browses workspace directories and file snapshots", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspacePath = vi.fn();
+    const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={files}
+        workspaceBrowser={{
+          state: "ready",
+          workspacePath: "/work/affent",
+          file: {
+            path: ".",
+            kind: "directory",
+            title: "Workspace root",
+            detail: "1 directory · 1 file",
+            entries: [
+              { name: "src", path: "src", kind: "directory" },
+              { name: "README.md", path: "README.md", kind: "file", size: "2 KiB" },
+            ],
+            lines: [],
+            hasMore: false,
+          },
+        }}
+        onOpenWorkspacePath={onOpenWorkspacePath}
+        onUseAsDraft={onUseAsDraft}
+      />,
+    );
+
+    const browser = screen.getByTestId("session-workspace-browser");
+    expect(browser).toHaveTextContent("Workspace browser");
+    expect(browser).toHaveTextContent("Workspace root");
+    expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("src");
+    expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("README.md");
+    await user.click(within(screen.getByTestId("session-workspace-browser-list")).getByRole("button", { name: /src/ }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src");
+    await user.clear(screen.getByLabelText("Workspace path"));
+    await user.type(screen.getByLabelText("Workspace path"), "src/main.go");
+    await user.click(within(browser).getByRole("button", { name: "Open" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/main.go");
+    await user.click(within(browser).getByRole("button", { name: "Reference listing" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("- file README.md (2 KiB)"), "file_snapshot");
+  });
+
+  it("shows loaded workspace file content", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspacePath = vi.fn();
+    const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={files}
+        workspaceBrowser={{
+          state: "ready",
+          workspacePath: "/work/affent",
+          file: {
+            path: "src/main.go",
+            kind: "file",
+            title: "main.go",
+            detail: "26 B · loaded",
+            entries: [],
+            text: "package main\nfunc main() {}\n",
+            lines: ["package main", "func main() {}", ""],
+            hasMore: false,
+            size: "26 B",
+          },
+        }}
+        onOpenWorkspacePath={onOpenWorkspacePath}
+        onUseAsDraft={onUseAsDraft}
+      />,
+    );
+
+    const preview = screen.getByTestId("session-workspace-file-preview");
+    expect(preview).toHaveTextContent("src/main.go");
+    expect(preview).toHaveTextContent("package main");
+    await user.click(within(preview).getByRole("button", { name: "Up" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src");
+    await user.click(within(preview).getByRole("button", { name: "Copy file" }));
+    expect(writeText).toHaveBeenCalledWith("package main\nfunc main() {}\n");
+    await user.click(within(preview).getByRole("button", { name: "Reference file" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: src/main.go"), "file_snapshot");
+  });
 });
 
 const files: SessionFilesView = {

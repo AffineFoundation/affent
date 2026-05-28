@@ -42,6 +42,7 @@ import (
 //	GET    /v1/sessions/{id}/transcripts/{path...}
 //	GET    /v1/sessions/{id}/artifacts
 //	GET    /v1/sessions/{id}/artifacts/{path...}
+//	GET    /v1/sessions/{id}/files
 //	POST   /v1/sessions/{id}/messages
 //	POST   /v1/sessions/{id}/commands
 //	POST   /v1/sessions/{id}/cancel
@@ -93,6 +94,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
+//	GET    /v1/sessions/{id}/files   → read/list active workspace files
 //	POST   /v1/sessions/{id}/messages → start async user turn
 //	POST   /v1/sessions/{id}/commands → run a workspace command from Workbench
 //	POST   /v1/sessions/{id}/cancel  → cancel active turn
@@ -143,6 +145,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionTranscripts(pool, sessionID, strings.TrimPrefix(sub, "transcripts"), w, r)
 		case (sub == "artifacts" || strings.HasPrefix(sub, "artifacts/")) && r.Method == http.MethodGet:
 			handleSessionArtifacts(pool, sessionID, strings.TrimPrefix(sub, "artifacts"), w, r)
+		case sub == "files" && r.Method == http.MethodGet:
+			handleSessionFiles(pool, sessionID, w, r)
 		case sub == "messages" && r.Method == http.MethodPost:
 			handleSessionMessage(pool, sessionID, w, r)
 		case sub == "commands" && r.Method == http.MethodPost:

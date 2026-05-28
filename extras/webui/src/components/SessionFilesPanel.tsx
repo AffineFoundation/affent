@@ -7,6 +7,7 @@ import {
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
+import { parentWorkspacePath, workspaceFileDraft, type WorkspaceFileBrowserState, type WorkspaceFileEntryView, type WorkspaceFileView } from "../view/workspaceFile";
 import { CopyButton } from "./CopyButton";
 import { HighlightText } from "./HighlightText";
 
@@ -14,17 +15,22 @@ type FileFilter = "all" | "changed" | "snapshots" | "issues" | "listed";
 
 export function SessionFilesPanel({
   files,
+  workspaceBrowser,
   defaultOpen = false,
+  onOpenWorkspacePath,
   onOpenArtifact,
   onUseAsDraft,
 }: {
   files: SessionFilesView;
+  workspaceBrowser?: WorkspaceFileBrowserState;
   defaultOpen?: boolean;
+  onOpenWorkspacePath?: (path: string) => void;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
   const [previewQuery, setPreviewQuery] = useState("");
+  const [workspaceQuery, setWorkspaceQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const [selectedRange, setSelectedRange] = useState<{ path: string; start: number; end: number } | undefined>();
   const [filter, setFilter] = useState<FileFilter>("all");
@@ -71,7 +77,23 @@ export function SessionFilesPanel({
             <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
             <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
           </div>
+          {onOpenWorkspacePath ? (
+            <span className="session-files-overview-actions">
+              <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(".")}>
+                Browse workspace
+              </button>
+            </span>
+          ) : null}
         </div>
+        {workspaceBrowser ? (
+          <WorkspaceBrowser
+            browser={workspaceBrowser}
+            query={workspaceQuery}
+            onQueryChange={setWorkspaceQuery}
+            onOpenPath={onOpenWorkspacePath}
+            onUseAsDraft={onUseAsDraft}
+          />
+        ) : null}
         {focus ? (
           <div className="session-files-focus" data-tone={focus.tone}>
             <div className="session-files-focus-main">
@@ -218,6 +240,184 @@ export function SessionFilesPanel({
       </div>
     </details>
   );
+}
+
+function WorkspaceBrowser({
+  browser,
+  query,
+  onQueryChange,
+  onOpenPath,
+  onUseAsDraft,
+}: {
+  browser: WorkspaceFileBrowserState;
+  query: string;
+  onQueryChange: (value: string) => void;
+  onOpenPath?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  const ready = browser.state === "ready" ? browser.file : undefined;
+  const currentPath = browser.state === "ready" ? browser.file.path : browser.state === "loading" || browser.state === "error" ? browser.path ?? "." : ".";
+  const parent = ready ? parentWorkspacePath(ready.path) : undefined;
+
+  function openTypedPath() {
+    onOpenPath?.(query.trim() || currentPath || ".");
+  }
+
+  return (
+    <section className="session-workspace-browser" data-testid="session-workspace-browser" aria-label="Workspace file browser">
+      <div className="session-workspace-browser-head">
+        <div>
+          <span>Workspace browser</span>
+          <strong>{workspaceBrowserTitle(browser)}</strong>
+          <small>{workspaceBrowserDetail(browser)}</small>
+        </div>
+        <div className="session-workspace-browser-path">
+          <input
+            aria-label="Workspace path"
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") openTypedPath();
+            }}
+            placeholder={currentPath === "." ? "src/main.go" : currentPath}
+          />
+          <button type="button" className="ghost-action" disabled={!onOpenPath || browser.state === "loading"} onClick={openTypedPath}>
+            Open
+          </button>
+        </div>
+      </div>
+      {browser.state === "loading" ? <div className="session-skills-empty">Loading {browser.path}...</div> : null}
+      {browser.state === "error" ? <div className="session-skills-empty">Could not open {browser.path ?? "workspace"}: {browser.error}</div> : null}
+      {ready?.kind === "directory" ? (
+        <WorkspaceDirectory
+          file={ready}
+          parent={parent}
+          onOpenPath={onOpenPath}
+          onUseAsDraft={onUseAsDraft}
+        />
+      ) : null}
+      {ready?.kind === "file" ? (
+        <WorkspaceFilePreview
+          file={ready}
+          parent={parent}
+          onOpenPath={onOpenPath}
+          onUseAsDraft={onUseAsDraft}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function WorkspaceDirectory({
+  file,
+  parent,
+  onOpenPath,
+  onUseAsDraft,
+}: {
+  file: WorkspaceFileView;
+  parent?: string;
+  onOpenPath?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  return (
+    <div className="session-workspace-browser-body">
+      <span className="session-evidence-actions">
+        {parent ? (
+          <button type="button" className="ghost-action" onClick={() => onOpenPath?.(parent)}>
+            Up
+          </button>
+        ) : null}
+        <CopyButton label="Copy path" value={file.path} className="ghost-action" />
+        {onUseAsDraft ? (
+          <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceFileDraft(file), "file_snapshot")}>
+            Reference listing
+          </button>
+        ) : null}
+      </span>
+      {file.entries.length > 0 ? (
+        <ol className="session-workspace-browser-list" data-testid="session-workspace-browser-list">
+          {file.entries.map((entry) => (
+            <WorkspaceEntry key={entry.path} entry={entry} onOpenPath={onOpenPath} />
+          ))}
+        </ol>
+      ) : (
+        <div className="session-skills-empty">Directory is empty.</div>
+      )}
+      {file.hasMore ? <small className="session-workspace-browser-more">More entries are available; open a narrower path.</small> : null}
+    </div>
+  );
+}
+
+function WorkspaceEntry({ entry, onOpenPath }: { entry: WorkspaceFileEntryView; onOpenPath?: (path: string) => void }) {
+  return (
+    <li className="session-workspace-browser-entry" data-kind={entry.kind}>
+      <button type="button" onClick={() => onOpenPath?.(entry.path)} disabled={!onOpenPath}>
+        <strong title={entry.path}>{entry.name}</strong>
+        <span>{entry.kind === "directory" ? "Directory" : entry.size ?? "File"}</span>
+      </button>
+    </li>
+  );
+}
+
+function WorkspaceFilePreview({
+  file,
+  parent,
+  onOpenPath,
+  onUseAsDraft,
+}: {
+  file: WorkspaceFileView;
+  parent?: string;
+  onOpenPath?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  return (
+    <div className="session-file-preview session-workspace-file-preview" data-testid="session-workspace-file-preview">
+      <div className="session-file-preview-head">
+        <div>
+          <span>Workspace file</span>
+          <strong title={file.path}>{file.path}</strong>
+        </div>
+        <small>{file.detail}</small>
+      </div>
+      <div className="session-file-preview-toolbar">
+        {parent ? (
+          <button type="button" className="ghost-action" onClick={() => onOpenPath?.(parent)}>
+            Up
+          </button>
+        ) : null}
+        <CopyButton label="Copy file" value={file.text ?? ""} className="ghost-action" />
+        <CopyButton label="Copy path" value={file.path} className="ghost-action" />
+        {onUseAsDraft ? (
+          <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceFileDraft(file), "file_snapshot")}>
+            Reference file
+          </button>
+        ) : null}
+      </div>
+      <div className="code session-file-preview-code" role="list" aria-label="Workspace file content">
+        {file.lines.map((line, index) => (
+          <div key={index} className="session-file-code-line">
+            <span className="session-file-code-line-number">{index + 1}</span>
+            <span className="session-file-code-line-text">{line || " "}</span>
+          </div>
+        ))}
+      </div>
+      {file.hasMore ? <small className="session-workspace-browser-more">Preview truncated; open through the agent before making broad edits.</small> : null}
+    </div>
+  );
+}
+
+function workspaceBrowserTitle(browser: WorkspaceFileBrowserState): string {
+  if (browser.state === "idle") return "Workspace file access";
+  if (browser.state === "loading") return browser.path;
+  if (browser.state === "error") return browser.path ?? "Workspace unavailable";
+  return browser.file.title;
+}
+
+function workspaceBrowserDetail(browser: WorkspaceFileBrowserState): string {
+  if (browser.state === "idle") return browser.workspacePath ? "Open root or enter a workspace-relative path." : "Workspace binding required.";
+  if (browser.state === "loading") return "Reading from the session workspace.";
+  if (browser.state === "error") return browser.error;
+  return browser.file.detail;
 }
 
 function FileFilterButton({

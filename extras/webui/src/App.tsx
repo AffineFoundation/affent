@@ -19,6 +19,7 @@ import {
   listSessions,
   listSkills,
   readSessionArtifact,
+  readSessionFile,
   sessionArtifactPath,
   readSkill,
   removeSessionMemory,
@@ -85,6 +86,7 @@ import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun, manualRunDraft } from "./view/sessionRun";
 import { buildWorkbenchArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
+import { buildWorkspaceFileView, type WorkspaceFileBrowserState } from "./view/workspaceFile";
 import { buildSessionTrace } from "./view/sessionTrace";
 import {
   buildConversationContextView,
@@ -219,6 +221,7 @@ export function App() {
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const [artifact, setArtifact] = useState<ArtifactViewerState>({ state: "idle" });
+  const [workspaceFileBrowser, setWorkspaceFileBrowser] = useState<WorkspaceFileBrowserState>({ state: "idle" });
   const sendInFlightRef = useRef(false);
   const initialUrlSessionIdRef = useRef(selectedSessionId);
   const sendFailedRef = useRef(false);
@@ -355,6 +358,9 @@ export function App() {
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
   const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
   const conversationContext = useMemo(() => buildConversationContextView(session, selectedSession?.context), [selectedSession?.context, session]);
+  useEffect(() => {
+    setWorkspaceFileBrowser({ state: "idle", workspacePath: sessionWorkspace.path });
+  }, [selectedSessionId, sessionWorkspace.path]);
   const workbenchAttachment = useMemo(
     () => buildWorkbenchAttachment({
       selectedSessionId,
@@ -1587,6 +1593,18 @@ export function App() {
     }
   }
 
+  async function handleOpenWorkspacePath(path: string) {
+    const cleanPath = path.trim() || ".";
+    if (!selectedSessionId) return;
+    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath: sessionWorkspace.path });
+    try {
+      const resp = await readSessionFile(client, selectedSessionId, { path: cleanPath, limit: 64 * 1024 });
+      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath: sessionWorkspace.path });
+    } catch (err) {
+      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath: sessionWorkspace.path });
+    }
+  }
+
   function handleArtifactSearch(query: string) {
     setArtifact((current) => (current.state === "ready" ? { ...current, query } : current));
   }
@@ -1894,7 +1912,9 @@ export function App() {
       return (
         <SessionFilesPanel
           files={sessionFiles}
+          workspaceBrowser={workspaceFileBrowser}
           defaultOpen
+          onOpenWorkspacePath={sessionWorkspace.hasData ? (path) => void handleOpenWorkspacePath(path) : undefined}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
         />

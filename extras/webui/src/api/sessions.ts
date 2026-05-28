@@ -393,6 +393,33 @@ export interface SessionCommandResponse {
   completed_at: string;
 }
 
+export interface SessionFileEntry {
+  name: string;
+  path: string;
+  kind: "file" | "directory" | string;
+  bytes?: number;
+  mod_time?: string;
+}
+
+export interface SessionFileResponse {
+  session_id: string;
+  path: string;
+  kind: "file" | "directory" | string;
+  bytes?: number;
+  mod_time?: string;
+  offset?: number;
+  text?: string;
+  has_more?: boolean;
+  entries?: SessionFileEntry[];
+}
+
+export interface SessionFileReadOptions {
+  path?: string;
+  offset?: number;
+  limit?: number;
+  signal?: AbortSignal;
+}
+
 export interface SessionCapabilities {
   eval_mode: boolean;
   eval_tools?: string;
@@ -801,6 +828,21 @@ export function runSessionCommand(
     body,
     signal,
   });
+}
+
+export function readSessionFile(
+  client: ApiClient,
+  sessionId: string,
+  opts: SessionFileReadOptions = {},
+): Promise<SessionFileResponse> {
+  const q = new URLSearchParams();
+  if (opts.path) q.set("path", opts.path);
+  if (opts.offset != null) q.set("offset", String(opts.offset));
+  if (opts.limit != null) q.set("limit", String(opts.limit));
+  return client.json<SessionFileResponse>(
+    withQuery(`/v1/sessions/${encodeURIComponent(sessionId)}/files`, q),
+    { signal: opts.signal },
+  );
 }
 
 export function cancelSessionTurn(
