@@ -76,6 +76,11 @@ Shared metadata fields:
   aggregate pass-rate gates are broad. CLI overrides use
   `--max-debug-brief-tag-rate tag=rate`; `tag=-1` disables a profile default
   for that tag.
+- `required_expectation_capabilities`: optional list of expectation capability
+  families that must be represented by at least one scenario in the batch.
+  This is a coverage guard for CI and model comparisons: it catches a run that
+  accidentally skipped, filtered, or misconfigured the scenario family a gate
+  was meant to exercise.
 
 ## Scenario Record
 

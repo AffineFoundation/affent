@@ -1120,7 +1120,11 @@ network-backed reads, browser network refs that were not followed by
 defer decision.
 Explicit `--max-debug-brief-tag-rate tag=rate` flags merge with profile
 defaults and can disable one profile tag with `tag=-1`. Other explicit gate
-flags override the profile defaults. JSONL summary records also
+flags override the profile defaults. Use
+`--require-expectation-capability CAPABILITY` when a CI batch must prove it
+actually included at least one scenario for a capability family such as
+`delegated_source_evidence`; this catches filtered or misconfigured suites
+before pass-rate gates are interpreted. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr.

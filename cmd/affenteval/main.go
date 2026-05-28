@@ -64,6 +64,35 @@ type batchConversationRepairExample struct {
 
 type stringFloatMapFlag map[string]float64
 
+type stringSetFlag map[string]bool
+
+func (f *stringSetFlag) Set(raw string) error {
+	for _, value := range splitCSV(raw) {
+		if value == "" {
+			continue
+		}
+		if *f == nil {
+			*f = stringSetFlag{}
+		}
+		(*f)[value] = true
+	}
+	if len(*f) == 0 {
+		return fmt.Errorf("value must be non-empty")
+	}
+	return nil
+}
+
+func (f *stringSetFlag) String() string {
+	if f == nil || len(*f) == 0 {
+		return ""
+	}
+	return strings.Join(sortedStringSetFlagValues(*f), ",")
+}
+
+func (f stringSetFlag) values() []string {
+	return sortedStringSetFlagValues(f)
+}
+
 func (f *stringFloatMapFlag) Set(raw string) error {
 	key, valueText, ok := strings.Cut(strings.TrimSpace(raw), "=")
 	if !ok {
@@ -106,6 +135,17 @@ func (f stringFloatMapFlag) clone() map[string]float64 {
 	return clone
 }
 
+func sortedStringSetFlagValues(values map[string]bool) []string {
+	out := make([]string, 0, len(values))
+	for value := range values {
+		if strings.TrimSpace(value) != "" {
+			out = append(out, value)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 func main() {
 	if err := loadDotEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "affenteval: load .env: %v\n", err)
@@ -119,6 +159,7 @@ func run(args []string) int {
 	fs.SetOutput(os.Stderr)
 	var (
 		debugBriefTagGates  stringFloatMapFlag
+		expectationCapGates stringSetFlag
 		list                = fs.Bool("list", false, "list built-in scenarios and exit")
 		listSuites          = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
 		listQualityProfiles = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
@@ -196,6 +237,7 @@ func run(args []string) int {
 		}
 	)
 	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
+	fs.Var(&expectationCapGates, "require-expectation-capability", "optional repeatable quality gate: require at least one scenario declaring this expectation capability; accepts comma-separated values")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
 
@@ -211,6 +253,9 @@ success and trace-level process quality.`)
 	}
 	if len(debugBriefTagGates) > 0 {
 		gates.MaxDebugBriefTagRates = debugBriefTagGates.clone()
+	}
+	if len(expectationCapGates) > 0 {
+		gates.RequiredExpectationCapabilities = expectationCapGates.values()
 	}
 	if *listQualityProfiles {
 		printQualityGateProfiles(os.Stdout)
@@ -396,6 +441,7 @@ type qualityGateConfig struct {
 	MaxAvgDurationMS                      *float64
 	MaxAvgTotalTokens                     *float64
 	MaxDebugBriefTagRates                 map[string]float64
+	RequiredExpectationCapabilities       []string
 }
 
 type qualityGateProfileDefinition struct {
@@ -564,6 +610,9 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 			continue
 		}
 		lines = append(lines, fmt.Sprintf("max-debug-brief-tag-rate=%s=%s", tag, formatGateFloat(value)))
+	}
+	if len(g.RequiredExpectationCapabilities) > 0 {
+		lines = append(lines, fmt.Sprintf("require-expectation-capability=%s", strings.Join(g.RequiredExpectationCapabilities, ",")))
 	}
 	return lines
 }
@@ -1865,6 +1914,11 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 			return fmt.Errorf("--max-debug-brief-tag-rate[%s] must be between 0 and 1", tag)
 		}
 	}
+	for _, cap := range g.RequiredExpectationCapabilities {
+		if strings.TrimSpace(cap) == "" {
+			return fmt.Errorf("--require-expectation-capability value must be non-empty")
+		}
+	}
 	return nil
 }
 
@@ -1904,6 +1958,11 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	expectationCapabilityPassed, expectationCapabilityTotal := expectationCapabilityPassTotals(s)
 	checkMin("expectation_capability_pass_rate", batchRatio(expectationCapabilityPassed, expectationCapabilityTotal), g.MinExpectationCapabilityPassRate, expectationCapabilityTotal > 0)
 	failures = append(failures, expectationCapabilityFamilyGateFailures(s, g.MinEachExpectationCapabilityPassRate)...)
+	for _, cap := range g.RequiredExpectationCapabilities {
+		if s.ExpectationCapabilities[cap] == 0 {
+			failures = append(failures, fmt.Sprintf("expectation_capability[%s] unavailable, want >= 1 scenario", cap))
+		}
+	}
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMin("session_search_matched_terms_per_call", batchRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls), g.MinSessionSearchMatchedTermsPerCall, s.SessionSearchCalls > 0)
 	checkMin("tool_repair_success_rate", batchRatio(s.ToolRepairSucceeded, s.ToolRepairCalls), g.MinToolRepairSuccessRate, s.ToolRepairCalls > 0)
@@ -2847,6 +2906,7 @@ type evalJSONLMetadata struct {
 	MaxAvgDurationMS                      *float64           `json:"max_avg_duration_ms,omitempty"`
 	MaxAvgTotalTokens                     *float64           `json:"max_avg_total_tokens,omitempty"`
 	MaxDebugBriefTagRates                 map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
+	RequiredExpectationCapabilities       []string           `json:"required_expectation_capabilities,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -2917,6 +2977,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgDurationMS:                      enabledQualityGateValue(gates.MaxAvgDurationMS),
 		MaxAvgTotalTokens:                     enabledQualityGateValue(gates.MaxAvgTotalTokens),
 		MaxDebugBriefTagRates:                 enabledQualityGateMap(gates.MaxDebugBriefTagRates),
+		RequiredExpectationCapabilities:       cloneStringSlice(gates.RequiredExpectationCapabilities),
 	}
 }
 
@@ -3735,7 +3796,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgToolCalls != nil ||
 		meta.MaxAvgDurationMS != nil ||
 		meta.MaxAvgTotalTokens != nil ||
-		len(meta.MaxDebugBriefTagRates) > 0
+		len(meta.MaxDebugBriefTagRates) > 0 ||
+		len(meta.RequiredExpectationCapabilities) > 0
 }
 
 func expectationCapabilityPassRates(total, passed map[string]int) map[string]float64 {
@@ -3807,6 +3869,13 @@ func cloneStringFloatMap(in map[string]float64) map[string]float64 {
 		out[k] = v
 	}
 	return out
+}
+
+func cloneStringSlice(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]string(nil), in...)
 }
 
 func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[string][]agenteval.ToolFailureExample {

@@ -114,6 +114,9 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
+	if !strings.Contains(help, "-require-expectation-capability") {
+		t.Fatalf("--help missing expectation capability coverage gate:\n%s", help)
+	}
 }
 
 func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
@@ -623,6 +626,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgDurationMS:                      ptr(1000),
 		MaxAvgTotalTokens:                     ptr(40),
 		MaxDebugBriefTagRates:                 map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0, "verifier:not_run": 0},
+		RequiredExpectationCapabilities:       []string{"browser", "delegated_source_evidence"},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -646,6 +650,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"expectation_capability_pass_rate[browser] 0.500 < min 0.750",
 		"expectation_capability_pass_rate[web] 0.000 < min 0.750",
 		"expectation_capability_pass_rate 0.500 < min 0.750",
+		"expectation_capability[delegated_source_evidence] unavailable, want >= 1 scenario",
 		"focused_task_error_rate 0.500 > max 0.250",
 		"forced_no_tools_rate 0.200 > max 0.100",
 		"loop_guard_intervention_rate 0.400 > max 0.300",
@@ -4223,6 +4228,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgDurationMS := 90000.0
 	maxAvgTotalTokens := 120000.0
 	maxDebugBriefTagRates := map[string]float64{"source_dynamic_without_network": 0}
+	requiredExpectationCapabilities := []string{"delegated_source_evidence", "source_access"}
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                           &minPassRate,
 		MinMemoryUpdateRate:                   &minMemoryUpdateRate,
@@ -4261,6 +4267,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxAvgDurationMS:                      &maxAvgDurationMS,
 		MaxAvgTotalTokens:                     &maxAvgTotalTokens,
 		MaxDebugBriefTagRates:                 maxDebugBriefTagRates,
+		RequiredExpectationCapabilities:       requiredExpectationCapabilities,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
@@ -4270,6 +4277,9 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	}
 	if !reflect.DeepEqual(meta.MaxDebugBriefTagRates, maxDebugBriefTagRates) {
 		t.Fatalf("debug brief tag gate metadata = %#v, want %#v", meta.MaxDebugBriefTagRates, maxDebugBriefTagRates)
+	}
+	if !reflect.DeepEqual(meta.RequiredExpectationCapabilities, requiredExpectationCapabilities) {
+		t.Fatalf("required expectation capability metadata = %#v, want %#v", meta.RequiredExpectationCapabilities, requiredExpectationCapabilities)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
 		t.Fatalf("disabled quality gate metadata should be omitted: %+v", meta)
