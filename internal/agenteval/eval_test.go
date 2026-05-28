@@ -546,9 +546,13 @@ func TestMergeRuntimeDiagnosticsFromFailures(t *testing.T) {
 	res := BatchResult{Failures: []string{
 		`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (model="qwen" endpoint="https://llm.example/v1/chat/completions" max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
 		`affentctl run failed: exit=1 err=stream ended without finish`,
+		`affentctl run failed: exit=1 err=launch chromium: /chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file
+Details: binary=/opt/chrome; missing_shared_library=libglib-2.0.so.0
+Failure: kind=browser_launch_failed
+Next: install Chromium runtime dependencies for the host image`,
 	}}
 	mergeRuntimeDiagnosticsFromFailures(&res, 1)
-	if res.RuntimeErrorByKind["llm_timeout"] != 1 || res.RuntimeErrorByKind["llm_incomplete_stream"] != 1 {
+	if res.RuntimeErrorByKind["llm_timeout"] != 1 || res.RuntimeErrorByKind["llm_incomplete_stream"] != 1 || res.RuntimeErrorByKind["browser_launch_failed"] != 1 {
 		t.Fatalf("RuntimeErrorByKind = %#v", res.RuntimeErrorByKind)
 	}
 	timeout := res.RuntimeErrorExamples["llm_timeout"]
@@ -563,15 +567,23 @@ func TestMergeRuntimeDiagnosticsFromFailures(t *testing.T) {
 		!strings.Contains(incomplete[0].Message, "stream ended without finish") {
 		t.Fatalf("llm_incomplete_stream RuntimeErrorExamples = %#v", incomplete)
 	}
+	browser := res.RuntimeErrorExamples["browser_launch_failed"]
+	if len(browser) != 1 ||
+		!strings.Contains(browser[0].Message, "missing_shared_library=libglib-2.0.so.0") ||
+		!strings.Contains(browser[0].Message, "install Chromium runtime dependencies") {
+		t.Fatalf("browser_launch_failed RuntimeErrorExamples = %#v", browser)
+	}
 }
 
 func TestRuntimeErrorDiagnosticsFromFailuresAddsActionableLegacyMessages(t *testing.T) {
 	failures := []string{
 		`affentctl run failed: exit=1 err=context deadline exceeded max-call-timeout/per-call-timeout=4m0s`,
 		`affentctl run failed: exit=1 err=stream ended without finish`,
+		`affentctl run failed: exit=1 err=launch chromium: executable file not found
+Failure: kind=browser_launch_failed`,
 	}
 	counts, examples := RuntimeErrorDiagnosticsFromFailures(failures, 2)
-	if counts["llm_timeout"] != 1 || counts["llm_incomplete_stream"] != 1 {
+	if counts["llm_timeout"] != 1 || counts["llm_incomplete_stream"] != 1 || counts["browser_launch_failed"] != 1 {
 		t.Fatalf("counts = %#v", counts)
 	}
 	timeout := examples["llm_timeout"]
@@ -588,6 +600,13 @@ func TestRuntimeErrorDiagnosticsFromFailuresAddsActionableLegacyMessages(t *test
 		!strings.Contains(incomplete[0].Message, "reverse-proxy reset") ||
 		!strings.Contains(incomplete[0].Message, "Original error:") {
 		t.Fatalf("llm_incomplete_stream examples = %#v", incomplete)
+	}
+	browser := examples["browser_launch_failed"]
+	if len(browser) != 1 ||
+		!strings.Contains(browser[0].Message, "Chromium could not start") ||
+		!strings.Contains(browser[0].Message, "AFFENT_BROWSER_BINARY") ||
+		!strings.Contains(browser[0].Message, "Original error:") {
+		t.Fatalf("browser_launch_failed examples = %#v", browser)
 	}
 }
 

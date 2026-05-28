@@ -2539,6 +2539,8 @@ func toolFailureHintsForKinds(counts map[string]int) failureHintMap {
 
 func failureKindHint(kind string) string {
 	switch kind {
+	case "browser_launch_failed":
+		return "Chromium could not start; install browser runtime dependencies, set AFFENT_BROWSER_BINARY to a working Chrome/Chromium binary, and rerun browser smoke tests before trusting browser/web eval failures"
 	case "llm_timeout":
 		return "upstream LLM streaming stalled past the per-call timeout; inspect provider queue/TTFT/chunk gaps or raise the runtime/eval timeout for slow reasoning models"
 	case "llm_incomplete_stream":

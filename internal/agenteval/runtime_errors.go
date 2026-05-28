@@ -5,6 +5,8 @@ import "strings"
 func RuntimeErrorKind(message string) string {
 	lower := strings.ToLower(strings.TrimSpace(message))
 	switch {
+	case isBrowserLaunchFailure(lower):
+		return "browser_launch_failed"
 	case isLLMTimeoutFailure(lower):
 		return "llm_timeout"
 	case isLLMIncompleteStreamFailure(lower):
@@ -48,6 +50,13 @@ func actionableRuntimeErrorMessage(kind, message string) string {
 	trimmed := strings.TrimSpace(message)
 	lower := strings.ToLower(trimmed)
 	switch kind {
+	case "browser_launch_failed":
+		if strings.Contains(lower, "chromium runtime dependencies") ||
+			strings.Contains(lower, "affent_browser_binary") ||
+			strings.Contains(lower, "missing_shared_library=") {
+			return trimmed
+		}
+		return "Browser launch failed (kind=browser_launch_failed). Chromium could not start, so browser-based web evidence is unavailable until the runtime image has Chrome/Chromium and its shared-library dependencies, or AFFENT_BROWSER_BINARY points to a working binary. Original error: " + trimmed
 	case "llm_timeout":
 		if strings.Contains(lower, "first-token latency") ||
 			strings.Contains(lower, "stream idle timeout") ||
@@ -65,6 +74,15 @@ func actionableRuntimeErrorMessage(kind, message string) string {
 	default:
 		return trimmed
 	}
+}
+
+func isBrowserLaunchFailure(lower string) bool {
+	return strings.Contains(lower, "browser_launch_failed") ||
+		(strings.Contains(lower, "launch chromium") &&
+			(strings.Contains(lower, "error while loading shared libraries") ||
+				strings.Contains(lower, "no such file or directory") ||
+				strings.Contains(lower, "executable file not found") ||
+				strings.Contains(lower, "chromium runtime dependencies")))
 }
 
 func isLLMTimeoutFailure(lower string) bool {

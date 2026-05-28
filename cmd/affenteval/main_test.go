@@ -2929,6 +2929,8 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 			`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
 			`affentctl run failed: exit=1 err=stream ended without finish`,
 			`affentctl run failed: exit=1 err=LLM llm_request failed (model="qwen" endpoint="https://llm.example/v1/chat/completions"): maximum context length is 4096 tokens`,
+			`affentctl run failed: exit=1 err=launch chromium: executable file not found
+Failure: kind=browser_launch_failed`,
 		},
 	}
 
@@ -2941,6 +2943,8 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 		"before finish_reason",
 		"hint[context_overflow]",
 		"context window",
+		"hint[browser_launch_failed]",
+		"Chromium could not start",
 	} {
 		if !strings.Contains(text.String(), want) {
 			t.Fatalf("text result missing %q:\n%s", want, text.String())
@@ -2959,7 +2963,8 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 	}
 	if !strings.Contains(fmt.Sprint(hints["llm_timeout"]), "per-call timeout") ||
 		!strings.Contains(fmt.Sprint(hints["llm_incomplete_stream"]), "SSE stream") ||
-		!strings.Contains(fmt.Sprint(hints["context_overflow"]), "context window") {
+		!strings.Contains(fmt.Sprint(hints["context_overflow"]), "context window") ||
+		!strings.Contains(fmt.Sprint(hints["browser_launch_failed"]), "Chromium could not start") {
 		t.Fatalf("failure_hints = %#v", hints)
 	}
 }
@@ -4235,6 +4240,8 @@ func TestFailureKind(t *testing.T) {
 		{`affentctl run failed: exit=1 err=context deadline exceeded while waiting for chat completion`, "llm_timeout"},
 		{`affentctl run failed: exit=1 err=LLM llm_stream ended with an incomplete SSE stream before finish_reason`, "llm_incomplete_stream"},
 		{`affentctl run failed: exit=1 err=stream ended without finish`, "llm_incomplete_stream"},
+		{`affentctl run failed: exit=1 err=launch chromium: /chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file
+Failure: kind=browser_launch_failed`, "browser_launch_failed"},
 		{`something else`, "other"},
 	}
 	for _, tc := range cases {

@@ -61,6 +61,26 @@ func TestBuildDebugBriefIncludesDelegationAndPlanSignals(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefTagsBrowserLaunchFailure(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK:                 false,
+		RuntimeErrorByKind: map[string]int{"browser_launch_failed": 1},
+		RuntimeErrorExamples: map[string][]RuntimeErrorExample{
+			"browser_launch_failed": {
+				{Kind: "browser_launch_failed", Message: "launch chromium: missing_shared_library=libglib-2.0.so.0"},
+			},
+		},
+	})
+	item := debugBriefItemByKind(brief, "runtime_error_by_kind")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["browser_launch_failed"] != 1 ||
+		!stringSliceContains(brief.Tags, "runtime_error") ||
+		!stringSliceContains(brief.Tags, "runtime_error:browser_launch_failed") {
+		t.Fatalf("browser launch failure debug item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesUnfinishedPlan(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,
