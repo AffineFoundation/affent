@@ -90,6 +90,16 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
   });
 
+  it("separates missing runtime snapshots from clean diagnostics", () => {
+    render(<RuntimeStatsPanel defaultOpen />);
+
+    const panel = screen.getByTestId("runtime-stats-panel");
+    expect(panel).toHaveTextContent("No runtime snapshot");
+    expect(panel).toHaveTextContent("Runtime diagnostics have not been fetched.");
+    expect(screen.getByTestId("runtime-stats-empty")).toHaveTextContent("Runtime snapshot not loaded.");
+    expect(panel).not.toHaveTextContent("No runtime diagnostics need attention.");
+  });
+
   it("keeps standard idle runtime from inventing ready diagnostics", () => {
     render(<RuntimeStatsPanel defaultOpen stats={{ model: "qwen-small", active_sessions: 0, running_turns: 0 }} />);
 

@@ -31,7 +31,10 @@ export function RuntimeStatsPanel({
             {error}
           </div>
         ) : null}
-        {!loading && !error ? (
+        {!loading && !error && !stats ? (
+          <div className="session-skills-empty" data-testid="runtime-stats-empty">Runtime snapshot not loaded.</div>
+        ) : null}
+        {!loading && !error && stats ? (
           metrics.length > 0 ? (
             <div className="runtime-stats-grid" data-testid="runtime-stats-grid">
               {metrics.map((metric) => (
@@ -66,7 +69,7 @@ function runtimeSummary(stats?: ServerStatsResponse): string {
 }
 
 function runtimeDetail(stats?: ServerStatsResponse): string {
-  if (!stats) return "Open Workbench while connected to inspect server health.";
+  if (!stats) return "Runtime diagnostics have not been fetched.";
   const parts: string[] = [];
   const sessions = stats.active_sessions ?? stats.sessions?.length ?? 0;
   parts.push(`${sessions} ${sessions === 1 ? "session" : "sessions"}`);
