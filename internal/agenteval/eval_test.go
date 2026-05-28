@@ -1981,8 +1981,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 27 {
-		t.Fatalf("long-run suite size = %d, want 27", len(scenarios))
+	if len(scenarios) != 28 {
+		t.Fatalf("long-run suite size = %d, want 28", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2409,6 +2409,45 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !closureGuard.ForbidWorkspaceAbsolutePaths || closureGuard.MaxLoopTurnInputTokens != 300000 || closureGuard.MaxLoopTurnTotalTokens != 320000 {
 		t.Fatalf("closure guard path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", closureGuard.ForbidWorkspaceAbsolutePaths, closureGuard.MaxLoopTurnInputTokens, closureGuard.MaxLoopTurnTotalTokens)
+	}
+
+	activePlanGuard, ok := seen["longrun-active-plan-final-closure-guard"]
+	if !ok {
+		t.Fatalf("long-run suite missing active plan final closure guard scenario")
+	}
+	if activePlanGuard.SessionID != "active-plan-final-closure-guard" {
+		t.Fatalf("active plan guard SessionID = %q, want active-plan-final-closure-guard", activePlanGuard.SessionID)
+	}
+	if activePlanGuard.RequiredMessageRejected["active_plan_unfinished"] != 1 ||
+		activePlanGuard.RequiredTraceEventCounts["message.rejected"] != 1 {
+		t.Fatalf("active plan guard rejected message requirements = rejected:%#v trace:%#v", activePlanGuard.RequiredMessageRejected, activePlanGuard.RequiredTraceEventCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "plan", Arg: "action", Substring: "update"},
+		{Tool: "plan", Arg: "index", Substring: "1"},
+		{Tool: "plan", Arg: "status", Substring: "completed"},
+	} {
+		if !toolArgRequirementContains(activePlanGuard.RequiredToolArgContains, want) {
+			t.Fatalf("active plan guard RequiredToolArgContains = %#v, want %#v", activePlanGuard.RequiredToolArgContains, want)
+		}
+	}
+	if !activePlanGuard.RequireNoPlanErrors || !activePlanGuard.RequireFinalPlanCompleted {
+		t.Fatalf("active plan guard plan closure flags = no_errors:%v final_completed:%v, want both true", activePlanGuard.RequireNoPlanErrors, activePlanGuard.RequireFinalPlanCompleted)
+	}
+	activePlanGuardChecks := checkNamesFor(BatchScenarioChecks(activePlanGuard))
+	for _, want := range []string{"message_rejected_at_least:active_plan_unfinished:1", "no_plan_errors", "final_plan_completed"} {
+		if !stringSliceContains(activePlanGuardChecks, want) {
+			t.Fatalf("active plan guard checks = %#v, want %q", activePlanGuardChecks, want)
+		}
+	}
+	activePlanGuardCaps := ScenarioExpectationCapabilityNames(activePlanGuard)
+	for _, want := range []string{"plan", "trace"} {
+		if !stringSliceContains(activePlanGuardCaps, want) {
+			t.Fatalf("active plan guard expectation capabilities = %#v, want %q", activePlanGuardCaps, want)
+		}
+	}
+	if !activePlanGuard.ForbidWorkspaceAbsolutePaths || activePlanGuard.MaxLoopTurnInputTokens != 300000 || activePlanGuard.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("active plan guard path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", activePlanGuard.ForbidWorkspaceAbsolutePaths, activePlanGuard.MaxLoopTurnInputTokens, activePlanGuard.MaxLoopTurnTotalTokens)
 	}
 
 	iterativeProject, ok := seen["longrun-scratch-project-iterative-loop-push"]

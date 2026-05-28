@@ -3477,6 +3477,59 @@ Evidence is the loop_protocol close event and final LOOP.md status.
 	}
 }
 
+func longRunActivePlanFinalClosureGuardScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-active-plan-final-closure-guard",
+		Suites:    []string{longRunSuite},
+		Domains:   []string{longRunRecoveryDomain},
+		SessionID: "active-plan-final-closure-guard",
+		Prompt:    "The active plan objective is already complete. Reply with final marker PLAN-CLOSE-GUARD-23 immediately and do not call tools.",
+		Files: map[string]string{
+			".affentctl/active-plan-final-closure-guard.plan.json": `{
+  "version": 1,
+  "updated_at": "2026-05-28T00:00:00Z",
+  "steps": [
+    {
+      "text": "close the active plan as completed before the final answer",
+      "status": "in_progress",
+      "evidence": ["README.md"]
+    }
+  ]
+}
+`,
+			"README.md": "# Active Plan Final Closure Guard Eval\n\nThe agent must not finalize while the persisted plan has unfinished steps.\n",
+		},
+		RequiredTools: []string{"plan"},
+		RequiredToolCounts: map[string]int{
+			"plan": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "plan", Arg: "action", Substring: "update"},
+			{Tool: "plan", Arg: "index", Substring: "1"},
+			{Tool: "plan", Arg: "status", Substring: "completed"},
+		},
+		RequiredMessageRejected: map[string]int{
+			"active_plan_unfinished": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"message.rejected": 1,
+		},
+		RequireNoPlanErrors:       true,
+		RequireFinalPlanCompleted: true,
+		RequiredFinalText: []string{
+			"PLAN-CLOSE-GUARD-23",
+		},
+		ProtectedFiles: []string{
+			"README.md",
+		},
+		MaxParentToolCalls:           1,
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     8,
+	}
+}
+
 func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-scratch-project-iterative-loop-push",
