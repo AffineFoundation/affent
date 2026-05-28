@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { normalizeEvents } from "../normalize/normalizeEvent";
-import { buildEventTraceItems, buildEventTraceModel, streamSummary } from "./eventTrace";
+import { buildEventTraceItems, buildEventTraceModel, filterEventTraceEvents, streamSummary } from "./eventTrace";
 
 describe("eventTrace view model", () => {
   it("summarizes known protocol events as user-facing actions", () => {
@@ -217,6 +217,38 @@ describe("eventTrace view model", () => {
         meta: ["Request 1", "max_turns", "2 actions", "1 failed", "Recall 2 hits, 1 context, 3 terms", "2 sources", "1 network", "1 partial", "1.2 s"],
       },
     });
+  });
+
+  it("filters trace events by display text, raw payload, and unclassified status", () => {
+    const events = normalizeEvents([
+      { id: 0, type: "trace.meta", data: { schema_version: 1 } },
+      {
+        id: 1,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "read_file",
+          args: { path: "README.md" },
+        },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 1,
+          result_summary: "file missing",
+        },
+      },
+      { id: 3, type: "future.event", data: { detail: "new server field" } },
+    ]);
+
+    expect(filterEventTraceEvents(events, "read_file").map((event) => event.id)).toEqual([1, 2]);
+    expect(filterEventTraceEvents(events, "README.md").map((event) => event.id)).toEqual([1]);
+    expect(filterEventTraceEvents(events, "file missing").map((event) => event.id)).toEqual([2]);
+    expect(filterEventTraceEvents(events, "schema v1").map((event) => event.id)).toEqual([0]);
+    expect(filterEventTraceEvents(events, "unclassified").map((event) => event.id)).toEqual([3]);
   });
 
   it("labels research checkpoint loop decisions in event trace metadata", () => {

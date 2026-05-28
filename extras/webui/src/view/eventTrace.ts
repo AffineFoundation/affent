@@ -73,6 +73,13 @@ export function buildEventTraceItems(events: readonly NormalizedEvent[]): EventT
   return buildEventTraceModel(events).items;
 }
 
+export function filterEventTraceEvents(events: readonly NormalizedEvent[], query: string): NormalizedEvent[] {
+  const search = query.trim().toLowerCase();
+  if (!search) return [...events];
+  const context = buildDisplayContext(events);
+  return events.filter((event) => eventTraceEventMatches(event, search, context));
+}
+
 interface DisplayContext {
   turnLabels: Map<string, string>;
   callTools: Map<string, string>;
@@ -293,6 +300,21 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
     default:
       return { label: event.type, meta: fallbackMeta(event, context), badges: [] };
   }
+}
+
+function eventTraceEventMatches(event: NormalizedEvent, search: string, context: DisplayContext): boolean {
+  const display = eventDisplay(event, context);
+  const haystack = [
+    String(event.id),
+    event.type,
+    event.turnId,
+    event.known ? "known" : "unclassified",
+    display.label,
+    ...display.meta,
+    ...display.badges,
+    JSON.stringify(event.raw),
+  ].filter(Boolean).join("\n").toLowerCase();
+  return haystack.includes(search);
 }
 
 function userMessageDisplayText(event: NormalizedEvent | undefined): string | undefined {

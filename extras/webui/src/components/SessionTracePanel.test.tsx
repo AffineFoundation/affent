@@ -22,15 +22,31 @@ describe("SessionTracePanel", () => {
     render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen onUseAsDraft={onUseAsDraft} />);
 
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("5 trace entries");
+    expect(screen.getByLabelText("Search trace")).toBeInTheDocument();
     expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Entries5");
     expect(screen.getByTestId("session-trace-latest")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
 
     await user.click(screen.getByRole("button", { name: "Copy trace evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Session trace evidence"));
 
     await user.click(screen.getByRole("button", { name: "Use trace as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Inspect this session trace"), "trace");
+
+    await user.type(screen.getByLabelText("Search trace"), "npm test");
+    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Matching1");
+    expect(screen.queryByTestId("session-trace-latest")).toBeNull();
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Action failed");
+
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByTestId("session-trace-latest")).toHaveTextContent("Action failed");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
+
+    await user.type(screen.getByLabelText("Search trace"), "missing event");
+    expect(screen.queryByTestId("event-trace")).toBeNull();
+    expect(screen.getByTestId("session-trace-panel")).toHaveTextContent('No trace entries matching "missing event".');
   });
 
   it("keeps empty trace states explicit", () => {
