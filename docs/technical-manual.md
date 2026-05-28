@@ -1054,6 +1054,7 @@ List built-in scenarios:
 ```bash
 go run ./cmd/affenteval --list
 go run ./cmd/affenteval --list-suites
+go run ./cmd/affenteval --suite long-run --quality-profile longrun --list-coverage
 ```
 
 Current built-in suites:
@@ -1118,6 +1119,13 @@ workload coverage without parsing scenario names. Use
 `--require-expectation-domain DOMAIN` when a CI batch must prove it actually
 included at least one realistic workload domain such as `market`, `bittensor`,
 `code_pr`, `web_evidence`, or `longrun_recovery`.
+
+Use `--list-coverage` before expensive live model runs to inspect the selected
+scenario set without running an agent. The report lists suites, expectation
+capabilities, task domains, and the scenarios contributing to each bucket. When
+combined with a quality profile, it also prints the same coverage preflight
+gaps that would otherwise stop the batch at runtime, so operators can catch an
+overly narrow `--scenario` filter before spending model/tool budget.
 
 Run scenarios:
 

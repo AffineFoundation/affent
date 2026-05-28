@@ -405,7 +405,7 @@ success and trace-level process quality.`)
 			fmt.Fprintf(os.Stderr, "coverage: %v\n", err)
 			return 64
 		}
-		printScenarioCoverage(os.Stdout, scenarios)
+		printScenarioCoverage(os.Stdout, scenarios, gates, *qualityProfile)
 		return 0
 	}
 	if strings.TrimSpace(*traceFile) != "" {
@@ -4716,7 +4716,7 @@ func qualityGatePreflightFailures(scenarios []agenteval.BatchScenario, g quality
 	return failures
 }
 
-func printScenarioCoverage(w io.Writer, scenarios []agenteval.BatchScenario) {
+func printScenarioCoverage(w io.Writer, scenarios []agenteval.BatchScenario, gates qualityGateConfig, qualityProfile string) {
 	suiteCounts := map[string]int{}
 	capabilityCounts := map[string]int{}
 	domainCounts := map[string]int{}
@@ -4741,6 +4741,7 @@ func printScenarioCoverage(w io.Writer, scenarios []agenteval.BatchScenario) {
 		formatStringIntCounts(capabilityCounts),
 		formatStringIntCounts(domainCounts),
 	)
+	printScenarioCoveragePreflight(w, scenarios, gates, qualityProfile)
 	printScenarioCoverageIndex(w, "CAPABILITY_SCENARIOS", capabilityScenarios)
 	printScenarioCoverageIndex(w, "DOMAIN_SCENARIOS", domainScenarios)
 	fmt.Fprintln(w, "SCENARIOS")
@@ -4752,6 +4753,30 @@ func printScenarioCoverage(w io.Writer, scenarios []agenteval.BatchScenario) {
 			formatStringList(agenteval.ScenarioExpectationDomains(scenario)),
 		)
 	}
+}
+
+func printScenarioCoveragePreflight(w io.Writer, scenarios []agenteval.BatchScenario, gates qualityGateConfig, qualityProfile string) {
+	if !hasCoveragePreflightRequirements(gates) {
+		return
+	}
+	status := "passed"
+	failures := qualityGatePreflightFailures(scenarios, gates)
+	if len(failures) > 0 {
+		status = "failed"
+	}
+	profile := strings.TrimSpace(qualityProfile)
+	if profile != "" {
+		fmt.Fprintf(w, "COVERAGE_PREFLIGHT status=%s profile=%s\n", status, profile)
+	} else {
+		fmt.Fprintf(w, "COVERAGE_PREFLIGHT status=%s\n", status)
+	}
+	for _, failure := range failures {
+		fmt.Fprintf(w, "  - %s\n", failure)
+	}
+}
+
+func hasCoveragePreflightRequirements(g qualityGateConfig) bool {
+	return len(g.RequiredExpectationCapabilities) > 0 || len(g.RequiredExpectationDomains) > 0
 }
 
 func printScenarioCoverageIndex(w io.Writer, title string, index map[string][]string) {

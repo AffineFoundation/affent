@@ -151,6 +151,35 @@ func TestRunListCoverageRejectsAdHocPrompt(t *testing.T) {
 	}
 }
 
+func TestRunListCoverageShowsQualityProfilePreflight(t *testing.T) {
+	out, code := captureStdout(t, func() int {
+		return run([]string{"--list-coverage", "--suite", "long-run", "--quality-profile", "longrun"})
+	})
+	if code != 0 {
+		t.Fatalf("run --list-coverage longrun profile exit = %d\n%s", code, out)
+	}
+	if !strings.Contains(out, "COVERAGE_PREFLIGHT status=passed profile=longrun") {
+		t.Fatalf("--list-coverage missing passed profile preflight:\n%s", out)
+	}
+
+	out, code = captureStdout(t, func() int {
+		return run([]string{"--list-coverage", "--scenario", "longrun-stock-analysis-synthesis", "--quality-profile", "longrun"})
+	})
+	if code != 0 {
+		t.Fatalf("run narrow --list-coverage longrun profile exit = %d\n%s", code, out)
+	}
+	for _, want := range []string{
+		"COVERAGE_PREFLIGHT status=failed profile=longrun",
+		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
+		"expectation_capability[skill_install] unavailable, want >= 1 selected scenario",
+		"expectation_domain[session_recovery] unavailable, want >= 1 selected scenario",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("narrow --list-coverage output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunQualityProfilePreflightRejectsNarrowScenarioSelection(t *testing.T) {
 	errOut, code := captureStderr(t, func() int {
 		return run([]string{"--quality-profile=longrun", "--scenario=longrun-stock-analysis-synthesis"})
@@ -202,7 +231,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
-	for _, want := range []string{"-require-expectation-capability", "-require-expectation-domain", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate", "-max-expectation-domain-avg-total-tokens", "-min-expectation-domain-source-access-verified-rate"} {
+	for _, want := range []string{"-list-coverage", "-require-expectation-capability", "-require-expectation-domain", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate", "-max-expectation-domain-avg-total-tokens", "-min-expectation-domain-source-access-verified-rate"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("--help missing expectation coverage gate %q:\n%s", want, help)
 		}

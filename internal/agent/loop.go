@@ -2216,7 +2216,9 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 			Text:         visibleText,
 			FinishReason: finish.Reason,
 		})
-		l.recordLoopProtocolCalibrationQuestionIfReady(turnID, visibleText, opts)
+		if finish.Reason != "tool_calls" {
+			l.recordLoopProtocolCalibrationQuestionIfReady(turnID, visibleText, opts)
+		}
 	}
 	// Backfill any tool_call IDs the model omitted. Done HERE — before
 	// the persistent Append — so the dispatch path, the eventual wire

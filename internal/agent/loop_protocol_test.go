@@ -81,6 +81,45 @@ func TestLoopProtocolForcedCalibrationQuestionDoesNotDependOnTextHeuristics(t *t
 		!strings.Contains(state.LastCalibrationQuestion, "implementation language") {
 		t.Fatalf("forced calibration question state = %+v", state)
 	}
+
+	loop.recordLoopProtocolCalibrationQuestionIfReady("turn_3", "I am updating the draft before activation.", TurnOptions{
+		UserMode:                     UserModeLoopSetup,
+		ForceLoopCalibrationQuestion: true,
+	})
+	state, found, err = loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState after pending forced text found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 {
+		t.Fatalf("pending calibration question should not be duplicated by process text: %+v", state)
+	}
+}
+
+func TestLoopProtocolStartSetupForcesCalibrationOnlyForFreshDraft(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build a CLI puzzle game.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	loop := &Loop{LoopProtocolPath: protocolPath}
+	args := json.RawMessage(`{"action":"start_setup","goal":"Build a CLI puzzle game."}`)
+	if !loop.loopProtocolStartSetupCreatedDraft(LoopProtocolToolName, args, false) {
+		t.Fatal("fresh start_setup draft should force one calibration question")
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "Which implementation language should I use?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Python"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	if loop.loopProtocolStartSetupCreatedDraft(LoopProtocolToolName, args, false) {
+		t.Fatal("re-reading an existing calibrated draft must not force another calibration capture")
+	}
 }
 
 func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {

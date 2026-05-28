@@ -328,6 +328,9 @@ func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string,
 	if err != nil || !found || state.Status != "draft" {
 		return
 	}
+	if state.CalibrationQuestions > state.CalibrationAnswers {
+		return
+	}
 	preview := loopstate.ProtocolCalibrationPreview(question)
 	if state.LastCalibrationQuestion == preview {
 		return
@@ -361,7 +364,11 @@ func (l *Loop) loopProtocolStartSetupCreatedDraft(toolName string, args json.Raw
 		return false
 	}
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(l.LoopProtocolPath), loopstate.StateFileName))
-	return err == nil && found && state.Status == "draft"
+	return err == nil &&
+		found &&
+		state.Status == "draft" &&
+		state.LastEventType == "loop.protocol_init" &&
+		state.CalibrationQuestions == 0
 }
 
 func loopProtocolPlanStateLine(checkpoint loopstate.PlanCheckpoint) string {
