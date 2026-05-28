@@ -669,15 +669,6 @@ describe("App", () => {
           },
         });
       }
-      if (url === "/v1/sessions/loop-1/loop-protocol" && init?.method === "POST") {
-        return jsonResponse({
-          session_id: "loop-1",
-          protocol: "# Loop Protocol\n\n- status: draft",
-          summary: { path: ".affent/loops/loop-1/LOOP.md", status: "draft", bytes: 32 },
-          state: { version: 1, loop_id: "loop-1", status: "draft", initial_goal_preview: "analyze market data for several days" },
-          events: [],
-        });
-      }
       if (url === "/v1/sessions/loop-1/messages" && init?.method === "POST") {
         return jsonResponse({ session_id: "loop-1", turn_id: "t1" });
       }
@@ -702,17 +693,16 @@ describe("App", () => {
 
     fireEvent.keyDown(input, { key: "Enter", code: "Enter", charCode: 13 });
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
-      "/v1/sessions/loop-1/loop-protocol",
+      "/v1/sessions/loop-1/messages",
       expect.objectContaining({ method: "POST" }),
     ));
-    const protocolCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/loop-1/loop-protocol" && init?.method === "POST");
-    expect(protocolCall).toBeDefined();
-    expect(JSON.parse(String(protocolCall?.[1]?.body))).toMatchObject({
-      activate: true,
-      goal: "analyze market data for several days",
-    });
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.anything());
     const messageCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/loop-1/messages" && init?.method === "POST");
-    expect(JSON.parse(String(messageCall?.[1]?.body)).display_text).toBe("Set up loop: analyze market data for several days");
+    expect(JSON.parse(String(messageCall?.[1]?.body))).toMatchObject({
+      content: "analyze market data for several days",
+      display_text: "Set up loop: analyze market data for several days",
+      mode: "loop_setup",
+    });
   });
 
   it("keeps empty loop setup out of the selected session surface", async () => {

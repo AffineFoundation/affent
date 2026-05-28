@@ -1134,11 +1134,10 @@ export function App() {
     const trimmedGoal = goal.trim();
     if (!trimmedGoal) return;
     let targetSessionId = selectedSessionId;
-    const activationPrompt = webLoopActivationPrompt(trimmedGoal);
     const displayText = `Set up loop: ${trimmedGoal}`;
     sendInFlightRef.current = true;
     sendFailedRef.current = false;
-    setPendingMessage({ text: activationPrompt, displayText, kind: "task" });
+    setPendingMessage({ text: trimmedGoal, displayText, kind: "task" });
     setActionBusy(true);
     try {
       if (!targetSessionId) {
@@ -1148,18 +1147,17 @@ export function App() {
         setSelectedSessionId(targetSessionId);
         setSession(initialSessionState());
       }
-      const loopProtocol = await updateSessionLoopProtocol(client, targetSessionId, {
-        activate: true,
-        goal: trimmedGoal,
+      await sendSessionMessage(client, targetSessionId, {
+        content: trimmedGoal,
+        display_text: displayText,
+        mode: "loop_setup",
       });
-      markSessionLoopProtocol(targetSessionId, loopProtocol, trimmedGoal);
-      await sendSessionMessage(client, targetSessionId, { content: activationPrompt, display_text: displayText });
       sendInFlightRef.current = false;
       markSessionLive(targetSessionId, displayText);
       const hasOpenStream = streamSessionIdRef.current === targetSessionId && !streamClosedRef.current;
       if (!hasOpenStream) {
         const reconciled = await loadHistory(targetSessionId);
-        releaseSettledTurn(reconciled.session, activationPrompt);
+        releaseSettledTurn(reconciled.session, trimmedGoal);
         setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
       } else {
         setStatus((current) => ({ ...current, state: "live", label: "Running" }));
@@ -2077,23 +2075,6 @@ function trackResize(event: ReactPointerEvent<HTMLElement>, onMove: (event: Poin
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
-}
-
-function webLoopActivationPrompt(goal: string): string {
-  return [
-    `Set up loop for: ${goal}`,
-    "",
-    "Loop protocol activation is pending, not active yet.",
-    "This setup path may have been started from chat or the WebUI; both require the same calibration-first activation flow.",
-    "Understand the user's real long-run intent before enabling the loop.",
-    "Use loop_protocol action=read to inspect the draft LOOP.md.",
-    "Ask exactly one concise calibration question now before activation, even when the initial goal seems clear.",
-    "Do not complete activation in the same turn that created the draft unless this turn is responding to an earlier explicit calibration answer.",
-    "If the goal, stop conditions, memory policy, or recovery expectations are still unclear after the answer, ask one focused follow-up in a later turn; keep status: draft until the protocol is complete.",
-    "After asking, wait for the user's answer; do not continue autonomous work or claim the loop is running while LOOP.md is still draft.",
-    "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a Current Situation snapshot kept at or below 1200 characters, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
-    "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
-  ].join("\n");
 }
 
 const loopStartMarker = "Start a long-running loop for this goal:";
