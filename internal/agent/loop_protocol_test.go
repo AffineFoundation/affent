@@ -122,6 +122,115 @@ func TestLoopProtocolStartSetupForcesCalibrationOnlyForFreshDraft(t *testing.T) 
 	}
 }
 
+func TestRunTurnDoesNotRecordProcessTextAsExtraLoopCalibration(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "answered")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "answered",
+		OwnerSession: "answered",
+		Goal:         "Build a CLI puzzle game.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "Which implementation language should I use?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Python"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	startSetupArgs, err := json.Marshal(map[string]any{
+		"action": "start_setup",
+		"goal":   "Build a CLI puzzle game.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r
+		call := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if call == 1 {
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role":    "assistant",
+						"content": "I am updating the draft before activation.",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "lp_repeat_setup",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(startSetupArgs),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Recorded Python and will continue from the saved draft.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(tmp, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	RegisterLoopProtocolOnly(reg, protocolPath)
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv,
+		Events: events, LoopProtocolPath: protocolPath,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "python"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type == sse.TypeTurnEnd {
+				goto done
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+
+done:
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 {
+		t.Fatalf("process text or repeated setup changed calibration counters: %+v", state)
+	}
+	if state.LastCalibrationQuestion != loopstate.ProtocolCalibrationPreview("Which implementation language should I use?") ||
+		state.LastCalibrationAnswer != "Python" {
+		t.Fatalf("calibration state drifted: %+v", state)
+	}
+	if got := atomic.LoadInt32(&calls); got != 2 {
+		t.Fatalf("LLM calls = %d, want 2", got)
+	}
+}
+
 func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "uncalibrated")
