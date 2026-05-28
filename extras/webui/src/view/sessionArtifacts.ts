@@ -14,6 +14,10 @@ export function buildSessionArtifacts(session: SessionState): TurnArtifact[] {
   return artifacts;
 }
 
+export function buildWorkbenchArtifacts(session: SessionState): TurnArtifact[] {
+  return buildSessionArtifacts(session).filter(isWorkbenchArtifact);
+}
+
 export function sessionArtifactLabel(session: SessionState): string | undefined {
   const artifacts = buildSessionArtifacts(session);
   if (artifacts.length === 0) return undefined;
@@ -31,4 +35,8 @@ export function artifactEvidenceText(artifact: TurnArtifact): string {
 
 export function artifactEvidenceDraft(artifact: TurnArtifact): string {
   return `Use this artifact in the next step:\n${artifactEvidenceText(artifact)}`;
+}
+
+export function isWorkbenchArtifact(artifact: TurnArtifact): boolean {
+  return !artifact.path.replace(/\\/g, "/").includes("/tool-results/");
 }

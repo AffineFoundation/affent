@@ -26,7 +26,7 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Read + Changed · available · turn 2 · 2 actions");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Next: rerun checkout tests");
-    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence: read.txt");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("read_file snapshot available");
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("export function checkout");

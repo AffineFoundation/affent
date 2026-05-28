@@ -2430,7 +2430,7 @@ describe("App", () => {
     expect(files).toHaveTextContent("2 file references");
     await user.click(within(files).getByText("Files"));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
-    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence: read.txt");
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Inspect file" })[0]);
@@ -3233,18 +3233,8 @@ describe("App", () => {
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
-    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("Artifacts");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).not.toHaveTextContent("Artifacts");
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
-    await selectWorkbenchTab(user, "Artifacts");
-    const artifacts = await screen.findByTestId("session-artifacts-panel");
-    expect(artifacts).toHaveTextContent("1 artifact");
-    expect(within(artifacts).getByRole("link", { name: "Download" })).toHaveAttribute(
-      "href",
-      "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt",
-    );
-    await user.click(within(artifacts).getByRole("button", { name: "Use artifact as draft" }));
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt");
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Summary: line 1");
 
     const backToChat = screen.queryByRole("button", { name: "Back to chat" });
     if (backToChat) await user.click(backToChat);

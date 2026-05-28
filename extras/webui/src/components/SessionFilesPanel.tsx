@@ -43,48 +43,25 @@ export function SessionFilesPanel({
         <span>{files.detail}</span>
       </summary>
       <div className="session-skills-body">
-        <div className="session-files-dashboard" aria-label="File work summary">
-          <FileStatButton
-            label="All"
-            value={stats.total}
-            detail={`${stats.read} read · ${stats.listed} listed · ${stats.changed} changed`}
-            active={filter === "all"}
-            onClick={() => setFilter("all")}
-          />
-          <FileStatButton
-            label="Changed"
-            value={stats.changed}
-            detail="agent wrote or edited"
-            active={filter === "changed"}
-            onClick={() => setFilter("changed")}
-          />
-          <FileStatButton
-            label="Snapshots"
-            value={stats.snapshots}
-            detail="loaded file text"
-            active={filter === "snapshots"}
-            onClick={() => setFilter("snapshots")}
-          />
-          <FileStatButton
-            label="Issues"
-            value={stats.failed + stats.running}
-            detail={`${stats.failed} failed · ${stats.running} pending`}
-            active={filter === "issues"}
-            onClick={() => setFilter("issues")}
-          />
-          <FileStatButton
-            label="Dirs"
-            value={stats.listed}
-            detail="listed roots"
-            active={filter === "listed"}
-            onClick={() => setFilter("listed")}
-          />
+        <div className="session-files-overview" aria-label="File work summary">
+          <div className="session-files-overview-main">
+            <span>Evidence</span>
+            <strong>{files.summary}</strong>
+            <small>{files.detail || "No file actions recorded."}</small>
+          </div>
+          <div className="session-files-filterbar" role="group" aria-label="File filters">
+            <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
+            <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
+            <FileFilterButton label="Read" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
+            <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
+            <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
+          </div>
         </div>
         {focus ? (
           <div className="session-files-focus" data-tone={focus.tone}>
             <div className="session-files-focus-main">
               <span>{focus.label}</span>
-              <strong title={focus.item.path}>{focus.item.path}</strong>
+              <strong title={focus.item.path}>{displayPath(focus.item.path)}</strong>
               <small>{focus.detail}</small>
             </div>
             {onUseAsDraft ? (
@@ -112,11 +89,12 @@ export function SessionFilesPanel({
             {visibleItems.map((item) => (
               <li key={item.path} className="session-files-item" data-status={item.status}>
                 <div className="session-files-main">
-                  <strong title={item.path}>{item.path}</strong>
+                  <strong title={item.path}>{displayPath(item.path)}</strong>
                   <span>{fileMeta(item)}</span>
+                  {displayPath(item.path) !== item.path ? <small title={item.path}>{item.path}</small> : null}
                   {item.detail ? <small>{item.detail}</small> : null}
                   {item.next ? <small>Next: {item.next}</small> : null}
-                  {item.artifactPath ? <small>Evidence artifact: {item.artifactPath}</small> : null}
+                  {item.artifactPath ? <small>Evidence: {artifactLabel(item.artifactPath)}</small> : null}
                   {item.contentPreview ? (
                     <small>{item.contentTruncated ? "Partial read_file snapshot available" : "read_file snapshot available"}</small>
                   ) : null}
@@ -191,24 +169,21 @@ export function SessionFilesPanel({
   );
 }
 
-function FileStatButton({
+function FileFilterButton({
   label,
   value,
-  detail,
   active,
   onClick,
 }: {
   label: string;
   value: number;
-  detail: string;
   active: boolean;
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="session-files-stat" data-active={active ? "true" : "false"} onClick={onClick}>
+    <button type="button" className="session-files-filter" data-active={active ? "true" : "false"} onClick={onClick}>
       <span>{label}</span>
       <strong>{value}</strong>
-      <small>{detail}</small>
     </button>
   );
 }
@@ -299,4 +274,16 @@ function statusLabel(status: SessionFileEvidence["status"]): string {
   if (status === "running") return "pending";
   if (status === "failed") return "failed";
   return "available";
+}
+
+function displayPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 3) return path;
+  return parts.slice(-3).join("/");
+}
+
+function artifactLabel(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).at(-1) ?? path;
 }

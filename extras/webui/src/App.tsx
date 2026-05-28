@@ -82,7 +82,7 @@ import { buildSessionOverview, type SessionOverview } from "./view/sessionOvervi
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun, manualRunDraft } from "./view/sessionRun";
-import { buildSessionArtifacts } from "./view/sessionArtifacts";
+import { buildWorkbenchArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
 import { buildSessionTrace } from "./view/sessionTrace";
 import {
@@ -350,7 +350,7 @@ export function App() {
   const sessionFiles = useMemo(() => buildSessionFiles(session), [session]);
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
-  const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
+  const workbenchArtifacts = useMemo(() => buildWorkbenchArtifacts(session), [session]);
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
   const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
   const conversationContext = useMemo(() => buildConversationContextView(session, selectedSession?.context), [selectedSession?.context, session]);
@@ -1734,7 +1734,7 @@ export function App() {
     overview,
     changes: sessionChanges,
     run: sessionRun,
-    artifacts: sessionArtifacts,
+    artifacts: workbenchArtifacts,
     files: sessionFiles,
     workspace: sessionWorkspace,
     trace: sessionTrace,
@@ -1829,7 +1829,7 @@ export function App() {
             workspace={sessionWorkspace}
             files={sessionFiles}
             changes={sessionChanges}
-            artifacts={sessionArtifacts}
+            artifacts={workbenchArtifacts}
             run={sessionRun}
             session={session}
             usage={workbenchContextUsage}
@@ -1867,7 +1867,7 @@ export function App() {
     if (workbenchTab === "artifacts") {
       return (
         <SessionArtifactsPanel
-          artifacts={sessionArtifacts}
+          artifacts={workbenchArtifacts}
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           downloadHref={
