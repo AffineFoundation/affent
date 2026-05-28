@@ -155,4 +155,55 @@ describe("SessionTracePanel", () => {
 
     expect(within(screen.getByTestId("session-trace-panel")).getByTestId("session-trace-empty")).toHaveTextContent("No persisted trace");
   });
+
+  it("filters repair and truncation diagnostics as first-class trace evidence", async () => {
+    const user = userEvent.setup();
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "read",
+          tool: "read_file",
+          args: { path: "README.md" },
+          args_repaired: true,
+          repair_notes: ["renamed readFile -> read_file"],
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "read",
+          exit_code: 0,
+          result_summary: "line 1\nline 2",
+          result: "line 1\nline 2",
+          result_truncated: true,
+          result_omitted_bytes: 2048,
+        },
+      },
+    ]);
+
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
+
+    expect(screen.getByRole("button", { name: "Repairs 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Truncated 1" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Repairs 1" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Repairs");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Repairs");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("1");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("repaired");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("line 1");
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "truncated" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Truncated");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Truncated");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("truncated");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started request");
+  });
 });

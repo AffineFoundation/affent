@@ -88,6 +88,8 @@ export function SessionTracePanel({
                 <span>Quick search</span>
                 <button type="button" onClick={() => applySearch("status:failed", "all")}>status:failed</button>
                 <button type="button" onClick={() => applySearch("tool:shell", "commands")}>tool:shell</button>
+                <button type="button" onClick={() => applySearch("repaired", "repairs")}>repaired</button>
+                <button type="button" onClick={() => applySearch("truncated", "truncated")}>truncated</button>
                 <button type="button" onClick={() => applySearch("artifact:", "artifacts")}>artifact:</button>
                 <button type="button" onClick={() => applySearch("path:", "files")}>path:</button>
                 <button type="button" onClick={() => applySearch("unclassified", "unclassified")}>unclassified</button>
@@ -237,7 +239,7 @@ export function SessionTracePanel({
   );
 }
 
-type TraceFilter = "all" | "issues" | "actions" | "commands" | "files" | "memory" | "context" | "loop" | "sources" | "artifacts" | "unclassified";
+type TraceFilter = "all" | "issues" | "actions" | "commands" | "files" | "memory" | "context" | "loop" | "sources" | "artifacts" | "repairs" | "truncated" | "unclassified";
 
 interface TraceFilterItem {
   key: TraceFilter;
@@ -255,6 +257,8 @@ interface TraceSelectionSummary {
   requestSpan: string;
   failedActions: number;
   actionResults: number;
+  repairCount: number;
+  truncatedCount: number;
   toolCount: number;
   topTools: string[];
   artifactCount: number;
@@ -277,6 +281,8 @@ function TraceSelectionSummaryView({ summary }: { summary: TraceSelectionSummary
       <TraceSelectionMetric label="Span" value={summary.eventSpan} />
       <TraceSelectionMetric label="Requests" value={summary.requestSpan} />
       <TraceSelectionMetric label="Failures" value={String(summary.failedActions)} />
+      {summary.repairCount > 0 ? <TraceSelectionMetric label="Repairs" value={String(summary.repairCount)} /> : null}
+      {summary.truncatedCount > 0 ? <TraceSelectionMetric label="Truncated" value={String(summary.truncatedCount)} /> : null}
       <TraceSelectionMetric label="Results" value={String(summary.actionResults)} />
       <TraceSelectionMetric label="Tools" value={summary.toolCount ? `${summary.toolCount} · ${summary.topTools.join(", ")}` : "0"} kind="tools" />
       <TraceSelectionMetric label="Artifacts" value={String(summary.artifactCount)} />
@@ -310,6 +316,8 @@ function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEve
   const requestSet = new Set<string>();
   let failedActions = 0;
   let actionResults = 0;
+  let repairCount = 0;
+  let truncatedCount = 0;
   let artifactCount = 0;
   let unclassifiedCount = 0;
   let firstId: number | undefined;
@@ -322,6 +330,8 @@ function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEve
     }
     if (event.turnId) requestSet.add(event.turnId);
     if (!event.known) unclassifiedCount += 1;
+    if (eventHasRepair(event)) repairCount += 1;
+    if (eventHasTruncation(event)) truncatedCount += 1;
     if (eventHasArtifact(event)) artifactCount += 1;
     if (event.type === EventType.ToolRequest || event.type === EventType.ToolResult) {
       const tool = toolName(event, callTools);
@@ -352,6 +362,8 @@ function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEve
         : `Request ${requestNumbers[0]}-${requestNumbers[requestNumbers.length - 1]} · ${requestNumbers.length}`,
     failedActions,
     actionResults,
+    repairCount,
+    truncatedCount,
     toolCount: toolCounts.size,
     topTools,
     artifactCount,
@@ -385,6 +397,8 @@ function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number
     { key: "loop", label: "Loop", count: countFilter(events, "loop") },
     { key: "sources", label: "Sources", count: countFilter(events, "sources") },
     { key: "artifacts", label: "Artifacts", count: countFilter(events, "artifacts") },
+    { key: "repairs", label: "Repairs", count: countFilter(events, "repairs") },
+    { key: "truncated", label: "Truncated", count: countFilter(events, "truncated") },
     { key: "unclassified", label: "Unclassified", count: countFilter(events, "unclassified") },
   ]);
 }
@@ -414,6 +428,8 @@ function filterLabel(filter: TraceFilter): string {
   if (filter === "loop") return "Loop";
   if (filter === "sources") return "Sources";
   if (filter === "artifacts") return "Artifacts";
+  if (filter === "repairs") return "Repairs";
+  if (filter === "truncated") return "Truncated";
   if (filter === "unclassified") return "Unclassified";
   return "All";
 }
@@ -436,6 +452,8 @@ function eventMatchesFilter(event: NormalizedEvent, filter: TraceFilter, callToo
   if (filter === "unclassified") return !event.known;
   if (filter === "artifacts") return eventHasArtifact(event);
   if (filter === "sources") return eventHasSourceEvidence(event, callTools);
+  if (filter === "repairs") return eventHasRepair(event);
+  if (filter === "truncated") return eventHasTruncation(event);
   if (event.type !== EventType.ToolRequest && event.type !== EventType.ToolResult) return false;
   const tool = toolName(event, callTools);
   if (filter === "commands") return tool === "shell";
@@ -448,6 +466,27 @@ function eventHasArtifact(event: NormalizedEvent): boolean {
   if (!event.data || typeof event.data !== "object") return false;
   const artifactPath = (event.data as { result_artifact_path?: unknown }).result_artifact_path;
   return typeof artifactPath === "string" && artifactPath.trim().length > 0;
+}
+
+function eventHasRepair(event: NormalizedEvent): boolean {
+  if (event.type !== EventType.ToolRequest || !event.data || typeof event.data !== "object") return false;
+  const data = event.data as Record<string, unknown>;
+  return data.args_repaired === true
+    || data.canonicalized === true
+    || (Array.isArray(data.repair_notes) && data.repair_notes.length > 0);
+}
+
+function eventHasTruncation(event: NormalizedEvent): boolean {
+  if (!event.data || typeof event.data !== "object") return false;
+  const data = event.data as Record<string, unknown>;
+  return data.args_truncated === true
+    || data.result_truncated === true
+    || positiveNumber(data.args_omitted_bytes)
+    || positiveNumber(data.result_omitted_bytes);
+}
+
+function positiveNumber(value: unknown): boolean {
+  return typeof value === "number" && value > 0;
 }
 
 function eventHasSourceEvidence(event: NormalizedEvent, callTools: Map<string, string>): boolean {
