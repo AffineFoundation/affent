@@ -158,7 +158,8 @@ type Config struct {
 	// and feeds active protocols into future turns. Ordinary chat does not
 	// create LOOP.md unless the model calls loop_protocol start_setup.
 	// Existing LOOP.md files are still honored when this is false.
-	EnableLoopProtocol bool `json:"enable_loop_protocol"`
+	EnableLoopProtocol    bool `json:"enable_loop_protocol"`
+	enableLoopProtocolSet bool
 
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
 	// through to agent runtime's builtin.
@@ -267,6 +268,7 @@ func LoadConfig(path string) (Config, error) {
 		EnableWeb          *bool `json:"enable_web"`
 		EnableWebSearch    *bool `json:"enable_web_search"`
 		EnableMemory       *bool `json:"enable_memory"`
+		EnableLoopProtocol *bool `json:"enable_loop_protocol"`
 		EnableSubagent     *bool `json:"enable_subagent"`
 		SubagentMaxDepth   *int  `json:"subagent_max_depth"`
 		EnableFocusedTasks *bool `json:"enable_focused_tasks"`
@@ -280,6 +282,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.enableWebSet = raw.EnableWeb != nil
 	cfg.enableWebSearchSet = raw.EnableWebSearch != nil
 	cfg.enableMemorySet = raw.EnableMemory != nil
+	cfg.enableLoopProtocolSet = raw.EnableLoopProtocol != nil
 	cfg.enableSubagentSet = raw.EnableSubagent != nil
 	cfg.subagentMaxDepthSet = raw.SubagentMaxDepth != nil
 	cfg.enableFocusedTasksSet = raw.EnableFocusedTasks != nil
@@ -331,6 +334,9 @@ func (c *Config) Resolve() error {
 	}
 	if !c.enableFocusedTasksSet {
 		c.EnableFocusedTasks = true
+	}
+	if !c.enableLoopProtocolSet {
+		c.EnableLoopProtocol = true
 	}
 	if c.EnableBuiltins {
 		c.enableBuiltinsSet = true
@@ -411,6 +417,8 @@ func (c *Config) Resolve() error {
 				c.enableWebSearchSet = true
 			case "AFFENTSERVE_MEMORY":
 				c.enableMemorySet = true
+			case "AFFENTSERVE_LOOP_PROTOCOL":
+				c.enableLoopProtocolSet = true
 			case "AFFENTSERVE_BUILTINS":
 				c.enableBuiltinsSet = true
 			}
@@ -614,6 +622,7 @@ func (c Config) EffectiveRuntimeConfig() Config {
 	c.EnableWebSearch = caps.WebSearch
 	c.EnableSubagent = caps.Subagent
 	c.EnableFocusedTasks = caps.FocusedTasks
+	c.EnableLoopProtocol = false
 	if !caps.Browser {
 		c.BrowserScreenshot = false
 		c.BrowserCacheDir = ""

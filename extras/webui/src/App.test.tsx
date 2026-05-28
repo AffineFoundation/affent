@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
@@ -698,8 +698,21 @@ describe("App", () => {
 
     expect((input as HTMLTextAreaElement).value).toContain("analyze market data for several days");
     expect((input as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
-    expect((input as HTMLTextAreaElement).value).toContain("Success criteria:");
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.anything());
+
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter", charCode: 13 });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+      "/v1/sessions/loop-1/loop-protocol",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    const protocolCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/loop-1/loop-protocol" && init?.method === "POST");
+    expect(protocolCall).toBeDefined();
+    expect(JSON.parse(String(protocolCall?.[1]?.body))).toMatchObject({
+      activate: true,
+      goal: "analyze market data for several days",
+    });
+    const messageCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/loop-1/messages" && init?.method === "POST");
+    expect(JSON.parse(String(messageCall?.[1]?.body)).display_text).toBe("Set up loop: analyze market data for several days");
   });
 
   it("keeps empty loop setup out of the selected session surface", async () => {

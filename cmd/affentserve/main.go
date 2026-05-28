@@ -81,6 +81,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable all tools by default; opt in with --eval-tools, --eval-all-tools, --builtins=true, --browser=true, --web=true, or --memory=true. Env: AFFENTSERVE_EVAL_MODE.")
 		evalTools          = fs.String("eval-tools", "", "Comma-separated eval tool allowlist; implies --eval-mode. Examples: read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,recall,delegation,all. Env: AFFENTSERVE_EVAL_TOOLS.")
 		evalAllTools       = fs.Bool("eval-all-tools", false, "Enable eval mode with the full serve tool surface instead of the default no-tool surface. Env: AFFENTSERVE_EVAL_ALL_TOOLS.")
+		enableLoopProtocol = fs.Bool("loop-protocol", true, "Register the session LOOP.md setup/maintenance tool for WebUI long-running loop setup. Env: AFFENTSERVE_LOOP_PROTOCOL.")
 		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		subagentMaxDepth   = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
 		enableFocusedTasks = fs.Bool("focused-tasks", true, "Register the run_task tool — bounded focused tasks with a per-kind tool whitelist and structured JSON output. Independent of --subagent. Env: AFFENTSERVE_FOCUSED_TASKS.")
@@ -205,6 +206,10 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if setFlags["eval-all-tools"] {
 		cfg.EvalAllTools = *evalAllTools
+	}
+	if setFlags["loop-protocol"] {
+		cfg.enableLoopProtocolSet = true
+		cfg.EnableLoopProtocol = *enableLoopProtocol
 	}
 	if setFlags["subagent"] {
 		cfg.enableSubagentSet = true

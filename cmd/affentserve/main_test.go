@@ -69,6 +69,9 @@ func TestParseFlagsAndConfig_DefaultOnToolsCanBeDisabled(t *testing.T) {
 	if !cfg.EnableFocusedTasks {
 		t.Fatal("focused tasks should default on")
 	}
+	if !cfg.EnableLoopProtocol {
+		t.Fatal("loop protocol should default on")
+	}
 
 	cfg, err = parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
@@ -76,6 +79,7 @@ func TestParseFlagsAndConfig_DefaultOnToolsCanBeDisabled(t *testing.T) {
 		"--subagent=false",
 		"--memory=false",
 		"--focused-tasks=false",
+		"--loop-protocol=false",
 	})
 	if err != nil {
 		t.Fatalf("parseFlagsAndConfig: %v", err)
@@ -88,6 +92,9 @@ func TestParseFlagsAndConfig_DefaultOnToolsCanBeDisabled(t *testing.T) {
 	}
 	if cfg.EnableFocusedTasks {
 		t.Fatal("--focused-tasks=false should disable focused tasks")
+	}
+	if cfg.EnableLoopProtocol {
+		t.Fatal("--loop-protocol=false should disable loop protocol")
 	}
 }
 
@@ -184,7 +191,7 @@ func TestParseFlagsAndConfig_EvalModeDisablesToolsByDefault(t *testing.T) {
 	if !cfg.EvalMode {
 		t.Fatal("eval mode should be enabled")
 	}
-	if cfg.EnableBuiltins || cfg.EnableMemory || cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+	if cfg.EnableBuiltins || cfg.EnableMemory || cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks || cfg.EnableLoopProtocol {
 		t.Fatalf("eval mode should disable tools by default: %+v", cfg)
 	}
 
