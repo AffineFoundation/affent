@@ -1494,6 +1494,23 @@ func SubagentCalledAtLeast(mode string, min int) Check {
 	}
 }
 
+func SubagentSourceEvidenceAtLeast(mode string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("subagent_source_evidence_at_least:%s:%d", mode, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.DelegationStats()
+			got := stats.SubagentSourceEvidenceByMode[mode]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s_source_evidence=%d", mode, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s_source_evidence=%d, want >= %d; source_evidence=%v", mode, got, min, stats.SubagentSourceEvidenceByMode),
+			}
+		},
+	}
+}
+
 func NoDelegationErrors() Check {
 	return Check{
 		Name: "no_delegation_errors",

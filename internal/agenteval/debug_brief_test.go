@@ -455,10 +455,31 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	})
 	item = debugBriefItemByKind(brief, "research_checkpoint")
 	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["subagent_research"] != 1 ||
+		item.Counts["subagent_source_evidence"] != 0 ||
+		!stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("unsourced research subagent should not satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Delegation: DelegationStats{
+			SubagentCalls:                1,
+			SubagentByMode:               map[string]int{"research": 1},
+			SubagentSourceEvidenceByMode: map[string]int{"research": 2},
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
 		item.Severity != "info" ||
 		item.Counts["subagent_research"] != 1 ||
+		item.Counts["subagent_source_evidence"] != 2 ||
 		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
-		t.Fatalf("research subagent should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+		t.Fatalf("sourced research subagent should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
 	}
 }
 

@@ -1077,6 +1077,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredSubagentModeCounts: map[string]int{
 			"review": 1,
 		},
+		RequiredSubagentSourceCounts: map[string]int{
+			"review": 1,
+		},
 		RequireNoDelegationErrors: true,
 		RequireNoPlanErrors:       true,
 		MaxSuccessfulToolCallsByTool: map[string]int{
@@ -1129,6 +1132,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"context_compaction_summary_contains:HRO market marker",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
+		"subagent_source_evidence_at_least:review:1",
 		"no_delegation_errors",
 		"no_plan_errors",
 		"max_successful_tool_calls:read_file:1",
@@ -2272,6 +2276,9 @@ func TestSubagentScenarioRequiresExploreMode(t *testing.T) {
 		if scenario.RequiredSubagentModeCounts["explore"] != 1 {
 			t.Fatalf("subagent-project-facts RequiredSubagentModeCounts = %#v, want explore=1", scenario.RequiredSubagentModeCounts)
 		}
+		if scenario.RequiredSubagentSourceCounts["explore"] != 2 {
+			t.Fatalf("subagent-project-facts RequiredSubagentSourceCounts = %#v, want explore=2", scenario.RequiredSubagentSourceCounts)
+		}
 		if !scenario.RequireNoDelegationErrors {
 			t.Fatal("subagent-project-facts should require clean delegation")
 		}
@@ -2808,6 +2815,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredSubagentModeCounts: map[string]int{
 			"review": 1,
 		},
+		RequiredSubagentSourceCounts: map[string]int{
+			"review": 1,
+		},
 		RequireNoDelegationErrors: true,
 		RequireNoPlanErrors:       true,
 		RequiredSourceAccess: []SourceAccessRequirement{
@@ -2941,6 +2951,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredFocusedTaskCounts["research"] != 1 ||
 		manifest.Expectations.RequiredFocusedTaskSourceCounts["research"] != 2 ||
 		manifest.Expectations.RequiredSubagentModeCounts["review"] != 1 ||
+		manifest.Expectations.RequiredSubagentSourceCounts["review"] != 1 ||
 		!manifest.Expectations.RequireNoDelegationErrors ||
 		!manifest.Expectations.RequireNoPlanErrors ||
 		len(manifest.Expectations.RequiredToolArgContains) != 1 ||

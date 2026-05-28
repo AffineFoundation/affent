@@ -549,6 +549,10 @@ transport exit code is zero. `verify` may use `ok:false` for a valid
 `focused_task_incomplete`, `subagent_incomplete`, and
 `delegation_incomplete=...` so operators can distinguish child reports that
 finished with unresolved gaps from transport/runtime failures.
+Subagent evals can also require source-bearing report lines through
+`required_subagent_source_counts`, which counts conservative Evidence, Files
+inspected, Commands run, and Sources entries in successful structured
+`subagent_run` results.
 
 Open gaps are detected conservatively from explicit report sections such as
 `Uncertainties`, `Warnings`, `Limitations`, `Open questions`, or `Gaps`
@@ -1263,8 +1267,10 @@ discovery-only and dynamic-partial page evidence remain weak leads. Focused
 `research`/`web_extract` tasks count as delegated evidence only when their
 structured result includes sourced findings, and live-web delegated checkpoint
 evals assert `required_focused_task_source_counts`; local explore/review
-children remain internal review signals. Research subagents still count as
-delegated research evidence through their explicit mode.
+children remain internal review signals. Research subagents count as delegated
+research evidence only when their report includes source-bearing Evidence,
+Files inspected, Commands run, or Sources lines; evals can assert this with
+`required_subagent_source_counts`.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

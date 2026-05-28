@@ -237,6 +237,31 @@ func TestFocusedTaskSourceFindingsAtLeast(t *testing.T) {
 	}
 }
 
+func TestSubagentSourceEvidenceAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			Tool:       "subagent_run",
+			Result:     `{"mode":"research","ok":true,"report":"Conclusion:\nexternal calibration found two anchors\nEvidence:\n- source: https://code.claude.com/docs/en/subagents\n- memory topic: loop-route\n- unsourced claim\nFiles inspected:\n- docs/loop.md\nUncertainties:\n- none"}`,
+			Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "research"},
+		},
+		{
+			Tool:       "subagent_run",
+			Result:     `{"mode":"research","ok":false,"report":"Conclusion:\npartial\nEvidence:\n- source: https://example.test"}`,
+			Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "research"},
+		},
+	}}
+	if res := SubagentSourceEvidenceAtLeast("research", 3).Eval(trace); !res.Pass {
+		t.Fatalf("expected sourced research subagent evidence to pass: %+v", res)
+	}
+	res := SubagentSourceEvidenceAtLeast("research", 4).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected source evidence count check to fail")
+	}
+	if !strings.Contains(res.Detail, "research_source_evidence=3") || !strings.Contains(res.Detail, "want >= 4") {
+		t.Fatalf("failure detail should explain source evidence count: %s", res.Detail)
+	}
+}
+
 func TestToolResultTruncated(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "shell", ResultTruncated: true, ResultOmittedBytes: 4096, ResultCapBytes: 262144},

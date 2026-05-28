@@ -1940,6 +1940,12 @@ type DelegationStats struct {
 	// (explore / review / test / research). Keys with zero counts
 	// are not included.
 	SubagentByMode map[string]int
+	// SubagentSourceEvidenceByMode counts source-bearing report lines in
+	// successful structured subagent_run results, grouped by mode.
+	// Subagent reports are prose, so this uses conservative Evidence /
+	// Files inspected / Commands run section parsing instead of treating a
+	// bare mode=research call as externally evidenced.
+	SubagentSourceEvidenceByMode map[string]int
 	// SubagentErrors counts subagent_run calls that failed at runtime or
 	// returned ok:false, which means the child report is partial or has
 	// unresolved gaps.
@@ -2001,6 +2007,12 @@ func (t Trace) DelegationStats() DelegationStats {
 					s.SubagentByMode = map[string]int{}
 				}
 				s.SubagentByMode[m]++
+				if sourced := subagentSourceEvidenceCount(c, m); sourced > 0 {
+					if s.SubagentSourceEvidenceByMode == nil {
+						s.SubagentSourceEvidenceByMode = map[string]int{}
+					}
+					s.SubagentSourceEvidenceByMode[m] += sourced
+				}
 			}
 		}
 	}
@@ -2056,6 +2068,118 @@ func focusedTaskResultCountsAsError(c ToolCall) bool {
 		taskType = strings.TrimSpace(c.Delegation.TaskType)
 	}
 	return taskType != string(agent.FocusedTaskVerify)
+}
+
+func subagentSourceEvidenceCount(c ToolCall, fallbackMode string) int {
+	if c.Tool != agent.SubagentToolName || strings.TrimSpace(c.Result) == "" {
+		return 0
+	}
+	var payload struct {
+		OK     *bool  `json:"ok"`
+		Mode   string `json:"mode"`
+		Report string `json:"report"`
+	}
+	if err := json.Unmarshal([]byte(c.Result), &payload); err != nil {
+		return 0
+	}
+	if payload.OK != nil && !*payload.OK {
+		return 0
+	}
+	mode := strings.TrimSpace(payload.Mode)
+	if mode == "" {
+		mode = strings.TrimSpace(fallbackMode)
+	}
+	if mode == "" {
+		return 0
+	}
+	return sourceEvidenceLinesInSubagentReport(payload.Report)
+}
+
+func sourceEvidenceLinesInSubagentReport(report string) int {
+	var count int
+	section := ""
+	for _, line := range strings.Split(report, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		if name, ok := subagentReportSectionName(trimmed); ok {
+			section = name
+			continue
+		}
+		if section == "" || subagentReportSectionBoundary(trimmed) {
+			if subagentReportSectionBoundary(trimmed) {
+				section = ""
+			}
+			continue
+		}
+		item := strings.TrimSpace(strings.TrimLeft(trimmed, "-*0123456789.、) \t"))
+		if item == "" || reportSectionItemMeansNoneForEval(item) {
+			continue
+		}
+		if subagentSectionItemHasSource(section, item) {
+			count++
+		}
+	}
+	return count
+}
+
+func subagentReportSectionName(line string) (string, bool) {
+	trimmed := strings.ToLower(strings.TrimSpace(strings.Trim(line, "#* ")))
+	trimmed = strings.TrimSuffix(strings.TrimSuffix(trimmed, ":"), "：")
+	switch trimmed {
+	case "evidence", "files inspected", "commands run", "sources", "source":
+		return trimmed, true
+	default:
+		return "", false
+	}
+}
+
+func subagentReportSectionBoundary(line string) bool {
+	trimmed := strings.TrimSpace(strings.Trim(line, "#* "))
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "*") {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "#") {
+		return true
+	}
+	return strings.HasSuffix(trimmed, ":") || strings.HasSuffix(trimmed, "：")
+}
+
+func subagentSectionItemHasSource(section, item string) bool {
+	lower := strings.ToLower(item)
+	switch section {
+	case "files inspected", "commands run", "sources", "source":
+		return true
+	case "evidence":
+		return strings.Contains(lower, "source:") ||
+			strings.Contains(lower, "source=") ||
+			strings.Contains(lower, "file:") ||
+			strings.Contains(lower, "path:") ||
+			strings.Contains(lower, "session") ||
+			strings.Contains(lower, "memory") ||
+			strings.Contains(lower, "http://") ||
+			strings.Contains(lower, "https://") ||
+			strings.Contains(lower, ".md") ||
+			strings.Contains(lower, ".go") ||
+			strings.Contains(lower, ".json") ||
+			strings.Contains(lower, ".txt") ||
+			strings.Contains(item, "/")
+	default:
+		return false
+	}
+}
+
+func reportSectionItemMeansNoneForEval(item string) bool {
+	switch strings.ToLower(strings.TrimSpace(item)) {
+	case "none", "none.", "n/a", "na", "no", "no.", "无", "无。", "没有", "没有。":
+		return true
+	default:
+		return false
+	}
 }
 
 func subagentResultCountsAsError(c ToolCall) bool {

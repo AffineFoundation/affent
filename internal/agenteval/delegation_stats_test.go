@@ -20,7 +20,7 @@ func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}, ExitCode: 1, IsErr: true},
 			{Tool: "run_task", Result: `{"task_type":"explore","ok":false,"warnings":["no_valid_evidence_backed_findings"]}`, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
 			{Tool: "run_task", Result: `{"task_type":"verify","ok":false,"summary":"claim falsified"}`, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "verify"}},
-			{Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "test"}},
+			{Tool: "subagent_run", Result: `{"ok":true,"mode":"test","report":"Conclusion:\nreproduced\nEvidence:\n- source: tests/queue_test.go\nFiles inspected:\n- tests/queue_test.go"}`, Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "test"}},
 			{Tool: "subagent_run", Result: `{"ok":false,"report":"partial"}`, Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "research"}},
 			{Tool: "read_file"}, // no delegation: must be ignored
 		},
@@ -54,6 +54,9 @@ func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 	if !reflect.DeepEqual(got.SubagentByMode, map[string]int{"test": 1, "research": 1}) {
 		t.Errorf("SubagentByMode = %+v", got.SubagentByMode)
 	}
+	if !reflect.DeepEqual(got.SubagentSourceEvidenceByMode, map[string]int{"test": 2}) {
+		t.Errorf("SubagentSourceEvidenceByMode = %+v", got.SubagentSourceEvidenceByMode)
+	}
 	if !got.HasAny() {
 		t.Error("HasAny() should report true when there are delegation calls")
 	}
@@ -67,7 +70,7 @@ func TestTrace_DelegationStats_EmptyTraceProducesZeroValueAndHasAnyFalse(t *test
 	if got.HasAny() {
 		t.Error("HasAny() must be false when no delegation calls observed")
 	}
-	if got.FocusedTaskByType != nil || got.FocusedTaskSourceFindingsByType != nil || got.SubagentByMode != nil {
+	if got.FocusedTaskByType != nil || got.FocusedTaskSourceFindingsByType != nil || got.SubagentByMode != nil || got.SubagentSourceEvidenceByMode != nil {
 		t.Error("sub-maps must stay nil when no delegation calls observed (keeps JSONL clean)")
 	}
 }

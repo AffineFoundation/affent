@@ -178,6 +178,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"focused_task_source_findings":  researchCheckpointFocusedTaskSourceFindingCount(res.Delegation),
 			"subagent_calls":                res.Delegation.SubagentCalls,
 			"subagent_research":             res.Delegation.SubagentByMode["research"],
+			"subagent_source_evidence":      res.Delegation.SubagentSourceEvidenceByMode["research"],
 		}, tags...)
 	}
 	if res.Delegation.HasAny() {
@@ -573,7 +574,7 @@ func researchCheckpointHasExternalEvidence(res BatchResult) bool {
 	if researchCheckpointFocusedTaskSourceFindingCount(res.Delegation) > 0 {
 		return true
 	}
-	if res.Delegation.SubagentByMode["research"] > 0 {
+	if res.Delegation.SubagentSourceEvidenceByMode["research"] > 0 {
 		return true
 	}
 	return false

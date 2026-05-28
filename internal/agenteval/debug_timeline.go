@@ -467,6 +467,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "required_focused_task_counts", exp.RequiredFocusedTaskCounts)
 	writeTimelineCountsLine(b, "required_focused_task_source_counts", exp.RequiredFocusedTaskSourceCounts)
 	writeTimelineCountsLine(b, "required_subagent_mode_counts", exp.RequiredSubagentModeCounts)
+	writeTimelineCountsLine(b, "required_subagent_source_counts", exp.RequiredSubagentSourceCounts)
 	if exp.RequireNoDelegationErrors || exp.RequireNoPlanErrors {
 		var parts []string
 		if exp.RequireNoDelegationErrors {
@@ -724,6 +725,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredFocusedTaskCounts) > 0 ||
 		len(exp.RequiredFocusedTaskSourceCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
+		len(exp.RequiredSubagentSourceCounts) > 0 ||
 		exp.RequireNoDelegationErrors ||
 		exp.RequireNoPlanErrors ||
 		len(exp.RequiredToolResultText) > 0 ||

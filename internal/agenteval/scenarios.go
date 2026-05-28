@@ -578,6 +578,9 @@ const DefaultRetryBudget = 3
 		RequiredSubagentModeCounts: map[string]int{
 			"explore": 1,
 		},
+		RequiredSubagentSourceCounts: map[string]int{
+			"explore": 2,
+		},
 		RequireNoDelegationErrors: true,
 		ForbiddenTools:            []string{"edit_file", "write_file"},
 		RequiredFinalText:         []string{"1500", "3", "docs/runtime.md", "internal/config/defaults.go"},

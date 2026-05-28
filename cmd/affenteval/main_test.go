@@ -470,6 +470,9 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 				RequiredSubagentModeCounts: map[string]int{
 					"review": 1,
 				},
+				RequiredSubagentSourceCounts: map[string]int{
+					"review": 1,
+				},
 			},
 			wantErr: "delegation missing run_task, subagent_run",
 		},
@@ -514,6 +517,9 @@ func TestExpectationRequiredToolNamesIncludesImplicitTools(t *testing.T) {
 		}},
 		RequiredFocusedTaskCounts: map[string]int{"explore": 1},
 		RequiredSubagentModeCounts: map[string]int{
+			"review": 1,
+		},
+		RequiredSubagentSourceCounts: map[string]int{
 			"review": 1,
 		},
 	})

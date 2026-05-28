@@ -177,6 +177,7 @@ type BatchScenario struct {
 	RequiredFocusedTaskCounts               map[string]int
 	RequiredFocusedTaskSourceCounts         map[string]int
 	RequiredSubagentModeCounts              map[string]int
+	RequiredSubagentSourceCounts            map[string]int
 	RequireNoDelegationErrors               bool
 	RequireNoPlanErrors                     bool
 	RequiredFinalText                       []string
@@ -382,6 +383,7 @@ type DebugScenarioExpectations struct {
 	RequiredFocusedTaskCounts               map[string]int                        `json:"required_focused_task_counts,omitempty"`
 	RequiredFocusedTaskSourceCounts         map[string]int                        `json:"required_focused_task_source_counts,omitempty"`
 	RequiredSubagentModeCounts              map[string]int                        `json:"required_subagent_mode_counts,omitempty"`
+	RequiredSubagentSourceCounts            map[string]int                        `json:"required_subagent_source_counts,omitempty"`
 	RequireNoDelegationErrors               bool                                  `json:"require_no_delegation_errors,omitempty"`
 	RequireNoPlanErrors                     bool                                  `json:"require_no_plan_errors,omitempty"`
 	RequiredFinalText                       []string                              `json:"required_final_text,omitempty"`
@@ -462,6 +464,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if len(exp.RequiredFocusedTaskCounts) > 0 ||
 		len(exp.RequiredFocusedTaskSourceCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
+		len(exp.RequiredSubagentSourceCounts) > 0 ||
 		exp.RequireNoDelegationErrors {
 		caps["delegation"] = true
 	}
@@ -591,7 +594,7 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 	if len(exp.RequiredFocusedTaskCounts) > 0 || len(exp.RequiredFocusedTaskSourceCounts) > 0 {
 		add(agent.FocusedTaskToolName)
 	}
-	if len(exp.RequiredSubagentModeCounts) > 0 {
+	if len(exp.RequiredSubagentModeCounts) > 0 || len(exp.RequiredSubagentSourceCounts) > 0 {
 		add(agent.SubagentToolName)
 	}
 	for _, tool := range exp.RequiredTruncatedResults {
@@ -1704,6 +1707,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredFocusedTaskCounts:               cloneStringIntMap(s.RequiredFocusedTaskCounts),
 		RequiredFocusedTaskSourceCounts:         cloneStringIntMap(s.RequiredFocusedTaskSourceCounts),
 		RequiredSubagentModeCounts:              cloneStringIntMap(s.RequiredSubagentModeCounts),
+		RequiredSubagentSourceCounts:            cloneStringIntMap(s.RequiredSubagentSourceCounts),
 		RequireNoDelegationErrors:               s.RequireNoDelegationErrors,
 		RequireNoPlanErrors:                     s.RequireNoPlanErrors,
 		RequiredFinalText:                       append([]string(nil), s.RequiredFinalText...),
@@ -2473,6 +2477,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, mode := range sortedStringMapKeys(scenario.RequiredSubagentModeCounts) {
 		checks = append(checks, SubagentCalledAtLeast(mode, scenario.RequiredSubagentModeCounts[mode]))
+	}
+	for _, mode := range sortedStringMapKeys(scenario.RequiredSubagentSourceCounts) {
+		checks = append(checks, SubagentSourceEvidenceAtLeast(mode, scenario.RequiredSubagentSourceCounts[mode]))
 	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())

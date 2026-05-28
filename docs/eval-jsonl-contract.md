@@ -130,8 +130,8 @@ Scenario records describe one eval case:
   delegated `run_task(research)` evidence, so result consumers can distinguish
   source-heavy parent reads from compact child research handoffs. Delegated
   research cases can additionally require `required_focused_task_source_counts`
-  so a child task must return source-backed findings, not just a successful
-  `run_task` call.
+  or `required_subagent_source_counts` so a child task must return
+  source-backed findings/report lines, not just a successful delegation call.
 - `expectation_capability_names`, `expectation_capability_outcome`,
   `expectation_capability_passed_names`, and
   `expectation_capability_failed_names`: optional scenario-level derived
