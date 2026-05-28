@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRun, runCommandDraft, runCommandEvidenceText, runCommandMeta } from "./sessionRun";
+import { buildSessionRun, manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta } from "./sessionRun";
 
 describe("buildSessionRun", () => {
   it("summarizes shell commands with failure recovery and artifacts", () => {
@@ -63,6 +63,16 @@ describe("buildSessionRun", () => {
       summary: "No commands",
       detail: "No shell commands in this chat.",
     });
+  });
+
+  it("builds a structured manual command draft", () => {
+    expect(manualRunDraft(" npm run build ", " extras/webui ")).toBe(
+      [
+        "Run this command in the session workspace, then report the exit code, working directory, and relevant output:",
+        "npm run build",
+        "Working directory: extras/webui",
+      ].join("\n"),
+    );
   });
 
   it("tracks running commands before a result arrives", () => {

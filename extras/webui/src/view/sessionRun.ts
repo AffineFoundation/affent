@@ -85,6 +85,15 @@ export function runCommandDraft(command: SessionRunCommand): string {
   return lines.join("\n");
 }
 
+export function manualRunDraft(command: string, cwd?: string): string {
+  const lines = [
+    "Run this command in the session workspace, then report the exit code, working directory, and relevant output:",
+    command.trim(),
+    cwd?.trim() ? `Working directory: ${cwd.trim()}` : undefined,
+  ];
+  return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
+
 function commandPriority(command: SessionRunCommand): number {
   if (command.status === "failed") return 0;
   if (command.status === "running") return 1;

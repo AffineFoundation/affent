@@ -51,6 +51,18 @@ describe("SessionRunPanel", () => {
       ].join("\n"),
       "run_command",
     );
+
+    await user.type(screen.getByLabelText("Command"), "npm run build");
+    await user.type(screen.getByLabelText("Working directory"), "extras/webui");
+    await user.click(screen.getByRole("button", { name: "Use command as draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      [
+        "Run this command in the session workspace, then report the exit code, working directory, and relevant output:",
+        "npm run build",
+        "Working directory: extras/webui",
+      ].join("\n"),
+      "run_command",
+    );
   });
 
   it("keeps the panel folded by default", () => {

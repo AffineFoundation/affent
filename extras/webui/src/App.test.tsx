@@ -2191,6 +2191,7 @@ describe("App", () => {
     expect(run).toHaveTextContent("1 failed command");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
+    expect(within(run).getByTestId("session-run-manual")).toBeVisible();
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open command output" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout spec failed");
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun as draft" }));
