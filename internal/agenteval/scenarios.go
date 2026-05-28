@@ -2746,6 +2746,122 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 	}
 }
 
+func longRunScratchProjectLoopPushScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-scratch-project-loop-push",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{codePRDomain, longRunRecoveryDomain},
+		SessionID:          "scratch-project-loop",
+		EnableLoopProtocol: true,
+		Prompt:            "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project and push it to origin main. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
+		Files: map[string]string{
+			".affent/loops/scratch-project-loop/LOOP.md": `# Loop Protocol: scratch-project-loop
+
+## 0. Metadata
+
+- loop_id: scratch-project-loop
+- owner_session: scratch-project-loop
+- status: running
+
+## 1. North Star
+
+Build a tiny but complete software project from a nearly empty repository, keep verification explicit, and preserve a commit/push handoff.
+
+## 2. Current Situation
+
+- Start from README plus this protocol only; no source package or tests exist yet.
+- Required durable marker: SCRATCH-LOOP-31.
+- The project should be small enough to finish in one eval run but realistic enough to require source, tests, docs, git commit, and push.
+
+## 3. Rules
+
+- Use Python stdlib unittest; do not add third-party dependencies.
+- Keep generated files focused: todo_core/, tests/, and README.md are enough.
+- Do not modify this LOOP.md.
+
+## 4. Plan/Step Pointer
+
+Current step: create tests and implementation, verify with unittest, then commit and push.
+
+## 5. Evidence And Recovery Index
+
+Evidence is the unittest command, git commit hash, origin/main push state, and the created project files.
+`,
+			"README.md": `# Scratch Loop Project Eval
+
+This repository starts almost empty. The agent must create the project, tests, docs, commit, and push.
+`,
+		},
+		SetupCommands: []string{
+			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
+		},
+		VerifyCommand: "python3 -m unittest discover -s tests && test -f todo_core/store.py && test -f todo_core/__init__.py && test -f tests/test_store.py && grep -R \"class TodoStore\" todo_core/store.py && grep -R \"mark_done\" tests/test_store.py && grep -R \"SCRATCH-LOOP-31\" README.md && git diff --quiet && git diff --cached --quiet && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{
+			`python3 -m unittest discover -s tests`,
+			`git commit`,
+			`git push`,
+		},
+		RequiredCommandCounts: map[string]int{
+			`python3 -m unittest`: 2,
+		},
+		RequiredTools: []string{"write_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
+			{Tool: "write_file", Arg: "path", Substring: "todo_core/__init__.py"},
+			{Tool: "write_file", Arg: "path", Substring: "tests/test_store.py"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `python3 -m unittest`, Tool: "write_file"},
+			{Command: `git commit`, Tool: "write_file"},
+			{Command: `git push`, Tool: "write_file"},
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{
+				CurrentSituation: "no source package or tests exist yet",
+				PlanCurrentStep:  "create tests and implementation",
+			},
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
+		},
+		RequiredFinalText: []string{
+			"SCRATCH-LOOP-31",
+			"python3 -m unittest discover -s tests",
+			"todo_core/store.py",
+			"tests/test_store.py",
+			"commit",
+			"push",
+		},
+		RequiredFileSubstrings: map[string][]string{
+			"todo_core/store.py": {
+				"class TodoStore",
+				"def add",
+				"def mark_done",
+				"def open_items",
+			},
+			"tests/test_store.py": {
+				"unittest",
+				"mark_done",
+				"open_items",
+			},
+			"README.md": {
+				"SCRATCH-LOOP-31",
+				"TodoStore",
+			},
+		},
+		ForbiddenCommands: defaultForbiddenCommands,
+		ProtectedFiles: []string{
+			".affent/loops/scratch-project-loop/LOOP.md",
+		},
+		MaxTurns: 20,
+	}
+}
+
 func longRunFocusedTaskRecoveryScenario() BatchScenario {
 	return BatchScenario{
 		Name:    "longrun-focused-task-recovery-synthesis",

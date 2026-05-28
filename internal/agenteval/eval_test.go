@@ -1536,8 +1536,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 18 {
-		t.Fatalf("long-run suite size = %d, want 18", len(scenarios))
+	if len(scenarios) != 19 {
+		t.Fatalf("long-run suite size = %d, want 19", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1678,6 +1678,63 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(commitPush.Domains, codePRDomain) {
 		t.Fatalf("commit/push Domains = %#v, want code_pr", commitPush.Domains)
+	}
+
+	scratchProject, ok := seen["longrun-scratch-project-loop-push"]
+	if !ok {
+		t.Fatalf("long-run suite missing scratch project loop/push scenario")
+	}
+	if scratchProject.SessionID != "scratch-project-loop" || !scratchProject.EnableLoopProtocol {
+		t.Fatalf("scratch project loop fields = session:%q loop:%v", scratchProject.SessionID, scratchProject.EnableLoopProtocol)
+	}
+	if _, ok := scratchProject.Files[".affent/loops/scratch-project-loop/LOOP.md"]; !ok {
+		t.Fatalf("scratch project scenario missing active LOOP.md")
+	}
+	if !strings.Contains(scratchProject.Prompt, "Build a small Python project") || strings.Contains(scratchProject.Prompt, "请") {
+		t.Fatalf("scratch project prompt should be English and task-specific: %q", scratchProject.Prompt)
+	}
+	for _, want := range []string{"python3 -m unittest discover -s tests", "git commit", "git push"} {
+		if !stringSliceContains(scratchProject.RequiredCommands, want) {
+			t.Fatalf("scratch project RequiredCommands = %#v, want %q", scratchProject.RequiredCommands, want)
+		}
+	}
+	if scratchProject.RequiredCommandCounts[`python3 -m unittest`] != 2 {
+		t.Fatalf("scratch project RequiredCommandCounts = %#v, want unittest=2", scratchProject.RequiredCommandCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
+		{Tool: "write_file", Arg: "path", Substring: "tests/test_store.py"},
+	} {
+		if !toolArgRequirementContains(scratchProject.RequiredToolArgContains, want) {
+			t.Fatalf("scratch project RequiredToolArgContains = %#v, want %#v", scratchProject.RequiredToolArgContains, want)
+		}
+	}
+	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git ls-remote --heads origin main"} {
+		if !strings.Contains(scratchProject.VerifyCommand, want) {
+			t.Fatalf("scratch project VerifyCommand = %q, want %q", scratchProject.VerifyCommand, want)
+		}
+	}
+	if scratchProject.RequiredLoopProtocolFeeds != 1 ||
+		scratchProject.RequiredLoopProtocolFeedModes["full"] != 1 ||
+		len(scratchProject.RequiredLoopProtocolFeedMatches) != 1 ||
+		!strings.Contains(scratchProject.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "no source package or tests exist yet") ||
+		!strings.Contains(scratchProject.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "create tests and implementation") {
+		t.Fatalf("scratch project loop protocol constraints = feeds:%d modes:%#v matches:%#v", scratchProject.RequiredLoopProtocolFeeds, scratchProject.RequiredLoopProtocolFeedModes, scratchProject.RequiredLoopProtocolFeedMatches)
+	}
+	if scratchProject.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 {
+		t.Fatalf("scratch project trace event requirements = %#v, want loop.turn_checkpoint=1", scratchProject.RequiredTraceEventCounts)
+	}
+	if !stringSliceContains(scratchProject.ProtectedFiles, ".affent/loops/scratch-project-loop/LOOP.md") {
+		t.Fatalf("scratch project ProtectedFiles = %#v, want LOOP.md", scratchProject.ProtectedFiles)
+	}
+	scratchProjectCaps := ExpectationCapabilityNames(debugScenarioExpectations(scratchProject))
+	for _, want := range []string{"loop_protocol", "trace", "verifier"} {
+		if !stringSliceContains(scratchProjectCaps, want) {
+			t.Fatalf("scratch project expectation capabilities = %#v, want %q", scratchProjectCaps, want)
+		}
+	}
+	if !stringSliceContains(scratchProject.Domains, codePRDomain) || !stringSliceContains(scratchProject.Domains, longRunRecoveryDomain) {
+		t.Fatalf("scratch project Domains = %#v, want code_pr and longrun_recovery", scratchProject.Domains)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]
