@@ -25,7 +25,8 @@ export function SessionTracePanel({
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
   const issueGroups = useMemo(() => traceToolIssueGroups(trace.toolIssues), [trace.toolIssues]);
-  const activeIssue = trace.toolIssues.find((issue) => issue.id === activeIssueId);
+  const activeIssue = trace.toolIssues.find((issue) => issue.id === activeIssueId)
+    ?? (filter === "issues" ? trace.toolIssues[0] : undefined);
   const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(
     () => {
@@ -130,6 +131,7 @@ export function SessionTracePanel({
                       onClick={() => {
                         setFilter("issues");
                         setQuery(`tool:${group.tool}`);
+                        setActiveIssueId(trace.toolIssues.find((issue) => issue.tool === group.tool)?.id);
                       }}
                     >
                       <strong>{group.tool}</strong>
@@ -143,7 +145,7 @@ export function SessionTracePanel({
                       key={`${issue.id}:${issue.title}`}
                       type="button"
                       className="session-trace-issue"
-                      data-selected={activeIssueId === issue.id ? "true" : "false"}
+                      data-selected={activeIssue?.id === issue.id ? "true" : "false"}
                       onClick={() => {
                         setActiveIssueId(issue.id);
                         setFilter("issues");

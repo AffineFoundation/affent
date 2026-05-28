@@ -43,6 +43,8 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("invalid_args");
     expect(screen.getByTestId("session-trace-issues")).not.toHaveTextContent("Next: rerun npm test after fixing checkout");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Request 1 · shell");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("rerun npm test after fixing checkout");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Inspect trace");
