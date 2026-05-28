@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 type DebugBrief struct {
@@ -56,6 +58,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		add("workspace_path", "fail", "agent used the workspace absolute path where the runtime expected workspace-relative commands or file args; inspect tool arguments and prompt/context path guidance before comparing task quality", []string{"failures", "tool_timeline", "runtime_surface", "timeline"}, map[string]int{
 			"failures": count,
 		}, "workspace_path", "workspace_path:absolute")
+	}
+	if counts, tags, ok := loopProtocolStillRunningCounts(res); ok {
+		add("loop_protocol_state", "warn", "loop protocol remained running at the latest checkpoint; inspect closure guard and close/plan state before treating the session as complete", []string{"loop_turn_checkpoint_examples", "runtime_surface", "message_rejected_examples", "timeline"}, counts, tags...)
 	}
 	expectedTurnEndReason := expectedTurnEndReasonFromExpectations(res.Expectations)
 	if res.TurnEndReason != "" && res.TurnEndReason != expectedTurnEndReason {
@@ -623,6 +628,40 @@ func workspaceAbsolutePathFailureCount(failures []string) int {
 		}
 	}
 	return count
+}
+
+func loopProtocolStillRunningCounts(res BatchResult) (map[string]int, []string, bool) {
+	latest := res.LoopTurnCheckpoints.Latest
+	if strings.ToLower(strings.TrimSpace(latest.Status)) != "running" {
+		return nil, nil, false
+	}
+	counts := map[string]int{
+		"running":          1,
+		"checkpoints":      res.LoopTurnCheckpoints.Count,
+		"protocol_feeds":   res.LoopProtocolFeeds.Count,
+		"tool_requests":    latest.ToolRequests,
+		"tool_errors":      latest.ToolErrors,
+		"forced_no_tools":  latest.ForcedNoTools,
+		"message_rejected": res.MessageRejectedStats.Count,
+	}
+	tags := []string{"loop_protocol", "loop_protocol:still_running"}
+	if !runtimeSurfaceHasCompletionGuard(res.RuntimeSurface, "loop_protocol_running") {
+		counts["missing_completion_guard"] = 1
+		tags = append(tags, "completion_guard:missing_loop_protocol")
+	}
+	return counts, tags, true
+}
+
+func runtimeSurfaceHasCompletionGuard(surface *sse.RuntimeSurfacePayload, guard string) bool {
+	if surface == nil {
+		return false
+	}
+	for _, got := range surface.CompletionGuards {
+		if got == guard {
+			return true
+		}
+	}
+	return false
 }
 
 func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {

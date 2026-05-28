@@ -130,6 +130,50 @@ func TestBuildDebugBriefClassifiesLoopProtocolCalibrationBacklog(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 5,
+			Latest: LoopTurnCheckpoint{
+				Status:        "running",
+				ToolRequests:  4,
+				ToolErrors:    1,
+				ForcedNoTools: 1,
+			},
+		},
+		LoopProtocolFeeds: LoopProtocolFeedStats{Count: 3},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Tools: []sse.RuntimeSurfaceTool{{Name: "loop_protocol"}},
+		},
+	})
+	item := debugBriefItemByKind(brief, "loop_protocol_state")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["running"] != 1 ||
+		item.Counts["checkpoints"] != 5 ||
+		item.Counts["protocol_feeds"] != 3 ||
+		item.Counts["missing_completion_guard"] != 1 ||
+		!stringSliceContains(item.Inspect, "runtime_surface") ||
+		!stringSliceContains(brief.Tags, "loop_protocol:still_running") ||
+		!stringSliceContains(brief.Tags, "completion_guard:missing_loop_protocol") {
+		t.Fatalf("loop protocol state item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 1,
+			Latest: LoopTurnCheckpoint{
+				Status: "completed",
+			},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "loop_protocol_state"); item != nil {
+		t.Fatalf("completed loop should not produce running-state warning: %+v", item)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSourceRepoSetupFailures(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: false,
