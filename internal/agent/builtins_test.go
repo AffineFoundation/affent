@@ -1614,7 +1614,11 @@ func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("skill install: %v", err)
 	}
-	if !strings.Contains(out, `installed skill "runtime_demo"`) || !strings.Contains(out, "active_now=false") || !strings.Contains(out, "required_tools=memory") || !strings.Contains(out, body) {
+	if !strings.Contains(out, `installed skill "runtime_demo"`) ||
+		!strings.Contains(out, "active_now=false") ||
+		!strings.Contains(out, "required_tools=memory") ||
+		!strings.Contains(out, "missing_required_tools=memory") ||
+		!strings.Contains(out, body) {
 		t.Fatalf("install output should expose body and required-tool gating:\n%s", out)
 	}
 	list, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"list"}`))
@@ -1649,6 +1653,34 @@ func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 	}
 	if got := reloaded.ProvideForTools("runtime demo task", tools); !strings.Contains(got, body) {
 		t.Fatalf("persisted skill should load on next session, got %q", got)
+	}
+}
+
+func TestSkillToolInstallReportsAvailableRequiredTools(t *testing.T) {
+	dir := t.TempDir()
+	reg := &SkillRegistry{}
+	tools := NewRegistry()
+	tools.Add(&Tool{Name: "memory"})
+	tool := skillTool(reg, dir, nil, tools)
+	body := "AFFENT ACTIVE SKILL: available_tool_demo\nUse the available tool demo workflow."
+	args, err := json.Marshal(map[string]any{
+		"action":         "install",
+		"name":           "available_tool_demo",
+		"body":           body,
+		"triggers":       []string{"available tool demo"},
+		"required_tools": []string{"memory"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("skill install: %v", err)
+	}
+	if !strings.Contains(out, "active_now=true") ||
+		!strings.Contains(out, "required_tools=memory") ||
+		!strings.Contains(out, "missing_required_tools=none") {
+		t.Fatalf("install output should expose available required tools:\n%s", out)
 	}
 }
 

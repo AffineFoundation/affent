@@ -462,7 +462,7 @@ func skillInstallSuccessMessage(installed Skill, runtimeTools *Registry) string 
 	if len(installed.AutoActivation.Any) > 0 {
 		triggerSummary = strings.Join(installed.AutoActivation.Any, ", ")
 	}
-	return fmt.Sprintf("installed skill %q active_now=%t source=%s triggers=%s required_tools=%s\n\n%s", installed.Name, skillActiveNow(installed, runtimeTools), installed.Source, triggerSummary, skillRequiredToolsSummary(installed.RequiredTools), strings.TrimSpace(installed.Body))
+	return fmt.Sprintf("installed skill %q active_now=%t source=%s triggers=%s required_tools=%s missing_required_tools=%s\n\n%s", installed.Name, skillActiveNow(installed, runtimeTools), installed.Source, triggerSummary, skillRequiredToolsSummary(installed.RequiredTools), skillMissingRequiredToolsSummary(installed, runtimeTools), strings.TrimSpace(installed.Body))
 }
 
 func skillRequiredToolsSummary(requiredTools []string) string {
@@ -480,6 +480,14 @@ func skillActiveNow(installed Skill, runtimeTools *Registry) bool {
 		return false
 	}
 	return installed.requiredToolsAvailable(runtimeTools)
+}
+
+func skillMissingRequiredToolsSummary(installed Skill, runtimeTools *Registry) string {
+	missing := installed.missingRequiredTools(runtimeTools)
+	if len(missing) == 0 {
+		return "none"
+	}
+	return strings.Join(missing, ", ")
 }
 
 // RegisterMemoryOnly registers just the `memory` tool. This is useful

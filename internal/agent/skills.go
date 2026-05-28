@@ -296,12 +296,21 @@ func (s Skill) requiredToolsAvailable(tools *Registry) bool {
 	if len(s.RequiredTools) == 0 || tools == nil {
 		return true
 	}
+	return len(s.missingRequiredTools(tools)) == 0
+}
+
+func (s Skill) missingRequiredTools(tools *Registry) []string {
+	var missing []string
 	for _, name := range s.RequiredTools {
+		if tools == nil {
+			missing = append(missing, name)
+			continue
+		}
 		if _, ok := tools.Get(name); !ok {
-			return false
+			missing = append(missing, name)
 		}
 	}
-	return true
+	return missing
 }
 
 // Names returns the registered skill names in order. Lets operators
