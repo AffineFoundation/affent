@@ -3209,6 +3209,9 @@ func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
 		if !scenario.RequireNoDelegationErrors {
 			t.Fatal("focused-task-project-facts should require clean delegation")
 		}
+		if !scenario.ForbidWorkspaceAbsolutePaths {
+			t.Fatal("focused-task-project-facts should forbid workspace absolute paths in parent and child shell calls")
+		}
 		return
 	}
 	t.Fatal("builtin scenarios missing focused-task-project-facts")
@@ -3228,9 +3231,50 @@ func TestSubagentScenarioRequiresExploreMode(t *testing.T) {
 		if !scenario.RequireNoDelegationErrors {
 			t.Fatal("subagent-project-facts should require clean delegation")
 		}
+		if !scenario.ForbidWorkspaceAbsolutePaths {
+			t.Fatal("subagent-project-facts should forbid workspace absolute paths in parent and child shell calls")
+		}
 		return
 	}
 	t.Fatal("builtin scenarios missing subagent-project-facts")
+}
+
+func TestDelegatedScenariosForbidWorkspaceAbsolutePaths(t *testing.T) {
+	want := map[string]bool{
+		"focused-task-project-facts":                      true,
+		"subagent-project-facts":                          true,
+		"subagent-noisy-facts":                            true,
+		"subagent-nested-facts":                           true,
+		"longrun-focused-task-recovery-synthesis":         true,
+		"live-web-research-checkpoint-delegated-evidence": true,
+	}
+	seen := map[string]BatchScenario{}
+	for _, scenario := range BuiltinBatchScenarios() {
+		if want[scenario.Name] {
+			seen[scenario.Name] = scenario
+		}
+	}
+	for name := range want {
+		scenario, ok := seen[name]
+		if !ok {
+			t.Fatalf("builtin scenarios missing %s", name)
+		}
+		if !scenario.ForbidWorkspaceAbsolutePaths {
+			t.Fatalf("%s should forbid workspace absolute paths so child transcript shell calls are checked", name)
+		}
+		checkNames := checkNamesFor(BatchScenarioChecks(scenario))
+		if !stringSliceContains(checkNames, "shell_command_lacks_workspace_absolute_path") {
+			t.Fatalf("%s checks = %#v, want workspace absolute path guard", name, checkNames)
+		}
+	}
+}
+
+func checkNamesFor(checks []Check) []string {
+	out := make([]string, 0, len(checks))
+	for _, check := range checks {
+		out = append(out, check.Name)
+	}
+	return out
 }
 
 func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
