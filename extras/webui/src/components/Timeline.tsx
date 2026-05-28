@@ -329,19 +329,19 @@ function IntroStarterPanel({ onUseAsDraft }: { onUseAsDraft: UseAsDraft }) {
 
 const starterDrafts = [
   {
-    title: "Inspect project",
-    preview: "Map files, risks, and next steps.",
-    prompt: "Inspect this project and summarize the important files, risks, and next steps.",
+    title: "Start loop",
+    preview: "Keep improving or checking a long-running goal.",
+    prompt: "Start a long-running loop for this goal: 持续分析最近的世界形势",
   },
   {
-    title: "Fix a failure",
-    preview: "Find the cause and smallest fix.",
-    prompt: "Find the failing test or execution error, explain the cause, and propose the smallest fix.",
+    title: "Daily task",
+    preview: "Run once per day at a fixed UTC offset.",
+    prompt: "Every day at UTC+8 09:00, summarize overnight market and repo signals.",
   },
   {
-    title: "Investigate issue",
-    preview: "Check errors, slow steps, and files.",
-    prompt: "Investigate the current issue, call out the likely cause, and propose the next concrete step.",
+    title: "Hourly task",
+    preview: "Run at a specific minute every hour.",
+    prompt: "Every hour at minute 5, check whether the monitored service is healthy and report only changes.",
   },
 ];
 

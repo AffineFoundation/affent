@@ -189,11 +189,7 @@ function buildLiveResearchHint(runtime?: RuntimeCapabilityView): ComposerTaskHin
 
 function buildCodeDiscoveryHint(runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
   if (!runtime) {
-    return {
-      label: "Workspace tools not confirmed",
-      detail: "Send once to confirm this chat's code tools, or paste file paths now if you already have them.",
-      tone: "unknown",
-    };
+    return undefined;
   }
 
   if (runtime.chips.some((chip) => chip.group === "Files" && chip.label === "Unavailable")) {
@@ -209,11 +205,7 @@ function buildCodeDiscoveryHint(runtime?: RuntimeCapabilityView): ComposerTaskHi
 
 function buildSkillInstallHint(runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
   if (!runtime) {
-    return {
-      label: "Skill install workflow",
-      detail: "Send once to confirm the chat's tools, or paste the skill URL, repository, or exact SKILL.md body.",
-      tone: "unknown",
-    };
+    return undefined;
   }
 
   if (runtime.chips.some((chip) => chip.group === "Skills" && chip.label === "Skill install")) {

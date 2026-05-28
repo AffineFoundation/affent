@@ -139,9 +139,7 @@ describe("WorkbenchContextPanel", () => {
     expect(health).toHaveTextContent("96 of 120 context messages are loaded.");
     expect(health).toHaveTextContent("24 messages before compaction");
     expect(usageCard).toHaveTextContent("Token usage");
-    expect(usageCard).toHaveTextContent("Conversation context");
-    expect(usageCard).toHaveTextContent("96/120 context messages");
-    expect(usageCard).toHaveTextContent("24 messages before compaction");
+    expect(screen.queryByTestId("workbench-context-budget")).toBeNull();
     expect(usageCard).toHaveTextContent("0.0015M tokens");
     expect(usageCard).toHaveTextContent("Session tokens");
     expect(usageCard).toHaveTextContent("0.0015M tokens (0.0012M in / 0.0003M out)");

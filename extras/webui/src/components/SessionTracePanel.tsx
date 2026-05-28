@@ -56,7 +56,7 @@ export function SessionTracePanel({
               ) : null}
             </div>
             {events.length > 1 ? (
-              <div className="session-skills-controls">
+              <div className="session-skills-controls session-trace-controls">
                 <label className="session-skills-search">
                   <span>Search trace</span>
                   <input
@@ -126,7 +126,7 @@ interface TraceFilterItem {
 }
 
 function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number): TraceFilterItem[] {
-  return [
+  return compactFilters([
     { key: "all", label: "All", count: events.length },
     { key: "issues", label: "Tool issues", count: toolIssueCount },
     { key: "actions", label: "Actions", count: countFilter(events, "actions") },
@@ -135,7 +135,11 @@ function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number
     { key: "memory", label: "Memory", count: countFilter(events, "memory") },
     { key: "context", label: "Context", count: countFilter(events, "context") },
     { key: "loop", label: "Loop", count: countFilter(events, "loop") },
-  ];
+  ]);
+}
+
+function compactFilters(filters: TraceFilterItem[]): TraceFilterItem[] {
+  return filters.filter((item) => item.key === "all" || item.count > 0);
 }
 
 function filterEventsByTraceFilter(events: readonly NormalizedEvent[], filter: TraceFilter): NormalizedEvent[] {

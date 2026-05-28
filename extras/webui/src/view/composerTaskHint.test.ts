@@ -53,20 +53,12 @@ describe("buildComposerTaskHint", () => {
     });
   });
 
-  it("explains skill installation when the runtime lacks that surface", () => {
-    expect(buildComposerTaskHint("install a skill from github")).toEqual({
-      label: "Skill install workflow",
-      detail: "Send once to confirm the chat's tools, or paste the skill URL, repository, or exact SKILL.md body.",
-      tone: "unknown",
-    });
+  it("stays quiet for skill installation before capability details exist", () => {
+    expect(buildComposerTaskHint("install a skill from github")).toBeUndefined();
   });
 
-  it("explains when code discovery needs workspace evidence", () => {
-    expect(buildComposerTaskHint("search the repo for the session capability wiring")).toEqual({
-      label: "Workspace tools not confirmed",
-      detail: "Send once to confirm this chat's code tools, or paste file paths now if you already have them.",
-      tone: "unknown",
-    });
+  it("stays quiet for code discovery before capability details exist", () => {
+    expect(buildComposerTaskHint("search the repo for the session capability wiring")).toBeUndefined();
   });
 
   it("stays quiet for local project work and research-ready runtimes", () => {

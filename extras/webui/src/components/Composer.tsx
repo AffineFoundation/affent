@@ -350,19 +350,9 @@ function draftModeLabel(mode: DraftContext["mode"]): string {
   return mode === "append" ? "Added" : "";
 }
 
-const loopPromptTemplate = `Start a long-running loop for this goal:
+const loopPromptTemplate = "Start a long-running loop for this goal: ";
 
-Goal:
-Success criteria:
-What to keep improving or checking:
-When to pause and ask me:`;
-
-const schedulePromptTemplate = `Set up a scheduled task:
-
-Schedule or frequency:
-What Affent should do:
-What result or check-in I expect:
-When to stop or ask me:`;
+const schedulePromptTemplate = "Every day at UTC+8 09:00, ";
 
 async function fileDraft(file: File): Promise<string> {
   if (!isReadableText(file)) {

@@ -276,8 +276,9 @@ describe("Timeline", () => {
 
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("start from a draft");
-    expect(screen.getByRole("button", { name: /Inspect project/ })).toBeInTheDocument();
-    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Inspect this project and summarize");
+    expect(screen.getByRole("button", { name: /Start loop/ })).toBeInTheDocument();
+    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Start a long-running loop for this goal:");
+    expect(screen.getByTestId("starter-preview")).not.toHaveTextContent("Inspect this project");
     expect(screen.getByTestId("timeline-empty")).not.toHaveTextContent("Message");
   });
 
@@ -310,12 +311,12 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline([], undefined, undefined, onUseAsDraft);
 
-    await user.hover(screen.getByRole("button", { name: /Investigate issue/ }));
+    await user.hover(screen.getByRole("button", { name: /Hourly task/ }));
 
-    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Investigate the current issue");
+    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Every hour at minute 5");
     await user.click(screen.getByRole("button", { name: "Use starter draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Investigate the current issue, call out the likely cause, and propose the next concrete step.",
+      "Every hour at minute 5, check whether the monitored service is healthy and report only changes.",
       "starter",
     );
   });
@@ -325,14 +326,14 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline([], undefined, undefined, onUseAsDraft);
 
-    await user.click(screen.getByRole("button", { name: /Fix a failure/ }));
+    await user.click(screen.getByRole("button", { name: /Daily task/ }));
 
     expect(onUseAsDraft).not.toHaveBeenCalled();
-    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Find the failing test or execution error");
+    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Every day at UTC+8 09:00");
     await user.click(screen.getByRole("button", { name: "Use starter draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Find the failing test or execution error, explain the cause, and propose the smallest fix.",
+      "Every day at UTC+8 09:00, summarize overnight market and repo signals.",
       "starter",
     );
   });

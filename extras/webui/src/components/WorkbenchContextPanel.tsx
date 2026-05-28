@@ -221,7 +221,6 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
   const usageItems = usage?.items ?? [];
   const trend = usage?.trend ?? [];
   const total = workbenchContextUsageSummary(usage);
-  const contextBudget = contextBudgetView(contextSummary);
   const contextHealth = contextHealthView(contextSummary, total);
 
   return (
@@ -234,21 +233,6 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
         </div>
         <b>{total ?? "0.0000M tokens"}</b>
       </div>
-      {contextBudget ? (
-        <div className="workbench-context-budget" data-testid="workbench-context-budget">
-          <div className="workbench-context-budget-main">
-            <div>
-              <strong>Conversation context</strong>
-              <span>{contextBudget.detail}</span>
-            </div>
-            <b>{contextBudget.percent}%</b>
-          </div>
-          <div className="workbench-context-budget-bar" aria-label={`Conversation context used ${contextBudget.percent}%`}>
-            <span style={{ width: `${Math.min(100, contextBudget.percent)}%` }} />
-          </div>
-          <small>{contextBudget.remaining}</small>
-        </div>
-      ) : null}
       {trend.length > 0 ? <UsageSparkline points={trend} /> : <div className="workbench-usage-empty">Usage appears after a turn ends or when the session index reports totals.</div>}
       {usageItems.length > 0 ? (
         <div className="workbench-usage-breakdown">
@@ -343,20 +327,6 @@ function ContextHealthRing({ percent }: { percent?: number }) {
       <b>{percent == null ? "--" : `${value}%`}</b>
     </span>
   );
-}
-
-function contextBudgetView(context?: SessionContextSummary): { percent: number; detail: string; remaining: string } | undefined {
-  if (!context || context.compact_trigger <= 0) return undefined;
-  const percent = Math.max(0, Math.round(context.compact_percent));
-  const count = formatContextCount(context.message_count);
-  const trigger = formatContextCount(context.compact_trigger);
-  return {
-    percent,
-    detail: `${count}/${trigger} context messages`,
-    remaining: context.messages_until_compact > 0
-      ? `${formatContextCount(context.messages_until_compact)} messages before compaction`
-      : "Compaction threshold reached",
-  };
 }
 
 function formatContextCount(value: number): string {

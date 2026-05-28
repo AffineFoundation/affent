@@ -55,16 +55,17 @@ describe("Composer", () => {
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    expect((input as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
-    expect((input as HTMLTextAreaElement).value).toContain("Success criteria:");
+    expect((input as HTMLTextAreaElement).value).toBe("Start a long-running loop for this goal:");
+    expect((input as HTMLTextAreaElement).value).not.toContain("Success criteria:");
+    expect((input as HTMLTextAreaElement).value).not.toContain("Goal:");
     expect(screen.getByTestId("composer-add")).not.toHaveAttribute("open");
 
     await user.clear(input);
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
-    expect((input as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
-    expect((input as HTMLTextAreaElement).value).toContain("Schedule or frequency:");
+    expect((input as HTMLTextAreaElement).value).toBe("Every day at UTC+8 09:00,");
+    expect((input as HTMLTextAreaElement).value).not.toContain("Schedule or frequency:");
   });
 
   it("closes the add menu when clicking outside it", async () => {
@@ -297,6 +298,19 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-task-hint")).not.toHaveTextContent("propose_install");
     expect(screen.getByTestId("composer-task-hint")).not.toHaveTextContent("confirm_install");
     expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+  });
+
+  it("does not show unconfirmed workspace or skill confirmation hints", async () => {
+    const user = userEvent.setup();
+    render(<Composer disabled={false} busy={false} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+
+    const input = screen.getByPlaceholderText("Message Affent...");
+    await user.type(input, "search the repo for the session capability wiring");
+    expect(screen.queryByTestId("composer-task-hint")).toBeNull();
+
+    await user.clear(input);
+    await user.type(input, "install a skill from github");
+    expect(screen.queryByTestId("composer-task-hint")).toBeNull();
   });
 
   it("loads suggested guidance while a turn is running", () => {

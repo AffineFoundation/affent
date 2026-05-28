@@ -8773,9 +8773,29 @@ pre.code {
 
 .session-trace-filter-group {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
   min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
+}
+
+.session-trace-controls {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.session-trace-controls .session-skills-search {
+  grid-column: 1;
+}
+
+.session-trace-controls .ghost-action {
+  justify-self: start;
+}
+
+.session-trace-controls .session-trace-filter-group {
+  grid-column: 1;
 }
 
 .session-trace-metrics {
@@ -8814,6 +8834,7 @@ pre.code {
 }
 
 .session-trace-filter {
+  flex: 0 0 auto;
   min-height: 30px;
   border: 1px solid rgba(217, 224, 232, 0.86);
   border-radius: var(--radius-sm);
