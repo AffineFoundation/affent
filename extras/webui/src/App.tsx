@@ -253,6 +253,14 @@ export function App() {
     () => session.turns.reduce((sum, turn) => sum + memoryUpdatesForTurn(turn).length, 0),
     [session.turns],
   );
+  const latestMemoryUpdate = useMemo(() => {
+    for (let index = session.turns.length - 1; index >= 0; index -= 1) {
+      const updates = memoryUpdatesForTurn(session.turns[index]);
+      const latest = updates.at(-1);
+      if (latest) return latest;
+    }
+    return selectedSession?.latest_memory_update;
+  }, [selectedSession?.latest_memory_update, session.turns]);
   const planMutationCount = useMemo(
     () => session.turns.reduce(
       (sum, turn) => sum + turn.toolCalls.filter((call) => (
@@ -1363,7 +1371,7 @@ export function App() {
     return (
       <SessionMemoryPanel
         memory={memoryState.state === "ready" ? memoryState.memory : undefined}
-        latestUpdate={selectedSession?.latest_memory_update}
+        latestUpdate={latestMemoryUpdate}
         loading={memoryState.state === "loading"}
         error={memoryState.state === "error" ? memoryState.error : undefined}
         noSession={memoryState.state === "empty"}
@@ -1398,12 +1406,21 @@ export function App() {
     configState: accountSettingsState,
     memoryState,
     skillsState,
-    latestMemoryUpdate: selectedSession?.latest_memory_update,
+    latestMemoryUpdate,
   });
+  const activeWorkbenchNavItem = workbenchNavItems.find((item) => item.key === workbenchTab);
+  const showWorkbenchInspector = workbenchTab !== "context";
 
   function openWorkbench(tab: WorkbenchTab = "context") {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);
+  }
+
+  function handleSelectWorkbenchTab(tab: WorkbenchTab) {
+    setWorkbenchTab(tab);
+    if (tab !== "context" && typeof window !== "undefined" && window.innerWidth <= 760) {
+      setWorkbenchOpen(false);
+    }
   }
 
   function renderWorkbenchTab() {
@@ -1419,7 +1436,7 @@ export function App() {
           run={sessionRun}
           automationTitle={automationContext?.title}
           automationDetail={automationContext?.detail}
-          onSelectSection={setWorkbenchTab}
+          onSelectSection={handleSelectWorkbenchTab}
           defaultOpen
         />
       );
@@ -1470,6 +1487,66 @@ export function App() {
     if (workbenchTab === "skills") return renderSkillsPanel(true);
     if (workbenchTab === "config") return renderAccountSettingsPanel(true);
     return renderRuntimeStatsPanel(true);
+  }
+
+  function renderWorkbenchRailContent() {
+    if (workbenchTab === "context") {
+      return (
+        <>
+          {renderWorkbenchTab()}
+          {sessionArtifacts.length > 0 ? (
+            <SessionArtifactsPanel
+              artifacts={sessionArtifacts}
+              onOpenArtifact={(path) => void handleOpenArtifact(path)}
+              downloadHref={
+                selectedSessionId
+                  ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
+                  : undefined
+              }
+              onUseAsDraft={handleUseAsDraft}
+            />
+          ) : null}
+        </>
+      );
+    }
+    return (
+      <WorkbenchEmpty
+        title={`${activeWorkbenchNavItem?.label ?? "Section"} open in inspector`}
+        detail="Use the wide work area for evidence, logs, files, config, and trace details."
+      />
+    );
+  }
+
+  function renderWorkbenchInspector() {
+    return (
+      <div className="workbench-inspector" data-testid="workbench-inspector">
+        <header className="workbench-inspector-head">
+          <div>
+            <span>Workbench Inspector</span>
+            <h2>{activeWorkbenchNavItem?.label ?? "Workbench"}</h2>
+            <p>{activeWorkbenchNavItem?.detail ?? "Detailed evidence and controls"}</p>
+          </div>
+          <button type="button" className="node-action" onClick={() => setWorkbenchTab("context")}>
+            Back to chat
+          </button>
+        </header>
+        <div className="workbench-inspector-body">
+          {renderWorkbenchTab()}
+          <ArtifactViewer
+            artifact={artifact}
+            onClose={() => setArtifact({ state: "idle" })}
+            onSearch={handleArtifactSearch}
+            onLoadMore={() => void handleLoadMoreArtifact()}
+            onUseAsDraft={handleUseAsDraft}
+            artifactDownloadHref={
+              selectedSessionId && artifact.state === "ready"
+                ? client.url(sessionArtifactPath(selectedSessionId, artifact.chunk.path))
+                : undefined
+            }
+          />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1581,9 +1658,9 @@ export function App() {
             className="timeline-surface"
             aria-label="Conversation"
             data-busy={surfaceBusy ? "true" : "false"}
-            data-mode={surfaceMode}
+            data-mode={showWorkbenchInspector ? "inspector" : surfaceMode}
           >
-            {showSurfaceContext ? (
+            {showSurfaceContext && !showWorkbenchInspector ? (
               <div className="surface-context">
                 {showChatContext ? <ChatContextBar overview={overview} /> : null}
                 <SessionPlanPanel
@@ -1595,33 +1672,37 @@ export function App() {
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>
             ) : null}
-            <div className="conversation-scroll" ref={conversationScrollRef} data-testid="conversation-scroll">
-              <ArtifactViewer
-                artifact={artifact}
-                onClose={() => setArtifact({ state: "idle" })}
-                onSearch={handleArtifactSearch}
-                onLoadMore={() => void handleLoadMoreArtifact()}
-                onUseAsDraft={handleUseAsDraft}
-                artifactDownloadHref={
-                  selectedSessionId && artifact.state === "ready"
-                    ? client.url(sessionArtifactPath(selectedSessionId, artifact.chunk.path))
-                    : undefined
-                }
-              />
-              <Timeline
-                session={session}
-                sessionId={selectedSessionId}
-                pendingMessage={pendingMessage}
-                guidanceReceipts={guidanceReceipts}
-                scrollRootRef={conversationScrollRef}
-                onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                onUseAsDraft={handleUseAsDraft}
-                savedChatCount={sessions.length}
-                latestChat={latestChatShortcut}
-                onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}
-                initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
-              />
-            </div>
+            {showWorkbenchInspector ? (
+              renderWorkbenchInspector()
+            ) : (
+              <div className="conversation-scroll" ref={conversationScrollRef} data-testid="conversation-scroll">
+                <ArtifactViewer
+                  artifact={artifact}
+                  onClose={() => setArtifact({ state: "idle" })}
+                  onSearch={handleArtifactSearch}
+                  onLoadMore={() => void handleLoadMoreArtifact()}
+                  onUseAsDraft={handleUseAsDraft}
+                  artifactDownloadHref={
+                    selectedSessionId && artifact.state === "ready"
+                      ? client.url(sessionArtifactPath(selectedSessionId, artifact.chunk.path))
+                      : undefined
+                  }
+                />
+                <Timeline
+                  session={session}
+                  sessionId={selectedSessionId}
+                  pendingMessage={pendingMessage}
+                  guidanceReceipts={guidanceReceipts}
+                  scrollRootRef={conversationScrollRef}
+                  onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                  onUseAsDraft={handleUseAsDraft}
+                  savedChatCount={sessions.length}
+                  latestChat={latestChatShortcut}
+                  onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}
+                  initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
+                />
+              </div>
+            )}
             <Composer
               disabled={demoActive}
               disabledReason={status.detail}
@@ -1648,22 +1729,10 @@ export function App() {
               subtitle={selectedSessionTitle ?? "Global runtime workspace"}
               navItems={workbenchNavItems}
               activeTab={workbenchTab}
-              onSelectTab={setWorkbenchTab}
+              onSelectTab={handleSelectWorkbenchTab}
               onClose={() => setWorkbenchOpen(false)}
             >
-              {renderWorkbenchTab()}
-              {workbenchTab === "context" && sessionArtifacts.length > 0 ? (
-                <SessionArtifactsPanel
-                  artifacts={sessionArtifacts}
-                  onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                  downloadHref={
-                    selectedSessionId
-                      ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
-                      : undefined
-                  }
-                  onUseAsDraft={handleUseAsDraft}
-                />
-              ) : null}
+              {renderWorkbenchRailContent()}
             </WorkbenchPanel>
           ) : null}
         </div>

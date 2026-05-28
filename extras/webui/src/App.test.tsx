@@ -1903,6 +1903,8 @@ describe("App", () => {
 
     await user.click(screen.getByLabelText("Workbench"));
 
+    expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Changes");
+    expect(screen.getByTestId("workbench-tab-surface")).toHaveTextContent("Changes open in inspector");
     const changes = await screen.findByTestId("session-changes-panel");
     expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
@@ -2372,7 +2374,7 @@ describe("App", () => {
     ]);
     live.close();
 
-    expect(await screen.findByTestId("memory-update-strip")).toHaveTextContent("MEM-STOCK-73");
+    expect(await screen.findByTestId("session-memory-latest")).toHaveTextContent("MEM-STOCK-73");
     await waitFor(() => expect(memoryCalls).toBeGreaterThanOrEqual(2));
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Alpha Coast market reports use marker MEM-STOCK-73.");
     const row = screen.getByRole("button", { name: /remember market policy/ });
