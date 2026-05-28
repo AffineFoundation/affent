@@ -10604,13 +10604,17 @@ html[data-theme="dark"] ::selection {
     width: 15px;
   }
   .workbench-panel {
-    position: static;
-    z-index: auto;
+    position: sticky;
+    z-index: 14;
+    top: 8px;
     order: 0;
     width: auto;
     min-height: 0;
-    height: auto;
-    max-height: 34vh;
+    height: min(68vh, calc(100vh - 84px));
+    height: min(68dvh, calc(100dvh - 84px));
+    max-height: min(68vh, calc(100vh - 84px));
+    max-height: min(68dvh, calc(100dvh - 84px));
+    align-content: stretch;
     border-radius: var(--radius);
     padding: 10px;
   }
