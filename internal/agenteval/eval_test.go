@@ -2532,9 +2532,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if len(loopCalibration.Prompts) != 2 ||
 		loopCalibration.RequiredLoopProtocolCalibrationRequests != 1 ||
 		loopCalibration.RequiredLoopProtocolCalibrations != 1 ||
+		loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses["draft"] != 1 ||
+		loopCalibration.RequiredLoopProtocolCalibrationStatuses["draft"] != 1 ||
 		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration_request"] != 1 ||
 		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
-		t.Fatalf("loop calibration expectations = prompts:%d requests:%d answers:%d trace:%#v", len(loopCalibration.Prompts), loopCalibration.RequiredLoopProtocolCalibrationRequests, loopCalibration.RequiredLoopProtocolCalibrations, loopCalibration.RequiredTraceEventCounts)
+		t.Fatalf("loop calibration expectations = prompts:%d requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopCalibration.Prompts), loopCalibration.RequiredLoopProtocolCalibrationRequests, loopCalibration.RequiredLoopProtocolCalibrations, loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses, loopCalibration.RequiredLoopProtocolCalibrationStatuses, loopCalibration.RequiredTraceEventCounts)
 	}
 	for _, want := range []string{"LOOP-CALIBRATION-Q17", "LOOP-CALIBRATION-A17", "Pause if source evidence is unavailable", "repeated tool failures", "objective changed"} {
 		if !stringSliceContains(loopCalibration.RequiredFinalText, want) {

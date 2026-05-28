@@ -2091,6 +2091,12 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 		},
 		RequiredLoopProtocolCalibrationRequests: 1,
 		RequiredLoopProtocolCalibrations:        1,
+		RequiredLoopProtocolCalibrationRequestStatuses: map[string]int{
+			"draft": 1,
+		},
+		RequiredLoopProtocolCalibrationStatuses: map[string]int{
+			"draft": 1,
+		},
 		RequiredTraceEventCounts: map[string]int{
 			"loop.protocol_calibration_request": 1,
 			"loop.protocol_calibration":         1,

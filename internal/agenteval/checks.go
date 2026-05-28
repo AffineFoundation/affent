@@ -720,6 +720,52 @@ func LoopProtocolCalibrationRequestsAtLeast(min int) Check {
 	}
 }
 
+func LoopProtocolCalibrationRequestStatusAtLeast(status string, min int) Check {
+	return loopProtocolCalibrationStatusAtLeast("request", status, min, func(t Trace) []LoopProtocolCalibration {
+		return t.LoopProtocolCalibrationRequests
+	})
+}
+
+func LoopProtocolCalibrationStatusAtLeast(status string, min int) Check {
+	return loopProtocolCalibrationStatusAtLeast("answer", status, min, func(t Trace) []LoopProtocolCalibration {
+		return t.LoopProtocolCalibrations
+	})
+}
+
+func loopProtocolCalibrationStatusAtLeast(kind, status string, min int, events func(Trace) []LoopProtocolCalibration) Check {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	if min <= 0 {
+		min = 1
+	}
+	label := "loop_protocol_calibration_status"
+	if kind == "request" {
+		label = "loop_protocol_calibration_request_status"
+	}
+	return Check{
+		Name: fmt.Sprintf("%s_at_least:%s:%d", label, normalized, min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var observed []string
+			for _, event := range events(t) {
+				got := strings.ToLower(strings.TrimSpace(event.Status))
+				if len(observed) < 5 {
+					observed = append(observed, fmt.Sprintf("%s:%s", event.LoopID, got))
+				}
+				if got == normalized {
+					count++
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s[%s]=%d", label, normalized, count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s[%s]=%d, want >= %d; observed=%v", label, normalized, count, min, observed),
+			}
+		},
+	}
+}
+
 func LoopProtocolFeedModeAtLeast(mode string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("loop_protocol_feed_mode_at_least:%s:%d", mode, min),

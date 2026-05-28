@@ -923,6 +923,18 @@ func TestLoopProtocolCalibrationCheck(t *testing.T) {
 	if res := LoopProtocolCalibrationRequestsAtLeast(1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol calibration request check to pass: %+v", res)
 	}
+	if res := LoopProtocolCalibrationRequestStatusAtLeast("draft", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected draft calibration request status check to pass: %+v", res)
+	}
+	requestStatus := LoopProtocolCalibrationRequestStatusAtLeast("running", 1).Eval(trace)
+	if requestStatus.Pass {
+		t.Fatal("expected running calibration request status check to fail")
+	}
+	for _, want := range []string{"loop_protocol_calibration_request_status[running]=0", "want >= 1", "sn120:draft"} {
+		if !strings.Contains(requestStatus.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", requestStatus.Detail, want)
+		}
+	}
 	requests := LoopProtocolCalibrationRequestsAtLeast(2).Eval(trace)
 	if requests.Pass {
 		t.Fatal("expected missing calibration request count to fail")
@@ -934,6 +946,18 @@ func TestLoopProtocolCalibrationCheck(t *testing.T) {
 	}
 	if res := LoopProtocolCalibrationsAtLeast(1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol calibration check to pass: %+v", res)
+	}
+	if res := LoopProtocolCalibrationStatusAtLeast("draft", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected draft calibration status check to pass: %+v", res)
+	}
+	answerStatus := LoopProtocolCalibrationStatusAtLeast("running", 1).Eval(trace)
+	if answerStatus.Pass {
+		t.Fatal("expected running calibration status check to fail")
+	}
+	for _, want := range []string{"loop_protocol_calibration_status[running]=0", "want >= 1", "sn120:draft"} {
+		if !strings.Contains(answerStatus.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", answerStatus.Detail, want)
+		}
 	}
 	res := LoopProtocolCalibrationsAtLeast(2).Eval(trace)
 	if res.Pass {

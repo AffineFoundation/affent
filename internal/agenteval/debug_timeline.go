@@ -480,6 +480,8 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if exp.RequiredLoopProtocolCalibrations > 0 {
 		fmt.Fprintf(b, "- required_loop_protocol_calibrations: `%d`\n", exp.RequiredLoopProtocolCalibrations)
 	}
+	writeTimelineCountsLine(b, "required_loop_protocol_calibration_request_statuses", exp.RequiredLoopProtocolCalibrationRequestStatuses)
+	writeTimelineCountsLine(b, "required_loop_protocol_calibration_statuses", exp.RequiredLoopProtocolCalibrationStatuses)
 	writeTimelineCountsLine(b, "required_loop_protocol_feed_modes", exp.RequiredLoopProtocolFeedModes)
 	if exp.RequireLoopProtocolFullAfterCompact {
 		fmt.Fprintf(b, "- required_loop_protocol_full_after_compaction: `true`\n")
@@ -760,6 +762,8 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.RequiredLoopProtocolFeeds > 0 ||
 		exp.RequiredLoopProtocolCalibrationRequests > 0 ||
 		exp.RequiredLoopProtocolCalibrations > 0 ||
+		len(exp.RequiredLoopProtocolCalibrationRequestStatuses) > 0 ||
+		len(exp.RequiredLoopProtocolCalibrationStatuses) > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
 		exp.RequireLoopProtocolFullAfterCompact ||

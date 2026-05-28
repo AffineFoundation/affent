@@ -140,79 +140,81 @@ type RecentSessionSearchRequirement struct {
 }
 
 type BatchScenario struct {
-	Name                                    string
-	Suites                                  []string
-	Domains                                 []string
-	Prompt                                  string
-	Prompts                                 []string
-	SessionID                               string
-	ExecutePlan                             bool
-	EnableMemory                            bool
-	EnableLoopProtocol                      bool
-	Files                                   map[string]string
-	SetupCommands                           []string
-	SourceRepoURL                           string
-	SourceRepoRef                           string
-	SourceRepoDir                           string
-	VerifyCommand                           string
-	VerifierTimeout                         time.Duration
-	ExpectedSkill                           string
-	ForbiddenCommands                       []string
-	RequiredCommands                        []string
-	RequiredCommandCounts                   map[string]int
-	RequiredToolCounts                      map[string]int
-	RequiredToolFailureKindCounts           map[string]int
-	MaxToolFailureKindCounts                map[string]int
-	RequiredToolStatsAtLeast                map[string]int
-	RequiredTraceEventCounts                map[string]int
-	RequiredConversationRepairStatsAtLeast  map[string]int
-	RequiredConversationRepairKinds         map[string]int
-	RequiredLoopDecisionKinds               map[string]int
-	RequiredLoopDecisionResults             map[string]int
-	RequiredLoopDecisionMatches             []LoopDecisionRequirement
-	RequiredLoopProtocolFeeds               int
-	RequiredLoopProtocolCalibrationRequests int
-	RequiredLoopProtocolCalibrations        int
-	RequiredLoopProtocolFeedModes           map[string]int
-	RequiredLoopProtocolFeedMatches         []LoopProtocolFeedRequirement
-	RequireLoopProtocolFullAfterCompact     bool
-	RequiredSourceAccess                    []SourceAccessRequirement
-	RequiredSessionSearch                   []SessionSearchRequirement
-	RequiredRecentSessionSearch             []RecentSessionSearchRequirement
-	RequiredContextInjectionSources         map[string]int
-	RequiredContextCompactions              int
-	RequiredReactiveCompactions             int
-	RequiredCompactionRemovedMsgs           int
-	RequiredContextSummaryText              []string
-	RequiredContextLoopProtocolAnchorText   []string
-	RequiredCommandBeforeTool               []CommandToolOrderRequirement
-	RequiredCommandAfterTool                []CommandToolOrderRequirement
-	RequiredCommandOrder                    []CommandOrderRequirement
-	RequiredTools                           []string
-	ForbiddenTools                          []string
-	RequiredFocusedTaskCounts               map[string]int
-	RequiredFocusedTaskSourceCounts         map[string]int
-	RequiredSubagentModeCounts              map[string]int
-	RequiredSubagentSourceCounts            map[string]int
-	RequireNoDelegationErrors               bool
-	RequireNoPlanErrors                     bool
-	RequiredFinalText                       []string
-	ForbiddenFinalText                      []string
-	RequiredToolResultText                  map[string][]string
-	RequiredToolArgContains                 []ToolArgContainsRequirement
-	ForbiddenToolArgContains                []ToolArgContainsRequirement
-	MaxToolArgContains                      []ToolArgContainsRequirement
-	RequiredTruncatedResults                []string
-	RequiredResultArtifacts                 []string
-	RequiredToolOrder                       []ToolOrderRequirement
-	ProtectedFiles                          []string
-	RequiredFileSubstrings                  map[string][]string
-	ForbiddenFileSubstrings                 map[string][]string
-	MaxParentToolCalls                      int
-	MaxSuccessfulToolCallsByTool            map[string]int
-	MaxTurns                                int
-	CompactTrigger                          int
-	CompactKeepLast                         int
+	Name                                           string
+	Suites                                         []string
+	Domains                                        []string
+	Prompt                                         string
+	Prompts                                        []string
+	SessionID                                      string
+	ExecutePlan                                    bool
+	EnableMemory                                   bool
+	EnableLoopProtocol                             bool
+	Files                                          map[string]string
+	SetupCommands                                  []string
+	SourceRepoURL                                  string
+	SourceRepoRef                                  string
+	SourceRepoDir                                  string
+	VerifyCommand                                  string
+	VerifierTimeout                                time.Duration
+	ExpectedSkill                                  string
+	ForbiddenCommands                              []string
+	RequiredCommands                               []string
+	RequiredCommandCounts                          map[string]int
+	RequiredToolCounts                             map[string]int
+	RequiredToolFailureKindCounts                  map[string]int
+	MaxToolFailureKindCounts                       map[string]int
+	RequiredToolStatsAtLeast                       map[string]int
+	RequiredTraceEventCounts                       map[string]int
+	RequiredConversationRepairStatsAtLeast         map[string]int
+	RequiredConversationRepairKinds                map[string]int
+	RequiredLoopDecisionKinds                      map[string]int
+	RequiredLoopDecisionResults                    map[string]int
+	RequiredLoopDecisionMatches                    []LoopDecisionRequirement
+	RequiredLoopProtocolFeeds                      int
+	RequiredLoopProtocolCalibrationRequests        int
+	RequiredLoopProtocolCalibrations               int
+	RequiredLoopProtocolCalibrationRequestStatuses map[string]int
+	RequiredLoopProtocolCalibrationStatuses        map[string]int
+	RequiredLoopProtocolFeedModes                  map[string]int
+	RequiredLoopProtocolFeedMatches                []LoopProtocolFeedRequirement
+	RequireLoopProtocolFullAfterCompact            bool
+	RequiredSourceAccess                           []SourceAccessRequirement
+	RequiredSessionSearch                          []SessionSearchRequirement
+	RequiredRecentSessionSearch                    []RecentSessionSearchRequirement
+	RequiredContextInjectionSources                map[string]int
+	RequiredContextCompactions                     int
+	RequiredReactiveCompactions                    int
+	RequiredCompactionRemovedMsgs                  int
+	RequiredContextSummaryText                     []string
+	RequiredContextLoopProtocolAnchorText          []string
+	RequiredCommandBeforeTool                      []CommandToolOrderRequirement
+	RequiredCommandAfterTool                       []CommandToolOrderRequirement
+	RequiredCommandOrder                           []CommandOrderRequirement
+	RequiredTools                                  []string
+	ForbiddenTools                                 []string
+	RequiredFocusedTaskCounts                      map[string]int
+	RequiredFocusedTaskSourceCounts                map[string]int
+	RequiredSubagentModeCounts                     map[string]int
+	RequiredSubagentSourceCounts                   map[string]int
+	RequireNoDelegationErrors                      bool
+	RequireNoPlanErrors                            bool
+	RequiredFinalText                              []string
+	ForbiddenFinalText                             []string
+	RequiredToolResultText                         map[string][]string
+	RequiredToolArgContains                        []ToolArgContainsRequirement
+	ForbiddenToolArgContains                       []ToolArgContainsRequirement
+	MaxToolArgContains                             []ToolArgContainsRequirement
+	RequiredTruncatedResults                       []string
+	RequiredResultArtifacts                        []string
+	RequiredToolOrder                              []ToolOrderRequirement
+	ProtectedFiles                                 []string
+	RequiredFileSubstrings                         map[string][]string
+	ForbiddenFileSubstrings                        map[string][]string
+	MaxParentToolCalls                             int
+	MaxSuccessfulToolCallsByTool                   map[string]int
+	MaxTurns                                       int
+	CompactTrigger                                 int
+	CompactKeepLast                                int
 }
 
 type BatchRunner struct {
@@ -366,75 +368,77 @@ type DebugRecoveryGuide struct {
 }
 
 type DebugScenarioExpectations struct {
-	CheckNames                              []string                              `json:"check_names,omitempty"`
-	Suites                                  []string                              `json:"suites,omitempty"`
-	Domains                                 []string                              `json:"domains,omitempty"`
-	SessionID                               string                                `json:"session_id,omitempty"`
-	ExecutePlan                             bool                                  `json:"execute_plan,omitempty"`
-	EnableMemory                            bool                                  `json:"enable_memory,omitempty"`
-	EnableLoopProtocol                      bool                                  `json:"enable_loop_protocol,omitempty"`
-	VerifyCommand                           string                                `json:"verify_command,omitempty"`
-	SetupCommands                           []string                              `json:"setup_commands,omitempty"`
-	SourceRepoURL                           string                                `json:"source_repo_url,omitempty"`
-	SourceRepoRef                           string                                `json:"source_repo_ref,omitempty"`
-	SourceRepoDir                           string                                `json:"source_repo_dir,omitempty"`
-	ExpectedSkill                           string                                `json:"expected_skill,omitempty"`
-	RequiredTools                           []string                              `json:"required_tools,omitempty"`
-	ForbiddenTools                          []string                              `json:"forbidden_tools,omitempty"`
-	RequiredCommands                        []string                              `json:"required_commands,omitempty"`
-	ForbiddenCommands                       []string                              `json:"forbidden_commands,omitempty"`
-	RequiredCommandCounts                   map[string]int                        `json:"required_command_counts,omitempty"`
-	RequiredCommandOrder                    []DebugCommandOrderRequirement        `json:"required_command_order,omitempty"`
-	RequiredToolCounts                      map[string]int                        `json:"required_tool_counts,omitempty"`
-	RequiredToolFailureKindCounts           map[string]int                        `json:"required_tool_failure_kind_counts,omitempty"`
-	MaxToolFailureKindCounts                map[string]int                        `json:"max_tool_failure_kind_counts,omitempty"`
-	RequiredToolStatsAtLeast                map[string]int                        `json:"required_tool_stats_at_least,omitempty"`
-	RequiredTraceEventCounts                map[string]int                        `json:"required_trace_event_counts,omitempty"`
-	RequiredConversationRepairStatsAtLeast  map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
-	RequiredConversationRepairKinds         map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
-	RequiredLoopDecisionKinds               map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
-	RequiredLoopDecisionResults             map[string]int                        `json:"required_loop_decision_results,omitempty"`
-	RequiredLoopDecisionMatches             []DebugLoopDecisionRequirement        `json:"required_loop_decision_matches,omitempty"`
-	RequiredLoopProtocolFeeds               int                                   `json:"required_loop_protocol_feeds,omitempty"`
-	RequiredLoopProtocolCalibrationRequests int                                   `json:"required_loop_protocol_calibration_requests,omitempty"`
-	RequiredLoopProtocolCalibrations        int                                   `json:"required_loop_protocol_calibrations,omitempty"`
-	RequiredLoopProtocolFeedModes           map[string]int                        `json:"required_loop_protocol_feed_modes,omitempty"`
-	RequiredLoopProtocolFeedMatches         []DebugLoopProtocolFeedRequirement    `json:"required_loop_protocol_feed_matches,omitempty"`
-	RequireLoopProtocolFullAfterCompact     bool                                  `json:"require_loop_protocol_full_after_compaction,omitempty"`
-	RequiredToolResultText                  map[string][]string                   `json:"required_tool_result_text,omitempty"`
-	RequiredToolArgContains                 []DebugToolArgContainsRequirement     `json:"required_tool_arg_contains,omitempty"`
-	ForbiddenToolArgContains                []DebugToolArgContainsRequirement     `json:"forbidden_tool_arg_contains,omitempty"`
-	MaxToolArgContains                      []DebugToolArgContainsRequirement     `json:"max_tool_arg_contains,omitempty"`
-	RequiredSourceAccess                    []DebugSourceAccessRequirement        `json:"required_source_access,omitempty"`
-	RequiredSessionSearch                   []DebugSessionSearchRequirement       `json:"required_session_search,omitempty"`
-	RequiredRecentSessionSearch             []DebugRecentSessionSearchRequirement `json:"required_recent_session_search,omitempty"`
-	RequiredContextInjectionSources         map[string]int                        `json:"required_context_injection_sources,omitempty"`
-	RequiredCommandBeforeTool               []DebugCommandToolOrderRequirement    `json:"required_command_before_tool,omitempty"`
-	RequiredCommandAfterTool                []DebugCommandToolOrderRequirement    `json:"required_command_after_tool,omitempty"`
-	RequiredToolOrder                       []DebugToolOrderRequirement           `json:"required_tool_order,omitempty"`
-	RequiredFocusedTaskCounts               map[string]int                        `json:"required_focused_task_counts,omitempty"`
-	RequiredFocusedTaskSourceCounts         map[string]int                        `json:"required_focused_task_source_counts,omitempty"`
-	RequiredSubagentModeCounts              map[string]int                        `json:"required_subagent_mode_counts,omitempty"`
-	RequiredSubagentSourceCounts            map[string]int                        `json:"required_subagent_source_counts,omitempty"`
-	RequireNoDelegationErrors               bool                                  `json:"require_no_delegation_errors,omitempty"`
-	RequireNoPlanErrors                     bool                                  `json:"require_no_plan_errors,omitempty"`
-	RequiredFinalText                       []string                              `json:"required_final_text,omitempty"`
-	ForbiddenFinalText                      []string                              `json:"forbidden_final_text,omitempty"`
-	RequiredTruncatedResults                []string                              `json:"required_truncated_results,omitempty"`
-	RequiredResultArtifacts                 []string                              `json:"required_result_artifacts,omitempty"`
-	RequiredContextCompactions              int                                   `json:"required_context_compactions,omitempty"`
-	RequiredReactiveCompactions             int                                   `json:"required_reactive_context_compactions,omitempty"`
-	RequiredCompactionRemovedMsgs           int                                   `json:"required_compaction_removed_messages,omitempty"`
-	RequiredContextSummaryText              []string                              `json:"required_context_summary_text,omitempty"`
-	RequiredContextLoopProtocolAnchorText   []string                              `json:"required_context_loop_protocol_anchor_text,omitempty"`
-	ProtectedFiles                          []string                              `json:"protected_files,omitempty"`
-	RequiredFileSubstrings                  map[string][]string                   `json:"required_file_substrings,omitempty"`
-	ForbiddenFileSubstrings                 map[string][]string                   `json:"forbidden_file_substrings,omitempty"`
-	MaxParentToolCalls                      int                                   `json:"max_parent_tool_calls,omitempty"`
-	MaxSuccessfulToolCallsByTool            map[string]int                        `json:"max_successful_tool_calls_by_tool,omitempty"`
-	MaxTurns                                int                                   `json:"max_turns,omitempty"`
-	CompactTrigger                          int                                   `json:"compact_trigger,omitempty"`
-	CompactKeepLast                         int                                   `json:"compact_keep_last,omitempty"`
+	CheckNames                                     []string                              `json:"check_names,omitempty"`
+	Suites                                         []string                              `json:"suites,omitempty"`
+	Domains                                        []string                              `json:"domains,omitempty"`
+	SessionID                                      string                                `json:"session_id,omitempty"`
+	ExecutePlan                                    bool                                  `json:"execute_plan,omitempty"`
+	EnableMemory                                   bool                                  `json:"enable_memory,omitempty"`
+	EnableLoopProtocol                             bool                                  `json:"enable_loop_protocol,omitempty"`
+	VerifyCommand                                  string                                `json:"verify_command,omitempty"`
+	SetupCommands                                  []string                              `json:"setup_commands,omitempty"`
+	SourceRepoURL                                  string                                `json:"source_repo_url,omitempty"`
+	SourceRepoRef                                  string                                `json:"source_repo_ref,omitempty"`
+	SourceRepoDir                                  string                                `json:"source_repo_dir,omitempty"`
+	ExpectedSkill                                  string                                `json:"expected_skill,omitempty"`
+	RequiredTools                                  []string                              `json:"required_tools,omitempty"`
+	ForbiddenTools                                 []string                              `json:"forbidden_tools,omitempty"`
+	RequiredCommands                               []string                              `json:"required_commands,omitempty"`
+	ForbiddenCommands                              []string                              `json:"forbidden_commands,omitempty"`
+	RequiredCommandCounts                          map[string]int                        `json:"required_command_counts,omitempty"`
+	RequiredCommandOrder                           []DebugCommandOrderRequirement        `json:"required_command_order,omitempty"`
+	RequiredToolCounts                             map[string]int                        `json:"required_tool_counts,omitempty"`
+	RequiredToolFailureKindCounts                  map[string]int                        `json:"required_tool_failure_kind_counts,omitempty"`
+	MaxToolFailureKindCounts                       map[string]int                        `json:"max_tool_failure_kind_counts,omitempty"`
+	RequiredToolStatsAtLeast                       map[string]int                        `json:"required_tool_stats_at_least,omitempty"`
+	RequiredTraceEventCounts                       map[string]int                        `json:"required_trace_event_counts,omitempty"`
+	RequiredConversationRepairStatsAtLeast         map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
+	RequiredConversationRepairKinds                map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
+	RequiredLoopDecisionKinds                      map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
+	RequiredLoopDecisionResults                    map[string]int                        `json:"required_loop_decision_results,omitempty"`
+	RequiredLoopDecisionMatches                    []DebugLoopDecisionRequirement        `json:"required_loop_decision_matches,omitempty"`
+	RequiredLoopProtocolFeeds                      int                                   `json:"required_loop_protocol_feeds,omitempty"`
+	RequiredLoopProtocolCalibrationRequests        int                                   `json:"required_loop_protocol_calibration_requests,omitempty"`
+	RequiredLoopProtocolCalibrations               int                                   `json:"required_loop_protocol_calibrations,omitempty"`
+	RequiredLoopProtocolCalibrationRequestStatuses map[string]int                        `json:"required_loop_protocol_calibration_request_statuses,omitempty"`
+	RequiredLoopProtocolCalibrationStatuses        map[string]int                        `json:"required_loop_protocol_calibration_statuses,omitempty"`
+	RequiredLoopProtocolFeedModes                  map[string]int                        `json:"required_loop_protocol_feed_modes,omitempty"`
+	RequiredLoopProtocolFeedMatches                []DebugLoopProtocolFeedRequirement    `json:"required_loop_protocol_feed_matches,omitempty"`
+	RequireLoopProtocolFullAfterCompact            bool                                  `json:"require_loop_protocol_full_after_compaction,omitempty"`
+	RequiredToolResultText                         map[string][]string                   `json:"required_tool_result_text,omitempty"`
+	RequiredToolArgContains                        []DebugToolArgContainsRequirement     `json:"required_tool_arg_contains,omitempty"`
+	ForbiddenToolArgContains                       []DebugToolArgContainsRequirement     `json:"forbidden_tool_arg_contains,omitempty"`
+	MaxToolArgContains                             []DebugToolArgContainsRequirement     `json:"max_tool_arg_contains,omitempty"`
+	RequiredSourceAccess                           []DebugSourceAccessRequirement        `json:"required_source_access,omitempty"`
+	RequiredSessionSearch                          []DebugSessionSearchRequirement       `json:"required_session_search,omitempty"`
+	RequiredRecentSessionSearch                    []DebugRecentSessionSearchRequirement `json:"required_recent_session_search,omitempty"`
+	RequiredContextInjectionSources                map[string]int                        `json:"required_context_injection_sources,omitempty"`
+	RequiredCommandBeforeTool                      []DebugCommandToolOrderRequirement    `json:"required_command_before_tool,omitempty"`
+	RequiredCommandAfterTool                       []DebugCommandToolOrderRequirement    `json:"required_command_after_tool,omitempty"`
+	RequiredToolOrder                              []DebugToolOrderRequirement           `json:"required_tool_order,omitempty"`
+	RequiredFocusedTaskCounts                      map[string]int                        `json:"required_focused_task_counts,omitempty"`
+	RequiredFocusedTaskSourceCounts                map[string]int                        `json:"required_focused_task_source_counts,omitempty"`
+	RequiredSubagentModeCounts                     map[string]int                        `json:"required_subagent_mode_counts,omitempty"`
+	RequiredSubagentSourceCounts                   map[string]int                        `json:"required_subagent_source_counts,omitempty"`
+	RequireNoDelegationErrors                      bool                                  `json:"require_no_delegation_errors,omitempty"`
+	RequireNoPlanErrors                            bool                                  `json:"require_no_plan_errors,omitempty"`
+	RequiredFinalText                              []string                              `json:"required_final_text,omitempty"`
+	ForbiddenFinalText                             []string                              `json:"forbidden_final_text,omitempty"`
+	RequiredTruncatedResults                       []string                              `json:"required_truncated_results,omitempty"`
+	RequiredResultArtifacts                        []string                              `json:"required_result_artifacts,omitempty"`
+	RequiredContextCompactions                     int                                   `json:"required_context_compactions,omitempty"`
+	RequiredReactiveCompactions                    int                                   `json:"required_reactive_context_compactions,omitempty"`
+	RequiredCompactionRemovedMsgs                  int                                   `json:"required_compaction_removed_messages,omitempty"`
+	RequiredContextSummaryText                     []string                              `json:"required_context_summary_text,omitempty"`
+	RequiredContextLoopProtocolAnchorText          []string                              `json:"required_context_loop_protocol_anchor_text,omitempty"`
+	ProtectedFiles                                 []string                              `json:"protected_files,omitempty"`
+	RequiredFileSubstrings                         map[string][]string                   `json:"required_file_substrings,omitempty"`
+	ForbiddenFileSubstrings                        map[string][]string                   `json:"forbidden_file_substrings,omitempty"`
+	MaxParentToolCalls                             int                                   `json:"max_parent_tool_calls,omitempty"`
+	MaxSuccessfulToolCallsByTool                   map[string]int                        `json:"max_successful_tool_calls_by_tool,omitempty"`
+	MaxTurns                                       int                                   `json:"max_turns,omitempty"`
+	CompactTrigger                                 int                                   `json:"compact_trigger,omitempty"`
+	CompactKeepLast                                int                                   `json:"compact_keep_last,omitempty"`
 }
 
 // ExpectationCapabilityNames derives broad capability families from a
@@ -484,6 +488,8 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if exp.RequiredLoopProtocolFeeds > 0 ||
 		exp.RequiredLoopProtocolCalibrationRequests > 0 ||
 		exp.RequiredLoopProtocolCalibrations > 0 ||
+		len(exp.RequiredLoopProtocolCalibrationRequestStatuses) > 0 ||
+		len(exp.RequiredLoopProtocolCalibrationStatuses) > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
 		exp.RequireLoopProtocolFullAfterCompact {
@@ -1890,44 +1896,46 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopProtocolFeeds:               s.RequiredLoopProtocolFeeds,
 		RequiredLoopProtocolCalibrationRequests: s.RequiredLoopProtocolCalibrationRequests,
 		RequiredLoopProtocolCalibrations:        s.RequiredLoopProtocolCalibrations,
-		RequiredLoopProtocolFeedModes:           cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
-		RequiredLoopProtocolFeedMatches:         loopFeedReqs,
-		RequireLoopProtocolFullAfterCompact:     s.RequireLoopProtocolFullAfterCompact,
-		RequiredToolResultText:                  cloneStringSliceMap(s.RequiredToolResultText),
-		RequiredToolArgContains:                 reqArgs,
-		ForbiddenToolArgContains:                forbiddenArgs,
-		MaxToolArgContains:                      maxArgs,
-		RequiredSourceAccess:                    sourceReqs,
-		RequiredSessionSearch:                   sessionSearchReqs,
-		RequiredRecentSessionSearch:             recentSessionSearchReqs,
-		RequiredContextInjectionSources:         cloneStringIntMap(s.RequiredContextInjectionSources),
-		RequiredCommandBeforeTool:               commandBeforeTool,
-		RequiredCommandAfterTool:                commandAfterTool,
-		RequiredCommandOrder:                    commandOrders,
-		RequiredToolOrder:                       toolOrders,
-		RequiredFocusedTaskCounts:               cloneStringIntMap(s.RequiredFocusedTaskCounts),
-		RequiredFocusedTaskSourceCounts:         cloneStringIntMap(s.RequiredFocusedTaskSourceCounts),
-		RequiredSubagentModeCounts:              cloneStringIntMap(s.RequiredSubagentModeCounts),
-		RequiredSubagentSourceCounts:            cloneStringIntMap(s.RequiredSubagentSourceCounts),
-		RequireNoDelegationErrors:               s.RequireNoDelegationErrors,
-		RequireNoPlanErrors:                     s.RequireNoPlanErrors,
-		RequiredFinalText:                       append([]string(nil), s.RequiredFinalText...),
-		ForbiddenFinalText:                      append([]string(nil), s.ForbiddenFinalText...),
-		RequiredTruncatedResults:                append([]string(nil), s.RequiredTruncatedResults...),
-		RequiredResultArtifacts:                 append([]string(nil), s.RequiredResultArtifacts...),
-		RequiredContextCompactions:              s.RequiredContextCompactions,
-		RequiredReactiveCompactions:             s.RequiredReactiveCompactions,
-		RequiredCompactionRemovedMsgs:           s.RequiredCompactionRemovedMsgs,
-		RequiredContextSummaryText:              append([]string(nil), s.RequiredContextSummaryText...),
-		RequiredContextLoopProtocolAnchorText:   append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
-		ProtectedFiles:                          append([]string(nil), s.ProtectedFiles...),
-		RequiredFileSubstrings:                  cloneStringSliceMap(s.RequiredFileSubstrings),
-		ForbiddenFileSubstrings:                 cloneStringSliceMap(s.ForbiddenFileSubstrings),
-		MaxParentToolCalls:                      s.MaxParentToolCalls,
-		MaxSuccessfulToolCallsByTool:            cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
-		MaxTurns:                                s.MaxTurns,
-		CompactTrigger:                          s.CompactTrigger,
-		CompactKeepLast:                         s.CompactKeepLast,
+		RequiredLoopProtocolCalibrationRequestStatuses: cloneStringIntMap(s.RequiredLoopProtocolCalibrationRequestStatuses),
+		RequiredLoopProtocolCalibrationStatuses:        cloneStringIntMap(s.RequiredLoopProtocolCalibrationStatuses),
+		RequiredLoopProtocolFeedModes:                  cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
+		RequiredLoopProtocolFeedMatches:                loopFeedReqs,
+		RequireLoopProtocolFullAfterCompact:            s.RequireLoopProtocolFullAfterCompact,
+		RequiredToolResultText:                         cloneStringSliceMap(s.RequiredToolResultText),
+		RequiredToolArgContains:                        reqArgs,
+		ForbiddenToolArgContains:                       forbiddenArgs,
+		MaxToolArgContains:                             maxArgs,
+		RequiredSourceAccess:                           sourceReqs,
+		RequiredSessionSearch:                          sessionSearchReqs,
+		RequiredRecentSessionSearch:                    recentSessionSearchReqs,
+		RequiredContextInjectionSources:                cloneStringIntMap(s.RequiredContextInjectionSources),
+		RequiredCommandBeforeTool:                      commandBeforeTool,
+		RequiredCommandAfterTool:                       commandAfterTool,
+		RequiredCommandOrder:                           commandOrders,
+		RequiredToolOrder:                              toolOrders,
+		RequiredFocusedTaskCounts:                      cloneStringIntMap(s.RequiredFocusedTaskCounts),
+		RequiredFocusedTaskSourceCounts:                cloneStringIntMap(s.RequiredFocusedTaskSourceCounts),
+		RequiredSubagentModeCounts:                     cloneStringIntMap(s.RequiredSubagentModeCounts),
+		RequiredSubagentSourceCounts:                   cloneStringIntMap(s.RequiredSubagentSourceCounts),
+		RequireNoDelegationErrors:                      s.RequireNoDelegationErrors,
+		RequireNoPlanErrors:                            s.RequireNoPlanErrors,
+		RequiredFinalText:                              append([]string(nil), s.RequiredFinalText...),
+		ForbiddenFinalText:                             append([]string(nil), s.ForbiddenFinalText...),
+		RequiredTruncatedResults:                       append([]string(nil), s.RequiredTruncatedResults...),
+		RequiredResultArtifacts:                        append([]string(nil), s.RequiredResultArtifacts...),
+		RequiredContextCompactions:                     s.RequiredContextCompactions,
+		RequiredReactiveCompactions:                    s.RequiredReactiveCompactions,
+		RequiredCompactionRemovedMsgs:                  s.RequiredCompactionRemovedMsgs,
+		RequiredContextSummaryText:                     append([]string(nil), s.RequiredContextSummaryText...),
+		RequiredContextLoopProtocolAnchorText:          append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
+		ProtectedFiles:                                 append([]string(nil), s.ProtectedFiles...),
+		RequiredFileSubstrings:                         cloneStringSliceMap(s.RequiredFileSubstrings),
+		ForbiddenFileSubstrings:                        cloneStringSliceMap(s.ForbiddenFileSubstrings),
+		MaxParentToolCalls:                             s.MaxParentToolCalls,
+		MaxSuccessfulToolCallsByTool:                   cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
+		MaxTurns:                                       s.MaxTurns,
+		CompactTrigger:                                 s.CompactTrigger,
+		CompactKeepLast:                                s.CompactKeepLast,
 	}
 }
 
@@ -2808,6 +2816,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredLoopProtocolCalibrations > 0 {
 		checks = append(checks, LoopProtocolCalibrationsAtLeast(scenario.RequiredLoopProtocolCalibrations))
+	}
+	for _, status := range sortedStringMapKeys(scenario.RequiredLoopProtocolCalibrationRequestStatuses) {
+		checks = append(checks, LoopProtocolCalibrationRequestStatusAtLeast(status, scenario.RequiredLoopProtocolCalibrationRequestStatuses[status]))
+	}
+	for _, status := range sortedStringMapKeys(scenario.RequiredLoopProtocolCalibrationStatuses) {
+		checks = append(checks, LoopProtocolCalibrationStatusAtLeast(status, scenario.RequiredLoopProtocolCalibrationStatuses[status]))
 	}
 	for _, mode := range sortedStringMapKeys(scenario.RequiredLoopProtocolFeedModes) {
 		checks = append(checks, LoopProtocolFeedModeAtLeast(mode, scenario.RequiredLoopProtocolFeedModes[mode]))
