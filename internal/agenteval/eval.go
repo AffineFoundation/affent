@@ -976,6 +976,9 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if err := writeScenarioFiles(workspace, scenario.Files); err != nil {
 		return res.fail("write scenario files: %v", err)
 	}
+	if err := verifyScenarioLoopProtocolState(workspace, scenario); err != nil {
+		return res.fail("%v", err)
+	}
 	for _, command := range scenario.SetupCommands {
 		command = strings.TrimSpace(command)
 		if command == "" {
@@ -2103,6 +2106,38 @@ func writeScenarioFiles(root string, files map[string]string) error {
 		}
 	}
 	return nil
+}
+
+func verifyScenarioLoopProtocolState(root string, scenario BatchScenario) error {
+	if !scenarioRequiresActiveLoopProtocol(scenario) {
+		return nil
+	}
+	sessionID := strings.TrimSpace(scenario.SessionID)
+	if sessionID == "" {
+		return fmt.Errorf("scenario %q requires loop protocol feeds but has no SessionID", scenario.Name)
+	}
+	name := filepath.ToSlash(filepath.Join(".affent", "loops", sessionID, "LOOP.md"))
+	path := filepath.Join(root, filepath.FromSlash(name))
+	info, err := os.Stat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("scenario %q requires loop protocol feeds but active protocol file %s is missing", scenario.Name, name)
+		}
+		return fmt.Errorf("stat loop protocol file %s: %w", name, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("scenario %q requires loop protocol feeds but active protocol path %s is a directory", scenario.Name, name)
+	}
+	return nil
+}
+
+func scenarioRequiresActiveLoopProtocol(scenario BatchScenario) bool {
+	return scenario.RequiredLoopProtocolFeeds > 0 ||
+		scenario.RequiredLoopProtocolCalibrationRequests > 0 ||
+		scenario.RequiredLoopProtocolCalibrations > 0 ||
+		len(scenario.RequiredLoopProtocolFeedModes) > 0 ||
+		len(scenario.RequiredLoopProtocolFeedMatches) > 0 ||
+		scenario.RequireLoopProtocolFullAfterCompact
 }
 
 func readProtectedFiles(root string, names []string) (map[string]string, error) {

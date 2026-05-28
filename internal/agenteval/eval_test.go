@@ -338,6 +338,25 @@ func TestBatchRunnerRejectsMultiTurnWithoutSessionID(t *testing.T) {
 	}
 }
 
+func TestBatchRunnerRejectsLoopProtocolExpectationWithoutProtocolFile(t *testing.T) {
+	res := (BatchRunner{WorkRoot: t.TempDir()}).Run(context.Background(), BatchScenario{
+		Name:                      "loop-missing",
+		SessionID:                 "loop-missing",
+		RequiredLoopProtocolFeeds: 1,
+		Files: map[string]string{
+			"README.md": "missing active loop protocol\n",
+		},
+	})
+	if res.OK || len(res.Failures) == 0 {
+		t.Fatalf("loop protocol expectation without file should fail early: %+v", res)
+	}
+	for _, want := range []string{"requires loop protocol feeds", ".affent/loops/loop-missing/LOOP.md", "missing"} {
+		if !strings.Contains(res.Failures[0], want) {
+			t.Fatalf("failure missing %q: %+v", want, res.Failures)
+		}
+	}
+}
+
 func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
