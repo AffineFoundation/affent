@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -1073,6 +1074,25 @@ func TestIsContextOverflow(t *testing.T) {
 		if got := IsContextOverflow(err); got != want {
 			t.Errorf("IsContextOverflow(%q) = %v, want %v", msg, got, want)
 		}
+	}
+
+	structured := &LLMHTTPError{
+		Status:  400,
+		Body:    `{"error":{"message":"provider returned a bounded structured error","type":"invalid_request_error","code":"context_length_exceeded"}}`,
+		Code:    "context_length_exceeded",
+		Type:    "invalid_request_error",
+		Message: "provider returned a bounded structured error",
+	}
+	if !IsContextOverflow(structured) {
+		t.Fatalf("structured context_length_exceeded error should trigger compaction: %+v", structured)
+	}
+	wrapped := fmt.Errorf("chat call failed: %w", structured)
+	if !IsContextOverflow(wrapped) {
+		t.Fatalf("wrapped structured context_length_exceeded error should trigger compaction: %v", wrapped)
+	}
+	nonOverflow := &LLMHTTPError{Status: 400, Body: `{"error":{"code":"invalid_api_key"}}`, Code: "invalid_api_key"}
+	if IsContextOverflow(nonOverflow) {
+		t.Fatalf("structured non-overflow error should not trigger compaction: %+v", nonOverflow)
 	}
 }
 

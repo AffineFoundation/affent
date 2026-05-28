@@ -163,6 +163,35 @@ func TestConsumeStream_CleanCloseWithoutFinishReasonIsRetryable(t *testing.T) {
 	}
 }
 
+func TestChatHTTPErrorExtractsStructuredProviderFields(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"message":"request rejected before streaming","type":"invalid_request_error","param":"messages","code":"context_length_exceeded"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewLLMClient(srv.URL, "", "fake")
+	_, err := c.Chat(context.Background(), []ChatMessage{{Role: "user", Content: "hi"}}, nil)
+	if err == nil {
+		t.Fatal("Chat should return the provider error")
+	}
+	var httpErr *LLMHTTPError
+	if !errors.As(err, &httpErr) {
+		t.Fatalf("Chat error should expose LLMHTTPError, got %T: %v", err, err)
+	}
+	if httpErr.Status != http.StatusBadRequest ||
+		httpErr.Code != "context_length_exceeded" ||
+		httpErr.Type != "invalid_request_error" ||
+		httpErr.Param != "messages" ||
+		httpErr.Message != "request rejected before streaming" {
+		t.Fatalf("structured HTTP error fields = %+v", httpErr)
+	}
+	if !IsContextOverflow(err) {
+		t.Fatalf("structured context_length_exceeded error should trigger compaction: %v", err)
+	}
+}
+
 // TestConsumeStream_ParallelToolCalls covers the OpenAI-style streaming
 // shape where the model issues two parallel tool calls and their
 // argument fragments arrive interleaved. The model-supplied `index`

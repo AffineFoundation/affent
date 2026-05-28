@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/memory"
@@ -1435,9 +1436,25 @@ var contextOverflowKeywords = []string{
 	"contextwindowexceedederror", "string too long",
 }
 
+var contextOverflowStructuredCodes = map[string]bool{
+	"context_length_exceeded":       true,
+	"context_window_exceeded":       true,
+	"contextwindowexceedederror":    true,
+	"maximum_context_length":        true,
+	"request_too_large":             true,
+	"too_many_tokens":               true,
+	"input_too_long":                true,
+	"prompt_too_long":               true,
+	"model_context_window_exceeded": true,
+}
+
 func IsContextOverflow(err error) bool {
 	if err == nil {
 		return false
+	}
+	var httpErr *LLMHTTPError
+	if errors.As(err, &httpErr) && httpErr != nil && llmHTTPErrorLooksLikeContextOverflow(httpErr) {
+		return true
 	}
 	s := strings.ToLower(err.Error())
 	for _, kw := range contextOverflowKeywords {
@@ -1446,4 +1463,23 @@ func IsContextOverflow(err error) bool {
 		}
 	}
 	return false
+}
+
+func llmHTTPErrorLooksLikeContextOverflow(err *LLMHTTPError) bool {
+	for _, field := range []string{err.Code, err.Type} {
+		if contextOverflowStructuredCodes[normalizeLLMErrorField(field)] {
+			return true
+		}
+	}
+	if err.Status == http.StatusRequestEntityTooLarge && normalizeLLMErrorField(err.Code) == "request_too_large" {
+		return true
+	}
+	return false
+}
+
+func normalizeLLMErrorField(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	value = strings.ReplaceAll(value, "-", "_")
+	value = strings.ReplaceAll(value, " ", "_")
+	return value
 }

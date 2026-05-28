@@ -55,6 +55,27 @@ func (e *RetryableError) Unwrap() error {
 	return e.Err
 }
 
+// LLMHTTPError preserves a non-2xx upstream response with bounded raw body
+// plus any structured provider fields we can extract from common OpenAI-
+// compatible error envelopes. Callers should prefer the structured fields for
+// routing decisions, and fall back to Body only when providers return plain
+// text or HTML.
+type LLMHTTPError struct {
+	Status  int
+	Body    string
+	Code    string
+	Type    string
+	Param   string
+	Message string
+}
+
+func (e *LLMHTTPError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return fmt.Sprintf("chat http %d: %s", e.Status, e.Body)
+}
+
 var retryableHTTPStatuses = map[int]bool{
 	408: true, // Request Timeout
 	429: true, // Too Many Requests
@@ -133,6 +154,64 @@ func parseRetryAfter(headerVal string) time.Duration {
 		return 0
 	}
 	return d
+}
+
+func newLLMHTTPError(status int, body []byte) *LLMHTTPError {
+	err := &LLMHTTPError{
+		Status: status,
+		Body:   string(body),
+	}
+	err.Code, err.Type, err.Param, err.Message = parseLLMHTTPErrorFields(body)
+	return err
+}
+
+func parseLLMHTTPErrorFields(body []byte) (code, typ, param, message string) {
+	var root map[string]any
+	if err := json.Unmarshal(body, &root); err != nil {
+		return "", "", "", ""
+	}
+	if nested, ok := objectField(root, "error"); ok {
+		code, typ, param, message = errorFieldsFromObject(nested)
+		if code != "" || typ != "" || param != "" || message != "" {
+			return code, typ, param, message
+		}
+	}
+	return errorFieldsFromObject(root)
+}
+
+func errorFieldsFromObject(obj map[string]any) (code, typ, param, message string) {
+	code = stringField(obj, "code")
+	typ = stringField(obj, "type")
+	param = stringField(obj, "param")
+	message = stringField(obj, "message")
+	if code == "" {
+		code = stringField(obj, "error_code")
+	}
+	if message == "" {
+		message = stringField(obj, "detail")
+	}
+	return code, typ, param, message
+}
+
+func objectField(obj map[string]any, key string) (map[string]any, bool) {
+	value, ok := obj[key]
+	if !ok {
+		return nil, false
+	}
+	nested, ok := value.(map[string]any)
+	return nested, ok
+}
+
+func stringField(obj map[string]any, key string) string {
+	value, ok := obj[key]
+	if !ok {
+		return ""
+	}
+	s, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(s)
 }
 
 // LLMClient calls a chat completions endpoint that follows OpenAI's
@@ -436,7 +515,7 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxLLMErrorBodyBytes))
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 		resp.Body.Close()
-		base := fmt.Errorf("chat http %d: %s", resp.StatusCode, errBody)
+		var base error = newLLMHTTPError(resp.StatusCode, errBody)
 		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 			base = fmt.Errorf(
 				"chat auth failed (status=%d endpoint=%s model=%s): %w\nNext: verify the API key is valid for this endpoint, and that the model name exists on the upstream provider",
