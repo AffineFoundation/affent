@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { changedFileDiffText, changedFileDraft, type SessionChangedFile, type SessionChangesView } from "../view/sessionChanges";
+import { changedFileDiffText, changedFileDraft, changesReviewFacts, changesReviewFocus, type SessionChangedFile, type SessionChangesView } from "../view/sessionChanges";
 import { CopyButton } from "./CopyButton";
 
 type ChangeFilter = "all" | "changed" | "issues" | "diff";
@@ -20,6 +20,8 @@ export function SessionChangesPanel({
   const [filter, setFilter] = useState<ChangeFilter>("all");
   const trimmedQuery = query.trim();
   const stats = changeStats(changes.files);
+  const review = changesReviewFocus(changes.files);
+  const reviewFacts = changesReviewFacts(changes.files);
   const filteredFiles = filter === "all" ? changes.files : changes.files.filter((file) => changeMatchesFilter(file, filter));
   const visibleFiles = trimmedQuery ? filteredFiles.filter((file) => changeMatchesQuery(file, trimmedQuery)) : filteredFiles;
   const focusFile = visibleFiles.find((file) => file.status === "failed")
@@ -40,6 +42,20 @@ export function SessionChangesPanel({
             <span>Review</span>
             <strong>{changes.summary}</strong>
             <small>{changes.detail || "No write or edit actions recorded."}</small>
+          </div>
+          <div className="session-changes-review" data-tone={review.tone ?? "neutral"} data-testid="session-changes-review">
+            <span>{review.label}</span>
+            <strong>{review.title}</strong>
+            <small>{review.detail}</small>
+          </div>
+          <div className="session-changes-facts" aria-label="Change review facts">
+            {reviewFacts.map((fact) => (
+              <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+                <small>{fact.label}</small>
+                <strong>{fact.value}</strong>
+                <b>{fact.detail}</b>
+              </span>
+            ))}
           </div>
           <div className="session-changes-filterbar" role="group" aria-label="Change filters">
             {changeFilterItems(stats).map((item) => (

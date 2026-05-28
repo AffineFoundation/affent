@@ -25,6 +25,20 @@ export interface SessionChangesView {
   tone?: "warning" | "error";
 }
 
+export interface SessionChangesReview {
+  label: string;
+  title: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
+export interface SessionChangesFact {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
 export type SessionChangeDiffLine = ChangeDiffLine;
 
 interface SessionChangedFileInternal extends SessionChangedFile {
@@ -85,6 +99,84 @@ export function changedFileDraft(file: SessionChangedFile): string {
     ].filter((line): line is string => Boolean(line)).join("\n");
   }
   return `Review and revise this diff if needed:\nPath: ${file.path}\n\n${diff}`;
+}
+
+export function changesReviewFocus(files: readonly SessionChangedFile[]): SessionChangesReview {
+  if (files.length === 0) {
+    return {
+      label: "Idle",
+      title: "No file writes recorded",
+      detail: "File changes will appear here after write or edit actions.",
+      tone: "neutral",
+    };
+  }
+  const failed = files.filter((file) => file.status === "failed");
+  if (failed.length > 0) {
+    return {
+      label: "Fix needed",
+      title: `${failed.length} failed ${plural("change", failed.length)}`,
+      detail: failed[0]?.detail ?? `Start with ${failed[0]?.path ?? "the failed change"}.`,
+      tone: "danger",
+    };
+  }
+  const running = files.filter((file) => file.status === "running");
+  if (running.length > 0) {
+    return {
+      label: "Changing now",
+      title: `${running.length} pending ${plural("change", running.length)}`,
+      detail: `Latest pending file: ${running[0]?.path ?? "unknown"}.`,
+      tone: "attention",
+    };
+  }
+  const withoutDiff = files.filter((file) => !file.diffPreview?.length);
+  if (withoutDiff.length > 0) {
+    return {
+      label: "Review gap",
+      title: `${withoutDiff.length} ${plural("file", withoutDiff.length)} ${withoutDiff.length === 1 ? "needs" : "need"} current-file review`,
+      detail: `No diff preview for ${withoutDiff[0]?.path ?? "one changed file"}; inspect the current file before approving.`,
+      tone: "attention",
+    };
+  }
+  return {
+    label: "Diff ready",
+    title: `${files.length} changed ${plural("file", files.length)} ready to review`,
+    detail: "Every changed file has a diff preview captured.",
+    tone: "ok",
+  };
+}
+
+export function changesReviewFacts(files: readonly SessionChangedFile[]): SessionChangesFact[] {
+  const total = files.length;
+  const diff = files.filter((file) => file.diffPreview?.length).length;
+  const evidence = files.filter((file) => file.diffPreview?.length || file.artifactPath).length;
+  const additions = sumKnown(files.map((file) => file.additions));
+  const deletions = sumKnown(files.map((file) => file.deletions));
+  return [
+    {
+      label: "Files",
+      value: String(total),
+      detail: total === 1 ? "changed file" : "changed files",
+      tone: total > 0 ? "ok" : "neutral",
+    },
+    {
+      label: "Diff",
+      value: total > 0 ? `${diff}/${total}` : "0/0",
+      detail: "preview captured",
+      tone: total === 0 ? "neutral" : diff === total ? "ok" : "attention",
+    },
+    {
+      label: "Evidence",
+      value: total > 0 ? `${evidence}/${total}` : "0/0",
+      detail: "diff or artifact",
+      tone: total === 0 ? "neutral" : evidence === total ? "ok" : evidence > 0 ? "attention" : "danger",
+    },
+    {
+      label: "Scale",
+      value: additions != null || deletions != null ? `+${additions ?? 0} -${deletions ?? 0}` : "unknown",
+      detail: additions != null || deletions != null ? "from diff metadata" : "diff stats unavailable",
+      tone: additions != null || deletions != null ? "neutral" : total > 0 ? "attention" : "neutral",
+    },
+  ];
 }
 
 function changePriority(file: SessionChangedFile): number {
@@ -175,6 +267,17 @@ function changesDetail(total: number, counts: { changed: number; failed: number;
 
 function plural(label: string, count: number): string {
   return count === 1 ? label : `${label}s`;
+}
+
+function sumKnown(values: Array<number | undefined>): number | undefined {
+  let total = 0;
+  let found = false;
+  for (const value of values) {
+    if (value == null) continue;
+    found = true;
+    total += value;
+  }
+  return found ? total : undefined;
 }
 
 function stringArg(call: ToolCallState, key: string): string | undefined {
