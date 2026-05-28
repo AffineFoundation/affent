@@ -1536,8 +1536,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 19 {
-		t.Fatalf("long-run suite size = %d, want 19", len(scenarios))
+	if len(scenarios) != 20 {
+		t.Fatalf("long-run suite size = %d, want 20", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1735,6 +1735,67 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(scratchProject.Domains, codePRDomain) || !stringSliceContains(scratchProject.Domains, longRunRecoveryDomain) {
 		t.Fatalf("scratch project Domains = %#v, want code_pr and longrun_recovery", scratchProject.Domains)
+	}
+
+	iterativeProject, ok := seen["longrun-scratch-project-iterative-loop-push"]
+	if !ok {
+		t.Fatalf("long-run suite missing iterative scratch project loop/push scenario")
+	}
+	if iterativeProject.SessionID != "scratch-project-iterative-loop" || !iterativeProject.EnableLoopProtocol {
+		t.Fatalf("iterative scratch project fields = session:%q loop:%v", iterativeProject.SessionID, iterativeProject.EnableLoopProtocol)
+	}
+	if len(iterativeProject.Prompts) != 2 || iterativeProject.Prompt != "" {
+		t.Fatalf("iterative scratch project prompts = prompt:%q prompts:%d", iterativeProject.Prompt, len(iterativeProject.Prompts))
+	}
+	for _, prompt := range iterativeProject.Prompts {
+		if strings.Contains(prompt, "请") {
+			t.Fatalf("iterative scratch project prompt should be English: %q", prompt)
+		}
+	}
+	if _, ok := iterativeProject.Files[".affent/loops/scratch-project-iterative-loop/LOOP.md"]; !ok {
+		t.Fatalf("iterative scratch project scenario missing active LOOP.md")
+	}
+	for _, want := range []string{"python3 -m unittest discover -s tests", "git commit", "git push"} {
+		if !stringSliceContains(iterativeProject.RequiredCommands, want) {
+			t.Fatalf("iterative scratch project RequiredCommands = %#v, want %q", iterativeProject.RequiredCommands, want)
+		}
+	}
+	if iterativeProject.RequiredCommandCounts[`python3 -m unittest`] != 4 ||
+		iterativeProject.RequiredCommandCounts[`git commit`] != 2 ||
+		iterativeProject.RequiredCommandCounts[`git push`] != 2 {
+		t.Fatalf("iterative scratch project RequiredCommandCounts = %#v, want unittest=4 commit=2 push=2", iterativeProject.RequiredCommandCounts)
+	}
+	for _, want := range []string{"def save_json", "def load_json", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main"} {
+		if !strings.Contains(iterativeProject.VerifyCommand, want) {
+			t.Fatalf("iterative scratch project VerifyCommand = %q, want %q", iterativeProject.VerifyCommand, want)
+		}
+	}
+	if iterativeProject.RequiredLoopProtocolFeeds != 2 ||
+		iterativeProject.RequiredLoopProtocolFeedModes["full"] != 2 ||
+		len(iterativeProject.RequiredLoopProtocolFeedMatches) != 1 ||
+		!strings.Contains(iterativeProject.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "no source package or tests exist yet") ||
+		!strings.Contains(iterativeProject.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "finish iteration 1") {
+		t.Fatalf("iterative scratch project loop protocol constraints = feeds:%d modes:%#v matches:%#v", iterativeProject.RequiredLoopProtocolFeeds, iterativeProject.RequiredLoopProtocolFeedModes, iterativeProject.RequiredLoopProtocolFeedMatches)
+	}
+	if iterativeProject.RequiredTraceEventCounts["loop.turn_checkpoint"] != 2 {
+		t.Fatalf("iterative scratch project trace event requirements = %#v, want loop.turn_checkpoint=2", iterativeProject.RequiredTraceEventCounts)
+	}
+	for _, want := range []string{"ITER-LOOP-57", "iteration 2", "save_json", "load_json", "clean"} {
+		if !stringSliceContains(iterativeProject.RequiredFinalText, want) {
+			t.Fatalf("iterative scratch project RequiredFinalText = %#v, want %q", iterativeProject.RequiredFinalText, want)
+		}
+	}
+	if !stringSliceContains(iterativeProject.ProtectedFiles, ".affent/loops/scratch-project-iterative-loop/LOOP.md") {
+		t.Fatalf("iterative scratch project ProtectedFiles = %#v, want LOOP.md", iterativeProject.ProtectedFiles)
+	}
+	iterativeProjectCaps := ExpectationCapabilityNames(debugScenarioExpectations(iterativeProject))
+	for _, want := range []string{"loop_protocol", "trace", "verifier", "session"} {
+		if !stringSliceContains(iterativeProjectCaps, want) {
+			t.Fatalf("iterative scratch project expectation capabilities = %#v, want %q", iterativeProjectCaps, want)
+		}
+	}
+	if !stringSliceContains(iterativeProject.Domains, codePRDomain) || !stringSliceContains(iterativeProject.Domains, longRunRecoveryDomain) {
+		t.Fatalf("iterative scratch project Domains = %#v, want code_pr and longrun_recovery", iterativeProject.Domains)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]

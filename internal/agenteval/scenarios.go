@@ -2862,6 +2862,136 @@ This repository starts almost empty. The agent must create the project, tests, d
 	}
 }
 
+func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-scratch-project-iterative-loop-push",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{codePRDomain, longRunRecoveryDomain},
+		SessionID:          "scratch-project-iterative-loop",
+		EnableLoopProtocol: true,
+		Prompts: []string{
+			"Iteration 1: build the initial Python project from this nearly empty repository. Use the active loop protocol as durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark items done, list all items, and list open items. Run python3 -m unittest discover -s tests once after creating tests and again after implementation. Update README.md with the usage summary and marker ITER-LOOP-57. Commit iteration 1, push it to origin main, and leave git status clean. The final answer for this turn must include ITER-LOOP-57, iteration 1, the test command, created files, commit hash, and push result.",
+			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence, update README.md with the persistence usage, run python3 -m unittest discover -s tests before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
+		},
+		Files: map[string]string{
+			".affent/loops/scratch-project-iterative-loop/LOOP.md": `# Loop Protocol: scratch-project-iterative-loop
+
+## 0. Metadata
+
+- loop_id: scratch-project-iterative-loop
+- owner_session: scratch-project-iterative-loop
+- status: running
+
+## 1. North Star
+
+Build a tiny software project across multiple verified iterations without losing state, evidence, or repository hygiene.
+
+## 2. Current Situation
+
+- Start from README plus this protocol only; no source package or tests exist yet.
+- Required durable marker: ITER-LOOP-57.
+- Iteration 1 should create the in-memory todo package, tests, docs, commit, and push.
+- Iteration 2 should continue the same project, add JSON persistence, tests, docs, a second commit, and a second push.
+
+## 3. Rules
+
+- Use Python stdlib unittest and json only; do not add third-party dependencies.
+- Keep generated files focused: todo_core/, tests/, and README.md are enough.
+- Do not modify this LOOP.md.
+- Each iteration must leave git status clean after push.
+
+## 4. Plan/Step Pointer
+
+Current step: finish iteration 1, then resume for iteration 2 without restarting the project.
+
+## 5. Evidence And Recovery Index
+
+Evidence is the unittest command, two non-initial commits, origin/main push state, README marker, and final project files.
+`,
+			"README.md": `# Iterative Scratch Loop Project Eval
+
+This repository starts almost empty. The agent must create the project over two loop iterations, with tests, docs, commits, and pushes in each iteration.
+`,
+		},
+		SetupCommands: []string{
+			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
+		},
+		VerifyCommand: "python3 -m unittest discover -s tests && test -f todo_core/store.py && test -f todo_core/__init__.py && test -f tests/test_store.py && grep -R \"class TodoStore\" todo_core/store.py && grep -R \"def save_json\" todo_core/store.py && grep -R \"def load_json\" todo_core/store.py && grep -R \"save_json\" tests/test_store.py && grep -R \"load_json\" tests/test_store.py && grep -R \"ITER-LOOP-57\" README.md && grep -R \"JSON\" README.md && test -z \"$(git status --porcelain)\" && test \"$(git rev-list --count HEAD)\" -ge 3 && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{
+			`python3 -m unittest discover -s tests`,
+			`git commit`,
+			`git push`,
+		},
+		RequiredCommandCounts: map[string]int{
+			`python3 -m unittest`: 4,
+			`git commit`:          2,
+			`git push`:            2,
+		},
+		RequiredTools: []string{"write_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
+			{Tool: "write_file", Arg: "path", Substring: "todo_core/__init__.py"},
+			{Tool: "write_file", Arg: "path", Substring: "tests/test_store.py"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `python3 -m unittest`, Tool: "write_file"},
+			{Command: `git commit`, Tool: "write_file"},
+			{Command: `git push`, Tool: "write_file"},
+		},
+		RequiredLoopProtocolFeeds: 2,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 2,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{
+				CurrentSituation: "no source package or tests exist yet",
+				PlanCurrentStep:  "finish iteration 1",
+			},
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 2,
+		},
+		RequiredFinalText: []string{
+			"ITER-LOOP-57",
+			"iteration 2",
+			"save_json",
+			"load_json",
+			"python3 -m unittest discover -s tests",
+			"commit",
+			"push",
+			"clean",
+		},
+		RequiredFileSubstrings: map[string][]string{
+			"todo_core/store.py": {
+				"class TodoStore",
+				"def add",
+				"def mark_done",
+				"def open_items",
+				"def save_json",
+				"def load_json",
+			},
+			"tests/test_store.py": {
+				"unittest",
+				"mark_done",
+				"open_items",
+				"save_json",
+				"load_json",
+			},
+			"README.md": {
+				"ITER-LOOP-57",
+				"TodoStore",
+				"JSON",
+			},
+		},
+		ForbiddenCommands: defaultForbiddenCommands,
+		ProtectedFiles: []string{
+			".affent/loops/scratch-project-iterative-loop/LOOP.md",
+		},
+		MaxTurns: 28,
+	}
+}
+
 func longRunFocusedTaskRecoveryScenario() BatchScenario {
 	return BatchScenario{
 		Name:    "longrun-focused-task-recovery-synthesis",
