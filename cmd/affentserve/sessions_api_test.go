@@ -2842,6 +2842,60 @@ func TestActivateSessionLoopProtocolRepairsRecordedCalibrationFromProtocol(t *te
 	}
 }
 
+func TestReadSessionLoopProtocolDoesNotRepairRecordedCalibration(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	sessionID := "loop-read-recorded-calibration"
+	protocolPath := sessionLoopProtocolPath(pool, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "Maintain a recurring global situation report.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "# Loop Protocol: "+sessionID, `# Loop Protocol: `+sessionID+`
+
+## Calibration Q&A (recorded)
+
+- **Q1**: Analysis scope? A: Cover major geopolitical, economic, and technology policy changes.`, 1)
+	if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
+		t.Fatalf("WriteProtocol: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/loop-protocol", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil ||
+		resp.State.CalibrationQuestions != 0 ||
+		resp.State.CalibrationAnswers != 0 ||
+		resp.State.LastEventType != "loop.protocol_init" {
+		t.Fatalf("read should not repair calibration state: %+v", resp.State)
+	}
+	if len(resp.Events) != 1 || resp.Events[0].Type != "loop.protocol_init" {
+		t.Fatalf("read should not append calibration events: %+v", resp.Events)
+	}
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, sessionID))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 0 || state.CalibrationAnswers != 0 || state.LastEventType != "loop.protocol_init" {
+		t.Fatalf("persisted state changed on read: %+v", state)
+	}
+}
+
 func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
