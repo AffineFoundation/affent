@@ -161,11 +161,7 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
 
 function buildLiveResearchHint(runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
   if (!runtime) {
-    return {
-      label: "Current sources not confirmed",
-      detail: "Send once to confirm this chat's sources, or paste URLs, docs, or files now if you already have them.",
-      tone: "unknown",
-    };
+    return undefined;
   }
 
   if (runtime.research === "off") {
@@ -185,11 +181,7 @@ function buildLiveResearchHint(runtime?: RuntimeCapabilityView): ComposerTaskHin
   }
 
   if (runtime.research === "unknown") {
-    return {
-      label: "Current sources not confirmed",
-      detail: "Send once to confirm this chat's sources, or paste URLs, docs, or files now if you already have them.",
-      tone: "unknown",
-    };
+    return undefined;
   }
 
   return undefined;

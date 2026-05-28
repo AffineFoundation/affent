@@ -7917,6 +7917,104 @@ pre.code {
   color: var(--text-muted);
 }
 
+.composer-input-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.composer-add {
+  position: relative;
+  align-self: end;
+}
+
+.composer-add-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 38px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.composer-add-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.composer-add[open] .composer-add-trigger,
+.composer-add-trigger:hover,
+.composer-add-trigger:focus-visible {
+  background: rgba(240, 253, 250, 0.72);
+  color: var(--text);
+  outline: none;
+}
+
+.composer-add-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 12;
+  display: grid;
+  gap: 4px;
+  min-width: 176px;
+  border: 1px solid rgba(189, 199, 211, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-pop);
+  backdrop-filter: blur(18px) saturate(1.08);
+  padding: 6px;
+  animation: detail-reveal var(--motion-panel) var(--ease-snap);
+}
+
+.composer-add-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 9px;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
+}
+
+.composer-add-menu button:hover,
+.composer-add-menu button:focus-visible {
+  border-color: rgba(20, 184, 166, 0.18);
+  background: rgba(240, 253, 250, 0.7);
+  color: var(--text);
+  outline: none;
+}
+
+.composer-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .composer textarea {
   width: 100%;
   min-height: 46px;
@@ -9020,6 +9118,18 @@ html[data-theme="dark"] .composer:focus-within {
   box-shadow: 0 24px 58px rgba(0, 0, 0, 0.48), 0 0 0 3px rgba(45, 212, 191, 0.1);
 }
 
+html[data-theme="dark"] .composer-add-trigger {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .composer-add[open] .composer-add-trigger,
+html[data-theme="dark"] .composer-add-trigger:hover,
+html[data-theme="dark"] .composer-add-trigger:focus-visible {
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--text);
+}
+
 html[data-theme="dark"] .session-panel[data-compact="true"] {
   background: transparent;
 }
@@ -9034,6 +9144,22 @@ html[data-theme="dark"] .session-skill-body,
 html[data-theme="dark"] .session-memory-entries,
 html[data-theme="dark"] .composer-task-hint[data-tone="unknown"] {
   background: rgba(14, 17, 22, 0.78);
+}
+
+html[data-theme="dark"] .composer-add-menu {
+  border-color: rgba(58, 68, 81, 0.9);
+  background: rgba(13, 17, 23, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .composer-add-menu button {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .composer-add-menu button:hover,
+html[data-theme="dark"] .composer-add-menu button:focus-visible {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(45, 212, 191, 0.12);
 }
 
 html[data-theme="dark"] .session-row {
@@ -10028,13 +10154,21 @@ html[data-theme="dark"] ::selection {
     padding: 10px;
     font-size: 16px;
   }
+  .composer-input-row {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 7px;
+  }
+  .composer-add-trigger {
+    width: 32px;
+    height: 36px;
+  }
   .composer[data-resume-idle="true"] {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .composer:has(.composer-automation[open]) {
+  .composer:has(.composer-add[open]) {
     grid-template-columns: minmax(0, 1fr);
   }
-  .composer:has(.composer-automation[open]) .composer-actions {
+  .composer:has(.composer-add[open]) .composer-actions {
     grid-column: 1 / -1;
   }
   .composer[data-resume-idle="true"] .composer-intent {
@@ -10059,6 +10193,17 @@ html[data-theme="dark"] ::selection {
   .composer-actions {
     justify-content: flex-end;
     padding-bottom: 1px;
+  }
+  .composer-add[open] {
+    position: static;
+  }
+  .composer-add[open] .composer-add-menu {
+    position: static;
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    margin-bottom: 6px;
+    box-shadow: var(--shadow-soft);
   }
   .composer-automation[open] {
     flex: 1 0 100%;

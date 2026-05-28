@@ -161,9 +161,8 @@ describe("App", () => {
     expect(screen.queryByTestId("runtime-capabilities")).toBeNull();
     expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
-    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.queryByTestId("composer-intent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(screen.queryByTestId("session-strip")).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
   });
@@ -625,26 +624,13 @@ describe("App", () => {
 
     const input = await screen.findByPlaceholderText("Message Affent...");
     await user.type(input, "analyze market data for several days");
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up long-running loop" }));
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.objectContaining({ method: "POST" })));
-    const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/loop-protocol");
-    expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "analyze market data for several days" }));
-    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/messages");
-    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string; display_text?: string };
-    expect(sent.content).toContain("Loop protocol activation is pending");
-    expect(sent.content).toContain("chat or the WebUI");
-    expect(sent.content).toContain("loop_protocol action=read");
-    expect(sent.content).toContain("Ask exactly one concise calibration question now");
-    expect(sent.content).toContain("ask one focused follow-up in a later turn");
-    expect(sent.content).toContain("Do not complete activation in the same turn");
-    expect(sent.content).toContain("wait for the user's answer");
-    expect(sent.content).toContain("complete_activation");
-    expect(sent.content).toContain("Current Situation");
-    expect(sent.content).toContain("1200 characters");
-    expect(await screen.findByTestId("session-list")).toHaveTextContent("Automation draft");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("analyze market data");
+    expect((input as HTMLTextAreaElement).value).toContain("analyze market data for several days");
+    expect((input as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
+    expect((input as HTMLTextAreaElement).value).toContain("Success criteria:");
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.anything());
   });
 
   it("keeps empty loop setup out of the selected session surface", async () => {
@@ -694,29 +680,12 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("long running subnet analysis"));
     expect(screen.queryByTestId("session-loop-panel")).toBeNull();
     await user.type(screen.getByPlaceholderText("Message Affent..."), "long running subnet analysis");
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up long-running loop" }));
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-panel/loop-protocol", expect.objectContaining({ method: "POST" })));
-    const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/loop-protocol");
-    expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long running subnet analysis" }));
-    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/messages");
-    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
-    expect(sent.content).toContain("Ask exactly one concise calibration question now");
-    expect(sent.content).toContain("ask one focused follow-up in a later turn");
-    expect(sent.content).toContain("Do not complete activation in the same turn");
-    expect(sent.content).toContain("complete_activation");
-    expect(sent.content).toContain("1200 characters");
-    expect(sent).toMatchObject({ display_text: "Set up loop: long running subnet analysis" });
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Set up loop: long running subnet analysis");
-    expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("complete_activation");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-panel/loop-protocol", expect.anything());
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
-    await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
-    expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Draft");
-    expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("Setup pending");
-    expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("activate after your answer");
   });
 
   it("continues draft loop setup from recorded calibration without asking again", async () => {
@@ -1076,62 +1045,12 @@ describe("App", () => {
 
     await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("long running subnet analysis"));
     expect(screen.queryByTestId("session-schedule-panel")).toBeNull();
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Schedule 1h check-in" }));
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.objectContaining({ method: "POST" })));
-    const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/schedules");
-    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; display_text?: string; next_run_at: string; enabled: boolean };
-    expect(body.kind).toBe("checkin");
-    expect(body.prompt).toContain("Scheduled check-in for session: long running subnet analysis");
-    expect(body.prompt).toContain("ask the user one concise question");
-    expect(body.prompt).toContain("loop_protocol action=read");
-    expect(body.prompt).toContain("Current Situation");
-    expect(body.prompt).toContain("1200 characters");
-    expect(body.display_text).toBe("Check in 1h: long running subnet analysis");
-    expect(body.enabled).toBe(true);
-    expect(body.next_run_at).toMatch(/Z$/);
-    const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/loop-protocol");
-    expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "Scheduled check-in for long running subnet analysis" }));
-    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/messages");
-    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string; display_text?: string };
-    expect(sent.content).toContain("Calibrate scheduled check-in");
-    expect(sent.content).toContain("Ask the user one concise question now");
-    expect(sent.content).toContain("ask one focused follow-up in a later turn");
-    expect(sent.content).toContain("do not claim the timer is operationally calibrated");
-    expect(sent.content).toContain("Current Situation at or below 1200 characters");
-    expect(sent.display_text).toBe("Calibrate check-in timer: long running subnet analysis");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate check-in timer: long running subnet analysis");
-    expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("do not claim the timer is operationally calibrated");
-    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
-    await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("1 timer active");
-    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Check in 1h: long running subnet analysis");
-    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("ask the user one concise question");
-    expect(screen.queryByTestId("session-list")).toBeNull();
-
-    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Pause" }));
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "PATCH" })));
-    const pauseCall = fetchImpl.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "PATCH");
-    expect((pauseCall?.[1] as RequestInit).body).toBe(JSON.stringify({ enabled: false }));
-    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 paused");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Paused");
-
-    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Resume" }));
-    await waitFor(() => expect(fetchImpl.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")).toHaveLength(2));
-    const resumeCall = fetchImpl.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH")[1];
-    expect((resumeCall[1] as RequestInit).body).toBe(JSON.stringify({ enabled: true }));
-    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
-
-    const deleteCallsBeforeConfirm = fetchImpl.mock.calls.filter(([url, init]) => String(url) === "/v1/sessions/timer-control/schedules/sched_1" && (init as RequestInit | undefined)?.method === "DELETE").length;
-    const scheduleList = screen.getByTestId("session-schedule-list");
-    await user.click(within(scheduleList).getByRole("button", { name: "Delete" }));
-    expect(fetchImpl.mock.calls.filter(([url, init]) => String(url) === "/v1/sessions/timer-control/schedules/sched_1" && (init as RequestInit | undefined)?.method === "DELETE")).toHaveLength(deleteCallsBeforeConfirm);
-    await user.click(within(within(scheduleList).getByRole("group", { name: "Confirm delete Check-in timer" })).getByRole("button", { name: "Confirm" }));
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "DELETE" })));
-    await waitFor(() => expect(screen.queryByTestId("session-schedule-panel")).toBeNull());
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Schedule or frequency:");
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.anything());
   });
 
   it("schedules a recurring loop tick from the unified automation menu when loop is running", async () => {
@@ -1211,41 +1130,12 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("long running runtime improvement"));
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     expect(screen.queryByTestId("session-schedule-panel")).toBeNull();
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Schedule 30m loop tick" }));
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.objectContaining({ method: "POST" })));
-    const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/schedules");
-    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; display_text?: string; repeat_interval_seconds?: number; enabled: boolean };
-    expect(body.kind).toBe("loop_tick");
-    expect(body.prompt).toContain("Scheduled loop tick for session: long running runtime improvement");
-    expect(body.prompt).toContain("autonomous long-run tick");
-    expect(body.prompt).toContain("loop_protocol action=read");
-    expect(body.prompt).toContain("advance at most one compact high-value step");
-    expect(body.prompt).toContain("Current Situation at or below 1200 characters");
-    expect(body.display_text).toBe("Loop every 30m: long running runtime improvement");
-    expect(body.repeat_interval_seconds).toBe(1800);
-    expect(body.enabled).toBe(true);
-    expect(fetchImpl.mock.calls.some(([url]) => String(url) === "/v1/sessions/loop-timer/loop-protocol")).toBe(false);
-    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/messages");
-    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string; display_text?: string };
-    expect(sent.content).toContain("Calibrate recurring loop tick");
-    expect(sent.content).toContain("Read LOOP.md with loop_protocol action=read");
-    expect(sent.content).toContain("Ask the user one concise question now");
-    expect(sent.content).toContain("ask one focused follow-up in a later turn");
-    expect(sent.content).toContain("Current Situation at or below 1200 characters");
-    expect(sent.display_text).toBe("Calibrate loop timer: long running runtime improvement");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate loop timer: long running runtime improvement");
-    expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Ask the user one concise question now");
-    await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running · 1 timer active");
-    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
-    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("autonomous long-run tick");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
-    expect(screen.queryByTestId("session-list")).toBeNull();
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("What Affent should do:");
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.anything());
   });
 
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
@@ -1454,7 +1344,7 @@ describe("App", () => {
 
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "explain Bittensor");
-    await user.click(screen.getByRole("button", { name: "Resume" }));
+    await user.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await within(screen.getByTestId("timeline")).findByText("Bittensor is a decentralized AI network.")).toBeVisible();
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-1/events", expect.anything()));
@@ -1526,7 +1416,7 @@ describe("App", () => {
     await screen.findByText("There are two files.");
 
     await user.type(screen.getByPlaceholderText("Message Affent..."), "explain Bittensor");
-    await user.click(screen.getByRole("button", { name: "Resume" }));
+    await user.click(screen.getByRole("button", { name: "Send" }));
 
     await waitFor(() => {
       const activity = screen.getAllByTestId("agent-activity");

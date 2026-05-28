@@ -11,20 +11,12 @@ describe("buildComposerTaskHint", () => {
     });
   });
 
-  it("surfaces unconfirmed research capability for saved chats", () => {
-    expect(buildComposerTaskHint("分析 affine 最近的发展趋势和币价", runtime("unknown"))).toEqual({
-      label: "Current sources not confirmed",
-      detail: "Send once to confirm this chat's sources, or paste URLs, docs, or files now if you already have them.",
-      tone: "unknown",
-    });
+  it("stays quiet for unconfirmed research capability", () => {
+    expect(buildComposerTaskHint("分析 affine 最近的发展趋势和币价", runtime("unknown"))).toBeUndefined();
   });
 
-  it("warns when no capability snapshot exists for the first research task", () => {
-    expect(buildComposerTaskHint("check latest market news")).toEqual({
-      label: "Current sources not confirmed",
-      detail: "Send once to confirm this chat's sources, or paste URLs, docs, or files now if you already have them.",
-      tone: "unknown",
-    });
+  it("stays quiet when no capability snapshot exists for the first research task", () => {
+    expect(buildComposerTaskHint("check latest market news")).toBeUndefined();
   });
 
   it("warns for natural external information-gathering prompts", () => {

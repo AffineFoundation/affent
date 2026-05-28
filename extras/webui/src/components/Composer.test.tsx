@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -12,10 +12,9 @@ describe("Composer", () => {
 
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(screen.getByTestId("composer")).toHaveAttribute("data-active", "false");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Follow-up");
+    expect(screen.queryByTestId("composer-intent")).toBeNull();
     await user.type(input, "first line{Shift>}{Enter}{/Shift}second line");
     expect(screen.getByTestId("composer")).toHaveAttribute("data-active", "true");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to send");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("2 lines");
     expect(input).toHaveValue("first line\nsecond line");
 
@@ -39,122 +38,65 @@ describe("Composer", () => {
   });
 
   it("switches the primary action to Start when no session exists yet", () => {
-    render(<Composer disabled={false} busy={false} hasSession={false} onSubmit={vi.fn()} onCancel={vi.fn()} onStartLoop={vi.fn()} />);
+    render(<Composer disabled={false} busy={false} hasSession={false} onSubmit={vi.fn()} onCancel={vi.fn()} />);
 
     expect(screen.getByPlaceholderText("Message Affent...")).toBeVisible();
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("New task");
+    expect(screen.queryByTestId("composer-intent")).toBeNull();
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
-    expect(screen.queryByTestId("composer-automation")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add context or automation" })).toBeVisible();
   });
 
-  it("shows Automation only when at least one automation action is available", async () => {
+  it("uses the add menu to insert editable loop and schedule prompts", async () => {
     const user = userEvent.setup();
-    const onStartLoop = vi.fn().mockResolvedValue(undefined);
-    const onScheduleCheckIn = vi.fn().mockResolvedValue(undefined);
-    const onScheduleLoopTick = vi.fn().mockResolvedValue(undefined);
-    const { rerender } = render(
-      <Composer
-        disabled={false}
-        busy={false}
-        hasSession={false}
-        onSubmit={vi.fn()}
-        onCancel={vi.fn()}
-        onStartLoop={onStartLoop}
-        onScheduleCheckIn={onScheduleCheckIn}
-        onScheduleLoopTick={onScheduleLoopTick}
-      />,
-    );
-
-    expect(screen.queryByTestId("composer-automation")).toBeNull();
+    render(<Composer disabled={false} busy={false} hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
 
     const input = screen.getByPlaceholderText("Message Affent...");
-    await user.type(input, "fix the failing checkout test");
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    expect(screen.queryByTestId("composer-automation")).toBeNull();
+    expect((input as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
+    expect((input as HTMLTextAreaElement).value).toContain("Success criteria:");
+    expect(screen.getByTestId("composer-add")).not.toHaveAttribute("open");
 
     await user.clear(input);
-    await user.type(input, "long running market monitor");
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
-    expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Schedule 1h check-in" })).toBeNull();
-    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Schedule 30m loop tick" })).toBeNull();
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up long-running loop" }));
-    expect(onStartLoop).toHaveBeenCalledWith("long running market monitor");
-
-    rerender(
-      <Composer
-        disabled={false}
-        busy={false}
-        hasSession
-        onSubmit={vi.fn()}
-        onCancel={vi.fn()}
-        onStartLoop={onStartLoop}
-        onScheduleCheckIn={onScheduleCheckIn}
-      />,
-    );
-
-    expect(screen.queryByTestId("composer-automation")).toBeNull();
-
-    rerender(
-      <Composer
-        disabled={false}
-        busy={false}
-        hasSession
-        automationAvailable
-        onSubmit={vi.fn()}
-        onCancel={vi.fn()}
-        onStartLoop={onStartLoop}
-        onScheduleCheckIn={onScheduleCheckIn}
-      />,
-    );
-
-    expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Set up long-running loop" })).toBeNull();
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Schedule 1h check-in" }));
-    expect(onScheduleCheckIn).toHaveBeenCalled();
+    expect((input as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
+    expect((input as HTMLTextAreaElement).value).toContain("Schedule or frequency:");
   });
 
-  it("does not show separate loop setup and loop timer actions for the same draft", async () => {
+  it("adds selected text files to the editable message", async () => {
     const user = userEvent.setup();
-    render(
-      <Composer
-        disabled={false}
-        busy={false}
-        hasSession
-        onSubmit={vi.fn()}
-        onCancel={vi.fn()}
-        onStartLoop={vi.fn()}
-        onScheduleLoopTick={vi.fn()}
-      />,
-    );
+    render(<Composer disabled={false} busy={false} hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
 
-    await user.type(screen.getByPlaceholderText("Message Affent..."), "keep improving the web workbench");
-    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    expect(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Upload file" })).toBeVisible();
 
-    const automation = screen.getByTestId("composer-automation");
-    expect(within(automation).getByRole("button", { name: "Set up long-running loop" })).toBeVisible();
-    expect(within(automation).queryByRole("button", { name: "Schedule 30m loop tick" })).toBeNull();
+    const fileInput = document.querySelector(".composer-file-input") as HTMLInputElement | null;
+    expect(fileInput).not.toBeNull();
+    await user.upload(fileInput as HTMLInputElement, new File(["export const ok = true;\n"], "sample.ts", { type: "text/typescript" }));
+
+    const input = screen.getByPlaceholderText("Message Affent...");
+    await waitFor(() => expect((input as HTMLTextAreaElement).value).toContain("Attached file: sample.ts"));
+    expect((input as HTMLTextAreaElement).value).toContain("export const ok = true;");
   });
 
-  it("labels saved history follow-ups as resuming the chat", async () => {
+  it("treats saved history follow-ups like normal chat sends", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<Composer disabled={false} busy={false} hasSession resumeSession onSubmit={onSubmit} onCancel={vi.fn()} />);
 
     const input = screen.getByPlaceholderText("Message Affent...");
-    expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "true");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
-    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "false");
+    expect(screen.queryByTestId("composer-intent")).toBeNull();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
 
     await user.type(input, "continue with the next concrete step");
 
     expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "false");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to resume");
-    expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Send" }));
     expect(onSubmit).toHaveBeenCalledWith("continue with the next concrete step");
   });
 
@@ -174,9 +116,8 @@ describe("Composer", () => {
 
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
 
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to resume");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
-    expect(screen.getByRole("button", { name: "Resume anyway" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
   it("loads starter drafts as editable starting tasks", () => {
@@ -287,7 +228,7 @@ describe("Composer", () => {
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
-  it("warns before the first research task when capability details are not loaded yet", async () => {
+  it("stays quiet before the first research task when capability details are not loaded yet", async () => {
     const user = userEvent.setup();
     render(
       <Composer
@@ -301,10 +242,8 @@ describe("Composer", () => {
 
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
 
-    expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "unknown");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current sources not confirmed");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs, docs, or files now");
-    expect(screen.getByRole("button", { name: "Start anyway" })).toBeEnabled();
+    expect(screen.queryByTestId("composer-task-hint")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
   });
 
   it("does not advertise normal workspace search capability in the composer", async () => {
