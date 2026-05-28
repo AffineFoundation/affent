@@ -1595,12 +1595,26 @@ function MessageStep({
       role="group"
       aria-label={`${label} message`}
     >
-      <div className={`flow-text${streaming ? " streaming-caret" : ""}`}>
+      <div className="message-bubble-row" data-side={variant}>
+        {variant === "user" && onReuse ? (
+          <MessageOptions text={text} onReuse={onReuse} />
+        ) : null}
+        <div className={`flow-text${streaming ? " streaming-caret" : ""}`}>
+          {variant === "assistant" ? (
+            <MarkdownText text={text} query={searchQuery} />
+          ) : (
+            <HighlightText text={text} query={searchQuery} />
+          )}
+        </div>
         {variant === "assistant" ? (
-          <MarkdownText text={text} query={searchQuery} />
-        ) : (
-          <HighlightText text={text} query={searchQuery} />
-        )}
+          <MessageOptions
+            text={text}
+            markdown
+            streaming={streaming}
+            onContinue={onContinue}
+            onRetry={onRetry}
+          />
+        ) : null}
       </div>
       {variant === "assistant" && streaming ? (
         <div className="typing-tail" role="status" aria-live="polite">
@@ -1612,15 +1626,37 @@ function MessageStep({
           <span>Writing</span>
         </div>
       ) : null}
-      {variant === "assistant" ? (
-        <div className="message-actions message-side-actions" data-side="assistant">
-          <CopyMenu
-            label="..."
-            ariaLabel="Message options"
-            className="message-copy-menu"
-            panelClassName="message-copy-menu-panel"
-            triggerClassName="message-side-trigger"
-          >
+    </div>
+  );
+}
+
+function MessageOptions({
+  text,
+  markdown = false,
+  streaming,
+  onContinue,
+  onRetry,
+  onReuse,
+}: {
+  text: string;
+  markdown?: boolean;
+  streaming?: boolean;
+  onContinue?: UseAsDraft;
+  onRetry?: UseAsDraft;
+  onReuse?: UseAsDraft;
+}) {
+  const side = markdown ? "assistant" : "user";
+  return (
+    <div className="message-actions message-side-actions" data-side={side}>
+      <CopyMenu
+        label="..."
+        ariaLabel="Message options"
+        className="message-copy-menu"
+        panelClassName="message-copy-menu-panel"
+        triggerClassName="message-side-trigger"
+      >
+        {markdown ? (
+          <>
             <CopyButton label="Copy markdown" value={text} className="message-action" />
             <CopyButton label="Copy plain text" value={markdownToPlainText(text)} className="message-action" />
             {onContinue && !streaming ? (
@@ -1633,25 +1669,18 @@ function MessageStep({
                 Retry from here
               </button>
             ) : null}
-          </CopyMenu>
-        </div>
-      ) : null}
-      {variant === "user" && onReuse ? (
-        <div className="message-actions message-side-actions" data-side="user">
-          <CopyMenu
-            label="..."
-            ariaLabel="Message options"
-            className="message-copy-menu"
-            panelClassName="message-copy-menu-panel"
-            triggerClassName="message-side-trigger"
-          >
+          </>
+        ) : (
+          <>
             <CopyButton label="Copy" value={text} className="message-action" />
-            <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
-              Edit message
-            </button>
-          </CopyMenu>
-        </div>
-      ) : null}
+            {onReuse ? (
+              <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
+                Edit message
+              </button>
+            ) : null}
+          </>
+        )}
+      </CopyMenu>
     </div>
   );
 }
