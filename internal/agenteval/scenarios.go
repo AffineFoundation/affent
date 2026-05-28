@@ -2334,6 +2334,56 @@ func memoryConfirmedWriteStatsScenario() BatchScenario {
 	}
 }
 
+func memoryAutonomousDurableRuleScenario() BatchScenario {
+	return BatchScenario{
+		Name:         "memory-autonomous-durable-rule",
+		Suites:       []string{smallModelToolsSuite, longRunSuite},
+		Domains:      []string{memoryDomain, longRunRecoveryDomain},
+		SessionID:    "memory-autonomous-writer",
+		EnableMemory: true,
+		Prompt:       "New durable workspace convention: future Alpha Coast market reports must include marker AUTO-MEM-73 and confidence tag source-led. This convention should matter in future sessions, not just this turn. Temporary status for this turn: no commit hash exists and no push result exists. Acknowledge the durable convention and explicitly distinguish it from the temporary status.",
+		Files: map[string]string{
+			"README.md": "# Autonomous Memory Eval\n\nThis repository does not contain the durable convention marker.\n",
+		},
+		VerifyCommand: shellAnd(
+			`grep -R "AUTO-MEM-73" .affent/memory/topics/conventions.md`,
+			`grep -R "source-led" .affent/memory/topics/conventions.md`,
+			`! grep -R "commit hash" .affent/memory/topics/conventions.md`,
+			`! grep -R "push result" .affent/memory/topics/conventions.md`,
+		),
+		RequiredTools: []string{"memory"},
+		RequiredToolCounts: map[string]int{
+			"memory": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "action", Substring: "add"},
+			{Tool: "memory", Arg: "target", Substring: "memory"},
+			{Tool: "memory", Arg: "topic", Substring: "conventions"},
+			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-73"},
+			{Tool: "memory", Arg: "content", Substring: "source-led"},
+		},
+		ForbiddenToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "commit hash"},
+			{Tool: "memory", Arg: "content", Substring: "push result"},
+			{Tool: "memory", Arg: "content", Substring: "Temporary status"},
+		},
+		MaxToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-73", Max: 1},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"memory_updates":    1,
+			"memory_update_add": 1,
+		},
+		RequiredFinalText: []string{"AUTO-MEM-73", "source-led", "temporary"},
+		ForbiddenTools:    []string{"read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles:    []string{"README.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"memory": 1,
+		},
+		MaxTurns: 5,
+	}
+}
+
 func smallToolRepeatedReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "small-tools-repeated-read",

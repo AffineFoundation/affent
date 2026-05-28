@@ -1316,6 +1316,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundMemoryRecall := false
 	foundSessionHistoryRecall := false
 	foundMemoryWriteStats := false
+	foundMemoryAutonomousWrite := false
 	foundSymbolContext := false
 	foundSymbolContextRuntimeCapabilities := false
 	foundSymbolContextThenReadFile := false
@@ -1438,6 +1439,44 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				t.Fatalf("memory-confirmed-write-stats tool counts = required:%#v max:%#v", scenario.RequiredToolCounts, scenario.MaxSuccessfulToolCallsByTool)
 			}
 		}
+		if scenario.Name == "memory-autonomous-durable-rule" {
+			foundMemoryAutonomousWrite = true
+			if !scenario.EnableMemory || scenario.SessionID != "memory-autonomous-writer" {
+				t.Fatalf("memory-autonomous-durable-rule memory/session fields = memory:%v session:%q", scenario.EnableMemory, scenario.SessionID)
+			}
+			if strings.Contains(scenario.Prompt, "memory tool") || strings.Contains(scenario.Prompt, "action=add") {
+				t.Fatalf("memory-autonomous-durable-rule should test autonomous write judgment, prompt=%q", scenario.Prompt)
+			}
+			for _, want := range []ToolArgContainsRequirement{
+				{Tool: "memory", Arg: "action", Substring: "add"},
+				{Tool: "memory", Arg: "topic", Substring: "conventions"},
+				{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-73"},
+				{Tool: "memory", Arg: "content", Substring: "source-led"},
+			} {
+				if !toolArgRequirementContains(scenario.RequiredToolArgContains, want) {
+					t.Fatalf("memory-autonomous-durable-rule RequiredToolArgContains = %#v, want %#v", scenario.RequiredToolArgContains, want)
+				}
+			}
+			for _, want := range []ToolArgContainsRequirement{
+				{Tool: "memory", Arg: "content", Substring: "commit hash"},
+				{Tool: "memory", Arg: "content", Substring: "push result"},
+			} {
+				if !toolArgRequirementContains(scenario.ForbiddenToolArgContains, want) {
+					t.Fatalf("memory-autonomous-durable-rule ForbiddenToolArgContains = %#v, want %#v", scenario.ForbiddenToolArgContains, want)
+				}
+			}
+			if scenario.RequiredToolStatsAtLeast["memory_updates"] != 1 || scenario.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
+				t.Fatalf("memory-autonomous-durable-rule stats = %#v, want memory update/add requirements", scenario.RequiredToolStatsAtLeast)
+			}
+			if scenario.RequiredToolCounts["memory"] != 1 || scenario.MaxSuccessfulToolCallsByTool["memory"] != 1 {
+				t.Fatalf("memory-autonomous-durable-rule tool counts = required:%#v max:%#v", scenario.RequiredToolCounts, scenario.MaxSuccessfulToolCallsByTool)
+			}
+			for _, want := range []string{"AUTO-MEM-73", "source-led", "commit hash", "push result"} {
+				if !strings.Contains(scenario.VerifyCommand, want) {
+					t.Fatalf("memory-autonomous-durable-rule VerifyCommand = %q, want %q", scenario.VerifyCommand, want)
+				}
+			}
+		}
 		if scenario.Name == "default-runtime-repo-search" {
 			foundRepoSearch = true
 			if !stringSliceContains(scenario.RequiredTools, "repo_search") {
@@ -1547,6 +1586,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundMemoryWriteStats {
 		t.Fatalf("small-model-tools suite missing memory-confirmed-write-stats")
 	}
+	if !foundMemoryAutonomousWrite {
+		t.Fatalf("small-model-tools suite missing memory-autonomous-durable-rule")
+	}
 	if !foundRepoSearch {
 		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
 	}
@@ -1576,8 +1618,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 22 {
-		t.Fatalf("long-run suite size = %d, want 22", len(scenarios))
+	if len(scenarios) != 23 {
+		t.Fatalf("long-run suite size = %d, want 23", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2412,6 +2454,36 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if memoryWrite.RequiredToolStatsAtLeast["memory_updates"] != 1 || memoryWrite.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
 		t.Fatalf("memory write stats constraints = %#v", memoryWrite.RequiredToolStatsAtLeast)
+	}
+
+	memoryAutonomousWrite, ok := seen["memory-autonomous-durable-rule"]
+	if !ok {
+		t.Fatalf("long-run suite missing autonomous memory write scenario")
+	}
+	if !memoryAutonomousWrite.EnableMemory || memoryAutonomousWrite.SessionID != "memory-autonomous-writer" {
+		t.Fatalf("autonomous memory write fields = memory:%v session:%q", memoryAutonomousWrite.EnableMemory, memoryAutonomousWrite.SessionID)
+	}
+	if strings.Contains(memoryAutonomousWrite.Prompt, "memory tool") || strings.Contains(memoryAutonomousWrite.Prompt, "action=add") {
+		t.Fatalf("autonomous memory write should not directly command the tool: %q", memoryAutonomousWrite.Prompt)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-73"},
+		{Tool: "memory", Arg: "content", Substring: "source-led"},
+	} {
+		if !toolArgRequirementContains(memoryAutonomousWrite.RequiredToolArgContains, want) {
+			t.Fatalf("autonomous memory write RequiredToolArgContains = %#v, want %#v", memoryAutonomousWrite.RequiredToolArgContains, want)
+		}
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "memory", Arg: "content", Substring: "commit hash"},
+		{Tool: "memory", Arg: "content", Substring: "push result"},
+	} {
+		if !toolArgRequirementContains(memoryAutonomousWrite.ForbiddenToolArgContains, want) {
+			t.Fatalf("autonomous memory write ForbiddenToolArgContains = %#v, want %#v", memoryAutonomousWrite.ForbiddenToolArgContains, want)
+		}
+	}
+	if !stringSliceContains(memoryAutonomousWrite.Domains, memoryDomain) || !stringSliceContains(memoryAutonomousWrite.Domains, longRunRecoveryDomain) {
+		t.Fatalf("autonomous memory write Domains = %#v, want memory and longrun_recovery", memoryAutonomousWrite.Domains)
 	}
 
 	focusedRecovery, ok := seen["longrun-focused-task-recovery-synthesis"]

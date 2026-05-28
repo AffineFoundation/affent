@@ -951,6 +951,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunLoopActivationCalibrationScenario(),
 		longRunResearchCheckpointScenario(),
 		memoryConfirmedWriteStatsScenario(),
+		memoryAutonomousDurableRuleScenario(),
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
