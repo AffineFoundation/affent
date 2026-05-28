@@ -579,6 +579,14 @@ func TestFocusedTaskPolicies(t *testing.T) {
 		t.Fatal("workspace/path-bearing child prompts should not trigger first-tool policy")
 	}
 
+	prompt := focusedTaskUserPrompt(FocusedTaskProfile{Kind: FocusedTaskExplore}, "inspect docs", "/workspace", 4)
+	if !strings.Contains(prompt, "Tool budget: at most 4 tool calls") || !strings.Contains(prompt, "use relative paths") || !strings.Contains(prompt, "omit cwd") {
+		t.Fatalf("focused-task prompt missing budget or workspace-relative guidance:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "/workspace") {
+		t.Fatalf("focused-task prompt should not steer child agents toward absolute workspace paths:\n%s", prompt)
+	}
+
 	okResult, err := json.Marshal(FocusedTaskResult{TaskType: FocusedTaskExplore, OK: true, Summary: "done"})
 	if err != nil {
 		t.Fatal(err)

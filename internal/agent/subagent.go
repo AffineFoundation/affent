@@ -532,7 +532,7 @@ type SubagentDeps struct {
 	// a cleanup function for session-scoped resources such as browsers.
 	// Core agent code stays dependency-free; callers that opt into
 	// heavier extras wire them here.
-	RegisterChildTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
+	RegisterChildTools   func(ctx context.Context, reg *Registry) (cleanup func(), err error)
 	Log                  zerolog.Logger
 	PerCallTimeout       time.Duration
 	SecretValuesProvider func() []string
@@ -1181,8 +1181,8 @@ Rendered web extraction:
 	return base
 }
 
-func subagentUserPrompt(mode, task, workspace string, maxTurns, depth, maxDepth int) string {
-	return fmt.Sprintf("Mode: %s\nWorkspace: %s\nSubagent depth: %d of %d.\nTool budget: at most %d tool calls/rounds. Stop early when evidence is sufficient.\nTask:\n%s", mode, workspace, depth, maxDepth, maxTurns, task)
+func subagentUserPrompt(mode, task, _ string, maxTurns, depth, maxDepth int) string {
+	return fmt.Sprintf("Mode: %s\nWorkspace: tools start in the session workspace; use relative paths and omit cwd unless a subdirectory is needed.\nSubagent depth: %d of %d.\nTool budget: at most %d tool calls/rounds. Stop early when evidence is sufficient.\nTask:\n%s", mode, depth, maxDepth, maxTurns, task)
 }
 
 type subagentToolCall struct {

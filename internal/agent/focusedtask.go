@@ -167,14 +167,14 @@ var defaultFocusedTaskProfileRegistry = DefaultFocusedTaskProfileRegistry()
 // helpers such as session_search or shell should not hide a useful
 // read-only focused task in deployments that do not expose them.
 type FocusedTaskDeps struct {
-	LLM               *LLMClient
-	Executor          executor.Executor
-	HostWorkspaceDir  string
-	Memory            memory.MemoryStore
-	SessionsDir       string
-	ParentSessionID   string
-	TranscriptDir     string
-	ProjectContextDir string
+	LLM                  *LLMClient
+	Executor             executor.Executor
+	HostWorkspaceDir     string
+	Memory               memory.MemoryStore
+	SessionsDir          string
+	ParentSessionID      string
+	TranscriptDir        string
+	ProjectContextDir    string
 	Log                  zerolog.Logger
 	PerCallTimeout       time.Duration
 	SecretValuesProvider func() []string
@@ -1006,9 +1006,9 @@ Output format (REQUIRED):
 	return WithRegistrySystemGuidance(base, reg)
 }
 
-func focusedTaskUserPrompt(p FocusedTaskProfile, objective, workspace string, maxTurns int) string {
-	return fmt.Sprintf("Task type: %s\nWorkspace: %s\nTool budget: at most %d tool calls. Stop early when the objective is answered.\nObjective:\n%s",
-		string(p.Kind), workspace, maxTurns, objective)
+func focusedTaskUserPrompt(p FocusedTaskProfile, objective, _ string, maxTurns int) string {
+	return fmt.Sprintf("Task type: %s\nWorkspace: tools start in the session workspace; use relative paths and omit cwd unless a subdirectory is needed.\nTool budget: at most %d tool calls. Stop early when the objective is answered.\nObjective:\n%s",
+		string(p.Kind), maxTurns, objective)
 }
 
 // Stable Kind values for sse.DelegationMeta. Exported so trace

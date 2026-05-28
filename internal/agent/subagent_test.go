@@ -617,6 +617,12 @@ func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
 	if !strings.Contains(got, "Stop early when evidence is sufficient") {
 		t.Fatalf("prompt missing early-stop guidance:\n%s", got)
 	}
+	if !strings.Contains(got, "use relative paths") || !strings.Contains(got, "omit cwd") {
+		t.Fatalf("prompt missing workspace-relative guidance:\n%s", got)
+	}
+	if strings.Contains(got, "/workspace") {
+		t.Fatalf("prompt should not steer child agents toward absolute workspace paths:\n%s", got)
+	}
 }
 
 func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
