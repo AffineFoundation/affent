@@ -234,11 +234,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "source_network:missing_response_diagnostics")
 			message = "network source evidence lacked response diagnostics; inspect status/content_type before trusting current facts"
 		}
-		partialNetworkReads := sourceNetworkPartialReads(res)
+		partialNetworkReads := sourceNetworkUnresolvedPartialReads(res)
 		if partialNetworkReads > 0 {
 			severity = "warn"
 			tags = append(tags, "source_network:partial_read")
-			message = "network source evidence was only partially read; continue from next_offset or use a narrower json_path before trusting missing fields"
+			message = "network source evidence has unresolved partial reads; continue from next_offset or use a narrower json_path before trusting missing fields"
 		}
 		add("source_access", severity, message, []string{"source_evidence"}, map[string]int{
 			"results":                      res.ToolStats.SourceAccessResults,
@@ -532,15 +532,53 @@ func sourceNetworkMissingResponseDiagnostics(res BatchResult) int {
 	return missing
 }
 
-func sourceNetworkPartialReads(res BatchResult) int {
+func sourceNetworkUnresolvedPartialReads(res BatchResult) int {
 	partial := 0
-	for _, ex := range res.SourceAccessExamples {
+	for i, ex := range res.SourceAccessExamples {
 		isNetwork := ex.Status == "network" || ex.URLField == "browser_network_url" || ex.SourceMethod == "network_xhr_fetch"
-		if isNetwork && ex.HasMore {
+		if isNetwork && ex.HasMore && !sourceNetworkPartialReadResolved(ex, res.SourceAccessExamples[i+1:]) {
 			partial++
 		}
 	}
 	return partial
+}
+
+func sourceNetworkPartialReadResolved(partial SourceAccessExample, later []SourceAccessExample) bool {
+	for _, ex := range later {
+		isNetwork := ex.Status == "network" || ex.URLField == "browser_network_url" || ex.SourceMethod == "network_xhr_fetch"
+		if !isNetwork || !sameSourceNetworkResponse(partial, ex) {
+			continue
+		}
+		if ex.JSONPath != "" && !ex.HasMore {
+			return true
+		}
+		if partial.NextOffset > 0 && ex.BodyOffset >= partial.NextOffset {
+			return true
+		}
+		if partial.NextOffset == 0 && !ex.HasMore {
+			return true
+		}
+	}
+	return false
+}
+
+func sameSourceNetworkResponse(a, b SourceAccessExample) bool {
+	aRef := strings.TrimSpace(a.Ref)
+	bRef := strings.TrimSpace(b.Ref)
+	if aRef != "" && bRef != "" {
+		return aRef == bRef
+	}
+	aURL := strings.TrimSpace(a.URL)
+	bURL := strings.TrimSpace(b.URL)
+	if aURL != "" && bURL != "" {
+		return aURL == bURL
+	}
+	aRequestedURL := strings.TrimSpace(a.RequestedURL)
+	bRequestedURL := strings.TrimSpace(b.RequestedURL)
+	if aRequestedURL != "" && bRequestedURL != "" {
+		return aRequestedURL == bRequestedURL
+	}
+	return false
 }
 
 func hasDebugBriefTruncation(res BatchResult) bool {

@@ -474,10 +474,85 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 	item = debugBriefItemByKind(brief, "source_access")
 	if item == nil ||
 		item.Severity != "warn" ||
-		item.Message != "network source evidence was only partially read; continue from next_offset or use a narrower json_path before trusting missing fields" ||
+		item.Message != "network source evidence has unresolved partial reads; continue from next_offset or use a narrower json_path before trusting missing fields" ||
 		item.Counts["partial_network_reads"] != 1 ||
 		!stringSliceContains(brief.Tags, "source_network:partial_read") {
 		t.Fatalf("partial network read item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  2,
+			SourceAccessVerified: 2,
+			SourceAccessNetwork:  2,
+		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    70,
+			BodyOffset:   14,
+			ShowingBytes: 12,
+			OmittedAfter: 44,
+			NextOffset:   26,
+			HasMore:      true,
+		}, {
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    70,
+			BodyOffset:   26,
+			ShowingBytes: 44,
+		}},
+	})
+	if stringSliceContains(brief.Tags, "source_network:partial_read") {
+		t.Fatalf("continued network read should not be tagged partial: %+v", brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  2,
+			SourceAccessVerified: 2,
+			SourceAccessNetwork:  2,
+		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n2",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    120000,
+			ShowingBytes: 65536,
+			OmittedAfter: 54464,
+			NextOffset:   65536,
+			HasMore:      true,
+		}, {
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n2",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			JSONPath:     "$.subnet.market_cap",
+			BodyBytes:    16,
+			ShowingBytes: 16,
+		}},
+	})
+	if stringSliceContains(brief.Tags, "source_network:partial_read") {
+		t.Fatalf("json_path follow-up should resolve partial read: %+v", brief.Tags)
 	}
 }
 
