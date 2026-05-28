@@ -243,7 +243,7 @@ function loopNextStepCopy(
     return {
       kicker: "Next action",
       title: "Keep LOOP.md compact",
-      detail: "Use chat for durable protocol changes; scheduled ticks should advance one compact step.",
+      detail: "Use chat for durable protocol changes; each future loop turn should advance one compact step.",
     };
   }
   if (status === "disabled") {

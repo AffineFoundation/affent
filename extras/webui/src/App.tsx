@@ -2301,12 +2301,12 @@ function automationWorkbenchMetrics(
   loopState: SessionSummary["loop_state"] | undefined,
   loopPanelState: LoopProtocolState,
   schedulePanelState: ScheduleState,
-  context: { title: string; detail: string } | undefined,
+  _context: { title: string; detail: string } | undefined,
 ): SessionAutomationMetric[] {
   return [
     automationLoopMetric(session, loopState, loopPanelState),
     automationTimerMetric(session, schedulePanelState),
-    automationNextMetric(context),
+    automationNextRunMetric(session, loopState, schedulePanelState),
   ];
 }
 
@@ -2382,10 +2382,23 @@ function automationWorkbenchFocus(
     };
   }
   if (status === "running") {
+    const summary = session?.schedules;
+    const visibleSchedules = schedulePanelState.state === "ready" ? schedulePanelState.schedules : [];
+    const enabled = Math.max(summary?.enabled ?? 0, visibleSchedules.filter((schedule) => schedule.enabled).length);
+    if (enabled <= 0) {
+      return {
+        label: "Automation active",
+        title: "Loop running manually",
+        detail: "No timer is scheduled; this loop continues only from chat or a new scheduled trigger.",
+        tone: "ok",
+      };
+    }
     return {
       label: "Automation active",
       title: "Loop can receive timer ticks",
-      detail: automationCompact(loopState?.last_decision ?? loopState?.last_event_summary) ?? "Use chat for durable protocol updates; keep LOOP.md compact.",
+      detail: session?.schedules?.next_run_at
+        ? `Next timer ${automationFormatTime(session.schedules.next_run_at)}`
+        : automationCompact(loopState?.last_decision ?? loopState?.last_event_summary) ?? "Use chat for durable protocol updates; keep LOOP.md compact.",
       tone: "ok",
     };
   }
@@ -2444,15 +2457,38 @@ function automationTimerMetric(session: SessionSummary | undefined, panelState: 
   return { label: "Timers", value: "Off", detail: "No scheduled follow-ups", tone: "neutral" };
 }
 
-function automationNextMetric(context: { title: string; detail: string } | undefined): SessionAutomationMetric {
-  if (!context) return { label: "Next", value: "Manual", detail: "Start loop or schedule a timer when needed", tone: "neutral" };
-  const title = automationCompact(context.title) ?? "Review";
-  return {
-    label: "Next",
-    value: title.length > 24 ? `${title.slice(0, 21).trimEnd()}...` : title,
-    detail: automationCompact(context.detail),
-    tone: /error|failed|waiting|pending|review/i.test(`${context.title} ${context.detail}`) ? "attention" : "neutral",
-  };
+function automationNextRunMetric(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  panelState: ScheduleState,
+): SessionAutomationMetric {
+  if (panelState.state === "loading") return { label: "Next run", value: "Loading", detail: "Reading timer details", tone: "neutral" };
+  if (panelState.state === "error") return { label: "Next run", value: "Error", detail: automationCompact(panelState.error) ?? "Timer details unavailable", tone: "danger" };
+  const summary = session?.schedules;
+  if ((summary?.pending_loop_ticks ?? 0) > 0) {
+    return { label: "Next run", value: "Pending", detail: "Activate LOOP.md before queued ticks run", tone: "attention" };
+  }
+  if (summary?.next_run_at) {
+    return {
+      label: "Next run",
+      value: automationFormatTime(summary.next_run_at),
+      detail: automationCompact(summary.next_prompt_preview) ?? scheduleKindDetail(summary.next_schedule_kind),
+      tone: "ok",
+    };
+  }
+  const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
+  const enabled = Math.max(summary?.enabled ?? 0, visibleSchedules.filter((schedule) => schedule.enabled).length);
+  if (enabled > 0) return { label: "Next run", value: "Unknown", detail: "Load timers to inspect schedule", tone: "attention" };
+  const loopRunning = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase() === "running";
+  if (loopRunning) return { label: "Next run", value: "Manual", detail: "No timer scheduled for this loop", tone: "neutral" };
+  return { label: "Next run", value: "None", detail: "No scheduled follow-ups", tone: "neutral" };
+}
+
+function scheduleKindDetail(kind: string | undefined): string {
+  if (kind === "loop_tick") return "loop tick";
+  if (kind === "daily_checkin") return "daily check-in";
+  if (kind === "checkin") return "check-in";
+  return "scheduled follow-up";
 }
 
 function automationFormatTime(value: string): string {
