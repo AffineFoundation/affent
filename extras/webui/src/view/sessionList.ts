@@ -268,6 +268,7 @@ function currentSessionMetrics(session: SessionState): string[] {
   const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const toolFailureMetricText = toolFailureMetric(currentSessionToolFailureStats(session));
   const guardMetric = loopGuardMetric(currentSessionLoopGuardStats(session));
   const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
   const recallMetric = sessionSearchMetric(currentSessionRecallStats(session));
@@ -283,6 +284,7 @@ function currentSessionMetrics(session: SessionState): string[] {
       priorIssues: priorIssueCount,
       toolIssues: toolIssueCount,
     }),
+    ...(toolFailureMetricText ? [toolFailureMetricText] : []),
     ...(recoveryMetric ? [recoveryMetric] : []),
     ...(guardMetric ? [guardMetric] : []),
     ...(sourceMetric ? [sourceMetric] : []),
@@ -344,6 +346,7 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const toolFailureMetricText = toolFailureMetric(currentSessionToolFailureStats(session));
   const guardMetric = loopGuardMetric(currentSessionLoopGuardStats(session));
   const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
   const recallMetric = sessionSearchMetric(currentSessionRecallStats(session));
@@ -356,6 +359,7 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
   if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
   if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
+  if (toolFailureMetricText) metrics.push(toolFailureMetricText);
   if (recoveryMetric) metrics.push(recoveryMetric);
   if (guardMetric) metrics.push(guardMetric);
   if (sourceMetric) metrics.push(sourceMetric);
@@ -373,6 +377,13 @@ function currentSessionLoopGuardStats(session: SessionState): Required<LoopGuard
     stats.forced_no_tools += toolStats.forced_no_tools ?? 0;
     return stats;
   }, emptyLoopGuardStats());
+}
+
+function currentSessionToolFailureStats(session: SessionState): Required<ToolFailureStats> {
+  return session.turns.reduce<Required<ToolFailureStats>>((stats, turn) => {
+    addCounts(stats.tool_failure_by_kind, turn.toolStats?.tool_failure_by_kind);
+    return stats;
+  }, emptyToolFailureStats());
 }
 
 function currentSessionSourceAccessStats(session: SessionState): Required<SourceAccessStats> {
@@ -504,7 +515,7 @@ function hasGuardMetric(row: SessionRowView): boolean {
 function needsAttention(row: SessionRowView): boolean {
   if (row.tone === "error" || row.tone === "warning") return true;
   if (row.status === "Blocked" || row.status === "Needs final answer") return true;
-  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Next step ") || metric.startsWith("Recovery "));
+  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Tool failures ") || metric.startsWith("Next step ") || metric.startsWith("Recovery "));
 }
 
 function usageMetrics(session: SessionSummary): string[] {
@@ -515,6 +526,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (toolRequests > 0) metrics.push(`${toolRequests} action${toolRequests === 1 ? "" : "s"}`);
   const toolErrors = session.tools?.tool_errors ?? 0;
   if (toolErrors > 0) metrics.push(`${toolErrors} issue${toolErrors === 1 ? "" : "s"}`);
+  const failureMetric = toolFailureMetric(session.tools);
+  if (failureMetric) metrics.push(failureMetric);
   const recovery = session.latest_recovery_hint ? recoveryMetric(session.latest_recovery_hint) : undefined;
   if (recovery) metrics.push(recovery);
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
@@ -542,6 +555,32 @@ function usageMetrics(session: SessionSummary): string[] {
 interface LoopGuardStats {
   loop_guard_interventions?: number;
   forced_no_tools?: number;
+}
+
+interface ToolFailureStats {
+  tool_failure_by_kind?: Record<string, number>;
+}
+
+function emptyToolFailureStats(): Required<ToolFailureStats> {
+  return { tool_failure_by_kind: {} };
+}
+
+function addCounts(target: Record<string, number>, incoming: Record<string, number> | undefined): void {
+  if (!incoming) return;
+  for (const [key, value] of Object.entries(incoming)) {
+    if (!key || !Number.isFinite(value) || value <= 0) continue;
+    target[key] = (target[key] ?? 0) + value;
+  }
+}
+
+function toolFailureMetric(stats: ToolFailureStats | undefined): string | undefined {
+  const counts = Object.entries(stats?.tool_failure_by_kind ?? {})
+    .filter(([, count]) => Number.isFinite(count) && count > 0)
+    .sort(([aKind, aCount], [bKind, bCount]) => bCount - aCount || aKind.localeCompare(bKind));
+  if (counts.length === 0) return undefined;
+  const shown = counts.slice(0, 3).map(([kind, count]) => `${kind} ${count}`);
+  if (counts.length > shown.length) shown.push(`+${counts.length - shown.length} more`);
+  return `Tool failures ${shown.join(", ")}`;
 }
 
 function emptyLoopGuardStats(): Required<LoopGuardStats> {

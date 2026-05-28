@@ -177,6 +177,31 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("recovery limit 2, 1 no-tool retry");
   });
 
+  it("surfaces structured tool failure kinds in row stats and issue filtering", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "failure-kind-session",
+        durable: true,
+        latest_user_message: "inspect long run failures",
+        tools: {
+          tool_requests: 5,
+          tool_errors: 2,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          tool_failure_by_kind: {
+            loop_guard_no_budget: 3,
+            invalid_args: 1,
+          },
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Tool failures loop_guard_no_budget 3, invalid_args 1");
+    expect(rows[0].stats).toBe("2 issues · Tool failures loop_guard_no_budget 3, invalid_args 1");
+    expect(rows[0].searchText).toContain("tool failures loop_guard_no_budget 3, invalid_args 1");
+    expect(countSessionsByFilter(rows).issues).toBe(1);
+  });
+
   it("surfaces persisted plan progress in row stats and search", () => {
     const rows = buildSessionRows([
       session({
@@ -1171,6 +1196,36 @@ describe("sessionList view model", () => {
 
     expect(rows[0].stats).toBe("1 issue · Recovery limit 2, 1 no-tool retry");
     expect(rows[0].searchText).toContain("recovery limit 2, 1 no-tool retry");
+  });
+
+  it("surfaces live structured tool failure kinds in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated failed calls" } },
+        {
+          id: 3,
+          type: "turn.end",
+          data: {
+            turn_id: "t1",
+            reason: "completed",
+            tool_stats: {
+              tool_requests: 3,
+              tool_errors: 1,
+              tool_failure_by_kind: {
+                invalid_args: 1,
+                loop_guard_no_budget: 2,
+              },
+            },
+          },
+        },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("Tool failures loop_guard_no_budget 2, invalid_args 1");
+    expect(rows[0].searchText).toContain("tool failures loop_guard_no_budget 2, invalid_args 1");
   });
 
   it("surfaces unknown events as an unclassified chip in the chat list", () => {

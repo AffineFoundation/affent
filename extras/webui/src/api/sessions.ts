@@ -26,9 +26,16 @@ export interface BrowserStatsSnapshot {
 
 export interface ToolStatsSnapshot {
   tool_requests: number;
+  tool_name_canonicalized?: number;
+  tool_args_repaired?: number;
+  tool_repair_calls?: number;
   tool_errors: number;
   tool_repair_succeeded: number;
   tool_repair_failed: number;
+  tool_repair_notes?: number;
+  tool_repair_by_kind?: Record<string, number>;
+  tool_failure_by_kind?: Record<string, number>;
+  tool_duration_ms?: number;
   loop_guard_interventions?: number;
   forced_no_tools?: number;
   source_access_results?: number;
@@ -36,14 +43,19 @@ export interface ToolStatsSnapshot {
   source_access_discovery_only?: number;
   source_access_network?: number;
   source_access_dynamic_partial?: number;
+  memory_search_calls?: number;
+  memory_search_misses?: number;
   session_search_calls?: number;
   session_search_results?: number;
   session_search_context_hits?: number;
   session_search_matched_terms?: number;
+  session_search_recent_sessions?: number;
   memory_updates?: number;
   memory_update_add?: number;
   memory_update_replace?: number;
   memory_update_remove?: number;
+  tool_context_truncated?: number;
+  tool_context_omitted_bytes?: number;
 }
 
 export interface SessionToolInfo {
