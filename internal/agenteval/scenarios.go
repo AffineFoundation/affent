@@ -1986,6 +1986,60 @@ func longRunResearchCheckpointScenario() BatchScenario {
 	}
 }
 
+func longRunLoopActivationCalibrationScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-loop-activation-calibration",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{longRunRecoveryDomain},
+		SessionID:          "loop-activation-calibration",
+		EnableLoopProtocol: true,
+		Prompts: []string{
+			"请为这个 session 开启长期 loop setup，但现在不要激活 LOOP.md。你必须只问一个很短的 loop 校准问题，问题要询问 stop condition 或 pause condition，并包含标记 LOOP-CALIBRATION-Q17。不要调用工具，不要读写文件。",
+			"校准回答：Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. 请确认已收到这个校准答案，最终回答必须包含 LOOP-CALIBRATION-A17、Pause if source evidence is unavailable、repeated tool failures、objective changed。不要调用工具，不要读写文件。",
+		},
+		RequiredLoopProtocolCalibrationRequests: 1,
+		RequiredLoopProtocolCalibrations:        1,
+		RequiredTraceEventCounts: map[string]int{
+			"loop.protocol_calibration_request": 1,
+			"loop.protocol_calibration":         1,
+		},
+		RequiredFinalText: []string{
+			"LOOP-CALIBRATION-Q17",
+			"LOOP-CALIBRATION-A17",
+			"Pause if source evidence is unavailable",
+			"repeated tool failures",
+			"objective changed",
+		},
+		ForbiddenTools: []string{
+			"read_file", "repo_search", "shell", "web_fetch", "web_search",
+			"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read",
+			"write_file", "edit_file", "run_task", "subagent_run", "memory", "session_search", "plan", "loop_protocol",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"read_file":            0,
+			"repo_search":          0,
+			"shell":                0,
+			"web_fetch":            0,
+			"web_search":           0,
+			"browser_snapshot":     0,
+			"write_file":           0,
+			"edit_file":            0,
+			"run_task":             0,
+			"subagent_run":         0,
+			"memory":               0,
+			"session_search":       0,
+			"plan":                 0,
+			"loop_protocol":        0,
+			"browser_navigate":     0,
+			"browser_find":         0,
+			"browser_network":      0,
+			"browser_network_read": 0,
+		},
+		MaxParentToolCalls: 0,
+		MaxTurns:           4,
+	}
+}
+
 func liveWebResearchCheckpointEvidenceScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "live-web-research-checkpoint-evidence",

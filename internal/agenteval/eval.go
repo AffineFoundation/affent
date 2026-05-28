@@ -140,6 +140,7 @@ type BatchScenario struct {
 	SessionID                               string
 	ExecutePlan                             bool
 	EnableMemory                            bool
+	EnableLoopProtocol                      bool
 	Files                                   map[string]string
 	SetupCommands                           []string
 	VerifyCommand                           string
@@ -351,6 +352,7 @@ type DebugScenarioExpectations struct {
 	SessionID                               string                                `json:"session_id,omitempty"`
 	ExecutePlan                             bool                                  `json:"execute_plan,omitempty"`
 	EnableMemory                            bool                                  `json:"enable_memory,omitempty"`
+	EnableLoopProtocol                      bool                                  `json:"enable_loop_protocol,omitempty"`
 	VerifyCommand                           string                                `json:"verify_command,omitempty"`
 	SetupCommands                           []string                              `json:"setup_commands,omitempty"`
 	ExpectedSkill                           string                                `json:"expected_skill,omitempty"`
@@ -876,6 +878,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCrashMissingToolResultResumeScenario(),
 		longRunCrashDuplicateToolResultResumeScenario(),
 		longRunContextCompactionRetentionScenario(),
+		longRunLoopActivationCalibrationScenario(),
 		longRunResearchCheckpointScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		smallToolRepeatedReadScenario(),
@@ -1683,6 +1686,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		SessionID:                               strings.TrimSpace(s.SessionID),
 		ExecutePlan:                             s.ExecutePlan,
 		EnableMemory:                            s.EnableMemory,
+		EnableLoopProtocol:                      s.EnableLoopProtocol,
 		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
 		SetupCommands:                           compactNonEmptyStrings(s.SetupCommands),
 		ExpectedSkill:                           strings.TrimSpace(s.ExpectedSkill),
@@ -1935,6 +1939,9 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	args = appendStringFlag(args, "--eval-tools", r.RuntimeTools)
 	if r.RuntimeMemory || scenario.EnableMemory {
 		args = append(args, "--memory=true")
+	}
+	if scenario.EnableLoopProtocol {
+		args = append(args, "--loop-protocol")
 	}
 	if r.RuntimeWeb {
 		args = append(args, "--web=true", "--web-search=true")
@@ -2235,8 +2242,6 @@ func evalLoopProtocolKnownStatus(s string) string {
 
 func scenarioRequiresActiveLoopProtocol(scenario BatchScenario) bool {
 	return scenario.RequiredLoopProtocolFeeds > 0 ||
-		scenario.RequiredLoopProtocolCalibrationRequests > 0 ||
-		scenario.RequiredLoopProtocolCalibrations > 0 ||
 		len(scenario.RequiredLoopProtocolFeedModes) > 0 ||
 		len(scenario.RequiredLoopProtocolFeedMatches) > 0 ||
 		scenario.RequireLoopProtocolFullAfterCompact

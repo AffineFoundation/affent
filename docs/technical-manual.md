@@ -1036,10 +1036,10 @@ Current built-in suites:
 - `hard-agent`: harder local agent tasks such as coding, planning, and subagent workflows.
 - `long-run`: deterministic complex tasks for longer practical runs, currently
   covering stock synthesis, Bittensor subnet research, code implementation with
-  PR-style reporting, focused-task recovery, research-checkpoint visibility,
-  multi-session task recovery, no-hit recent-session anchor recovery, and
-  crash-window resume after missing, duplicate, or unexpected tool results are
-  repaired.
+  PR-style reporting, focused-task recovery, loop activation calibration,
+  research-checkpoint visibility, multi-session task recovery, no-hit
+  recent-session anchor recovery, and crash-window resume after missing,
+  duplicate, or unexpected tool results are repaired.
   The stock and subnet scenarios require reading the explicit evidence files,
   so a run cannot pass by answering only from prompt wording or stale archive
   files. The PR-style coding scenario requires reading the implementation file
@@ -1374,12 +1374,14 @@ also validates scenario-declared tool dependencies from required tool counts,
 orders, argument checks, source-access checks, session recall checks, and
 delegation checks, including recent-session recovery-anchor checks and
 command-before/after-tool ordering checks, against the selected runtime surface.
-When a scenario declares loop protocol feed/calibration requirements,
-`affenteval` also fails before model execution if the current session's active
+When a scenario declares active loop protocol feed requirements, `affenteval`
+also fails before model execution if the current session's active
 `.affent/loops/<session_id>/LOOP.md` fixture is missing or explicitly marked
 with a non-running status such as `draft`; it also rejects a present sidecar
 `state.json` whose lifecycle status is non-running or unreadable, so long-run
-protocol regressions do not get confused with a misauthored eval fixture. These
+protocol regressions do not get confused with a misauthored eval fixture.
+Calibration-only setup scenarios are allowed to start from a draft protocol and
+use `--loop-protocol` so the trace can prove the ask/wait/answer path. These
 pre-run failures are grouped under `loop_protocol_fixture` in batch failure
 kinds and emit the `loop_protocol:fixture` debug-brief tag, which the built-in
 `longrun` quality profile treats as a zero-tolerance setup regression.

@@ -398,6 +398,23 @@ func TestBatchRunnerRejectsMultiTurnWithoutSessionID(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolCalibrationExpectationDoesNotRequireActiveFixture(t *testing.T) {
+	calibrationOnly := BatchScenario{
+		Name:                                    "loop-calibration-only",
+		SessionID:                               "loop-calibration-only",
+		RequiredLoopProtocolCalibrationRequests: 1,
+		RequiredLoopProtocolCalibrations:        1,
+	}
+	if scenarioRequiresActiveLoopProtocol(calibrationOnly) {
+		t.Fatal("calibration-only setup expectations should not require a pre-active LOOP.md fixture")
+	}
+	withFeed := calibrationOnly
+	withFeed.RequiredLoopProtocolFeeds = 1
+	if !scenarioRequiresActiveLoopProtocol(withFeed) {
+		t.Fatal("loop protocol feed expectations should require an active LOOP.md fixture")
+	}
+}
+
 func TestBatchRunnerRejectsLoopProtocolExpectationWithoutProtocolFile(t *testing.T) {
 	res := (BatchRunner{WorkRoot: t.TempDir()}).Run(context.Background(), BatchScenario{
 		Name:                      "loop-missing",
@@ -1500,8 +1517,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 16 {
-		t.Fatalf("long-run suite size = %d, want 16", len(scenarios))
+	if len(scenarios) != 17 {
+		t.Fatalf("long-run suite size = %d, want 17", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1915,6 +1932,37 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(compactionRetention.ForbiddenTools, "shell") {
 		t.Fatalf("compaction retention ForbiddenTools = %#v, want shell", compactionRetention.ForbiddenTools)
+	}
+
+	loopCalibration, ok := seen["longrun-loop-activation-calibration"]
+	if !ok {
+		t.Fatalf("long-run suite missing loop activation calibration scenario")
+	}
+	if !loopCalibration.EnableLoopProtocol || loopCalibration.SessionID != "loop-activation-calibration" {
+		t.Fatalf("loop calibration fields = enable:%v session:%q", loopCalibration.EnableLoopProtocol, loopCalibration.SessionID)
+	}
+	if len(loopCalibration.Prompts) != 2 ||
+		loopCalibration.RequiredLoopProtocolCalibrationRequests != 1 ||
+		loopCalibration.RequiredLoopProtocolCalibrations != 1 ||
+		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration_request"] != 1 ||
+		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
+		t.Fatalf("loop calibration expectations = prompts:%d requests:%d answers:%d trace:%#v", len(loopCalibration.Prompts), loopCalibration.RequiredLoopProtocolCalibrationRequests, loopCalibration.RequiredLoopProtocolCalibrations, loopCalibration.RequiredTraceEventCounts)
+	}
+	for _, want := range []string{"LOOP-CALIBRATION-Q17", "LOOP-CALIBRATION-A17", "Pause if source evidence is unavailable", "repeated tool failures", "objective changed"} {
+		if !stringSliceContains(loopCalibration.RequiredFinalText, want) {
+			t.Fatalf("loop calibration RequiredFinalText = %#v, want %q", loopCalibration.RequiredFinalText, want)
+		}
+	}
+	if !stringSliceContains(loopCalibration.ForbiddenTools, "loop_protocol") || loopCalibration.MaxParentToolCalls != 0 {
+		t.Fatalf("loop calibration tool constraints = forbidden:%#v max_parent:%d", loopCalibration.ForbiddenTools, loopCalibration.MaxParentToolCalls)
+	}
+	loopCalibrationCaps := ExpectationCapabilityNames(debugScenarioExpectations(loopCalibration))
+	if !stringSliceContains(loopCalibrationCaps, "loop_protocol") ||
+		!stringSliceContains(loopCalibrationCaps, "trace") {
+		t.Fatalf("loop calibration expectation capabilities = %#v, want loop protocol and trace", loopCalibrationCaps)
+	}
+	if scenarioRequiresActiveLoopProtocol(loopCalibration) {
+		t.Fatal("loop calibration setup scenario must not require a pre-active LOOP.md fixture")
 	}
 
 	researchCheckpoint, ok := seen["longrun-research-checkpoint"]
@@ -3738,13 +3786,14 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
-		Prompt:          "fix it",
-		SessionID:       "planned",
-		ExecutePlan:     true,
-		EnableMemory:    true,
-		MaxTurns:        3,
-		CompactTrigger:  6,
-		CompactKeepLast: 3,
+		Prompt:             "fix it",
+		SessionID:          "planned",
+		ExecutePlan:        true,
+		EnableMemory:       true,
+		EnableLoopProtocol: true,
+		MaxTurns:           3,
+		CompactTrigger:     6,
+		CompactKeepLast:    3,
 	}, "fix it")
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{
@@ -3766,6 +3815,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--eval-all-tools",
 		"--eval-tools\x00read_file,shell",
 		"--memory=true",
+		"--loop-protocol",
 		"--web=true",
 		"--web-search=true",
 		"--browser=true",

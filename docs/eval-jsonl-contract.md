@@ -356,6 +356,8 @@ Scenario records describe one eval case:
   `required_loop_protocol_calibration_requests` and
   `required_loop_protocol_calibrations`, which is useful for proving that a
   loop asked for calibration and then recorded user input before activation.
+  Calibration-only setup scenarios may start from a draft protocol; active
+  `LOOP.md` fixture preflight is reserved for feed requirements.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.
