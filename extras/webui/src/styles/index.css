@@ -2821,6 +2821,59 @@ button.workbench-context-runtime-item:focus-visible {
   line-height: 1.45;
 }
 
+.session-loop-details {
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.72);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(255, 255, 255, 0.58);
+  overflow: hidden;
+}
+
+.session-loop-details > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+  list-style: none;
+  padding: 0 10px;
+}
+
+.session-loop-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-loop-details > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.54;
+  transform: rotate(45deg);
+  transition: transform 140ms ease;
+}
+
+.session-loop-details[open] > summary {
+  border-bottom: 1px solid rgba(217, 224, 232, 0.72);
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.session-loop-details[open] > summary::after {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.session-loop-details > .session-loop-checklist,
+.session-loop-details > .session-loop-events,
+.session-loop-details > .session-loop-preview,
+.session-loop-details > .session-loop-protocol {
+  margin: 8px;
+}
+
 .session-loop-setup {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

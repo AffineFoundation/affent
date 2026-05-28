@@ -1667,9 +1667,7 @@ export function App() {
             onUpdateSchedule={handleUpdateSchedule}
             onDeleteSchedule={handleDeleteSchedule}
           />
-        ) : (
-          <WorkbenchEmpty title="No timers" detail="No scheduled loop ticks or check-ins are attached to this chat." />
-        )}
+        ) : null}
       </>
     );
   }

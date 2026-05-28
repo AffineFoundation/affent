@@ -76,11 +76,10 @@ describe("SessionLoopPanel", () => {
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("A calibration answer is recorded");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("Current Situation <= 1200 chars");
-    expect(panel).toHaveTextContent("Setup question");
-    expect(panel).toHaveTextContent("What should pause this loop?");
     expect(panel).toHaveTextContent("Calibration");
     expect(panel).toHaveTextContent("1 calibration answer");
     expect(panel).toHaveTextContent("Stop when source evidence is weak.");
+    expect(panel).not.toHaveTextContent("Setup questionWhat should pause this loop?");
     expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Review and activate in chat");
     expect(screen.getByRole("button", { name: "Review in chat" })).toBeInTheDocument();
   });

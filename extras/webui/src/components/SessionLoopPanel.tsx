@@ -114,7 +114,6 @@ export function SessionLoopPanel({
     >
       <div className="session-plan-body session-loop-body">
         <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
-        <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
         <LoopNextStep
           status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"}
           goal={goal}
@@ -127,7 +126,6 @@ export function SessionLoopPanel({
           {path ? <LoopField label="File" value={path} mono /> : null}
           {feeds > 0 ? <LoopField label="Feeds" value={String(feeds)} /> : null}
           {updates > 0 ? <LoopField label="Updates" value={String(updates)} /> : null}
-          {calibrationQuestion ? <LoopField label="Setup question" value={calibrationQuestion} /> : null}
           {calibration ? <LoopField label="Calibration" value={calibration} /> : null}
           {memory ? <LoopField label="Memory" value={memory} /> : null}
           {compaction ? <LoopField label="Compaction" value={compaction} /> : null}
@@ -136,11 +134,25 @@ export function SessionLoopPanel({
           ) : null}
           {event ? <LoopField label="Latest" value={event} /> : null}
         </div>
-        {preview ? <p className="session-loop-preview">{preview}</p> : null}
-        {protocol ? (
-          <pre className="session-loop-protocol" data-testid="session-loop-protocol">{protocol}</pre>
+        <details className="session-loop-details" data-testid="session-loop-progress">
+          <summary>Activation flow</summary>
+          <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
+        </details>
+        {preview || protocol ? (
+          <details className="session-loop-details" data-testid="session-loop-protocol-details">
+            <summary>{protocol ? "LOOP.md" : "LOOP.md preview"}</summary>
+            {preview ? <p className="session-loop-preview">{preview}</p> : null}
+            {protocol ? (
+              <pre className="session-loop-protocol" data-testid="session-loop-protocol">{protocol}</pre>
+            ) : null}
+          </details>
         ) : null}
-        {events && events.length > 0 ? <LoopEvents events={events} /> : null}
+        {events && events.length > 0 ? (
+          <details className="session-loop-details" data-testid="session-loop-events-details">
+            <summary>Recent loop events</summary>
+            <LoopEvents events={events} />
+          </details>
+        ) : null}
         {protocolError ? (
           <div className="session-plan-empty error" role="alert">
             {protocolError}
