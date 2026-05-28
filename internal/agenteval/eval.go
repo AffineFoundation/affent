@@ -154,6 +154,7 @@ type BatchScenario struct {
 	RequiredCommandCounts                   map[string]int
 	RequiredToolCounts                      map[string]int
 	RequiredToolFailureKindCounts           map[string]int
+	MaxToolFailureKindCounts                map[string]int
 	RequiredToolStatsAtLeast                map[string]int
 	RequiredTraceEventCounts                map[string]int
 	RequiredConversationRepairStatsAtLeast  map[string]int
@@ -371,6 +372,7 @@ type DebugScenarioExpectations struct {
 	RequiredCommandCounts                   map[string]int                        `json:"required_command_counts,omitempty"`
 	RequiredToolCounts                      map[string]int                        `json:"required_tool_counts,omitempty"`
 	RequiredToolFailureKindCounts           map[string]int                        `json:"required_tool_failure_kind_counts,omitempty"`
+	MaxToolFailureKindCounts                map[string]int                        `json:"max_tool_failure_kind_counts,omitempty"`
 	RequiredToolStatsAtLeast                map[string]int                        `json:"required_tool_stats_at_least,omitempty"`
 	RequiredTraceEventCounts                map[string]int                        `json:"required_trace_event_counts,omitempty"`
 	RequiredConversationRepairStatsAtLeast  map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
@@ -1748,6 +1750,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredCommandCounts:                   cloneStringIntMap(s.RequiredCommandCounts),
 		RequiredToolCounts:                      cloneStringIntMap(s.RequiredToolCounts),
 		RequiredToolFailureKindCounts:           cloneStringIntMap(s.RequiredToolFailureKindCounts),
+		MaxToolFailureKindCounts:                cloneStringIntMap(s.MaxToolFailureKindCounts),
 		RequiredToolStatsAtLeast:                cloneStringIntMap(s.RequiredToolStatsAtLeast),
 		RequiredTraceEventCounts:                cloneStringIntMap(s.RequiredTraceEventCounts),
 		RequiredConversationRepairStatsAtLeast:  cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
@@ -2469,6 +2472,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, kind := range sortedStringMapKeys(scenario.RequiredToolFailureKindCounts) {
 		checks = append(checks, ToolFailureKindAtLeast(kind, scenario.RequiredToolFailureKindCounts[kind]))
+	}
+	for _, kind := range sortedStringMapKeys(scenario.MaxToolFailureKindCounts) {
+		checks = append(checks, ToolFailureKindAtMost(kind, scenario.MaxToolFailureKindCounts[kind]))
 	}
 	for _, field := range sortedStringMapKeys(scenario.RequiredToolStatsAtLeast) {
 		checks = append(checks, ToolStatsAtLeast(field, scenario.RequiredToolStatsAtLeast[field]))

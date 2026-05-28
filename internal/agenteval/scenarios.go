@@ -3225,6 +3225,11 @@ if __name__ == "__main__":
 			"session_search_context_hits":  1,
 			"session_search_matched_terms": 1,
 		},
+		MaxToolFailureKindCounts: map[string]int{
+			"invalid_args":         0,
+			"loop_guard_call_cap":  0,
+			"loop_guard_no_budget": 0,
+		},
 		RequiredSessionSearch: []SessionSearchRequirement{
 			{
 				QueryContains:   "INTEGRATED-HANDOFF-26",

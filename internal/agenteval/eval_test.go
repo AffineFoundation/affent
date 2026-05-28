@@ -1085,6 +1085,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolFailureKindCounts: map[string]int{
 			"invalid_args": 1,
 		},
+		MaxToolFailureKindCounts: map[string]int{
+			"loop_guard_call_cap": 0,
+		},
 		RequiredToolStatsAtLeast: map[string]int{
 			"memory_updates": 1,
 		},
@@ -1167,6 +1170,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_called_before:read_file->edit_file",
 		"tool_called_at_least:plan:2",
 		"tool_failure_kind_at_least:invalid_args:1",
+		"tool_failure_kind_at_most:loop_guard_call_cap:0",
 		"tool_stats_at_least:memory_updates:1",
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
@@ -1891,6 +1895,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	for _, field := range []string{"memory_updates", "memory_update_add", "memory_search_calls", "session_search_calls", "session_search_results"} {
 		if integrated.RequiredToolStatsAtLeast[field] != 1 {
 			t.Fatalf("integrated memory recovery RequiredToolStatsAtLeast = %#v, want %s=1", integrated.RequiredToolStatsAtLeast, field)
+		}
+	}
+	for _, kind := range []string{"invalid_args", "loop_guard_call_cap", "loop_guard_no_budget"} {
+		if max, ok := integrated.MaxToolFailureKindCounts[kind]; !ok || max != 0 {
+			t.Fatalf("integrated memory recovery MaxToolFailureKindCounts = %#v, want %s=0", integrated.MaxToolFailureKindCounts, kind)
 		}
 	}
 	if len(integrated.RequiredSessionSearch) != 1 ||
