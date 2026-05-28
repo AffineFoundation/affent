@@ -55,6 +55,8 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-expectation-domain-pass-rate=0.800",
 		"min-each-expectation-domain-pass-rate=0.500",
 		"min-expectation-domain-source-access-verified-rate=web_evidence=0.900",
+		"max-focused-task-error-rate=0.100",
+		"max-subagent-error-rate=0.100",
 		"max-source-dynamic-partial-rate=0.200",
 		"max-expectation-domain-avg-total-tokens=web_evidence=120000.000",
 		"max-expectation-domain-avg-tool-calls=web_evidence=18.000",
@@ -71,7 +73,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
 		"require-expectation-capability=longrun_recovery,loop_protocol,session_search",
-		"require-expectation-capability=browser,source_access,web",
+		"require-expectation-capability=browser,delegated_source_evidence,source_access,web",
 		"require-expectation-domain=bittensor,code_pr,longrun_recovery,market",
 		"require-expectation-domain=web_evidence",
 	} {
@@ -960,6 +962,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MinEachExpectationCapabilityPassRate == nil || *webGates.MinEachExpectationCapabilityPassRate != 0.50 ||
 		webGates.MinExpectationDomainPassRate == nil || *webGates.MinExpectationDomainPassRate != 0.80 ||
 		webGates.MinEachExpectationDomainPassRate == nil || *webGates.MinEachExpectationDomainPassRate != 0.50 ||
+		webGates.MaxFocusedTaskErrorRate == nil || *webGates.MaxFocusedTaskErrorRate != 0.10 ||
+		webGates.MaxSubagentErrorRate == nil || *webGates.MaxSubagentErrorRate != 0.10 ||
 		webGates.MaxAvgContextRemovedMessages == nil || *webGates.MaxAvgContextRemovedMessages != 80 ||
 		webGates.MaxAvgContextSummaryBytes == nil || *webGates.MaxAvgContextSummaryBytes != 20000 ||
 		webGates.MaxAvgContextSummaryMissing == nil || *webGates.MaxAvgContextSummaryMissing != 0 ||
@@ -987,7 +991,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["research_checkpoint:no_external_evidence"] != 0 ||
 		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
-		!reflect.DeepEqual(webGates.RequiredExpectationCapabilities, []string{"browser", "source_access", "web"}) ||
+		!reflect.DeepEqual(webGates.RequiredExpectationCapabilities, []string{"browser", "delegated_source_evidence", "source_access", "web"}) ||
 		!reflect.DeepEqual(webGates.RequiredExpectationDomains, []string{"web_evidence"}) {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}

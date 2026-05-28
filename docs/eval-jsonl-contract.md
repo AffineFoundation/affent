@@ -710,7 +710,10 @@ Summary records aggregate all scenario records from the same process:
   The built-in `web-evidence` profile enables these gates for the
   `web_evidence` domain so mixed live-web batches cannot hide weak current-web
   evidence, tool errors, loop-guard churn, runtime errors, or runaway cost
-  behind unrelated passing domains.
+  behind unrelated passing domains. The same profile also requires the
+  `delegated_source_evidence` expectation capability and gates delegated child
+  error rates so focused web research remains an explicit, source-backed path
+  rather than an unobserved convenience tool.
   `--require-expectation-domain` gates declared workload-domain coverage
   independently from capability coverage, so CI can require at least one
   realistic market, Bittensor, code/PR, web-evidence, or long-run recovery

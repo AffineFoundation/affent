@@ -1134,12 +1134,15 @@ regressions. Use
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads, browser network refs that were not followed by
 `browser_network_read`, or dynamic gaps without an explicit evidence-quality
-defer decision. The profile requires `browser`, `source_access`, and `web`
-expectation capability coverage so accidental non-web batches fail before their
-source-quality rates are interpreted, and it requires the `web_evidence`
-task-domain label so source-quality gates are tied to at least one current-web
-workload. It also gates domain-level expectation pass rate, so a web-evidence
-batch cannot hide failed current-web workloads behind unrelated passing cases.
+defer decision. The profile requires `browser`, `source_access`, `web`, and
+`delegated_source_evidence` expectation capability coverage so accidental
+non-web batches fail before their source-quality rates are interpreted and the
+focused-research evidence path remains covered. It also gates focused-task and
+subagent error rates for delegated web research, and it requires the
+`web_evidence` task-domain label so source-quality gates are tied to at least
+one current-web workload. It also gates domain-level expectation pass rate, so a
+web-evidence batch cannot hide failed current-web workloads behind unrelated
+passing cases.
 The profile additionally scopes the same source-quality, runtime-error,
 tool-error, loop-guard, tool-call, and token-cost limits to the `web_evidence`
 workload domain, so mixed live-web batches cannot hide a weak current-web
