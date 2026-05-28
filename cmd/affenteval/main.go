@@ -216,45 +216,51 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("affenteval", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
-		debugBriefTagGates     stringFloatMapFlag
-		expectationCapGates    stringSetFlag
-		expectationDomainGates stringSetFlag
-		list                   = fs.Bool("list", false, "list built-in scenarios and exit")
-		listSuites             = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
-		listQualityProfiles    = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
-		suite                  = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
-		scenarioCSV            = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
-		prompt                 = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
-		promptFile             = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
-		adHocName              = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
-		adHocSessionID         = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
-		adHocMaxTurns          = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
-		adHocVerify            = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
-		repoRoot               = fs.String("repo-root", ".", "Affent repository root")
-		workRoot               = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
-		baseURL                = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
-		apiKey                 = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
-		model                  = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
-		providerLabel          = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
-		temperature            = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
-		topP                   = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
-		maxTokens              = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
-		seed                   = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
-		executor               = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
-		runtimeEvalMode        = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
-		runtimeTools           = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
-		runtimeAllTools        = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
-		runtimeMemory          = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
-		runtimeWeb             = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
-		runtimeBrowser         = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
-		runtimeMCPConfig       = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful to opt into MCP only")
-		traceDeltas            = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
-		timeout                = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
-		verifierOutputCap      = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
-		jsonl                  = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
-		keepWorkspaces         = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
-		qualityProfile         = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
-		gates                  = qualityGateConfig{
+		debugBriefTagGates                        stringFloatMapFlag
+		expectationCapGates                       stringSetFlag
+		expectationDomainGates                    stringSetFlag
+		expectationDomainMinVerifiedGates         stringFloatMapFlag
+		expectationDomainMaxAvgTokensGates        stringFloatMapFlag
+		expectationDomainMaxAvgToolCallsGates     stringFloatMapFlag
+		expectationDomainMaxAvgRuntimeErrorsGates stringFloatMapFlag
+		expectationDomainMaxToolErrorGates        stringFloatMapFlag
+		expectationDomainMaxLoopGuardGates        stringFloatMapFlag
+		list                                      = fs.Bool("list", false, "list built-in scenarios and exit")
+		listSuites                                = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
+		listQualityProfiles                       = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
+		suite                                     = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
+		scenarioCSV                               = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
+		prompt                                    = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
+		promptFile                                = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
+		adHocName                                 = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
+		adHocSessionID                            = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
+		adHocMaxTurns                             = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
+		adHocVerify                               = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
+		repoRoot                                  = fs.String("repo-root", ".", "Affent repository root")
+		workRoot                                  = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
+		baseURL                                   = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
+		apiKey                                    = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
+		model                                     = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
+		providerLabel                             = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
+		temperature                               = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		topP                                      = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
+		maxTokens                                 = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
+		seed                                      = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
+		executor                                  = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
+		runtimeEvalMode                           = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
+		runtimeTools                              = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
+		runtimeAllTools                           = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
+		runtimeMemory                             = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
+		runtimeWeb                                = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
+		runtimeBrowser                            = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
+		runtimeMCPConfig                          = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful to opt into MCP only")
+		traceDeltas                               = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
+		timeout                                   = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
+		verifierOutputCap                         = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
+		jsonl                                     = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
+		keepWorkspaces                            = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
+		qualityProfile                            = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
+		gates                                     = qualityGateConfig{
 			MinPassRate:                           fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:                     fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:                   fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
@@ -300,6 +306,12 @@ func run(args []string) int {
 	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
 	fs.Var(&expectationCapGates, "require-expectation-capability", "optional repeatable quality gate: require at least one scenario declaring this expectation capability; accepts comma-separated values")
 	fs.Var(&expectationDomainGates, "require-expectation-domain", "optional repeatable quality gate: require at least one scenario declaring this task domain; accepts comma-separated values")
+	fs.Var(&expectationDomainMinVerifiedGates, "min-expectation-domain-source-access-verified-rate", "optional repeatable quality gate: minimum verified SourceAccess rate for a task domain, as domain=rate")
+	fs.Var(&expectationDomainMaxAvgTokensGates, "max-expectation-domain-avg-total-tokens", "optional repeatable quality gate: maximum average total tokens for a task domain, as domain=tokens")
+	fs.Var(&expectationDomainMaxAvgToolCallsGates, "max-expectation-domain-avg-tool-calls", "optional repeatable quality gate: maximum average tool calls for a task domain, as domain=count")
+	fs.Var(&expectationDomainMaxAvgRuntimeErrorsGates, "max-expectation-domain-avg-runtime-errors", "optional repeatable quality gate: maximum average runtime errors for a task domain, as domain=count")
+	fs.Var(&expectationDomainMaxToolErrorGates, "max-expectation-domain-tool-error-rate", "optional repeatable quality gate: maximum tool error rate for a task domain, as domain=rate")
+	fs.Var(&expectationDomainMaxLoopGuardGates, "max-expectation-domain-loop-guard-intervention-rate", "optional repeatable quality gate: maximum loop guard intervention rate for a task domain, as domain=rate")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
 
@@ -321,6 +333,24 @@ success and trace-level process quality.`)
 	}
 	if len(expectationDomainGates) > 0 {
 		gates.RequiredExpectationDomains = expectationDomainGates.values()
+	}
+	if len(expectationDomainMinVerifiedGates) > 0 {
+		gates.MinExpectationDomainSourceAccessVerifiedRates = expectationDomainMinVerifiedGates.clone()
+	}
+	if len(expectationDomainMaxAvgTokensGates) > 0 {
+		gates.MaxExpectationDomainAvgTotalTokens = expectationDomainMaxAvgTokensGates.clone()
+	}
+	if len(expectationDomainMaxAvgToolCallsGates) > 0 {
+		gates.MaxExpectationDomainAvgToolCalls = expectationDomainMaxAvgToolCallsGates.clone()
+	}
+	if len(expectationDomainMaxAvgRuntimeErrorsGates) > 0 {
+		gates.MaxExpectationDomainAvgRuntimeErrors = expectationDomainMaxAvgRuntimeErrorsGates.clone()
+	}
+	if len(expectationDomainMaxToolErrorGates) > 0 {
+		gates.MaxExpectationDomainToolErrorRates = expectationDomainMaxToolErrorGates.clone()
+	}
+	if len(expectationDomainMaxLoopGuardGates) > 0 {
+		gates.MaxExpectationDomainLoopGuardInterventionRates = expectationDomainMaxLoopGuardGates.clone()
 	}
 	if *listQualityProfiles {
 		printQualityGateProfiles(os.Stdout)
@@ -467,49 +497,55 @@ success and trace-level process quality.`)
 }
 
 type qualityGateConfig struct {
-	MinPassRate                           *float64
-	MinCompletionRate                     *float64
-	MinMemoryUpdateRate                   *float64
-	MinLoopProtocolFeedRate               *float64
-	MinRuntimeSurfaceRate                 *float64
-	MinTraceEventRate                     *float64
-	MinSourceNetworkRate                  *float64
-	MinSourceAccessVerifiedRate           *float64
-	MinExpectationCapabilityPassRate      *float64
-	MinEachExpectationCapabilityPassRate  *float64
-	MinExpectationDomainPassRate          *float64
-	MinEachExpectationDomainPassRate      *float64
-	MinSessionSearchContextHitRate        *float64
-	MinSessionSearchMatchedTermsPerCall   *float64
-	MinToolRepairSuccessRate              *float64
-	MinVerifierPassRate                   *float64
-	MaxFocusedTaskErrorRate               *float64
-	MaxForcedNoToolsRate                  *float64
-	MaxLoopGuardInterventionRate          *float64
-	MaxPlanErrorRate                      *float64
-	MaxMemorySearchMissRate               *float64
-	MaxSourceDiscoveryOnlyRate            *float64
-	MaxSourceDynamicPartialRate           *float64
-	MaxSubagentErrorRate                  *float64
-	MaxToolErrorRate                      *float64
-	MaxToolContextTruncationRate          *float64
-	MaxToolResultTruncationRate           *float64
-	MaxAvgRuntimeErrors                   *float64
-	MaxAvgContextCompactions              *float64
-	MaxAvgReactiveCompactions             *float64
-	MaxAvgContextRemovedMessages          *float64
-	MaxAvgContextSummaryBytes             *float64
-	MaxAvgContextSummaryMissing           *float64
-	MaxAvgContextSummaryEmpty             *float64
-	MaxAvgContextInjections               *float64
-	MaxAvgContextInjectionBytes           *float64
-	MaxAvgContextInjectionEstimatedTokens *float64
-	MaxAvgToolCalls                       *float64
-	MaxAvgDurationMS                      *float64
-	MaxAvgTotalTokens                     *float64
-	MaxDebugBriefTagRates                 map[string]float64
-	RequiredExpectationCapabilities       []string
-	RequiredExpectationDomains            []string
+	MinPassRate                                    *float64
+	MinCompletionRate                              *float64
+	MinMemoryUpdateRate                            *float64
+	MinLoopProtocolFeedRate                        *float64
+	MinRuntimeSurfaceRate                          *float64
+	MinTraceEventRate                              *float64
+	MinSourceNetworkRate                           *float64
+	MinSourceAccessVerifiedRate                    *float64
+	MinExpectationCapabilityPassRate               *float64
+	MinEachExpectationCapabilityPassRate           *float64
+	MinExpectationDomainPassRate                   *float64
+	MinEachExpectationDomainPassRate               *float64
+	MinSessionSearchContextHitRate                 *float64
+	MinSessionSearchMatchedTermsPerCall            *float64
+	MinToolRepairSuccessRate                       *float64
+	MinVerifierPassRate                            *float64
+	MaxFocusedTaskErrorRate                        *float64
+	MaxForcedNoToolsRate                           *float64
+	MaxLoopGuardInterventionRate                   *float64
+	MaxPlanErrorRate                               *float64
+	MaxMemorySearchMissRate                        *float64
+	MaxSourceDiscoveryOnlyRate                     *float64
+	MaxSourceDynamicPartialRate                    *float64
+	MaxSubagentErrorRate                           *float64
+	MaxToolErrorRate                               *float64
+	MaxToolContextTruncationRate                   *float64
+	MaxToolResultTruncationRate                    *float64
+	MaxAvgRuntimeErrors                            *float64
+	MaxAvgContextCompactions                       *float64
+	MaxAvgReactiveCompactions                      *float64
+	MaxAvgContextRemovedMessages                   *float64
+	MaxAvgContextSummaryBytes                      *float64
+	MaxAvgContextSummaryMissing                    *float64
+	MaxAvgContextSummaryEmpty                      *float64
+	MaxAvgContextInjections                        *float64
+	MaxAvgContextInjectionBytes                    *float64
+	MaxAvgContextInjectionEstimatedTokens          *float64
+	MaxAvgToolCalls                                *float64
+	MaxAvgDurationMS                               *float64
+	MaxAvgTotalTokens                              *float64
+	MaxDebugBriefTagRates                          map[string]float64
+	MinExpectationDomainSourceAccessVerifiedRates  map[string]float64
+	MaxExpectationDomainAvgTotalTokens             map[string]float64
+	MaxExpectationDomainAvgToolCalls               map[string]float64
+	MaxExpectationDomainAvgRuntimeErrors           map[string]float64
+	MaxExpectationDomainToolErrorRates             map[string]float64
+	MaxExpectationDomainLoopGuardInterventionRates map[string]float64
+	RequiredExpectationCapabilities                []string
+	RequiredExpectationDomains                     []string
 }
 
 type qualityGateProfileDefinition struct {
@@ -689,6 +725,21 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 		}
 		lines = append(lines, fmt.Sprintf("max-debug-brief-tag-rate=%s=%s", tag, formatGateFloat(value)))
 	}
+	addMap := func(name string, values map[string]float64) {
+		for _, key := range sortedFloatMapKeys(values) {
+			value := values[key]
+			if value < 0 {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("%s=%s=%s", name, key, formatGateFloat(value)))
+		}
+	}
+	addMap("min-expectation-domain-source-access-verified-rate", g.MinExpectationDomainSourceAccessVerifiedRates)
+	addMap("max-expectation-domain-avg-total-tokens", g.MaxExpectationDomainAvgTotalTokens)
+	addMap("max-expectation-domain-avg-tool-calls", g.MaxExpectationDomainAvgToolCalls)
+	addMap("max-expectation-domain-avg-runtime-errors", g.MaxExpectationDomainAvgRuntimeErrors)
+	addMap("max-expectation-domain-tool-error-rate", g.MaxExpectationDomainToolErrorRates)
+	addMap("max-expectation-domain-loop-guard-intervention-rate", g.MaxExpectationDomainLoopGuardInterventionRates)
 	if len(g.RequiredExpectationCapabilities) > 0 {
 		lines = append(lines, fmt.Sprintf("require-expectation-capability=%s", strings.Join(g.RequiredExpectationCapabilities, ",")))
 	}
@@ -765,6 +816,24 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 		}
 		g.MaxDebugBriefTagRates = profileTags
 	}
+	applyMap := func(name string, dst *map[string]float64, src map[string]float64) {
+		if len(src) == 0 {
+			return
+		}
+		profileValues := cloneStringFloatMap(src)
+		if flagSet != nil && flagSet(name) {
+			for key, threshold := range *dst {
+				profileValues[key] = threshold
+			}
+		}
+		*dst = profileValues
+	}
+	applyMap("min-expectation-domain-source-access-verified-rate", &g.MinExpectationDomainSourceAccessVerifiedRates, profileConfig.MinExpectationDomainSourceAccessVerifiedRates)
+	applyMap("max-expectation-domain-avg-total-tokens", &g.MaxExpectationDomainAvgTotalTokens, profileConfig.MaxExpectationDomainAvgTotalTokens)
+	applyMap("max-expectation-domain-avg-tool-calls", &g.MaxExpectationDomainAvgToolCalls, profileConfig.MaxExpectationDomainAvgToolCalls)
+	applyMap("max-expectation-domain-avg-runtime-errors", &g.MaxExpectationDomainAvgRuntimeErrors, profileConfig.MaxExpectationDomainAvgRuntimeErrors)
+	applyMap("max-expectation-domain-tool-error-rate", &g.MaxExpectationDomainToolErrorRates, profileConfig.MaxExpectationDomainToolErrorRates)
+	applyMap("max-expectation-domain-loop-guard-intervention-rate", &g.MaxExpectationDomainLoopGuardInterventionRates, profileConfig.MaxExpectationDomainLoopGuardInterventionRates)
 	if len(profileConfig.RequiredExpectationCapabilities) > 0 {
 		profileCapabilities := cloneStringSlice(profileConfig.RequiredExpectationCapabilities)
 		if flagSet != nil && flagSet("require-expectation-capability") {
@@ -2105,6 +2174,22 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 			return fmt.Errorf("--max-debug-brief-tag-rate[%s] must be between 0 and 1", tag)
 		}
 	}
+	for _, gate := range []struct {
+		name   string
+		values map[string]float64
+		rate   bool
+	}{
+		{"--min-expectation-domain-source-access-verified-rate", g.MinExpectationDomainSourceAccessVerifiedRates, true},
+		{"--max-expectation-domain-avg-total-tokens", g.MaxExpectationDomainAvgTotalTokens, false},
+		{"--max-expectation-domain-avg-tool-calls", g.MaxExpectationDomainAvgToolCalls, false},
+		{"--max-expectation-domain-avg-runtime-errors", g.MaxExpectationDomainAvgRuntimeErrors, false},
+		{"--max-expectation-domain-tool-error-rate", g.MaxExpectationDomainToolErrorRates, true},
+		{"--max-expectation-domain-loop-guard-intervention-rate", g.MaxExpectationDomainLoopGuardInterventionRates, true},
+	} {
+		if err := validateStringFloatGateMap(gate.name, gate.values, gate.rate); err != nil {
+			return err
+		}
+	}
 	for _, cap := range g.RequiredExpectationCapabilities {
 		if strings.TrimSpace(cap) == "" {
 			return fmt.Errorf("--require-expectation-capability value must be non-empty")
@@ -2113,6 +2198,30 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 	for _, domain := range g.RequiredExpectationDomains {
 		if strings.TrimSpace(domain) == "" {
 			return fmt.Errorf("--require-expectation-domain value must be non-empty")
+		}
+	}
+	return nil
+}
+
+func validateStringFloatGateMap(name string, values map[string]float64, rate bool) error {
+	for key, value := range values {
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("%s domain must be non-empty", name)
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return fmt.Errorf("%s[%s] must be finite", name, key)
+		}
+		if value < 0 {
+			if value == -1 {
+				continue
+			}
+			if rate {
+				return fmt.Errorf("%s[%s] must be disabled with -1 or set between 0 and 1", name, key)
+			}
+			return fmt.Errorf("%s[%s] must be disabled with -1 or set to a non-negative value", name, key)
+		}
+		if rate && value > 1 {
+			return fmt.Errorf("%s[%s] must be between 0 and 1", name, key)
 		}
 	}
 	return nil
@@ -2167,6 +2276,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 			failures = append(failures, fmt.Sprintf("expectation_domain[%s] unavailable, want >= 1 scenario", domain))
 		}
 	}
+	failures = append(failures, expectationDomainMetricGateFailures(s, g)...)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMin("session_search_matched_terms_per_call", batchRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls), g.MinSessionSearchMatchedTermsPerCall, s.SessionSearchCalls > 0)
 	checkMin("tool_repair_success_rate", batchRatio(s.ToolRepairSucceeded, s.ToolRepairCalls), g.MinToolRepairSuccessRate, s.ToolRepairCalls > 0)
@@ -3084,68 +3194,74 @@ func formatPassTotalCounts(passed, total map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion                         int                `json:"schema_version"`
-	Suite                                 string             `json:"suite,omitempty"`
-	Model                                 string             `json:"model,omitempty"`
-	ProviderLabel                         string             `json:"provider_label,omitempty"`
-	Executor                              string             `json:"executor"`
-	Temperature                           string             `json:"temperature,omitempty"`
-	TopP                                  string             `json:"top_p,omitempty"`
-	MaxTokens                             string             `json:"max_tokens,omitempty"`
-	Seed                                  string             `json:"seed,omitempty"`
-	RuntimeEvalMode                       bool               `json:"runtime_eval_mode,omitempty"`
-	RuntimeTools                          string             `json:"runtime_tools,omitempty"`
-	RuntimeAllTools                       bool               `json:"runtime_all_tools,omitempty"`
-	RuntimeMemory                         bool               `json:"runtime_memory,omitempty"`
-	RuntimeWeb                            bool               `json:"runtime_web,omitempty"`
-	RuntimeBrowser                        bool               `json:"runtime_browser,omitempty"`
-	TraceDeltas                           bool               `json:"trace_deltas,omitempty"`
-	RuntimeMCP                            bool               `json:"runtime_mcp,omitempty"`
-	TimeoutMS                             int64              `json:"timeout_ms"`
-	QualityProfile                        string             `json:"quality_profile,omitempty"`
-	MinPassRate                           *float64           `json:"min_pass_rate,omitempty"`
-	MinCompletionRate                     *float64           `json:"min_completion_rate,omitempty"`
-	MinMemoryUpdateRate                   *float64           `json:"min_memory_update_rate,omitempty"`
-	MinLoopProtocolFeedRate               *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
-	MinRuntimeSurfaceRate                 *float64           `json:"min_runtime_surface_rate,omitempty"`
-	MinTraceEventRate                     *float64           `json:"min_trace_event_rate,omitempty"`
-	MinSourceNetworkRate                  *float64           `json:"min_source_network_rate,omitempty"`
-	MinSourceAccessVerifiedRate           *float64           `json:"min_source_access_verified_rate,omitempty"`
-	MinExpectationCapabilityPassRate      *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
-	MinEachExpectationCapabilityPassRate  *float64           `json:"min_each_expectation_capability_pass_rate,omitempty"`
-	MinExpectationDomainPassRate          *float64           `json:"min_expectation_domain_pass_rate,omitempty"`
-	MinEachExpectationDomainPassRate      *float64           `json:"min_each_expectation_domain_pass_rate,omitempty"`
-	MinSessionSearchContextHitRate        *float64           `json:"min_session_search_context_hit_rate,omitempty"`
-	MinSessionSearchMatchedTermsPerCall   *float64           `json:"min_session_search_matched_terms_per_call,omitempty"`
-	MinToolRepairSuccessRate              *float64           `json:"min_tool_repair_success_rate,omitempty"`
-	MinVerifierPassRate                   *float64           `json:"min_verifier_pass_rate,omitempty"`
-	MaxFocusedTaskErrorRate               *float64           `json:"max_focused_task_error_rate,omitempty"`
-	MaxForcedNoToolsRate                  *float64           `json:"max_forced_no_tools_rate,omitempty"`
-	MaxLoopGuardInterventionRate          *float64           `json:"max_loop_guard_intervention_rate,omitempty"`
-	MaxPlanErrorRate                      *float64           `json:"max_plan_error_rate,omitempty"`
-	MaxMemorySearchMissRate               *float64           `json:"max_memory_search_miss_rate,omitempty"`
-	MaxSourceDiscoveryOnlyRate            *float64           `json:"max_source_discovery_only_rate,omitempty"`
-	MaxSourceDynamicPartialRate           *float64           `json:"max_source_dynamic_partial_rate,omitempty"`
-	MaxSubagentErrorRate                  *float64           `json:"max_subagent_error_rate,omitempty"`
-	MaxToolErrorRate                      *float64           `json:"max_tool_error_rate,omitempty"`
-	MaxToolContextTruncationRate          *float64           `json:"max_tool_context_truncation_rate,omitempty"`
-	MaxToolResultTruncationRate           *float64           `json:"max_tool_result_truncation_rate,omitempty"`
-	MaxAvgRuntimeErrors                   *float64           `json:"max_avg_runtime_errors,omitempty"`
-	MaxAvgContextCompactions              *float64           `json:"max_avg_context_compactions,omitempty"`
-	MaxAvgReactiveCompactions             *float64           `json:"max_avg_reactive_context_compactions,omitempty"`
-	MaxAvgContextRemovedMessages          *float64           `json:"max_avg_context_removed_messages,omitempty"`
-	MaxAvgContextSummaryBytes             *float64           `json:"max_avg_context_summary_bytes,omitempty"`
-	MaxAvgContextSummaryMissing           *float64           `json:"max_avg_context_summary_missing,omitempty"`
-	MaxAvgContextSummaryEmpty             *float64           `json:"max_avg_context_summary_empty,omitempty"`
-	MaxAvgContextInjections               *float64           `json:"max_avg_context_injections,omitempty"`
-	MaxAvgContextInjectionBytes           *float64           `json:"max_avg_context_injection_bytes,omitempty"`
-	MaxAvgContextInjectionEstimatedTokens *float64           `json:"max_avg_context_injection_estimated_tokens,omitempty"`
-	MaxAvgToolCalls                       *float64           `json:"max_avg_tool_calls,omitempty"`
-	MaxAvgDurationMS                      *float64           `json:"max_avg_duration_ms,omitempty"`
-	MaxAvgTotalTokens                     *float64           `json:"max_avg_total_tokens,omitempty"`
-	MaxDebugBriefTagRates                 map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
-	RequiredExpectationCapabilities       []string           `json:"required_expectation_capabilities,omitempty"`
-	RequiredExpectationDomains            []string           `json:"required_expectation_domains,omitempty"`
+	SchemaVersion                                  int                `json:"schema_version"`
+	Suite                                          string             `json:"suite,omitempty"`
+	Model                                          string             `json:"model,omitempty"`
+	ProviderLabel                                  string             `json:"provider_label,omitempty"`
+	Executor                                       string             `json:"executor"`
+	Temperature                                    string             `json:"temperature,omitempty"`
+	TopP                                           string             `json:"top_p,omitempty"`
+	MaxTokens                                      string             `json:"max_tokens,omitempty"`
+	Seed                                           string             `json:"seed,omitempty"`
+	RuntimeEvalMode                                bool               `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools                                   string             `json:"runtime_tools,omitempty"`
+	RuntimeAllTools                                bool               `json:"runtime_all_tools,omitempty"`
+	RuntimeMemory                                  bool               `json:"runtime_memory,omitempty"`
+	RuntimeWeb                                     bool               `json:"runtime_web,omitempty"`
+	RuntimeBrowser                                 bool               `json:"runtime_browser,omitempty"`
+	TraceDeltas                                    bool               `json:"trace_deltas,omitempty"`
+	RuntimeMCP                                     bool               `json:"runtime_mcp,omitempty"`
+	TimeoutMS                                      int64              `json:"timeout_ms"`
+	QualityProfile                                 string             `json:"quality_profile,omitempty"`
+	MinPassRate                                    *float64           `json:"min_pass_rate,omitempty"`
+	MinCompletionRate                              *float64           `json:"min_completion_rate,omitempty"`
+	MinMemoryUpdateRate                            *float64           `json:"min_memory_update_rate,omitempty"`
+	MinLoopProtocolFeedRate                        *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
+	MinRuntimeSurfaceRate                          *float64           `json:"min_runtime_surface_rate,omitempty"`
+	MinTraceEventRate                              *float64           `json:"min_trace_event_rate,omitempty"`
+	MinSourceNetworkRate                           *float64           `json:"min_source_network_rate,omitempty"`
+	MinSourceAccessVerifiedRate                    *float64           `json:"min_source_access_verified_rate,omitempty"`
+	MinExpectationCapabilityPassRate               *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
+	MinEachExpectationCapabilityPassRate           *float64           `json:"min_each_expectation_capability_pass_rate,omitempty"`
+	MinExpectationDomainPassRate                   *float64           `json:"min_expectation_domain_pass_rate,omitempty"`
+	MinEachExpectationDomainPassRate               *float64           `json:"min_each_expectation_domain_pass_rate,omitempty"`
+	MinSessionSearchContextHitRate                 *float64           `json:"min_session_search_context_hit_rate,omitempty"`
+	MinSessionSearchMatchedTermsPerCall            *float64           `json:"min_session_search_matched_terms_per_call,omitempty"`
+	MinToolRepairSuccessRate                       *float64           `json:"min_tool_repair_success_rate,omitempty"`
+	MinVerifierPassRate                            *float64           `json:"min_verifier_pass_rate,omitempty"`
+	MaxFocusedTaskErrorRate                        *float64           `json:"max_focused_task_error_rate,omitempty"`
+	MaxForcedNoToolsRate                           *float64           `json:"max_forced_no_tools_rate,omitempty"`
+	MaxLoopGuardInterventionRate                   *float64           `json:"max_loop_guard_intervention_rate,omitempty"`
+	MaxPlanErrorRate                               *float64           `json:"max_plan_error_rate,omitempty"`
+	MaxMemorySearchMissRate                        *float64           `json:"max_memory_search_miss_rate,omitempty"`
+	MaxSourceDiscoveryOnlyRate                     *float64           `json:"max_source_discovery_only_rate,omitempty"`
+	MaxSourceDynamicPartialRate                    *float64           `json:"max_source_dynamic_partial_rate,omitempty"`
+	MaxSubagentErrorRate                           *float64           `json:"max_subagent_error_rate,omitempty"`
+	MaxToolErrorRate                               *float64           `json:"max_tool_error_rate,omitempty"`
+	MaxToolContextTruncationRate                   *float64           `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxToolResultTruncationRate                    *float64           `json:"max_tool_result_truncation_rate,omitempty"`
+	MaxAvgRuntimeErrors                            *float64           `json:"max_avg_runtime_errors,omitempty"`
+	MaxAvgContextCompactions                       *float64           `json:"max_avg_context_compactions,omitempty"`
+	MaxAvgReactiveCompactions                      *float64           `json:"max_avg_reactive_context_compactions,omitempty"`
+	MaxAvgContextRemovedMessages                   *float64           `json:"max_avg_context_removed_messages,omitempty"`
+	MaxAvgContextSummaryBytes                      *float64           `json:"max_avg_context_summary_bytes,omitempty"`
+	MaxAvgContextSummaryMissing                    *float64           `json:"max_avg_context_summary_missing,omitempty"`
+	MaxAvgContextSummaryEmpty                      *float64           `json:"max_avg_context_summary_empty,omitempty"`
+	MaxAvgContextInjections                        *float64           `json:"max_avg_context_injections,omitempty"`
+	MaxAvgContextInjectionBytes                    *float64           `json:"max_avg_context_injection_bytes,omitempty"`
+	MaxAvgContextInjectionEstimatedTokens          *float64           `json:"max_avg_context_injection_estimated_tokens,omitempty"`
+	MaxAvgToolCalls                                *float64           `json:"max_avg_tool_calls,omitempty"`
+	MaxAvgDurationMS                               *float64           `json:"max_avg_duration_ms,omitempty"`
+	MaxAvgTotalTokens                              *float64           `json:"max_avg_total_tokens,omitempty"`
+	MaxDebugBriefTagRates                          map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
+	MinExpectationDomainSourceAccessVerifiedRates  map[string]float64 `json:"min_expectation_domain_source_access_verified_rates,omitempty"`
+	MaxExpectationDomainAvgTotalTokens             map[string]float64 `json:"max_expectation_domain_avg_total_tokens,omitempty"`
+	MaxExpectationDomainAvgToolCalls               map[string]float64 `json:"max_expectation_domain_avg_tool_calls,omitempty"`
+	MaxExpectationDomainAvgRuntimeErrors           map[string]float64 `json:"max_expectation_domain_avg_runtime_errors,omitempty"`
+	MaxExpectationDomainToolErrorRates             map[string]float64 `json:"max_expectation_domain_tool_error_rates,omitempty"`
+	MaxExpectationDomainLoopGuardInterventionRates map[string]float64 `json:"max_expectation_domain_loop_guard_intervention_rates,omitempty"`
+	RequiredExpectationCapabilities                []string           `json:"required_expectation_capabilities,omitempty"`
+	RequiredExpectationDomains                     []string           `json:"required_expectation_domains,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -3218,8 +3334,14 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgDurationMS:                      enabledQualityGateValue(gates.MaxAvgDurationMS),
 		MaxAvgTotalTokens:                     enabledQualityGateValue(gates.MaxAvgTotalTokens),
 		MaxDebugBriefTagRates:                 enabledQualityGateMap(gates.MaxDebugBriefTagRates),
-		RequiredExpectationCapabilities:       cloneStringSlice(gates.RequiredExpectationCapabilities),
-		RequiredExpectationDomains:            cloneStringSlice(gates.RequiredExpectationDomains),
+		MinExpectationDomainSourceAccessVerifiedRates:  enabledQualityGateMap(gates.MinExpectationDomainSourceAccessVerifiedRates),
+		MaxExpectationDomainAvgTotalTokens:             enabledQualityGateMap(gates.MaxExpectationDomainAvgTotalTokens),
+		MaxExpectationDomainAvgToolCalls:               enabledQualityGateMap(gates.MaxExpectationDomainAvgToolCalls),
+		MaxExpectationDomainAvgRuntimeErrors:           enabledQualityGateMap(gates.MaxExpectationDomainAvgRuntimeErrors),
+		MaxExpectationDomainToolErrorRates:             enabledQualityGateMap(gates.MaxExpectationDomainToolErrorRates),
+		MaxExpectationDomainLoopGuardInterventionRates: enabledQualityGateMap(gates.MaxExpectationDomainLoopGuardInterventionRates),
+		RequiredExpectationCapabilities:                cloneStringSlice(gates.RequiredExpectationCapabilities),
+		RequiredExpectationDomains:                     cloneStringSlice(gates.RequiredExpectationDomains),
 	}
 }
 
@@ -4062,6 +4184,12 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgDurationMS != nil ||
 		meta.MaxAvgTotalTokens != nil ||
 		len(meta.MaxDebugBriefTagRates) > 0 ||
+		len(meta.MinExpectationDomainSourceAccessVerifiedRates) > 0 ||
+		len(meta.MaxExpectationDomainAvgTotalTokens) > 0 ||
+		len(meta.MaxExpectationDomainAvgToolCalls) > 0 ||
+		len(meta.MaxExpectationDomainAvgRuntimeErrors) > 0 ||
+		len(meta.MaxExpectationDomainToolErrorRates) > 0 ||
+		len(meta.MaxExpectationDomainLoopGuardInterventionRates) > 0 ||
 		len(meta.RequiredExpectationCapabilities) > 0 ||
 		len(meta.RequiredExpectationDomains) > 0
 }
@@ -4198,6 +4326,73 @@ func expectationDomainFamilyGateFailures(s batchSummary, threshold *float64) []s
 			failures = append(failures, fmt.Sprintf("expectation_domain_pass_rate[%s] %s < min %s", domain, formatGateFloat(rate), formatGateFloat(*threshold)))
 		}
 	}
+	sort.Strings(failures)
+	return failures
+}
+
+func expectationDomainMetricGateFailures(s batchSummary, g qualityGateConfig) []string {
+	metrics := expectationDomainRuntimeMetrics(s.ExpectationDomainRuntime)
+	var failures []string
+	checkMinMap := func(name string, thresholds map[string]float64, actual func(expectationDomainMetrics) (*float64, bool)) {
+		for _, domain := range sortedFloatMapKeys(thresholds) {
+			threshold := thresholds[domain]
+			if threshold < 0 {
+				continue
+			}
+			metric, ok := metrics[domain]
+			if !ok {
+				failures = append(failures, fmt.Sprintf("%s[%s] unavailable, want >= %s", name, domain, formatGateFloat(threshold)))
+				continue
+			}
+			value, available := actual(metric)
+			if !available || value == nil {
+				failures = append(failures, fmt.Sprintf("%s[%s] unavailable, want >= %s", name, domain, formatGateFloat(threshold)))
+				continue
+			}
+			if *value < threshold {
+				failures = append(failures, fmt.Sprintf("%s[%s] %s < min %s", name, domain, formatGateFloat(*value), formatGateFloat(threshold)))
+			}
+		}
+	}
+	checkMaxMap := func(name string, thresholds map[string]float64, actual func(expectationDomainMetrics) (*float64, bool)) {
+		for _, domain := range sortedFloatMapKeys(thresholds) {
+			threshold := thresholds[domain]
+			if threshold < 0 {
+				continue
+			}
+			metric, ok := metrics[domain]
+			if !ok {
+				failures = append(failures, fmt.Sprintf("%s[%s] unavailable, want <= %s", name, domain, formatGateFloat(threshold)))
+				continue
+			}
+			value, available := actual(metric)
+			if !available || value == nil {
+				continue
+			}
+			if *value > threshold {
+				failures = append(failures, fmt.Sprintf("%s[%s] %s > max %s", name, domain, formatGateFloat(*value), formatGateFloat(threshold)))
+			}
+		}
+	}
+	floatPtr := func(value float64) *float64 { return &value }
+	checkMinMap("expectation_domain_source_access_verified_rate", g.MinExpectationDomainSourceAccessVerifiedRates, func(metric expectationDomainMetrics) (*float64, bool) {
+		return metric.SourceAccessVerifiedRate, metric.SourceAccessResults > 0
+	})
+	checkMaxMap("expectation_domain_avg_total_tokens", g.MaxExpectationDomainAvgTotalTokens, func(metric expectationDomainMetrics) (*float64, bool) {
+		return floatPtr(metric.AvgTotalTokens), true
+	})
+	checkMaxMap("expectation_domain_avg_tool_calls", g.MaxExpectationDomainAvgToolCalls, func(metric expectationDomainMetrics) (*float64, bool) {
+		return floatPtr(metric.AvgToolCalls), true
+	})
+	checkMaxMap("expectation_domain_avg_runtime_errors", g.MaxExpectationDomainAvgRuntimeErrors, func(metric expectationDomainMetrics) (*float64, bool) {
+		return floatPtr(metric.AvgRuntimeErrors), true
+	})
+	checkMaxMap("expectation_domain_tool_error_rate", g.MaxExpectationDomainToolErrorRates, func(metric expectationDomainMetrics) (*float64, bool) {
+		return metric.ToolErrorRate, metric.ToolCalls > 0
+	})
+	checkMaxMap("expectation_domain_loop_guard_intervention_rate", g.MaxExpectationDomainLoopGuardInterventionRates, func(metric expectationDomainMetrics) (*float64, bool) {
+		return metric.LoopGuardInterventionRate, metric.ToolCalls > 0
+	})
 	sort.Strings(failures)
 	return failures
 }

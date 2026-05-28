@@ -69,6 +69,16 @@ Shared metadata fields:
   `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`:
   optional quality gate thresholds configured for the run. Disabled gates are
   omitted.
+- `min_expectation_domain_source_access_verified_rates`,
+  `max_expectation_domain_avg_total_tokens`,
+  `max_expectation_domain_avg_tool_calls`,
+  `max_expectation_domain_avg_runtime_errors`,
+  `max_expectation_domain_tool_error_rates`, and
+  `max_expectation_domain_loop_guard_intervention_rates`: optional maps from
+  workload domain to a domain-specific quality threshold. These preserve
+  experiment-specific CI conditions such as "Bittensor research must stay under
+  this token budget" or "web evidence must keep verified SourceAccess above
+  this rate" without forcing one global threshold across unlike task domains.
 - `max_debug_brief_tag_rates`: optional map of `debug_brief` tag to maximum
   scenario rate. This lets profiles fail specific triage patterns, such as
   weak session recall context or dynamic web evidence without network-backed
@@ -690,6 +700,13 @@ Summary records aggregate all scenario records from the same process:
   intentionally attributed to each declared domain so dashboards can answer
   which realistic workload is expensive, unstable, or producing weak source
   evidence without parsing scenario names.
+  Domain-specific quality gates can be enabled with
+  `--min-expectation-domain-source-access-verified-rate DOMAIN=RATE`,
+  `--max-expectation-domain-avg-total-tokens DOMAIN=TOKENS`,
+  `--max-expectation-domain-avg-tool-calls DOMAIN=COUNT`,
+  `--max-expectation-domain-avg-runtime-errors DOMAIN=COUNT`,
+  `--max-expectation-domain-tool-error-rate DOMAIN=RATE`, and
+  `--max-expectation-domain-loop-guard-intervention-rate DOMAIN=RATE`.
   `--require-expectation-domain` gates declared workload-domain coverage
   independently from capability coverage, so CI can require at least one
   realistic market, Bittensor, code/PR, web-evidence, or long-run recovery

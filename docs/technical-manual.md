@@ -1158,7 +1158,15 @@ runtime errors, token cost, memory-update rate, loop-guard rate, tool error
 rate, and SourceAccess evidence rates down by realistic workload domain. This
 is the primary machine-readable view for answering whether market analysis,
 Bittensor research, code/PR work, web evidence, or long-run recovery is the
-expensive or unstable part of a run.
+expensive or unstable part of a run. Use domain-specific gates such as
+`--max-expectation-domain-avg-total-tokens bittensor=90000`,
+`--max-expectation-domain-avg-tool-calls code_pr=18`,
+`--max-expectation-domain-avg-runtime-errors web_evidence=0.2`,
+`--max-expectation-domain-tool-error-rate code_pr=0.05`,
+`--max-expectation-domain-loop-guard-intervention-rate market=0.1`, and
+`--min-expectation-domain-source-access-verified-rate web_evidence=0.9`
+when CI or a model comparison needs a realistic workload-specific cost,
+stability, or evidence-quality bar.
 The default text summary also prints the key normalized rates used for long-run
 debugging, including pass/completion, average scenario duration, memory update
 coverage, loop-protocol feed coverage, runtime-surface coverage, tool errors,
