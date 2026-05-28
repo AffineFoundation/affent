@@ -136,7 +136,8 @@ Scenario records describe one eval case:
   `required_recent_session_search` anchor requirements, loop-decision
   requirements, loop protocol calibration/feed, active plan
   checkpoint/current-situation, and last-turn checkpoint requirements,
-  context-compaction requirements, optional
+  context-compaction requirements, context-injection source requirements such as
+  `required_context_injection_sources.final_evidence_digest`, optional
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
@@ -656,7 +657,9 @@ Summary records aggregate all scenario records from the same process:
   `context_injection_examples`. No-tool finalization recovery may emit
   `source=final_evidence_digest` when the runtime appended a compact digest of
   prior citable tool evidence before forcing the model to answer without more
-  tools.
+  tools. Scenarios can assert this hidden recovery path with
+  `expectations.required_context_injection_sources`, which maps a source name to
+  the minimum required injection count.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag. Verifier tags such as
   `verifier:failed`, `verifier:not_run`, `verifier:abnormal`, and

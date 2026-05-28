@@ -1302,11 +1302,16 @@ record also include structured
 `expectations` plus derived expected capability names/outcome, so
 batch-analysis scripts can group failures by required tools, evidence checks,
 loop protocol feed checkpoints, plan/delegation constraints, and
-context-compaction requirements without reimplementing capability inference.
+context-compaction or context-injection requirements without reimplementing
+capability inference. Context-injection requirements are useful for hidden
+runtime guardrails such as `final_evidence_digest`, where the model sees a
+compact evidence digest during forced no-tool finalization but the user-facing
+answer should not expose internal control text.
 Text and JSONL summary records aggregate those declarations as expectation
 coverage counters, including suites, required tools, required source-access
 statuses, and broad capabilities such as memory, browser, delegation, plan,
-loop protocol, research checkpoint, and context compaction. Scenarios that
+loop protocol, research checkpoint, context compaction, and context injection.
+Scenarios that
 require loop protocol feeds, no-hit recent-session anchors, and a `session_search` to `memory`
 recovery sequence are additionally tagged as `longrun_recovery`, so batch
 triage can separate full durable-recovery failures from single-surface recall

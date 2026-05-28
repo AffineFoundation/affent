@@ -1078,6 +1078,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolStatsAtLeast: map[string]int{
 			"memory_updates": 1,
 		},
+		RequiredContextInjectionSources: map[string]int{
+			"final_evidence_digest": 1,
+		},
 		RequiredLoopDecisionKinds: map[string]int{
 			"evidence_quality": 1,
 		},
@@ -1165,6 +1168,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
 		"recent_session_search_anchor_at_least:missing marker:market-alpha:*:*:source review:loop.protocol_feed:max_turns:*:1",
+		"context_injection_source_at_least:final_evidence_digest:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -2862,6 +2866,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredTraceEventCounts: map[string]int{
 			"conversation.repaired": 1,
 		},
+		RequiredContextInjectionSources: map[string]int{
+			"final_evidence_digest": 1,
+		},
 		RequiredLoopDecisionKinds: map[string]int{
 			"evidence_quality": 1,
 		},
@@ -2991,7 +2998,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Verifier.OutputCapBytes != 1536 {
 		t.Fatalf("manifest verifier = %+v", manifest.Verifier)
 	}
-	wantCapabilities := []string{"browser", "context_compaction", "delegated_source_evidence", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
+	wantCapabilities := []string{"browser", "context_compaction", "context_injection", "delegated_source_evidence", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
 		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
@@ -3020,6 +3027,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredToolStatsAtLeast["source_access_dynamic_partial"] != 1 ||
 		manifest.Expectations.RequiredToolStatsAtLeast["source_access_network"] != 1 ||
 		manifest.Expectations.RequiredTraceEventCounts["conversation.repaired"] != 1 ||
+		manifest.Expectations.RequiredContextInjectionSources["final_evidence_digest"] != 1 ||
 		manifest.Expectations.RequiredLoopDecisionKinds["evidence_quality"] != 1 ||
 		manifest.Expectations.RequiredLoopDecisionResults["defer"] != 1 ||
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
@@ -3307,7 +3315,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
-		"expectation_capabilities: `browser`, `context_compaction`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
+		"expectation_capabilities: `browser`, `context_compaction`, `context_injection`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"domains: `market`, `web_evidence`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
@@ -3321,6 +3329,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tool_failure_kind_counts: `dynamic_shell=1`",
 		"required_tool_stats_at_least: `memory_updates=2,source_access_dynamic_partial=1,source_access_network=1`",
 		"required_trace_event_counts: `conversation.repaired=1`",
+		"required_context_injection_sources: `final_evidence_digest=1`",
 		"required_loop_decision_kinds: `evidence_quality=1`",
 		"required_loop_decision_results: `defer=1`",
 		"required_loop_protocol_feeds: `1`",

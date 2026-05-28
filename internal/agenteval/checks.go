@@ -78,6 +78,34 @@ func TraceEventCountAtLeast(eventType string, min int) Check {
 	}
 }
 
+func ContextInjectionSourceAtLeast(source string, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_injection_source_at_least:%s:%d", source, min),
+		Eval: func(t Trace) CheckResult {
+			got := 0
+			var observed []string
+			for _, injection := range t.ContextInjections {
+				if strings.TrimSpace(injection.Source) != "" && len(observed) < 6 {
+					observed = append(observed, injection.Source)
+				}
+				if injection.Source == source {
+					got++
+				}
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", source, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d context injection(s) from source %q, got %d; observed=%v", min, source, got, observed),
+			}
+		},
+	}
+}
+
 func ConversationRepairStatsAtLeast(field string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("conversation_repair_stats_at_least:%s:%d", field, min),
