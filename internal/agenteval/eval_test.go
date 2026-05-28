@@ -1965,8 +1965,8 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 5 {
-		t.Fatalf("live-web suite size = %d, want 5", len(scenarios))
+	if len(scenarios) != 6 {
+		t.Fatalf("live-web suite size = %d, want 6", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -2023,6 +2023,62 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if !stringSliceContains(researchEvidence.ForbiddenTools, "browser_navigate") ||
 		!stringSliceContains(researchEvidence.ForbiddenTools, "run_task") {
 		t.Fatalf("research evidence ForbiddenTools = %#v, want browser and delegation forbidden", researchEvidence.ForbiddenTools)
+	}
+
+	delegatedResearch, ok := seen["live-web-research-checkpoint-delegated-evidence"]
+	if !ok {
+		t.Fatalf("live-web suite missing delegated research checkpoint evidence scenario")
+	}
+	if delegatedResearch.SessionID != "live-web-research-checkpoint-delegated-evidence" {
+		t.Fatalf("delegated research SessionID = %q", delegatedResearch.SessionID)
+	}
+	if !stringSliceContains(delegatedResearch.RequiredTools, "run_task") ||
+		delegatedResearch.RequiredToolCounts["run_task"] != 1 ||
+		delegatedResearch.RequiredFocusedTaskCounts["research"] != 1 ||
+		!delegatedResearch.RequireNoDelegationErrors {
+		t.Fatalf("delegated research requirements = tools:%#v counts:%#v focused:%#v no_errors:%v", delegatedResearch.RequiredTools, delegatedResearch.RequiredToolCounts, delegatedResearch.RequiredFocusedTaskCounts, delegatedResearch.RequireNoDelegationErrors)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "run_task", Arg: "task_type", Substring: "research"},
+		{Tool: "run_task", Arg: "objective", Substring: "Claude Code"},
+		{Tool: "run_task", Arg: "objective", Substring: "Hermes"},
+	} {
+		if !toolArgRequirementContains(delegatedResearch.RequiredToolArgContains, want) {
+			t.Fatalf("delegated research RequiredToolArgContains = %#v, want %#v", delegatedResearch.RequiredToolArgContains, want)
+		}
+	}
+	for _, want := range []string{`"task_type":"research"`, `"ok":true`, `"findings"`, `"source"`} {
+		if !stringSliceContains(delegatedResearch.RequiredToolResultText["run_task"], want) {
+			t.Fatalf("delegated research run_task result requirements = %#v, want %q", delegatedResearch.RequiredToolResultText["run_task"], want)
+		}
+	}
+	if delegatedResearch.RequiredLoopDecisionKinds["research_checkpoint"] != 1 ||
+		delegatedResearch.RequiredLoopDecisionResults["trigger"] != 1 ||
+		len(delegatedResearch.RequiredLoopDecisionMatches) != 1 ||
+		delegatedResearch.RequiredLoopDecisionMatches[0] != (LoopDecisionRequirement{Kind: "research_checkpoint", Decision: "trigger", Trigger: "external_calibration_requested"}) {
+		t.Fatalf("delegated research loop decision constraints = kinds:%#v results:%#v matches:%#v", delegatedResearch.RequiredLoopDecisionKinds, delegatedResearch.RequiredLoopDecisionResults, delegatedResearch.RequiredLoopDecisionMatches)
+	}
+	if delegatedResearch.RequiredLoopProtocolFeeds != 1 || delegatedResearch.RequiredLoopProtocolFeedModes["full"] != 1 {
+		t.Fatalf("delegated research loop protocol constraints = feeds:%d modes:%#v", delegatedResearch.RequiredLoopProtocolFeeds, delegatedResearch.RequiredLoopProtocolFeedModes)
+	}
+	for _, want := range []string{"RESEARCH-DELEGATED-58", "research", "run_task", "Claude Code", "Hermes", "external calibration"} {
+		if !stringSliceContains(delegatedResearch.RequiredFinalText, want) {
+			t.Fatalf("delegated research RequiredFinalText = %#v, want %q", delegatedResearch.RequiredFinalText, want)
+		}
+	}
+	delegatedResearchCaps := ExpectationCapabilityNames(debugScenarioExpectations(delegatedResearch))
+	for _, want := range []string{"delegation", "loop_protocol", "research_checkpoint"} {
+		if !stringSliceContains(delegatedResearchCaps, want) {
+			t.Fatalf("delegated research expectation capabilities = %#v, want %q", delegatedResearchCaps, want)
+		}
+	}
+	for _, forbidden := range []string{"web_fetch", "web_search", "browser_navigate", "subagent_run"} {
+		if !stringSliceContains(delegatedResearch.ForbiddenTools, forbidden) {
+			t.Fatalf("delegated research ForbiddenTools = %#v, want %q", delegatedResearch.ForbiddenTools, forbidden)
+		}
+	}
+	if delegatedResearch.MaxParentToolCalls != 1 {
+		t.Fatalf("delegated research MaxParentToolCalls = %d, want 1", delegatedResearch.MaxParentToolCalls)
 	}
 
 	scenario, ok := seen["live-web-taostats-sn120-dynamic-evidence"]

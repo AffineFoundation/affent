@@ -2047,6 +2047,84 @@ func liveWebResearchCheckpointEvidenceScenario() BatchScenario {
 	}
 }
 
+func liveWebResearchCheckpointDelegatedEvidenceScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "live-web-research-checkpoint-delegated-evidence",
+		Suites:    []string{liveWebSuite},
+		SessionID: "live-web-research-checkpoint-delegated-evidence",
+		Prompt:    "你正在维护 Affent 的长期 loop 协议。请做一次很窄的外部校准，但必须把网页研究隔离到 focused task：只调用 run_task，task_type 必须是 research，objective 要求核验 Claude Code subagents 官方文档和 Hermes Agent learning loop/agent loop 资料对 Affent loop protocol 的启发。父上下文不得直接调用 web_fetch、web_search 或 browser 工具，不要修改文件，不要运行 shell。最终回答必须包含 RESEARCH-DELEGATED-58、research、run_task、Claude Code、Hermes、external calibration，并说明子任务证据是否支持继续保留 focused research as evidence 的路线。",
+		Files: map[string]string{
+			".affent/loops/live-web-research-checkpoint-delegated-evidence/LOOP.md": "# Loop Protocol: live-web-research-checkpoint-delegated-evidence\n\n## 0. Metadata\n\n- loop_id: live-web-research-checkpoint-delegated-evidence\n- owner_session: live-web-research-checkpoint-delegated-evidence\n- status: running\n\n## 1. North Star\n\nKeep Affent's long-run loop protocol practical: external calibration should happen when it changes durable route choices, while noisy source reading stays out of the parent context when possible.\n\n## 2. Current Situation\n\n- The active question is whether a research checkpoint can be satisfied by a focused research child instead of direct parent web_fetch.\n- The parent must keep only compact child findings, source URLs, warnings, and route implications.\n\n## 3. Evolution Protocol\n\nUse focused research when external calibration would otherwise flood the parent context; accept the route only when the trace preserves the child task type and compact evidence.\n\n## 4. Self-Attack\n\nReject delegated research that hides missing sources, returns unsupported conclusions, or causes the parent to repeat the same source reads.\n\n## 5. Rules\n\nDelegation is useful only when it buys context isolation and auditable evidence; do not use it for one-screen checks.\n\n## 6. Plan/Step Pointer\n\nNo active plan is required for this evidence-only checkpoint.\n\n## 7. Evidence And Recovery Index\n\nThe trace must contain loop.decision research_checkpoint and run_task task_type=research.\n",
+			"README.md": "# Delegated Research Checkpoint Eval\n\nThis scenario validates that active loop research checkpoints can use focused research evidence without parent-context web reads.\n",
+		},
+		RequiredTools: []string{"run_task"},
+		RequiredToolCounts: map[string]int{
+			"run_task": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "run_task", Arg: "task_type", Substring: "research"},
+			{Tool: "run_task", Arg: "objective", Substring: "Claude Code"},
+			{Tool: "run_task", Arg: "objective", Substring: "Hermes"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"run_task": {
+				`"task_type":"research"`,
+				`"ok":true`,
+				`"findings"`,
+				`"source"`,
+			},
+		},
+		RequiredFocusedTaskCounts: map[string]int{
+			"research": 1,
+		},
+		RequireNoDelegationErrors: true,
+		RequiredLoopDecisionKinds: map[string]int{
+			"research_checkpoint": 1,
+		},
+		RequiredLoopDecisionResults: map[string]int{
+			"trigger": 1,
+		},
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{
+				Kind:     "research_checkpoint",
+				Decision: "trigger",
+				Trigger:  "external_calibration_requested",
+			},
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredFinalText: []string{
+			"RESEARCH-DELEGATED-58",
+			"research",
+			"run_task",
+			"Claude Code",
+			"Hermes",
+			"external calibration",
+		},
+		ForbiddenFinalText: []string{
+			"无需外部证据",
+			"no external evidence needed",
+		},
+		ForbiddenTools: []string{
+			"read_file", "repo_search", "shell", "write_file", "edit_file",
+			"web_fetch", "web_search",
+			"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read",
+			"subagent_run",
+		},
+		ProtectedFiles: []string{
+			".affent/loops/live-web-research-checkpoint-delegated-evidence/LOOP.md",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"run_task": 1,
+		},
+		MaxParentToolCalls: 1,
+		MaxTurns:           8,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",

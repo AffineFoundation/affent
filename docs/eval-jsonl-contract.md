@@ -125,7 +125,10 @@ Scenario records describe one eval case:
   `evidence_quality=defer/source_access_dynamic_partial` or
   `research_checkpoint=trigger/external_calibration_requested`, which lets
   long-run evals prove that the runtime surfaced a needed external-calibration
-  checkpoint instead of relying on an invisible prompt nudge.
+  checkpoint instead of relying on an invisible prompt nudge. Live-web
+  research checkpoint cases cover both direct parent `web_fetch` evidence and
+  delegated `run_task(research)` evidence, so result consumers can distinguish
+  source-heavy parent reads from compact child research handoffs.
 - `expectation_capability_names`, `expectation_capability_outcome`,
   `expectation_capability_passed_names`, and
   `expectation_capability_failed_names`: optional scenario-level derived

@@ -1052,10 +1052,14 @@ Current built-in suites:
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, browser network evidence quality, and externally
   evidenced research checkpoints. These scenarios intentionally depend on
-  public sites and should be run with web/browser tools enabled. The research
-  checkpoint evidence case requires an active `LOOP.md`, a visible
-  `research_checkpoint` loop decision, and verified `web_fetch` SourceAccess
-  from official Claude Code documentation before any loop-route conclusion.
+  public sites and should be run with web/browser/delegation tools enabled.
+  The direct research checkpoint evidence case requires an active `LOOP.md`, a
+  visible `research_checkpoint` loop decision, and verified `web_fetch`
+  SourceAccess from official Claude Code documentation before any loop-route
+  conclusion. The delegated research checkpoint evidence case requires the
+  parent to use `run_task(research)` and forbids parent-side web/browser reads,
+  proving that focused research can satisfy the checkpoint without flooding the
+  parent context.
   Browser network evidence scenarios require final answers to preserve
   `browser_network_url`, `requested_url`, `ref=...`, `status=...`, and
   `content_type=...`, so operators can distinguish the response actually read
@@ -1073,12 +1077,12 @@ Run scenarios:
 ```bash
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --temperature 0
 go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,delegation --temperature 0
-go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
+go run ./cmd/affenteval --suite live-web --runtime-tools delegation --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --jsonl > eval.jsonl
 go run ./cmd/affenteval --list-quality-profiles
 go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,delegation --quality-profile longrun --temperature 0
-go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --quality-profile web-evidence --temperature 0 --keep-workspaces
+go run ./cmd/affenteval --suite live-web --runtime-tools delegation --runtime-web --runtime-browser --quality-profile web-evidence --temperature 0 --keep-workspaces
 ```
 
 Quality gate flags are optional and disabled by default. They return exit code
