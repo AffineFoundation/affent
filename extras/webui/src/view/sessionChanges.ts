@@ -9,8 +9,12 @@ export interface SessionChangedFile {
   status: SessionChangeStatus;
   turnNumber: number;
   actionCount: number;
+  additions?: number;
+  deletions?: number;
   detail?: string;
   artifactPath?: string;
+  diffPreview?: SessionChangeDiffLine[];
+  diffTruncated?: boolean;
 }
 
 export interface SessionChangesView {
@@ -18,6 +22,13 @@ export interface SessionChangesView {
   summary: string;
   detail: string;
   tone?: "warning" | "error";
+}
+
+export type SessionChangeDiffLineKind = "meta" | "hunk" | "add" | "remove" | "context";
+
+export interface SessionChangeDiffLine {
+  kind: SessionChangeDiffLineKind;
+  text: string;
 }
 
 interface SessionChangedFileInternal extends SessionChangedFile {
@@ -68,6 +79,7 @@ function changeFromCall(call: ToolCallState, turnNumber: number, sequence: numbe
     turnNumber,
     sequence,
     actionCount: 1,
+    ...changeDiff(call),
     detail: changeDetail(call),
     artifactPath: call.resultArtifactPath,
   };
@@ -94,7 +106,54 @@ function changeStatus(call: ToolCallState): SessionChangeStatus {
 function changeDetail(call: ToolCallState): string | undefined {
   const source = call.resultSummary || call.result || call.failureKind;
   if (!source) return undefined;
-  return summarizePreview(source, 120);
+  return summarizePreview(stripDiffLines(source), 120);
+}
+
+function changeDiff(call: ToolCallState): Pick<SessionChangedFile, "additions" | "deletions" | "diffPreview" | "diffTruncated"> {
+  const source = call.result || call.resultSummary;
+  const diff = extractUnifiedDiff(source);
+  return diff ? {
+    additions: diff.additions,
+    deletions: diff.deletions,
+    diffPreview: diff.lines,
+    diffTruncated: diff.truncated,
+  } : {};
+}
+
+function extractUnifiedDiff(source?: string): { lines: SessionChangeDiffLine[]; additions: number; deletions: number; truncated: boolean } | undefined {
+  if (!source) return undefined;
+  const rawLines = source.split(/\r?\n/);
+  const start = rawLines.findIndex((line) => /^diff --git\s|^---\s/.test(line));
+  if (start === -1) return undefined;
+  const diffLines = rawLines.slice(start);
+  if (!diffLines.some((line) => /^@@\s/.test(line))) return undefined;
+
+  let additions = 0;
+  let deletions = 0;
+  const maxLines = 80;
+  const lines: SessionChangeDiffLine[] = [];
+  for (const line of diffLines) {
+    if (line.startsWith("+") && !line.startsWith("+++")) additions += 1;
+    if (line.startsWith("-") && !line.startsWith("---")) deletions += 1;
+    if (lines.length < maxLines) lines.push({ kind: diffLineKind(line), text: line || " " });
+  }
+  return { lines, additions, deletions, truncated: diffLines.length > maxLines };
+}
+
+function diffLineKind(line: string): SessionChangeDiffLineKind {
+  if (line.startsWith("@@")) return "hunk";
+  if (line.startsWith("+") && !line.startsWith("+++")) return "add";
+  if (line.startsWith("-") && !line.startsWith("---")) return "remove";
+  if (/^(diff --git|index\s|---\s|\+\+\+\s)/.test(line)) return "meta";
+  return "context";
+}
+
+function stripDiffLines(text: string): string {
+  const lines = text.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^diff --git\s|^---\s/.test(line));
+  if (start === -1) return text;
+  const before = lines.slice(0, start).join("\n").trim();
+  return before || "Unified diff available";
 }
 
 function changesSummary(total: number, counts: { changed: number; failed: number; running: number }): string {

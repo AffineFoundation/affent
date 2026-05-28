@@ -44,6 +44,14 @@ export function SessionChangesPanel({
                     </button>
                   ) : null}
                 </span>
+                {file.diffPreview && file.diffPreview.length > 0 ? (
+                  <pre className="session-change-diff" data-testid="session-change-diff" aria-label={`Diff preview for ${file.path}`}>
+                    {file.diffPreview.map((line, index) => (
+                      <span key={`${index}:${line.text}`} data-kind={line.kind}>{line.text}</span>
+                    ))}
+                    {file.diffTruncated ? <span data-kind="meta">Diff preview truncated</span> : null}
+                  </pre>
+                ) : null}
               </li>
             ))}
           </ol>
@@ -59,6 +67,7 @@ function changeMeta(file: SessionChangedFile): string {
   const parts = [
     file.operation === "write" ? "Write" : "Edit",
     statusLabel(file.status),
+    file.additions != null || file.deletions != null ? `+${file.additions ?? 0} -${file.deletions ?? 0}` : undefined,
     `turn ${file.turnNumber}`,
     file.actionCount > 1 ? `${file.actionCount} actions` : undefined,
   ].filter(Boolean);

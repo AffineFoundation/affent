@@ -1867,7 +1867,19 @@ describe("App", () => {
                 call_id: "edit",
                 exit_code: 0,
                 result_summary: "Updated payment route",
-                result: "Updated payment route",
+                result: [
+                  "Updated payment route",
+                  "diff --git a/src/payments.ts b/src/payments.ts",
+                  "index 1111111..2222222 100644",
+                  "--- a/src/payments.ts",
+                  "+++ b/src/payments.ts",
+                  "@@ -1,3 +1,4 @@",
+                  " export function pay() {",
+                  "-  return false;",
+                  "+  const enabled = true;",
+                  "+  return enabled;",
+                  " }",
+                ].join("\n"),
                 result_artifact_path: ".affent/artifacts/tool-results/edit.txt",
               },
             },
@@ -1911,7 +1923,10 @@ describe("App", () => {
     const changes = await screen.findByTestId("session-changes-panel");
     expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
+    expect(changes).toHaveTextContent("+2 -1");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("Updated payment route");
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Adjust" }));

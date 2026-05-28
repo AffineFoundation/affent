@@ -56,6 +56,57 @@ describe("buildSessionChanges", () => {
     });
   });
 
+  it("extracts unified diff evidence without making prose look like a diff", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "src/payments.ts" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "edit",
+          exit_code: 0,
+          result_summary: "Updated payment route",
+          result: [
+            "Updated payment route",
+            "diff --git a/src/payments.ts b/src/payments.ts",
+            "index 1111111..2222222 100644",
+            "--- a/src/payments.ts",
+            "+++ b/src/payments.ts",
+            "@@ -1,3 +1,4 @@",
+            " export function pay() {",
+            "-  return false;",
+            "+  const enabled = true;",
+            "+  return enabled;",
+            " }",
+          ].join("\n"),
+        },
+      },
+    ]);
+
+    const [file] = buildSessionChanges(session).files;
+
+    expect(file).toMatchObject({
+      path: "src/payments.ts",
+      detail: "Updated payment route",
+      additions: 2,
+      deletions: 1,
+      diffTruncated: false,
+    });
+    expect(file.diffPreview?.map((line) => [line.kind, line.text])).toEqual([
+      ["meta", "diff --git a/src/payments.ts b/src/payments.ts"],
+      ["meta", "index 1111111..2222222 100644"],
+      ["meta", "--- a/src/payments.ts"],
+      ["meta", "+++ b/src/payments.ts"],
+      ["hunk", "@@ -1,3 +1,4 @@"],
+      ["context", " export function pay() {"],
+      ["remove", "-  return false;"],
+      ["add", "+  const enabled = true;"],
+      ["add", "+  return enabled;"],
+      ["context", " }"],
+    ]);
+  });
+
   it("prioritizes failed and running changes before completed edits", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

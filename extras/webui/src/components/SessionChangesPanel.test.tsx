@@ -17,9 +17,12 @@ describe("SessionChangesPanel", () => {
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("2 changed files");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
-    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Edit · changed · turn 2");
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Edit · changed · +2 -1 · turn 2");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/edit.txt");
+    expect(screen.getByTestId("session-change-diff")).toHaveAccessibleName("Diff preview for src/payments.ts");
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
 
     await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
@@ -49,8 +52,21 @@ const changes: SessionChangesView = {
       status: "changed",
       turnNumber: 2,
       actionCount: 1,
+      additions: 2,
+      deletions: 1,
       detail: "Updated payment route",
       artifactPath: ".affent/artifacts/tool-results/edit.txt",
+      diffPreview: [
+        { kind: "meta", text: "diff --git a/src/payments.ts b/src/payments.ts" },
+        { kind: "meta", text: "--- a/src/payments.ts" },
+        { kind: "meta", text: "+++ b/src/payments.ts" },
+        { kind: "hunk", text: "@@ -1,3 +1,4 @@" },
+        { kind: "context", text: " export function pay() {" },
+        { kind: "remove", text: "-  return false;" },
+        { kind: "add", text: "+  const enabled = true;" },
+        { kind: "add", text: "+  return enabled;" },
+        { kind: "context", text: " }" },
+      ],
     },
     {
       path: "tests/payments.spec.ts",
