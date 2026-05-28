@@ -1382,7 +1382,7 @@ func longRunRecentSessionAnchorRecoveryScenario() BatchScenario {
 		Name:      "longrun-recent-session-anchor-recovery",
 		Suites:    []string{longRunSuite},
 		SessionID: "recent-anchor-reader",
-		Prompt:    "你正在恢复一个长时间运行的研究 session，但当前只记得错误关键词 ORIONABSENT999。必须先用 session_search 查询 ORIONABSENT999；如果没有直接命中，就使用返回的 recent_sessions 锚点继续恢复。最终回答必须包含 handoff marker、当前 plan step、loop feed 状态、恢复原因/失败类型和证据 session。不要读取文件、运行 shell、使用 memory 或修改文件。",
+		Prompt:    "你正在恢复一个长时间运行的研究 session，但当前只记得错误关键词 ORIONABSENT999。必须先用 session_search 查询 ORIONABSENT999；如果没有直接命中，就使用返回的 recent_sessions 锚点继续恢复。最终回答必须包含 handoff marker、当前 plan step、loop feed 状态、恢复原因/失败类型、tool_errors=1、forced_no_tools=1、下一步 browser_network_read ref n7 和证据 session。不要读取文件、运行 shell、使用 memory 或修改文件。",
 		Files: map[string]string{
 			".affentctl/recent-anchor/conversation.jsonl": `{"role":"user","content":"Continue Alpha Coast source verification after browser evidence stalled"}
 {"role":"assistant","content":"Latest handoff marker RECENT-HANDOFF-42. Evidence should cite session recent-anchor and continue the current plan, not restart research."}
@@ -1425,7 +1425,7 @@ Recover the active Alpha Coast evidence task from durable anchors instead of res
 
 Use session_search recent-session anchors when direct hits are empty.
 `,
-			".affentctl/recent-anchor/.affent/loops/recent-anchor/events.jsonl": `{"seq":1,"time":"2026-05-27T00:00:00Z","type":"loop.protocol_feed","summary":"digest feed preserved RECENT-HANDOFF-42 recovery anchors","mode":"digest","feed_number":4,"plan_label":"plan:1/2:active","plan_step_index":2,"plan_step_status":"in_progress","plan_step":"continue RECENT-HANDOFF-42 by reading browser network evidence","turn_end_reason":"max_turns","session_search_calls":1,"loop_guards":1}
+			".affentctl/recent-anchor/.affent/loops/recent-anchor/events.jsonl": `{"seq":1,"time":"2026-05-27T00:00:00Z","type":"loop.protocol_feed","summary":"digest feed preserved RECENT-HANDOFF-42 recovery anchors","mode":"digest","feed_number":4,"plan_label":"plan:1/2:active","plan_step_index":2,"plan_step_status":"in_progress","plan_step":"continue RECENT-HANDOFF-42 by reading browser network evidence","turn_end_reason":"max_turns","tool_errors":1,"forced_no_tools":1,"session_search_calls":1,"loop_guards":1,"decision_kind":"evidence_quality","decision":"defer","confidence":"high","required_action":"read browser_network_read ref n7 before citing dashboard metrics"}
 `,
 			".affentctl/recent-anchor/events.jsonl": `{"type":"turn.end","data":{"turn_id":"turn-prev","reason":"max_turns","tool_stats":{"tool_failure_by_kind":{"loop_guard_no_new_evidence":2},"loop_guard_interventions":1,"tool_context_truncated":1}}}
 `,
@@ -1446,6 +1446,9 @@ Use session_search recent-session anchors when direct hits are empty.
 				"RECENT-HANDOFF-42",
 				"loop.protocol_feed",
 				"reason=max_turns",
+				"tool_errors=1",
+				"forced_no_tools=1",
+				"browser_network_read ref n7",
 				"loop_guard_no_new_evidence",
 			},
 		},
@@ -1462,12 +1465,33 @@ Use session_search recent-session anchors when direct hits are empty.
 				RecoveryContains: "loop_guard_no_new_evidence",
 				MessageContains:  "recent_sessions",
 			},
+			{
+				QueryContains:   "ORIONABSENT999",
+				SessionID:       "recent-anchor",
+				LoopContains:    "tool_errors=1",
+				MessageContains: "recent_sessions",
+			},
+			{
+				QueryContains:   "ORIONABSENT999",
+				SessionID:       "recent-anchor",
+				LoopContains:    "forced_no_tools=1",
+				MessageContains: "recent_sessions",
+			},
+			{
+				QueryContains:   "ORIONABSENT999",
+				SessionID:       "recent-anchor",
+				LoopContains:    "browser_network_read ref n7",
+				MessageContains: "recent_sessions",
+			},
 		},
 		RequiredFinalText: []string{
 			"RECENT-HANDOFF-42",
 			"browser network evidence",
 			"loop.protocol_feed",
 			"max_turns",
+			"tool_errors=1",
+			"forced_no_tools=1",
+			"browser_network_read ref n7",
 			"loop_guard_no_new_evidence",
 			"recent-anchor",
 		},

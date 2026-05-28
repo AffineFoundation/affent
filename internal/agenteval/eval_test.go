@@ -1480,14 +1480,26 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if recentAnchorRecovery.RequiredToolStatsAtLeast["session_search_recent_sessions"] != 1 {
 		t.Fatalf("recent anchor recovery stats = %#v, want recent_sessions", recentAnchorRecovery.RequiredToolStatsAtLeast)
 	}
-	if len(recentAnchorRecovery.RequiredRecentSessionSearch) != 1 ||
+	if len(recentAnchorRecovery.RequiredRecentSessionSearch) != 4 ||
 		recentAnchorRecovery.RequiredRecentSessionSearch[0].SessionID != "recent-anchor" ||
 		recentAnchorRecovery.RequiredRecentSessionSearch[0].QueryContains != "ORIONABSENT999" ||
 		recentAnchorRecovery.RequiredRecentSessionSearch[0].LoopContains != "loop.protocol_feed" ||
 		recentAnchorRecovery.RequiredRecentSessionSearch[0].RecoveryContains != "loop_guard_no_new_evidence" {
 		t.Fatalf("recent anchor recovery requirement = %#v", recentAnchorRecovery.RequiredRecentSessionSearch)
 	}
-	for _, want := range []string{"RECENT-HANDOFF-42", "loop.protocol_feed", "loop_guard_no_new_evidence", "recent-anchor"} {
+	for _, want := range []string{"tool_errors=1", "forced_no_tools=1", "browser_network_read ref n7"} {
+		found := false
+		for _, req := range recentAnchorRecovery.RequiredRecentSessionSearch {
+			if req.LoopContains == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("recent anchor recovery RequiredRecentSessionSearch = %#v, want loop_contains %q", recentAnchorRecovery.RequiredRecentSessionSearch, want)
+		}
+	}
+	for _, want := range []string{"RECENT-HANDOFF-42", "loop.protocol_feed", "loop_guard_no_new_evidence", "recent-anchor", "tool_errors=1", "forced_no_tools=1", "browser_network_read ref n7"} {
 		if !stringSliceContains(recentAnchorRecovery.RequiredFinalText, want) {
 			t.Fatalf("recent anchor recovery RequiredFinalText = %#v, want %q", recentAnchorRecovery.RequiredFinalText, want)
 		}

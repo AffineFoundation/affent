@@ -1044,8 +1044,11 @@ Current built-in suites:
   repaired count, failure kind, and next-step guidance.
   Session-recall scenarios can require either direct `session_search` hits or
   no-hit `recent_sessions` recovery anchors, including plan, loop, and
-  recovery previews. This lets long-run tests fail when cross-session recovery
-  only exposes generic chat text instead of actionable continuation state.
+  recovery previews. The recent-session recovery case also asserts loop-feed
+  failure counters such as `tool_errors=1`, `forced_no_tools=1`, and the next
+  `browser_network_read` action, so long-run tests fail when cross-session
+  recovery only exposes generic chat text instead of actionable continuation
+  state.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
