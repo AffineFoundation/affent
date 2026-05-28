@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   fileContentText,
   fileEvidenceDraft,
   fileLines,
   fileRangeDraft,
+  fileRangeText,
   filesReviewFacts,
   filesReviewFocus,
   type SessionFileEvidence,
@@ -33,6 +34,7 @@ export function SessionFilesPanel({
 }) {
   const [query, setQuery] = useState("");
   const [previewQuery, setPreviewQuery] = useState("");
+  const [lineJump, setLineJump] = useState("");
   const [workspaceQuery, setWorkspaceQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const [selectedRange, setSelectedRange] = useState<{ path: string; start: number; end: number } | undefined>();
@@ -48,7 +50,8 @@ export function SessionFilesPanel({
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
   const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
   const focus = filesFocus(files.items);
-  function selectPreviewLine(lineNumber: number) {
+  const previewCodeRef = useRef<HTMLDivElement | null>(null);
+  function selectPreviewLine(lineNumber: number, scroll = false) {
     if (!selectedItem) return;
     setSelectedRange((current) => {
       if (!current || current.path !== selectedItem.path || current.start !== current.end) {
@@ -60,6 +63,18 @@ export function SessionFilesPanel({
         end: Math.max(current.end, lineNumber),
       };
     });
+    if (scroll) {
+      window.requestAnimationFrame(() => {
+        const target = previewCodeRef.current?.querySelector<HTMLElement>(`[data-line-number="${lineNumber}"]`);
+        target?.scrollIntoView?.({ block: "center" });
+      });
+    }
+  }
+  function jumpToPreviewLine() {
+    if (!selectedItem || snapshotLines.length === 0) return;
+    const lineNumber = Number.parseInt(lineJump, 10);
+    if (!Number.isFinite(lineNumber)) return;
+    selectPreviewLine(Math.max(1, Math.min(snapshotLines.length, lineNumber)), true);
   }
   return (
     <details className="session-skills-panel session-files-panel" data-testid="session-files-panel" open={defaultOpen}>
@@ -165,30 +180,50 @@ export function SessionFilesPanel({
                   placeholder="text in loaded file"
                 />
               </label>
+              <span className="session-file-line-jump">
+                <input
+                  aria-label="Go to line"
+                  inputMode="numeric"
+                  value={lineJump}
+                  onChange={(event) => setLineJump(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") jumpToPreviewLine();
+                  }}
+                  placeholder="line"
+                />
+                <button type="button" className="ghost-action" onClick={jumpToPreviewLine}>
+                  Go
+                </button>
+              </span>
               <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
             </div>
-            {activeRange && onUseAsDraft ? (
+            {activeRange ? (
               <div className="session-file-range-actions" data-testid="session-file-range-actions">
                 <span>
                   Lines {activeRange.start}-{activeRange.end}
                 </span>
-                <button
-                  type="button"
-                  className="ghost-action"
-                  onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "ask"), "file_range")}
-                >
-                  Ask about range
-                </button>
-                <button
-                  type="button"
-                  className="ghost-action"
-                  onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "edit"), "file_range")}
-                >
-                  Edit range
-                </button>
+                <CopyButton label="Copy range" value={fileRangeText(selectedItem, activeRange.start, activeRange.end)} className="ghost-action" />
+                {onUseAsDraft ? (
+                  <>
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "ask"), "file_range")}
+                    >
+                      Ask about range
+                    </button>
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "edit"), "file_range")}
+                    >
+                      Edit range
+                    </button>
+                  </>
+                ) : null}
               </div>
             ) : null}
-            <div className="code session-file-preview-code" data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot">
+            <div className="code session-file-preview-code" data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot" ref={previewCodeRef}>
               {snapshotLines.map((line, index) => {
                 const lineNumber = index + 1;
                 const selected = activeRange ? lineNumber >= activeRange.start && lineNumber <= activeRange.end : false;
@@ -197,6 +232,7 @@ export function SessionFilesPanel({
                     key={lineNumber}
                     type="button"
                     className="session-file-code-line"
+                    data-line-number={lineNumber}
                     data-selected={selected ? "true" : "false"}
                     onClick={() => selectPreviewLine(lineNumber)}
                   >

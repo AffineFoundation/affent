@@ -44,6 +44,9 @@ describe("SessionFilesPanel", () => {
 
     await user.click(screen.getByRole("button", { name: /1 export function checkout/ }));
     expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 1-1");
+    await user.click(screen.getByRole("button", { name: "Copy range" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File range for src/payments.ts"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Lines: 1-1"));
     await user.click(screen.getByRole("button", { name: /3 }/ }));
     expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 1-3");
     await user.click(screen.getByRole("button", { name: "Ask about range" }));
@@ -52,6 +55,10 @@ describe("SessionFilesPanel", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("export function checkout"), "file_range");
     await user.click(screen.getByRole("button", { name: "Edit range" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Edit this selected file range"), "file_range");
+    await user.clear(screen.getByLabelText("Go to line"));
+    await user.type(screen.getByLabelText("Go to line"), "2");
+    await user.click(screen.getByRole("button", { name: "Go" }));
+    expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 2-2");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");

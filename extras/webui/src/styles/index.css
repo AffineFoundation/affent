@@ -3493,10 +3493,29 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-file-preview-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: end;
   min-width: 0;
+}
+
+.session-file-line-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-file-line-jump input {
+  width: 64px;
+  min-height: 28px;
+  border: 1px solid rgba(217, 224, 232, 0.86);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.84);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 0 7px;
 }
 
 .session-file-range-actions {
@@ -13610,6 +13629,12 @@ html[data-theme="dark"] .session-file-preview {
 html[data-theme="dark"] .session-file-range-actions {
   border-color: rgba(45, 212, 191, 0.24);
   background: rgba(13, 40, 38, 0.34);
+}
+
+html[data-theme="dark"] .session-file-line-jump input {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(9, 12, 17, 0.72);
+  color: var(--text);
 }
 
 html[data-theme="dark"] .session-file-code-line:hover,

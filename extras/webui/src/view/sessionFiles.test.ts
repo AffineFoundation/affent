@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText, fileLines, fileRangeDraft, filesEvidenceDraft, filesEvidenceText, filesReviewFacts, filesReviewFocus } from "./sessionFiles";
+import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText, fileLines, fileRangeDraft, fileRangeText, filesEvidenceDraft, filesEvidenceText, filesReviewFacts, filesReviewFocus } from "./sessionFiles";
 
 describe("buildSessionFiles", () => {
   it("summarizes read, list, and changed file evidence from reducer state", () => {
@@ -178,6 +178,9 @@ describe("buildSessionFiles", () => {
     expect(fileContentText(item)).toContain("checkout route handler");
     expect(fileContentDraft(item)).toContain("Use this loaded file snapshot in the next step");
     expect(fileLines(item)).toEqual(["checkout route handler", "Next: rerun checkout tests"]);
+    expect(fileRangeText(item, 2, 1)).toContain("File range for src/payments.ts");
+    expect(fileRangeText(item, 2, 1)).toContain("Lines: 1-2");
+    expect(fileRangeText(item, 2, 1)).toContain("checkout route handler");
     expect(fileRangeDraft(item, 2, 1, "ask")).toContain("Lines: 1-2");
     expect(fileRangeDraft(item, 2, 1, "ask")).toContain("Review this selected file range");
     expect(fileRangeDraft(item, 1, 1, "edit")).toContain("Edit this selected file range");

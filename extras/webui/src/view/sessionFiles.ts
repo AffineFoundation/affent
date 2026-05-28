@@ -141,6 +141,19 @@ export function fileContentText(item: SessionFileEvidence): string {
   return lines.join("\n");
 }
 
+export function fileRangeText(item: SessionFileEvidence, startLine: number, endLine: number): string {
+  const lines = fileLines(item);
+  const start = Math.max(1, Math.min(startLine, endLine));
+  const end = Math.min(lines.length, Math.max(startLine, endLine));
+  const selected = lines.slice(start - 1, end).join("\n");
+  return [
+    `File range for ${item.path}`,
+    `Lines: ${start}-${end}`,
+    "",
+    selected,
+  ].join("\n");
+}
+
 export function fileContentDraft(item: SessionFileEvidence): string {
   const content = item.contentPreview ?? "";
   const snapshot = item.contentTruncated ? "partial read_file output" : "read_file output";
@@ -162,7 +175,6 @@ export function fileRangeDraft(
   const lines = fileLines(item);
   const start = Math.max(1, Math.min(startLine, endLine));
   const end = Math.min(lines.length, Math.max(startLine, endLine));
-  const selected = lines.slice(start - 1, end).join("\n");
   const lead = intent === "edit"
     ? "Edit this selected file range in the next step:"
     : "Review this selected file range in the next step:";
@@ -171,7 +183,7 @@ export function fileRangeDraft(
     `File: ${item.path}`,
     `Lines: ${start}-${end}`,
     "",
-    boundedDraftContent(selected),
+    boundedDraftContent(lines.slice(start - 1, end).join("\n")),
   ].join("\n");
 }
 
