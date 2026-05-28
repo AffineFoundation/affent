@@ -136,6 +136,10 @@ describe("SessionFilesPanel", () => {
       />,
     );
 
+    const changedItem = within(screen.getByTestId("session-files-list")).getAllByRole("listitem")[0];
+    await user.click(within(changedItem).getByRole("button", { name: "Open current" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
+
     const browser = screen.getByTestId("session-workspace-browser");
     expect(browser).toHaveTextContent("Workspace browser");
     expect(browser).toHaveTextContent("Workspace root");

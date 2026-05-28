@@ -5,8 +5,10 @@ import {
   artifactEvidenceText,
   artifactKind,
   artifactKindLabel,
+  artifactLineageLabel,
   artifactReviewDetail,
   artifactReviewFocus,
+  artifactReviewFacts,
   artifactReviewStats,
   artifactReviewSummary,
   artifactSummaryPreview,
@@ -37,6 +39,7 @@ export function SessionArtifactsPanel({
   const filteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
   const visibleArtifacts = trimmedQuery ? filteredArtifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : filteredArtifacts;
   const focus = artifactReviewFocus(artifacts);
+  const reviewFacts = artifactReviewFacts(artifacts);
   const focusDownloadUrl = focus ? downloadHref?.(focus.path) : undefined;
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
@@ -56,14 +59,14 @@ export function SessionArtifactsPanel({
             {focus ? (
               <div className="session-artifacts-focus" data-testid="session-artifacts-focus">
                 <div className="session-artifacts-focus-main">
-                  <small>{artifactKindLabel(focus)}</small>
+                  <small>{[artifactKindLabel(focus), artifactLineageLabel(focus)].filter(Boolean).join(" · ")}</small>
                   <strong title={focus.path}>{focus.name}</strong>
                   <b>{artifactSizeLabel(focus) || "recorded"}</b>
                 </div>
                 <div className="session-artifacts-focus-actions">
                   {onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(focus.path)}>
-                      Open latest
+                      Open artifact
                     </button>
                   ) : null}
                   {focusDownloadUrl ? (
@@ -75,6 +78,15 @@ export function SessionArtifactsPanel({
                 </div>
               </div>
             ) : null}
+            <div className="session-artifacts-facts" aria-label="Artifact review facts">
+              {reviewFacts.map((fact) => (
+                <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+                  <small>{fact.label}</small>
+                  <strong>{fact.value}</strong>
+                  <b>{fact.detail}</b>
+                </span>
+              ))}
+            </div>
             <div className="session-artifacts-filterbar" role="group" aria-label="Artifact filters">
               <ArtifactFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
               <ArtifactFilterButton label="Deliverables" value={stats.deliverables} active={filter === "deliverable"} onClick={() => setFilter("deliverable")} />
@@ -169,6 +181,8 @@ function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
     artifact.name,
     artifact.path,
     artifact.source,
+    artifact.tool,
+    artifactLineageLabel(artifact),
     artifact.summary,
     artifactKindLabel(artifact),
     artifactSizeLabel(artifact),
@@ -179,6 +193,7 @@ function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
 function artifactMeta(artifact: TurnArtifact): string {
   const parts = [
     artifactKindLabel(artifact),
+    artifactLineageLabel(artifact),
     artifact.source,
     artifactSizeLabel(artifact) || undefined,
   ].filter(Boolean);

@@ -12,6 +12,8 @@ describe("buildTurnArtifacts", () => {
         path: ".affent/artifacts/tool-results/000001-c1.txt",
         name: "000001-c1.txt",
         source: "cat big.log",
+        tool: "shell",
+        callIndex: 1,
         summary: "line 1\nline 2\n…(truncated)",
         truncated: true,
         bytes: 8192,

@@ -119,8 +119,13 @@ export function SessionFilesPanel({
               <strong title={focus.item.path}>{displayPath(focus.item.path)}</strong>
               <small>{focus.detail}</small>
             </div>
-            {focus.item.contentPreview || (focus.item.artifactPath && onOpenArtifact) ? (
+            {focus.item.contentPreview || (focus.item.artifactPath && onOpenArtifact) || onOpenWorkspacePath ? (
               <span className="session-files-focus-actions">
+                {onOpenWorkspacePath ? (
+                  <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(focus.item.path)}>
+                    Open current file
+                  </button>
+                ) : null}
                 {focus.item.contentPreview ? (
                   <button type="button" className="ghost-action" onClick={() => setSelectedPath(focus.item.path)}>
                     View snapshot
@@ -230,6 +235,11 @@ export function SessionFilesPanel({
                   ) : null}
                 </div>
                 <span className="session-files-actions">
+                  {onOpenWorkspacePath ? (
+                    <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(item.path)}>
+                      Open current
+                    </button>
+                  ) : null}
                   {item.contentPreview ? (
                     <button
                       type="button"

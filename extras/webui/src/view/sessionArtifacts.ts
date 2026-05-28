@@ -8,18 +8,27 @@ export interface SessionArtifactStats {
   deliverables: number;
   fullOutputs: number;
   recordedBytes: number;
+  latestTurn?: number;
+  sourceCount: number;
+}
+
+export interface SessionArtifactFact {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "ok" | "attention" | "neutral";
 }
 
 export function buildSessionArtifacts(session: SessionState): TurnArtifact[] {
   const seen = new Set<string>();
   const artifacts: TurnArtifact[] = [];
-  for (const turn of session.turns) {
-    for (const artifact of buildTurnArtifacts(turn)) {
+  session.turns.forEach((turn, turnIndex) => {
+    for (const artifact of buildTurnArtifacts(turn, { turnNumber: turnIndex + 1 })) {
       if (seen.has(artifact.path)) continue;
       seen.add(artifact.path);
       artifacts.push(artifact);
     }
-  }
+  });
   return artifacts;
 }
 
@@ -35,6 +44,8 @@ export function sessionArtifactLabel(session: SessionState): string | undefined 
 
 export function artifactEvidenceText(artifact: TurnArtifact): string {
   const lines = [`Artifact evidence for ${artifact.path}`, `Source: ${artifact.source}`];
+  const lineage = artifactLineageLabel(artifact);
+  if (lineage) lines.push(`Origin: ${lineage}`);
   const size = artifactSizeLabel(artifact);
   if (size) lines.push(`Size: ${size}`);
   if (artifact.truncated) lines.push("Full output available as artifact");
@@ -62,13 +73,66 @@ export function artifactKindLabel(artifact: TurnArtifact): string {
   return artifactKind(artifact) === "full_output" ? "Full output" : "Deliverable";
 }
 
+export function artifactLineageLabel(artifact: TurnArtifact): string | undefined {
+  const parts = [
+    artifact.turnNumber != null ? `turn ${artifact.turnNumber}` : undefined,
+    artifact.tool,
+    artifact.callIndex != null ? `call ${artifact.callIndex}` : undefined,
+  ].filter(Boolean);
+  return parts.join(" · ") || undefined;
+}
+
 export function artifactReviewStats(artifacts: readonly TurnArtifact[]): SessionArtifactStats {
+  const latestTurn = artifacts
+    .map((artifact) => artifact.turnNumber)
+    .filter((turn): turn is number => typeof turn === "number")
+    .sort((a, b) => a - b)
+    .at(-1);
+  const sources = new Set(artifacts.map((artifact) => artifact.tool || artifact.source).filter(Boolean));
   return {
     total: artifacts.length,
     deliverables: artifacts.filter((artifact) => artifactKind(artifact) === "deliverable").length,
     fullOutputs: artifacts.filter((artifact) => artifactKind(artifact) === "full_output").length,
     recordedBytes: artifacts.reduce((sum, artifact) => sum + (artifact.bytes ?? 0), 0),
+    latestTurn,
+    sourceCount: sources.size,
   };
+}
+
+export function artifactReviewFacts(artifacts: readonly TurnArtifact[]): SessionArtifactFact[] {
+  const stats = artifactReviewStats(artifacts);
+  return [
+    {
+      label: "Files",
+      value: String(stats.total),
+      detail: stats.total === 1 ? "artifact" : "artifacts",
+      tone: stats.total > 0 ? "ok" : "neutral",
+    },
+    {
+      label: "Full output",
+      value: String(stats.fullOutputs),
+      detail: "tool logs",
+      tone: "neutral",
+    },
+    {
+      label: "Deliverables",
+      value: String(stats.deliverables),
+      detail: "generated files",
+      tone: stats.deliverables > 0 ? "ok" : "neutral",
+    },
+    {
+      label: "Recorded",
+      value: stats.recordedBytes > 0 ? `${Math.ceil(stats.recordedBytes / 1024)} KiB` : "n/a",
+      detail: "known size",
+      tone: "neutral",
+    },
+    {
+      label: "Latest turn",
+      value: stats.latestTurn != null ? String(stats.latestTurn) : "n/a",
+      detail: `${stats.sourceCount} ${stats.sourceCount === 1 ? "source" : "sources"}`,
+      tone: "neutral",
+    },
+  ];
 }
 
 export function artifactReviewSummary(artifacts: readonly TurnArtifact[]): string {

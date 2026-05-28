@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { artifactEvidenceDraft, artifactEvidenceText, artifactKind, artifactReviewDetail, artifactReviewSummary, buildSessionArtifacts, buildWorkbenchArtifacts, sessionArtifactLabel } from "./sessionArtifacts";
+import {
+  artifactEvidenceDraft,
+  artifactEvidenceText,
+  artifactKind,
+  artifactLineageLabel,
+  artifactReviewDetail,
+  artifactReviewFacts,
+  artifactReviewSummary,
+  buildSessionArtifacts,
+  buildWorkbenchArtifacts,
+  sessionArtifactLabel,
+} from "./sessionArtifacts";
 
 describe("sessionArtifacts", () => {
   it("deduplicates artifacts across turns and summarizes their size", () => {
@@ -78,12 +89,17 @@ describe("sessionArtifacts", () => {
     expect(buildWorkbenchArtifacts(session)).toHaveLength(1);
     expect(sessionArtifactLabel(session)).toBe("1 file (8 KiB, 1 MiB omitted)");
     expect(artifactKind(artifacts[0])).toBe("full_output");
+    expect(artifactLineageLabel(artifacts[0])).toBe("turn 1 · web_fetch · call 1");
     expect(artifactReviewSummary(artifacts)).toBe("1 full output");
     expect(artifactReviewDetail(artifacts)).toBe("1 file · 8 KiB recorded");
+    expect(artifactReviewFacts(artifacts)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Latest turn", value: "1", detail: "1 source" }),
+    ]));
     expect(artifactEvidenceText(artifacts[0])).toBe(
       [
         "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
         "Source: web_fetch",
+        "Origin: turn 1 · web_fetch · call 1",
         "Size: (8 KiB, cap 256 KiB, 1 MiB omitted)",
         "Full output available as artifact",
         "Summary: saved output",

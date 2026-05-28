@@ -5,6 +5,9 @@ export interface TurnArtifact {
   path: string;
   name: string;
   source: string;
+  tool?: string;
+  turnNumber?: number;
+  callIndex?: number;
   summary?: string;
   truncated: boolean;
   bytes?: number;
@@ -12,17 +15,20 @@ export interface TurnArtifact {
   capBytes?: number;
 }
 
-export function buildTurnArtifacts(turn: TurnState): TurnArtifact[] {
+export function buildTurnArtifacts(turn: TurnState, context: { turnNumber?: number } = {}): TurnArtifact[] {
   const seen = new Set<string>();
   const artifacts: TurnArtifact[] = [];
 
-  for (const call of turn.toolCalls) {
+  for (const [index, call] of turn.toolCalls.entries()) {
     if (!call.resultArtifactPath || seen.has(call.resultArtifactPath)) continue;
     seen.add(call.resultArtifactPath);
     artifacts.push({
       path: call.resultArtifactPath,
       name: artifactName(call.resultArtifactPath),
       source: toolSource(call),
+      tool: call.tool,
+      turnNumber: context.turnNumber,
+      callIndex: index + 1,
       summary: call.resultSummary,
       truncated: call.resultTruncated,
       bytes: call.resultBytes,
