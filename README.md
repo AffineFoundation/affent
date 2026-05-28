@@ -9,9 +9,6 @@ record. The browser Workbench is the primary operating surface; the CLI, HTTP
 API, traces, memory, plans, skills, and artifacts all read from the same
 file-backed state.
 
-Affent is early, but it is built for long-running software tasks rather than
-single prompt demos.
-
 ## What Affent Provides
 
 | Area | Capability |
