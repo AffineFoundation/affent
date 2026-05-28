@@ -23,8 +23,7 @@ export function SessionTracePanel({
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
   const issueGroups = useMemo(() => traceToolIssueGroups(trace.toolIssues), [trace.toolIssues]);
-  const artifactCount = useMemo(() => countFilter(events, "artifacts"), [events]);
-  const actionCount = useMemo(() => countFilter(events, "actions"), [events]);
+  const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(
     () => {
       const source = filterEventsByTraceFilter(events, filter);
@@ -89,71 +88,27 @@ export function SessionTracePanel({
                 <button type="button" onClick={() => applySearch("unclassified", "unclassified")}>unclassified</button>
               </div>
             ) : null}
-            <div className="session-trace-focus" data-testid="session-trace-focus">
-              <button
-                type="button"
-                data-active={filter === "issues"}
-                disabled={trace.toolIssueCount === 0}
-                onClick={() => {
-                  setFilter((current) => current === "issues" ? "all" : "issues");
-                  setQuery("");
-                }}
-              >
-                <strong>{trace.toolIssueCount}</strong>
-                <span>tool issues</span>
-              </button>
-              <button
-                type="button"
-                data-active={trimmedQuery === "status:failed"}
-                disabled={trace.toolIssueCount === 0}
-                onClick={() => applySearch("status:failed")}
-              >
-                <strong>{trace.toolIssueCount}</strong>
-                <span>failed calls</span>
-              </button>
-              <button
-                type="button"
-                data-active={filter === "actions"}
-                disabled={actionCount === 0}
-                onClick={() => {
-                  setFilter((current) => current === "actions" ? "all" : "actions");
-                  setQuery("");
-                }}
-              >
-                <strong>{actionCount}</strong>
-                <span>actions</span>
-              </button>
-              <button
-                type="button"
-                data-active={filter === "artifacts"}
-                disabled={artifactCount === 0}
-                onClick={() => {
-                  setFilter((current) => current === "artifacts" ? "all" : "artifacts");
-                  setQuery("");
-                }}
-              >
-                <strong>{artifactCount}</strong>
-                <span>artifacts</span>
-              </button>
-              <button
-                type="button"
-                data-active={filter === "unclassified"}
-                disabled={trace.unknownCount === 0}
-                onClick={() => {
-                  setFilter((current) => current === "unclassified" ? "all" : "unclassified");
-                  setQuery("");
-                }}
-              >
-                <strong>{trace.unknownCount}</strong>
-                <span>unclassified</span>
-              </button>
+            <div className="session-trace-resultbar" data-testid="session-trace-resultbar">
+              <div>
+                <strong>{visibleEvents.length}</strong>
+                <span>{resultCountLabel(visibleEvents.length, hasActiveNarrowing)}</span>
+              </div>
+              {filter !== "all" ? <span>Filter: {filterLabel(filter)}</span> : null}
+              {trimmedQuery ? <span>Search: {trimmedQuery}</span> : null}
+              {hasActiveNarrowing ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilter("all");
+                    setQuery("");
+                  }}
+                >
+                  Reset
+                </button>
+              ) : null}
             </div>
             <div className="session-trace-metrics" data-testid="session-trace-metrics">
-              <span><strong>Entries</strong>{trace.eventCount}</span>
               <span><strong>Records</strong>{trace.recordCount}</span>
-              {trace.toolIssueCount > 0 ? <span data-tone="error"><strong>Tool issues</strong>{trace.toolIssueCount}</span> : null}
-              {trimmedQuery ? <span><strong>Matching</strong>{visibleEvents.length}</span> : null}
-              {filter !== "all" ? <span><strong>Filter</strong>{filterLabel(filter)}</span> : null}
               {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
               {trace.unknownCount > 0 ? <span data-tone="warning"><strong>Unclassified</strong>{trace.unknownCount}</span> : null}
             </div>
@@ -295,6 +250,11 @@ function emptyStateLabel(filter: TraceFilter, query: string): string {
   const filterText = filter === "all" ? "" : filterLabel(filter);
   if (query) return filterText ? `${filterText} and "${query}"` : `"${query}"`;
   return filterText || "the selected filter";
+}
+
+function resultCountLabel(count: number, narrowed: boolean): string {
+  if (narrowed) return count === 1 ? "matching entry" : "matching entries";
+  return count === 1 ? "trace entry loaded" : "trace entries loaded";
 }
 
 function eventMatchesFilter(event: NormalizedEvent, filter: TraceFilter, callTools: Map<string, string>): boolean {
