@@ -172,7 +172,7 @@ func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 	pool.cfg.BaseURL = srv.URL
 	pool.cfg.EnableLoopProtocol = true
 
-	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/loop-mode/messages", strings.NewReader(`{"mode":"loop_setup","content":"market monitor"}`))
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/loop-mode/messages", strings.NewReader(`{"mode":"loop_setup","content":"market monitor","display_text":"Set up loop: market monitor"}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusAccepted {
@@ -185,6 +185,28 @@ func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 	if loopstate.ProtocolStatus(protocol) != "draft" || !strings.Contains(protocol, "market monitor") {
 		t.Fatalf("loop setup mode protocol:\n%s", protocol)
 	}
+	s := activeSessionByID(pool, "loop-mode")
+	if s == nil {
+		t.Fatal("loop setup should create active session")
+	}
+	messages := s.conv.Snapshot()
+	sawSetupPrompt := false
+	for _, msg := range messages {
+		if msg.Role != "user" {
+			continue
+		}
+		if strings.Contains(msg.Content, "Loop protocol activation is pending, not active yet.") &&
+			strings.Contains(msg.Content, "Set up loop for: market monitor") {
+			sawSetupPrompt = true
+		}
+		if msg.Content == "market monitor" {
+			t.Fatalf("conversation should contain backend loop setup prompt, not raw WebUI goal: %+v", messages)
+		}
+	}
+	if !sawSetupPrompt {
+		t.Fatalf("conversation should include backend loop setup prompt, got %+v", messages)
+	}
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"display_text":"Set up loop: market monitor"`)
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"type":"turn.end"`)
 }
 
