@@ -443,6 +443,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxDebugBriefTagRates: map[string]float64{
 					"empty_recall:no_recent_sessions": 0,
 					"loop_guard:forced_no_tools":      0,
+					"recall:memory_no_topic_anchors":  0,
 					"recall:no_context":               0,
 					"recall:no_matched_terms":         0,
 					"recall:weak_context":             0,

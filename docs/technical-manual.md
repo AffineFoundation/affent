@@ -1092,9 +1092,12 @@ observability, shared memory, tool recovery, loop-guard no-tool fallback, and
 cross-session recovery regressions fail the batch. No-hit session recall is
 allowed only when `recent_sessions` exposes recovery anchors; no-hit recall
 without recent anchors trips the `empty_recall:no_recent_sessions` debug tag
-gate. Failed, not-run, or abnormal verifier tags also trip the longrun profile
-so code/PR scenarios do not rely only on aggregate verifier pass rate or pass
-rate to expose verification regressions. Use
+gate. Memory search misses are not gated merely for missing once, but misses
+without topic anchors trip `recall:memory_no_topic_anchors` so shared-memory
+regressions have to expose a retry path or fail the profile. Failed, not-run, or
+abnormal verifier tags also trip the longrun profile so code/PR scenarios do not
+rely only on aggregate verifier pass rate or pass rate to expose verification
+regressions. Use
 `--quality-profile web-evidence` for live/current web evidence runs; it also
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads, browser network refs that were not followed by
