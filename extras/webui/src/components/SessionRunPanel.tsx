@@ -16,7 +16,10 @@ export function SessionRunPanel({
 }) {
   const [manualCommand, setManualCommand] = useState("");
   const [manualCwd, setManualCwd] = useState("");
-  const focusCommand = run.commands.find((command) => command.status === "failed") ?? run.commands.find((command) => command.status === "running");
+  const [query, setQuery] = useState("");
+  const trimmedQuery = query.trim();
+  const visibleCommands = trimmedQuery ? run.commands.filter((command) => runMatchesQuery(command, trimmedQuery)) : run.commands;
+  const focusCommand = visibleCommands.find((command) => command.status === "failed") ?? visibleCommands.find((command) => command.status === "running");
 
   function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,9 +43,22 @@ export function SessionRunPanel({
             onUseAsDraft={onUseAsDraft}
           />
         ) : null}
-        {run.commands.length > 0 ? (
+        {run.commands.length > 1 ? (
+          <div className="session-skills-controls">
+            <label className="session-skills-search">
+              <span>Search commands</span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="command, cwd, status, or output" />
+            </label>
+            {trimmedQuery ? (
+              <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                Clear
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {visibleCommands.length > 0 ? (
           <ol className="session-run-list" data-testid="session-run-list">
-            {run.commands.map((command, index) => (
+            {visibleCommands.map((command, index) => (
               <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
                 <div className="session-run-main">
                   <strong title={command.command}>{command.command}</strong>
@@ -69,6 +85,8 @@ export function SessionRunPanel({
               </li>
             ))}
           </ol>
+        ) : run.commands.length > 0 ? (
+          <div className="session-skills-empty">No commands matching "{trimmedQuery}".</div>
         ) : (
           <div className="session-skills-empty">No shell commands in this chat.</div>
         )}
@@ -102,6 +120,19 @@ export function SessionRunPanel({
       </div>
     </details>
   );
+}
+
+function runMatchesQuery(command: SessionRunCommand, query: string): boolean {
+  const haystack = [
+    command.command,
+    command.cwd,
+    command.status,
+    runCommandMeta(command),
+    command.detail,
+    command.next,
+    command.artifactPath,
+  ].filter(Boolean).join("\n").toLowerCase();
+  return haystack.includes(query.toLowerCase());
 }
 
 function RunFocus({
