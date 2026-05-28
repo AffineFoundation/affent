@@ -1308,6 +1308,9 @@ func renderTimelineDecisions(b *strings.Builder, trace *Trace) {
 	b.WriteString("\n## Loop Decisions\n\n")
 	for i, d := range trace.LoopDecisions {
 		fmt.Fprintf(b, "%d. kind=`%s` decision=`%s` trigger=`%s` confidence=`%s`\n", i+1, d.Kind, d.Decision, d.Trigger, d.Confidence)
+		if d.TokenBudget > 0 {
+			fmt.Fprintf(b, "   token_budget: `%d`\n", d.TokenBudget)
+		}
 		if d.Reason != "" {
 			fmt.Fprintf(b, "   reason: %s\n", timelineInline(d.Reason, 600))
 		}

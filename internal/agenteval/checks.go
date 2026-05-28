@@ -1530,6 +1530,9 @@ func formatLoopDecisionExample(d LoopDecision) string {
 	if d.Trigger != "" {
 		parts = append(parts, "trigger="+d.Trigger)
 	}
+	if d.TokenBudget > 0 {
+		parts = append(parts, fmt.Sprintf("token_budget=%d", d.TokenBudget))
+	}
 	return strings.Join(parts, " ")
 }
 

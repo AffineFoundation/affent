@@ -242,6 +242,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			Confidence:     p.Confidence,
 			Reason:         p.Reason,
 			RequiredAction: p.RequiredAction,
+			TokenBudget:    p.TokenBudget,
 			TurnID:         p.TurnID,
 			DecisionID:     p.DecisionID,
 		})

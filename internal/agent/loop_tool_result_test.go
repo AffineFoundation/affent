@@ -2609,6 +2609,7 @@ func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
 	deadline := time.After(10 * time.Second)
 	var sawSkipped bool
 	var sawFinal bool
+	var sawDecision bool
 	var usage sse.UsagePayload
 	var endStats *sse.ToolRuntimeStats
 	for {
@@ -2634,6 +2635,20 @@ func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
 				if p.Text == "summary after input budget" {
 					sawFinal = true
 				}
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				if p.Kind == "input_budget" {
+					sawDecision = true
+					if p.Trigger != "turn_input_tokens_exhausted" || p.Decision != "defer" || p.TokenBudget != 50 {
+						t.Fatalf("unexpected input-budget decision: %+v", p)
+					}
+					if p.VisibleInUI == nil || !*p.VisibleInUI || !strings.Contains(p.RequiredAction, "Stop taking more tool actions") {
+						t.Fatalf("input-budget decision should be visible and actionable: %+v", p)
+					}
+				}
 			case sse.TypeUsage:
 				if err := json.Unmarshal(ev.Data, &usage); err != nil {
 					t.Fatalf("decode usage: %v", err)
@@ -2655,6 +2670,9 @@ func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
 				}
 				if !sawSkipped || !sawFinal {
 					t.Fatalf("sawSkipped=%t sawFinal=%t", sawSkipped, sawFinal)
+				}
+				if !sawDecision {
+					t.Fatal("expected visible input-budget loop decision")
 				}
 				if usage.InputTokens != 70 || usage.OutputTokens != 7 {
 					t.Fatalf("usage = %+v, want 70/7", usage)
@@ -2728,6 +2746,7 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 
 	deadline := time.After(10 * time.Second)
 	var sawFinal bool
+	var sawDecision bool
 	var usage sse.UsagePayload
 	for {
 		select {
@@ -2744,6 +2763,20 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 				if p.Text == "projected budget summary" {
 					sawFinal = true
 				}
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				if p.Kind == "input_budget" {
+					sawDecision = true
+					if p.Trigger != "projected_request_input_tokens" || p.Decision != "defer" || p.TokenBudget != 50 {
+						t.Fatalf("unexpected projected input-budget decision: %+v", p)
+					}
+					if p.VisibleInUI == nil || !*p.VisibleInUI || !strings.Contains(p.Reason, "Projected next request") {
+						t.Fatalf("projected input-budget decision should be visible and explain projection: %+v", p)
+					}
+				}
 			case sse.TypeUsage:
 				if err := json.Unmarshal(ev.Data, &usage); err != nil {
 					t.Fatalf("decode usage: %v", err)
@@ -2758,6 +2791,9 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 				}
 				if !sawFinal {
 					t.Fatal("missing projected-budget final answer")
+				}
+				if !sawDecision {
+					t.Fatal("expected projected input-budget loop decision")
 				}
 				if secondRequestHadTools.Load() {
 					t.Fatal("projected-budget recovery request must not include tools")

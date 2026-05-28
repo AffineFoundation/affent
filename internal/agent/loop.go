@@ -1075,6 +1075,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	guardInterventions := 0
 	budgetExhaustedOmissions := 0
 	processFinalRecovered := false
+	inputBudgetDecisionPublished := false
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
 	runBudgetFinal := func(prompt, skippedReason string) (bool, string, error) {
@@ -1131,6 +1132,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		if budget <= 0 || totalIn < budget {
 			return false
 		}
+		l.publishInputBudgetLoopDecision(turnID, "turn_input_tokens_exhausted", totalIn, 0, budget, &inputBudgetDecisionPublished)
 		if !forceNoToolsNext {
 			toolStats.ForcedNoTools++
 		}
@@ -1153,6 +1155,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				return false
 			}
 		}
+		l.publishInputBudgetLoopDecision(turnID, "projected_request_input_tokens", totalIn, projected, budget, &inputBudgetDecisionPublished)
 		if !forceNoToolsNext {
 			toolStats.ForcedNoTools++
 		}
@@ -1596,6 +1599,35 @@ func (l *Loop) publishEvidenceQualityDecisions(turnID string, stats sse.ToolRunt
 		RequiredAction: "Read browser network responses or an official API/source before citing dynamic page metrics.",
 		VisibleInUI:    &visible,
 	})
+}
+
+func (l *Loop) publishInputBudgetLoopDecision(turnID, trigger string, observed, projected, budget int, published *bool) {
+	if published != nil && *published {
+		return
+	}
+	if budget <= 0 {
+		return
+	}
+	visible := true
+	reason := fmt.Sprintf("Turn input token pressure reached %d token(s) against a %d-token budget.", observed, budget)
+	if projected > 0 {
+		reason = fmt.Sprintf("Projected next request would raise this turn to about %d input token(s) against a %d-token budget.", projected, budget)
+	}
+	l.publishLoopDecision(sse.LoopDecisionPayload{
+		TurnID:         turnID,
+		DecisionID:     "input-budget-" + trigger,
+		Kind:           "input_budget",
+		Trigger:        trigger,
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         reason,
+		RequiredAction: "Stop taking more tool actions in this turn; produce a compact final answer from collected evidence, then continue in a new turn if more work is needed.",
+		TokenBudget:    budget,
+		VisibleInUI:    &visible,
+	})
+	if published != nil {
+		*published = true
+	}
 }
 
 func (l *Loop) publishLoopDecision(payload sse.LoopDecisionPayload) {
