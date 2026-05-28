@@ -1335,6 +1335,42 @@ func TestNoPlanErrors(t *testing.T) {
 	}
 }
 
+func TestFinalPlanCompleted(t *testing.T) {
+	okTrace := Trace{Tools: []ToolCall{
+		{
+			CallID: "c1",
+			Tool:   "plan",
+			Args:   map[string]any{"action": "update"},
+			Result: `{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"completed"}]}`,
+		},
+	}}
+	if res := FinalPlanCompleted().Eval(okTrace); !res.Pass {
+		t.Fatalf("expected completed plan to pass: %+v", res)
+	}
+
+	pendingTrace := Trace{Tools: []ToolCall{
+		{
+			CallID: "c1",
+			Tool:   "plan",
+			Args:   map[string]any{"action": "update"},
+			Result: `{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"pending"}]}`,
+		},
+	}}
+	res := FinalPlanCompleted().Eval(pendingTrace)
+	if res.Pass {
+		t.Fatal("expected unfinished plan to fail")
+	}
+	for _, want := range []string{`completed_steps=1`, `total_steps=2`, `current_step_status="pending"`, `ship`} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
+		}
+	}
+
+	if res := FinalPlanCompleted().Eval(Trace{}); res.Pass || !strings.Contains(res.Detail, "plan_calls=0") {
+		t.Fatalf("missing plan should fail with plan call count: %+v", res)
+	}
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{

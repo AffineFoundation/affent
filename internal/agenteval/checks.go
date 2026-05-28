@@ -1793,6 +1793,31 @@ func NoPlanErrors() Check {
 	}
 }
 
+func FinalPlanCompleted() Check {
+	return Check{
+		Name: "final_plan_completed",
+		Eval: func(t Trace) CheckResult {
+			stats := t.PlanStats()
+			detail := fmt.Sprintf(
+				"plan_calls=%d completed_steps=%d total_steps=%d current_step_index=%d current_step_status=%q current_step=%q",
+				stats.Calls,
+				stats.CompletedSteps,
+				stats.TotalSteps,
+				stats.CurrentStepIndex,
+				stats.CurrentStepStatus,
+				stats.CurrentStep,
+			)
+			if !stats.HasAny() {
+				return CheckResult{Pass: false, Detail: detail}
+			}
+			if stats.TotalSteps > 0 && stats.CompletedSteps == stats.TotalSteps {
+				return CheckResult{Pass: true, Detail: detail}
+			}
+			return CheckResult{Pass: false, Detail: detail}
+		},
+	}
+}
+
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"tool_requests":                 func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
 	"tool_name_canonicalized":       func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },

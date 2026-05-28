@@ -203,6 +203,7 @@ type BatchScenario struct {
 	RequiredSubagentSourceCounts                   map[string]int
 	RequireNoDelegationErrors                      bool
 	RequireNoPlanErrors                            bool
+	RequireFinalPlanCompleted                      bool
 	RequiredFinalText                              []string
 	ForbiddenFinalText                             []string
 	RequiredToolResultText                         map[string][]string
@@ -438,6 +439,7 @@ type DebugScenarioExpectations struct {
 	RequiredSubagentSourceCounts                   map[string]int                        `json:"required_subagent_source_counts,omitempty"`
 	RequireNoDelegationErrors                      bool                                  `json:"require_no_delegation_errors,omitempty"`
 	RequireNoPlanErrors                            bool                                  `json:"require_no_plan_errors,omitempty"`
+	RequireFinalPlanCompleted                      bool                                  `json:"require_final_plan_completed,omitempty"`
 	RequiredFinalText                              []string                              `json:"required_final_text,omitempty"`
 	ForbiddenFinalText                             []string                              `json:"forbidden_final_text,omitempty"`
 	RequiredTruncatedResults                       []string                              `json:"required_truncated_results,omitempty"`
@@ -479,7 +481,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 			}
 		}
 	}
-	if exp.ExecutePlan || exp.RequireNoPlanErrors {
+	if exp.ExecutePlan || exp.RequireNoPlanErrors || exp.RequireFinalPlanCompleted {
 		caps["plan"] = true
 	}
 	if exp.EnableMemory {
@@ -2032,6 +2034,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredSubagentSourceCounts:                   cloneStringIntMap(s.RequiredSubagentSourceCounts),
 		RequireNoDelegationErrors:                      s.RequireNoDelegationErrors,
 		RequireNoPlanErrors:                            s.RequireNoPlanErrors,
+		RequireFinalPlanCompleted:                      s.RequireFinalPlanCompleted,
 		RequiredFinalText:                              append([]string(nil), s.RequiredFinalText...),
 		ForbiddenFinalText:                             append([]string(nil), s.ForbiddenFinalText...),
 		RequiredTruncatedResults:                       append([]string(nil), s.RequiredTruncatedResults...),
@@ -3170,6 +3173,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequireNoPlanErrors {
 		checks = append(checks, NoPlanErrors())
+	}
+	if scenario.RequireFinalPlanCompleted {
+		checks = append(checks, FinalPlanCompleted())
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

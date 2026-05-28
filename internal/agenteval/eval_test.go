@@ -2295,7 +2295,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if _, ok := scratchProject.Files[".affent/loops/scratch-project-loop/LOOP.md"]; !ok {
 		t.Fatalf("scratch project scenario missing active LOOP.md")
 	}
-	if !strings.Contains(scratchProject.Prompt, "Build a small Python project") || strings.Contains(scratchProject.Prompt, "请") {
+	if !strings.Contains(scratchProject.Prompt, "Build a small Python project") ||
+		!strings.Contains(scratchProject.Prompt, "complete every plan step") ||
+		strings.Contains(scratchProject.Prompt, "请") {
 		t.Fatalf("scratch project prompt should be English and task-specific: %q", scratchProject.Prompt)
 	}
 	for _, want := range []string{"python3 -m unittest discover -s tests", "git status", "git commit", "git push"} {
@@ -2319,8 +2321,13 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("scratch project RequiredToolArgContains = %#v, want %#v", scratchProject.RequiredToolArgContains, want)
 		}
 	}
-	if !stringSliceContains(scratchProject.RequiredTools, "loop_protocol") {
-		t.Fatalf("scratch project RequiredTools = %#v, want loop_protocol", scratchProject.RequiredTools)
+	for _, want := range []string{"plan", "loop_protocol"} {
+		if !stringSliceContains(scratchProject.RequiredTools, want) {
+			t.Fatalf("scratch project RequiredTools = %#v, want %q", scratchProject.RequiredTools, want)
+		}
+	}
+	if scratchProject.RequiredToolCounts["plan"] != 2 {
+		t.Fatalf("scratch project RequiredToolCounts = %#v, want plan=2", scratchProject.RequiredToolCounts)
 	}
 	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(scratchProject.VerifyCommand, want) {
@@ -2337,6 +2344,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if scratchProject.RequiredLoopProtocolFinalStatus != "completed" {
 		t.Fatalf("scratch project RequiredLoopProtocolFinalStatus = %q, want completed", scratchProject.RequiredLoopProtocolFinalStatus)
 	}
+	if !scratchProject.RequireNoPlanErrors || !scratchProject.RequireFinalPlanCompleted {
+		t.Fatalf("scratch project plan closure flags = no_errors:%v final_completed:%v, want both true", scratchProject.RequireNoPlanErrors, scratchProject.RequireFinalPlanCompleted)
+	}
+	checkNames := checkNamesFor(BatchScenarioChecks(scratchProject))
+	for _, want := range []string{"no_plan_errors", "final_plan_completed"} {
+		if !stringSliceContains(checkNames, want) {
+			t.Fatalf("scratch project checks = %#v, want %q", checkNames, want)
+		}
+	}
 	if scratchProject.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 {
 		t.Fatalf("scratch project trace event requirements = %#v, want loop.turn_checkpoint=1", scratchProject.RequiredTraceEventCounts)
 	}
@@ -2347,7 +2363,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("scratch project ProtectedFiles = %#v, want LOOP.md", scratchProject.ProtectedFiles)
 	}
 	scratchProjectCaps := ScenarioExpectationCapabilityNames(scratchProject)
-	for _, want := range []string{"loop_protocol", "skill", "trace", "verifier"} {
+	for _, want := range []string{"loop_protocol", "plan", "skill", "trace", "verifier"} {
 		if !stringSliceContains(scratchProjectCaps, want) {
 			t.Fatalf("scratch project expectation capabilities = %#v, want %q", scratchProjectCaps, want)
 		}

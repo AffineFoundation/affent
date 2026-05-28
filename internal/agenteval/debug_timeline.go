@@ -520,6 +520,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		fmt.Fprintf(b, "- required_no_errors: `%s`\n", strings.Join(parts, " "))
 	}
+	if exp.RequireFinalPlanCompleted {
+		fmt.Fprintf(b, "- required_final_plan_completed: `true`\n")
+	}
 	if len(exp.RequiredLoopDecisionMatches) > 0 {
 		for _, req := range exp.RequiredLoopDecisionMatches {
 			min := req.Min
@@ -797,6 +800,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredSubagentSourceCounts) > 0 ||
 		exp.RequireNoDelegationErrors ||
 		exp.RequireNoPlanErrors ||
+		exp.RequireFinalPlanCompleted ||
 		len(exp.RequiredToolResultText) > 0 ||
 		len(exp.RequiredToolArgContains) > 0 ||
 		len(exp.ForbiddenToolArgContains) > 0 ||

@@ -3274,7 +3274,7 @@ func longRunScratchProjectLoopPushScenario() BatchScenario {
 		Domains:            []string{codePRDomain, longRunRecoveryDomain},
 		SessionID:          "scratch-project-loop",
 		EnableLoopProtocol: true,
-		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
+		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state and the plan tool to track the work through completion. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, complete every plan step, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
 		Files: map[string]string{
 			".affent/loops/scratch-project-loop/LOOP.md": `# Loop Protocol: scratch-project-loop
 
@@ -3335,7 +3335,10 @@ This repository starts almost empty. The agent must create the project, tests, d
 		RequiredCommandCounts: map[string]int{
 			`python3 -m unittest`: 2,
 		},
-		RequiredTools: []string{"write_file", "loop_protocol"},
+		RequiredTools: []string{"plan", "write_file", "loop_protocol"},
+		RequiredToolCounts: map[string]int{
+			"plan": 2,
+		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
 			{Tool: "write_file", Arg: "path", Substring: "todo_core/__init__.py"},
@@ -3363,6 +3366,8 @@ This repository starts almost empty. The agent must create the project, tests, d
 			},
 		},
 		RequiredLoopProtocolFinalStatus: "completed",
+		RequireNoPlanErrors:             true,
+		RequireFinalPlanCompleted:       true,
 		RequiredTraceEventCounts: map[string]int{
 			"loop.turn_checkpoint": 1,
 		},
