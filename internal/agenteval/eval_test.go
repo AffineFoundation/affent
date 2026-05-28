@@ -3407,6 +3407,24 @@ func TestBuiltinGitCommitPushScenariosVerifyPushedRemoteContent(t *testing.T) {
 	}
 }
 
+func TestBuiltinGitCommitPushScenariosRequireLongrunPathAndTokenGuards(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresGitCommitAndPush(scenario) {
+			continue
+		}
+		if !scenario.ForbidWorkspaceAbsolutePaths {
+			t.Fatalf("%s requires git commit/push but does not forbid workspace absolute paths", scenario.Name)
+		}
+		if scenario.MaxLoopTurnInputTokens != 300000 || scenario.MaxLoopTurnTotalTokens != 320000 {
+			t.Fatalf("%s requires git commit/push but lacks loop token ceilings: input=%d total=%d", scenario.Name, scenario.MaxLoopTurnInputTokens, scenario.MaxLoopTurnTotalTokens)
+		}
+		checkNames := checkNamesFor(BatchScenarioChecks(scenario))
+		if !stringSliceContains(checkNames, "shell_command_lacks_workspace_absolute_path") {
+			t.Fatalf("%s checks = %#v, want workspace absolute path guard", scenario.Name, checkNames)
+		}
+	}
+}
+
 func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresDurableMemoryWrite(scenario) || !scenarioRequiresGitCommitAndPush(scenario) {

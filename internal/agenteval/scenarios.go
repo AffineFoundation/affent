@@ -3011,10 +3011,13 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},
-		RequiredFinalText: []string{"go test ./...", "status", "commit", "push"},
-		ForbiddenCommands: defaultForbiddenCommands,
-		ProtectedFiles:    []string{"set/set_test.go"},
-		MaxTurns:          16,
+		RequiredFinalText:            []string{"go test ./...", "status", "commit", "push"},
+		ForbiddenCommands:            defaultForbiddenCommands,
+		ProtectedFiles:               []string{"set/set_test.go"},
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     16,
 	}
 }
 
