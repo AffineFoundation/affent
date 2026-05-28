@@ -2005,8 +2005,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 28 {
-		t.Fatalf("long-run suite size = %d, want 28", len(scenarios))
+	if len(scenarios) != 29 {
+		t.Fatalf("long-run suite size = %d, want 29", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2026,6 +2026,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	for _, want := range []string{
 		"context_compaction",
 		"delegation",
+		"input_budget",
 		"longrun_recovery",
 		"loop_protocol",
 		"memory",
@@ -2983,6 +2984,29 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(compactionRetention.ForbiddenTools, "shell") {
 		t.Fatalf("compaction retention ForbiddenTools = %#v, want shell", compactionRetention.ForbiddenTools)
+	}
+
+	inputBudget, ok := seen["longrun-input-budget-pressure"]
+	if !ok {
+		t.Fatalf("long-run suite missing input budget pressure scenario")
+	}
+	if !inputBudget.EnableLoopProtocol || inputBudget.SessionID != "longrun-input-budget-pressure" || inputBudget.RuntimeMaxTurnInputTokens != 1 {
+		t.Fatalf("input budget scenario fields = enable:%v session:%q runtime_budget:%d", inputBudget.EnableLoopProtocol, inputBudget.SessionID, inputBudget.RuntimeMaxTurnInputTokens)
+	}
+	if inputBudget.RequiredLoopDecisionKinds["input_budget"] != 1 ||
+		inputBudget.RequiredLoopDecisionResults["defer"] != 1 ||
+		len(inputBudget.RequiredLoopDecisionMatches) != 1 ||
+		inputBudget.RequiredLoopDecisionMatches[0].MinTokenBudget != 1 ||
+		inputBudget.RequiredLoopDecisionMatches[0].MinObservedInputTokens != 1 {
+		t.Fatalf("input budget decision requirements = kinds:%#v results:%#v matches:%#v", inputBudget.RequiredLoopDecisionKinds, inputBudget.RequiredLoopDecisionResults, inputBudget.RequiredLoopDecisionMatches)
+	}
+	if inputBudget.RequiredTraceEventCounts["loop.decision"] != 1 ||
+		inputBudget.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 ||
+		inputBudget.RequiredTraceEventCounts["runtime.surface"] != 1 {
+		t.Fatalf("input budget trace requirements = %#v", inputBudget.RequiredTraceEventCounts)
+	}
+	if _, ok := inputBudget.Files[".affent/loops/longrun-input-budget-pressure/LOOP.md"]; !ok {
+		t.Fatalf("input budget scenario missing seeded LOOP.md")
 	}
 
 	loopCalibration, ok := seen["longrun-loop-activation-calibration"]
@@ -5543,14 +5567,15 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
-		Prompt:             "fix it",
-		SessionID:          "planned",
-		ExecutePlan:        true,
-		EnableMemory:       true,
-		EnableLoopProtocol: true,
-		MaxTurns:           3,
-		CompactTrigger:     6,
-		CompactKeepLast:    3,
+		Prompt:                    "fix it",
+		SessionID:                 "planned",
+		ExecutePlan:               true,
+		EnableMemory:              true,
+		EnableLoopProtocol:        true,
+		MaxTurns:                  3,
+		RuntimeMaxTurnInputTokens: 7,
+		CompactTrigger:            6,
+		CompactKeepLast:           3,
 	}, "fix it")
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{
@@ -5561,6 +5586,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--trace\x00/tmp/ws/trace.jsonl",
 		"--trace-skip-deltas",
 		"--max-turns\x003",
+		"--max-turn-input-tokens\x007",
 		"--compact-trigger\x006",
 		"--compact-keep-last\x003",
 		"--temperature\x000",

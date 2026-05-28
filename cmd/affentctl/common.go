@@ -58,19 +58,20 @@ func trimUTF8(s string, n int) string {
 // trace destination, system-prompt override, session selection. Bind once,
 // register on each command's FlagSet via bind().
 type commonFlags struct {
-	configPath       string
-	workspace        string
-	baseURL          string
-	apiKey           string
-	model            string
-	maxTurns         int
-	callTimeout      time.Duration
-	retryTransient   int
-	retryBackoff     time.Duration
-	tracePath        string
-	traceSkipDeltas  bool
-	systemPromptPath string
-	quiet            bool
+	configPath         string
+	workspace          string
+	baseURL            string
+	apiKey             string
+	model              string
+	maxTurns           int
+	maxTurnInputTokens int
+	callTimeout        time.Duration
+	retryTransient     int
+	retryBackoff       time.Duration
+	tracePath          string
+	traceSkipDeltas    bool
+	systemPromptPath   string
+	quiet              bool
 	// evalMode freezes the runtime to a strict single-loop benchmark
 	// surface. It disables all tools by default; opt back in with
 	// --eval-tools, --eval-all-tools, or explicit capability flags
@@ -160,6 +161,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.apiKey, "api-key", "", "API key (env: AFFENTCTL_API_KEY)")
 	fs.StringVar(&c.model, "model", "", "model id (env: AFFENTCTL_MODEL)")
 	fs.IntVar(&c.maxTurns, "max-turns", 10, "max tool-call rounds per user message (env: AFFENTCTL_MAX_TURNS)")
+	fs.IntVar(&c.maxTurnInputTokens, "max-turn-input-tokens", 0, "aggregate per-turn prompt-token budget across repeated assistant/tool calls; 0 uses runtime default (env: AFFENTCTL_MAX_TURN_INPUT_TOKENS)")
 	fs.DurationVar(&c.callTimeout, "max-call-timeout", agent.DefaultPerCallTimeout, "per-LLM-call timeout (env: AFFENTCTL_MAX_CALL_TIMEOUT)")
 	fs.IntVar(&c.retryTransient, "retry-transient", agent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables (env: AFFENTCTL_RETRY_TRANSIENT)")
 	fs.DurationVar(&c.retryBackoff, "retry-backoff", agent.DefaultTransientBackoff, "initial backoff between retries; doubles each attempt (env: AFFENTCTL_RETRY_BACKOFF)")
@@ -310,12 +312,13 @@ var flagEnvSources = map[string]string{
 }
 
 func configPrecedenceEnvSources() map[string]string {
-	out := make(map[string]string, len(flagEnvSources)+12)
+	out := make(map[string]string, len(flagEnvSources)+13)
 	for name, env := range flagEnvSources {
 		out[name] = env
 	}
 	for name, env := range map[string]string{
 		"max-turns":              "AFFENTCTL_MAX_TURNS",
+		"max-turn-input-tokens":  "AFFENTCTL_MAX_TURN_INPUT_TOKENS",
 		"max-call-timeout":       "AFFENTCTL_MAX_CALL_TIMEOUT",
 		"retry-transient":        "AFFENTCTL_RETRY_TRANSIENT",
 		"retry-backoff":          "AFFENTCTL_RETRY_BACKOFF",
@@ -334,22 +337,23 @@ func configPrecedenceEnvSources() map[string]string {
 }
 
 type fileConfig struct {
-	Workspace       *string `json:"workspace"`
-	BaseURL         *string `json:"base_url"`
-	APIKey          *string `json:"api_key"`
-	Model           *string `json:"model"`
-	MaxTurns        *int    `json:"max_turns"`
-	MaxCallTimeout  *string `json:"max_call_timeout"`
-	RetryTransient  *int    `json:"retry_transient"`
-	RetryBackoff    *string `json:"retry_backoff"`
-	Trace           *string `json:"trace"`
-	TraceSkipDeltas *bool   `json:"trace_skip_deltas"`
-	SystemPrompt    *string `json:"system_prompt"`
-	Quiet           *bool   `json:"quiet"`
-	EvalMode        *bool   `json:"eval_mode"`
-	EvalTools       *string `json:"eval_tools"`
-	EvalAllTools    *bool   `json:"eval_all_tools"`
-	Memory          *struct {
+	Workspace          *string `json:"workspace"`
+	BaseURL            *string `json:"base_url"`
+	APIKey             *string `json:"api_key"`
+	Model              *string `json:"model"`
+	MaxTurns           *int    `json:"max_turns"`
+	MaxTurnInputTokens *int    `json:"max_turn_input_tokens"`
+	MaxCallTimeout     *string `json:"max_call_timeout"`
+	RetryTransient     *int    `json:"retry_transient"`
+	RetryBackoff       *string `json:"retry_backoff"`
+	Trace              *string `json:"trace"`
+	TraceSkipDeltas    *bool   `json:"trace_skip_deltas"`
+	SystemPrompt       *string `json:"system_prompt"`
+	Quiet              *bool   `json:"quiet"`
+	EvalMode           *bool   `json:"eval_mode"`
+	EvalTools          *string `json:"eval_tools"`
+	EvalAllTools       *bool   `json:"eval_all_tools"`
+	Memory             *struct {
 		Enabled        *bool   `json:"enabled"`
 		Only           *bool   `json:"only"`
 		WorkspaceStore *string `json:"workspace_store"` // legacy single-file pointer; triggers migration
@@ -440,6 +444,9 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 func normalizeRuntimeLimits(c *commonFlags) error {
 	if c.maxTurns <= 0 {
 		return fmt.Errorf("--max-turns must be a positive integer")
+	}
+	if c.maxTurnInputTokens < 0 {
+		return fmt.Errorf("--max-turn-input-tokens must be zero or a positive integer")
 	}
 	if c.callTimeout <= 0 {
 		return fmt.Errorf("--max-call-timeout must be a positive duration")
@@ -546,6 +553,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setString("api-key", &c.apiKey, cfg.APIKey)
 	setString("model", &c.model, cfg.Model)
 	setInt("max-turns", &c.maxTurns, cfg.MaxTurns)
+	setInt("max-turn-input-tokens", &c.maxTurnInputTokens, cfg.MaxTurnInputTokens)
 	if err := setDuration("max-call-timeout", &c.callTimeout, cfg.MaxCallTimeout); err != nil {
 		return err
 	}
@@ -733,6 +741,9 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setInt("max-turns", "AFFENTCTL_MAX_TURNS", &c.maxTurns); err != nil {
+		return err
+	}
+	if err := setInt("max-turn-input-tokens", "AFFENTCTL_MAX_TURN_INPUT_TOKENS", &c.maxTurnInputTokens); err != nil {
 		return err
 	}
 	if err := setInt("retry-transient", "AFFENTCTL_RETRY_TRANSIENT", &c.retryTransient); err != nil {
@@ -1510,6 +1521,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		Events:                 events,
 		Log:                    log,
 		MaxTurnSteps:           c.maxTurns,
+		MaxTurnInputTokens:     c.maxTurnInputTokens,
 		FinalNoToolsOnMaxTurns: true,
 		PerCallTimeout:         c.callTimeout,
 		MaxTransientRetries:    c.retryTransient,

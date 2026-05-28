@@ -67,9 +67,13 @@ type ToolArgContainsRequirement struct {
 }
 
 type LoopDecisionRequirement struct {
-	Kind     string
-	Decision string
-	Trigger  string
+	Kind                    string
+	Decision                string
+	Trigger                 string
+	MinTokenBudget          int
+	MinObservedInputTokens  int
+	MinProjectedInputTokens int
+	MinBudgetBytes          int
 	// Min is the required number of matching loop.decision events. Values
 	// <=0 default to one so scenarios can spell the common case tersely.
 	Min int
@@ -96,6 +100,10 @@ type LoopProtocolFeedRequirement struct {
 	LastDecisionConfidence        string
 	LastDecisionReason            string
 	LastDecisionAction            string
+	MinLastDecisionTokenBudget    int
+	MinLastDecisionObservedInput  int
+	MinLastDecisionProjectedInput int
+	MinLastDecisionBudgetBytes    int
 	// Min is the required number of matching loop.protocol_feed events.
 	// Values <=0 default to one so scenarios can spell the common case tersely.
 	Min int
@@ -221,6 +229,7 @@ type BatchScenario struct {
 	ForbiddenFileSubstrings                        map[string][]string
 	MaxParentToolCalls                             int
 	MaxSuccessfulToolCallsByTool                   map[string]int
+	RuntimeMaxTurnInputTokens                      int
 	MaxLoopTurnInputTokens                         int
 	MaxLoopTurnTotalTokens                         int
 	MaxTurns                                       int
@@ -462,6 +471,7 @@ type DebugScenarioExpectations struct {
 	ForbiddenFileSubstrings                        map[string][]string                   `json:"forbidden_file_substrings,omitempty"`
 	MaxParentToolCalls                             int                                   `json:"max_parent_tool_calls,omitempty"`
 	MaxSuccessfulToolCallsByTool                   map[string]int                        `json:"max_successful_tool_calls_by_tool,omitempty"`
+	RuntimeMaxTurnInputTokens                      int                                   `json:"runtime_max_turn_input_tokens,omitempty"`
 	MaxLoopTurnInputTokens                         int                                   `json:"max_loop_turn_input_tokens,omitempty"`
 	MaxLoopTurnTotalTokens                         int                                   `json:"max_loop_turn_total_tokens,omitempty"`
 	MaxTurns                                       int                                   `json:"max_turns,omitempty"`
@@ -494,6 +504,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if exp.EnableMemory {
 		caps["memory"] = true
+	}
+	if exp.RuntimeMaxTurnInputTokens > 0 {
+		caps["input_budget"] = true
+		caps["trace"] = true
 	}
 	if strings.TrimSpace(exp.ExpectedSkill) != "" {
 		caps["skill"] = true
@@ -578,6 +592,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if expectationRequiresResearchCheckpoint(exp) {
 		caps["research_checkpoint"] = true
+	}
+	if expectationRequiresLoopDecisionKind(exp, "input_budget") {
+		caps["input_budget"] = true
+		caps["trace"] = true
 	}
 	if expectationRequiresDelegatedSourceEvidence(exp) {
 		caps["delegated_source_evidence"] = true
@@ -674,11 +692,19 @@ func expectationRequiresSkillInstall(exp DebugScenarioExpectations) bool {
 }
 
 func expectationRequiresResearchCheckpoint(exp DebugScenarioExpectations) bool {
-	if exp.RequiredLoopDecisionKinds["research_checkpoint"] > 0 {
+	return expectationRequiresLoopDecisionKind(exp, "research_checkpoint")
+}
+
+func expectationRequiresLoopDecisionKind(exp DebugScenarioExpectations, kind string) bool {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return false
+	}
+	if exp.RequiredLoopDecisionKinds[kind] > 0 {
 		return true
 	}
 	for _, req := range exp.RequiredLoopDecisionMatches {
-		if req.Kind == "research_checkpoint" {
+		if req.Kind == kind {
 			return true
 		}
 	}
@@ -868,10 +894,14 @@ type DebugCommandOrderRequirement struct {
 }
 
 type DebugLoopDecisionRequirement struct {
-	Kind     string `json:"kind,omitempty"`
-	Decision string `json:"decision,omitempty"`
-	Trigger  string `json:"trigger,omitempty"`
-	Min      int    `json:"min,omitempty"`
+	Kind                    string `json:"kind,omitempty"`
+	Decision                string `json:"decision,omitempty"`
+	Trigger                 string `json:"trigger,omitempty"`
+	MinTokenBudget          int    `json:"min_token_budget,omitempty"`
+	MinObservedInputTokens  int    `json:"min_observed_input_tokens,omitempty"`
+	MinProjectedInputTokens int    `json:"min_projected_input_tokens,omitempty"`
+	MinBudgetBytes          int    `json:"min_budget_bytes,omitempty"`
+	Min                     int    `json:"min,omitempty"`
 }
 
 type DebugLoopProtocolFeedRequirement struct {
@@ -895,6 +925,10 @@ type DebugLoopProtocolFeedRequirement struct {
 	LastDecisionConfidence        string `json:"last_decision_confidence,omitempty"`
 	LastDecisionReason            string `json:"last_decision_reason,omitempty"`
 	LastDecisionAction            string `json:"last_decision_required_action,omitempty"`
+	MinLastDecisionTokenBudget    int    `json:"min_last_decision_token_budget,omitempty"`
+	MinLastDecisionObservedInput  int    `json:"min_last_decision_observed_input_tokens,omitempty"`
+	MinLastDecisionProjectedInput int    `json:"min_last_decision_projected_input_tokens,omitempty"`
+	MinLastDecisionBudgetBytes    int    `json:"min_last_decision_budget_bytes,omitempty"`
 	Min                           int    `json:"min,omitempty"`
 }
 
@@ -1066,6 +1100,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCrashMissingToolResultResumeScenario(),
 		longRunCrashDuplicateToolResultResumeScenario(),
 		longRunContextCompactionRetentionScenario(),
+		longRunInputBudgetPressureScenario(),
 		longRunLoopActivationCalibrationScenario(),
 		longRunLoopActivationCompletedDraftScenario(),
 		longRunResearchCheckpointScenario(),
@@ -1948,10 +1983,14 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 	loopReqs := make([]DebugLoopDecisionRequirement, 0, len(s.RequiredLoopDecisionMatches))
 	for _, req := range s.RequiredLoopDecisionMatches {
 		loopReqs = append(loopReqs, DebugLoopDecisionRequirement{
-			Kind:     req.Kind,
-			Decision: req.Decision,
-			Trigger:  req.Trigger,
-			Min:      req.Min,
+			Kind:                    req.Kind,
+			Decision:                req.Decision,
+			Trigger:                 req.Trigger,
+			MinTokenBudget:          req.MinTokenBudget,
+			MinObservedInputTokens:  req.MinObservedInputTokens,
+			MinProjectedInputTokens: req.MinProjectedInputTokens,
+			MinBudgetBytes:          req.MinBudgetBytes,
+			Min:                     req.Min,
 		})
 	}
 	loopFeedReqs := make([]DebugLoopProtocolFeedRequirement, 0, len(s.RequiredLoopProtocolFeedMatches))
@@ -1977,6 +2016,10 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			LastDecisionConfidence:        req.LastDecisionConfidence,
 			LastDecisionReason:            req.LastDecisionReason,
 			LastDecisionAction:            req.LastDecisionAction,
+			MinLastDecisionTokenBudget:    req.MinLastDecisionTokenBudget,
+			MinLastDecisionObservedInput:  req.MinLastDecisionObservedInput,
+			MinLastDecisionProjectedInput: req.MinLastDecisionProjectedInput,
+			MinLastDecisionBudgetBytes:    req.MinLastDecisionBudgetBytes,
 			Min:                           req.Min,
 		})
 	}
@@ -2093,6 +2136,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ForbiddenFileSubstrings:                        cloneStringSliceMap(s.ForbiddenFileSubstrings),
 		MaxParentToolCalls:                             s.MaxParentToolCalls,
 		MaxSuccessfulToolCallsByTool:                   cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
+		RuntimeMaxTurnInputTokens:                      s.RuntimeMaxTurnInputTokens,
 		MaxLoopTurnInputTokens:                         s.MaxLoopTurnInputTokens,
 		MaxLoopTurnTotalTokens:                         s.MaxLoopTurnTotalTokens,
 		MaxTurns:                                       s.MaxTurns,
@@ -2284,6 +2328,9 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if scenario.CompactKeepLast > 0 {
 		args = append(args, "--compact-keep-last", fmt.Sprint(scenario.CompactKeepLast))
+	}
+	if scenario.RuntimeMaxTurnInputTokens > 0 {
+		args = append(args, "--max-turn-input-tokens", fmt.Sprint(scenario.RuntimeMaxTurnInputTokens))
 	}
 	if !r.TraceDeltas {
 		args = append(args, "--trace-skip-deltas")
@@ -3127,11 +3174,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, LoopDecisionResultAtLeast(decision, scenario.RequiredLoopDecisionResults[decision]))
 	}
 	for _, req := range scenario.RequiredLoopDecisionMatches {
-		min := req.Min
-		if min <= 0 {
-			min = 1
-		}
-		checks = append(checks, LoopDecisionMatchAtLeast(req.Kind, req.Decision, req.Trigger, min))
+		checks = append(checks, LoopDecisionRequirementAtLeast(req))
 	}
 	if scenario.RequiredLoopProtocolFeeds > 0 {
 		checks = append(checks, LoopProtocolFeedsAtLeast(scenario.RequiredLoopProtocolFeeds))

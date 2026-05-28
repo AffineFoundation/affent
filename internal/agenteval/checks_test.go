@@ -881,12 +881,25 @@ func TestLoopDecisionChecks(t *testing.T) {
 
 func TestLoopDecisionMatchAtLeast(t *testing.T) {
 	trace := Trace{LoopDecisions: []LoopDecision{
+		{Kind: "input_budget", Decision: "defer", Trigger: "turn_input_tokens_observed_after_step", TokenBudget: 300000, ObservedInputTokens: 479974},
 		{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", BudgetBytes: 32768},
 		{Kind: "evidence_quality", Decision: "continue", Trigger: "memory_review"},
 		{Kind: "loop_stop", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 	}}
 	if res := LoopDecisionMatchAtLeast("evidence_quality", "defer", "source_access_dynamic_partial", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected exact loop decision match to pass: %+v", res)
+	}
+	if res := LoopDecisionRequirementAtLeast(LoopDecisionRequirement{
+		Kind:                   "input_budget",
+		Decision:               "defer",
+		Trigger:                "turn_input_tokens_observed_after_step",
+		MinTokenBudget:         300000,
+		MinObservedInputTokens: 479974,
+	}).Eval(trace); !res.Pass {
+		t.Fatalf("expected structured input-budget decision match to pass: %+v", res)
+	}
+	if res := LoopDecisionRequirementAtLeast(LoopDecisionRequirement{Kind: "input_budget", MinObservedInputTokens: 500000}).Eval(trace); res.Pass || !strings.Contains(res.Detail, "observed_input_tokens>=500000") || !strings.Contains(res.Detail, "observed_input=479974") {
+		t.Fatalf("expected structured input-budget decision mismatch detail, got: %+v", res)
 	}
 	res := LoopDecisionMatchAtLeast("evidence_quality", "defer", "network_source_missing", 1).Eval(trace)
 	if res.Pass {
@@ -938,7 +951,7 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 
 func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
-		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnToolErrors: 1, LastTurnForcedNoTools: 1, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1, LastDecisionKind: "evidence_quality", LastDecisionTrigger: "source_access_dynamic_partial", LastDecision: "defer", LastDecisionConfidence: "high", LastDecisionReason: "dynamic widgets were empty", LastDecisionAction: "read browser_network_read ref n7"},
+		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnToolErrors: 1, LastTurnForcedNoTools: 1, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1, LastDecisionKind: "evidence_quality", LastDecisionTrigger: "source_access_dynamic_partial", LastDecision: "defer", LastDecisionConfidence: "high", LastDecisionReason: "dynamic widgets were empty", LastDecisionAction: "read browser_network_read ref n7", LastDecisionTokenBudget: 300000, LastDecisionObservedInput: 479974},
 		{Mode: "full", FeedNumber: 2, PlanLabel: "SN120 research", PlanCurrentStepStatus: "pending", PlanCurrentStep: "write final cited analysis"},
 	}, EventOrder: []TraceEventRef{
 		{Index: 1, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "digest", LoopProtocolPath: ".affent/loops/sn120/LOOP.md"},
@@ -977,6 +990,8 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 		LastDecisionConfidence:        "high",
 		LastDecisionReason:            "widgets were empty",
 		LastDecisionAction:            "browser_network_read ref n7",
+		MinLastDecisionTokenBudget:    300000,
+		MinLastDecisionObservedInput:  479974,
 	}).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol last-turn checkpoint match to pass: %+v", res)
 	}

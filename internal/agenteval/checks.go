@@ -732,19 +732,41 @@ func LoopDecisionResultAtLeast(decision string, min int) Check {
 }
 
 func LoopDecisionMatchAtLeast(kind, decision, trigger string, min int) Check {
+	return LoopDecisionRequirementAtLeast(LoopDecisionRequirement{Kind: kind, Decision: decision, Trigger: trigger, Min: min})
+}
+
+func LoopDecisionRequirementAtLeast(req LoopDecisionRequirement) Check {
+	min := req.Min
+	if min <= 0 {
+		min = 1
+	}
+	name := fmt.Sprintf("loop_decision_match_at_least:%s:%s:%s:%d", req.Kind, req.Decision, req.Trigger, min)
+	if req.MinTokenBudget > 0 || req.MinObservedInputTokens > 0 || req.MinProjectedInputTokens > 0 || req.MinBudgetBytes > 0 {
+		var nameParts []string
+		for _, part := range []string{
+			req.Kind,
+			req.Decision,
+			req.Trigger,
+			positiveCheckNamePart("token_budget", req.MinTokenBudget),
+			positiveCheckNamePart("observed_input", req.MinObservedInputTokens),
+			positiveCheckNamePart("projected_input", req.MinProjectedInputTokens),
+			positiveCheckNamePart("budget_bytes", req.MinBudgetBytes),
+		} {
+			if part != "" {
+				nameParts = append(nameParts, checkNamePart(part))
+			}
+		}
+		if len(nameParts) > 0 {
+			name = "loop_decision_match_at_least:" + strings.Join(nameParts, ":") + fmt.Sprintf(":%d", min)
+		}
+	}
 	return Check{
-		Name: fmt.Sprintf("loop_decision_match_at_least:%s:%s:%s:%d", kind, decision, trigger, min),
+		Name: name,
 		Eval: func(t Trace) CheckResult {
 			count := 0
 			var examples []string
 			for _, d := range t.LoopDecisions {
-				if kind != "" && d.Kind != kind {
-					continue
-				}
-				if decision != "" && d.Decision != decision {
-					continue
-				}
-				if trigger != "" && d.Trigger != trigger {
+				if !loopDecisionMatchesRequirement(d, req) {
 					continue
 				}
 				count++
@@ -757,10 +779,61 @@ func LoopDecisionMatchAtLeast(kind, decision, trigger string, min int) Check {
 			}
 			return CheckResult{
 				Pass:   false,
-				Detail: fmt.Sprintf("matched=%d, want >= %d for kind=%q decision=%q trigger=%q; observed=%v", count, min, kind, decision, trigger, loopDecisionExamples(t.LoopDecisions, 5)),
+				Detail: fmt.Sprintf("matched=%d, want >= %d for %s; observed=%v", count, min, loopDecisionRequirementSummary(req), loopDecisionExamples(t.LoopDecisions, 5)),
 			}
 		},
 	}
+}
+
+func loopDecisionMatchesRequirement(decision LoopDecision, req LoopDecisionRequirement) bool {
+	if req.Kind != "" && decision.Kind != req.Kind {
+		return false
+	}
+	if req.Decision != "" && decision.Decision != req.Decision {
+		return false
+	}
+	if req.Trigger != "" && decision.Trigger != req.Trigger {
+		return false
+	}
+	if req.MinTokenBudget > 0 && decision.TokenBudget < req.MinTokenBudget {
+		return false
+	}
+	if req.MinObservedInputTokens > 0 && decision.ObservedInputTokens < req.MinObservedInputTokens {
+		return false
+	}
+	if req.MinProjectedInputTokens > 0 && decision.ProjectedInputTokens < req.MinProjectedInputTokens {
+		return false
+	}
+	if req.MinBudgetBytes > 0 && decision.BudgetBytes < req.MinBudgetBytes {
+		return false
+	}
+	return true
+}
+
+func loopDecisionRequirementSummary(req LoopDecisionRequirement) string {
+	var parts []string
+	if req.Kind != "" {
+		parts = append(parts, fmt.Sprintf("kind=%q", req.Kind))
+	}
+	if req.Decision != "" {
+		parts = append(parts, fmt.Sprintf("decision=%q", req.Decision))
+	}
+	if req.Trigger != "" {
+		parts = append(parts, fmt.Sprintf("trigger=%q", req.Trigger))
+	}
+	appendMin := func(name string, value int) {
+		if value > 0 {
+			parts = append(parts, fmt.Sprintf("%s>=%d", name, value))
+		}
+	}
+	appendMin("token_budget", req.MinTokenBudget)
+	appendMin("observed_input_tokens", req.MinObservedInputTokens)
+	appendMin("projected_input_tokens", req.MinProjectedInputTokens)
+	appendMin("budget_bytes", req.MinBudgetBytes)
+	if len(parts) == 0 {
+		return "any loop decision"
+	}
+	return strings.Join(parts, " ")
 }
 
 func MessageRejectedAtLeast(trigger string, min int) Check {
@@ -982,6 +1055,10 @@ func LoopProtocolFeedRequirementAtLeast(req LoopProtocolFeedRequirement) Check {
 		req.LastDecisionConfidence,
 		req.LastDecisionReason,
 		req.LastDecisionAction,
+		positiveCheckNamePart("decision_token_budget", req.MinLastDecisionTokenBudget),
+		positiveCheckNamePart("decision_observed_input", req.MinLastDecisionObservedInput),
+		positiveCheckNamePart("decision_projected_input", req.MinLastDecisionProjectedInput),
+		positiveCheckNamePart("decision_budget_bytes", req.MinLastDecisionBudgetBytes),
 	} {
 		if part != "" {
 			nameParts = append(nameParts, checkNamePart(part))
@@ -1082,6 +1159,18 @@ func loopProtocolFeedMatchesRequirement(feed LoopProtocolFeed, req LoopProtocolF
 	if req.LastDecisionAction != "" && !strings.Contains(feed.LastDecisionAction, req.LastDecisionAction) {
 		return false
 	}
+	if req.MinLastDecisionTokenBudget > 0 && feed.LastDecisionTokenBudget < req.MinLastDecisionTokenBudget {
+		return false
+	}
+	if req.MinLastDecisionObservedInput > 0 && feed.LastDecisionObservedInput < req.MinLastDecisionObservedInput {
+		return false
+	}
+	if req.MinLastDecisionProjectedInput > 0 && feed.LastDecisionProjectedInput < req.MinLastDecisionProjectedInput {
+		return false
+	}
+	if req.MinLastDecisionBudgetBytes > 0 && feed.LastDecisionBudgetBytes < req.MinLastDecisionBudgetBytes {
+		return false
+	}
 	return true
 }
 
@@ -1136,6 +1225,10 @@ func loopProtocolFeedRequirementSummary(req LoopProtocolFeedRequirement) string 
 	if req.LastDecisionAction != "" {
 		parts = append(parts, fmt.Sprintf("last_decision_action_contains=%q", req.LastDecisionAction))
 	}
+	appendMin("last_decision_token_budget", req.MinLastDecisionTokenBudget)
+	appendMin("last_decision_observed_input_tokens", req.MinLastDecisionObservedInput)
+	appendMin("last_decision_projected_input_tokens", req.MinLastDecisionProjectedInput)
+	appendMin("last_decision_budget_bytes", req.MinLastDecisionBudgetBytes)
 	if len(parts) == 0 {
 		return "any loop protocol feed"
 	}
@@ -1610,6 +1703,12 @@ func formatLoopDecisionExample(d LoopDecision) string {
 	}
 	if d.TokenBudget > 0 {
 		parts = append(parts, fmt.Sprintf("token_budget=%d", d.TokenBudget))
+	}
+	if d.ObservedInputTokens > 0 {
+		parts = append(parts, fmt.Sprintf("observed_input=%d", d.ObservedInputTokens))
+	}
+	if d.ProjectedInputTokens > 0 {
+		parts = append(parts, fmt.Sprintf("projected_input=%d", d.ProjectedInputTokens))
 	}
 	if d.BudgetBytes > 0 {
 		parts = append(parts, fmt.Sprintf("budget_bytes=%d", d.BudgetBytes))

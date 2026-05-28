@@ -2113,6 +2113,58 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 	}
 }
 
+func longRunInputBudgetPressureScenario() BatchScenario {
+	return BatchScenario{
+		Name:                      "longrun-input-budget-pressure",
+		Suites:                    []string{longRunSuite},
+		Domains:                   []string{contextCompactionDomain, longRunRecoveryDomain},
+		SessionID:                 "longrun-input-budget-pressure",
+		Prompt:                    "Do not call tools. Reply with exactly: BUDGET-PRESSURE-OK",
+		RuntimeMaxTurnInputTokens: 1,
+		Files: map[string]string{
+			".affent/loops/longrun-input-budget-pressure/LOOP.md": "# Loop Protocol\n\n## North Star\nKeep runtime budget pressure visible and recoverable during long-running sessions.\n\n## Current Situation\n- current intent: verify input-budget pressure emits structured trace evidence\n- current risk: budget pressure can be hidden if only final text is inspected\n\n## Recovery\nIf input budget pressure appears, preserve the latest decision, observed tokens, and budget for Workbench and eval review.\n",
+		},
+		EnableLoopProtocol: true,
+		RequiredLoopDecisionKinds: map[string]int{
+			"input_budget": 1,
+		},
+		RequiredLoopDecisionResults: map[string]int{
+			"defer": 1,
+		},
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{
+				Kind:                   "input_budget",
+				Decision:               "defer",
+				Trigger:                "turn_input_tokens_observed_after_step",
+				MinTokenBudget:         1,
+				MinObservedInputTokens: 1,
+			},
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "full", CurrentSituation: "input-budget pressure emits structured trace evidence"},
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.decision":        1,
+			"loop.turn_checkpoint": 1,
+			"runtime.surface":      1,
+		},
+		RequiredFinalText: []string{"BUDGET-PRESSURE-OK"},
+		ForbiddenTools:    []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
+		ProtectedFiles: []string{
+			".affent/loops/longrun-input-budget-pressure/LOOP.md",
+		},
+		MaxParentToolCalls:     0,
+		MaxLoopTurnTotalTokens: 320000,
+		MaxTurns:               2,
+		CompactTrigger:         240,
+		CompactKeepLast:        10,
+	}
+}
+
 func longRunResearchCheckpointScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-research-checkpoint",

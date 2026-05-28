@@ -1041,6 +1041,7 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 		"--workspace", t.TempDir(),
 		"--model", "fake-model",
 		"--base-url", "http://127.0.0.1:1/v1",
+		"--max-turn-input-tokens", "123",
 		"--subagent=false",
 		"--quiet",
 	}); err != nil {
@@ -1062,6 +1063,9 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	}
 	if !b.loop.FinalNoToolsOnMaxTurns {
 		t.Fatal("setupLoop should request a final no-tool answer when max turns are exhausted")
+	}
+	if b.loop.MaxTurnInputTokens != 123 {
+		t.Fatalf("MaxTurnInputTokens = %d, want 123", b.loop.MaxTurnInputTokens)
 	}
 	msgs := b.loop.Conv.Snapshot()
 	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
@@ -2062,6 +2066,7 @@ func TestNormalizeRuntimeLimits(t *testing.T) {
 		want string
 	}{
 		{name: "max turns", edit: func(c *commonFlags) { c.maxTurns = 0 }, want: "--max-turns must be a positive integer"},
+		{name: "max turn input tokens", edit: func(c *commonFlags) { c.maxTurnInputTokens = -1 }, want: "--max-turn-input-tokens must be zero or a positive integer"},
 		{name: "call timeout", edit: func(c *commonFlags) { c.callTimeout = 0 }, want: "--max-call-timeout must be a positive duration"},
 		{name: "negative retries", edit: func(c *commonFlags) { c.retryTransient = -1 }, want: "--retry-transient must be zero or a positive integer"},
 		{name: "retry backoff", edit: func(c *commonFlags) { c.retryBackoff = 0 }, want: "--retry-backoff must be a positive duration"},
