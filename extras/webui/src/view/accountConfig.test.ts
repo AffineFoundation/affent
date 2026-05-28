@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   accountConfigDetail,
-  accountConfigDraft,
   accountConfigEvidenceText,
   accountConfigSummary,
   accountEnvMatchesQuery,
   sshAccessDescription,
+  sshStorageDescription,
 } from "./accountConfig";
 
 describe("accountConfig view helpers", () => {
@@ -34,7 +34,7 @@ describe("accountConfig view helpers", () => {
       "SSH public key path: /state/.affentserve/ssh/id_ed25519.pub",
     ].join("\n"));
     expect(accountConfigEvidenceText(settings)).not.toContain("ssh-ed25519 AAAA affent");
-    expect(accountConfigDraft(settings)).toContain("Do not ask for or expose secret values");
+    expect(sshStorageDescription(settings.ssh)).toBe("/state/.affentserve/ssh/id_ed25519.pub");
     expect(accountEnvMatchesQuery(settings.env[0], "github")).toBe(true);
     expect(accountEnvMatchesQuery(settings.env[0], "configured")).toBe(true);
     expect(accountEnvMatchesQuery(settings.env[1], "empty")).toBe(true);
@@ -52,6 +52,7 @@ describe("accountConfig view helpers", () => {
 
     expect(accountConfigSummary(settings)).toBe("SSH key issue");
     expect(accountConfigDetail(settings)).toBe("SSH key found; public key unavailable");
+    expect(sshStorageDescription(settings.ssh)).toBe("Storage path not reported by this server build.");
     expect(accountConfigEvidenceText(settings)).toContain("SSH issue: could not derive public key");
   });
 });

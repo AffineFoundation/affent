@@ -6,7 +6,6 @@ import { AccountSettingsPanel } from "./AccountSettingsPanel";
 describe("AccountSettingsPanel", () => {
   it("shows an existing SSH public key and safe config evidence actions", async () => {
     const user = userEvent.setup();
-    const onUseAsDraft = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(
@@ -15,7 +14,6 @@ describe("AccountSettingsPanel", () => {
           env: [{ name: "GITHUB_TOKEN", configured: true, updated_at: "2026-05-27T10:00:00Z" }],
           ssh: { exists: true, public_key: "ssh-ed25519 AAAA affent", public_key_path: "/state/.affentserve/ssh/id_ed25519.pub" },
         }}
-        onUseAsDraft={onUseAsDraft}
         defaultOpen
       />,
     );
@@ -25,8 +23,10 @@ describe("AccountSettingsPanel", () => {
     expect(panel).toHaveTextContent("1 env · SSH key");
     expect(panel).toHaveTextContent("SSH public key ready");
     expect(panel).toHaveTextContent("Existing keys are shown, never overwritten");
+    expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("/state/.affentserve/ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use config as draft" })).toBeNull();
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("GITHUB_TOKEN");
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("configured");
 
@@ -34,8 +34,8 @@ describe("AccountSettingsPanel", () => {
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Runtime config evidence"));
     expect(writeText).toHaveBeenCalledWith(expect.not.stringContaining("ssh-ed25519 AAAA affent"));
 
-    await user.click(screen.getByRole("button", { name: "Use config as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Do not ask for or expose secret values"), "config");
+    await user.click(screen.getByRole("button", { name: "Copy path" }));
+    expect(writeText).toHaveBeenCalledWith("/state/.affentserve/ssh/id_ed25519.pub");
   });
 
   it("saves and confirms deletion for environment variables without displaying the value", async () => {

@@ -1685,7 +1685,6 @@ export function App() {
         onSetEnv={handleSetAccountEnv}
         onDeleteEnv={handleDeleteAccountEnv}
         onEnsureSSHKey={handleEnsureAccountSSHKey}
-        onUseAsDraft={handleUseAsDraft}
       />
     );
   }

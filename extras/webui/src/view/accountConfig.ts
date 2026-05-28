@@ -25,6 +25,12 @@ export function sshAccessDescription(ssh?: AccountSettingsResponse["ssh"]): stri
   return "Generate an SSH key only when this session needs private Git access.";
 }
 
+export function sshStorageDescription(ssh?: AccountSettingsResponse["ssh"]): string | undefined {
+  if (ssh?.public_key_path) return ssh.public_key_path;
+  if (ssh?.public_key || ssh?.exists) return "Storage path not reported by this server build.";
+  return undefined;
+}
+
 export function accountConfigEvidenceText(settings: AccountSettingsResponse): string {
   return [
     "Runtime config evidence",
@@ -34,14 +40,6 @@ export function accountConfigEvidenceText(settings: AccountSettingsResponse): st
     settings.ssh.public_key_path ? `SSH public key path: ${settings.ssh.public_key_path}` : undefined,
     settings.ssh.public_key_error ? `SSH issue: ${settings.ssh.public_key_error}` : undefined,
   ].filter((line): line is string => !!line).join("\n");
-}
-
-export function accountConfigDraft(settings: AccountSettingsResponse): string {
-  return [
-    "Use this runtime config evidence to decide the next setup or verification step. Do not ask for or expose secret values in chat:",
-    "",
-    accountConfigEvidenceText(settings),
-  ].join("\n");
 }
 
 export function accountEnvMatchesQuery(entry: AccountEnvSummary, query: string): boolean {

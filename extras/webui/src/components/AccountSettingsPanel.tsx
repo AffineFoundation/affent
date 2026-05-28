@@ -1,13 +1,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
-import type { UseAsDraft } from "../view/draftSource";
 import {
   accountConfigDetail,
-  accountConfigDraft,
   accountConfigEvidenceText,
   accountConfigSummary,
   accountEnvMatchesQuery,
   sshAccessDescription,
+  sshStorageDescription,
 } from "../view/accountConfig";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
@@ -23,7 +22,6 @@ export function AccountSettingsPanel({
   onSetEnv,
   onDeleteEnv,
   onEnsureSSHKey,
-  onUseAsDraft,
 }: {
   settings?: AccountSettingsResponse;
   loading?: boolean;
@@ -35,7 +33,6 @@ export function AccountSettingsPanel({
   onSetEnv?: (name: string, value: string) => Promise<void> | void;
   onDeleteEnv?: (name: string) => Promise<void> | void;
   onEnsureSSHKey?: () => Promise<void> | void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
@@ -54,6 +51,7 @@ export function AccountSettingsPanel({
     ? panelErrorSummary("Config API", error)
     : accountConfigDetail(settings);
   const sshDescription = sshAccessDescription(ssh);
+  const sshStorage = sshStorageDescription(ssh);
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 
   async function submitEnv(event: FormEvent) {
@@ -131,11 +129,6 @@ export function AccountSettingsPanel({
             {settings ? (
               <div className="account-settings-actions">
                 <CopyButton label="Copy config evidence" value={accountConfigEvidenceText(settings)} className="node-action" />
-                {onUseAsDraft ? (
-                  <button type="button" className="node-action" onClick={() => onUseAsDraft(accountConfigDraft(settings), "config")}>
-                    Use config as draft
-                  </button>
-                ) : null}
               </div>
             ) : null}
             <div className="account-settings-section">
@@ -143,6 +136,13 @@ export function AccountSettingsPanel({
                 <strong>SSH key</strong>
                 <span>{sshDescription}</span>
               </div>
+              {sshStorage ? (
+                <div className="account-ssh-storage" data-testid="account-ssh-storage">
+                  <span>Storage</span>
+                  <code>{sshStorage}</code>
+                  {ssh?.public_key_path ? <CopyButton label="Copy path" value={ssh.public_key_path} className="ghost-action" /> : null}
+                </div>
+              ) : null}
               {ssh?.public_key ? (
                 <>
                   <pre className="session-loop-protocol account-public-key" data-testid="account-public-key">{ssh.public_key}</pre>
