@@ -35,6 +35,24 @@ describe("SessionAutomationPanel", () => {
           tone: "attention",
           action: "answer",
         }}
+        queue={[
+          {
+            id: "loop-calibration",
+            label: "Required",
+            title: "Answer loop calibration",
+            detail: "LOOP.md is still a draft.",
+            tone: "attention",
+            meta: ".affent/loops/demo/LOOP.md",
+          },
+          {
+            id: "timer-next",
+            label: "Check-in",
+            title: "Next May 27, 02:00 PM",
+            detail: "Repeats every 1h.",
+            tone: "ok",
+            meta: "sched_1",
+          },
+        ]}
         actions={<button type="button">Answer setup</button>}
         defaultOpen
       >
@@ -46,6 +64,12 @@ describe("SessionAutomationPanel", () => {
     expect(focus).toHaveTextContent("Required action");
     expect(focus).toHaveTextContent("Answer setup question");
     expect(screen.getByRole("button", { name: "Answer setup" })).toBeInTheDocument();
+    const queue = screen.getByTestId("session-automation-queue");
+    expect(queue).toHaveTextContent("Execution queue");
+    expect(queue).toHaveTextContent("2 items");
+    expect(queue).toHaveTextContent("Answer loop calibration");
+    expect(queue).toHaveTextContent(".affent/loops/demo/LOOP.md");
+    expect(queue).toHaveTextContent("Next May 27, 02:00 PM");
     const dashboard = screen.getByTestId("session-automation-dashboard");
     expect(dashboard).toHaveTextContent("Loop");
     expect(dashboard).toHaveTextContent("Draft");

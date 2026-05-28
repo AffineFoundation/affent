@@ -30,6 +30,7 @@ import {
   updateSessionLoopProtocol,
   updateSessionSchedule,
   type SessionScheduleDeleteResponse,
+  type SessionSchedule,
   type SessionSchedulesResponse,
   type SessionLoopProtocolDeleteResponse,
   type SessionLoopProtocolResponse,
@@ -58,7 +59,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
-import { SessionAutomationPanel, type SessionAutomationFocus, type SessionAutomationMetric } from "./components/SessionAutomationPanel";
+import { SessionAutomationPanel, type SessionAutomationFocus, type SessionAutomationMetric, type SessionAutomationQueueItem } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
@@ -1657,6 +1658,7 @@ export function App() {
     const automationDetail = automationContext?.detail ?? "Start a loop or schedule a check-in when this chat needs follow-up.";
     const automationMetrics = automationWorkbenchMetrics(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
     const automationFocus = automationWorkbenchFocus(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
+    const automationQueue = automationWorkbenchQueue(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState);
     const emptyScheduleSummary = { count: 0, enabled: 0 };
     const scheduleSummary = selectedSession?.schedules;
     const loadedSchedules = selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined;
@@ -1670,6 +1672,7 @@ export function App() {
         detail={automationDetail}
         metrics={automationMetrics}
         focus={automationFocus}
+        queue={automationQueue}
         actions={(
           <>
             {automationFocus?.action === "answer" || automationFocus?.action === "review" ? (
@@ -2435,6 +2438,230 @@ function automationWorkbenchFocus(
   };
 }
 
+function automationWorkbenchQueue(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  loopPanelState: LoopProtocolState,
+  schedulePanelState: ScheduleState,
+): SessionAutomationQueueItem[] {
+  const items: SessionAutomationQueueItem[] = [];
+  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
+  const path = automationCompact(session?.loop_protocol?.path ?? loopState?.protocol_path);
+  const goal = automationCompact(loopState?.initial_goal_preview ?? session?.loop_protocol?.state?.initial_goal_preview);
+  const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
+  const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
+  const lastQuestion = automationCompact(loopState?.last_calibration_question_preview ?? session?.loop_protocol?.state?.last_calibration_question_preview);
+
+  if (loopPanelState.state === "loading") {
+    items.push({
+      id: "loop-loading",
+      label: "Loop",
+      title: "Loading LOOP.md",
+      detail: "Reading the protocol file and recent loop events.",
+      tone: "neutral",
+      meta: path,
+    });
+  } else if (loopPanelState.state === "error") {
+    items.push({
+      id: "loop-error",
+      label: "Loop",
+      title: "LOOP.md unavailable",
+      detail: automationCompact(loopPanelState.error) ?? "Refresh LOOP.md before relying on this loop.",
+      tone: "danger",
+      meta: path,
+    });
+  } else if (status === "draft" && answers <= 0) {
+    items.push({
+      id: "loop-calibration",
+      label: "Required",
+      title: questions > 0 ? "Answer loop calibration" : "Wait for calibration question",
+      detail: lastQuestion ?? "LOOP.md is still a draft and cannot run timer ticks yet.",
+      tone: "attention",
+      meta: path,
+    });
+  } else if (status === "draft") {
+    items.push({
+      id: "loop-review",
+      label: "Required",
+      title: "Review and activate LOOP.md",
+      detail: "A calibration answer is recorded; verify durable intent, stop conditions, and recovery anchors before activation.",
+      tone: "attention",
+      meta: path,
+    });
+  } else if (status === "running") {
+    items.push({
+      id: "loop-running",
+      label: "Loop",
+      title: "LOOP.md is running",
+      detail: goal ?? automationCompact(loopState?.last_decision ?? loopState?.last_event_summary) ?? "Future loop turns receive this protocol.",
+      tone: "ok",
+      meta: path,
+    });
+  } else if (status === "disabled") {
+    items.push({
+      id: "loop-disabled",
+      label: "Loop",
+      title: "LOOP.md is disabled",
+      detail: "This session will not receive loop protocol context until setup runs again.",
+      tone: "danger",
+      meta: path,
+    });
+  } else if (path || session?.has_loop_protocol) {
+    items.push({
+      id: "loop-check",
+      label: "Loop",
+      title: "Review LOOP.md status",
+      detail: "Protocol metadata exists but the runtime status is not clear yet.",
+      tone: "neutral",
+      meta: path,
+    });
+  }
+
+  const scheduleError = automationScheduleErrorItem(session, schedulePanelState);
+  if (scheduleError) items.push(scheduleError);
+
+  if (schedulePanelState.state === "loading") {
+    items.push({
+      id: "timers-loading",
+      label: "Timers",
+      title: "Loading timer details",
+      detail: "Reading saved schedules before pause, resume, or delete controls are shown.",
+      tone: "neutral",
+    });
+  } else if (schedulePanelState.state === "ready" && schedulePanelState.schedules.length > 0) {
+    const schedules = [...schedulePanelState.schedules].sort((a, b) => Date.parse(a.next_run_at) - Date.parse(b.next_run_at));
+    schedules.slice(0, 4).forEach((schedule) => {
+      items.push(automationScheduleQueueItem(schedule, status));
+    });
+    if (schedules.length > 4) {
+      items.push({
+        id: "timers-more",
+        label: "Timers",
+        title: `${schedules.length - 4} more saved timers`,
+        detail: "Use the timer list below for full pause, resume, and delete controls.",
+        tone: "neutral",
+      });
+    }
+  } else {
+    const summaryItem = automationScheduleSummaryQueueItem(session, status);
+    if (summaryItem) items.push(summaryItem);
+  }
+
+  if (items.length === 0) {
+    items.push({
+      id: "automation-off",
+      label: "Manual",
+      title: "No loop or timer armed",
+      detail: "Start setup or schedule a check-in only when this session needs durable follow-up.",
+      tone: "neutral",
+    });
+  }
+
+  return items;
+}
+
+function automationScheduleErrorItem(
+  session: SessionSummary | undefined,
+  panelState: ScheduleState,
+): SessionAutomationQueueItem | undefined {
+  const summary = session?.schedules;
+  if (panelState.state === "error") {
+    return {
+      id: "timers-error",
+      label: "Timers",
+      title: "Timer details unavailable",
+      detail: automationCompact(panelState.error) ?? "Refresh timers before changing scheduled work.",
+      tone: "danger",
+    };
+  }
+  const count = summary?.error_count ?? 0;
+  if (count <= 0 && !summary?.last_error) return undefined;
+  return {
+    id: "timers-last-error",
+    label: "Timers",
+    title: `${Math.max(count, 1)} timer ${Math.max(count, 1) === 1 ? "error" : "errors"}`,
+    detail: automationCompact(summary?.last_error) ?? "Load timer details to inspect the failed schedule.",
+    tone: "danger",
+  };
+}
+
+function automationScheduleSummaryQueueItem(session: SessionSummary | undefined, loopStatus?: string): SessionAutomationQueueItem | undefined {
+  const summary = session?.schedules;
+  if (!summary) {
+    return session?.has_schedules
+      ? {
+        id: "timers-unloaded",
+        label: "Timers",
+        title: "Timer details need loading",
+        detail: "Load timers to inspect next run, last error, and pause/delete controls.",
+        tone: "neutral",
+      }
+      : undefined;
+  }
+  const pending = summary.pending_loop_ticks ?? 0;
+  if (pending > 0) {
+    return {
+      id: "timers-pending",
+      label: "Timers",
+      title: `${pending} loop ${pending === 1 ? "tick" : "ticks"} pending`,
+      detail: "They will stay queued until LOOP.md is activated.",
+      tone: "attention",
+    };
+  }
+  if (summary.next_run_at) {
+    return {
+      id: `timer-next-${summary.next_schedule_id ?? summary.next_run_at}`,
+      label: scheduleKindLabel(summary.next_schedule_kind),
+      title: `Next run ${automationFormatTime(summary.next_run_at)}`,
+      detail: automationCompact(summary.next_prompt_preview) ?? scheduleKindDetail(summary.next_schedule_kind),
+      tone: "ok",
+    };
+  }
+  if (summary.enabled > 0) {
+    return {
+      id: "timers-enabled",
+      label: "Timers",
+      title: `${summary.enabled} enabled ${summary.enabled === 1 ? "timer" : "timers"}`,
+      detail: "Load timer details to inspect the next run and recent outcome.",
+      tone: loopStatus === "running" ? "ok" : "neutral",
+    };
+  }
+  if (summary.count > 0) {
+    return {
+      id: "timers-paused",
+      label: "Timers",
+      title: `${summary.count} paused ${summary.count === 1 ? "timer" : "timers"}`,
+      detail: "Resume or delete saved timers from the list below.",
+      tone: "neutral",
+    };
+  }
+  return undefined;
+}
+
+function automationScheduleQueueItem(schedule: SessionSchedule, loopStatus?: string): SessionAutomationQueueItem {
+  const pending = schedule.kind === "loop_tick" && schedule.enabled && loopStatus !== "running";
+  const failed = !!automationCompact(schedule.last_error);
+  return {
+    id: `timer-${schedule.id}`,
+    label: scheduleKindLabel(schedule.kind),
+    title: pending ? "Waiting for LOOP.md activation" : schedule.enabled ? `Next ${automationFormatTime(schedule.next_run_at)}` : "Paused",
+    detail: automationScheduleQueueDetail(schedule, pending),
+    meta: schedule.id,
+    tone: failed ? "danger" : pending ? "attention" : schedule.enabled ? "ok" : "neutral",
+  };
+}
+
+function automationScheduleQueueDetail(schedule: SessionSchedule, pending: boolean): string {
+  const parts = [
+    pending ? "Loop tick cannot run until calibration is complete" : automationCompact(schedule.display_text) ?? automationCompact(schedule.prompt),
+    schedule.repeat_interval_seconds ? `Repeats every ${formatAutomationDuration(schedule.repeat_interval_seconds)}` : "One-time",
+    schedule.run_count && schedule.run_count > 0 ? `${schedule.run_count} ${schedule.run_count === 1 ? "run" : "runs"}` : undefined,
+    schedule.last_run_at ? `last ${automationFormatTime(schedule.last_run_at)}` : undefined,
+    automationCompact(schedule.last_error) ? `error: ${automationCompact(schedule.last_error)}` : undefined,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 function automationLoopMetric(
   session: SessionSummary | undefined,
   loopState: SessionSummary["loop_state"] | undefined,
@@ -2535,6 +2762,20 @@ function scheduleKindDetail(kind: string | undefined): string {
   if (kind === "daily_checkin") return "daily check-in";
   if (kind === "checkin") return "check-in";
   return "scheduled follow-up";
+}
+
+function scheduleKindLabel(kind: string | undefined): string {
+  if (kind === "loop_tick") return "Loop tick";
+  if (kind === "daily_checkin") return "Daily check-in";
+  if (kind === "checkin") return "Check-in";
+  return "Timer";
+}
+
+function formatAutomationDuration(seconds: number): string {
+  if (seconds % 86400 === 0) return `${seconds / 86400}d`;
+  if (seconds % 3600 === 0) return `${seconds / 3600}h`;
+  if (seconds % 60 === 0) return `${seconds / 60}m`;
+  return `${seconds}s`;
 }
 
 function automationFormatTime(value: string): string {

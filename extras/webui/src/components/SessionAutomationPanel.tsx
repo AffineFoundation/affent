@@ -15,11 +15,21 @@ export interface SessionAutomationFocus {
   action?: "answer" | "review";
 }
 
+export interface SessionAutomationQueueItem {
+  id: string;
+  label: string;
+  title: string;
+  detail: string;
+  meta?: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
 export function SessionAutomationPanel({
   title,
   detail,
   metrics = [],
   focus,
+  queue = [],
   actions,
   defaultOpen = false,
   testId = "session-automation-panel",
@@ -29,6 +39,7 @@ export function SessionAutomationPanel({
   detail: string;
   metrics?: readonly SessionAutomationMetric[];
   focus?: SessionAutomationFocus;
+  queue?: readonly SessionAutomationQueueItem[];
   actions?: ReactNode;
   defaultOpen?: boolean;
   testId?: string;
@@ -52,6 +63,26 @@ export function SessionAutomationPanel({
               </div>
             ) : null}
             {actions ? <div className="session-automation-focus-actions">{actions}</div> : null}
+          </section>
+        ) : null}
+        {queue.length > 0 ? (
+          <section className="session-automation-queue" data-testid="session-automation-queue" aria-label="Automation execution queue">
+            <header>
+              <span>Execution queue</span>
+              <strong>{queue.length} {queue.length === 1 ? "item" : "items"}</strong>
+            </header>
+            <ol>
+              {queue.map((item) => (
+                <li key={item.id} data-tone={item.tone ?? "neutral"}>
+                  <div className="session-automation-queue-main">
+                    <span>{item.label}</span>
+                    <strong>{item.title}</strong>
+                    <p>{item.detail}</p>
+                  </div>
+                  {item.meta ? <code>{item.meta}</code> : null}
+                </li>
+              ))}
+            </ol>
           </section>
         ) : null}
         {metrics.length > 0 ? (
