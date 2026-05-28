@@ -1392,7 +1392,17 @@ func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 	createDurableSessionDir(t, pool, "durable-tool-stats")
 	dir := pool.sessionDirPath("durable-tool-stats")
 
-	body := sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+	body := sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t0",
+		CallID: "skipped-fetch",
+		Tool:   "web_fetch",
+		Args:   map[string]any{"url": "https://api.taostats.io/api/subnet/120"},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:   "t0",
+		CallID:   "skipped-fetch",
+		ExitCode: 1,
+		Result:   "(max_turns reached before this tool ran)",
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
 		TurnID: "t1",
 		Reason: sse.TurnEndCompleted,
 		ToolStats: &sse.ToolRuntimeStats{
@@ -1444,7 +1454,9 @@ func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 		summary.Tools.ToolContextOmitted != 512 {
 		t.Fatalf("durable tool stats = %+v, want aggregated turn.end stats", summary.Tools)
 	}
-	if summary.Tools.ToolFailureByKind["dynamic_shell"] != 1 || summary.Tools.ToolFailureByKind["no_matches"] != 2 {
+	if summary.Tools.ToolFailureByKind["dynamic_shell"] != 1 ||
+		summary.Tools.ToolFailureByKind["no_matches"] != 2 ||
+		summary.Tools.ToolFailureByKind["loop_guard_no_budget"] != 1 {
 		t.Fatalf("tool_failure_by_kind = %+v, want aggregated failure kinds", summary.Tools.ToolFailureByKind)
 	}
 	if !strings.Contains(summary.LatestRecoveryHint, "top tool failure kind=no_matches (2)") {

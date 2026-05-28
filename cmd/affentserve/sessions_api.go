@@ -24,6 +24,7 @@ import (
 	"github.com/affinefoundation/affent/internal/sessionsearch"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
+	"github.com/affinefoundation/affent/internal/toolfailure"
 )
 
 const (
@@ -1756,6 +1757,8 @@ func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCom
 
 func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {
 	var summary ToolStatsSnapshot
+	toolsByCallID := map[string]string{}
+	derivedFailureByKind := map[string]int64{}
 	seen := false
 	for {
 		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
@@ -1770,20 +1773,76 @@ func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {
 		}
 		line = bytes.TrimRight(line, "\r\n")
 		var ev sse.Event
-		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeTurnEnd {
+		if err := json.Unmarshal(line, &ev); err != nil {
 			continue
 		}
-		var p sse.TurnEndPayload
-		if err := json.Unmarshal(ev.Data, &p); err != nil || p.ToolStats == nil {
-			continue
+		switch ev.Type {
+		case sse.TypeToolRequest:
+			var p sse.ToolRequestPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil || p.CallID == "" {
+				continue
+			}
+			toolsByCallID[p.CallID] = p.Tool
+		case sse.TypeToolResult:
+			var p sse.ToolResultPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			tool := toolsByCallID[p.CallID]
+			for _, kind := range toolResultFailureKindsForSessionSummary(tool, p) {
+				derivedFailureByKind[kind]++
+				seen = true
+			}
+		case sse.TypeTurnEnd:
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil || p.ToolStats == nil {
+				continue
+			}
+			addToolStatsSnapshot(&summary, toolStatsSnapshotFromRuntime(*p.ToolStats))
+			seen = true
 		}
-		addToolStatsSnapshot(&summary, toolStatsSnapshotFromRuntime(*p.ToolStats))
-		seen = true
 	}
+	mergeMaxToolFailureKinds(&summary, derivedFailureByKind)
 	if !seen {
 		return nil, nil
 	}
 	return &summary, nil
+}
+
+func toolResultFailureKindsForSessionSummary(tool string, p sse.ToolResultPayload) []string {
+	kinds := append([]string(nil), p.FailureKinds...)
+	if p.FailureKind != "" && !containsString(kinds, p.FailureKind) {
+		kinds = append([]string{p.FailureKind}, kinds...)
+	}
+	for _, kind := range toolfailure.KindsForResult(tool, p.Result, p.ExitCode != 0) {
+		if !containsString(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	return kinds
+}
+
+func mergeMaxToolFailureKinds(summary *ToolStatsSnapshot, derived map[string]int64) {
+	if len(derived) == 0 {
+		return
+	}
+	if summary.ToolFailureByKind == nil {
+		summary.ToolFailureByKind = map[string]int64{}
+	}
+	for kind, count := range derived {
+		if count > summary.ToolFailureByKind[kind] {
+			summary.ToolFailureByKind[kind] = count
+		}
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func toolStatsSnapshotFromRuntime(stats sse.ToolRuntimeStats) ToolStatsSnapshot {
