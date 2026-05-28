@@ -1022,6 +1022,154 @@ func TestConsumeAndPersist_ReasoningOnlyTerminalEmitsMessageDone(t *testing.T) {
 	}
 }
 
+func TestRunTurnCompletionGuardDefersPrematureFinalAnswer(t *testing.T) {
+	var calls int
+	planUpdated := false
+	planArgs, err := json.Marshal(map[string]any{
+		"action": "update",
+		"index":  1,
+		"status": "completed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r
+		calls++
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl := w.(http.Flusher)
+		switch calls {
+		case 1:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"All done.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		case 2:
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "plan_1",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      PlanToolName,
+								"arguments": string(planArgs),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+		default:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Now complete with plan evidence.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv := newTestConv(t)
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        PlanToolName,
+		Description: "test plan tool",
+		Schema:      json.RawMessage(`{"type":"object"}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			_ = ctx
+			if !strings.Contains(string(args), `"status":"completed"`) {
+				t.Fatalf("plan args = %s, want completed update", args)
+			}
+			planUpdated = true
+			return `{"version":1,"steps":[{"text":"ship","status":"completed"}]}`, nil
+		},
+	})
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM:          NewLLMClient(srv.URL, "", "fake-model"),
+		Tools:        reg,
+		Conv:         conv,
+		Events:       events,
+		Log:          zerolog.Nop(),
+		MaxTurnSteps: 4,
+		CompletionGuards: []CompletionGuard{
+			func() CompletionGuardResult {
+				if planUpdated {
+					return CompletionGuardResult{}
+				}
+				return CompletionGuardResult{
+					Blocked:        true,
+					ID:             "plan-unfinished",
+					Trigger:        "active_plan_unfinished",
+					Reason:         "plan:0/1:active",
+					RequiredAction: "update the plan before finalizing",
+					Prompt:         "The persisted plan is unfinished. Call the plan tool before finalizing.",
+				}
+			},
+		},
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "finish the task"); err != nil {
+		t.Fatal(err)
+	}
+
+	var sawDecision, sawPlanCall bool
+	var finalText string
+	var endReason string
+	deadline := time.After(10 * time.Second)
+	for endReason == "" {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				if p.Kind == "completion_guard" && p.Trigger == "active_plan_unfinished" && p.Decision == "defer" {
+					sawDecision = true
+				}
+			case sse.TypeToolRequest:
+				var p sse.ToolRequestPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				if p.Tool == PlanToolName {
+					sawPlanCall = true
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				finalText = p.Text
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				endReason = p.Reason
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for guarded turn.end")
+		}
+	}
+	if !sawDecision || !sawPlanCall || !planUpdated {
+		t.Fatalf("guard did not force plan update: decision=%v plan_call=%v updated=%v", sawDecision, sawPlanCall, planUpdated)
+	}
+	if endReason != sse.TurnEndCompleted {
+		t.Fatalf("turn end reason = %q, want completed", endReason)
+	}
+	if finalText != "Now complete with plan evidence." {
+		t.Fatalf("final text = %q", finalText)
+	}
+	if calls != 3 {
+		t.Fatalf("LLM calls = %d, want 3", calls)
+	}
+}
+
 func TestEnsureSystemPrompt_EmptyConv_WithMemory(t *testing.T) {
 	conv := newTestConv(t)
 	mem := newTestStore(t)

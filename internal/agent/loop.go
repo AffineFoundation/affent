@@ -222,12 +222,31 @@ type Loop struct {
 	// narrow procedure instead of a permanently longer prompt.
 	SkillProvider SkillProvider
 
+	// CompletionGuards can reject an otherwise final assistant answer when
+	// durable control state says the turn is not safe to close yet. Guards are
+	// state providers, not text classifiers: they should inspect plan/loop/etc.
+	// state and return a corrective prompt only when that state is unfinished.
+	CompletionGuards []CompletionGuard
+
 	// FinalNoToolsOnMaxTurns gives the model one final no-tool response
 	// after the tool budget is exhausted. This is useful for bounded
 	// child agents: when inspection budget runs out, they should
 	// summarize partial evidence instead of trying one more tool call.
 	FinalNoToolsOnMaxTurns bool
 }
+
+type CompletionGuard func() CompletionGuardResult
+
+type CompletionGuardResult struct {
+	Blocked        bool
+	ID             string
+	Trigger        string
+	Reason         string
+	RequiredAction string
+	Prompt         string
+}
+
+const maxCompletionGuardInterventions = 2
 
 const (
 	UserModeNormal      = "normal"
@@ -1079,6 +1098,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	toolContextBudgetDecisionPublished := false
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
+	completionGuardInterventions := 0
 	runBudgetFinal := func(prompt, skippedReason string) (bool, string, error) {
 		nextPrompt := prompt
 		nextSkippedReason := skippedReason
@@ -1105,6 +1125,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				if finalAnswerNeedsEvidenceRecovery(content, toolCallsUsed) {
 					nextPrompt = processNarrationRecoveryPrompt
 					continue
+				}
+				if guard, blocked := l.completionGuardBlocker(turnID); blocked {
+					l.publishCompletionGuardDecision(turnID, guard)
+					return false, "", nil
 				}
 				return true, "", nil
 			}
@@ -1232,6 +1256,19 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 				endReason = sse.TurnEndMaxTurns
 				break
+			}
+			if guard, blocked := l.completionGuardBlocker(turnID); blocked {
+				l.publishCompletionGuardDecision(turnID, guard)
+				completionGuardInterventions++
+				if completionGuardInterventions > maxCompletionGuardInterventions {
+					endReason = sse.TurnEndMaxTurns
+					break
+				}
+				if err := l.appendCompletionGuardPrompt(turnID, guard); err != nil {
+					endReason = sse.TurnEndError
+					break
+				}
+				continue
 			}
 			finishedNaturally = true
 			break
@@ -1666,6 +1703,67 @@ func (l *Loop) publishLoopDecision(payload sse.LoopDecisionPayload) {
 	}
 	l.publish(sse.TypeLoopDecision, payload)
 	l.recordLoopDecision(payload)
+}
+
+func (l *Loop) completionGuardBlocker(turnID string) (CompletionGuardResult, bool) {
+	for _, guard := range l.CompletionGuards {
+		if guard == nil {
+			continue
+		}
+		result := guard()
+		if !result.Blocked {
+			continue
+		}
+		result.ID = strings.TrimSpace(result.ID)
+		if result.ID == "" {
+			result.ID = "completion-guard"
+		}
+		result.Trigger = strings.TrimSpace(result.Trigger)
+		if result.Trigger == "" {
+			result.Trigger = "durable_state_unfinished"
+		}
+		result.Reason = strings.TrimSpace(result.Reason)
+		if result.Reason == "" {
+			result.Reason = "Durable control state reports unfinished work."
+		}
+		result.RequiredAction = strings.TrimSpace(result.RequiredAction)
+		if result.RequiredAction == "" {
+			result.RequiredAction = "Update durable control state or mark the blocked work before finalizing."
+		}
+		result.Prompt = strings.TrimSpace(result.Prompt)
+		if result.Prompt == "" {
+			result.Prompt = "Durable control state reports unfinished work. Do not finalize yet; update the authoritative task state or mark the work blocked with evidence before answering."
+		}
+		return result, true
+	}
+	return CompletionGuardResult{}, false
+}
+
+func (l *Loop) publishCompletionGuardDecision(turnID string, guard CompletionGuardResult) {
+	visible := true
+	l.publishLoopDecision(sse.LoopDecisionPayload{
+		TurnID:         turnID,
+		DecisionID:     guard.ID,
+		Kind:           "completion_guard",
+		Trigger:        guard.Trigger,
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         guard.Reason,
+		RequiredAction: guard.RequiredAction,
+		VisibleInUI:    &visible,
+	})
+}
+
+func (l *Loop) appendCompletionGuardPrompt(turnID string, guard CompletionGuardResult) error {
+	prompt := strings.TrimSpace(guard.Prompt)
+	if prompt == "" {
+		return nil
+	}
+	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {
+		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append completion guard prompt")
+		return err
+	}
+	return nil
 }
 
 func (l *Loop) recordLoopDecision(payload sse.LoopDecisionPayload) {

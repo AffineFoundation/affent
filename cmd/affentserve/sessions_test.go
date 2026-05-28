@@ -1807,6 +1807,16 @@ func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
 	if !strings.Contains(got, "cmd/affentserve/sessions.go") {
 		t.Fatalf("active plan evidence missing, got %q", got)
 	}
+	if len(s.loop.CompletionGuards) == 0 {
+		t.Fatal("active plan should install a completion guard")
+	}
+	guard := s.loop.CompletionGuards[0]()
+	if !guard.Blocked ||
+		guard.Trigger != "active_plan_unfinished" ||
+		!strings.Contains(guard.Reason, "plan:0/1:active") ||
+		!strings.Contains(guard.Prompt, "AFFENT COMPLETION GUARD:") {
+		t.Fatalf("active plan completion guard = %+v", guard)
+	}
 }
 
 func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
