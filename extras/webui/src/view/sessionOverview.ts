@@ -3,6 +3,7 @@ import type { SessionContextSummary, SessionPlanSummary } from "../api/sessions"
 import { latestAssistantMessageText, type SessionState, type TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
+import { formatByteCount } from "./byteFormat";
 import { memoryUpdatesForTurn } from "./memoryUpdate";
 import { summarizeSessionTitle } from "./sessionList";
 import { buildTurnActivity, type TurnActivityView } from "./turnActivity";
@@ -345,9 +346,17 @@ function buildAutomationMetric(session: SessionState): SessionOverviewMetric | u
   if (loopFeeds.length > 0) parts.push(loopProtocolFeedMetric(loopFeeds));
   if (visibleDecisions.length > 0) {
     const latest = visibleDecisions.at(-1);
-    parts.push(`${visibleDecisions.length} ${loopDecisionMetricName(latest)}${visibleDecisions.length === 1 ? "" : "s"}${latest?.decision ? ` ${latest.decision}` : ""}`);
+    parts.push(loopDecisionMetric(visibleDecisions.length, latest));
   }
   return { label: "Automation", value: parts.join(" · "), tone: stats.maxTurns > 0 || stats.interventions > 0 ? "warning" : undefined };
+}
+
+function loopDecisionMetric(count: number, decision: SessionState["loopDecisions"][number] | undefined): string {
+  return [
+    `${count} ${loopDecisionMetricName(decision)}${count === 1 ? "" : "s"}`,
+    decision?.decision,
+    loopDecisionBudgetPressure(decision),
+  ].filter(Boolean).join(" ");
 }
 
 function loopDecisionMetricName(decision: SessionState["loopDecisions"][number] | undefined): string {
@@ -355,6 +364,22 @@ function loopDecisionMetricName(decision: SessionState["loopDecisions"][number] 
   if (decision?.kind === "input_budget") return "input budget decision";
   if (decision?.kind === "tool_context_budget") return "context budget decision";
   return "decision";
+}
+
+function loopDecisionBudgetPressure(decision: SessionState["loopDecisions"][number] | undefined): string | undefined {
+  if (!decision) return undefined;
+  if (decision.kind === "input_budget") {
+    const observed = decision.observed_input_tokens;
+    const projected = decision.projected_input_tokens;
+    const budget = decision.token_budget;
+    if (projected && projected > 0 && budget && budget > 0) return `projected ${projected.toLocaleString()}/${budget.toLocaleString()} tokens`;
+    if (observed && observed > 0 && budget && budget > 0) return `observed ${observed.toLocaleString()}/${budget.toLocaleString()} tokens`;
+    if (projected && projected > 0) return `projected ${projected.toLocaleString()} tokens`;
+    if (observed && observed > 0) return `observed ${observed.toLocaleString()} tokens`;
+    if (budget && budget > 0) return `budget ${budget.toLocaleString()} tokens`;
+  }
+  if (decision.kind === "tool_context_budget" && decision.budget_bytes && decision.budget_bytes > 0) return `budget ${formatByteCount(decision.budget_bytes)}`;
+  return undefined;
 }
 
 function loopProtocolFeedMetric(feeds: SessionState["loopProtocolFeeds"]): string {

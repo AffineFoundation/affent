@@ -359,6 +359,7 @@ describe("buildSessionOverview", () => {
           kind: "input_budget",
           decision: "defer",
           token_budget: 300000,
+          observed_input_tokens: 479974,
           visible_in_ui: true,
         },
       },
@@ -371,7 +372,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Automation", value: "1 input budget decision defer", tone: undefined },
+      { label: "Automation", value: "1 input budget decision defer observed 479,974/300,000 tokens", tone: undefined },
     ]));
   });
 
