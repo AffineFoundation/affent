@@ -637,6 +637,10 @@ type LoopProtocolFeed struct {
 	LastDecisionConfidence     string `json:"last_decision_confidence,omitempty"`
 	LastDecisionReason         string `json:"last_decision_reason,omitempty"`
 	LastDecisionAction         string `json:"last_decision_required_action,omitempty"`
+	LastDecisionTokenBudget    int    `json:"last_decision_token_budget,omitempty"`
+	LastDecisionObservedInput  int    `json:"last_decision_observed_input_tokens,omitempty"`
+	LastDecisionProjectedInput int    `json:"last_decision_projected_input_tokens,omitempty"`
+	LastDecisionBudgetBytes    int    `json:"last_decision_budget_bytes,omitempty"`
 }
 
 type LoopProtocolCalibration struct {
@@ -1769,6 +1773,10 @@ func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
 			LastDecisionConfidence:     feed.LastDecisionConfidence,
 			LastDecisionReason:         feed.LastDecisionReason,
 			LastDecisionAction:         feed.LastDecisionAction,
+			LastDecisionTokenBudget:    feed.LastDecisionTokenBudget,
+			LastDecisionObservedInput:  feed.LastDecisionObservedInput,
+			LastDecisionProjectedInput: feed.LastDecisionProjectedInput,
+			LastDecisionBudgetBytes:    feed.LastDecisionBudgetBytes,
 		})
 	}
 	return stats

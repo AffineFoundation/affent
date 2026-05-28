@@ -249,16 +249,30 @@ func loopProtocolStateLine(protocolPath string, livePlanCheckpoint loopstate.Pla
 		}))
 	}
 	if state.LastDecisionKind != "" || state.LastDecision != "" || state.LastDecisionAction != "" {
-		lines = append(lines, "last_decision: "+loopProtocolInlineFields([]string{
+		fields := []string{
 			"kind=" + state.LastDecisionKind,
 			"trigger=" + state.LastDecisionTrigger,
 			"decision=" + state.LastDecision,
 			"confidence=" + state.LastDecisionConfidence,
-			"reason=" + state.LastDecisionReason,
-			"action=" + state.LastDecisionAction,
-		}))
+		}
+		fields = appendLoopProtocolPositiveIntField(fields, "token_budget", state.LastDecisionTokenBudget)
+		fields = appendLoopProtocolPositiveIntField(fields, "observed_input", state.LastDecisionObservedInput)
+		fields = appendLoopProtocolPositiveIntField(fields, "projected_input", state.LastDecisionProjectedInput)
+		fields = appendLoopProtocolPositiveIntField(fields, "budget_bytes", state.LastDecisionBudgetBytes)
+		fields = append(fields,
+			"reason="+state.LastDecisionReason,
+			"action="+state.LastDecisionAction,
+		)
+		lines = append(lines, "last_decision: "+loopProtocolInlineFields(fields))
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func appendLoopProtocolPositiveIntField(fields []string, key string, value int) []string {
+	if value <= 0 {
+		return fields
+	}
+	return append(fields, key+"="+strconv.Itoa(value))
 }
 
 func loopProtocolInlineFields(fields []string) string {
@@ -614,11 +628,15 @@ func applyLoopProtocolLastDecisionFields(payload *sse.LoopProtocolFeedPayload, r
 	if payload == nil {
 		return
 	}
-	fields := loopProtocolKeyValueSegments(raw, []string{"kind", "trigger", "decision", "confidence", "reason", "action"})
+	fields := loopProtocolKeyValueSegments(raw, []string{"kind", "trigger", "decision", "confidence", "token_budget", "observed_input", "projected_input", "budget_bytes", "reason", "action"})
 	payload.LastDecisionKind = fields["kind"]
 	payload.LastDecisionTrigger = fields["trigger"]
 	payload.LastDecision = fields["decision"]
 	payload.LastDecisionConfidence = fields["confidence"]
+	payload.LastDecisionTokenBudget = parsePositiveInt(fields["token_budget"])
+	payload.LastDecisionObservedInput = parsePositiveInt(fields["observed_input"])
+	payload.LastDecisionProjectedInput = parsePositiveInt(fields["projected_input"])
+	payload.LastDecisionBudgetBytes = parsePositiveInt(fields["budget_bytes"])
 	payload.LastDecisionReason = fields["reason"]
 	payload.LastDecisionAction = fields["action"]
 }

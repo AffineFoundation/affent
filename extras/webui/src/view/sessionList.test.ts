@@ -412,6 +412,28 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("research checkpoint");
   });
 
+  it("surfaces input budget pressure in automation row stats", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "budget-loop",
+        durable: true,
+        has_loop_state: true,
+        loop_state: {
+          version: 1,
+          status: "running",
+          loop_decisions: 1,
+          last_decision_kind: "input_budget",
+          last_decision: "defer",
+          last_decision_token_budget: 300000,
+          last_decision_observed_input_tokens: 479974,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Automation running, input budget decision defer observed 479,974/300,000 tokens");
+    expect(rows[0].searchText).toContain("input budget decision");
+  });
+
   it("surfaces high context pressure in row stats and search", () => {
     const rows = buildSessionRows([
       session({

@@ -768,6 +768,10 @@ func TestRecordDecisionUpdatesStateAndEvents(t *testing.T) {
 		Confidence:     "high",
 		Reason:         "dynamic widgets lacked text",
 		RequiredAction: "read browser network responses",
+		TokenBudget:    300000,
+		ObservedInput:  479974,
+		ProjectedInput: 512000,
+		BudgetBytes:    65536,
 	})
 	if err != nil {
 		t.Fatalf("RecordDecision: %v", err)
@@ -780,6 +784,10 @@ func TestRecordDecisionUpdatesStateAndEvents(t *testing.T) {
 		event.Confidence != "high" ||
 		event.Reason != "dynamic widgets lacked text" ||
 		event.RequiredAction != "read browser network responses" ||
+		event.TokenBudget != 300000 ||
+		event.ObservedInput != 479974 ||
+		event.ProjectedInput != 512000 ||
+		event.BudgetBytes != 65536 ||
 		event.Path != ProtocolRelPath("market-run") {
 		t.Fatalf("event = %+v", event)
 	}
@@ -791,6 +799,10 @@ func TestRecordDecisionUpdatesStateAndEvents(t *testing.T) {
 		state.LastDecisionConfidence != "high" ||
 		state.LastDecisionReason != "dynamic widgets lacked text" ||
 		state.LastDecisionAction != "read browser network responses" ||
+		state.LastDecisionTokenBudget != 300000 ||
+		state.LastDecisionObservedInput != 479974 ||
+		state.LastDecisionProjectedInput != 512000 ||
+		state.LastDecisionBudgetBytes != 65536 ||
 		state.LastEventType != "loop.decision" {
 		t.Fatalf("state = %+v", state)
 	}

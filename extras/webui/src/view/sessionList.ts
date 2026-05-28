@@ -1,5 +1,5 @@
 import type { MemoryUpdateMeta } from "../api/events";
-import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
+import type { SessionContextCompactionSummary, SessionContextSummary, SessionLoopState, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import { latestAssistantMessageText, type SessionState } from "../store/sessionState";
 import { formatByteCount } from "./byteFormat";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
@@ -849,8 +849,8 @@ function sessionAutomationLoopMetric(session: SessionSummary): string | undefine
     parts.push(lastMemoryAction && lastMemoryLocation ? `memory ${lastMemoryAction} ${lastMemoryLocation}` : `${memoryUpdates} memory ${memoryUpdates === 1 ? "update" : "updates"}`);
   }
   if (decisions && decisions > 0) {
-    const decisionName = lastDecisionKind === "research_checkpoint" ? "research checkpoint" : "decision";
-    parts.push(lastDecisionKind && lastDecision ? `${decisionName} ${loopDecisionMetricResult(lastDecisionKind, lastDecision)}` : `${decisions} ${decisions === 1 ? decisionName : `${decisionName}s`}`);
+    const decisionName = loopDecisionMetricName(lastDecisionKind);
+    parts.push(lastDecisionKind && lastDecision ? `${decisionName} ${loopDecisionMetricResult(lastDecisionKind, lastDecision, state)}` : `${decisions} ${decisions === 1 ? decisionName : `${decisionName}s`}`);
   }
   if (turnReason) parts.push(`last turn ${turnReason}`);
   if (eventSummary) parts.push(eventSummary);
@@ -858,9 +858,37 @@ function sessionAutomationLoopMetric(session: SessionSummary): string | undefine
   return parts.join(", ");
 }
 
-function loopDecisionMetricResult(kind: string, decision: string): string {
-  if (kind === "research_checkpoint") return decision;
-  return `${kind}:${decision}`;
+function loopDecisionMetricName(kind: string | undefined): string {
+  if (kind === "research_checkpoint") return "research checkpoint";
+  if (kind === "input_budget") return "input budget decision";
+  if (kind === "tool_context_budget") return "context budget decision";
+  return "decision";
+}
+
+function loopDecisionMetricResult(kind: string, decision: string, state: SessionLoopState | undefined): string {
+  const pressure = loopDecisionBudgetPressure(kind, state);
+  if (kind === "research_checkpoint" || kind === "input_budget" || kind === "tool_context_budget") {
+    return [decision, pressure].filter(Boolean).join(" ");
+  }
+  return [`${kind}:${decision}`, pressure].filter(Boolean).join(" ");
+}
+
+function loopDecisionBudgetPressure(kind: string, state: SessionLoopState | undefined): string | undefined {
+  if (!state) return undefined;
+  if (kind === "input_budget") {
+    const observed = state.last_decision_observed_input_tokens;
+    const projected = state.last_decision_projected_input_tokens;
+    const budget = state.last_decision_token_budget;
+    if (projected && projected > 0 && budget && budget > 0) return `projected ${projected.toLocaleString()}/${budget.toLocaleString()} tokens`;
+    if (observed && observed > 0 && budget && budget > 0) return `observed ${observed.toLocaleString()}/${budget.toLocaleString()} tokens`;
+    if (projected && projected > 0) return `projected ${projected.toLocaleString()} tokens`;
+    if (observed && observed > 0) return `observed ${observed.toLocaleString()} tokens`;
+    if (budget && budget > 0) return `budget ${budget.toLocaleString()} tokens`;
+  }
+  if (kind === "tool_context_budget" && state.last_decision_budget_bytes && state.last_decision_budget_bytes > 0) {
+    return `budget ${formatByteCount(state.last_decision_budget_bytes)}`;
+  }
+  return undefined;
 }
 
 function sessionAutomationScheduleMetric(session: SessionSummary): string | undefined {

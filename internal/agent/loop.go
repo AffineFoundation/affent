@@ -1798,6 +1798,10 @@ func (l *Loop) recordLoopDecision(payload sse.LoopDecisionPayload) {
 		Confidence:     payload.Confidence,
 		Reason:         payload.Reason,
 		RequiredAction: payload.RequiredAction,
+		TokenBudget:    payload.TokenBudget,
+		ObservedInput:  payload.ObservedInputTokens,
+		ProjectedInput: payload.ProjectedInputTokens,
+		BudgetBytes:    payload.BudgetBytes,
 	}); err != nil {
 		l.Log.Warn().Err(err).Msg("record loop decision checkpoint failed")
 	}

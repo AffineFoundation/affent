@@ -731,6 +731,10 @@ func recentLoopPreviewContent(path, sid string) (string, bool, error) {
 			"loop_guards="+stateSearchInt(summary.State.LastTurnLoopGuards),
 			"confidence="+stateSearchValue(summary.State.LastDecisionConfidence),
 			"decision="+stateSearchValue(summary.State.LastDecision),
+			"token_budget="+stateSearchInt(summary.State.LastDecisionTokenBudget),
+			"observed_input="+stateSearchInt(summary.State.LastDecisionObservedInput),
+			"projected_input="+stateSearchInt(summary.State.LastDecisionProjectedInput),
+			"budget_bytes="+stateSearchInt(summary.State.LastDecisionBudgetBytes),
 			"action="+stateSearchValue(summary.State.LastDecisionAction),
 			"reason="+stateSearchValue(summary.State.LastDecisionReason),
 		)
@@ -1171,6 +1175,10 @@ func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {
 		"trigger="+stateSearchValue(state.LastDecisionTrigger),
 		"decision="+stateSearchValue(state.LastDecision),
 		"confidence="+stateSearchValue(state.LastDecisionConfidence),
+		"token_budget="+stateSearchInt(state.LastDecisionTokenBudget),
+		"observed_input="+stateSearchInt(state.LastDecisionObservedInput),
+		"projected_input="+stateSearchInt(state.LastDecisionProjectedInput),
+		"budget_bytes="+stateSearchInt(state.LastDecisionBudgetBytes),
 		"reason="+stateSearchValue(state.LastDecisionReason),
 		"action="+stateSearchValue(state.LastDecisionAction),
 	)

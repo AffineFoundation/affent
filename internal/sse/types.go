@@ -345,6 +345,10 @@ type LoopProtocolFeedPayload struct {
 	LastDecisionConfidence     string `json:"last_decision_confidence,omitempty"`
 	LastDecisionReason         string `json:"last_decision_reason,omitempty"`
 	LastDecisionAction         string `json:"last_decision_required_action,omitempty"`
+	LastDecisionTokenBudget    int    `json:"last_decision_token_budget,omitempty"`
+	LastDecisionObservedInput  int    `json:"last_decision_observed_input_tokens,omitempty"`
+	LastDecisionProjectedInput int    `json:"last_decision_projected_input_tokens,omitempty"`
+	LastDecisionBudgetBytes    int    `json:"last_decision_budget_bytes,omitempty"`
 }
 
 // LoopProtocolCalibrationPayload mirrors draft LOOP.md calibration questions

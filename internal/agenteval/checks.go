@@ -1748,6 +1748,18 @@ func loopProtocolFeedLastDecisionSummary(feed LoopProtocolFeed) string {
 	if feed.LastDecisionConfidence != "" {
 		parts = append(parts, "confidence="+feed.LastDecisionConfidence)
 	}
+	if feed.LastDecisionTokenBudget > 0 {
+		parts = append(parts, fmt.Sprintf("token_budget=%d", feed.LastDecisionTokenBudget))
+	}
+	if feed.LastDecisionObservedInput > 0 {
+		parts = append(parts, fmt.Sprintf("observed_input=%d", feed.LastDecisionObservedInput))
+	}
+	if feed.LastDecisionProjectedInput > 0 {
+		parts = append(parts, fmt.Sprintf("projected_input=%d", feed.LastDecisionProjectedInput))
+	}
+	if feed.LastDecisionBudgetBytes > 0 {
+		parts = append(parts, fmt.Sprintf("budget_bytes=%d", feed.LastDecisionBudgetBytes))
+	}
 	return strings.Join(parts, " ")
 }
 

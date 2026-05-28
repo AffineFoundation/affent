@@ -740,6 +740,8 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 		Confidence:     "high",
 		Reason:         "dynamic widgets lacked text",
 		RequiredAction: "read browser network responses",
+		TokenBudget:    300000,
+		ObservedInput:  479974,
 	}); err != nil {
 		t.Fatalf("RecordDecision: %v", err)
 	}
@@ -769,7 +771,7 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 		"last_calibration: answer=Pause if the requested market source cannot be verified.",
 		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 tool_errors=1 forced_no_tools=1 memory_updates=1 memory_searches=3 memory_misses=2 session_search=1 loop_guards=1",
 		"last_memory_update: action=replace location=memory:markets preview=old dashboard rule -> prefer browser network evidence",
-		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer confidence=high reason=dynamic widgets lacked text action=read browser network responses",
+		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer confidence=high token_budget=300000 observed_input=479974 reason=dynamic widgets lacked text action=read browser network responses",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("loop protocol feed missing runtime checkpoint %q:\n%s", want, got)
@@ -879,6 +881,9 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 		Confidence:     "high",
 		Reason:         "dynamic widgets exposed empty values",
 		RequiredAction: "read browser_network_read ref n7 before citing metrics",
+		TokenBudget:    300000,
+		ObservedInput:  479974,
+		ProjectedInput: 512000,
 	}); err != nil {
 		t.Fatalf("RecordDecision: %v", err)
 	}
@@ -931,6 +936,9 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.LastDecisionTrigger != "source_access_dynamic_partial" ||
 			payload.LastDecision != "defer" ||
 			payload.LastDecisionConfidence != "high" ||
+			payload.LastDecisionTokenBudget != 300000 ||
+			payload.LastDecisionObservedInput != 479974 ||
+			payload.LastDecisionProjectedInput != 512000 ||
 			payload.LastDecisionReason != "dynamic widgets exposed empty values" ||
 			payload.LastDecisionAction != "read browser_network_read ref n7 before citing metrics" ||
 			!strings.Contains(payload.CurrentSituation, "recover the long-run trace") ||
@@ -1026,14 +1034,16 @@ func TestPublishLoopDecisionPersistsSidecarDecision(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	loop := &Loop{LoopProtocolPath: path, Events: events}
 	loop.publishLoopDecision(sse.LoopDecisionPayload{
-		TurnID:         "turn_decision",
-		DecisionID:     "decision-1",
-		Kind:           "evidence_quality",
-		Trigger:        "source_access_dynamic_partial",
-		Decision:       "defer",
-		Confidence:     "high",
-		Reason:         "dynamic widgets lacked text",
-		RequiredAction: "read browser network responses",
+		TurnID:              "turn_decision",
+		DecisionID:          "decision-1",
+		Kind:                "evidence_quality",
+		Trigger:             "source_access_dynamic_partial",
+		Decision:            "defer",
+		Confidence:          "high",
+		Reason:              "dynamic widgets lacked text",
+		RequiredAction:      "read browser network responses",
+		TokenBudget:         300000,
+		ObservedInputTokens: 479974,
 	})
 
 	select {
@@ -1060,14 +1070,16 @@ func TestPublishLoopDecisionPersistsSidecarDecision(t *testing.T) {
 		state.LastDecisionID != "decision-1" ||
 		state.LastDecisionKind != "evidence_quality" ||
 		state.LastDecision != "defer" ||
-		state.LastDecisionAction != "read browser network responses" {
+		state.LastDecisionAction != "read browser network responses" ||
+		state.LastDecisionTokenBudget != 300000 ||
+		state.LastDecisionObservedInput != 479974 {
 		t.Fatalf("state = %+v", state)
 	}
 	sidecar, found, err := loopstate.ReadRecentEvents(filepath.Join(dir, loopstate.EventsFileName), 1)
 	if err != nil || !found || len(sidecar) != 1 {
 		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(sidecar), err)
 	}
-	if sidecar[0].Type != "loop.decision" || sidecar[0].DecisionID != "decision-1" || sidecar[0].RequiredAction != "read browser network responses" {
+	if sidecar[0].Type != "loop.decision" || sidecar[0].DecisionID != "decision-1" || sidecar[0].RequiredAction != "read browser network responses" || sidecar[0].TokenBudget != 300000 || sidecar[0].ObservedInput != 479974 {
 		t.Fatalf("sidecar event = %+v", sidecar[0])
 	}
 }

@@ -303,6 +303,10 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			LastDecisionConfidence:     p.LastDecisionConfidence,
 			LastDecisionReason:         p.LastDecisionReason,
 			LastDecisionAction:         p.LastDecisionAction,
+			LastDecisionTokenBudget:    p.LastDecisionTokenBudget,
+			LastDecisionObservedInput:  p.LastDecisionObservedInput,
+			LastDecisionProjectedInput: p.LastDecisionProjectedInput,
+			LastDecisionBudgetBytes:    p.LastDecisionBudgetBytes,
 		})
 	case sse.TypeLoopCalibrationRequest:
 		var p sse.LoopProtocolCalibrationPayload

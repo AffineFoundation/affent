@@ -261,6 +261,16 @@ export interface LoopProtocolFeedPayload {
   plan_current_step_index?: number;
   plan_current_step_status?: string;
   plan_current_step?: string;
+  last_decision_kind?: string;
+  last_decision_trigger?: string;
+  last_decision?: string;
+  last_decision_confidence?: string;
+  last_decision_reason?: string;
+  last_decision_required_action?: string;
+  last_decision_token_budget?: number;
+  last_decision_observed_input_tokens?: number;
+  last_decision_projected_input_tokens?: number;
+  last_decision_budget_bytes?: number;
 }
 
 export interface LoopProtocolCalibrationPayload {

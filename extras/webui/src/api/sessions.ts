@@ -202,6 +202,10 @@ export interface SessionLoopState {
   last_decision_confidence?: string;
   last_decision_reason?: string;
   last_decision_required_action?: string;
+  last_decision_token_budget?: number;
+  last_decision_observed_input_tokens?: number;
+  last_decision_projected_input_tokens?: number;
+  last_decision_budget_bytes?: number;
   last_decision_at?: string;
   context_compactions?: number;
   last_context_compaction_at?: string;
