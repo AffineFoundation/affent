@@ -433,6 +433,95 @@ func TestValidateProtocolActivationReadyRequiresAllCalibrationAnswers(t *testing
 	}
 }
 
+func TestRepairRecordedCalibrationFromProtocol(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "longrun")
+	if _, _, _, err := EnsureProtocolTemplate(path, ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "session-a",
+		Goal:         "Run a durable loop setup.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol := `# Loop Protocol: longrun
+
+## Calibration Q&A (recorded)
+
+- **Q1**: Analysis scope? A: Track repository reliability and release blockers.
+- **Q2**: Output cadence? A: Update status daily and summarize blockers weekly.
+
+## 0. Metadata
+
+- status: running
+`
+	repaired, err := RepairRecordedCalibrationFromProtocol(path, protocol)
+	if err != nil {
+		t.Fatalf("RepairRecordedCalibrationFromProtocol: %v", err)
+	}
+	if !repaired {
+		t.Fatal("RepairRecordedCalibrationFromProtocol repaired=false, want true")
+	}
+	state, found, err := ReadState(StatePath(dir, "longrun"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 2 ||
+		state.CalibrationAnswers != 2 ||
+		!strings.Contains(state.LastCalibrationQuestion, "Output cadence") ||
+		!strings.Contains(state.LastCalibrationAnswer, "weekly") {
+		t.Fatalf("state = %+v", state)
+	}
+	events, found, err := ReadRecentEvents(EventsPath(dir, "longrun"), 10)
+	if err != nil || !found {
+		t.Fatalf("ReadRecentEvents found=%v err=%v", found, err)
+	}
+	if len(events) != 5 ||
+		events[1].Type != "loop.protocol_calibration_request" ||
+		events[2].Type != "loop.protocol_calibration" ||
+		events[3].Type != "loop.protocol_calibration_request" ||
+		events[4].Type != "loop.protocol_calibration" {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestRepairRecordedCalibrationFromProtocolAnswersExistingQuestion(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "longrun")
+	if _, _, _, err := EnsureProtocolTemplate(path, ProtocolTemplateOptions{
+		LoopID: "longrun",
+		Goal:   "Run a durable loop setup.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	protocol := `# Loop Protocol: longrun
+
+## Calibration Q&A (recorded)
+
+- **Q1**: What stop condition should pause this loop? A: Pause when required source evidence is unavailable.
+`
+	repaired, err := RepairRecordedCalibrationFromProtocol(path, protocol)
+	if err != nil {
+		t.Fatalf("RepairRecordedCalibrationFromProtocol: %v", err)
+	}
+	if !repaired {
+		t.Fatal("RepairRecordedCalibrationFromProtocol repaired=false, want true")
+	}
+	state, found, err := ReadState(StatePath(dir, "longrun"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		!strings.Contains(state.LastCalibrationAnswer, "source evidence") {
+		t.Fatalf("state = %+v", state)
+	}
+}
+
 func TestStatePersistsAtomicallyAndSummaryPrefersState(t *testing.T) {
 	dir := t.TempDir()
 	loopDir := ProtocolDir(dir, "market-run")

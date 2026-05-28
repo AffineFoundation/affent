@@ -101,6 +101,61 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolCompletesActivationFromRecordedCalibrationSection(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "# Loop Protocol: longrun", `# Loop Protocol: longrun
+
+## Calibration Q&A (recorded)
+
+- **Q1**: What stop condition should pause this loop? A: Stop if live source quality is too weak.`, 1)
+	for _, replacement := range [][2]string{
+		{"- status: draft", "- status: running"},
+		{"- hard constraints:", "- hard constraints: keep evidence cited and stop on unresolved user intent"},
+		{"- known evidence:", "- known evidence: user requested durable market analysis"},
+		{"- current risk or blocker:", "- current risk or blocker: needs live source verification"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state before continuing"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "complete_activation",
+		"protocol": protocol,
+		"reason":   "user intent understood from recorded calibration",
+	})))
+	if err != nil {
+		t.Fatalf("complete_activation: %v", err)
+	}
+	if !strings.Contains(out, "activated LOOP.md status=running") {
+		t.Fatalf("activation output = %q", out)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.Status != "running" ||
+		state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		!strings.Contains(state.LastCalibrationAnswer, "source quality") {
+		t.Fatalf("state = %+v", state)
+	}
+}
+
 func TestLoopProtocolToolRejectsActivationBeforeCalibrationAnswer(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")

@@ -183,6 +183,9 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 			loopProtocolActivationInvalidFailureKind,
 		)
 	}
+	if _, err := loopstate.RepairRecordedCalibrationFromProtocol(protocolPath, protocol); err != nil {
+		return "", err
+	}
 	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
 		return "", loopProtocolFailure(
 			fmt.Sprintf("%v\nNext: ask one concise calibration question, wait for the user's answer, then retry loop_protocol action=complete_activation with the full LOOP.md in the protocol argument and metadata status: running after the runtime records that answer", err),

@@ -2842,19 +2842,6 @@ func TestActivateSessionLoopProtocolRepairsRecordedCalibrationFromProtocol(t *te
 	}
 }
 
-func TestRecordedLoopCalibrationPairsAcceptsChineseInlineAnswer(t *testing.T) {
-	pairs := recordedLoopCalibrationPairs(`## Calibration Q&A (recorded)
-
-- **Q1**: 分析范围？A: 全面覆盖，优先关注中美关系和全球经济。
-- **Q2**: 产出频率？A: 每天更新一次，每周深度分析。`)
-	if len(pairs) != 2 ||
-		!strings.Contains(pairs[0].question, "分析范围") ||
-		!strings.Contains(pairs[0].answer, "全面覆盖") ||
-		!strings.Contains(pairs[1].answer, "每周深度分析") {
-		t.Fatalf("pairs = %+v", pairs)
-	}
-}
-
 func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

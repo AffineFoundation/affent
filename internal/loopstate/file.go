@@ -238,6 +238,93 @@ func ValidateProtocolActivationReady(protocolPath string) error {
 	return nil
 }
 
+// RepairRecordedCalibrationFromProtocol recovers old draft loop state when the
+// full protocol already contains a compact "Calibration Q&A (recorded)"
+// section but state.json missed the corresponding calibration events.
+func RepairRecordedCalibrationFromProtocol(protocolPath, protocol string) (bool, error) {
+	state, found, err := ReadState(filepath.Join(filepath.Dir(protocolPath), StateFileName))
+	if err != nil || !found {
+		return false, err
+	}
+	if state.Status != "draft" || state.CalibrationAnswers > 0 {
+		return false, nil
+	}
+	pairs := recordedCalibrationPairs(protocol)
+	if len(pairs) == 0 {
+		return false, nil
+	}
+	repaired := false
+	if state.CalibrationQuestions <= 0 {
+		for _, pair := range pairs {
+			if _, _, err := RecordProtocolCalibrationQuestion(protocolPath, pair.question); err != nil {
+				return repaired, err
+			}
+			if _, _, err := RecordProtocolCalibrationAnswer(protocolPath, pair.answer); err != nil {
+				return repaired, err
+			}
+			repaired = true
+		}
+		return repaired, nil
+	}
+	missingAnswers := state.CalibrationQuestions - state.CalibrationAnswers
+	for i := 0; i < missingAnswers && i < len(pairs); i++ {
+		if _, _, err := RecordProtocolCalibrationAnswer(protocolPath, pairs[i].answer); err != nil {
+			return repaired, err
+		}
+		repaired = true
+	}
+	return repaired, nil
+}
+
+type recordedCalibrationPair struct {
+	question string
+	answer   string
+}
+
+func recordedCalibrationPairs(protocol string) []recordedCalibrationPair {
+	lines := strings.Split(protocol, "\n")
+	inRecordedSection := false
+	pairs := []recordedCalibrationPair{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(trimmed, "## ") {
+			inRecordedSection = strings.Contains(lower, "calibration q&a") && strings.Contains(lower, "recorded")
+			continue
+		}
+		if !inRecordedSection || !strings.HasPrefix(trimmed, "-") {
+			continue
+		}
+		if pair, ok := recordedCalibrationPairFromLine(trimmed); ok {
+			pairs = append(pairs, pair)
+		}
+	}
+	return pairs
+}
+
+func recordedCalibrationPairFromLine(line string) (recordedCalibrationPair, bool) {
+	line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
+	if line == "" {
+		return recordedCalibrationPair{}, false
+	}
+	if before, after, ok := strings.Cut(line, "**:"); ok && strings.Contains(before, "**Q") {
+		line = strings.TrimSpace(after)
+	}
+	answerSplitters := []string{" A: ", " A：", " 答: ", " 答：", "A: ", "A：", "答: ", "答："}
+	for _, splitter := range answerSplitters {
+		question, answer, ok := strings.Cut(line, splitter)
+		if !ok {
+			continue
+		}
+		question = strings.TrimSpace(question)
+		answer = strings.TrimSpace(answer)
+		if question != "" && answer != "" {
+			return recordedCalibrationPair{question: question, answer: answer}, true
+		}
+	}
+	return recordedCalibrationPair{}, false
+}
+
 func unresolvedActivationPlaceholders(protocol string) []string {
 	blankMarkers := map[string]bool{
 		"- hard constraints:":         true,
