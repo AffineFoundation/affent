@@ -105,8 +105,10 @@ describe("RuntimeStatsPanel", () => {
 
     const panel = screen.getByTestId("runtime-stats-panel");
     expect(panel).toHaveTextContent("qwen-small");
+    expect(panel).toHaveTextContent("No active sessions");
     expect(panel).toHaveTextContent("No runtime diagnostics need attention.");
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
+    expect(panel).not.toHaveTextContent("0 sessions");
     expect(panel).not.toHaveTextContent("Mode");
     expect(panel).not.toHaveTextContent("Tools");
     expect(panel).not.toHaveTextContent("standard");

@@ -72,7 +72,7 @@ function runtimeDetail(stats?: ServerStatsResponse): string {
   if (!stats) return "Runtime diagnostics have not been fetched.";
   const parts: string[] = [];
   const sessions = stats.active_sessions ?? stats.sessions?.length ?? 0;
-  parts.push(`${sessions} ${sessions === 1 ? "session" : "sessions"}`);
+  parts.push(sessions > 0 ? `${sessions} ${sessions === 1 ? "session" : "sessions"}` : "No active sessions");
   const running = stats.running_turns ?? 0;
   if (running > 0) parts.push(`${running} running`);
   if (stats.eval_mode) parts.push(evalModeDetail(stats));
