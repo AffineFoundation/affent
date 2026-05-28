@@ -68,10 +68,33 @@ describe("buildSessionTrace", () => {
         durationMs: 340,
         artifactPath: ".affent/artifacts/tool-results/000001-shell.txt",
         next: "rerun npm test after fixing checkout",
+        occurrences: 1,
       },
     ]);
     expect(sessionTraceEvidenceText(trace)).toContain("Tool issue: Request 1 · shell · invalid_args · failed");
     expect(sessionTraceEvidenceText(trace)).not.toContain("Next: rerun npm test after fixing checkout");
+  });
+
+  it("compacts repeated tool issues while preserving total issue count", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "loop1", tool: "loop_protocol", args: {} } },
+      { id: 3, type: "tool.result", data: { turn_id: "t1", call_id: "loop1", exit_code: 1, failure_kind: "loop_protocol_activation_status", result_summary: "Error: complete_activation requires LOOP.md metadata status: draft or running" } },
+      { id: 4, type: "tool.request", data: { turn_id: "t1", call_id: "loop2", tool: "loop_protocol", args: {} } },
+      { id: 5, type: "tool.result", data: { turn_id: "t1", call_id: "loop2", exit_code: 1, failure_kind: "loop_protocol_activation_status", result_summary: "Error: complete_activation requires LOOP.md metadata status: draft or running" } },
+    ]);
+
+    const trace = buildSessionTrace(session);
+
+    expect(trace.toolIssueCount).toBe(2);
+    expect(trace.toolIssues).toHaveLength(1);
+    expect(trace.toolIssues[0]).toMatchObject({
+      id: "loop1",
+      tool: "loop_protocol",
+      occurrences: 2,
+      badges: ["exit 1", "loop_protocol_activation_status", "2x"],
+    });
+    expect(sessionTraceEvidenceText(trace)).toContain("2 occurrences");
   });
 
   it("returns an empty state for sessions without trace", () => {

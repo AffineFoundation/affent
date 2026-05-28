@@ -29,6 +29,7 @@ export interface TraceToolIssueView {
   durationMs?: number;
   artifactPath?: string;
   next?: string;
+  occurrences: number;
 }
 
 export function buildSessionTrace(session: SessionState): SessionTraceView {
@@ -38,7 +39,7 @@ export function buildSessionTrace(session: SessionState): SessionTraceView {
   const latest = latestTraceRecord(model.items);
   const eventCount = session.events.length;
   const toolIssues = buildTraceToolIssues(session);
-  const toolIssueCount = toolIssues.length;
+  const toolIssueCount = toolIssues.reduce((sum, issue) => sum + issue.occurrences, 0);
   const summary = eventCount > 0
     ? `${eventCount} trace ${eventCount === 1 ? "entry" : "entries"}`
     : "No trace entries";
@@ -88,10 +89,34 @@ function buildTraceToolIssues(session: SessionState): TraceToolIssueView[] {
         durationMs: call.durationMs,
         artifactPath: call.resultArtifactPath,
         next: issueNextHint(call.resultSummary, call.result),
+        occurrences: 1,
       });
     }
   });
-  return issues;
+  return compactRepeatedToolIssues(issues);
+}
+
+function compactRepeatedToolIssues(issues: TraceToolIssueView[]): TraceToolIssueView[] {
+  const bySignature = new Map<string, TraceToolIssueView>();
+  const out: TraceToolIssueView[] = [];
+  for (const issue of issues) {
+    const signature = [
+      issue.tool,
+      issue.detail,
+      issue.badges.join("|"),
+      issue.exitCode ?? "",
+      issue.next ?? "",
+    ].join("\u0000");
+    const previous = bySignature.get(signature);
+    if (!previous) {
+      bySignature.set(signature, issue);
+      out.push(issue);
+      continue;
+    }
+    previous.occurrences += 1;
+    previous.badges = compactStrings([...previous.badges, `${previous.occurrences}x`]);
+  }
+  return out;
 }
 
 function isToolIssue(call: SessionState["turns"][number]["toolCalls"][number]): boolean {
@@ -109,7 +134,8 @@ export function sessionTraceEvidenceText(trace: SessionTraceView): string {
   if (trace.toolIssues.length > 0) {
     lines.push(`Tool issues: ${trace.toolIssueCount}`);
     for (const issue of trace.toolIssues.slice(0, 3)) {
-      lines.push(`Tool issue: ${issue.title}${issue.detail ? ` · ${issue.detail}` : ""}`);
+      const occurrences = issue.occurrences > 1 ? ` · ${issue.occurrences} occurrences` : "";
+      lines.push(`Tool issue: ${issue.title}${issue.detail ? ` · ${issue.detail}` : ""}${occurrences}`);
     }
   }
   if (trace.latest) {

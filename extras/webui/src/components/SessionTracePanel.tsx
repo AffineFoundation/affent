@@ -20,7 +20,7 @@ export function SessionTracePanel({
   onOpenArtifact?: (path: string) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<TraceFilter>("all");
+  const [filter, setFilter] = useState<TraceFilter>(() => trace.toolIssueCount > 0 ? "issues" : "all");
   const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
@@ -201,7 +201,7 @@ export function SessionTracePanel({
                 ) : null}
               </div>
             ) : null}
-            {!trimmedQuery && trace.latest ? (
+            {!hasActiveNarrowing && trace.latest ? (
               <div className="session-trace-latest" data-testid="session-trace-latest">
                 <strong>{trace.latest.label}</strong>
                 <span>{trace.latest.detail}</span>
@@ -239,7 +239,7 @@ interface TraceToolIssueGroup {
 function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceToolIssueGroup[] {
   const counts = new Map<string, number>();
   for (const issue of issues) {
-    counts.set(issue.tool, (counts.get(issue.tool) ?? 0) + 1);
+    counts.set(issue.tool, (counts.get(issue.tool) ?? 0) + issue.occurrences);
   }
   return [...counts.entries()]
     .map(([tool, count]) => ({ tool, count }))
