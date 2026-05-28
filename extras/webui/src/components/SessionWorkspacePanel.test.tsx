@@ -31,6 +31,7 @@ describe("SessionWorkspacePanel", () => {
 const workspace: SessionWorkspaceView = {
   hasData: true,
   summary: "Workspace mismatch",
+  shortStatus: "Workspace mismatch",
   detail: "/repo/affent · branch main · dirty · cwd /tmp",
   tone: "warning",
   label: "affent",

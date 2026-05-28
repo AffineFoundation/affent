@@ -18,7 +18,7 @@ describe("buildWorkbenchNavItems", () => {
       changes: { summary: "No changed files", detail: "No changes", files: [] },
       run: { summary: "No commands", detail: "No commands", commands: [] },
       files: { summary: "No files", detail: "No files", items: [] },
-      workspace: { hasData: false, summary: "No workspace evidence", detail: "No workspace binding or command cwd recorded." },
+      workspace: { hasData: false, summary: "No workspace evidence", shortStatus: "No workspace evidence", detail: "No workspace binding or command cwd recorded." },
       runtimeState: { state: "idle" },
       configState: { state: "idle" },
       memoryState: { state: "idle" },
@@ -68,6 +68,7 @@ describe("buildWorkbenchNavItems", () => {
       workspace: {
         hasData: true,
         summary: "affent",
+        shortStatus: "affent",
         detail: "/repo/affent · branch main · dirty",
         label: "affent",
         path: "/repo/affent",

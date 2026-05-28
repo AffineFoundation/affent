@@ -74,6 +74,7 @@ describe("buildWorkbenchAttention", () => {
       workspace: {
         hasData: true,
         summary: "Workspace mismatch",
+        shortStatus: "Workspace mismatch",
         detail: "/repo/affent · cwd /tmp",
         tone: "warning",
         issue: "Latest command cwd is outside the session workspace.",

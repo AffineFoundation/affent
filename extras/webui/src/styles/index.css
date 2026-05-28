@@ -178,6 +178,58 @@ body {
   background: var(--c-error-bg);
 }
 
+.workspace-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: min(260px, 28vw);
+  height: 28px;
+  overflow: hidden;
+  border: 1px solid rgba(189, 199, 211, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.62);
+  color: var(--text-muted);
+  padding: 0 9px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workspace-status-pill:hover,
+.workspace-status-pill:focus-visible {
+  border-color: rgba(20, 184, 166, 0.36);
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: none;
+}
+
+.workspace-status-pill[data-tone="warning"] {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(255, 251, 235, 0.86);
+  color: #92400e;
+}
+
+.workspace-status-pill span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.workspace-status-pill[data-tone="warning"] .workspace-status-dot {
+  background: var(--c-warn);
+}
+
 .app-header .spacer {
   flex: 1;
 }
@@ -7786,6 +7838,7 @@ html[data-theme="dark"] .markdown-text hr {
 html[data-theme="dark"] .theme-switch,
 html[data-theme="dark"] .mobile-chrome-toggle,
 html[data-theme="dark"] .mobile-chrome-restore,
+html[data-theme="dark"] .workspace-status-pill,
 html[data-theme="dark"] .workbench-trigger,
 html[data-theme="dark"] .workbench-close,
 html[data-theme="dark"] .workbench-panel,
@@ -8549,6 +8602,11 @@ html[data-theme="dark"] ::selection {
   }
   .workbench-trigger {
     order: 3;
+  }
+  .workspace-status-pill {
+    order: 2;
+    max-width: min(150px, calc(100vw - 220px));
+    height: 32px;
   }
   .workbench-trigger {
     width: 32px;

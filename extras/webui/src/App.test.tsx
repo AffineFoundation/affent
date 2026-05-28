@@ -2062,8 +2062,9 @@ describe("App", () => {
     expect(await screen.findByText("Workspace evidence recorded.")).toBeVisible();
     expect(screen.queryByTestId("session-workspace-panel")).toBeNull();
     expect(screen.getByText("Workspace mismatch · View workspace")).toBeVisible();
+    expect(screen.getByTestId("workspace-status-pill")).toHaveTextContent("Workspace mismatch");
 
-    await user.click(screen.getByLabelText("Workbench"));
+    await user.click(screen.getByTestId("workspace-status-pill"));
 
     const workspace = await screen.findByTestId("session-workspace-panel");
     expect(workspace).toHaveAttribute("open");

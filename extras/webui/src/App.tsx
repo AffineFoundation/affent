@@ -60,6 +60,7 @@ import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
 import { SessionWorkspacePanel } from "./components/SessionWorkspacePanel";
 import { WorkbenchEmpty, WorkbenchPanel } from "./components/WorkbenchPanel";
+import { WorkspaceStatusPill } from "./components/WorkspaceStatusPill";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -1494,6 +1495,7 @@ export function App() {
           <span className="connection-pill" data-state={status.state} data-testid="connection-pill" title={status.detail ?? status.label}>
             {connectionLabel}
           </span>
+          <WorkspaceStatusPill workspace={sessionWorkspace} onOpen={() => openWorkbench("workspace")} />
           <span className="spacer" />
           <button type="button" className="mobile-chrome-toggle" aria-label="Hide top controls" onClick={() => setMobileTopbarHidden(true)}>
             <span className="mobile-collapse-icon" aria-hidden="true">

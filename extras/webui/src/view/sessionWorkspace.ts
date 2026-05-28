@@ -4,6 +4,7 @@ import type { SessionRunView } from "./sessionRun";
 export interface SessionWorkspaceView {
   hasData: boolean;
   summary: string;
+  shortStatus: string;
   detail: string;
   tone?: "warning" | "error";
   label?: string;
@@ -32,13 +33,16 @@ export function buildSessionWorkspace(
     return {
       hasData: false,
       summary: "No workspace evidence",
+      shortStatus: "No workspace evidence",
       detail: "No workspace binding or command cwd recorded.",
     };
   }
 
+  const summary = issue ? "Workspace mismatch" : label ?? "Workspace recorded";
   return {
     hasData: true,
-    summary: issue ? "Workspace mismatch" : label ?? "Workspace recorded",
+    summary,
+    shortStatus: workspaceShortStatus({ summary, label, path, branch, dirtyState }),
     detail: workspaceDetail({ path, branch, dirtyState, lastAgentCwd }),
     tone: issue ? "warning" : undefined,
     label,
@@ -49,6 +53,27 @@ export function buildSessionWorkspace(
     latestCommandCwd,
     issue,
   };
+}
+
+function workspaceShortStatus({
+  summary,
+  label,
+  path,
+  branch,
+  dirtyState,
+}: {
+  summary: string;
+  label?: string;
+  path?: string;
+  branch?: string;
+  dirtyState?: string;
+}): string {
+  if (summary === "Workspace mismatch") return summary;
+  return [
+    label ?? (path ? compactPath(path) : summary),
+    branch,
+    dirtyState,
+  ].filter(Boolean).join(" · ");
 }
 
 function workspaceDetail({

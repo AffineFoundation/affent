@@ -18,6 +18,7 @@ describe("buildSessionWorkspace", () => {
     expect(workspace).toMatchObject({
       hasData: true,
       summary: "affent",
+      shortStatus: "affent · main · dirty",
       detail: "/repo/affent · branch main · dirty · cwd extras/webui",
       path: "/repo/affent",
       lastAgentCwd: "extras/webui",
@@ -31,6 +32,7 @@ describe("buildSessionWorkspace", () => {
     )).toMatchObject({
       hasData: true,
       summary: "Workspace mismatch",
+      shortStatus: "Workspace mismatch",
       tone: "warning",
       issue: "Latest command cwd is outside the session workspace.",
     });
@@ -40,6 +42,7 @@ describe("buildSessionWorkspace", () => {
     expect(buildSessionWorkspace(session({}), run())).toMatchObject({
       hasData: false,
       summary: "No workspace evidence",
+      shortStatus: "No workspace evidence",
     });
   });
 });

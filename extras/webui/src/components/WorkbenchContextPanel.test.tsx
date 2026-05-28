@@ -23,6 +23,7 @@ describe("WorkbenchContextPanel", () => {
         workspace={{
           hasData: true,
           summary: "affent",
+          shortStatus: "affent · main · dirty",
           detail: "/work/affent · branch main · dirty",
           label: "affent",
           path: "/work/affent",
