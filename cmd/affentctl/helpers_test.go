@@ -508,6 +508,51 @@ func TestChatLoopSlashOnCreatesDraftAndActivationPrompt(t *testing.T) {
 	}
 }
 
+func TestChatLoopRecordsCalibrationAnswerBeforeNextTurn(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "loop-answer"
+	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "keep a long-running code review loop aligned",
+		Workspace:    workspace,
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	question := "For this loop, what stop condition should pause work?"
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, question); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	conv, err := agent.OpenConversationAt(filepath.Join(workspace, "chat.jsonl"))
+	if err != nil {
+		t.Fatalf("OpenConversationAt: %v", err)
+	}
+	if err := conv.Append(agent.ChatMessage{Role: "assistant", Content: question}); err != nil {
+		t.Fatalf("append assistant question: %v", err)
+	}
+	b := &loopBundle{
+		loop:             &agent.Loop{Conv: conv},
+		workspace:        workspace,
+		sessionID:        sessionID,
+		loopProtocolPath: protocolPath,
+	}
+
+	recordCurrentSessionLoopCalibrationAnswerIfReady(b, "Pause if tests or web evidence cannot verify the change.")
+
+	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationAnswer, "Pause if tests") {
+		t.Fatalf("calibration answer state = %+v", state)
+	}
+	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
+		t.Fatalf("ValidateProtocolActivationReady after CLI answer: %v", err)
+	}
+}
+
 func TestChatPlanSlashDraftRequiresRequest(t *testing.T) {
 	_, _, ok, err := chatPlanSlashTurn("/plan draft", &loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}})
 	if err == nil || !strings.Contains(err.Error(), "requires a request") || ok {

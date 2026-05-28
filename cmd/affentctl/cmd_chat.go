@@ -172,6 +172,9 @@ Slash commands inside the REPL:
 				}
 			}
 		}
+		if !strings.HasPrefix(line, "/") {
+			recordCurrentSessionLoopCalibrationAnswerIfReady(b, turnText)
+		}
 
 		// Per-turn cancellation context: Ctrl+C only kills the active
 		// turn, not the REPL.
@@ -571,6 +574,68 @@ func finalizeCurrentSessionLoopActivation(b *loopBundle) {
 		b.loopProtocolSkillInstalled = true
 	}
 	fmt.Fprintf(os.Stderr, "[loop] active: %s\n", loopstate.ProtocolRelPath(b.sessionID))
+}
+
+func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string) {
+	if b == nil || b.loop == nil || b.loop.Conv == nil || strings.TrimSpace(text) == "" {
+		return
+	}
+	path := b.loopProtocolPath
+	if strings.TrimSpace(path) == "" {
+		path = loopstate.ProtocolPath(b.workspace, b.sessionID)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found || state.Status != "draft" {
+		return
+	}
+	if state.CalibrationQuestions > 0 {
+		if state.CalibrationAnswers >= state.CalibrationQuestions {
+			return
+		}
+	} else if state.CalibrationAnswers > 0 {
+		return
+	}
+	if !conversationHasCurrentSessionLoopCalibrationQuestion(b.loop.Conv.Snapshot()) {
+		return
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, text); err != nil {
+		fmt.Fprintf(os.Stderr, "[loop] calibration record failed: %v\n", err)
+	}
+}
+
+func conversationHasCurrentSessionLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
+		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
+			return looksLikeCurrentSessionLoopCalibrationQuestion(msg.Content)
+		}
+	}
+	return false
+}
+
+func looksLikeCurrentSessionLoopCalibrationQuestion(text string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
+	if normalized == "" || (!strings.Contains(normalized, "?") && !strings.Contains(normalized, "？")) {
+		return false
+	}
+	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "长期", "循环"}
+	if !containsAnyText(normalized, loopishMarkers) {
+		return false
+	}
+	calibrationMarkers := []string{
+		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule",
+		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时",
+	}
+	return containsAnyText(normalized, calibrationMarkers)
+}
+
+func containsAnyText(text string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func markdownLoopStatus(content string) string {
