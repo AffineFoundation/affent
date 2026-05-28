@@ -26,6 +26,47 @@ func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
 	}
 }
 
+func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 10
+{}`},
+		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/2; ref=n2; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 10
+{}`},
+		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/3; ref=n3; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 10
+{}`},
+		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/4; ref=n4; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 10
+{}`},
+		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/5; ref=n5; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 10
+{}`},
+		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/6; ref=n6; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 200 (offset 0, showing 80, omitted_after 120, next_offset 80)
+{"partial":true}
+[... 120 bytes omitted after this chunk; retry with offset=80, a narrower json_path, or max_bytes up to 65536 ...]`},
+	}}
+
+	examples := sourceAccessExamplesForDebug(trace)
+	if len(examples) != 6 || examples[5].Ref != "n6" || !examples[5].HasMore {
+		t.Fatalf("sourceAccessExamplesForDebug = %+v, want all trace source examples including late partial read", examples)
+	}
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  len(examples),
+			SourceAccessVerified: len(examples),
+			SourceAccessNetwork:  len(examples),
+		},
+		SourceAccessExamples: examples,
+	})
+	if !stringSliceContains(brief.Tags, "source_network:partial_read") {
+		t.Fatalf("debug brief should see late partial read beyond display cap, tags=%+v", brief.Tags)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",

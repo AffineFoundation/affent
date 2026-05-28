@@ -30,9 +30,6 @@ const (
 	maxDebugToolRepairExamples       = 5
 	maxDebugLoopGuardExamples        = 5
 	maxDebugToolTruncationExamples   = 5
-	maxDebugSourceAccessExamples     = 5
-	maxDebugBrowserScrollExamples    = 5
-	maxDebugBrowserNetworkExamples   = 5
 	maxDebugMemoryUpdateExamples     = 5
 	maxDebugMemorySearchMissExamples = 5
 	maxDebugSessionSearchExamples    = 5
@@ -968,9 +965,9 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.LoopGuardExamples = trace.LoopGuardExamples(maxDebugLoopGuardExamples)
-		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
-		res.BrowserScrollExamples = trace.BrowserScrollExamples(maxDebugBrowserScrollExamples)
-		res.BrowserNetworkExamples = trace.BrowserNetworkSearchExamples(maxDebugBrowserNetworkExamples)
+		res.SourceAccessExamples = sourceAccessExamplesForDebug(trace)
+		res.BrowserScrollExamples = browserScrollExamplesForDebug(trace)
+		res.BrowserNetworkExamples = browserNetworkExamplesForDebug(trace)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
 		res.MemorySearchMissExamples = trace.MemorySearchMissExamples(maxDebugMemorySearchMissExamples)
 		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
@@ -1023,13 +1020,13 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		res.MemorySearchMissExamples = trace.MemorySearchMissExamples(maxDebugMemorySearchMissExamples)
 	}
 	if trace != nil && len(res.SourceAccessExamples) == 0 {
-		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
+		res.SourceAccessExamples = sourceAccessExamplesForDebug(*trace)
 	}
 	if trace != nil && len(res.BrowserScrollExamples) == 0 {
-		res.BrowserScrollExamples = trace.BrowserScrollExamples(maxDebugBrowserScrollExamples)
+		res.BrowserScrollExamples = browserScrollExamplesForDebug(*trace)
 	}
 	if trace != nil && len(res.BrowserNetworkExamples) == 0 {
-		res.BrowserNetworkExamples = trace.BrowserNetworkSearchExamples(maxDebugBrowserNetworkExamples)
+		res.BrowserNetworkExamples = browserNetworkExamplesForDebug(*trace)
 	}
 	if trace != nil && len(res.SessionSearchExamples) == 0 {
 		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
@@ -1180,6 +1177,18 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		return err
 	}
 	return nil
+}
+
+func sourceAccessExamplesForDebug(trace Trace) []SourceAccessExample {
+	return trace.SourceAccessExamples(len(trace.Tools))
+}
+
+func browserScrollExamplesForDebug(trace Trace) []BrowserScrollExample {
+	return trace.BrowserScrollExamples(len(trace.Tools))
+}
+
+func browserNetworkExamplesForDebug(trace Trace) []BrowserNetworkSearchExample {
+	return trace.BrowserNetworkSearchExamples(len(trace.Tools))
 }
 
 func BuildDebugRecoveryGuide(res BatchResult) *DebugRecoveryGuide {
