@@ -661,6 +661,49 @@ func TestToolLoopGuard_BrowserNetworkMatchResetsNoMatchLoop(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BrowserNetworkRefsOnlyRequiresRead(t *testing.T) {
+	g := newToolLoopGuard()
+	match := "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://dash.example/subnets/120\nquery: \"market\"\nEVIDENCE_STATUS: refs_only_not_citable; read_required=true\nMATCHES:\n- n7 status=200 resource=fetch content_type=application/json url=https://dash.example/api/subnets/120/metrics\n  preview: {\"market_cap\":\"201.04K T\"}\n  json_paths: $.market_cap=\"201.04K T\"\nNext: call browser_network_read with the most relevant ref and json_path before citing values.\n"
+	for i := 1; i < browserNetworkRefsOnlyThreshold; i++ {
+		guard, ok := g.recordToolResult("browser_network", json.RawMessage(`{"query":"market"}`), match, false)
+		if guard != "" || !ok {
+			t.Fatalf("browser_network refs-only %d should not guard yet; guard=%q ok=%v", i, guard, ok)
+		}
+	}
+	guard, ok := g.recordToolResult("browser_network", json.RawMessage(`{"query":"validators"}`), match, false)
+	if ok {
+		t.Fatal("threshold refs-only browser_network result should force a read")
+	}
+	for _, want := range []string{
+		"browser_network returned captured response refs",
+		"https://dash.example/subnets/120",
+		"refs/previews are not citable evidence",
+		"browser_network_read",
+		"n7",
+		"json_path",
+		"Failure: kind=loop_guard_no_new_evidence",
+	} {
+		if !strings.Contains(guard, want) {
+			t.Fatalf("browser_network refs-only guard missing %q: %q", want, guard)
+		}
+	}
+}
+
+func TestToolLoopGuard_BrowserNetworkReadResetsRefsOnlyLoop(t *testing.T) {
+	g := newToolLoopGuard()
+	match := "BROWSER NETWORK EVIDENCE\nCURRENT_PAGE: https://dash.example/subnets/120\nEVIDENCE_STATUS: refs_only_not_citable; read_required=true\nMATCHES:\n- n1 status=200 resource=fetch content_type=application/json url=https://dash.example/api\n"
+	for i := 0; i < browserNetworkRefsOnlyThreshold-1; i++ {
+		g.recordToolResult("browser_network", json.RawMessage(`{"query":"q"}`), match, false)
+	}
+	read := "SourceAccess: browser_network_url=https://dash.example/api; requested_url=https://dash.example/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\n{\"market_cap\":\"201.04K T\"}"
+	if guard, ok := g.recordToolResult("browser_network_read", json.RawMessage(`{"ref":"n1"}`), read, false); guard != "" || !ok {
+		t.Fatalf("browser_network_read should reset refs-only loop; guard=%q ok=%v", guard, ok)
+	}
+	if guard, ok := g.recordToolResult("browser_network", json.RawMessage(`{"query":"again"}`), match, false); guard != "" || !ok {
+		t.Fatalf("post-read refs-only search should restart count, not guard; guard=%q ok=%v", guard, ok)
+	}
+}
+
 // TestToolLoopGuard_PerTurnCallCapForRunTask pins the
 // over-delegation mitigation: a model can keep varying run_task's
 // arguments (different task_type / objective / max_turns each call)

@@ -23,6 +23,7 @@ const (
 	browserInteractionHaltThreshold = 5
 	browserFindNoMatchThreshold     = 3
 	browserNetworkNoMatchThreshold  = 3
+	browserNetworkRefsOnlyThreshold = 3
 	browserScrollNoMoveThreshold    = 2
 
 	loopGuardCallCapKind             = "loop_guard_call_cap"
@@ -84,6 +85,8 @@ type toolLoopGuard struct {
 	browserFindNoMatchCount    int
 	browserNetworkNoMatchPage  string
 	browserNetworkNoMatchCount int
+	browserNetworkRefsPage     string
+	browserNetworkRefsCount    int
 	browserScrollNoMovePage    string
 	browserScrollNoMoveDir     string
 	browserScrollNoMoveCount   int
@@ -231,6 +234,14 @@ func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, resu
 		}
 		outcomeOK = false
 	}
+	if browserGuard := g.recordBrowserNetworkRefsOnly(tool, result, isErr); browserGuard != "" {
+		if guardResult != "" {
+			guardResult += "\n\n" + browserGuard
+		} else {
+			guardResult = browserGuard
+		}
+		outcomeOK = false
+	}
 	if browserGuard := g.recordBrowserScrollNoMovement(tool, result, isErr); browserGuard != "" {
 		if guardResult != "" {
 			guardResult += "\n\n" + browserGuard
@@ -313,12 +324,86 @@ func (g *toolLoopGuard) recordBrowserNetworkNoMatch(tool, result string, isErr b
 	return browserNetworkNoNewEvidenceMessage(page, g.browserNetworkNoMatchCount, browserNetworkHasRecentCapturedResponses(result))
 }
 
+func (g *toolLoopGuard) recordBrowserNetworkRefsOnly(tool, result string, isErr bool) string {
+	if g == nil {
+		return ""
+	}
+	if tool == "browser_network_read" {
+		if !isErr && strings.Contains(result, "SourceAccess: browser_network_url=") {
+			g.browserNetworkRefsPage = ""
+			g.browserNetworkRefsCount = 0
+		}
+		return ""
+	}
+	if tool != "browser_network" || isErr {
+		return ""
+	}
+	page := browserNetworkCurrentPage(result)
+	if page == "" {
+		page = "__unknown_browser_page__"
+	}
+	ref := browserNetworkFirstMatchRef(result)
+	if ref == "" || !browserNetworkRefsOnlyResult(result) {
+		if g.browserNetworkRefsPage == page {
+			g.browserNetworkRefsCount = 0
+		}
+		return ""
+	}
+	if g.browserNetworkRefsPage != page {
+		g.browserNetworkRefsPage = page
+		g.browserNetworkRefsCount = 0
+	}
+	g.browserNetworkRefsCount++
+	if g.browserNetworkRefsCount < browserNetworkRefsOnlyThreshold {
+		return ""
+	}
+	return browserNetworkRefsOnlyMessage(page, g.browserNetworkRefsCount, ref, browserNetworkHasJSONPathHints(result))
+}
+
 func browserNetworkNoMatches(result string) bool {
 	if !strings.Contains(result, "BROWSER NETWORK EVIDENCE") {
 		return false
 	}
 	for _, line := range strings.Split(result, "\n") {
 		if strings.TrimSpace(line) == "MATCHES: none" {
+			return true
+		}
+	}
+	return false
+}
+
+func browserNetworkRefsOnlyResult(result string) bool {
+	return strings.Contains(result, "BROWSER NETWORK EVIDENCE") &&
+		strings.Contains(result, "refs_only_not_citable") &&
+		strings.Contains(result, "read_required=true") &&
+		!browserNetworkNoMatches(result)
+}
+
+func browserNetworkFirstMatchRef(result string) string {
+	inMatches := false
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case line == "MATCHES:":
+			inMatches = true
+			continue
+		case strings.HasPrefix(line, "Next:") || strings.HasPrefix(line, "Failure:"):
+			return ""
+		}
+		if !inMatches || !strings.HasPrefix(line, "- n") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) >= 2 {
+			return strings.TrimSpace(fields[1])
+		}
+	}
+	return ""
+}
+
+func browserNetworkHasJSONPathHints(result string) bool {
+	for _, line := range strings.Split(result, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "json_paths:") {
 			return true
 		}
 	}
@@ -367,6 +452,22 @@ func browserNetworkNoNewEvidenceMessage(rawURL string, count int, hasRecent bool
 	}
 	return withLoopGuardFailureKind(
 		fmt.Sprintf("loop_guard: browser_network returned no captured response matches on %s %d times this turn. Repeating network searches is unlikely to add evidence unless the page loads new XHR/fetch responses.\nNext: %s", source, count, next),
+		loopGuardNoNewEvidenceKind,
+	)
+}
+
+func browserNetworkRefsOnlyMessage(rawURL string, count int, ref string, hasJSONPathHints bool) string {
+	source := "the current rendered page"
+	if rawURL != "" && rawURL != "__unknown_browser_page__" {
+		source = fmt.Sprintf("%q", rawURL)
+	}
+	next := fmt.Sprintf("call browser_network_read with a relevant ref such as %s before doing any more browser_network searches", ref)
+	if hasJSONPathHints {
+		next += ", using a listed json_path to keep the response compact"
+	}
+	next += "; otherwise mark hidden fields unverified."
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: browser_network returned captured response refs on %s %d times this turn, but refs/previews are not citable evidence until read.\nNext: %s", source, count, next),
 		loopGuardNoNewEvidenceKind,
 	)
 }
