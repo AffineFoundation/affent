@@ -2673,6 +2673,115 @@ func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
 	}
 }
 
+func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.T) {
+	var calls int32
+	var toolRan int32
+	var secondRequestHadTools atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"first","type":"function","function":{"name":"expensive","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":40,"completion_tokens":4}}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		default:
+			if strings.Contains(body, `"tools"`) {
+				secondRequestHadTools.Store(true)
+			}
+			w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"projected budget summary"},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":2}}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "expensive", Description: "expensive", Schema: json.RawMessage(`{"type":"object","properties":{}}`), Execute: func(context.Context, json.RawMessage) (string, error) {
+		atomic.AddInt32(&toolRan, 1)
+		return "verified evidence\n" + strings.Repeat("x", 400), nil
+	}})
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 50, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawFinal bool
+	var usage sse.UsagePayload
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == "projected budget summary" {
+					sawFinal = true
+				}
+			case sse.TypeUsage:
+				if err := json.Unmarshal(ev.Data, &usage); err != nil {
+					t.Fatalf("decode usage: %v", err)
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed after projected-budget summary", p.Reason)
+				}
+				if !sawFinal {
+					t.Fatal("missing projected-budget final answer")
+				}
+				if secondRequestHadTools.Load() {
+					t.Fatal("projected-budget recovery request must not include tools")
+				}
+				if got := atomic.LoadInt32(&toolRan); got != 1 {
+					t.Fatalf("tool calls = %d, want only the first tool to run", got)
+				}
+				if got := atomic.LoadInt32(&calls); got != 2 {
+					t.Fatalf("LLM calls = %d, want initial tool call and one no-tool final", got)
+				}
+				if usage.InputTokens != 49 || usage.OutputTokens != 6 {
+					t.Fatalf("usage = %+v, want 49/6", usage)
+				}
+				if p.ToolStats == nil || p.ToolStats.ForcedNoTools != 1 || p.ToolStats.ToolRequests != 1 || p.ToolStats.ToolErrors != 0 {
+					t.Fatalf("tool stats = %+v, want one real tool and one forced no-tool transition", p.ToolStats)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_SubagentExternalResearchPolicyRejectsDirectCall(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

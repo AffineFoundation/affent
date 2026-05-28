@@ -1138,6 +1138,28 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		forceNoToolsReason = "(turn input token budget exhausted; final no-tool answer requested)"
 		return true
 	}
+	forceNoToolsForProjectedInputBudget := func(toolDefs []ToolDef) bool {
+		budget := l.maxTurnInputTokensForTurn(opts)
+		if budget <= 0 || totalIn <= 0 || forceNoToolsNext {
+			return false
+		}
+		projected := totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+		if projected < budget {
+			return false
+		}
+		if l.maybeCompactForBudgetPressure(ctx, turnID) {
+			projected = totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+			if projected < budget {
+				return false
+			}
+		}
+		if !forceNoToolsNext {
+			toolStats.ForcedNoTools++
+		}
+		forceNoToolsNext = true
+		forceNoToolsReason = "(projected turn input token budget would be exhausted; final no-tool answer requested)"
+		return true
+	}
 	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
@@ -1145,6 +1167,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 
 		toolDefs := l.toolDefs(opts)
+		if forceNoToolsForProjectedInputBudget(toolDefs) {
+			toolDefs = nil
+		}
 		if forceNoToolsNext {
 			toolDefs = nil
 		}
@@ -2090,6 +2115,21 @@ func estimateContextTokens(text string) int {
 	return (len([]rune(text)) + 3) / 4
 }
 
+func estimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
+	msgBytes := ApproximateConversationBytes(msgs)
+	toolBytes := 0
+	if len(tools) > 0 {
+		if raw, err := json.Marshal(tools); err == nil {
+			toolBytes = len(raw)
+		}
+	}
+	total := msgBytes + toolBytes
+	if total <= 0 {
+		return 0
+	}
+	return (total + 3) / 4
+}
+
 func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string, force bool) {
 	if payload == nil || (!payload.ResultTruncated && !force) || strings.TrimSpace(l.ToolResultArtifactDir) == "" {
 		return
@@ -2748,6 +2788,18 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 // is bypassed so we get an emergency-trim even on shorter logs whose
 // individual messages are unusually large. No-op if Compactor is nil.
 func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) bool {
+	reason := "threshold"
+	if reactive {
+		reason = "context_overflow"
+	}
+	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason)
+}
+
+func (l *Loop) maybeCompactForBudgetPressure(ctx context.Context, turnID string) bool {
+	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure")
+}
+
+func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string) bool {
 	if l.Compactor == nil {
 		return false
 	}
@@ -2756,7 +2808,7 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 		return false
 	}
 	compactor := l.Compactor
-	if reactive {
+	if bypassThreshold {
 		if c, ok := l.Compactor.(*LLMSummaryCompactor); ok {
 			emergency := *c
 			emergency.TriggerMsgs = 0
@@ -2779,17 +2831,18 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
 	}
-	l.publishContextCompacted(turnID, len(before), len(after), reactive, after)
-	l.markLoopProtocolCompacted(reactive)
+	l.publishContextCompacted(turnID, len(before), len(after), reactive, reason, after)
+	l.markLoopProtocolCompacted(reactive, reason)
 	l.Log.Info().
 		Int("before", len(before)).
 		Int("after", len(after)).
 		Bool("reactive", reactive).
+		Str("reason", reason).
 		Msg("conversation compacted")
 	return true
 }
 
-func (l *Loop) markLoopProtocolCompacted(reactive bool) {
+func (l *Loop) markLoopProtocolCompacted(reactive bool, reason string) {
 	path := strings.TrimSpace(l.LoopProtocolPath)
 	if path == "" {
 		return
@@ -2800,16 +2853,12 @@ func (l *Loop) markLoopProtocolCompacted(reactive bool) {
 	} else if !found {
 		return
 	}
-	reason := "threshold"
-	if reactive {
-		reason = "context_overflow"
-	}
 	if _, _, err := loopstate.RecordContextCompaction(path, reason, reactive); err != nil {
 		l.Log.Warn().Err(err).Msg("record loop protocol compaction state failed")
 	}
 }
 
-func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, msgs []ChatMessage) {
+func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, reason string, msgs []ChatMessage) {
 	summaryBytes := 0
 	summaryPreview := ""
 	loopProtocolAnchor := ""
@@ -2822,9 +2871,9 @@ func (l *Loop) publishContextCompacted(turnID string, before, after int, reactiv
 			break
 		}
 	}
-	reason := "threshold"
-	if reactive {
-		reason = "context_overflow"
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "threshold"
 	}
 	l.publish(sse.TypeContextCompact, sse.ContextCompactPayload{
 		TurnID:             turnID,
