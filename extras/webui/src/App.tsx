@@ -59,6 +59,7 @@ import { SessionFilesPanel } from "./components/SessionFilesPanel";
 import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
 import { SessionWorkspacePanel } from "./components/SessionWorkspacePanel";
+import { WorkbenchEmpty, WorkbenchPanel, type WorkbenchNavItem, type WorkbenchTab } from "./components/WorkbenchPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -101,15 +102,6 @@ interface StatusBanner {
 }
 
 type ThemeMode = "light" | "dark";
-type WorkbenchTab = "context" | "changes" | "run" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
-
-interface WorkbenchNavItem {
-  key: WorkbenchTab;
-  label: string;
-  detail: string;
-  badge?: string;
-  tone?: "error" | "warning" | "attention";
-}
 
 interface HistoryLoadResult {
   session: SessionState;
@@ -1715,55 +1707,28 @@ export function App() {
             />
           </section>
           {workbenchOpen ? (
-            <aside className="workbench-panel" data-testid="workbench-panel" aria-label="Workbench">
-              <div className="workbench-panel-head">
-                <div>
-                  <strong>Workbench</strong>
-                  <span>{selectedSessionTitle ?? "Global runtime workspace"}</span>
-                </div>
-                <button
-                  type="button"
-                  className="workbench-close"
-                  aria-label="Close Workbench"
-                  onClick={() => setWorkbenchOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-              <nav className="workbench-nav" aria-label="Workbench sections">
-                {workbenchNavItems.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    className="workbench-nav-item"
-                    data-active={workbenchTab === item.key ? "true" : "false"}
-                    data-tone={item.tone}
-                    onClick={() => setWorkbenchTab(item.key)}
-                  >
-                    <span className="workbench-nav-main">
-                      <strong>{item.label}</strong>
-                      <small>{item.detail}</small>
-                    </span>
-                    {item.badge ? <span className="workbench-nav-badge">{item.badge}</span> : null}
-                  </button>
-                ))}
-              </nav>
-              <div className="workbench-tab-surface" data-testid="workbench-tab-surface">
-                {renderWorkbenchTab()}
-                {workbenchTab === "context" && sessionArtifacts.length > 0 ? (
-                  <SessionArtifactsPanel
-                    artifacts={sessionArtifacts}
-                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                    downloadHref={
-                      selectedSessionId
-                        ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
-                        : undefined
-                    }
-                    onUseAsDraft={handleUseAsDraft}
-                  />
-                ) : null}
-              </div>
-            </aside>
+            <WorkbenchPanel
+              title="Workbench"
+              subtitle={selectedSessionTitle ?? "Global runtime workspace"}
+              navItems={workbenchNavItems}
+              activeTab={workbenchTab}
+              onSelectTab={setWorkbenchTab}
+              onClose={() => setWorkbenchOpen(false)}
+            >
+              {renderWorkbenchTab()}
+              {workbenchTab === "context" && sessionArtifacts.length > 0 ? (
+                <SessionArtifactsPanel
+                  artifacts={sessionArtifacts}
+                  onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                  downloadHref={
+                    selectedSessionId
+                      ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
+                      : undefined
+                  }
+                  onUseAsDraft={handleUseAsDraft}
+                />
+              ) : null}
+            </WorkbenchPanel>
           ) : null}
         </div>
       </main>
@@ -1858,15 +1823,6 @@ function skillsBadge(state: SkillsState): string | undefined {
   if (state.state === "error") return "!";
   if (state.state === "ready" && state.skills.length > 0) return String(state.skills.length);
   return undefined;
-}
-
-function WorkbenchEmpty({ title, detail }: { title: string; detail: string }) {
-  return (
-    <section className="workbench-empty" data-testid="workbench-empty">
-      <strong>{title}</strong>
-      <span>{detail}</span>
-    </section>
-  );
 }
 
 function webLoopActivationPrompt(goal: string): string {
