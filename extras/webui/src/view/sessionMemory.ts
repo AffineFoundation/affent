@@ -53,6 +53,11 @@ export function memoryBucketUsage(bucket: SessionMemoryBucket): string {
   return bucket.percent ? `${base} · ${bucket.percent}%` : base;
 }
 
+export function memoryBucketPreview(bucket: SessionMemoryBucket): string {
+  const first = bucket.entries?.find((entry) => entry.trim());
+  return first ?? "No entries in this bucket.";
+}
+
 export function memoryUsageLabel(stats: SessionMemoryStats): string {
   if (stats.charsLimit) return `${stats.charsUsed}/${stats.charsLimit} chars`;
   return `${stats.charsUsed} chars`;

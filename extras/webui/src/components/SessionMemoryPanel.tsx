@@ -6,6 +6,7 @@ import {
   memoryActionLabel,
   memoryBucketMatchesQuery,
   memoryBucketMatchingEntries,
+  memoryBucketPreview,
   memoryBucketDraft,
   memoryBucketEvidenceText,
   memoryBucketLabel,
@@ -234,7 +235,10 @@ export function SessionMemoryPanel({
                           <strong>{memoryBucketLabel(bucket)}</strong>
                           <span>{bucket.entry_count} entries</span>
                         </span>
-                        <span className="session-skill-desc">{memoryBucketUsage(bucket)}</span>
+                        <span className="session-skill-desc">
+                          <span data-testid={`memory-bucket-preview-${bucket.target}-${bucket.topic ?? "general"}`}>{memoryBucketPreview(bucket)}</span>
+                          <small>{memoryBucketUsage(bucket)}</small>
+                        </span>
                         {trimmedQuery && matchingEntries.length > 0 ? (
                           <span className="session-skill-status">
                             <span>{matchingEntries.length} matched</span>
