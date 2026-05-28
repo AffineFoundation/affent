@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sessionsearch"
 	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
@@ -686,7 +687,7 @@ func compactSessionSearchResultForSummary(content string) (string, bool) {
 	if err := json.Unmarshal([]byte(content), &resp); err != nil {
 		return "", false
 	}
-	if resp.Query == "" && resp.Message == "" && resp.Total == 0 && len(resp.Results) == 0 {
+	if resp.Query == "" && resp.Message == "" && resp.Total == 0 && len(resp.Results) == 0 && len(resp.RecentSessions) == 0 {
 		return "", false
 	}
 	var b strings.Builder
@@ -711,6 +712,13 @@ func compactSessionSearchResultForSummary(content string) (string, bool) {
 		}
 		b.WriteString("results:")
 		appendCompactSessionSearchHits(&b, resp.Results)
+	}
+	if len(resp.RecentSessions) > 0 {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString("recent_sessions:")
+		appendCompactRecentSessions(&b, resp.RecentSessions)
 	}
 	return b.String(), true
 }
@@ -1201,6 +1209,49 @@ func appendCompactSessionSearchHits(b *strings.Builder, hits []SessionSearchHit)
 	}
 	if len(hits) > limit {
 		fmt.Fprintf(b, "\n- ... %d more hit(s)", len(hits)-limit)
+	}
+}
+
+func appendCompactRecentSessions(b *strings.Builder, sessions []sessionsearch.RecentSession) {
+	limit := len(sessions)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, session := range sessions[:limit] {
+		b.WriteString("\n- ")
+		if session.SessionID != "" {
+			b.WriteString("session=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.SessionID), 120))
+			b.WriteByte(' ')
+		}
+		if session.ModTime != "" {
+			b.WriteString("mod_time=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.ModTime), 80))
+			b.WriteByte(' ')
+		}
+		if session.LatestUser != "" {
+			b.WriteString("user=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.LatestUser), 160))
+			b.WriteByte(' ')
+		}
+		if session.LatestAssistant != "" {
+			b.WriteString("assistant=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.LatestAssistant), 160))
+			b.WriteByte(' ')
+		}
+		if session.Plan != "" {
+			b.WriteString("plan=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.Plan), 180))
+			b.WriteByte(' ')
+		}
+		if session.Loop != "" {
+			b.WriteString("loop=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.Loop), 180))
+			b.WriteByte(' ')
+		}
+	}
+	if len(sessions) > limit {
+		fmt.Fprintf(b, "\n- ... %d more recent session(s)", len(sessions)-limit)
 	}
 }
 

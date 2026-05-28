@@ -188,6 +188,27 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		}
 	})
 
+	t.Run("session search no-hit result keeps recent plan and loop anchors", func(t *testing.T) {
+		raw := `{"query":"missing Alpha Coast marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"alpha-loop","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk","loop":"loop_status: running current_situation: preserve Alpha Coast source evidence before citing values"}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: SessionSearchToolName, Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[session_search]",
+			"query: missing Alpha Coast marker",
+			"message: no results. Next: retry from anchors.",
+			"recent_sessions:",
+			"session=alpha-loop mod_time=2026-05-27T12:00:00Z user=Analyze Alpha Coast recovery assistant=final marker HIST-STOCK-44",
+			"plan=plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk",
+			"loop=loop_status: running current_situation: preserve Alpha Coast source evidence",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact session_search no-hit result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"recent_sessions"`) || strings.Contains(got, `"session_id"`) {
+			t.Fatalf("compact session_search no-hit result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
+
 	t.Run("web source result keeps source access and bounded evidence", func(t *testing.T) {
 		raw := "SourceAccess: fetched_url=https://metrics.example/affine; requested_url=https://dashboard.example/affine; linked_urls_in_content=discovered_unverified_until_fetched\n" +
 			"Affine SN120 metrics as of 2026-05-24T12:00:00Z: price $0.0632, market cap $195094, 24h volume $5001.\n" +
