@@ -574,7 +574,7 @@ describe("App", () => {
     expect(sent.content).toContain("complete_activation");
     expect(sent.content).toContain("Current Situation");
     expect(sent.content).toContain("1200 characters");
-    expect(await screen.findByTestId("session-list")).toHaveTextContent("Loop draft");
+    expect(await screen.findByTestId("session-list")).toHaveTextContent("Automation draft");
     expect(screen.getByTestId("session-list")).toHaveTextContent("analyze market data");
   });
 
@@ -892,7 +892,7 @@ describe("App", () => {
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-control/loop-protocol", expect.objectContaining({ method: "DELETE" })));
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop disabled");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Disabled");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("Loop disabled");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Automation disabled");
     expect(screen.queryByRole("button", { name: "Disable loop" })).toBeNull();
   });
 

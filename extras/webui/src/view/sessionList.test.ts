@@ -222,8 +222,8 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics.some((metric) => metric.startsWith("Timer 0/1, 1 error, last LOOP.md not running"))).toBe(true);
-    expect(rows[0].stats).toContain("Timer 0/1, 1 error");
+    expect(rows[0].metrics.some((metric) => metric.startsWith("Automation timer 0/1, 1 error, last LOOP.md not running"))).toBe(true);
+    expect(rows[0].stats).toContain("Automation timer 0/1, 1 error");
     expect(rows[0].chips).toContain("automation");
     expect(rows[0].searchText).toContain("loop.md not running");
   });
@@ -269,8 +269,8 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics.some((metric) => metric.startsWith("Timer 1 pending/1, waiting for LOOP.md activation"))).toBe(true);
-    expect(rows[0].stats).toContain("Timer 1 pending/1");
+    expect(rows[0].metrics.some((metric) => metric.startsWith("Automation timer 1 pending/1, waiting for LOOP.md activation"))).toBe(true);
+    expect(rows[0].stats).toContain("Automation timer 1 pending/1");
     expect(rows[0].chips).toContain("automation");
     expect(rows[0].searchText).toContain("waiting for loop.md activation");
   });
@@ -297,7 +297,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Timer 1/1");
+    expect(rows[0].metrics).toContain("Automation timer 1/1");
     expect(rows[0].stats).not.toContain("pending");
   });
 
@@ -338,12 +338,12 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running, 2 updates, 5 feeds, plan:1/3:active step 2 in_progress, memory replace memory:markets, decision evidence_quality:defer, last turn completed, Updated LOOP.md");
+    expect(rows[0].metrics).toContain("Automation running, 2 updates, 5 feeds, plan:1/3:active step 2 in_progress, memory replace memory:markets, decision evidence_quality:defer, last turn completed, Updated LOOP.md");
     expect(rows[0].chips).toContain("automation");
-    expect(rows[0].searchText).toContain("loop running");
+    expect(rows[0].searchText).toContain("automation running");
   });
 
-  it("keeps loop state visible after the protocol file is disabled", () => {
+  it("keeps automation state visible after the protocol file is disabled", () => {
     const rows = buildSessionRows([
       session({
         id: "disabled-loop",
@@ -361,12 +361,12 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop disabled, 1 update, 3 feeds, Disabled LOOP.md");
+    expect(rows[0].metrics).toContain("Automation disabled, 1 update, 3 feeds, Disabled LOOP.md");
     expect(rows[0].chips).toContain("automation");
-    expect(rows[0].searchText).toContain("loop disabled");
+    expect(rows[0].searchText).toContain("automation disabled");
   });
 
-  it("labels research checkpoint decisions in loop row stats", () => {
+  it("labels research checkpoint decisions in automation row stats", () => {
     const rows = buildSessionRows([
       session({
         id: "research-loop",
@@ -382,7 +382,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running, research checkpoint trigger");
+    expect(rows[0].metrics).toContain("Automation running, research checkpoint trigger");
     expect(rows[0].chips).toContain("automation");
     expect(rows[0].searchText).toContain("research checkpoint");
   });

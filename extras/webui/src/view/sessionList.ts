@@ -173,7 +173,7 @@ function mergeCurrentDurableMetrics(current: string[], durable: string[]): strin
   const out = [...current];
   const seen = new Set(out);
   for (const metric of durable) {
-    if (!metric.startsWith("Loop ") || seen.has(metric)) continue;
+    if (!metric.startsWith("Automation ") || seen.has(metric)) continue;
     out.push(metric);
     seen.add(metric);
   }
@@ -532,9 +532,9 @@ function usageMetrics(session: SessionSummary): string[] {
   if (compactionMetric) metrics.push(compactionMetric);
   const planMetric = sessionPlanMetric(session.plan_summary);
   if (planMetric) metrics.push(planMetric);
-  const loopMetric = sessionLoopProtocolMetric(session);
-  if (loopMetric) metrics.push(loopMetric);
-  const scheduleMetric = sessionScheduleMetric(session);
+  const automationLoopMetric = sessionAutomationLoopMetric(session);
+  if (automationLoopMetric) metrics.push(automationLoopMetric);
+  const scheduleMetric = sessionAutomationScheduleMetric(session);
   if (scheduleMetric) metrics.push(scheduleMetric);
   return metrics;
 }
@@ -729,7 +729,7 @@ function sessionPlanMetric(plan: SessionPlanSummary | undefined): string | undef
   return parts.join(", ");
 }
 
-function sessionLoopProtocolMetric(session: SessionSummary): string | undefined {
+function sessionAutomationLoopMetric(session: SessionSummary): string | undefined {
   if (!session.has_loop_protocol && !session.has_loop_state) return undefined;
   const state = session.loop_protocol?.state ?? session.loop_state;
   const status = session.loop_protocol?.status?.trim() ?? state?.status?.trim();
@@ -747,7 +747,7 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   const lastDecision = state?.last_decision?.trim();
   const turnReason = state?.last_turn_end_reason?.trim();
   const eventSummary = state?.last_event_summary?.trim();
-  const parts = status ? [`Loop ${status}`] : [];
+  const parts = status ? [`Automation ${status}`] : [];
   if (initialGoal) parts.push(`goal ${initialGoal}`);
   if (updates && updates > 0) parts.push(`${updates} ${updates === 1 ? "update" : "updates"}`);
   if (feeds && feeds > 0) parts.push(`${feeds} ${feeds === 1 ? "feed" : "feeds"}`);
@@ -770,11 +770,11 @@ function loopDecisionMetricResult(kind: string, decision: string): string {
   return `${kind}:${decision}`;
 }
 
-function sessionScheduleMetric(session: SessionSummary): string | undefined {
+function sessionAutomationScheduleMetric(session: SessionSummary): string | undefined {
   const summary = session.schedules;
   if (!summary || summary.count <= 0) return undefined;
   const pendingLoopTimers = pendingLoopTimerCount(session);
-  const parts = [pendingLoopTimers > 0 ? `Timer ${pendingLoopTimers} pending/${summary.count}` : `Timer ${summary.enabled}/${summary.count}`];
+  const parts = [pendingLoopTimers > 0 ? `Automation timer ${pendingLoopTimers} pending/${summary.count}` : `Automation timer ${summary.enabled}/${summary.count}`];
   if ((summary.error_count ?? 0) > 0) parts.push(`${summary.error_count} error${summary.error_count === 1 ? "" : "s"}`);
   if (summary.last_error) parts.push(`last ${summarize(summary.last_error, 72)}`);
   if (pendingLoopTimers > 0) parts.push("waiting for LOOP.md activation");
