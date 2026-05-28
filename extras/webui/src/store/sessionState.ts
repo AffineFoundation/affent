@@ -81,6 +81,8 @@ export interface TurnState {
   userText?: string;
   thinkingText: string;
   thinkingStreaming: boolean;
+  assistantMessages?: string[];
+  assistantTextDraft?: string;
   assistantText: string;
   messageStreaming: boolean;
   runtimeSurface?: RuntimeSurfacePayload;

@@ -926,6 +926,7 @@ function displayUserMessage(value?: string): string | undefined {
 
 function isPlaceholderTitle(text: string): boolean {
   const normalized = normalizeComparableTitle(text).replace(/^[()[\]{}'"“”‘’]+|[()[\]{}'"“”‘’]+$/g, "");
+  if (/^\d+$/.test(normalized)) return true;
   return normalized === "empty" || normalized === "untitled" || normalized === "null" || normalized === "undefined";
 }
 
@@ -1017,6 +1018,8 @@ function stripContinuationPrefix(text: string): string {
 export function summarizeSessionTitle(text: string): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (!cleaned) return "Saved chat";
+  const loopSetup = summarizeLoopSetupPrompt(cleaned);
+  if (loopSetup) return summarize(loopSetup, 42);
   const directReply = summarizeDirectReplyPrompt(cleaned);
   if (directReply) return summarize(directReply, 42);
   const intentTitle = summarizeIntentTitle(cleaned);
@@ -1064,6 +1067,16 @@ function summarizeDirectReplyPrompt(text: string): string | undefined {
     .trim();
   if (!topic) return "Reply check";
   return `${capitalizeLeadingAscii(prettyTopicName(topic))} check`;
+}
+
+function summarizeLoopSetupPrompt(text: string): string | undefined {
+  const match = text.match(/^(?:set\s+up\s+loop(?:\s+for)?|start\s+a\s+long-running\s+loop\s+for\s+this\s+goal)\s*[:：]\s*([\s\S]+)$/i);
+  if (!match) return undefined;
+  const goal = match[1]
+    .split(/\n+/)[0]
+    .split(/[,，]\s*(?:不断|并|and|then|with)\s*/i)[0]
+    .trim();
+  return goal ? prettyTopicName(goal) : "Long-running loop";
 }
 
 function summarizeIntentTitle(text: string): string | undefined {

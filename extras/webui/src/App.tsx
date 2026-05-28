@@ -74,7 +74,7 @@ import { initialSessionState, type SessionState } from "./store/sessionState";
 import { deriveWorkflowStatus } from "./store/workflowStatus";
 import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
-import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
+import { buildSessionRows, formatLoadingChatTitle, isGenericChatTitle, summarizeSessionTitle } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
@@ -278,10 +278,8 @@ export function App() {
     [selectedSessionId, sessions],
   );
   const selectedSessionTitle = useMemo(() => {
-    if (!selectedSession) return undefined;
-    const row = buildSessionRows([selectedSession])[0];
-    return row?.title;
-  }, [selectedSession]);
+    return selectedSessionDisplayTitle(selectedSession, session);
+  }, [selectedSession, session]);
   const selectedSessionActive = selectedSession?.active === true;
   const selectedLoopState = selectedSession?.loop_protocol?.state ?? selectedSession?.loop_state;
   const selectedLoopProtocolState = loopProtocolState.state !== "idle" && loopProtocolState.sessionId === selectedSessionId
@@ -2085,6 +2083,20 @@ function sessionIdFromCurrentUrl(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+function selectedSessionDisplayTitle(selectedSession: SessionSummary | undefined, session: SessionState): string | undefined {
+  const row = selectedSession ? buildSessionRows([selectedSession])[0] : undefined;
+  const topic = conversationTopicFromTurns(session.turns);
+  const topicTitle = topic ? summarizeSessionTitle(topic) : undefined;
+  if (topicTitle && (!row || row.titleSource !== "topic" || isWeakSelectedSessionTitle(row.title))) return topicTitle;
+  return row?.title ?? topicTitle;
+}
+
+function isWeakSelectedSessionTitle(title: string | undefined): boolean {
+  if (!title) return true;
+  const value = title.trim();
+  return isGenericChatTitle(value) || /^new live chat$/i.test(value) || /^\d+$/.test(value);
 }
 
 function syncSessionIdToUrl(sessionId?: string) {

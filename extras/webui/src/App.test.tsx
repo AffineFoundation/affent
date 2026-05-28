@@ -1965,6 +1965,63 @@ describe("App", () => {
     expect(await screen.findByTestId("conversation-scroll")).toBeVisible();
   });
 
+  it("uses the loaded user request instead of numeric generated titles in Workbench", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{
+            id: "loop-title",
+            active: true,
+            durable: true,
+            has_conversation: true,
+            has_events: true,
+            generated_title: "1",
+            workspace_path: "/workspace/sessions/loop-title",
+            workspace_label: "loop-title",
+            usage: { input_tokens: 25849, output_tokens: 264, turns: 1 },
+          }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-title/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "loop-title",
+          events: [
+            { id: 0, type: "trace.meta", data: { schema_version: 1 } },
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            {
+              id: 2,
+              type: "user.message",
+              data: {
+                turn_id: "t1",
+                text: "Set up loop for: 持续分析最近的世界形势,不断完善文档报告\n\nLoop protocol activation is pending.",
+                display_text: "Set up loop: 持续分析最近的世界形势,不断完善文档报告",
+                mode: "loop_setup",
+              },
+            },
+          ],
+          next_after: 2,
+          has_more: false,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/loop-title/events") return eventStreamResponse("");
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("持续分析最近的世界形势"));
+    await user.click(screen.getByLabelText("Workbench"));
+    const attachment = await screen.findByTestId("workbench-attachment");
+    expect(attachment).toHaveTextContent("持续分析最近的世界形势");
+    expect(attachment).not.toHaveTextContent(/^1$/);
+  });
+
   it("keeps global Workbench sections stable without rendering every panel at once", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {

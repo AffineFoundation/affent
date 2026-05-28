@@ -800,6 +800,28 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("list the files");
   });
 
+  it("summarizes loop setup prompts and ignores numeric generated titles", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "loop-setup",
+        active: true,
+        durable: true,
+        generated_title: "1",
+        topic_user_message: "Set up loop: 持续分析最近的世界形势,不断完善文档报告",
+        latest_user_message: "Set up loop: 持续分析最近的世界形势,不断完善文档报告",
+      }),
+      session({
+        id: "long-loop",
+        durable: true,
+        summary_title: "1",
+        latest_user_message: "Start a long-running loop for this goal: monitor runtime health",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "loop-setup")?.title).toBe("持续分析最近的世界形势");
+    expect(rows.find((row) => row.id === "long-loop")?.title).toBe("monitor runtime health");
+  });
+
   it("uses a pending first task as the selected chat title before events arrive", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "new-1", active: true, durable: true })]),

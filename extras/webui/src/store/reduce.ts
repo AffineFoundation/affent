@@ -93,6 +93,31 @@ function updateToolCall(
   return { ...state, turns };
 }
 
+function completedAssistantMessages(turn: TurnState): string[] {
+  if (turn.assistantMessages?.length) return turn.assistantMessages;
+  if (!turn.assistantText.trim() || turn.messageStreaming) return [];
+  return [turn.assistantText];
+}
+
+function appendAssistantMessage(messages: readonly string[], text: string): string[] {
+  const value = text.trim() ? text : "";
+  if (!value) return [...messages];
+  if (messages.at(-1) === value) return [...messages];
+  return [...messages, value];
+}
+
+function composeAssistantText(messages: readonly string[], draft = ""): string {
+  return joinAssistantParts([...messages, draft].filter((part) => part.length > 0));
+}
+
+function joinAssistantParts(parts: readonly string[]): string {
+  return parts.reduce((out, part) => {
+    if (!out) return part;
+    if (/\s$/.test(out) || /^\s/.test(part)) return out + part;
+    return `${out}\n\n${part}`;
+  }, "");
+}
+
 export function applyEvent(state: SessionState, ev: NormalizedEvent): SessionState {
   const withEvent = { ...state, events: [...state.events, ev] };
   return applyEventPayload(withEvent, ev);
@@ -112,6 +137,8 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         status: "running",
         thinkingText: "",
         thinkingStreaming: false,
+        assistantMessages: [],
+        assistantTextDraft: "",
         assistantText: "",
         messageStreaming: false,
         toolCalls: [],
@@ -164,7 +191,8 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
       const p = ev.data as MessageDeltaPayload;
       return updateTurn(state, p.turn_id, (t) => ({
         ...t,
-        assistantText: t.assistantText + p.delta,
+        assistantTextDraft: (t.assistantTextDraft ?? "") + p.delta,
+        assistantText: composeAssistantText(t.assistantMessages ?? [], (t.assistantTextDraft ?? "") + p.delta),
         messageStreaming: true,
       }));
     }
@@ -172,7 +200,9 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
       const p = ev.data as MessageDonePayload;
       return updateTurn(state, p.turn_id, (t) => ({
         ...t,
-        assistantText: p.text,
+        assistantMessages: appendAssistantMessage(t.assistantMessages ?? completedAssistantMessages(t), p.text),
+        assistantTextDraft: "",
+        assistantText: composeAssistantText(appendAssistantMessage(t.assistantMessages ?? completedAssistantMessages(t), p.text)),
         messageStreaming: false,
         finishReason: p.finish_reason,
       }));

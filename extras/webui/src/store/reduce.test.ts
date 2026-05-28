@@ -62,6 +62,22 @@ describe("reduce — message deltas accumulate before done", () => {
     expect(state.turns[0].messageStreaming).toBe(true);
     expect(state.status).toBe("running");
   });
+
+  it("preserves multiple assistant messages emitted within one turn", () => {
+    const state = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "activate the loop" } },
+      { id: 3, type: "message.delta", data: { turn_id: "t1", delta: "First status" } },
+      { id: 4, type: "message.done", data: { turn_id: "t1", text: "First status" } },
+      { id: 5, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "loop_protocol", args: { action: "read" } } },
+      { id: 6, type: "tool.result", data: { turn_id: "t1", call_id: "c1", exit_code: 0, result_summary: "draft ready" } },
+      { id: 7, type: "message.delta", data: { turn_id: "t1", delta: "Second status" } },
+      { id: 8, type: "message.done", data: { turn_id: "t1", text: "Second status" } },
+    ]);
+
+    expect(state.turns[0].assistantMessages).toEqual(["First status", "Second status"]);
+    expect(state.turns[0].assistantText).toBe("First status\n\nSecond status");
+  });
 });
 
 describe("reduce — user display text", () => {
