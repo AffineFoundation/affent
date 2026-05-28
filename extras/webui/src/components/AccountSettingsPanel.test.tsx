@@ -17,6 +17,7 @@ describe("AccountSettingsPanel", () => {
 
     const panel = screen.getByTestId("account-settings-panel");
     expect(panel).toHaveTextContent("Config");
+    expect(panel).toHaveTextContent("1 env · SSH key");
     expect(panel).toHaveTextContent("SSH public key ready");
     expect(panel).toHaveTextContent("Existing keys are shown, never overwritten");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
@@ -47,6 +48,7 @@ describe("AccountSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Save env" }));
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("1 env");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
     expect(screen.queryByText("gl_secret")).toBeNull();
     await user.click(within(screen.getByTestId("account-env-list")).getByRole("button", { name: "Delete" }));
@@ -58,6 +60,7 @@ describe("AccountSettingsPanel", () => {
     const onEnsureSSHKey = vi.fn().mockResolvedValue(undefined);
     render(<AccountSettingsPanel settings={{ env: [], ssh: { exists: false } }} onEnsureSSHKey={onEnsureSSHKey} defaultOpen />);
 
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No config");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No env vars or SSH key configured");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate an SSH key only when this session needs private Git access");
     await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
@@ -79,6 +82,7 @@ describe("AccountSettingsPanel", () => {
       />,
     );
 
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("SSH key issue");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("SSH key found; public key unavailable");
     expect(screen.getByRole("alert")).toHaveTextContent("could not be derived");
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
@@ -89,7 +93,7 @@ describe("AccountSettingsPanel", () => {
     render(<AccountSettingsPanel error={diagnostic} />);
 
     const summary = within(screen.getByTestId("account-settings-panel")).getByText("Unavailable").closest("summary");
-    expect(summary).toHaveTextContent("Access API failed: API route /v1/settings returned the WebUI app shell.");
+    expect(summary).toHaveTextContent("Config API failed: API route /v1/settings returned the WebUI app shell.");
     expect(summary).not.toHaveTextContent("Use the current affentserve build");
 
     await userEvent.click(screen.getByText("Unavailable"));

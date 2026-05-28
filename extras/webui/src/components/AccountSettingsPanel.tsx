@@ -29,9 +29,9 @@ export function AccountSettingsPanel({
   const envCount = settings?.env.length ?? 0;
   const ssh = settings?.ssh;
   const hasPublicKey = !!ssh?.public_key;
-  const title = loading ? "Loading" : error ? "Unavailable" : `${envCount} env${envCount === 1 ? "" : "s"}`;
+  const title = loading ? "Loading" : error ? "Unavailable" : configSummary(envCount, ssh);
   const detail = error
-    ? panelErrorSummary("Access API", error)
+    ? panelErrorSummary("Config API", error)
     : accessDetail(envCount, ssh);
   const sshDescription = hasPublicKey
     ? "Use this public key for GitHub or GitLab deploy access. Existing keys are shown, never overwritten."
@@ -56,7 +56,7 @@ export function AccountSettingsPanel({
         <span>{detail}</span>
       </summary>
       <div className="session-skills-body">
-        {loading ? <div className="session-skills-empty">Loading account access settings...</div> : null}
+        {loading ? <div className="session-skills-empty">Loading config...</div> : null}
         {!loading && error ? (
           <div className="session-skills-empty error" role="alert">
             {error}
@@ -147,4 +147,11 @@ function accessDetail(envCount: number, ssh?: AccountSettingsResponse["ssh"]): s
   if (ssh?.exists) return "SSH key found; public key unavailable";
   if (envCount > 0) return "No SSH key configured";
   return "No env vars or SSH key configured";
+}
+
+function configSummary(envCount: number, ssh?: AccountSettingsResponse["ssh"]): string {
+  const env = envCount > 0 ? `${envCount} env${envCount === 1 ? "" : "s"}` : undefined;
+  if (ssh?.public_key) return env ? `${env} · SSH key` : "SSH key";
+  if (ssh?.exists) return env ? `${env} · SSH key issue` : "SSH key issue";
+  return env ?? "No config";
 }
