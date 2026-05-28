@@ -404,7 +404,7 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 
 func sessionSearchRoleIsStateAnchor(role string) bool {
 	switch strings.TrimSpace(role) {
-	case "plan", "loop":
+	case "plan", "loop", "event":
 		return true
 	default:
 		return false

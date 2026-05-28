@@ -2229,7 +2229,7 @@ func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) 
 		}
 	}
 	first := resp.Results[0]
-	parts := []string{"session recall hits lack adjacent context, plan anchors, or loop anchors"}
+	parts := []string{"session recall hits lack adjacent context/recovery anchors"}
 	if strings.TrimSpace(first.SessionID) != "" {
 		anchor := "verify with narrower session_search before relying on " + strings.TrimSpace(first.SessionID)
 		if first.TurnIdx > 0 {
@@ -2257,7 +2257,7 @@ func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) 
 
 func sessionSearchResultRoleIsRecoveryAnchor(role string) bool {
 	switch strings.TrimSpace(role) {
-	case "plan", "loop":
+	case "plan", "loop", "event":
 		return true
 	default:
 		return false

@@ -808,6 +808,13 @@ func TestRecoveryHintFromSessionSearchHitsAllowsLoopAnchor(t *testing.T) {
 	}
 }
 
+func TestRecoveryHintFromSessionSearchHitsAllowsEventAnchor(t *testing.T) {
+	result := `{"query":"loop guard max turns","total":1,"results":[{"session_id":"stalled","role":"event","snippet":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2","matched_terms":["loop","guard"],"context_included":false}]}`
+	if got := recoveryHintFromSessionSearchResult(result); got != "" {
+		t.Fatalf("hint = %q, want no weak-hit warning for recovery event anchor", got)
+	}
+}
+
 func TestRecoveryHintFromSessionSearchDoesNotTreatOtherResultJSONAsWeakHits(t *testing.T) {
 	result := `{"ok":true,"target":"memory","results":[{"topic":"markets","entry":"alpha coast decision"}]}`
 	if got := recoveryHintFromSessionSearchResult(result); got != "" {

@@ -31,7 +31,7 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 		Tool:     "session_search",
 		CallID:   "search-empty",
 		ExitCode: 0,
-		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk","loop":"loop_status: running current_situation: preserve Alpha Coast source evidence"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
+		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: plan:1/2:active current_step: 2 [in_progress] Recheck Alpha Coast risk","loop":"loop_status: running current_situation: preserve Alpha Coast source evidence","recovery":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
 	}}}
 
 	examples := trace.SessionSearchExamples(5)
@@ -47,8 +47,32 @@ func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 		!strings.Contains(examples[0].RecentAssistantPreview, "HIST-STOCK-44") ||
 		!strings.Contains(examples[0].RecentPlanPreview, "Recheck Alpha Coast risk") ||
 		!strings.Contains(examples[0].RecentLoopPreview, "source evidence") ||
+		!strings.Contains(examples[0].RecentRecoveryPreview, "loop_guard_no_new_evidence") ||
 		!strings.Contains(examples[0].Message, "retry") {
 		t.Fatalf("unexpected recent anchor example: %+v", examples[0])
+	}
+}
+
+func TestSessionSearchExamplesIncludeRecoveryEventHits(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		Tool:     "session_search",
+		CallID:   "search-event",
+		ExitCode: 0,
+		Result:   `{"query":"loop_guard_no_new_evidence max_turns","total":1,"results":[{"session_id":"stalled-loop","message_idx":3,"role":"event","snippet":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2","score":4.4,"matched_terms":["loop","guard","evidence","max","turns"],"mod_time":"2026-05-27T12:00:00Z"}]}`,
+	}}}
+
+	examples := trace.SessionSearchExamples(5)
+	if len(examples) != 1 {
+		t.Fatalf("SessionSearchExamples len = %d, want 1: %+v", len(examples), examples)
+	}
+	got := examples[0]
+	if got.CallID != "search-event" ||
+		got.SessionID != "stalled-loop" ||
+		got.MessageIdx != 3 ||
+		got.Role != "event" ||
+		!strings.Contains(got.SnippetPreview, "loop_guard_no_new_evidence") ||
+		!reflect.DeepEqual(got.MatchedTerms, []string{"loop", "guard", "evidence", "max", "turns"}) {
+		t.Fatalf("unexpected event hit example: %+v", got)
 	}
 }
 

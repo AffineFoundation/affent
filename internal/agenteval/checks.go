@@ -1115,6 +1115,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	if ex.MessageIdx > 0 {
 		parts = append(parts, fmt.Sprintf("message=%d", ex.MessageIdx))
 	}
+	if ex.Role != "" {
+		parts = append(parts, "role="+ex.Role)
+	}
 	if ex.ModTime != "" {
 		parts = append(parts, "mod_time="+previewSubstr(ex.ModTime, 80))
 	}
@@ -1132,6 +1135,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	}
 	if ex.RecentLoopPreview != "" {
 		parts = append(parts, "recent_loop="+previewSubstr(ex.RecentLoopPreview, 100))
+	}
+	if ex.RecentRecoveryPreview != "" {
+		parts = append(parts, "recent_recovery="+previewSubstr(ex.RecentRecoveryPreview, 100))
 	}
 	return strings.Join(parts, " ")
 }

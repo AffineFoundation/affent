@@ -158,7 +158,7 @@ func TestMemoryUpdateMetaForResult(t *testing.T) {
 
 func TestRecordSessionSearchStats(t *testing.T) {
 	var stats sse.ToolRuntimeStats
-	recordSessionSearchStats(&stats, "session_search", `{"query":"Alpha Coast","total":4,"results":[{"session_id":"market-alpha","matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","matched_terms":["alpha"],"context_included":false},{"session_id":"market-plan","role":"plan","matched_terms":["plan"],"context_included":false},{"session_id":"market-loop","role":"loop","matched_terms":["loop"],"context_included":false}]}`, false)
+	recordSessionSearchStats(&stats, "session_search", `{"query":"Alpha Coast","total":5,"results":[{"session_id":"market-alpha","matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","matched_terms":["alpha"],"context_included":false},{"session_id":"market-plan","role":"plan","matched_terms":["plan"],"context_included":false},{"session_id":"market-loop","role":"loop","matched_terms":["loop"],"context_included":false},{"session_id":"market-event","role":"event","matched_terms":["event"],"context_included":false}]}`, false)
 	recordSessionSearchStats(&stats, "session_search", `{"query":"empty","total":0,"results":[],"recent_sessions":[{"session_id":"recent-a"},{"session_id":"recent-b"}]}`, false)
 	recordSessionSearchStats(&stats, "session_search", `not json`, false)
 	recordSessionSearchStats(&stats, "session_search", `{"total":1,"results":[{"matched_terms":["ignored"],"context_included":true}]}`, true)
@@ -167,14 +167,14 @@ func TestRecordSessionSearchStats(t *testing.T) {
 	if stats.SessionSearchCalls != 4 {
 		t.Fatalf("SessionSearchCalls = %d, want 4", stats.SessionSearchCalls)
 	}
-	if stats.SessionSearchResults != 4 {
-		t.Fatalf("SessionSearchResults = %d, want 4", stats.SessionSearchResults)
+	if stats.SessionSearchResults != 5 {
+		t.Fatalf("SessionSearchResults = %d, want 5", stats.SessionSearchResults)
 	}
-	if stats.SessionSearchContextHits != 3 {
-		t.Fatalf("SessionSearchContextHits = %d, want 3", stats.SessionSearchContextHits)
+	if stats.SessionSearchContextHits != 4 {
+		t.Fatalf("SessionSearchContextHits = %d, want 4", stats.SessionSearchContextHits)
 	}
-	if stats.SessionSearchMatchedTerms != 4 {
-		t.Fatalf("SessionSearchMatchedTerms = %d, want 4", stats.SessionSearchMatchedTerms)
+	if stats.SessionSearchMatchedTerms != 5 {
+		t.Fatalf("SessionSearchMatchedTerms = %d, want 5", stats.SessionSearchMatchedTerms)
 	}
 	if stats.SessionSearchRecent != 2 {
 		t.Fatalf("SessionSearchRecent = %d, want 2", stats.SessionSearchRecent)
