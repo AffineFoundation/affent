@@ -864,6 +864,7 @@ func TestWriteTraceDebugArtifactsAppliesScenarioWithTraceWorkspace(t *testing.T)
 		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
 	}
 	if manifest.Scenario != "trace-path-hygiene" ||
+		manifest.TraceWorkspace != workspace ||
 		!manifest.Expectations.ForbidWorkspaceAbsolutePaths ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "shell_command_lacks_workspace_absolute_path") {
 		t.Fatalf("manifest expectations did not preserve scenario gates: %+v", manifest.Expectations)
@@ -934,8 +935,24 @@ func TestWriteTraceDebugArtifactsChecksDurableChildTranscripts(t *testing.T) {
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
 	}
-	if len(manifest.ChildTranscripts) != 1 || manifest.ChildTranscripts[0].Path != transcriptRel {
-		t.Fatalf("manifest child transcripts = %+v, want %s", manifest.ChildTranscripts, transcriptRel)
+	if len(manifest.ChildTranscripts) != 1 ||
+		manifest.ChildTranscripts[0].Path != transcriptRel ||
+		manifest.TraceWorkspace != workspace ||
+		manifest.ChildTranscriptRoot != sessionDir {
+		t.Fatalf("manifest trace roots/child transcripts = workspace:%q root:%q refs:%+v", manifest.TraceWorkspace, manifest.ChildTranscriptRoot, manifest.ChildTranscripts)
+	}
+	timeline, err := os.ReadFile(filepath.Join(outDir, "affenteval-timeline.md"))
+	if err != nil {
+		t.Fatalf("read timeline: %v", err)
+	}
+	for _, want := range []string{
+		"trace_workspace: `" + workspace + "`",
+		"child_transcript_root: `" + sessionDir + "`",
+		"kind=`subagent` path=`" + transcriptRel + "`",
+	} {
+		if !strings.Contains(string(timeline), want) {
+			t.Fatalf("timeline missing %q:\n%s", want, timeline)
+		}
 	}
 }
 

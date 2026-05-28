@@ -39,6 +39,12 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	if res.TracePath != "" {
 		fmt.Fprintf(&b, "- trace_jsonl: `%s`\n", res.TracePath)
 	}
+	if workspace := traceWorkspaceForManifest(res); workspace != "" {
+		fmt.Fprintf(&b, "- trace_workspace: `%s`\n", workspace)
+	}
+	if root := childTranscriptRootForManifest(res); root != "" {
+		fmt.Fprintf(&b, "- child_transcript_root: `%s`\n", root)
+	}
 	if res.TraceDeltas {
 		fmt.Fprintf(&b, "- trace_deltas: `true`\n")
 	} else {

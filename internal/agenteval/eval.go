@@ -250,6 +250,8 @@ type BatchRunner struct {
 type BatchResult struct {
 	BatchScenario                   string
 	Workspace                       string
+	TraceWorkspace                  string
+	ChildTranscriptRoot             string
 	TracePath                       string
 	DebugManifestPath               string
 	TimelinePath                    string
@@ -318,6 +320,8 @@ type DebugManifest struct {
 	Scenario                               string                            `json:"scenario"`
 	OK                                     bool                              `json:"ok"`
 	Workspace                              string                            `json:"workspace"`
+	TraceWorkspace                         string                            `json:"trace_workspace,omitempty"`
+	ChildTranscriptRoot                    string                            `json:"child_transcript_root,omitempty"`
 	TracePath                              string                            `json:"trace_path"`
 	TimelinePath                           string                            `json:"timeline_path,omitempty"`
 	FinalTextPath                          string                            `json:"final_text_path,omitempty"`
@@ -1291,6 +1295,14 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if trace != nil && res.ContextCompactions.Count == 0 {
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 	}
+	if trace != nil {
+		if strings.TrimSpace(res.TraceWorkspace) == "" {
+			res.TraceWorkspace = strings.TrimSpace(trace.WorkspaceDir)
+		}
+		if strings.TrimSpace(res.ChildTranscriptRoot) == "" {
+			res.ChildTranscriptRoot = strings.TrimSpace(trace.ChildTranscriptRootDir)
+		}
+	}
 	if len(res.ChildTranscripts) == 0 {
 		res.ChildTranscripts = collectDebugChildTranscripts(res.Workspace, maxDebugChildTranscriptRefs)
 	}
@@ -1323,6 +1335,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		Scenario:                               res.BatchScenario,
 		OK:                                     res.OK,
 		Workspace:                              res.Workspace,
+		TraceWorkspace:                         traceWorkspaceForManifest(*res),
+		ChildTranscriptRoot:                    childTranscriptRootForManifest(*res),
 		TracePath:                              res.TracePath,
 		TimelinePath:                           timelinePath,
 		FinalTextPath:                          finalTextPath,
@@ -1443,6 +1457,34 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	return nil
 }
 
+func traceWorkspaceForManifest(res BatchResult) string {
+	workspace := strings.TrimSpace(res.TraceWorkspace)
+	if workspace == "" || sameCleanPath(workspace, res.Workspace) {
+		return ""
+	}
+	return workspace
+}
+
+func childTranscriptRootForManifest(res BatchResult) string {
+	if len(res.ChildTranscripts) == 0 {
+		return ""
+	}
+	root := strings.TrimSpace(res.ChildTranscriptRoot)
+	if root == "" || sameCleanPath(root, res.Workspace) {
+		return ""
+	}
+	return root
+}
+
+func sameCleanPath(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	if a == "" || b == "" {
+		return false
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
+}
+
 func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	if res == nil {
 		return
@@ -1485,6 +1527,8 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.Repair = trace.RepairStats()
 	res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
 	res.ChildTranscripts = append([]DebugTranscriptRef(nil), trace.ChildTranscripts...)
+	res.TraceWorkspace = strings.TrimSpace(trace.WorkspaceDir)
+	res.ChildTranscriptRoot = strings.TrimSpace(trace.ChildTranscriptRootDir)
 }
 
 func sourceAccessExamplesForDebug(trace Trace) []SourceAccessExample {
