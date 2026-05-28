@@ -37,7 +37,7 @@ export function SessionRunPanel({
                   <CopyButton label="Copy command" value={command.command} className="ghost-action" />
                   {command.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
-                      Open output
+                      Open command output
                     </button>
                   ) : null}
                   {onUseAsDraft ? (

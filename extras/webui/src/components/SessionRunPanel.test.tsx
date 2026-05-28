@@ -26,7 +26,7 @@ describe("SessionRunPanel", () => {
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Copy command" }));
     expect(writeText).toHaveBeenCalledWith("npm test -- checkout.spec.ts");
 
-    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open output" }));
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open command output" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/test.txt");
 
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
