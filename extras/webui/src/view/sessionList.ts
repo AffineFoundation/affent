@@ -515,7 +515,7 @@ function hasGuardMetric(row: SessionRowView): boolean {
 function needsAttention(row: SessionRowView): boolean {
   if (row.tone === "error" || row.tone === "warning") return true;
   if (row.status === "Blocked" || row.status === "Needs final answer") return true;
-  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Tool failures ") || metric.startsWith("Next step ") || metric.startsWith("Recovery "));
+  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Issue types ") || metric.startsWith("Next step ") || metric.startsWith("Recovery "));
 }
 
 function usageMetrics(session: SessionSummary): string[] {
@@ -576,11 +576,35 @@ function addCounts(target: Record<string, number>, incoming: Record<string, numb
 function toolFailureMetric(stats: ToolFailureStats | undefined): string | undefined {
   const counts = Object.entries(stats?.tool_failure_by_kind ?? {})
     .filter(([, count]) => Number.isFinite(count) && count > 0)
-    .sort(([aKind, aCount], [bKind, bCount]) => bCount - aCount || aKind.localeCompare(bKind));
+    .sort(([aKind, aCount], [bKind, bCount]) => bCount - aCount || failureKindLabel(aKind).localeCompare(failureKindLabel(bKind)));
   if (counts.length === 0) return undefined;
-  const shown = counts.slice(0, 3).map(([kind, count]) => `${kind} ${count}`);
+  const shown = counts.slice(0, 3).map(([kind, count]) => `${failureKindLabel(kind)} ${count}`);
   if (counts.length > shown.length) shown.push(`+${counts.length - shown.length} more`);
-  return `Tool failures ${shown.join(", ")}`;
+  return `Issue types ${shown.join(", ")}`;
+}
+
+function failureKindLabel(kind: string): string {
+  const normalized = kind.trim().toLowerCase();
+  if (!normalized) return "other";
+  if (normalized === "invalid_args") return "invalid request";
+  if (normalized === "blocked") return "blocked";
+  if (normalized === "timeout") return "timeout";
+  if (normalized === "empty_response") return "empty response";
+  if (normalized === "dynamic_shell") return "dynamic page";
+  if (normalized === "no_results") return "no results";
+  if (normalized === "no_matches") return "no matches";
+  if (normalized === "network" || normalized === "network_error") return "network";
+  if (normalized === "upstream_5xx") return "provider error";
+  if (normalized === "llm_timeout") return "model timeout";
+  if (normalized === "loop_guard_no_budget") return "action budget";
+  if (normalized === "loop_guard_call_cap") return "action limit";
+  if (normalized === "loop_guard_repeated_call") return "repeated action";
+  if (normalized === "loop_guard_repeated_failures") return "repeated failures";
+  if (normalized === "loop_guard_repeated_failed_input") return "repeated failed input";
+  if (normalized === "loop_guard_halted_tool") return "halted action";
+  if (normalized === "loop_guard_no_new_evidence") return "no new evidence";
+  if (normalized === "loop_guard_direct_reader_warning") return "source warning";
+  return normalized.replace(/^loop_guard_/, "").replace(/_/g, " ");
 }
 
 function emptyLoopGuardStats(): Required<LoopGuardStats> {

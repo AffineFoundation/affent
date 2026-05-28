@@ -196,9 +196,9 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Tool failures loop_guard_no_budget 3, invalid_args 1");
-    expect(rows[0].stats).toBe("2 issues · Tool failures loop_guard_no_budget 3, invalid_args 1");
-    expect(rows[0].searchText).toContain("tool failures loop_guard_no_budget 3, invalid_args 1");
+    expect(rows[0].metrics).toContain("Issue types action budget 3, invalid request 1");
+    expect(rows[0].stats).toBe("2 issues · Issue types action budget 3, invalid request 1");
+    expect(rows[0].searchText).toContain("issue types action budget 3, invalid request 1");
     expect(countSessionsByFilter(rows).issues).toBe(1);
   });
 
@@ -1224,8 +1224,8 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("Tool failures loop_guard_no_budget 2, invalid_args 1");
-    expect(rows[0].searchText).toContain("tool failures loop_guard_no_budget 2, invalid_args 1");
+    expect(rows[0].stats).toBe("Issue types action budget 2, invalid request 1");
+    expect(rows[0].searchText).toContain("issue types action budget 2, invalid request 1");
   });
 
   it("surfaces unknown events as an unclassified chip in the chat list", () => {
