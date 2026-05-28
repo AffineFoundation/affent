@@ -437,6 +437,17 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if exp.VerifyCommand != "" {
 		fmt.Fprintf(b, "- verify_command: `%s`\n", timelineInline(exp.VerifyCommand, timelineArgsPreviewBytes))
 	}
+	if exp.SourceRepoURL != "" {
+		var parts []string
+		parts = append(parts, fmt.Sprintf("url=%s", exp.SourceRepoURL))
+		if exp.SourceRepoRef != "" {
+			parts = append(parts, fmt.Sprintf("ref=%s", exp.SourceRepoRef))
+		}
+		if exp.SourceRepoDir != "" {
+			parts = append(parts, fmt.Sprintf("dir=%s", exp.SourceRepoDir))
+		}
+		fmt.Fprintf(b, "- source_repo: `%s`\n", timelineInline(strings.Join(parts, " "), timelineArgsPreviewBytes))
+	}
 	if exp.ExpectedSkill != "" {
 		fmt.Fprintf(b, "- expected_skill: `%s`\n", timelineInline(exp.ExpectedSkill, timelineArgsPreviewBytes))
 	}
@@ -721,6 +732,9 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.ExecutePlan ||
 		exp.EnableMemory ||
 		exp.VerifyCommand != "" ||
+		exp.SourceRepoURL != "" ||
+		exp.SourceRepoRef != "" ||
+		exp.SourceRepoDir != "" ||
 		exp.ExpectedSkill != "" ||
 		len(exp.RequiredTools) > 0 ||
 		len(exp.ForbiddenTools) > 0 ||

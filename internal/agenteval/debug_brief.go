@@ -44,6 +44,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"failures": count,
 		}, "loop_protocol", "loop_protocol:fixture")
 	}
+	if count := sourceRepoSetupFailureCount(res.Failures); count > 0 {
+		add("source_repo_setup", "fail", "source repository setup failed before the agent turn; fix the eval repository URL, ref, target directory, or setup command before judging model behavior", []string{"failures", "expectations", "debug_manifest", "workspace"}, map[string]int{
+			"failures": count,
+		}, "source_repo", "source_repo:setup")
+	}
 	if res.TurnEndReason != "" && res.TurnEndReason != "completed" {
 		add("turn_end", "fail", fmt.Sprintf("turn ended with reason %q", res.TurnEndReason), []string{"final_text", "tool_timeline"}, map[string]int{res.TurnEndReason: 1}, "turn_end:"+res.TurnEndReason)
 	}
@@ -561,6 +566,17 @@ func loopProtocolFixtureFailureCount(failures []string) int {
 	count := 0
 	for _, failure := range failures {
 		if strings.Contains(strings.ToLower(failure), "requires loop protocol feeds") {
+			count++
+		}
+	}
+	return count
+}
+
+func sourceRepoSetupFailureCount(failures []string) int {
+	count := 0
+	for _, failure := range failures {
+		lower := strings.ToLower(strings.TrimSpace(failure))
+		if strings.HasPrefix(lower, "source repo ") {
 			count++
 		}
 	}

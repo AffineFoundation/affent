@@ -3474,6 +3474,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		Domains:       []string{"market", "web_evidence"},
 		MaxTurns:      12,
 		SetupCommands: []string{"git init"},
+		SourceRepoURL: "remote.git",
+		SourceRepoRef: "main",
+		SourceRepoDir: "app",
 		RequiredTools: []string{
 			"web_fetch",
 			"browser_network_read",
@@ -3625,7 +3628,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Verifier.OutputCapBytes != 1536 {
 		t.Fatalf("manifest verifier = %+v", manifest.Verifier)
 	}
-	wantCapabilities := []string{"browser", "context_compaction", "context_injection", "delegated_source_evidence", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
+	wantCapabilities := []string{"browser", "context_compaction", "context_injection", "delegated_source_evidence", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "source_repo", "trace", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
 		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
@@ -3646,6 +3649,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
 		!reflect.DeepEqual(manifest.Expectations.SetupCommands, []string{"git init"}) ||
+		manifest.Expectations.SourceRepoURL != "remote.git" ||
+		manifest.Expectations.SourceRepoRef != "main" ||
+		manifest.Expectations.SourceRepoDir != "app" ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredTools, []string{"web_fetch", "browser_network_read"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenTools, []string{"shell"}) ||
 		manifest.Expectations.RequiredToolCounts["browser_network_read"] != 1 ||
@@ -3700,6 +3706,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(manifest.Expectations.RequiredFileSubstrings["trace.jsonl"], []string{"resume_missing_tool_result"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenFileSubstrings["notes.md"], []string{"uncited taostats metric"}) {
 		t.Fatalf("manifest expectations = %+v", manifest.Expectations)
+	}
+	timelineRaw, err := os.ReadFile(res.TimelinePath)
+	if err != nil {
+		t.Fatalf("read timeline: %v", err)
+	}
+	if !strings.Contains(string(timelineRaw), "- source_repo: `url=remote.git ref=main dir=app`") {
+		t.Fatalf("timeline missing source repo expectation:\n%s", string(timelineRaw))
 	}
 	if manifest.DebugBrief == nil || len(manifest.DebugBrief.Tags) == 0 {
 		t.Fatalf("manifest debug brief missing: %+v", manifest.DebugBrief)
@@ -3954,10 +3967,11 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
-		"expectation_capabilities: `browser`, `context_compaction`, `context_injection`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
+		"expectation_capabilities: `browser`, `context_compaction`, `context_injection`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `source_repo`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"domains: `market`, `web_evidence`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
+		"source_repo: `url=remote.git ref=main dir=app`",
 		"checks: `turn_ended_cleanly`",
 		"required_tools: `web_fetch`, `browser_network_read`",
 		"forbidden_tools: `shell`",

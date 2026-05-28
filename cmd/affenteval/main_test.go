@@ -5079,6 +5079,7 @@ func TestFailureKindsForResult(t *testing.T) {
 		`affentctl run failed: exit=1 err=LLM llm_stream ended with an incomplete SSE stream (model="qwen" endpoint="https://llm.example/v1/chat/completions"). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk: stream ended without finish`,
 		`affentctl run failed: exit=1 err=LLM llm_request failed (model="qwen" endpoint="https://llm.example/v1/chat/completions"): prompt is too long`,
 		`scenario "loop-draft" requires loop protocol feeds but active protocol file .affent/loops/loop-draft/LOOP.md has status "draft", want running`,
+		`source repo clone failed: git clone remote.git app: exit status 128`,
 	})
 	if got["turn_end"] != 1 ||
 		got["missing_command"] != 2 ||
@@ -5089,7 +5090,8 @@ func TestFailureKindsForResult(t *testing.T) {
 		got["llm_timeout"] != 2 ||
 		got["llm_incomplete_stream"] != 1 ||
 		got["context_overflow"] != 1 ||
-		got["loop_protocol_fixture"] != 1 {
+		got["loop_protocol_fixture"] != 1 ||
+		got["source_repo_setup"] != 1 {
 		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }
@@ -5128,6 +5130,15 @@ func TestFailureKindHintIncludesLoopProtocolFixtureRecovery(t *testing.T) {
 	for _, want := range []string{"LOOP.md fixture", "missing", "non-running", "unreadable state"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("failureKindHint(loop_protocol_fixture) = %q, want %q", got, want)
+		}
+	}
+}
+
+func TestFailureKindHintIncludesSourceRepoSetupRecovery(t *testing.T) {
+	got := failureKindHint("source_repo_setup")
+	for _, want := range []string{"source repository", "source_repo_url/ref/dir", "setup commands", "git availability"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("failureKindHint(source_repo_setup) = %q, want %q", got, want)
 		}
 	}
 }
@@ -5174,6 +5185,7 @@ func TestFailureKind(t *testing.T) {
 		{`affentctl run failed: exit=1 err=launch chromium: /chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file
 Failure: kind=browser_launch_failed`, "browser_launch_failed"},
 		{`scenario "loop-missing" requires loop protocol feeds but active protocol file .affent/loops/loop-missing/LOOP.md is missing`, "loop_protocol_fixture"},
+		{`source repo checkout failed: git -C app checkout main: exit status 1`, "source_repo_setup"},
 		{`something else`, "other"},
 	}
 	for _, tc := range cases {

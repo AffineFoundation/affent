@@ -80,6 +80,25 @@ func TestBuildDebugBriefClassifiesLoopProtocolFixtureFailures(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesSourceRepoSetupFailures(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: false,
+		Failures: []string{
+			`source repo clone failed: git clone remote.git app: exit status 128`,
+		},
+	})
+	item := debugBriefItemByKind(brief, "source_repo_setup")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["failures"] != 1 ||
+		!stringSliceContains(item.Inspect, "expectations") ||
+		!stringSliceContains(item.Inspect, "workspace") ||
+		!stringSliceContains(brief.Tags, "source_repo") ||
+		!stringSliceContains(brief.Tags, "source_repo:setup") {
+		t.Fatalf("source repo setup debug brief item=%+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefTagsBrowserLaunchFailure(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK:                 false,

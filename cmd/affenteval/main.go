@@ -3334,6 +3334,8 @@ func failureKindHint(kind string) string {
 		return "upstream rejected the request because the prompt/context window was too large; compaction, shorter history, or smaller tool context is needed"
 	case "loop_protocol_fixture":
 		return "the eval scenario declares loop protocol feed/calibration expectations but the current-session LOOP.md fixture is missing, non-running, or has unreadable state; fix the fixture before rerunning model evals"
+	case "source_repo_setup":
+		return "the eval scenario failed while preparing its source repository before the agent turn; inspect source_repo_url/ref/dir, setup commands, git availability, and local/remote access before treating this as model behavior"
 	default:
 		return ""
 	}
@@ -5690,6 +5692,8 @@ func failureKind(failure string) string {
 		return "parse_trace"
 	case strings.Contains(lower, "requires loop protocol feeds"):
 		return "loop_protocol_fixture"
+	case strings.HasPrefix(lower, "source repo "):
+		return "source_repo_setup"
 	case strings.Contains(lower, "turn ended with reason"):
 		return "turn_end"
 	case strings.Contains(lower, "missing required command match"):
