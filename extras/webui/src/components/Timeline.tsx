@@ -320,7 +320,7 @@ function IntroStarterPanel({ onUseAsDraft }: { onUseAsDraft: UseAsDraft }) {
         <span>Draft preview</span>
         <p>{activeStarter.prompt}</p>
         <button type="button" onClick={() => useDraft()}>
-          Use draft
+          Use starter draft
         </button>
       </div>
     </div>

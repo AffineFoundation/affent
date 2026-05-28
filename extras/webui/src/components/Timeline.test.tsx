@@ -313,7 +313,7 @@ describe("Timeline", () => {
     await user.hover(screen.getByRole("button", { name: /Investigate issue/ }));
 
     expect(screen.getByTestId("starter-preview")).toHaveTextContent("Investigate the current issue");
-    await user.click(screen.getByRole("button", { name: "Use draft" }));
+    await user.click(screen.getByRole("button", { name: "Use starter draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       "Investigate the current issue, call out the likely cause, and propose the next concrete step.",
       "starter",
@@ -329,7 +329,7 @@ describe("Timeline", () => {
 
     expect(onUseAsDraft).not.toHaveBeenCalled();
     expect(screen.getByTestId("starter-preview")).toHaveTextContent("Find the failing test or execution error");
-    await user.click(screen.getByRole("button", { name: "Use draft" }));
+    await user.click(screen.getByRole("button", { name: "Use starter draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
       "Find the failing test or execution error, explain the cause, and propose the smallest fix.",
