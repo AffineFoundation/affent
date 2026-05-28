@@ -66,7 +66,10 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Searchable durable memory");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
-    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Use snapshot" }));
+    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Suggest from chat" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("suggest durable memory entries"), "memory");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Current memory: 4 entries"), "memory");
+    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Review snapshot" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("durable memory snapshot"), "memory");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
@@ -274,16 +277,20 @@ describe("SessionMemoryPanel", () => {
   });
 
   it("keeps empty memory state factual and avoids unusable search", () => {
-    render(<SessionMemoryPanel defaultOpen memory={{ session_id: "s1", has_memory: false, topics: [] }} />);
+    const onUseAsDraft = vi.fn();
+    render(<SessionMemoryPanel defaultOpen memory={{ session_id: "s1", has_memory: false, topics: [] }} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-memory-panel");
     expect(panel).toHaveTextContent("No durable memory");
     expect(panel).toHaveTextContent("No user, core, or topic entries saved.");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Session scoped");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Read only");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No durable memory saved");
     expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
-    expect(screen.queryByTestId("session-memory-form")).toBeNull();
+    expect(screen.getByTestId("session-memory-form")).toBeInTheDocument();
+    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Suggest from chat");
+    screen.getByRole("button", { name: "Suggest from chat" }).click();
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Do not save memory yet"), "memory");
     expect(panel).not.toHaveTextContent("No matching memory.");
   });
 

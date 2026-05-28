@@ -169,6 +169,22 @@ export function memorySnapshotDraft(memory: SessionMemoryResponse): string {
   ].join("\n");
 }
 
+export function memorySuggestionDraft(memory?: SessionMemoryResponse): string {
+  const lines = [
+    "Review the current chat and suggest durable memory entries worth saving.",
+    "",
+    "Only propose facts that are stable, useful in future sessions, and non-secret.",
+    "For each candidate include target, topic, content, and why it should or should not be saved.",
+    "Do not save memory yet unless I explicitly confirm.",
+  ];
+  if (memory) {
+    const stats = memoryStats(memory);
+    lines.push("");
+    lines.push(`Current memory: ${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} · ${memoryUsageLabel(stats)}`);
+  }
+  return lines.join("\n");
+}
+
 export function memoryBucketDraft(bucket: SessionMemoryBucket): string {
   return [
     "Use this memory evidence to continue the chat. Verify whether it is relevant, stale, or needs correction:",

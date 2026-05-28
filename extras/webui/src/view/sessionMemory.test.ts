@@ -11,6 +11,7 @@ import {
   memoryStats,
   memorySnapshotDraft,
   memorySnapshotEvidenceText,
+  memorySuggestionDraft,
   memoryUsageLabel,
   manualMemoryDraft,
   memoryUpdateDraft,
@@ -115,6 +116,27 @@ describe("sessionMemory view helpers", () => {
       "Content:",
       "CoinGecko pages require a browser fallback.",
     ].join("\n"));
+  });
+
+  it("builds a current-chat memory suggestion prompt without saving directly", () => {
+    const draft = memorySuggestionDraft({
+      session_id: "s1",
+      has_memory: true,
+      topics: [{
+        target: "memory",
+        topic: "project",
+        entries: ["Use Vite for WebUI development."],
+        entry_count: 1,
+        chars_used: 31,
+        chars_limit: 4400,
+        percent: 1,
+      }],
+    });
+
+    expect(draft).toContain("suggest durable memory entries");
+    expect(draft).toContain("non-secret");
+    expect(draft).toContain("Do not save memory yet");
+    expect(draft).toContain("Current memory: 1 entry");
   });
 
   it("summarizes memory scope and capacity pressure", () => {

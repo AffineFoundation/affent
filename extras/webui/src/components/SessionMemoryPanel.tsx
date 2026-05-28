@@ -14,6 +14,7 @@ import {
   memoryBucketUsage,
   memoryPressureLabel,
   memoryScopeLabel,
+  memorySuggestionDraft,
   memoryStats,
   memorySnapshotDraft,
   memorySnapshotEvidenceText,
@@ -481,9 +482,14 @@ function MemoryPanelActions({
   return (
     <div className="session-memory-toolbar" data-mode={minimal ? "minimal" : undefined} data-testid="session-memory-toolbar">
       {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="ghost-action" /> : null}
+      {onUseAsDraft ? (
+        <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySuggestionDraft(memory), "memory")}>
+          Suggest from chat
+        </button>
+      ) : null}
       {memory && hasSavedMemory && onUseAsDraft ? (
         <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySnapshotDraft(memory), "memory")}>
-          Use snapshot
+          Review snapshot
         </button>
       ) : null}
       {hasSearch ? <span>Searchable durable memory</span> : null}
