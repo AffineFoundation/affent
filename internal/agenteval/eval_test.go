@@ -2726,9 +2726,23 @@ func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
 		AffentctlCommand:  []string{"go", "run", "./cmd/affentctl", "run", "--trace-skip-deltas", "--prompt", "<prompt>"},
 		TraceDeltas:       false,
 		ToolStats: ToolRuntimeStats{
-			SourceAccessResults:        1,
+			SourceAccessResults:        2,
 			SourceAccessDynamicPartial: 1,
 		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    120000,
+			ShowingBytes: 65536,
+			OmittedAfter: 54464,
+			NextOffset:   65536,
+			HasMore:      true,
+		}},
 	}
 	guide := BuildDebugRecoveryGuide(res)
 	if guide == nil {
@@ -2743,6 +2757,7 @@ func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
 		"Priority debug tags:",
 		"outcome:failed",
 		"source_dynamic_without_network",
+		"source_network:partial_read",
 	} {
 		if !strings.Contains(guide.ContinuePrompt, want) {
 			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)

@@ -1316,6 +1316,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"browser_network:unread_refs",
 		"browser_scroll:stuck_without_network",
 		"source_network:missing_response_diagnostics",
+		"source_network:partial_read",
 		"context_compaction:summary_missing",
 		"context_compaction:summary_empty",
 		"truncation:missing_artifact",
