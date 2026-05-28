@@ -80,11 +80,19 @@ describe("AccountSettingsPanel", () => {
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("2 envs");
+    expect(screen.getByTestId("account-env-review")).toHaveTextContent("1 finding");
+    expect(screen.getByTestId("account-env-review")).toHaveTextContent("EMPTY_TOKEN");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
     expect(screen.getByRole("status")).toHaveTextContent("GITLAB_TOKEN saved.");
     expect(screen.queryByText("gl_secret")).toBeNull();
 
     const envList = screen.getByTestId("account-env-list");
+    await user.click(within(screen.getByTestId("account-env-review")).getByRole("button", { name: "Show variables" }));
+    expect(screen.getByTestId("account-env-search-count")).toHaveTextContent("1 variable");
+    expect(envList).toHaveTextContent("EMPTY_TOKEN");
+    expect(envList).not.toHaveTextContent("GITHUB_TOKEN");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
     await user.type(screen.getByPlaceholderText("name, configured, or empty"), "github");
     expect(screen.getByTestId("account-env-search-count")).toHaveTextContent('1 variable matching "github"');
     expect(envList).toHaveTextContent("GITHUB_TOKEN");

@@ -5,11 +5,15 @@ import {
   accountConfigDetail,
   accountConfigReview,
   accountConfigSummary,
+  accountEnvMatchesFilter,
   accountEnvMatchesQuery,
+  accountEnvReviewFindings,
+  accountEnvReviewNames,
   sshAccessDescription,
   sshPathDisplay,
   sshPathState,
   sshStorageDescription,
+  type AccountEnvFilter,
 } from "../view/accountConfig";
 import type { RunCommandExecutionRequest } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
@@ -46,13 +50,17 @@ export function AccountSettingsPanel({
   const [gitHost, setGitHost] = useState("github.com");
   const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
   const [mutationStatus, setMutationStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
+  const [envFilter, setEnvFilter] = useState<AccountEnvFilter>("all");
   const ssh = settings?.ssh;
+  const envReviewFindings = useMemo(() => accountEnvReviewFindings(settings), [settings]);
+  const envReviewNames = useMemo(() => accountEnvReviewNames(settings), [settings]);
   const trimmedQuery = query.trim();
   const visibleEnv = useMemo(() => {
     const env = settings?.env ?? [];
-    if (!trimmedQuery) return env;
-    return env.filter((entry) => accountEnvMatchesQuery(entry, trimmedQuery));
-  }, [settings?.env, trimmedQuery]);
+    return env
+      .filter((entry) => accountEnvMatchesFilter(entry, envFilter, envReviewNames))
+      .filter((entry) => !trimmedQuery || accountEnvMatchesQuery(entry, trimmedQuery));
+  }, [envFilter, envReviewNames, settings?.env, trimmedQuery]);
   const title = loading ? "Loading" : error ? "Unavailable" : accountConfigSummary(settings);
   const detail = error
     ? panelErrorSummary("Config API", error)
@@ -214,20 +222,36 @@ export function AccountSettingsPanel({
                 {mutationStatus.message}
               </span>
             ) : null}
+            {settings && envReviewFindings.length > 0 ? (
+              <AccountEnvReviewQueue
+                findings={envReviewFindings}
+                onShowEnv={() => setEnvFilter("review")}
+              />
+            ) : null}
             {settings && settings.env.length > 0 ? (
               <div className="session-skills-controls">
+                <AccountEnvFilters
+                  env={settings.env}
+                  reviewNames={envReviewNames}
+                  value={envFilter}
+                  onChange={setEnvFilter}
+                />
                 <label className="session-skills-search">
                   <span>Search env</span>
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="name, configured, or empty" />
                 </label>
-                {trimmedQuery ? (
-                  <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                {trimmedQuery || envFilter !== "all" ? (
+                  <button type="button" className="ghost-action" onClick={() => {
+                    setQuery("");
+                    setEnvFilter("all");
+                  }}>
                     Clear
                   </button>
                 ) : null}
-                {trimmedQuery ? (
+                {trimmedQuery || envFilter !== "all" ? (
                   <span className="session-search-count" data-testid="account-env-search-count">
-                    {visibleEnv.length} {visibleEnv.length === 1 ? "variable" : "variables"} matching "{trimmedQuery}"
+                    {visibleEnv.length} {visibleEnv.length === 1 ? "variable" : "variables"}
+                    {trimmedQuery ? ` matching "${trimmedQuery}"` : ""}
                   </span>
                 ) : null}
               </div>
@@ -239,6 +263,9 @@ export function AccountSettingsPanel({
                     <span className="session-skill-title">
                       <strong>{entry.name}</strong>
                       <span>{entry.configured ? "configured" : "empty"}</span>
+                    </span>
+                    <span className="account-env-meta">
+                      {entry.updated_at ? `Updated ${formatTimestamp(entry.updated_at)}` : "No update time"}
                     </span>
                     {onDeleteEnv ? confirmDeleteEnv === entry.name ? (
                       <div className="account-env-confirm" role="group" aria-label={`Confirm delete ${entry.name}`}>
@@ -265,6 +292,85 @@ export function AccountSettingsPanel({
         ) : null}
       </div>
     </details>
+  );
+}
+
+function AccountEnvFilters({
+  env,
+  reviewNames,
+  value,
+  onChange,
+}: {
+  env: readonly AccountSettingsResponse["env"][number][];
+  reviewNames: ReadonlySet<string>;
+  value: AccountEnvFilter;
+  onChange: (value: AccountEnvFilter) => void;
+}) {
+  const counts = {
+    all: env.length,
+    configured: env.filter((entry) => entry.configured).length,
+    empty: env.filter((entry) => !entry.configured).length,
+    review: env.filter((entry) => reviewNames.has(entry.name)).length,
+  };
+  const options: Array<{ value: AccountEnvFilter; label: string; count: number }> = [
+    { value: "all", label: "All", count: counts.all },
+    { value: "configured", label: "Configured", count: counts.configured },
+    { value: "empty", label: "Empty", count: counts.empty },
+    { value: "review", label: "Needs review", count: counts.review },
+  ];
+  return (
+    <div className="session-filter-pills" role="group" aria-label="Filter environment variables">
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          disabled={option.count === 0 && value !== option.value}
+          onClick={() => onChange(option.value)}
+        >
+          <span>{option.label}</span>
+          <strong>{option.count}</strong>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AccountEnvReviewQueue({
+  findings,
+  onShowEnv,
+}: {
+  findings: ReturnType<typeof accountEnvReviewFindings>;
+  onShowEnv: () => void;
+}) {
+  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
+    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+  return (
+    <section className="account-env-review" data-testid="account-env-review" aria-label="Environment review queue">
+      <div className="account-env-review-head">
+        <span>Env review</span>
+        <strong>{findings.length} {findings.length === 1 ? "finding" : "findings"}</strong>
+        <button type="button" className="ghost-action" onClick={onShowEnv}>Show variables</button>
+      </div>
+      <div className="account-env-review-kinds">
+        {Object.entries(counts).map(([kind, count]) => (
+          <span key={kind}>
+            {kind === "empty" ? "Empty" : "Incomplete"}
+            <strong>{count}</strong>
+          </span>
+        ))}
+      </div>
+      <ul className="account-env-review-list">
+        {findings.slice(0, 4).map((finding) => (
+          <li key={`${finding.kind}:${finding.name}`}>
+            <strong>{finding.name}</strong>
+            <span>{finding.detail}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

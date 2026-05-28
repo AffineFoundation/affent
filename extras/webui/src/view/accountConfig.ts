@@ -14,6 +14,13 @@ export type AccountConfigReview = {
   nextAction: string;
 };
 
+export type AccountEnvReviewFinding = {
+  kind: "empty" | "incomplete";
+  name: string;
+  detail: string;
+  related?: string[];
+};
+
 export function accountConfigSummary(settings?: AccountSettingsResponse): string {
   if (!settings) return "No config";
   const env = settings.env.length > 0 ? `${settings.env.length} env${settings.env.length === 1 ? "" : "s"}` : undefined;
@@ -92,6 +99,59 @@ export function accountEnvMatchesQuery(entry: AccountEnvSummary, query: string):
     entry.configured ? "configured" : "empty",
     entry.updated_at,
   ].filter(Boolean).join(" ").toLowerCase().includes(query.trim().toLowerCase());
+}
+
+export function accountEnvMatchesFilter(
+  entry: AccountEnvSummary,
+  filter: AccountEnvFilter,
+  reviewNames: ReadonlySet<string>,
+): boolean {
+  if (filter === "configured") return entry.configured;
+  if (filter === "empty") return !entry.configured;
+  if (filter === "review") return reviewNames.has(entry.name);
+  return true;
+}
+
+export type AccountEnvFilter = "all" | "configured" | "empty" | "review";
+
+export function accountEnvReviewFindings(settings?: AccountSettingsResponse): AccountEnvReviewFinding[] {
+  if (!settings) return [];
+  const findings: AccountEnvReviewFinding[] = [];
+  const configured = new Set(settings.env.filter((entry) => entry.configured).map((entry) => entry.name));
+  settings.env.forEach((entry) => {
+    if (!entry.configured) {
+      findings.push({
+        kind: "empty",
+        name: entry.name,
+        detail: "saved with an empty value",
+      });
+    }
+  });
+  const hasGoogleApi = configured.has("GOOGLE_API_KEY") || configured.has("GOOGLE_CSE_API_KEY");
+  const hasGoogleCx = configured.has("GOOGLE_CSE_ID") || configured.has("GOOGLE_SEARCH_ENGINE_ID");
+  if (hasGoogleApi && !hasGoogleCx) {
+    const name = configured.has("GOOGLE_API_KEY") ? "GOOGLE_API_KEY" : "GOOGLE_CSE_API_KEY";
+    findings.push({
+      kind: "incomplete",
+      name,
+      detail: "Google search also needs GOOGLE_CSE_ID or GOOGLE_SEARCH_ENGINE_ID",
+      related: ["GOOGLE_CSE_ID", "GOOGLE_SEARCH_ENGINE_ID"],
+    });
+  }
+  if (hasGoogleCx && !hasGoogleApi) {
+    const name = configured.has("GOOGLE_CSE_ID") ? "GOOGLE_CSE_ID" : "GOOGLE_SEARCH_ENGINE_ID";
+    findings.push({
+      kind: "incomplete",
+      name,
+      detail: "Google search also needs GOOGLE_API_KEY or GOOGLE_CSE_API_KEY",
+      related: ["GOOGLE_API_KEY", "GOOGLE_CSE_API_KEY"],
+    });
+  }
+  return findings;
+}
+
+export function accountEnvReviewNames(settings?: AccountSettingsResponse): Set<string> {
+  return new Set(accountEnvReviewFindings(settings).flatMap((finding) => [finding.name, ...(finding.related ?? [])]));
 }
 
 export function accountConfigReview(settings: AccountSettingsResponse): AccountConfigReview {

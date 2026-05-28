@@ -4,7 +4,10 @@ import {
   accountConfigEvidenceText,
   accountConfigReview,
   accountConfigSummary,
+  accountEnvMatchesFilter,
   accountEnvMatchesQuery,
+  accountEnvReviewFindings,
+  accountEnvReviewNames,
   accountGitAccessVerifyRequest,
   sshAccessDescription,
   sshPathDisplay,
@@ -86,5 +89,30 @@ describe("accountConfig view helpers", () => {
     });
     expect(sshStorageDescription(settings.ssh)).toBe("Storage path not reported by this server build.");
     expect(accountConfigEvidenceText(settings)).toContain("SSH issue: could not derive public key");
+  });
+
+  it("finds environment variables that need runtime config review", () => {
+    const settings = {
+      env: [
+        { name: "GOOGLE_API_KEY", configured: true },
+        { name: "EMPTY_TOKEN", configured: false },
+        { name: "GITHUB_TOKEN", configured: true },
+      ],
+      ssh: { exists: false },
+    };
+
+    expect(accountEnvReviewFindings(settings)).toEqual([
+      { kind: "empty", name: "EMPTY_TOKEN", detail: "saved with an empty value" },
+      {
+        kind: "incomplete",
+        name: "GOOGLE_API_KEY",
+        detail: "Google search also needs GOOGLE_CSE_ID or GOOGLE_SEARCH_ENGINE_ID",
+        related: ["GOOGLE_CSE_ID", "GOOGLE_SEARCH_ENGINE_ID"],
+      },
+    ]);
+    expect(accountEnvReviewNames(settings)).toEqual(new Set(["EMPTY_TOKEN", "GOOGLE_API_KEY", "GOOGLE_CSE_ID", "GOOGLE_SEARCH_ENGINE_ID"]));
+    expect(accountEnvMatchesFilter(settings.env[0], "configured", accountEnvReviewNames(settings))).toBe(true);
+    expect(accountEnvMatchesFilter(settings.env[1], "empty", accountEnvReviewNames(settings))).toBe(true);
+    expect(accountEnvMatchesFilter(settings.env[2], "review", accountEnvReviewNames(settings))).toBe(false);
   });
 });
