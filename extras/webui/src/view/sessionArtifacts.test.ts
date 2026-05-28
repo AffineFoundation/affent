@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionArtifacts, sessionArtifactLabel } from "./sessionArtifacts";
+import { artifactEvidenceDraft, artifactEvidenceText, buildSessionArtifacts, sessionArtifactLabel } from "./sessionArtifacts";
 
 describe("sessionArtifacts", () => {
   it("deduplicates artifacts across turns and summarizes their size", () => {
@@ -73,7 +73,18 @@ describe("sessionArtifacts", () => {
       { id: 8, type: "turn.end", data: { turn_id: "t2", reason: "completed" } },
     ]);
 
-    expect(buildSessionArtifacts(session)).toHaveLength(1);
+    const artifacts = buildSessionArtifacts(session);
+    expect(artifacts).toHaveLength(1);
     expect(sessionArtifactLabel(session)).toBe("1 file (8 KiB, 1 MiB omitted)");
+    expect(artifactEvidenceText(artifacts[0])).toBe(
+      [
+        "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
+        "Source: web_fetch",
+        "Size: (8 KiB, cap 256 KiB, 1 MiB omitted)",
+        "Full output available as artifact",
+        "Summary: saved output",
+      ].join("\n"),
+    );
+    expect(artifactEvidenceDraft(artifacts[0])).toContain("Use this artifact in the next step:\nArtifact evidence");
   });
 });

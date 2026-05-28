@@ -111,6 +111,36 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "trace")).toMatchObject({ badge: "1", detail: "qwen-small" });
   });
 
+  it("uses current session trace evidence before runtime diagnostics when trace is loaded", () => {
+    const items = buildWorkbenchNavItems({
+      overview,
+      changes: { summary: "No changed files", detail: "No changes", files: [] },
+      run: { summary: "No commands", detail: "No commands", commands: [] },
+      files: { summary: "No files", detail: "No files", items: [] },
+      workspace: { hasData: false, summary: "No workspace evidence", shortStatus: "No workspace evidence", detail: "No workspace binding or command cwd recorded." },
+      trace: {
+        summary: "12 trace entries",
+        detail: "5 grouped records · schema v1",
+        eventCount: 12,
+        recordCount: 5,
+        metadataCount: 1,
+        unknownCount: 0,
+        schemaVersion: 1,
+      },
+      runtimeState: { state: "ready", stats: { model: "qwen-small", active_sessions: 1, running_turns: 0 } },
+      configState: { state: "idle" },
+      memoryState: { state: "idle" },
+      skillsState: { state: "idle" },
+    });
+
+    expect(items.find((item) => item.key === "trace")).toMatchObject({
+      scope: "current",
+      badge: "12",
+      detail: "5 records · schema v1",
+    });
+    expect(items.filter((item) => item.key === "trace")).toHaveLength(1);
+  });
+
   it("maps attention targets to Workbench tabs", () => {
     expect(workbenchTabFromAttention("workspace")).toBe("workspace");
     expect(workbenchTabFromAttention("automation")).toBe("automation");

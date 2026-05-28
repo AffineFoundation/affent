@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRun } from "./sessionRun";
+import { buildSessionRun, runCommandDraft, runCommandEvidenceText, runCommandMeta } from "./sessionRun";
 
 describe("buildSessionRun", () => {
   it("summarizes shell commands with failure recovery and artifacts", () => {
@@ -34,6 +34,21 @@ describe("buildSessionRun", () => {
       next: "update payment route then rerun",
       artifactPath: ".affent/artifacts/tool-results/test.txt",
     });
+    expect(runCommandMeta(run.commands[0])).toBe("failed · exit 1 · 1.48s · turn 1");
+    expect(runCommandEvidenceText(run.commands[0])).toBe(
+      [
+        "Run evidence for npm test -- checkout.spec.ts",
+        "Status: failed",
+        "Exit: 1",
+        "Duration: 1.48s",
+        "Turn: 1",
+        "Working directory: extras/webui",
+        "Output: checkout spec failed",
+        "Next: update payment route then rerun",
+        "Output artifact: .affent/artifacts/tool-results/test.txt",
+      ].join("\n"),
+    );
+    expect(runCommandDraft(run.commands[0])).toContain("Run evidence for npm test -- checkout.spec.ts");
   });
 
   it("keeps non-shell actions out of Run", () => {

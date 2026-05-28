@@ -1,10 +1,19 @@
 import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
 import type { SessionChangesView } from "../view/sessionChanges";
+import type { UseAsDraft } from "../view/draftSource";
 import type { SessionFilesView } from "../view/sessionFiles";
 import type { SessionRunView } from "../view/sessionRun";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
+import {
+  buildWorkbenchContextEvidence,
+  workbenchContextEvidenceDraft,
+  workbenchContextEvidenceText,
+  workbenchContextStatusDetail,
+  workbenchContextSummary,
+} from "../view/workbenchContext";
 import type { WorkbenchAttention } from "../view/workbenchAttention";
 import type { WorkbenchTab } from "../view/workbenchNav";
+import { CopyButton } from "./CopyButton";
 import { RunDetails } from "./RunDetails";
 
 export function WorkbenchContextPanel({
@@ -18,6 +27,7 @@ export function WorkbenchContextPanel({
   automationTitle,
   automationDetail,
   onSelectSection,
+  onUseAsDraft,
   defaultOpen = false,
 }: {
   overview: SessionOverview;
@@ -30,13 +40,15 @@ export function WorkbenchContextPanel({
   automationTitle?: string;
   automationDetail?: string;
   onSelectSection?: (tab: WorkbenchTab) => void;
+  onUseAsDraft?: UseAsDraft;
   defaultOpen?: boolean;
 }) {
   const metrics = displaySessionOverviewMetrics(overview.metrics);
-  const summary = contextSummary(overview, hasSelectedSession);
+  const summary = workbenchContextSummary(overview, hasSelectedSession);
   const detail = hasSelectedSession ? overview.headline : "Start or open a chat";
-  const statusDetail = attention?.target === "context" ? attention.detail : overview.detail;
-  const evidence = contextEvidence({ workspace, changes, files, run });
+  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, files, run, automationTitle, automationDetail };
+  const statusDetail = workbenchContextStatusDetail(contextInput);
+  const evidence = buildWorkbenchContextEvidence(contextInput);
 
   return (
     <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
@@ -63,6 +75,16 @@ export function WorkbenchContextPanel({
           summaryLabel="Context metrics"
           inlineLimit={2}
         />
+        {hasSelectedSession ? (
+          <span className="workbench-context-actions">
+            <CopyButton label="Copy context" value={workbenchContextEvidenceText(contextInput)} className="ghost-action" />
+            {onUseAsDraft ? (
+              <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workbenchContextEvidenceDraft(contextInput), "evidence")}>
+                Use context as draft
+              </button>
+            ) : null}
+          </span>
+        ) : null}
         {evidence.length > 0 ? (
           <div className="workbench-context-evidence" data-testid="workbench-context-evidence">
             {evidence.map((item) => (
@@ -97,71 +119,4 @@ export function WorkbenchContextPanel({
       </div>
     </details>
   );
-}
-
-function contextSummary(overview: SessionOverview, hasSelectedSession: boolean): string {
-  if (overview.active) return overview.stateLabel;
-  if (!hasSelectedSession) return "Fresh task";
-  if (overview.tone === "error") return "Needs attention";
-  if (overview.tone === "warning") return "Review needed";
-  return overview.stateLabel || "Chat ready";
-}
-
-interface ContextEvidenceItem {
-  target: WorkbenchTab;
-  label: string;
-  summary: string;
-  detail: string;
-  tone?: "warning" | "error";
-}
-
-function contextEvidence({
-  workspace,
-  changes,
-  files,
-  run,
-}: {
-  workspace?: SessionWorkspaceView;
-  changes?: SessionChangesView;
-  files?: SessionFilesView;
-  run?: SessionRunView;
-}): ContextEvidenceItem[] {
-  const items: ContextEvidenceItem[] = [];
-  if (workspace?.hasData) {
-    items.push({
-      target: "workspace",
-      label: "Workspace",
-      summary: workspace.summary,
-      detail: workspace.detail,
-      tone: workspace.tone,
-    });
-  }
-  if (changes && changes.files.length > 0) {
-    items.push({
-      target: "changes",
-      label: "Changes",
-      summary: changes.summary,
-      detail: changes.detail,
-      tone: changes.tone,
-    });
-  }
-  if (files && files.items.length > 0) {
-    items.push({
-      target: "files",
-      label: "Files",
-      summary: files.summary,
-      detail: files.detail,
-      tone: files.tone,
-    });
-  }
-  if (run && run.commands.length > 0) {
-    items.push({
-      target: "run",
-      label: "Run",
-      summary: run.summary,
-      detail: run.detail,
-      tone: run.tone,
-    });
-  }
-  return items;
 }

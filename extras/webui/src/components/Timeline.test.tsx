@@ -765,7 +765,8 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("execution-tree")).toBeNull();
 
     await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Use artifact as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith("Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt", "artifact");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt"), "artifact");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Source: cat big.log"), "artifact");
 
     await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");

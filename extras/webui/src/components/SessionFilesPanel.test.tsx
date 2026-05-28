@@ -25,12 +25,17 @@ describe("SessionFilesPanel", () => {
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy evidence" })[0]);
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"));
+
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file as draft" })[0]);
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Review this file in the next step: src/payments.ts", "file_evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"), "file_evidence");
   });
 
   it("keeps the panel folded by default", () => {

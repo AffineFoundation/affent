@@ -59,6 +59,7 @@ import { SessionFilesPanel } from "./components/SessionFilesPanel";
 import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
 import { SessionWorkspacePanel } from "./components/SessionWorkspacePanel";
+import { SessionTracePanel } from "./components/SessionTracePanel";
 import { WorkbenchEmpty, WorkbenchPanel } from "./components/WorkbenchPanel";
 import { WorkspaceStatusPill } from "./components/WorkspaceStatusPill";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
@@ -77,6 +78,7 @@ import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
+import { buildSessionTrace } from "./view/sessionTrace";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
 import {
@@ -177,6 +179,7 @@ export function App() {
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | undefined>();
   const [updatingScheduleId, setUpdatingScheduleId] = useState<string | undefined>();
   const [workbenchOpen, setWorkbenchOpen] = useState(false);
+  const [workbenchInspectorOpen, setWorkbenchInspectorOpen] = useState(false);
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("context");
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -300,10 +303,12 @@ export function App() {
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
   const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
+  const sessionTrace = useMemo(() => buildSessionTrace(session), [session]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
-  const showSessionNav = !demoActive && sessions.length > 0;
+  const hasSessionNav = !demoActive && sessions.length > 0;
+  const showSessionNav = hasSessionNav && !workbenchOpen;
   const compactNav = demoActive || !showSessionNav;
-  const showHeaderNewChat = !demoActive && !showSessionNav;
+  const showHeaderNewChat = !demoActive && !hasSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
   const showAutomationContext = showLoopContext || showScheduleContext;
   const automationContext = showAutomationContext
@@ -1241,6 +1246,10 @@ export function App() {
 
   function handleUseAsDraft(content: string, source?: DraftSource) {
     setComposerDraft((current) => ({ id: (current?.id ?? 0) + 1, content, source }));
+    if (workbenchOpen && shouldReturnToChatForDraft()) {
+      setWorkbenchOpen(false);
+      setWorkbenchInspectorOpen(false);
+    }
   }
 
   async function handleOpenArtifact(path: string) {
@@ -1363,6 +1372,7 @@ export function App() {
         onSetEnv={handleSetAccountEnv}
         onDeleteEnv={handleDeleteAccountEnv}
         onEnsureSSHKey={handleEnsureAccountSSHKey}
+        onUseAsDraft={handleUseAsDraft}
       />
     );
   }
@@ -1376,6 +1386,7 @@ export function App() {
         error={memoryState.state === "error" ? memoryState.error : undefined}
         noSession={memoryState.state === "empty"}
         defaultOpen={defaultOpen}
+        onUseAsDraft={handleUseAsDraft}
       />
     );
   }
@@ -1390,6 +1401,7 @@ export function App() {
         installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
         onReadSkill={handleReadSkill}
         onInstallSkill={handleInstallSkill}
+        onUseAsDraft={handleUseAsDraft}
       />
     );
   }
@@ -1400,6 +1412,7 @@ export function App() {
     run: sessionRun,
     files: sessionFiles,
     workspace: sessionWorkspace,
+    trace: sessionTrace,
     automation: automationContext,
     attention: workbenchAttention,
     runtimeState: runtimeStatsState,
@@ -1409,19 +1422,21 @@ export function App() {
     latestMemoryUpdate,
   });
   const activeWorkbenchNavItem = workbenchNavItems.find((item) => item.key === workbenchTab);
-  const showWorkbenchInspector = workbenchOpen;
+  const showWorkbenchInspector = workbenchOpen && workbenchInspectorOpen;
 
   useEffect(() => {
     if (!workbenchNavItems.some((item) => item.key === workbenchTab)) setWorkbenchTab("context");
   }, [workbenchNavItems, workbenchTab]);
 
-  function openWorkbench(tab: WorkbenchTab = "context") {
+  function openWorkbench(tab: WorkbenchTab = "context", inspect = false) {
     setWorkbenchTab(tab);
     setWorkbenchOpen(true);
+    setWorkbenchInspectorOpen(inspect);
   }
 
   function handleSelectWorkbenchTab(tab: WorkbenchTab) {
     setWorkbenchTab(tab);
+    setWorkbenchInspectorOpen(true);
   }
 
   function renderWorkbenchTab() {
@@ -1439,6 +1454,7 @@ export function App() {
             automationTitle={automationContext?.title}
             automationDetail={automationContext?.detail}
             onSelectSection={handleSelectWorkbenchTab}
+            onUseAsDraft={handleUseAsDraft}
             defaultOpen
           />
           {sessionArtifacts.length > 0 ? (
@@ -1501,7 +1517,18 @@ export function App() {
     if (workbenchTab === "memory") return renderMemoryPanel(true);
     if (workbenchTab === "skills") return renderSkillsPanel(true);
     if (workbenchTab === "config") return renderAccountSettingsPanel(true);
-    return renderRuntimeStatsPanel(true);
+    return (
+      <>
+        <SessionTracePanel
+          trace={sessionTrace}
+          events={session.events}
+          defaultOpen
+          onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
+        />
+        {renderRuntimeStatsPanel(sessionTrace.eventCount === 0)}
+      </>
+    );
   }
 
   function renderWorkbenchInspector() {
@@ -1513,7 +1540,7 @@ export function App() {
             <h2>{activeWorkbenchNavItem?.label ?? "Workbench"}</h2>
             <p>{activeWorkbenchNavItem?.detail ?? "Detailed evidence and controls"}</p>
           </div>
-          <button type="button" className="node-action" onClick={() => setWorkbenchOpen(false)}>
+          <button type="button" className="node-action" onClick={() => setWorkbenchInspectorOpen(false)}>
             Back to chat
           </button>
         </header>
@@ -1560,7 +1587,7 @@ export function App() {
           <span className="connection-pill" data-state={status.state} data-testid="connection-pill" title={status.detail ?? status.label}>
             {connectionLabel}
           </span>
-          <WorkspaceStatusPill workspace={sessionWorkspace} onOpen={() => openWorkbench("workspace")} />
+          <WorkspaceStatusPill workspace={sessionWorkspace} onOpen={() => openWorkbench("workspace", true)} />
           <span className="spacer" />
           <button type="button" className="mobile-chrome-toggle" aria-label="Hide top controls" onClick={() => setMobileTopbarHidden(true)}>
             <span className="mobile-collapse-icon" aria-hidden="true">
@@ -1585,6 +1612,7 @@ export function App() {
             onClick={() => {
               if (workbenchOpen) {
                 setWorkbenchOpen(false);
+                setWorkbenchInspectorOpen(false);
               } else {
                 openWorkbench(workbenchAttention ? workbenchTabFromAttention(workbenchAttention.target) : workbenchTab);
               }
@@ -1717,7 +1745,10 @@ export function App() {
               navItems={workbenchNavItems}
               activeTab={workbenchTab}
               onSelectTab={handleSelectWorkbenchTab}
-              onClose={() => setWorkbenchOpen(false)}
+              onClose={() => {
+                setWorkbenchOpen(false);
+                setWorkbenchInspectorOpen(false);
+              }}
             />
           ) : null}
         </div>
@@ -1739,6 +1770,12 @@ function initialTheme(): ThemeMode {
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
+}
+
+function shouldReturnToChatForDraft(): boolean {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(max-width: 768px)").matches;
 }
 
 function webLoopActivationPrompt(goal: string): string {

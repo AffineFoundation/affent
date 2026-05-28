@@ -1,5 +1,5 @@
 import type { UseAsDraft } from "../view/draftSource";
-import type { SessionChangedFile, SessionChangesView } from "../view/sessionChanges";
+import { changedFileDiffText, changedFileDraft, type SessionChangedFile, type SessionChangesView } from "../view/sessionChanges";
 import { CopyButton } from "./CopyButton";
 
 export function SessionChangesPanel({
@@ -33,13 +33,16 @@ export function SessionChangesPanel({
                 </div>
                 <span className="session-evidence-actions">
                   <CopyButton label="Copy path" value={file.path} className="ghost-action" />
+                  {file.diffPreview && file.diffPreview.length > 0 ? (
+                    <CopyButton label="Copy diff" value={changedFileDiffText(file)} className="ghost-action" />
+                  ) : null}
                   {file.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(file.artifactPath ?? "")}>
                       Open evidence
                     </button>
                   ) : null}
                   {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(changeDraft(file), "changed_file")}>
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(changedFileDraft(file), "changed_file")}>
                       Adjust
                     </button>
                   ) : null}
@@ -78,8 +81,4 @@ function statusLabel(status: SessionChangedFile["status"]): string {
   if (status === "running") return "pending";
   if (status === "failed") return "failed";
   return "changed";
-}
-
-function changeDraft(file: SessionChangedFile): string {
-  return `Review and adjust this changed file: ${file.path}`;
 }

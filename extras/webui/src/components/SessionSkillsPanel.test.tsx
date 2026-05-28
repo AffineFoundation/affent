@@ -6,6 +6,9 @@ import { SessionSkillsPanel } from "./SessionSkillsPanel";
 describe("SessionSkillsPanel", () => {
   it("lists skill titles and summaries, then loads full content on expand", async () => {
     const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const onReadSkill = vi.fn(async () => ({
       name: "coding_repair_workflow",
       description: "Repair code by reproducing failures first.",
@@ -31,6 +34,7 @@ describe("SessionSkillsPanel", () => {
         installEnabled
         onReadSkill={onReadSkill}
         onInstallSkill={vi.fn()}
+        onUseAsDraft={onUseAsDraft}
       />,
     );
 
@@ -47,6 +51,13 @@ describe("SessionSkillsPanel", () => {
     expect(onReadSkill).toHaveBeenCalledWith("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Source: embed:skill");
     expect(await screen.findByText(/Reproduce first/)).toBeInTheDocument();
+
+    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Copy skill evidence" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Skill evidence for coding_repair_workflow"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Loaded content:"));
+
+    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Use skill as draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("apply, update, or replace"), "skill");
   });
 
   it("submits a manually entered skill", async () => {

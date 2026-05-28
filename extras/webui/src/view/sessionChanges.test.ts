@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionChanges } from "./sessionChanges";
+import { buildSessionChanges, changedFileDiffText, changedFileDraft } from "./sessionChanges";
 
 describe("buildSessionChanges", () => {
   it("summarizes write and edit tool calls from reducer state", () => {
@@ -145,6 +145,70 @@ describe("buildSessionChanges", () => {
       deletions: 1,
     });
     expect(file.diffPreview?.[0]).toMatchObject({ kind: "meta", text: "diff --git a/src/app.ts b/src/app.ts" });
+  });
+
+  it("shows diff-backed completed changes before artifact-only changes", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "src/checkout.ts" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "edit",
+          exit_code: 0,
+          result_summary: "Updated checkout validation",
+          result: [
+            "Updated checkout validation",
+            "diff --git a/src/checkout.ts b/src/checkout.ts",
+            "--- a/src/checkout.ts",
+            "+++ b/src/checkout.ts",
+            "@@ -1 +1 @@",
+            "-return false;",
+            "+return true;",
+          ].join("\n"),
+        },
+      },
+      { id: 4, type: "tool.request", data: { turn_id: "t1", call_id: "write", tool: "write_file", args: { path: "tests/checkout.spec.ts" } } },
+      { id: 5, type: "tool.result", data: { call_id: "write", exit_code: 0, result_summary: "Wrote checkout spec", result: "Wrote checkout spec" } },
+    ]);
+
+    expect(buildSessionChanges(session).files.map((file) => file.path)).toEqual([
+      "src/checkout.ts",
+      "tests/checkout.spec.ts",
+    ]);
+  });
+
+  it("builds copyable diff and adjustment draft text from view data", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "src/checkout.ts" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "edit",
+          exit_code: 0,
+          result_summary: "Updated checkout validation",
+          result: [
+            "Updated checkout validation",
+            "diff --git a/src/checkout.ts b/src/checkout.ts",
+            "--- a/src/checkout.ts",
+            "+++ b/src/checkout.ts",
+            "@@ -1 +1 @@",
+            "-return false;",
+            "+return true;",
+          ].join("\n"),
+        },
+      },
+    ]);
+
+    const [file] = buildSessionChanges(session).files;
+
+    expect(changedFileDiffText(file)).toContain("Diff for src/checkout.ts");
+    expect(changedFileDiffText(file)).toContain("+return true;");
+    expect(changedFileDraft(file)).toContain("Path: src/checkout.ts");
+    expect(changedFileDraft(file)).toContain("+return true;");
   });
 
   it("prioritizes failed and running changes before completed edits", () => {

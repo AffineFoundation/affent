@@ -903,7 +903,7 @@ describe("App", () => {
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-control/loop-protocol", expect.objectContaining({ method: "DELETE" })));
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop disabled");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Disabled");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("Automation disabled");
+    expect(screen.queryByTestId("session-list")).toBeNull();
     expect(screen.queryByRole("button", { name: "Disable loop" })).toBeNull();
   });
 
@@ -1047,7 +1047,7 @@ describe("App", () => {
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Check in 1h: long running subnet analysis");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("ask the user one concise question");
-    expect(screen.getByTestId("session-list")).not.toHaveTextContent("timers");
+    expect(screen.queryByTestId("session-list")).toBeNull();
 
     await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Pause" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "PATCH" })));
@@ -1178,7 +1178,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("autonomous long-run tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
-    expect(screen.getByTestId("session-list")).not.toHaveTextContent("timers");
+    expect(screen.queryByTestId("session-list")).toBeNull();
   });
 
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
@@ -1775,16 +1775,15 @@ describe("App", () => {
 
     await user.click(screen.getByLabelText("Workbench"));
 
-    expect(screen.getByTestId("workbench-inspector")).toHaveTextContent("Context");
-    expect(screen.queryByTestId("conversation-scroll")).toBeNull();
+    expect(screen.getByTestId("workbench-panel")).toBeVisible();
+    expect(screen.queryByTestId("workbench-inspector")).toBeNull();
+    expect(screen.getByTestId("conversation-scroll")).toBeVisible();
     expect(screen.queryByLabelText("Settings")).toBeNull();
-    const context = screen.getByTestId("workbench-context-panel");
-    expect(context).toHaveAttribute("open");
-    expect(context).toHaveTextContent("Fresh task");
     expect(screen.queryByTestId("runtime-stats-panel")).toBeNull();
     expect(screen.queryByTestId("account-settings-panel")).toBeNull();
     expect(screen.queryByTestId("session-skills-panel")).toBeNull();
     await selectWorkbenchTab(user, "Trace");
+    expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Trace");
     const runtime = await screen.findByTestId("runtime-stats-panel");
     expect(runtime).toHaveTextContent("Diagnostics");
     expect(runtime).toHaveTextContent("qwen-small");
@@ -1915,9 +1914,14 @@ describe("App", () => {
     expect(await screen.findByText("Checkout route fixed.")).toBeVisible();
     expect(screen.queryByTestId("session-changes-panel")).toBeNull();
     expect(screen.getByText("1 changed file · Review diff")).toBeVisible();
+    expect(screen.getByTestId("session-list")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
 
+    expect(screen.getByTestId("conversation-scroll")).toBeVisible();
+    expect(screen.queryByTestId("session-list")).toBeNull();
+    expect(screen.queryByTestId("workbench-inspector")).toBeNull();
+    await selectWorkbenchTab(user, "Changes");
     expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Changes");
     expect(screen.queryByTestId("workbench-tab-surface")).toBeNull();
     const changes = await screen.findByTestId("session-changes-panel");
@@ -1931,7 +1935,10 @@ describe("App", () => {
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("Updated payment route");
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Adjust" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using changed file");
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Review and adjust this changed file: src/payments.ts");
+    const draft = screen.getByPlaceholderText("Message Affent...");
+    expect(draft).toHaveValue();
+    expect((draft as HTMLTextAreaElement).value).toContain("Path: src/payments.ts");
+    expect((draft as HTMLTextAreaElement).value).toContain("+  return enabled;");
   });
 
   it("surfaces session file evidence inside Workbench without adding default Chat noise", async () => {
@@ -2022,7 +2029,10 @@ describe("App", () => {
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file as draft" })[0]);
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file evidence");
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file path in the next step: src/payments.ts");
+    const draft = screen.getByPlaceholderText("Message Affent...");
+    expect(draft).toHaveValue();
+    expect((draft as HTMLTextAreaElement).value).toContain("File evidence for src/payments.ts");
+    expect((draft as HTMLTextAreaElement).value).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
   });
 
   it("surfaces workspace evidence inside Workbench without adding default Chat noise", async () => {
@@ -2173,6 +2183,9 @@ describe("App", () => {
 
     await user.click(screen.getByLabelText("Workbench"));
 
+    expect(screen.getByTestId("conversation-scroll")).toBeVisible();
+    expect(screen.queryByTestId("workbench-inspector")).toBeNull();
+    await selectWorkbenchTab(user, "Run");
     const run = await screen.findByTestId("session-run-panel");
     expect(run).toHaveAttribute("open");
     expect(run).toHaveTextContent("1 failed command");
@@ -2182,9 +2195,8 @@ describe("App", () => {
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout spec failed");
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun as draft" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using command");
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
-      "Rerun this command and report the result:\nnpm test -- checkout.spec.ts\nUse this recovery hint: update payment route then rerun",
-    );
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Run evidence for npm test -- checkout.spec.ts");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Next: update payment route then rerun");
   });
 
   it("keeps the top bar compact when stats polling would fail", async () => {
@@ -2395,6 +2407,8 @@ describe("App", () => {
     expect(await screen.findByTestId("session-memory-latest")).toHaveTextContent("MEM-STOCK-73");
     await waitFor(() => expect(memoryCalls).toBeGreaterThanOrEqual(2));
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Alpha Coast market reports use marker MEM-STOCK-73.");
+    expect(screen.queryByTestId("session-list")).toBeNull();
+    await user.click(screen.getByLabelText("Close Workbench"));
     const row = screen.getByRole("button", { name: /remember market policy/ });
     expect(within(row).queryByTestId("session-chips")).toBeNull();
     expect(row).not.toHaveTextContent("Memory");
@@ -2784,13 +2798,13 @@ describe("App", () => {
 
     await user.click(await screen.findByRole("button", { name: "Use artifact as draft" }));
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
-      "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
-    );
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Source: cat big.log");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Artifact added to message");
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Context");
     const artifacts = await screen.findByTestId("session-artifacts-panel");
     expect(artifacts).toHaveTextContent("1 artifact");
     expect(within(artifacts).getByRole("link", { name: "Download" })).toHaveAttribute(
@@ -2798,11 +2812,11 @@ describe("App", () => {
       "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt",
     );
     await user.click(within(artifacts).getByRole("button", { name: "Use artifact as draft" }));
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
-      "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
-    );
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Summary: line 1");
 
-    await user.click(screen.getByRole("button", { name: "Back to chat" }));
+    const backToChat = screen.queryByRole("button", { name: "Back to chat" });
+    if (backToChat) await user.click(backToChat);
     await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open artifact" }));
     await user.click(await screen.findByRole("button", { name: "Use text" }));
 

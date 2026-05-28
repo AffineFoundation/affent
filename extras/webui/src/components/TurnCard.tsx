@@ -5,6 +5,7 @@ import type { ToolCallState, TurnError, TurnState } from "../store/sessionState"
 import type { UseAsDraft } from "../view/draftSource";
 import { summarizeUserError } from "../view/errorSummary";
 import { buildExecutionTree, searchableExecutionNodeText } from "../view/executionTree";
+import { artifactEvidenceDraft } from "../view/sessionArtifacts";
 import { buildTurnActivity, type TurnActivityBriefRow, type TurnActivityEvidence, type TurnActivityNode, type TurnActivityView } from "../view/turnActivity";
 import { buildTurnBoundaryView } from "../view/turnBoundary";
 import { buildTurnWorkSummaryWithOptions, selectHeadlineWorkSummaryItems, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
@@ -1289,7 +1290,7 @@ function ArtifactStrip({
           </div>
           <div className="artifact-pill-actions">
             {onUseAsDraft ? (
-              <button type="button" className="artifact-pill-action" onClick={() => onUseAsDraft(artifactDraft(artifact.path), "artifact")}>
+              <button type="button" className="artifact-pill-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
                 Use artifact as draft
               </button>
             ) : null}
@@ -1303,10 +1304,6 @@ function ArtifactStrip({
       ))}
     </div>
   );
-}
-
-function artifactDraft(path: string): string {
-  return `Use this artifact in the next step: ${path}`;
 }
 
 function ContinuationPrompt({ turn, onUseAsDraft }: { turn: TurnState; onUseAsDraft?: UseAsDraft }) {

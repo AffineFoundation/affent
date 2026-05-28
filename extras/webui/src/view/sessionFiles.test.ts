@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionFiles } from "./sessionFiles";
+import { buildSessionFiles, fileEvidenceDraft, fileEvidenceText } from "./sessionFiles";
 
 describe("buildSessionFiles", () => {
   it("summarizes read, list, and changed file evidence from reducer state", () => {
@@ -70,6 +70,32 @@ describe("buildSessionFiles", () => {
       summary: "No file evidence",
       detail: "No read, list, write, or edit actions in this chat.",
     });
+  });
+
+  it("builds reusable evidence and draft text from file view data", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "read", tool: "read_file", args: { path: "src/payments.ts" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "read",
+          exit_code: 0,
+          result_summary: "checkout route handler\nNext: rerun checkout tests",
+          result: "checkout route handler\nNext: rerun checkout tests",
+          result_artifact_path: ".affent/artifacts/tool-results/read.txt",
+        },
+      },
+    ]);
+
+    const [item] = buildSessionFiles(session).items;
+
+    expect(fileEvidenceText(item)).toContain("File evidence for src/payments.ts");
+    expect(fileEvidenceText(item)).toContain("Detail: checkout route handler");
+    expect(fileEvidenceText(item)).toContain("Next: rerun checkout tests");
+    expect(fileEvidenceDraft(item)).toContain("Use this file evidence in the next step");
+    expect(fileEvidenceDraft(item)).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
   });
 
   it("prioritizes failed, running, and changed files before passive reads", () => {

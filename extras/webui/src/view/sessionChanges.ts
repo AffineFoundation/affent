@@ -44,7 +44,13 @@ export function buildSessionChanges(session: SessionState): SessionChangesView {
     }
   });
   const files = [...byPath.values()]
-    .sort((a, b) => changePriority(a) - changePriority(b) || b.turnNumber - a.turnNumber || b.sequence - a.sequence || a.path.localeCompare(b.path))
+    .sort((a, b) =>
+      changePriority(a) - changePriority(b)
+      || changeEvidencePriority(a) - changeEvidencePriority(b)
+      || b.turnNumber - a.turnNumber
+      || b.sequence - a.sequence
+      || a.path.localeCompare(b.path)
+    )
     .map(({ sequence: _sequence, ...file }) => file);
   const failed = files.filter((file) => file.status === "failed").length;
   const running = files.filter((file) => file.status === "running").length;
@@ -57,10 +63,27 @@ export function buildSessionChanges(session: SessionState): SessionChangesView {
   };
 }
 
+export function changedFileDiffText(file: SessionChangedFile): string {
+  if (!file.diffPreview || file.diffPreview.length === 0) return "";
+  const lines = [`Diff for ${file.path}`, ...file.diffPreview.map((line) => line.text)];
+  if (file.diffTruncated) lines.push("Diff preview truncated");
+  return lines.join("\n");
+}
+
+export function changedFileDraft(file: SessionChangedFile): string {
+  const diff = changedFileDiffText(file);
+  if (!diff) return `Review and adjust this changed file: ${file.path}`;
+  return `Review and adjust this changed file:\nPath: ${file.path}\n\n${diff}`;
+}
+
 function changePriority(file: SessionChangedFile): number {
   if (file.status === "failed") return 0;
   if (file.status === "running") return 1;
   return 2;
+}
+
+function changeEvidencePriority(file: SessionChangedFile): number {
+  return file.diffPreview && file.diffPreview.length > 0 ? 0 : 1;
 }
 
 function changeFromCall(call: ToolCallState, turnNumber: number, sequence: number): SessionChangedFileInternal | undefined {

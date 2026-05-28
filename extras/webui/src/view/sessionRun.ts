@@ -50,10 +50,57 @@ export function buildSessionRun(session: SessionState): SessionRunView {
   };
 }
 
+export function runCommandMeta(command: SessionRunCommand): string {
+  const parts = [
+    runStatusLabel(command.status),
+    command.exitCode != null ? `exit ${command.exitCode}` : undefined,
+    command.durationMs != null ? formatDuration(command.durationMs) : undefined,
+    `turn ${command.turnNumber}`,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+export function runCommandEvidenceText(command: SessionRunCommand): string {
+  const lines = [
+    `Run evidence for ${command.command}`,
+    `Status: ${runStatusLabel(command.status)}`,
+    command.exitCode != null ? `Exit: ${command.exitCode}` : undefined,
+    command.durationMs != null ? `Duration: ${formatDuration(command.durationMs)}` : undefined,
+    `Turn: ${command.turnNumber}`,
+    command.cwd ? `Working directory: ${command.cwd}` : undefined,
+    command.detail ? `Output: ${command.detail}` : undefined,
+    command.next ? `Next: ${command.next}` : undefined,
+    command.artifactPath ? `Output artifact: ${command.artifactPath}` : undefined,
+  ];
+  return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
+
+export function runCommandDraft(command: SessionRunCommand): string {
+  const lines = [
+    "Rerun or recover from this command, then report the result:",
+    command.command,
+    "",
+    runCommandEvidenceText(command),
+  ];
+  return lines.join("\n");
+}
+
 function commandPriority(command: SessionRunCommand): number {
   if (command.status === "failed") return 0;
   if (command.status === "running") return 1;
   return 2;
+}
+
+function runStatusLabel(status: SessionRunStatus): string {
+  if (status === "running") return "running";
+  if (status === "failed") return "failed";
+  return "passed";
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  const s = ms / 1000;
+  return `${s.toFixed(s < 10 ? 2 : 1)}s`;
 }
 
 function commandFromCall(call: ToolCallState, turnNumber: number, sequence: number): SessionRunCommandInternal | undefined {

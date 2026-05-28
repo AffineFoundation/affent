@@ -1,5 +1,13 @@
 import { useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
+import type { UseAsDraft } from "../view/draftSource";
+import {
+  accountConfigDetail,
+  accountConfigDraft,
+  accountConfigEvidenceText,
+  accountConfigSummary,
+  sshAccessDescription,
+} from "../view/accountConfig";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
 
@@ -13,6 +21,7 @@ export function AccountSettingsPanel({
   onSetEnv,
   onDeleteEnv,
   onEnsureSSHKey,
+  onUseAsDraft,
 }: {
   settings?: AccountSettingsResponse;
   loading?: boolean;
@@ -23,21 +32,16 @@ export function AccountSettingsPanel({
   onSetEnv?: (name: string, value: string) => Promise<void> | void;
   onDeleteEnv?: (name: string) => Promise<void> | void;
   onEnsureSSHKey?: () => Promise<void> | void;
+  onUseAsDraft?: UseAsDraft;
 }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
-  const envCount = settings?.env.length ?? 0;
   const ssh = settings?.ssh;
-  const hasPublicKey = !!ssh?.public_key;
-  const title = loading ? "Loading" : error ? "Unavailable" : configSummary(envCount, ssh);
+  const title = loading ? "Loading" : error ? "Unavailable" : accountConfigSummary(settings);
   const detail = error
     ? panelErrorSummary("Config API", error)
-    : accessDetail(envCount, ssh);
-  const sshDescription = hasPublicKey
-    ? "Use this public key for GitHub or GitLab deploy access. Existing keys are shown, never overwritten."
-    : ssh?.exists
-      ? "A private key exists, but its public key is unavailable."
-      : "Generate an SSH key only when this session needs private Git access.";
+    : accountConfigDetail(settings);
+  const sshDescription = sshAccessDescription(ssh);
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 
   async function submitEnv(event: FormEvent) {
@@ -64,6 +68,16 @@ export function AccountSettingsPanel({
         ) : null}
         {!loading && !error ? (
           <>
+            {settings ? (
+              <div className="account-settings-actions">
+                <CopyButton label="Copy config evidence" value={accountConfigEvidenceText(settings)} className="node-action" />
+                {onUseAsDraft ? (
+                  <button type="button" className="node-action" onClick={() => onUseAsDraft(accountConfigDraft(settings), "config")}>
+                    Use config as draft
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <div className="account-settings-section">
               <div>
                 <strong>SSH key</strong>
@@ -140,18 +154,4 @@ export function AccountSettingsPanel({
       </div>
     </details>
   );
-}
-
-function accessDetail(envCount: number, ssh?: AccountSettingsResponse["ssh"]): string {
-  if (ssh?.public_key) return "SSH public key ready";
-  if (ssh?.exists) return "SSH key found; public key unavailable";
-  if (envCount > 0) return "No SSH key configured";
-  return "No env vars or SSH key configured";
-}
-
-function configSummary(envCount: number, ssh?: AccountSettingsResponse["ssh"]): string {
-  const env = envCount > 0 ? `${envCount} env${envCount === 1 ? "" : "s"}` : undefined;
-  if (ssh?.public_key) return env ? `${env} · SSH key` : "SSH key";
-  if (ssh?.exists) return env ? `${env} · SSH key issue` : "SSH key issue";
-  return env ?? "No config";
 }

@@ -1,4 +1,5 @@
 import type { ArtifactChunk } from "../api/sessions";
+import { formatByteCount } from "./byteFormat";
 
 export interface ArtifactStatsView {
   loadedBytes: number;
@@ -37,6 +38,45 @@ export function buildArtifactMatchPreviews(text: string, query: string, limit = 
   return previews;
 }
 
+export function artifactChunkEvidenceText(chunk: ArtifactChunk): string {
+  const stats = buildArtifactStats(chunk, "");
+  return [
+    `Artifact evidence for ${chunk.path}`,
+    `Loaded: ${formatByteCount(stats.loadedBytes)} of ${formatByteCount(stats.totalBytes)}`,
+    `Status: ${stats.complete ? "complete file" : "partial load"}`,
+  ].join("\n");
+}
+
+export function artifactChunkEvidenceDraft(chunk: ArtifactChunk): string {
+  return `Use this artifact in the next step:\n${artifactChunkEvidenceText(chunk)}`;
+}
+
+export function artifactLoadedTextDraft(path: string, text: string): string {
+  return [
+    "Use this loaded file text in the next step:",
+    `File: ${path}`,
+    `Text:\n${summarize(text, 4000)}`,
+  ].join("\n");
+}
+
+export function artifactMatchesText(path: string, query: string, matches: readonly ArtifactMatchPreview[]): string {
+  return [
+    `File: ${path}`,
+    `Query: ${query.trim()}`,
+    ...matches.map((match) => `Line ${match.lineNumber}: ${match.text}`),
+  ].join("\n");
+}
+
+export function artifactMatchesDraft(path: string, query: string, matches: readonly ArtifactMatchPreview[]): string {
+  return [
+    "Use this artifact evidence in the next step:",
+    `File: ${path}`,
+    `Query: ${query.trim()}`,
+    "Matches:",
+    ...matches.map((match) => `Line ${match.lineNumber}: ${match.text}`),
+  ].join("\n");
+}
+
 function percent(loaded: number, total: number): number {
   if (total <= 0) return 100;
   return Math.max(0, Math.min(100, Math.round((loaded / total) * 100)));
@@ -61,4 +101,10 @@ function countMatches(text: string, query: string): number {
     cursor = next + needle.length;
   }
   return count;
+}
+
+function summarize(text: string, limit: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= limit) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
 }

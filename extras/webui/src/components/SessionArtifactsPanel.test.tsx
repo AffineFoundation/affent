@@ -47,9 +47,13 @@ describe("SessionArtifactsPanel", () => {
 
     await user.click(within(list).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
+    await user.click(within(list).getByRole("button", { name: "Copy evidence" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Artifact evidence for .affent/artifacts/tool-results/000001-test.txt"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Summary: checkout spec failed"));
     await user.click(within(list).getByRole("button", { name: "Open artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
     await user.click(within(list).getByRole("button", { name: "Use artifact as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith("Use this artifact in the next step: .affent/artifacts/tool-results/000001-test.txt", "artifact");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Source: npm test -- checkout.spec.ts"), "artifact");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Summary: checkout spec failed"), "artifact");
   });
 });

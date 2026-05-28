@@ -1,6 +1,15 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { SessionSkillInfo, SessionSkillInstallRequest } from "../api/sessions";
-import { formatByteCount } from "../view/byteFormat";
+import type { UseAsDraft } from "../view/draftSource";
+import {
+  activationCoverage,
+  activationSummary,
+  skillDraft,
+  skillEvidenceText,
+  skillKindLabel,
+  skillSizeLabel,
+  skillSummaryTags,
+} from "../view/sessionSkills";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
 
@@ -18,6 +27,7 @@ export function SessionSkillsPanel({
   installEnabled = false,
   onReadSkill,
   onInstallSkill,
+  onUseAsDraft,
 }: {
   skills?: readonly SessionSkillInfo[];
   loading?: boolean;
@@ -26,6 +36,7 @@ export function SessionSkillsPanel({
   installEnabled?: boolean;
   onReadSkill?: (name: string) => Promise<SessionSkillInfo>;
   onInstallSkill?: (request: SessionSkillInstallRequest) => Promise<SessionSkillInfo>;
+  onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
   const [bodyByName, setBodyByName] = useState<Record<string, SkillBodyState>>({});
@@ -209,8 +220,16 @@ export function SessionSkillsPanel({
                       <div className="session-skill-detail">
                         <div className="session-skill-meta">
                           {skill.source ? <span>Source: {skill.source}</span> : null}
-                          <span>{formatByteCount(skill.body_bytes)}</span>
+                          <span>{skillSizeLabel(skill)}</span>
                           {activationSummary(skill) ? <span>{activationSummary(skill)}</span> : null}
+                        </div>
+                        <div className="session-skill-actions">
+                          <CopyButton label="Copy skill evidence" value={skillEvidenceText(skill, body)} className="node-action" />
+                          {onUseAsDraft ? (
+                            <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
+                              Use skill as draft
+                            </button>
+                          ) : null}
                         </div>
                         {bodyState?.loading ? <div className="session-skills-empty">Loading full content...</div> : null}
                         {bodyState?.error ? <div className="session-skills-empty error">{bodyState.error}</div> : null}
@@ -247,35 +266,6 @@ function splitList(text: string): string[] | undefined {
 
 function emptySkillsText(canInstall: boolean): string {
   return canInstall ? "No reusable workflows saved yet." : "No skills returned by this runtime.";
-}
-
-function activationSummary(skill: SessionSkillInfo): string {
-  const triggers = skill.triggers ?? skill.auto_activation?.any ?? [];
-  if (triggers.length > 0) return `Triggers: ${triggers.slice(0, 3).join(", ")}${triggers.length > 3 ? "..." : ""}`;
-  if (skill.required_tools && skill.required_tools.length > 0) return `Needs: ${skill.required_tools.join(", ")}`;
-  return "";
-}
-
-function skillKindLabel(skill: SessionSkillInfo): string {
-  return skill.runtime ? "Custom" : "Built in";
-}
-
-function activationCoverage(skills: readonly SessionSkillInfo[]): string {
-  const triggerable = skills.filter((skill) => (skill.triggers?.length ?? skill.auto_activation?.any?.length ?? 0) > 0).length;
-  const toolBound = skills.filter((skill) => (skill.required_tools?.length ?? 0) > 0).length;
-  const parts: string[] = [];
-  if (triggerable > 0) parts.push(`${triggerable} triggerable`);
-  if (toolBound > 0) parts.push(`${toolBound} tool-bound`);
-  return parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
-}
-
-function skillSummaryTags(skill: SessionSkillInfo): string[] {
-  const tags = [skillKindLabel(skill)];
-  const triggers = skill.triggers ?? skill.auto_activation?.any ?? [];
-  if (triggers.length > 0) tags.push(`${triggers.length} trigger${triggers.length === 1 ? "" : "s"}`);
-  const requiredTools = skill.required_tools?.length ?? 0;
-  if (requiredTools > 0) tags.push(`${requiredTools} tool${requiredTools === 1 ? "" : "s"}`);
-  return tags;
 }
 
 function formatPanelError(err: unknown): string {

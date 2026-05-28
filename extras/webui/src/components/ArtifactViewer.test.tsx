@@ -51,6 +51,15 @@ describe("ArtifactViewer", () => {
     await user.click(screen.getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");
     await user.click(screen.getByRole("button", { name: "Copy file" }));
+    await user.click(screen.getByRole("button", { name: "Copy evidence" }));
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
+        "Loaded: 20 B of 20 B",
+        "Status: partial load",
+      ].join("\n"),
+    );
+    await user.click(screen.getByRole("button", { name: "Copy file" }));
     await user.click(screen.getByRole("button", { name: "Copy text" }));
     expect(writeText).toHaveBeenCalledWith("hay needle stack");
     await user.click(screen.getByRole("button", { name: "Copy matches" }));
@@ -78,7 +87,12 @@ describe("ArtifactViewer", () => {
     expect(onLoadMore).toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Use artifact as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
+      [
+        "Use this artifact in the next step:",
+        "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
+        "Loaded: 20 B of 20 B",
+        "Status: partial load",
+      ].join("\n"),
       "artifact",
     );
     await user.click(screen.getByRole("button", { name: "Use text" }));

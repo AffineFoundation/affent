@@ -1,5 +1,5 @@
 import type { UseAsDraft } from "../view/draftSource";
-import type { SessionRunCommand, SessionRunView } from "../view/sessionRun";
+import { runCommandDraft, runCommandEvidenceText, runCommandMeta, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 
 export function SessionRunPanel({
@@ -27,7 +27,7 @@ export function SessionRunPanel({
               <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
                 <div className="session-run-main">
                   <strong title={command.command}>{command.command}</strong>
-                  <span>{commandMeta(command)}</span>
+                  <span>{runCommandMeta(command)}</span>
                   {command.cwd ? <small title={command.cwd}>Cwd: {command.cwd}</small> : null}
                   {command.detail ? <small>{command.detail}</small> : null}
                   {command.next ? <small>Next: {command.next}</small> : null}
@@ -35,13 +35,14 @@ export function SessionRunPanel({
                 </div>
                 <span className="session-evidence-actions">
                   <CopyButton label="Copy command" value={command.command} className="ghost-action" />
+                  <CopyButton label="Copy run evidence" value={runCommandEvidenceText(command)} className="ghost-action" />
                   {command.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
                       Open command output
                     </button>
                   ) : null}
                   {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runDraft(command), "run_command")}>
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runCommandDraft(command), "run_command")}>
                       Rerun as draft
                     </button>
                   ) : null}
@@ -55,32 +56,4 @@ export function SessionRunPanel({
       </div>
     </details>
   );
-}
-
-function commandMeta(command: SessionRunCommand): string {
-  const parts = [
-    statusLabel(command.status),
-    command.exitCode != null ? `exit ${command.exitCode}` : undefined,
-    command.durationMs != null ? formatDuration(command.durationMs) : undefined,
-    `turn ${command.turnNumber}`,
-  ].filter(Boolean);
-  return parts.join(" · ");
-}
-
-function statusLabel(status: SessionRunCommand["status"]): string {
-  if (status === "running") return "running";
-  if (status === "failed") return "failed";
-  return "passed";
-}
-
-function runDraft(command: SessionRunCommand): string {
-  const cwd = command.cwd ? `\nWorking directory: ${command.cwd}` : "";
-  const next = command.next ? `\nUse this recovery hint: ${command.next}` : "";
-  return `Rerun this command and report the result:\n${command.command}${cwd}${next}`;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const s = ms / 1000;
-  return `${s.toFixed(s < 10 ? 2 : 1)}s`;
 }

@@ -25,6 +25,9 @@ describe("SessionRunPanel", () => {
 
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Copy command" }));
     expect(writeText).toHaveBeenCalledWith("npm test -- checkout.spec.ts");
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Copy run evidence" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Run evidence for npm test -- checkout.spec.ts"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Output artifact: .affent/artifacts/tool-results/test.txt"));
 
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open command output" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/test.txt");
@@ -32,7 +35,20 @@ describe("SessionRunPanel", () => {
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Rerun this command and report the result:\nnpm test -- checkout.spec.ts\nWorking directory: extras/webui\nUse this recovery hint: update payment route then rerun",
+      [
+        "Rerun or recover from this command, then report the result:",
+        "npm test -- checkout.spec.ts",
+        "",
+        "Run evidence for npm test -- checkout.spec.ts",
+        "Status: failed",
+        "Exit: 1",
+        "Duration: 1.48s",
+        "Turn: 2",
+        "Working directory: extras/webui",
+        "Output: checkout spec failed",
+        "Next: update payment route then rerun",
+        "Output artifact: .affent/artifacts/tool-results/test.txt",
+      ].join("\n"),
       "run_command",
     );
   });

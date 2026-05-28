@@ -8,12 +8,16 @@ describe("WorkbenchContextPanel", () => {
   it("opens on current chat context without promoting low-signal token counts", async () => {
     const user = userEvent.setup();
     const onSelectSection = vi.fn();
+    const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
     render(
       <WorkbenchContextPanel
         defaultOpen
         hasSelectedSession
         onSelectSection={onSelectSection}
+        onUseAsDraft={onUseAsDraft}
         overview={overview({
           headline: "Fix failing checkout tests",
           detail: "Tests failed after the payment route changed.",
@@ -79,6 +83,13 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("3 file references");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Run");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("1 failed command");
+
+    await user.click(screen.getByRole("button", { name: "Copy context" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Workbench context evidence"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Run: 1 failed command"));
+    await user.click(screen.getByRole("button", { name: "Use context as draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this current chat context in the next step:"), "evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Recovery: rerun checkout spec"), "evidence");
 
     await user.click(screen.getByRole("button", { name: "Open Run" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
@@ -165,6 +176,7 @@ describe("WorkbenchContextPanel", () => {
     expect(panel).toHaveTextContent("Start a task or open a saved chat before inspecting session evidence.");
     expect(panel).not.toHaveTextContent("run evidence, changes, memory, and automation");
     expect(panel).not.toHaveTextContent("No chat selected");
+    expect(screen.queryByRole("button", { name: "Copy context" })).toBeNull();
   });
 });
 

@@ -1,6 +1,14 @@
 import { useState } from "react";
 import type { ArtifactChunk } from "../api/sessions";
-import { buildArtifactMatchPreviews, buildArtifactStats } from "../view/artifactViewer";
+import {
+  artifactChunkEvidenceDraft,
+  artifactChunkEvidenceText,
+  artifactLoadedTextDraft,
+  artifactMatchesDraft,
+  artifactMatchesText,
+  buildArtifactMatchPreviews,
+  buildArtifactStats,
+} from "../view/artifactViewer";
 import { formatByteCount } from "../view/byteFormat";
 import type { UseAsDraft } from "../view/draftSource";
 import { CopyButton } from "./CopyButton";
@@ -92,14 +100,14 @@ export function ArtifactViewer({
                 <button
                   type="button"
                   className="node-action"
-                  onClick={() => onUseAsDraft(artifactDraft(artifact.chunk.path), "artifact")}
+                  onClick={() => onUseAsDraft(artifactChunkEvidenceDraft(artifact.chunk), "artifact")}
                 >
                   Use artifact as draft
                 </button>
                 <button
                   type="button"
                   className="node-action"
-                  onClick={() => onUseAsDraft(artifactTextDraft(artifact.chunk.path, artifact.chunk.text), "artifact_text")}
+                  onClick={() => onUseAsDraft(artifactLoadedTextDraft(artifact.chunk.path, artifact.chunk.text), "artifact_text")}
                   disabled={artifact.chunk.text.trim() === ""}
                 >
                   Use text
@@ -118,6 +126,7 @@ export function ArtifactViewer({
               triggerClassName="node-action artifact-copy-trigger"
             >
               <CopyButton label="Copy path" value={artifact.chunk.path} className="node-action" />
+              <CopyButton label="Copy evidence" value={artifactChunkEvidenceText(artifact.chunk)} className="node-action" />
               <CopyButton label="Copy text" value={artifact.chunk.text} className="node-action" />
             </CopyMenu>
           </div>
@@ -191,36 +200,6 @@ function displayName(path: string): string {
   return clean || path;
 }
 
-function artifactDraft(path: string): string {
-  return `Use this artifact in the next step: ${path}`;
-}
-
-function artifactTextDraft(path: string, text: string): string {
-  return [
-    "Use this loaded file text in the next step:",
-    `File: ${path}`,
-    `Text:\n${summarize(text, 4000)}`,
-  ].join("\n");
-}
-
-function artifactMatchesDraft(path: string, query: string, matches: Array<{ lineNumber: number; text: string }>): string {
-  return [
-    "Use this artifact evidence in the next step:",
-    `File: ${path}`,
-    `Query: ${query.trim()}`,
-    "Matches:",
-    ...matches.map((match) => `Line ${match.lineNumber}: ${match.text}`),
-  ].join("\n");
-}
-
-function artifactMatchesText(path: string, query: string, matches: Array<{ lineNumber: number; text: string }>): string {
-  return [
-    `File: ${path}`,
-    `Query: ${query.trim()}`,
-    ...matches.map((match) => `Line ${match.lineNumber}: ${match.text}`),
-  ].join("\n");
-}
-
 function formatJsonPreview(text: string): string | undefined {
   const trimmed = text.trim();
   if (!trimmed || (!trimmed.startsWith("{") && !trimmed.startsWith("["))) return undefined;
@@ -229,10 +208,4 @@ function formatJsonPreview(text: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-function summarize(text: string, limit: number): string {
-  const trimmed = text.trim();
-  if (trimmed.length <= limit) return trimmed;
-  return `${trimmed.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
 }

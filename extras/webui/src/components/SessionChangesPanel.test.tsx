@@ -27,12 +27,17 @@ describe("SessionChangesPanel", () => {
     await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
+    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Copy diff" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Diff for src/payments.ts"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"));
+
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/edit.txt");
 
     await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Adjust" })[0]);
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Review and adjust this changed file: src/payments.ts", "changed_file");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: src/payments.ts"), "changed_file");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"), "changed_file");
   });
 
   it("keeps the panel folded by default", () => {

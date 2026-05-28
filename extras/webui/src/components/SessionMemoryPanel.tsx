@@ -1,6 +1,20 @@
 import { useMemo, useState } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
-import type { SessionMemoryBucket, SessionMemoryResponse } from "../api/sessions";
+import type { SessionMemoryResponse } from "../api/sessions";
+import type { UseAsDraft } from "../view/draftSource";
+import {
+  memoryActionLabel,
+  memoryBucketDraft,
+  memoryBucketEvidenceText,
+  memoryBucketLabel,
+  memoryBuckets,
+  memoryBucketUsage,
+  memoryUpdateDraft,
+  memoryUpdateEvidenceText,
+  memoryUpdateLocation,
+  memoryUpdatePreview,
+  totalMemoryChars,
+} from "../view/sessionMemory";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
 
@@ -11,6 +25,7 @@ export function SessionMemoryPanel({
   error,
   noSession = false,
   defaultOpen = false,
+  onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
   latestUpdate?: MemoryUpdateMeta;
@@ -18,6 +33,7 @@ export function SessionMemoryPanel({
   error?: string;
   noSession?: boolean;
   defaultOpen?: boolean;
+  onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
   const [panelOpen, setPanelOpen] = useState(defaultOpen);
@@ -26,7 +42,7 @@ export function SessionMemoryPanel({
     const search = query.trim().toLowerCase();
     if (!search) return buckets;
     return buckets.filter((bucket) =>
-      [bucketLabel(bucket), bucket.target, bucket.topic, ...(bucket.entries ?? [])]
+      [memoryBucketLabel(bucket), bucket.target, bucket.topic, ...(bucket.entries ?? [])]
         .filter(Boolean)
         .join(" ")
         .toLowerCase()
@@ -52,7 +68,7 @@ export function SessionMemoryPanel({
       : error
         ? panelErrorSummary("Memory API", error)
         : memory?.has_memory
-          ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
+          ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalMemoryChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";
 
   return (
@@ -77,7 +93,7 @@ export function SessionMemoryPanel({
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
         {!loading && !error && !noSession ? (
           <>
-            {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
+            {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
               <div className="session-skills-controls">
                 <label className="session-skills-search">
@@ -92,10 +108,10 @@ export function SessionMemoryPanel({
                   <details key={`${bucket.target}:${bucket.topic ?? ""}`} className="session-skill-item">
                     <summary>
                       <span className="session-skill-title">
-                        <strong>{bucketLabel(bucket)}</strong>
+                        <strong>{memoryBucketLabel(bucket)}</strong>
                         <span>{bucket.entry_count} entries</span>
                       </span>
-                      <span className="session-skill-desc">{bucketUsage(bucket)}</span>
+                      <span className="session-skill-desc">{memoryBucketUsage(bucket)}</span>
                     </summary>
                     <div className="session-skill-detail">
                       <div className="session-skill-meta">
@@ -104,7 +120,15 @@ export function SessionMemoryPanel({
                       </div>
                       {bucket.entries && bucket.entries.length > 0 ? (
                         <>
-                          <CopyButton label="Copy" value={bucket.entries.join("\n\n")} className="node-action" />
+                          <div className="session-memory-actions">
+                            <CopyButton label="Copy entries" value={bucket.entries.join("\n\n")} className="node-action" />
+                            <CopyButton label="Copy evidence" value={memoryBucketEvidenceText(bucket)} className="node-action" />
+                            {onUseAsDraft ? (
+                              <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
+                                Use memory as draft
+                              </button>
+                            ) : null}
+                          </div>
                           <ul className="session-memory-entries">
                             {bucket.entries.map((entry, index) => (
                               <li key={`${index}:${entry}`}>{entry}</li>
@@ -128,9 +152,9 @@ export function SessionMemoryPanel({
   );
 }
 
-function LatestMemoryUpdate({ update }: { update: MemoryUpdateMeta }) {
-  const location = update.location || [update.target, update.topic].filter(Boolean).join(":");
-  const preview = update.preview || update.next_preview || update.previous_preview || "";
+function LatestMemoryUpdate({ update, onUseAsDraft }: { update: MemoryUpdateMeta; onUseAsDraft?: UseAsDraft }) {
+  const location = memoryUpdateLocation(update);
+  const preview = memoryUpdatePreview(update);
   return (
     <div className="session-memory-latest" data-testid="session-memory-latest">
       <div>
@@ -139,39 +163,16 @@ function LatestMemoryUpdate({ update }: { update: MemoryUpdateMeta }) {
         {location ? <code>{location}</code> : null}
       </div>
       {preview ? <p>{preview}</p> : null}
+      <div className="session-memory-actions">
+        <CopyButton label="Copy update evidence" value={memoryUpdateEvidenceText(update)} className="node-action" />
+        {onUseAsDraft ? (
+          <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryUpdateDraft(update), "memory")}>
+            Use update as draft
+          </button>
+        ) : null}
+      </div>
     </div>
   );
-}
-
-function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBucket[] {
-  if (!memory) return [];
-  const out: SessionMemoryBucket[] = [];
-  if (memory.user) out.push(memory.user);
-  if (memory.core) out.push(memory.core);
-  out.push(...(memory.topics ?? []));
-  return out;
-}
-
-function bucketLabel(bucket: SessionMemoryBucket): string {
-  if (bucket.target === "user") return "User";
-  if (bucket.topic === "core") return "Core";
-  return bucket.topic || "General";
-}
-
-function bucketUsage(bucket: SessionMemoryBucket): string {
-  const base = bucket.chars_limit ? `${bucket.chars_used}/${bucket.chars_limit} chars` : `${bucket.chars_used} chars`;
-  return bucket.percent ? `${base} · ${bucket.percent}%` : base;
-}
-
-function memoryActionLabel(action: string): string {
-  if (action === "add") return "Added";
-  if (action === "replace") return "Replaced";
-  if (action === "remove") return "Removed";
-  return action;
-}
-
-function totalChars(buckets: readonly SessionMemoryBucket[]): number {
-  return buckets.reduce((sum, bucket) => sum + bucket.chars_used, 0);
 }
 
 function formatTimestamp(value: string): string {

@@ -1,4 +1,5 @@
 import type { UseAsDraft } from "../view/draftSource";
+import { artifactEvidenceDraft, artifactEvidenceText } from "../view/sessionArtifacts";
 import { artifactSizeLabel, type TurnArtifact } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
 
@@ -37,6 +38,7 @@ export function SessionArtifactsPanel({
                   </div>
                   <span className="session-evidence-actions">
                     <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
+                    <CopyButton label="Copy evidence" value={artifactEvidenceText(artifact)} className="ghost-action" />
                     {onOpenArtifact ? (
                       <button type="button" className="ghost-action" onClick={() => onOpenArtifact(artifact.path)}>
                         Open artifact
@@ -48,7 +50,7 @@ export function SessionArtifactsPanel({
                       </a>
                     ) : null}
                     {onUseAsDraft ? (
-                      <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactDraft(artifact.path), "artifact")}>
+                      <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
                         Use artifact as draft
                       </button>
                     ) : null}
@@ -87,8 +89,4 @@ function artifactMeta(artifact: TurnArtifact): string {
     artifactSizeLabel(artifact) || undefined,
   ].filter(Boolean);
   return parts.join(" · ");
-}
-
-function artifactDraft(path: string): string {
-  return `Use this artifact in the next step: ${path}`;
 }

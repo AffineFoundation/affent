@@ -4,6 +4,7 @@ import type { SessionChangesView } from "./sessionChanges";
 import type { SessionFilesView } from "./sessionFiles";
 import type { SessionOverview } from "./sessionOverview";
 import type { SessionRunView } from "./sessionRun";
+import type { SessionTraceView } from "./sessionTrace";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
 import type { WorkbenchAttention, WorkbenchAttentionTarget } from "./workbenchAttention";
 import {
@@ -32,6 +33,7 @@ export function buildWorkbenchNavItems({
   run,
   files,
   workspace,
+  trace,
   automation,
   attention,
   runtimeState,
@@ -45,6 +47,7 @@ export function buildWorkbenchNavItems({
   run: SessionRunView;
   files: SessionFilesView;
   workspace: SessionWorkspaceView;
+  trace?: SessionTraceView;
   automation?: { title: string };
   attention?: WorkbenchAttention;
   runtimeState: WorkbenchRuntimePanelState;
@@ -118,6 +121,16 @@ export function buildWorkbenchNavItems({
       tone: attention?.target === "automation" ? attention.tone : undefined,
     });
   }
+  if (trace && trace.eventCount > 0) {
+    currentItems.push({
+      key: "trace",
+      label: "Trace",
+      scope: "current",
+      detail: traceNavDetail(trace),
+      badge: traceBadge(trace),
+      tone: trace.unknownCount > 0 ? "warning" : undefined,
+    });
+  }
 
   return [
     ...currentItems,
@@ -145,14 +158,16 @@ export function buildWorkbenchNavItems({
       badge: configTabHasSignal ? configBadge(configState) : undefined,
       tone: configState.state === "error" ? "error" : undefined,
     },
-    {
-      key: "trace",
-      label: "Trace",
-      scope: "platform",
-      detail: runtimeNavDetail(runtimeState),
-      badge: runtimeTabHasSignal ? runtimeBadge(runtimeState) : undefined,
-      tone: runtimeState.state === "error" ? "error" : undefined,
-    },
+    ...(trace && trace.eventCount > 0
+      ? []
+      : [{
+        key: "trace" as const,
+        label: "Trace",
+        scope: "platform" as const,
+        detail: runtimeNavDetail(runtimeState),
+        badge: runtimeTabHasSignal ? runtimeBadge(runtimeState) : undefined,
+        tone: runtimeState.state === "error" ? "error" as const : undefined,
+      }]),
   ];
 }
 
@@ -178,6 +193,18 @@ function runtimeBadge(state: WorkbenchRuntimePanelState): string | undefined {
   if (issues > 0) return String(issues);
   if ((state.stats.running_turns ?? 0) > 0) return "run";
   return "on";
+}
+
+function traceNavDetail(trace: SessionTraceView): string {
+  if (trace.unknownCount > 0) return `${trace.recordCount} records · ${trace.unknownCount} unclassified`;
+  if (trace.schemaVersion) return `${trace.recordCount} records · schema v${trace.schemaVersion}`;
+  return `${trace.recordCount} grouped ${trace.recordCount === 1 ? "record" : "records"}`;
+}
+
+function traceBadge(trace: SessionTraceView): string | undefined {
+  if (trace.eventCount <= 0) return undefined;
+  if (trace.eventCount > 99) return "99+";
+  return String(trace.eventCount);
 }
 
 function configNavDetail(state: WorkbenchAccessPanelState): string {

@@ -52,6 +52,23 @@ export function buildSessionFiles(session: SessionState): SessionFilesView {
   };
 }
 
+export function fileEvidenceText(item: SessionFileEvidence): string {
+  const lines = [`File evidence for ${item.path}`, `Actions: ${item.actions.join(", ")}`, `Status: ${item.status}`];
+  if (item.detail) lines.push(`Detail: ${item.detail}`);
+  if (item.next) lines.push(`Next: ${item.next}`);
+  if (item.artifactPath) lines.push(`Evidence artifact: ${item.artifactPath}`);
+  return lines.join("\n");
+}
+
+export function fileEvidenceDraft(item: SessionFileEvidence): string {
+  const lead = item.actions.includes("changed")
+    ? "Review this changed file in the next step"
+    : item.actions.includes("listed")
+      ? "Use this listed directory in the next step"
+      : "Use this file evidence in the next step";
+  return `${lead}:\n${fileEvidenceText(item)}`;
+}
+
 function filePriority(item: SessionFileEvidence): number {
   if (item.status === "failed") return 0;
   if (item.status === "running") return 1;

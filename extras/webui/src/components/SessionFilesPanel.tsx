@@ -1,5 +1,5 @@
 import type { UseAsDraft } from "../view/draftSource";
-import type { SessionFileEvidence, SessionFilesView } from "../view/sessionFiles";
+import { fileEvidenceDraft, fileEvidenceText, type SessionFileEvidence, type SessionFilesView } from "../view/sessionFiles";
 import { CopyButton } from "./CopyButton";
 
 export function SessionFilesPanel({
@@ -34,13 +34,14 @@ export function SessionFilesPanel({
                 </div>
                 <span className="session-files-actions">
                   <CopyButton label="Copy path" value={item.path} className="ghost-action" />
+                  <CopyButton label="Copy evidence" value={fileEvidenceText(item)} className="ghost-action" />
                   {item.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
                       Open evidence
                     </button>
                   ) : null}
                   {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileDraft(item), "file_evidence")}>
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
                       Use file as draft
                     </button>
                   ) : null}
@@ -79,10 +80,4 @@ function statusLabel(status: SessionFileEvidence["status"]): string {
   if (status === "running") return "pending";
   if (status === "failed") return "failed";
   return "available";
-}
-
-function fileDraft(item: SessionFileEvidence): string {
-  if (item.actions.includes("changed")) return `Review this file in the next step: ${item.path}`;
-  if (item.actions.includes("listed")) return `Use this listed directory in the next step: ${item.path}`;
-  return `Use this file path in the next step: ${item.path}`;
 }
