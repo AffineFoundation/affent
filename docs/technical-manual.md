@@ -992,8 +992,9 @@ Compacted plan tool results also include the same `plan:x/y:status` label so
 post-compaction recovery can identify current progress even if natural-language
 step text was shortened.
 Compacted `session_search` results preserve no-hit `recent_sessions` anchors,
-including compact user/assistant, plan, and loop previews, so a compaction does
-not erase the retry path the model was supposed to use for long-run recovery.
+including compact user/assistant, plan, loop, and recovery previews such as
+`loop_turn_checkpoint` anchors, so a compaction does not erase the retry path
+the model was supposed to use for long-run recovery.
 If the compacted span included an active `LOOP.md` feed, the rolling summary
 also receives a deterministic `LOOP_PROTOCOL:` anchor with the protocol path,
 feed mode/count, loop id/status, and active plan checkpoint. This keeps

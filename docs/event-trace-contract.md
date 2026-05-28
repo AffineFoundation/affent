@@ -388,6 +388,11 @@ recovery checkpoints without opening sidecar files.
   `memory_search_calls`, `memory_search_misses`, and
   `session_search_calls`: compact runtime summary for the completed turn.
 
+Session summaries may surface `loop.turn_checkpoint` as `latest_recovery_hint`
+when the checkpoint contains a recovery signal such as `end_reason=max_turns`,
+`end_reason=error`, tool errors, loop guard interventions, forced no-tools, or
+memory misses. Routine completed checkpoints should not create recovery noise.
+
 ### `loop.protocol_calibration_request`
 
 Records that the assistant asked the required setup question for a draft
@@ -450,10 +455,11 @@ external calibration. It does not start a separate controller agent.
 - `recoverable`: whether the turn can continue.
 
 Session summaries may surface recent `error` events, `turn.end` failures such
-as `reason=max_turns`, successful no-hit `session_search` results with
-recent-session anchors, no-hit memory search results with topic anchors, and
-context compactions whose summary is missing or empty as
-`latest_recovery_hint`, preserving specific error text when it is available.
+as `reason=max_turns`, `loop.turn_checkpoint` recovery checkpoints, successful
+no-hit `session_search` results with recent-session anchors, no-hit memory
+search results with topic anchors, and context compactions whose summary is
+missing or empty as `latest_recovery_hint`, preserving specific error text when
+it is available.
 
 ## Compatibility Rules
 
