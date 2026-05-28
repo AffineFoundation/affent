@@ -754,6 +754,19 @@ func TestRecoveryHintFromConversationSessionSearchRecentLoopAnchor(t *testing.T)
 	}
 }
 
+func TestRecoveryHintFromConversationSessionSearchRecentRecoveryAnchor(t *testing.T) {
+	result := `{"query":"missing marker","total":0,"results":[],"recent_sessions":[{"session_id":"recent-recovery","recovery":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2; loop_guards=2"}]}`
+	got := recoveryHintFromConversationMessage(agent.ChatMessage{
+		Role:    "tool",
+		Content: result,
+	})
+	for _, want := range []string{"session recall found no direct hits", "retry from recent session recent-recovery", "reason=max_turns", "loop_guard_no_new_evidence"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation recovery hint missing %q: %q", want, got)
+		}
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromWeakSessionSearchHits(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

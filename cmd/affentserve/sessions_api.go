@@ -2210,6 +2210,9 @@ func recoveryHintFromSessionSearchResult(text string) string {
 	if preview == "" {
 		preview = strings.TrimSpace(recent.Loop)
 	}
+	if preview == "" {
+		preview = strings.TrimSpace(recent.Recovery)
+	}
 	if preview != "" {
 		parts = append(parts, "preview: "+preview)
 	}

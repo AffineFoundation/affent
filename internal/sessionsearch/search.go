@@ -43,6 +43,7 @@ type RecentSession struct {
 	LatestAssistant string `json:"latest_assistant,omitempty"`
 	Plan            string `json:"plan,omitempty"`
 	Loop            string `json:"loop,omitempty"`
+	Recovery        string `json:"recovery,omitempty"`
 }
 
 // Response is the session_search tool return shape.
@@ -180,11 +181,12 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 }
 
 type sessionLogCandidate struct {
-	sessionID string
-	path      string
-	planPath  string
-	loopPath  string
-	modTime   time.Time
+	sessionID  string
+	path       string
+	planPath   string
+	loopPath   string
+	eventsPath string
+	modTime    time.Time
 }
 
 // RecentSessions returns recent transcript summaries to help recover from a
@@ -222,10 +224,12 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				conversationPath := filepath.Join(sessionsDir, sid, "conversation.jsonl")
 				planPath := filepath.Join(sessionsDir, sid, "plan.json")
 				loopPath := loopstate.ProtocolPath(filepath.Join(sessionsDir, sid), sid)
+				eventsPath := filepath.Join(sessionsDir, sid, "events.jsonl")
 				conversationInfo, hasConversation := regularFileInfo(conversationPath)
 				planInfo, hasPlan := regularFileInfo(planPath)
 				loopInfo, hasLoop := regularFileInfo(loopPath)
-				if !hasConversation && !hasPlan && !hasLoop {
+				eventsInfo, hasEvents := regularFileInfo(eventsPath)
+				if !hasConversation && !hasPlan && !hasLoop && !hasEvents {
 					continue
 				}
 				modTime := time.Time{}
@@ -238,12 +242,16 @@ func RecentSessions(ctx context.Context, sessionsDir, currentSessionID string, l
 				if hasLoop && (modTime.IsZero() || loopInfo.ModTime().After(modTime)) {
 					modTime = loopInfo.ModTime()
 				}
+				if hasEvents && (modTime.IsZero() || eventsInfo.ModTime().After(modTime)) {
+					modTime = eventsInfo.ModTime()
+				}
 				candidates = append(candidates, sessionLogCandidate{
-					sessionID: sid,
-					path:      conversationPath,
-					planPath:  planPath,
-					loopPath:  loopPath,
-					modTime:   modTime,
+					sessionID:  sid,
+					path:       conversationPath,
+					planPath:   planPath,
+					loopPath:   loopPath,
+					eventsPath: eventsPath,
+					modTime:    modTime,
 				})
 				continue
 			}
@@ -304,7 +312,7 @@ func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (Recent
 	}
 	if cand.path != "" {
 		if _, ok := regularFileInfo(cand.path); !ok {
-			if cand.planPath == "" && cand.loopPath == "" {
+			if cand.planPath == "" && cand.loopPath == "" && cand.eventsPath == "" {
 				return RecentSession{}, false, errors.New("session log must be a regular file")
 			}
 		} else {
@@ -358,7 +366,12 @@ func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (Recent
 			summary.Loop = loop
 		}
 	}
-	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" && summary.Loop == "" {
+	if cand.eventsPath != "" {
+		if recovery := recentRecoveryPreview(cand.eventsPath); recovery != "" {
+			summary.Recovery = recovery
+		}
+	}
+	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" && summary.Loop == "" && summary.Recovery == "" {
 		return RecentSession{}, false, nil
 	}
 	return summary, true, nil
@@ -618,6 +631,211 @@ func recentLoopPreview(path, sid string) string {
 		return ""
 	}
 	return recentSessionPreview(content)
+}
+
+func recentRecoveryPreview(path string) string {
+	if _, ok := regularFileInfo(path); !ok {
+		return ""
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	reader := bufio.NewReaderSize(f, 64*1024)
+	latest := ""
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return latest
+		}
+		if overLimit {
+			continue
+		}
+		line = []byte(strings.TrimRight(string(line), "\r\n"))
+		var ev eventRecord
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		if preview := recoveryPreviewFromEvent(ev); preview != "" {
+			latest = recentSessionPreview(preview)
+		}
+	}
+	return latest
+}
+
+type eventRecord struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data"`
+}
+
+func recoveryPreviewFromEvent(ev eventRecord) string {
+	switch ev.Type {
+	case "conversation.repaired":
+		var p struct {
+			MissingToolResults    int    `json:"missing_tool_results,omitempty"`
+			DuplicateToolResults  int    `json:"duplicate_tool_results,omitempty"`
+			UnexpectedToolResults int    `json:"unexpected_tool_results,omitempty"`
+			FailureKind           string `json:"failure_kind,omitempty"`
+			Next                  string `json:"next,omitempty"`
+		}
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return ""
+		}
+		parts := []string{"conversation_repaired"}
+		if p.FailureKind != "" {
+			parts = append(parts, "kind="+p.FailureKind)
+		}
+		if p.MissingToolResults > 0 {
+			parts = append(parts, fmt.Sprintf("missing_tool_results=%d", p.MissingToolResults))
+		}
+		if p.DuplicateToolResults > 0 {
+			parts = append(parts, fmt.Sprintf("duplicate_tool_results=%d", p.DuplicateToolResults))
+		}
+		if p.UnexpectedToolResults > 0 {
+			parts = append(parts, fmt.Sprintf("unexpected_tool_results=%d", p.UnexpectedToolResults))
+		}
+		if strings.TrimSpace(p.Next) != "" {
+			parts = append(parts, "next="+strings.TrimSpace(p.Next))
+		}
+		return strings.Join(parts, "; ")
+	case "error":
+		var p struct {
+			Code        string `json:"code"`
+			Message     string `json:"message"`
+			FailureKind string `json:"failure_kind,omitempty"`
+			Recoverable bool   `json:"recoverable"`
+		}
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return ""
+		}
+		parts := []string{"runtime_error"}
+		if p.Code != "" {
+			parts = append(parts, "code="+p.Code)
+		}
+		if p.FailureKind != "" {
+			parts = append(parts, "kind="+p.FailureKind)
+		}
+		if p.Recoverable {
+			parts = append(parts, "recoverable=true")
+		}
+		if strings.TrimSpace(p.Message) != "" {
+			parts = append(parts, "message="+strings.TrimSpace(p.Message))
+		}
+		return strings.Join(parts, "; ")
+	case "turn.end":
+		var p struct {
+			Reason    string `json:"reason"`
+			ToolStats *struct {
+				ToolFailureByKind      map[string]int `json:"tool_failure_by_kind,omitempty"`
+				LoopGuardInterventions int            `json:"loop_guard_interventions,omitempty"`
+				ToolContextTruncated   int            `json:"tool_context_truncated,omitempty"`
+			} `json:"tool_stats,omitempty"`
+		}
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return ""
+		}
+		if p.Reason != "max_turns" && p.Reason != "error" {
+			return ""
+		}
+		parts := []string{"turn_end: reason=" + p.Reason}
+		if p.ToolStats != nil {
+			if kind, count := topFailureKind(p.ToolStats.ToolFailureByKind); kind != "" {
+				parts = append(parts, fmt.Sprintf("top_failure=%s:%d", kind, count))
+			}
+			if p.ToolStats.LoopGuardInterventions > 0 {
+				parts = append(parts, fmt.Sprintf("loop_guards=%d", p.ToolStats.LoopGuardInterventions))
+			}
+			if p.ToolStats.ToolContextTruncated > 0 {
+				parts = append(parts, fmt.Sprintf("tool_context_truncated=%d", p.ToolStats.ToolContextTruncated))
+			}
+		}
+		return strings.Join(parts, "; ")
+	case "loop.decision":
+		var p struct {
+			Kind           string `json:"kind"`
+			Decision       string `json:"decision"`
+			RequiredAction string `json:"required_action,omitempty"`
+			VisibleInUI    *bool  `json:"visible_in_ui,omitempty"`
+		}
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return ""
+		}
+		if p.VisibleInUI != nil && !*p.VisibleInUI {
+			return ""
+		}
+		if strings.TrimSpace(p.RequiredAction) == "" {
+			return ""
+		}
+		return "loop_decision: kind=" + strings.TrimSpace(p.Kind) + "; decision=" + strings.TrimSpace(p.Decision) + "; action=" + strings.TrimSpace(p.RequiredAction)
+	case "context.compacted":
+		var p contextCompactRecord
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return ""
+		}
+		var raw struct {
+			SummaryPresent *bool `json:"summary_present"`
+		}
+		_ = json.Unmarshal(ev.Data, &raw)
+		state := contextSummaryState(p, raw.SummaryPresent != nil)
+		if state != "missing" && state != "empty" {
+			return ""
+		}
+		parts := []string{"context_compaction: summary=" + state}
+		if p.RemovedMessages > 0 {
+			parts = append(parts, fmt.Sprintf("removed_messages=%d", p.RemovedMessages))
+		}
+		if strings.TrimSpace(p.Reason) != "" {
+			parts = append(parts, "reason="+strings.TrimSpace(p.Reason))
+		}
+		if p.Reactive {
+			parts = append(parts, "reactive=true")
+		}
+		return strings.Join(parts, "; ")
+	default:
+		return ""
+	}
+}
+
+func topFailureKind(counts map[string]int) (string, int) {
+	var top string
+	var topCount int
+	for kind, count := range counts {
+		kind = strings.TrimSpace(kind)
+		if kind == "" || count <= 0 {
+			continue
+		}
+		if count > topCount || (count == topCount && (top == "" || kind < top)) {
+			top = kind
+			topCount = count
+		}
+	}
+	return top, topCount
+}
+
+type contextCompactRecord struct {
+	RemovedMessages int    `json:"removed_messages"`
+	Reactive        bool   `json:"reactive"`
+	Reason          string `json:"reason"`
+	SummaryPresent  bool   `json:"summary_present"`
+	SummaryBytes    int    `json:"summary_bytes,omitempty"`
+	SummaryPreview  string `json:"summary_preview,omitempty"`
+}
+
+func contextSummaryState(p contextCompactRecord, summaryPresentKnown bool) string {
+	if !summaryPresentKnown {
+		return "unknown"
+	}
+	if !p.SummaryPresent {
+		return "missing"
+	}
+	if p.SummaryBytes <= 0 && strings.TrimSpace(p.SummaryPreview) == "" {
+		return "empty"
+	}
+	return "present"
 }
 
 func loopSearchContent(path, sid string) (string, bool, error) {

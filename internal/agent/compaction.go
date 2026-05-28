@@ -1249,6 +1249,11 @@ func appendCompactRecentSessions(b *strings.Builder, sessions []sessionsearch.Re
 			b.WriteString(textutil.Preview(strings.TrimSpace(session.Loop), 180))
 			b.WriteByte(' ')
 		}
+		if session.Recovery != "" {
+			b.WriteString("recovery=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.Recovery), 180))
+			b.WriteByte(' ')
+		}
 	}
 	if len(sessions) > limit {
 		fmt.Fprintf(b, "\n- ... %d more recent session(s)", len(sessions)-limit)

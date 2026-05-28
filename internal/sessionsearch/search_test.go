@@ -77,6 +77,34 @@ func writeDurableLoop(t *testing.T, root, sessionID, raw string) {
 	}
 }
 
+func writeDurableEvents(t *testing.T, root, sessionID string, events ...eventRecord) {
+	t.Helper()
+	dir := filepath.Join(root, sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(filepath.Join(dir, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for _, ev := range events {
+		if err := enc.Encode(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func mustEvent(t *testing.T, eventType string, payload any) eventRecord {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return eventRecord{Type: eventType, Data: raw}
+}
+
 func TestSearchFindsAndRanksMatches(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "low", []testMessage{
@@ -361,6 +389,57 @@ Recover Alpha Coast market research without losing evidence quality.
 	}
 	if strings.Contains(fmt.Sprint(recent), "hidden current loop") {
 		t.Fatalf("current session loop leaked into recent anchors: %+v", recent)
+	}
+}
+
+func TestRecentSessionsIncludesRecoveryAnchorsFromEvents(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "recovery-only",
+		mustEvent(t, "context.compacted", map[string]any{
+			"turn_id":          "t1",
+			"before_messages":  80,
+			"after_messages":   20,
+			"removed_messages": 60,
+			"reactive":         true,
+			"reason":           "context_overflow",
+			"summary_present":  false,
+		}),
+		mustEvent(t, "turn.end", map[string]any{
+			"turn_id": "t1",
+			"reason":  "max_turns",
+			"tool_stats": map[string]any{
+				"tool_failure_by_kind":     map[string]int{"loop_guard_no_new_evidence": 2, "blocked": 1},
+				"loop_guard_interventions": 2,
+				"tool_context_truncated":   1,
+			},
+		}),
+	)
+	writeDurableEvents(t, dir, "current",
+		mustEvent(t, "turn.end", map[string]any{"turn_id": "current", "reason": "max_turns"}),
+	)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "recovery-only", "events.jsonl"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 {
+		t.Fatalf("expected one recent recovery anchor, got %+v", recent)
+	}
+	got := recent[0]
+	if got.SessionID != "recovery-only" || got.LatestUser != "" || got.Plan != "" || got.Loop != "" {
+		t.Fatalf("recovery-only anchor should not invent other previews: %+v", got)
+	}
+	for _, want := range []string{"turn_end: reason=max_turns", "loop_guard_no_new_evidence:2", "loop_guards=2", "tool_context_truncated=1"} {
+		if !strings.Contains(got.Recovery, want) {
+			t.Fatalf("recovery preview missing %q: %+v", want, got)
+		}
+	}
+	if strings.Contains(fmt.Sprint(recent), "current") {
+		t.Fatalf("current session events leaked into recent anchors: %+v", recent)
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sessionsearch"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // writeSessionLog drops a JSONL conversation file for one past
@@ -34,6 +35,36 @@ func writeSessionLog(t *testing.T, sessionsDir, sid string, msgs ...ChatMessage)
 	}
 }
 
+func writeDurableSessionEvents(t *testing.T, sessionsDir, sid string, events ...sse.Event) {
+	t.Helper()
+	dir := filepath.Join(sessionsDir, sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "events.jsonl")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetEscapeHTML(false)
+	for _, ev := range events {
+		if err := enc.Encode(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func mustSSEEvent(t *testing.T, eventType string, payload any) sse.Event {
+	t.Helper()
+	ev, err := sse.NewEvent(eventType, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ev
+}
+
 // TestSessionSearchTool_QueryRequired pins the friendly error for
 // empty query — same pattern memoryTool uses, so the model sees a
 // helpful Message field instead of a raw decode failure.
@@ -54,7 +85,7 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 func TestWithSessionSearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	once := WithSessionSearchSystemGuidance(base)
-	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "recent_sessions", "session id", "logical turn_idx", "JSONL message_idx", "untrusted evidence"} {
+	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "recent_sessions", "recovery previews", "session id", "logical turn_idx", "JSONL message_idx", "untrusted evidence"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("session search guidance missing %q:\n%s", want, once)
 		}
@@ -167,6 +198,36 @@ func TestSessionSearchTool_NoResultsIncludesRecentSessionAnchors(t *testing.T) {
 	}
 	if strings.Contains(out, "current task") {
 		t.Fatalf("current session leaked into recent anchors:\n%s", out)
+	}
+}
+
+func TestSessionSearchTool_NoResultsIncludesRecoveryAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableSessionEvents(t, dir, "past-recovery",
+		mustSSEEvent(t, sse.TypeLoopDecision, sse.LoopDecisionPayload{
+			Kind:           "evidence_quality",
+			Decision:       "defer",
+			RequiredAction: "read browser_network_read ref n7 before citing market cap",
+		}),
+	)
+
+	tool := sessionSearchTool(dir, "current")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"unmatched needle"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp SessionSearchResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out)
+	}
+	if len(resp.RecentSessions) != 1 || resp.RecentSessions[0].SessionID != "past-recovery" {
+		t.Fatalf("expected recovery recent session anchor, got %+v", resp.RecentSessions)
+	}
+	if !strings.Contains(resp.RecentSessions[0].Recovery, "browser_network_read ref n7") {
+		t.Fatalf("recent session should include recovery preview: %+v", resp.RecentSessions[0])
+	}
+	if !strings.Contains(out, `"recovery"`) {
+		t.Fatalf("raw response should expose recovery anchor:\n%s", out)
 	}
 }
 
