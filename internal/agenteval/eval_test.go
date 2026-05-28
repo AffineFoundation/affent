@@ -3436,6 +3436,29 @@ func TestBuiltinLoopProtocolFeedScenariosRequireTurnCheckpoints(t *testing.T) {
 	}
 }
 
+func TestBuiltinSkillInstallScenariosRequireSameSessionActivationEvidence(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresSkillInstallConfirmation(scenario) {
+			continue
+		}
+		if scenario.SessionID == "" || len(scenario.Prompts) < 3 {
+			t.Fatalf("%s confirms a skill install but does not prove same-session activation with a later turn; session=%q prompts=%d", scenario.Name, scenario.SessionID, len(scenario.Prompts))
+		}
+		if scenario.RequiredToolCounts["skill"] < 2 || scenario.MaxParentToolCalls > scenario.RequiredToolCounts["skill"] {
+			t.Fatalf("%s skill install should bound parent skill calls to install-only turns; required=%#v max_parent=%d", scenario.Name, scenario.RequiredToolCounts, scenario.MaxParentToolCalls)
+		}
+		if scenario.RequiredContextInjectionSources["skill_provider"] < 1 || scenario.RequiredTraceEventCounts["context.injected"] < 1 {
+			t.Fatalf("%s confirms a skill install but lacks skill_provider context injection evidence; sources=%#v trace=%#v", scenario.Name, scenario.RequiredContextInjectionSources, scenario.RequiredTraceEventCounts)
+		}
+		if !stringSliceContains(scenario.RequiredToolResultText["skill"], "active_now=true") {
+			t.Fatalf("%s confirms a skill install but does not require active_now=true in skill result: %#v", scenario.Name, scenario.RequiredToolResultText["skill"])
+		}
+		if len(scenario.RequiredFinalText) == 0 {
+			t.Fatalf("%s confirms a skill install but has no post-activation final text evidence", scenario.Name)
+		}
+	}
+}
+
 func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresDurableMemoryWrite(scenario) || !scenarioRequiresGitCommitAndPush(scenario) {
@@ -3514,6 +3537,10 @@ func scenarioHasGitStatusAfterMutation(scenario BatchScenario) bool {
 		}
 	}
 	return false
+}
+
+func scenarioRequiresSkillInstallConfirmation(scenario BatchScenario) bool {
+	return toolArgRequirementContains(scenario.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "skill", Arg: "action", Substring: "confirm_install"})
 }
 
 func scenarioForbidsMemoryContent(scenario BatchScenario, term string) bool {
