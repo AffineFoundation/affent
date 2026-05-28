@@ -1192,7 +1192,11 @@ authoritative files before trusting compressed context. Empty or degraded
 session recall routes the next agent to `session_search_examples` and narrower
 recent-session, plan, or loop anchors; memory misses without topic anchors
 route to `memory_search_miss_examples` and target/topic discovery. Failed
-tool-repair hints add a concrete
+verifiers add concrete continuation actions to inspect the Verifier section,
+failures, retained workspace diff, and exact verifier command before blaming
+runtime behavior; abnormal verifier exits and truncated verifier output route
+first to timeout/cancel symptoms or a local rerun with a larger output cap.
+Failed tool-repair hints add a concrete
 continuation action to inspect `tool_repair_examples` and decide whether the
 durable fix belongs in tool aliasing, argument repair, or model guidance before
 rerunning. The debug manifest, timeline, and JSONL scenario

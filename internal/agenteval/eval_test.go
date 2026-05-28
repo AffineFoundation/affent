@@ -141,6 +141,28 @@ func TestDebugRecoveryPriorityTagsIncludesRecallDegradation(t *testing.T) {
 	}
 }
 
+func TestDebugRecoveryPriorityTagsIncludesVerifierFailures(t *testing.T) {
+	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"verifier:output_truncated",
+		"verifier:abnormal",
+		"verifier:failed",
+		"source_network:partial_read",
+		"outcome:failed",
+		"misc:later",
+	}})
+	want := []string{
+		"outcome:failed",
+		"verifier:failed",
+		"verifier:abnormal",
+		"verifier:output_truncated",
+		"source_network:partial_read",
+		"misc:later",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",
@@ -3118,6 +3140,57 @@ func TestBuildDebugRecoveryGuideAddsUnreadBrowserNetworkAction(t *testing.T) {
 		!stringSliceContains(guide.Inspect, "source_evidence") ||
 		!stringSliceContains(guide.Inspect, "tool_timeline") {
 		t.Fatalf("recovery guide inspect = %#v, want browser network, source evidence, and timeline", guide.Inspect)
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsVerifierRecoveryActions(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/code-pr",
+		TimelinePath:      "/tmp/affent-eval/code-pr/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/code-pr/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/code-pr/trace.jsonl",
+		Failures:          []string{"verify command failed: go test ./..."},
+		Verifier: VerifierResult{
+			Command:            "go test ./...",
+			Ran:                true,
+			OK:                 false,
+			ExitCode:           -1,
+			OutputTruncated:    true,
+			OutputOmittedBytes: 8192,
+			OutputCapBytes:     2048,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"verifier:failed",
+		"verifier:abnormal",
+		"verifier:output_truncated",
+		"inspect the Verifier section, failures, and retained workspace diff",
+		"rerun the exact verifier command in the workspace",
+		"inspect verifier timeout/cancel symptoms",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	for _, want := range []string{"verifier", "failures", "timeline"} {
+		if !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideCleanPassWithoutBrief(t *testing.T) {
+	guide := BuildDebugRecoveryGuide(BatchResult{
+		OK:          true,
+		Workspace:   "/tmp/affent-eval/pass",
+		RunExitCode: 0,
+	})
+	if guide != nil {
+		t.Fatalf("clean pass should not emit recovery guide: %+v", guide)
 	}
 }
 

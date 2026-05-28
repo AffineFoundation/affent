@@ -1274,7 +1274,7 @@ func BuildDebugRecoveryGuide(res BatchResult) *DebugRecoveryGuide {
 		return nil
 	}
 	brief := BuildDebugBrief(res)
-	if res.OK && res.RunExitCode == 0 && len(brief.Items) == 0 {
+	if res.OK && res.RunExitCode == 0 && (brief == nil || len(brief.Items) == 0) {
 		return nil
 	}
 	guide := &DebugRecoveryGuide{
@@ -1416,6 +1416,18 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "tool_repair:failed") {
 		add("For tool_repair:failed, inspect tool_repair_examples and the tool timeline before rerunning; decide whether the fix belongs in tool aliasing, argument repair, or model guidance.")
 	}
+	if containsString(tags, "verifier:failed") {
+		add("For verifier:failed, inspect the Verifier section, failures, and retained workspace diff, then rerun the exact verifier command in the workspace before changing runtime behavior.")
+	}
+	if containsString(tags, "verifier:not_run") {
+		add("For verifier:not_run, inspect runtime exit state and setup commands before trusting the code-task outcome; the scenario did not reach its configured verification step.")
+	}
+	if containsString(tags, "verifier:abnormal") {
+		add("For verifier:abnormal, inspect verifier timeout/cancel symptoms and the command itself before treating the implementation as semantically wrong.")
+	}
+	if containsString(tags, "verifier:output_truncated") {
+		add("For verifier:output_truncated, rerun the verifier in the retained workspace or raise --verifier-output-cap before inferring the exact failing assertion from the bounded preview.")
+	}
 	if containsString(tags, "loop_guard:forced_no_tools") {
 		add("For loop_guard:forced_no_tools, inspect loop_guard_examples and the previous successful evidence before retrying tools; change the tool sequence or finish with a marked gap instead of repeating the blocked call.")
 	}
@@ -1451,6 +1463,10 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"runtime_error",
 		"conversation_repair",
 		"tool_repair:failed",
+		"verifier:failed",
+		"verifier:not_run",
+		"verifier:abnormal",
+		"verifier:output_truncated",
 		"loop_guard:forced_no_tools",
 		"source_dynamic_without_network",
 		"source_dynamic_without_decision",
