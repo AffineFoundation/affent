@@ -106,6 +106,19 @@ func TestRunListSuiteScenarios(t *testing.T) {
 	}
 }
 
+func TestRunListScenarioFiltersScenarios(t *testing.T) {
+	out, code := captureStdout(t, func() int {
+		return run([]string{"--list", "--scenario", "longrun-active-plan-final-closure-guard"})
+	})
+	if code != 0 {
+		t.Fatalf("run --list --scenario exit = %d", code)
+	}
+	lines := strings.Fields(out)
+	if len(lines) != 1 || lines[0] != "longrun-active-plan-final-closure-guard" {
+		t.Fatalf("--list --scenario output = %#v, want only selected scenario\n%s", lines, out)
+	}
+}
+
 func TestRunListCoverageForLongRunSuite(t *testing.T) {
 	out, code := captureStdout(t, func() int {
 		return run([]string{"--list-coverage", "--suite", "long-run"})

@@ -383,19 +383,13 @@ success and trace-level process quality.`)
 		return 0
 	}
 	if *list {
-		if *suite == "" {
-			for _, name := range agenteval.BatchScenarioNames() {
-				fmt.Println(name)
-			}
-		} else {
-			scenarios, err := agenteval.SelectBatchScenariosForSuite(*suite, nil)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "suite: %v\n", err)
-				return 64
-			}
-			for _, scenario := range scenarios {
-				fmt.Println(scenario.Name)
-			}
+		scenarios, err := selectedEvalScenarios(*suite, *scenarioCSV, "", "", "", "", 1, "")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
+			return 64
+		}
+		for _, scenario := range scenarios {
+			fmt.Println(scenario.Name)
 		}
 		return 0
 	}
