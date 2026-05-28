@@ -1080,9 +1080,11 @@ go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --quali
 Quality gate flags are optional and disabled by default. They return exit code
 `1` after the full batch finishes if the aggregate summary violates configured
 thresholds. Text summaries print a `QUALITY_GATES` line when any gate is
-enabled, including failed gate names and thresholds; JSONL records copy the
-enabled thresholds into metadata so result files preserve their pass/fail
-conditions. Use `--quality-profile longrun` for general long-run regression
+enabled, including failed gate names and thresholds; debug-brief tag gate
+failures also print bounded representative scenarios with retained
+trace/timeline/debug-manifest paths. JSONL records copy the enabled thresholds
+into metadata so result files preserve their pass/fail conditions. Use
+`--quality-profile longrun` for general long-run regression
 runs; it includes minimum trace-event, memory-update, loop-protocol feed,
 session-search context-hit, scenario-level session-recall debug tag, and missing
 truncation-artifact gates, plus a scenario-level failed tool-repair gate, so

@@ -2067,7 +2067,7 @@ func TestPrintBatchSummaryIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 func TestPrintBatchQualityGates(t *testing.T) {
 	var out bytes.Buffer
 	meta := testEvalJSONLMetadata()
-	printBatchQualityGates(&out, meta, nil)
+	printBatchQualityGates(&out, meta, batchSummary{}, nil)
 	if out.Len() != 0 {
 		t.Fatalf("disabled quality gates should not print, got:\n%s", out.String())
 	}
@@ -2075,7 +2075,7 @@ func TestPrintBatchQualityGates(t *testing.T) {
 	minPassRate := 0.8
 	meta.MinPassRate = &minPassRate
 	meta.QualityProfile = "longrun"
-	printBatchQualityGates(&out, meta, []string{"pass_rate 0.500 < min 0.800"})
+	printBatchQualityGates(&out, meta, batchSummary{}, []string{"pass_rate 0.500 < min 0.800"})
 	got := out.String()
 	if !strings.Contains(got, "QUALITY_GATES status=failed profile=longrun failures=1") ||
 		!strings.Contains(got, "gate_failure: pass_rate 0.500 < min 0.800") {
@@ -2083,7 +2083,26 @@ func TestPrintBatchQualityGates(t *testing.T) {
 	}
 
 	out.Reset()
-	printBatchQualityGates(&out, meta, nil)
+	printBatchQualityGates(&out, meta, batchSummary{
+		DebugBriefTagExamples: map[string][]batchDebugBriefTagExample{
+			"verifier:failed": {{
+				Scenario:          "code-pr",
+				FailureKinds:      map[string]int{"verify_command": 1},
+				TracePath:         "/tmp/affenteval/code-pr/trace.jsonl",
+				TimelinePath:      "/tmp/affenteval/code-pr/affenteval-timeline.md",
+				DebugManifestPath: "/tmp/affenteval/code-pr/affenteval-debug.json",
+			}},
+		},
+	}, []string{"debug_brief_tag_rate[verifier:failed] 0.500 > max 0.000"})
+	got = out.String()
+	if !strings.Contains(got, "gate_failure: debug_brief_tag_rate[verifier:failed] 0.500 > max 0.000") ||
+		!strings.Contains(got, "debug_brief_example[verifier:failed]: scenario=code-pr failure_kinds=verify_command:1") ||
+		!strings.Contains(got, "timeline=/tmp/affenteval/code-pr/affenteval-timeline.md") {
+		t.Fatalf("debug brief tag quality gate output missing example:\n%s", got)
+	}
+
+	out.Reset()
+	printBatchQualityGates(&out, meta, batchSummary{}, nil)
 	if strings.TrimSpace(out.String()) != "QUALITY_GATES status=passed profile=longrun" {
 		t.Fatalf("passed quality gates output = %q", out.String())
 	}
@@ -2091,7 +2110,7 @@ func TestPrintBatchQualityGates(t *testing.T) {
 	out.Reset()
 	meta = testEvalJSONLMetadata()
 	meta.MaxDebugBriefTagRates = map[string]float64{"source_dynamic_without_network": 0}
-	printBatchQualityGates(&out, meta, nil)
+	printBatchQualityGates(&out, meta, batchSummary{}, nil)
 	if strings.TrimSpace(out.String()) != "QUALITY_GATES status=passed" {
 		t.Fatalf("debug brief tag quality gates output = %q", out.String())
 	}

@@ -621,7 +621,8 @@ Summary records aggregate all scenario records from the same process:
   gate threshold was configured, and
   `quality_gate_failures` lists failed gate comparisons when any thresholds
   were violated. `debug_brief_tag_rate[tag]` failures use total scenarios as
-  the denominator.
+  the denominator; pair them with `debug_brief_tag_examples` to jump to
+  representative retained artifacts for the failing tag.
 - Runtime surface and trace coverage totals: `runtime_surface_rate`,
   `runtime_surface_scenarios`, `runtime_surface_tools`,
   `runtime_surface_capabilities`, `trace_event_rate`, and

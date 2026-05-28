@@ -339,7 +339,7 @@ success and trace-level process quality.`)
 		printBatchSummaryJSONL(os.Stdout, jsonlMeta, summary, gateFailures)
 	} else {
 		printBatchSummary(os.Stdout, summary)
-		printBatchQualityGates(os.Stdout, jsonlMeta, gateFailures)
+		printBatchQualityGates(os.Stdout, jsonlMeta, summary, gateFailures)
 	}
 	if len(gateFailures) > 0 {
 		fmt.Fprintln(os.Stderr, "quality gates failed:")
@@ -1503,7 +1503,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printExpectationCapabilityFailureExampleLines(w, s.ExpectationCapabilityFailureExamples, "")
 }
 
-func printBatchQualityGates(w io.Writer, meta evalJSONLMetadata, failures []string) {
+func printBatchQualityGates(w io.Writer, meta evalJSONLMetadata, summary batchSummary, failures []string) {
 	if !hasQualityGateThresholds(meta) {
 		return
 	}
@@ -1521,6 +1521,46 @@ func printBatchQualityGates(w io.Writer, meta evalJSONLMetadata, failures []stri
 	fmt.Fprintln(w)
 	for _, failure := range failures {
 		fmt.Fprintf(w, "  gate_failure: %s\n", failure)
+		if tag := qualityGateDebugBriefTag(failure); tag != "" {
+			printQualityGateDebugBriefExamples(w, tag, summary.DebugBriefTagExamples[tag], "    ")
+		}
+	}
+}
+
+func qualityGateDebugBriefTag(failure string) string {
+	const prefix = "debug_brief_tag_rate["
+	failure = strings.TrimSpace(failure)
+	if !strings.HasPrefix(failure, prefix) {
+		return ""
+	}
+	rest := strings.TrimPrefix(failure, prefix)
+	end := strings.Index(rest, "]")
+	if end <= 0 {
+		return ""
+	}
+	return strings.TrimSpace(rest[:end])
+}
+
+func printQualityGateDebugBriefExamples(w io.Writer, tag string, examples []batchDebugBriefTagExample, indent string) {
+	tag = strings.TrimSpace(tag)
+	if tag == "" || len(examples) == 0 {
+		return
+	}
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sdebug_brief_example[%s]: scenario=%s", indent, tag, ex.Scenario)
+		if len(ex.FailureKinds) > 0 {
+			fmt.Fprintf(w, " failure_kinds=%s", formatStringIntCounts(ex.FailureKinds))
+		}
+		if ex.TracePath != "" {
+			fmt.Fprintf(w, " trace=%s", ex.TracePath)
+		}
+		if ex.TimelinePath != "" {
+			fmt.Fprintf(w, " timeline=%s", ex.TimelinePath)
+		}
+		if ex.DebugManifestPath != "" {
+			fmt.Fprintf(w, " debug_manifest=%s", ex.DebugManifestPath)
+		}
+		fmt.Fprintln(w)
 	}
 }
 
