@@ -72,8 +72,19 @@ export function changedFileDiffText(file: SessionChangedFile): string {
 
 export function changedFileDraft(file: SessionChangedFile): string {
   const diff = changedFileDiffText(file);
-  if (!diff) return `Review and adjust this changed file: ${file.path}`;
-  return `Review and adjust this changed file:\nPath: ${file.path}\n\n${diff}`;
+  if (!diff) {
+    return [
+      "Inspect this changed file and decide whether it needs a follow-up edit:",
+      `Path: ${file.path}`,
+      `Operation: ${file.operation}`,
+      `Status: ${file.status}`,
+      file.detail ? `Latest evidence: ${file.detail}` : undefined,
+      file.artifactPath ? `Evidence artifact: ${file.artifactPath}` : undefined,
+      "",
+      "No diff preview was captured, so read the current file before making changes.",
+    ].filter((line): line is string => Boolean(line)).join("\n");
+  }
+  return `Review and revise this diff if needed:\nPath: ${file.path}\n\n${diff}`;
 }
 
 function changePriority(file: SessionChangedFile): number {

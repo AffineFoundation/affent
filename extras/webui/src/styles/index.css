@@ -1734,6 +1734,25 @@ button.workbench-context-runtime-item:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.session-changes-evidence-state {
+  width: fit-content;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.58);
+  padding: 2px 7px;
+}
+
+.session-changes-evidence-state[data-state="diff"],
+.session-changes-evidence-state[data-state="artifact"] {
+  border-color: rgba(20, 184, 166, 0.24);
+  color: #0f766e;
+}
+
+.session-changes-evidence-state[data-state="missing"] {
+  border-color: rgba(148, 163, 184, 0.34);
+  color: var(--text-faint);
+}
+
 .session-files-focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -11069,6 +11088,10 @@ html[data-theme="dark"] .session-changes-focus[data-status="failed"] {
 html[data-theme="dark"] .session-changes-focus[data-status="running"] {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(120, 53, 15, 0.16);
+}
+
+html[data-theme="dark"] .session-changes-evidence-state {
+  background: rgba(14, 17, 22, 0.42);
 }
 
 html[data-theme="dark"] .session-workspace-hero {

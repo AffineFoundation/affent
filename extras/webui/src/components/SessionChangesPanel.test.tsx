@@ -37,7 +37,7 @@ describe("SessionChangesPanel", () => {
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/edit.txt");
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Adjust" })[0]);
+    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Revise diff" })[0]);
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: src/payments.ts"), "changed_file");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"), "changed_file");
@@ -62,6 +62,37 @@ describe("SessionChangesPanel", () => {
     await user.type(screen.getByLabelText("Search changes"), "missing.ts");
     expect(screen.queryByTestId("session-changes-list")).toBeNull();
     expect(panel).toHaveTextContent('No changed files matching "missing.ts".');
+  });
+
+  it("makes no-diff changes explicit and offers file review", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    render(
+      <SessionChangesPanel
+        defaultOpen
+        changes={{
+          summary: "1 changed file",
+          detail: "1 changed",
+          files: [{
+            path: "game2048.py",
+            operation: "edit",
+            status: "changed",
+            turnNumber: 4,
+            actionCount: 5,
+            detail: "replaced 1 occurrence(s) in game2048.py",
+          }],
+        }}
+        onUseAsDraft={onUseAsDraft}
+      />,
+    );
+
+    const panel = screen.getByTestId("session-changes-panel");
+    expect(panel).toHaveTextContent("No diff preview captured");
+    expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Diff/ })).toBeNull();
+    expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Issues/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Review file" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("No diff preview was captured"), "changed_file");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: game2048.py"), "changed_file");
   });
 
   it("keeps the panel folded by default", () => {

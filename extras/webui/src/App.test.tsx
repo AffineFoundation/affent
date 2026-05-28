@@ -2340,7 +2340,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
     await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("Updated payment route");
-    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Adjust" }));
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Revise diff" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using changed file");
     const draft = screen.getByPlaceholderText("Message Affent...");
     expect(draft).toHaveValue();

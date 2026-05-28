@@ -42,10 +42,15 @@ export function SessionChangesPanel({
             <small>{changes.detail || "No write or edit actions recorded."}</small>
           </div>
           <div className="session-changes-filterbar" role="group" aria-label="Change filters">
-            <ChangeFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
-            <ChangeFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
-            <ChangeFilterButton label="Issues" value={stats.issues} active={filter === "issues"} onClick={() => setFilter("issues")} />
-            <ChangeFilterButton label="Diff" value={stats.diff} active={filter === "diff"} onClick={() => setFilter("diff")} />
+            {changeFilterItems(stats).map((item) => (
+              <ChangeFilterButton
+                key={item.filter}
+                label={item.label}
+                value={item.value}
+                active={filter === item.filter}
+                onClick={() => setFilter(item.filter)}
+              />
+            ))}
           </div>
         </div>
         {focusFile ? (
@@ -55,6 +60,9 @@ export function SessionChangesPanel({
               <strong title={focusFile.path}>{displayPath(focusFile.path)}</strong>
               <small>{changeMeta(focusFile)}</small>
               {focusFile.detail ? <p>{focusFile.detail}</p> : null}
+              <small className="session-changes-evidence-state" data-state={changeEvidenceState(focusFile).state}>
+                {changeEvidenceState(focusFile).label}
+              </small>
               {focusFile.artifactPath ? <small title={focusFile.artifactPath}>Evidence: {artifactLabel(focusFile.artifactPath)}</small> : null}
             </div>
             <span className="session-evidence-actions">
@@ -69,7 +77,7 @@ export function SessionChangesPanel({
               ) : null}
               {onUseAsDraft ? (
                 <button type="button" className="ghost-action primary-run-action" onClick={() => onUseAsDraft(changedFileDraft(focusFile), "changed_file")}>
-                  Adjust
+                  {changeDraftActionLabel(focusFile)}
                 </button>
               ) : null}
             </span>
@@ -99,6 +107,9 @@ export function SessionChangesPanel({
                   <strong title={file.path}>{displayPath(file.path)}</strong>
                   <span>{changeMeta(file)}</span>
                   {file.detail ? <small>{file.detail}</small> : null}
+                  <small className="session-changes-evidence-state" data-state={changeEvidenceState(file).state}>
+                    {changeEvidenceState(file).label}
+                  </small>
                   {file.artifactPath ? <small title={file.artifactPath}>Evidence: {artifactLabel(file.artifactPath)}</small> : null}
                 </div>
                 <span className="session-evidence-actions">
@@ -113,7 +124,7 @@ export function SessionChangesPanel({
                   ) : null}
                   {onUseAsDraft ? (
                     <button type="button" className="ghost-action" onClick={() => onUseAsDraft(changedFileDraft(file), "changed_file")}>
-                      Adjust
+                      {changeDraftActionLabel(file)}
                     </button>
                   ) : null}
                 </span>
@@ -170,11 +181,31 @@ function changeStats(files: readonly SessionChangedFile[]) {
   };
 }
 
+function changeFilterItems(stats: ReturnType<typeof changeStats>): Array<{ filter: ChangeFilter; label: string; value: number }> {
+  return [
+    { filter: "all", label: "All", value: stats.total },
+    stats.changed > 0 ? { filter: "changed", label: "Changed", value: stats.changed } : undefined,
+    stats.issues > 0 ? { filter: "issues", label: "Issues", value: stats.issues } : undefined,
+    stats.diff > 0 ? { filter: "diff", label: "Diff", value: stats.diff } : undefined,
+  ].filter((item): item is { filter: ChangeFilter; label: string; value: number } => Boolean(item));
+}
+
 function changeMatchesFilter(file: SessionChangedFile, filter: ChangeFilter): boolean {
   if (filter === "changed") return file.status === "changed";
   if (filter === "issues") return file.status === "failed" || file.status === "running";
   if (filter === "diff") return !!file.diffPreview && file.diffPreview.length > 0;
   return true;
+}
+
+function changeEvidenceState(file: SessionChangedFile): { state: "diff" | "artifact" | "missing"; label: string } {
+  if (file.diffPreview && file.diffPreview.length > 0) return { state: "diff", label: "Diff preview captured" };
+  if (file.artifactPath) return { state: "artifact", label: "Evidence artifact captured" };
+  return { state: "missing", label: "No diff preview captured" };
+}
+
+function changeDraftActionLabel(file: SessionChangedFile): string {
+  if (file.diffPreview && file.diffPreview.length > 0) return "Revise diff";
+  return "Review file";
 }
 
 function changeMatchesQuery(file: SessionChangedFile, query: string): boolean {

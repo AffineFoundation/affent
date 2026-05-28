@@ -227,8 +227,25 @@ describe("buildSessionChanges", () => {
 
     expect(changedFileDiffText(file)).toContain("Diff for src/checkout.ts");
     expect(changedFileDiffText(file)).toContain("+return true;");
+    expect(changedFileDraft(file)).toContain("Review and revise this diff if needed");
     expect(changedFileDraft(file)).toContain("Path: src/checkout.ts");
     expect(changedFileDraft(file)).toContain("+return true;");
+  });
+
+  it("builds a file-review draft when no diff preview was captured", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "game2048.py" } } },
+      { id: 3, type: "tool.result", data: { call_id: "edit", exit_code: 0, result_summary: "replaced 1 occurrence(s) in game2048.py", result: "replaced 1 occurrence(s) in game2048.py" } },
+    ]);
+
+    const [file] = buildSessionChanges(session).files;
+
+    expect(changedFileDiffText(file)).toBe("");
+    expect(changedFileDraft(file)).toContain("Inspect this changed file");
+    expect(changedFileDraft(file)).toContain("Path: game2048.py");
+    expect(changedFileDraft(file)).toContain("Latest evidence: replaced 1 occurrence(s) in game2048.py");
+    expect(changedFileDraft(file)).toContain("No diff preview was captured");
   });
 
   it("prioritizes failed and running changes before completed edits", () => {
