@@ -159,6 +159,7 @@ type BatchScenario struct {
 	VerifierTimeout                                time.Duration
 	ExpectedSkill                                  string
 	ForbiddenCommands                              []string
+	ForbidWorkspaceAbsolutePaths                   bool
 	RequiredCommands                               []string
 	RequiredCommandCounts                          map[string]int
 	RequiredToolCounts                             map[string]int
@@ -388,6 +389,7 @@ type DebugScenarioExpectations struct {
 	ForbiddenTools                                 []string                              `json:"forbidden_tools,omitempty"`
 	RequiredCommands                               []string                              `json:"required_commands,omitempty"`
 	ForbiddenCommands                              []string                              `json:"forbidden_commands,omitempty"`
+	ForbidWorkspaceAbsolutePaths                   bool                                  `json:"forbid_workspace_absolute_paths,omitempty"`
 	RequiredCommandCounts                          map[string]int                        `json:"required_command_counts,omitempty"`
 	RequiredCommandOrder                           []DebugCommandOrderRequirement        `json:"required_command_order,omitempty"`
 	RequiredToolCounts                             map[string]int                        `json:"required_tool_counts,omitempty"`
@@ -558,6 +560,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["workspace"] = true
 	}
 	if len(exp.RequiredCommandOrder) > 0 || len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
+		caps["workspace"] = true
+	}
+	if exp.ForbidWorkspaceAbsolutePaths {
 		caps["workspace"] = true
 	}
 	if len(exp.RequiredFileSubstrings) > 0 || len(exp.ForbiddenFileSubstrings) > 0 || len(exp.ProtectedFiles) > 0 {
@@ -1020,6 +1025,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
+		smallToolWorkspaceRelativeShellScenario(),
 		oversizedToolResultScenario(),
 		longRunStockAnalysisScenario(),
 		longRunBittensorSubnetScenario(),
@@ -1919,6 +1925,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ForbiddenTools:                          append([]string(nil), s.ForbiddenTools...),
 		RequiredCommands:                        append([]string(nil), s.RequiredCommands...),
 		ForbiddenCommands:                       append([]string(nil), s.ForbiddenCommands...),
+		ForbidWorkspaceAbsolutePaths:            s.ForbidWorkspaceAbsolutePaths,
 		RequiredCommandCounts:                   cloneStringIntMap(s.RequiredCommandCounts),
 		RequiredToolCounts:                      cloneStringIntMap(s.RequiredToolCounts),
 		RequiredToolFailureKindCounts:           cloneStringIntMap(s.RequiredToolFailureKindCounts),
@@ -2953,6 +2960,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, forbidden := range scenario.ForbiddenCommands {
 		checks = append(checks, ShellCommandLacksUnguarded(forbidden))
+	}
+	if scenario.ForbidWorkspaceAbsolutePaths {
+		checks = append(checks, ShellCommandLacksWorkspaceAbsolutePath())
 	}
 	if len(scenario.ProtectedFiles) > 0 {
 		checks = append(checks, FileNotEdited(scenario.ProtectedFiles))

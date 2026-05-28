@@ -459,6 +459,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineStringList(b, "forbidden_tools", exp.ForbiddenTools)
 	writeTimelineStringList(b, "required_commands", exp.RequiredCommands)
 	writeTimelineStringList(b, "forbidden_commands", exp.ForbiddenCommands)
+	if exp.ForbidWorkspaceAbsolutePaths {
+		fmt.Fprintf(b, "- forbid_workspace_absolute_paths: `true`\n")
+	}
 	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
 	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
 	writeTimelineToolOrders(b, "required_tool_order", exp.RequiredToolOrder)

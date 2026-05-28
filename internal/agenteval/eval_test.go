@@ -1420,6 +1420,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundSymbolContextThenReadFile := false
 	foundFileContext := false
 	foundRepoSearch := false
+	foundWorkspaceRelativeShell := false
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "small-model-tools") {
 			t.Fatalf("scenario %s missing suite marker", scenario.Name)
@@ -1619,6 +1620,22 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				t.Fatalf("default-runtime-repo-search MaxSuccessfulToolCallsByTool = %#v, want repo_search=1", scenario.MaxSuccessfulToolCallsByTool)
 			}
 		}
+		if scenario.Name == "small-tools-workspace-relative-shell" {
+			foundWorkspaceRelativeShell = true
+			if !scenario.ForbidWorkspaceAbsolutePaths {
+				t.Fatal("small-tools-workspace-relative-shell should forbid workspace absolute paths")
+			}
+			if !stringSliceContains(scenario.RequiredTools, "shell") {
+				t.Fatalf("small-tools-workspace-relative-shell RequiredTools = %#v, want shell", scenario.RequiredTools)
+			}
+			if !stringSliceContains(ScenarioExpectationCapabilityNames(scenario), "workspace") {
+				t.Fatalf("small-tools-workspace-relative-shell capabilities should include workspace")
+			}
+			checkNames := debugScenarioExpectations(scenario).CheckNames
+			if !stringSliceContains(checkNames, "shell_command_lacks_workspace_absolute_path") {
+				t.Fatalf("small-tools-workspace-relative-shell checks = %#v, want workspace absolute path guard", checkNames)
+			}
+		}
 		if scenario.Name == "default-runtime-symbol-context" {
 			foundSymbolContext = true
 			if !stringSliceContains(scenario.RequiredTools, "symbol_context") {
@@ -1721,6 +1738,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 	if !foundRepoSearch {
 		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
+	}
+	if !foundWorkspaceRelativeShell {
+		t.Fatalf("small-model-tools suite missing small-tools-workspace-relative-shell")
 	}
 	if !foundSymbolContext {
 		t.Fatalf("small-model-tools suite missing default-runtime-symbol-context")

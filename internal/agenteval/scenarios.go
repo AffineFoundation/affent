@@ -2563,6 +2563,33 @@ func smallToolShellFailureScenario() BatchScenario {
 	}
 }
 
+func smallToolWorkspaceRelativeShellScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "small-tools-workspace-relative-shell",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "Run shell from the workspace root, print the current directory, read data/value.txt using a workspace-relative path, and answer the exact marker. Do not set cwd and do not use an absolute workspace path.",
+		Files: map[string]string{
+			"data/value.txt": "marker=RELATIVE-WORKSPACE-OK\n",
+		},
+		RequiredTools: []string{"shell"},
+		RequiredCommands: []string{
+			`pwd`,
+			`cat (\./)?data/value\.txt`,
+		},
+		RequiredToolResultText: map[string][]string{
+			"shell": {"RELATIVE-WORKSPACE-OK"},
+		},
+		RequiredFinalText:            []string{"RELATIVE-WORKSPACE-OK"},
+		ForbiddenTools:               []string{"write_file", "edit_file"},
+		ForbidWorkspaceAbsolutePaths: true,
+		ProtectedFiles:               []string{"data/value.txt"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"shell": 2,
+		},
+		MaxTurns: 5,
+	}
+}
+
 func oversizedToolResultScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "runtime-oversized-tool-result",

@@ -1819,6 +1819,53 @@ func TestShellCommandLacksUnguarded(t *testing.T) {
 	})
 }
 
+func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
+	check := ShellCommandLacksWorkspaceAbsolutePath()
+	workspace := filepath.Join(t.TempDir(), "workspace")
+
+	t.Run("passes for relative command", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID: "c1",
+				Tool:   "shell",
+				Args:   map[string]any{"command": "pwd; cat data/value.txt"},
+			}},
+		}
+		if res := check.Eval(trace); !res.Pass {
+			t.Fatalf("relative shell command should pass: %+v", res)
+		}
+	})
+
+	t.Run("fails for command absolute workspace path", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID: "c1",
+				Tool:   "shell",
+				Args:   map[string]any{"command": "cat " + filepath.Join(workspace, "data/value.txt")},
+			}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path in command should fail: %+v", res)
+		}
+	})
+
+	t.Run("fails for cwd absolute workspace path", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID: "c1",
+				Tool:   "shell",
+				Args:   map[string]any{"command": "cat data/value.txt", "cwd": workspace},
+			}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path in cwd should fail: %+v", res)
+		}
+	})
+}
+
 func TestFileNotEdited(t *testing.T) {
 	t.Run("fails when protected file edited", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{

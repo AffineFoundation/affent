@@ -2237,6 +2237,59 @@ func ShellCommandLacksUnguarded(forbidden string) Check {
 	}
 }
 
+// ShellCommandLacksWorkspaceAbsolutePath passes when shell command arguments
+// stay workspace-relative. It checks both the command text and optional cwd
+// arg against the trace's actual workspace path, so it catches regressions
+// where prompt guidance makes the model paste a per-session absolute path.
+func ShellCommandLacksWorkspaceAbsolutePath() Check {
+	return Check{
+		Name: "shell_command_lacks_workspace_absolute_path",
+		Eval: func(t Trace) CheckResult {
+			needles := workspaceAbsolutePathNeedles(t.WorkspaceDir)
+			if len(needles) == 0 {
+				return CheckResult{Pass: true, Detail: "workspace path unavailable; skipped absolute-path check"}
+			}
+			for _, c := range t.Tools {
+				if c.Tool != "shell" {
+					continue
+				}
+				for _, argName := range []string{"command", "cwd"} {
+					value, ok := c.Args[argName]
+					if !ok {
+						continue
+					}
+					text := fmt.Sprint(value)
+					for _, needle := range needles {
+						if strings.Contains(text, needle) {
+							return CheckResult{
+								Pass:   false,
+								Detail: fmt.Sprintf("shell call_id=%s used workspace absolute path in %s: %q", c.CallID, argName, previewSubstr(text, 160)),
+							}
+						}
+					}
+				}
+			}
+			return CheckResult{Pass: true}
+		},
+	}
+}
+
+func workspaceAbsolutePathNeedles(workspace string) []string {
+	workspace = strings.TrimSpace(workspace)
+	if workspace == "" {
+		return nil
+	}
+	clean := filepath.Clean(workspace)
+	if clean == "." || clean == string(filepath.Separator) || !filepath.IsAbs(clean) {
+		return nil
+	}
+	needles := []string{clean}
+	if slash := filepath.ToSlash(clean); slash != clean {
+		needles = append(needles, slash)
+	}
+	return needles
+}
+
 // FileNotEdited passes when no write_file / edit_file tool call
 // targeted any of the named paths. Paths match against the trailing
 // segment of args.path (so "test_slug.py" catches both
