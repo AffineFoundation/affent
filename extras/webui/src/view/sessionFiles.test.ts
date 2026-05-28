@@ -28,6 +28,7 @@ describe("buildSessionFiles", () => {
         listed: 1,
         changed: 1,
         snapshots: 1,
+        staleSnapshots: 1,
       },
     });
     expect(files.items).toEqual([
@@ -42,16 +43,19 @@ describe("buildSessionFiles", () => {
         contentPreview: "existing route",
         contentSource: "read_file",
         contentTruncated: false,
+        contentStale: true,
       }),
       expect.objectContaining({ path: "src", actions: ["listed"], status: "available" }),
     ]);
     expect(filesReviewFocus(files.items)).toMatchObject({
       label: "Changed file",
       title: "src/payments.ts",
-      tone: "ok",
+      tone: "attention",
+      detail: "Loaded snapshot predates the latest change; open the current workspace file before review.",
     });
     expect(filesReviewFacts(files.items)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Snapshots", value: "1/2", tone: "attention" }),
+      expect.objectContaining({ label: "Stale", value: "1", detail: "verify current file", tone: "attention" }),
       expect.objectContaining({ label: "Issues", value: "0", detail: "none", tone: "neutral" }),
     ]));
   });
@@ -130,6 +134,7 @@ describe("buildSessionFiles", () => {
       detail: "loaded game",
       next: undefined,
       contentPreview: "print('2048')",
+      contentStale: false,
     });
   });
 
@@ -169,6 +174,7 @@ describe("buildSessionFiles", () => {
     expect(fileEvidenceText(item)).toContain("Detail: checkout route handler");
     expect(fileEvidenceText(item)).toContain("Next: rerun checkout tests");
     expect(fileEvidenceText(item)).toContain("Loaded snapshot: read_file output");
+    expect(fileEvidenceText(item)).not.toContain("Snapshot freshness");
     expect(fileEvidenceDraft(item)).toContain("Use this file evidence in the next step");
     expect(fileEvidenceDraft(item)).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
     expect(filesEvidenceText(buildSessionFiles(session))).toContain("Session file evidence");

@@ -19,8 +19,10 @@ describe("SessionFilesPanel", () => {
     expect(panel).toHaveTextContent("2 file references");
     expect(screen.getByTestId("session-files-review")).toHaveTextContent("Changed file");
     expect(screen.getByTestId("session-files-review")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-files-review")).toHaveTextContent("Loaded snapshot predates the latest change");
     expect(screen.getByLabelText("File review facts")).toHaveTextContent("Snapshots");
     expect(screen.getByLabelText("File review facts")).toHaveTextContent("1/2");
+    expect(screen.getByLabelText("File review facts")).toHaveTextContent("Stale");
     expect(screen.queryByTestId("session-workspace-browser")).toBeNull();
     expect(within(dashboard).getByText("All").closest("button")).toHaveTextContent("2");
     expect(within(within(dashboard).getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ })).toHaveTextContent("1");
@@ -34,8 +36,9 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Next: rerun checkout tests");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence: read.txt");
-    expect(screen.getByTestId("session-files-list")).toHaveTextContent("read_file snapshot available");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Snapshot may predate latest change");
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-file-preview")).toHaveTextContent("snapshot before latest change");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("export function checkout");
 
     await user.type(screen.getByLabelText("Search file snapshot"), "route");
@@ -226,6 +229,7 @@ const files: SessionFilesView = {
       contentPreview: "export function checkout() {\n  return route('/checkout');\n}\n",
       contentSource: "read_file",
       contentTruncated: false,
+      contentStale: true,
       contentBytes: 58,
     },
     {

@@ -16,6 +16,7 @@ export interface SessionFileEvidence {
   contentPreview?: string;
   contentSource?: "read_file";
   contentTruncated?: boolean;
+  contentStale?: boolean;
   contentBytes?: number;
 }
 
@@ -36,6 +37,7 @@ export interface SessionFilesStats {
   listed: number;
   changed: number;
   snapshots: number;
+  staleSnapshots: number;
 }
 
 export interface SessionFilesReview {
@@ -54,6 +56,7 @@ export interface SessionFilesFact {
 
 interface SessionFileEvidenceInternal extends SessionFileEvidence {
   sequence: number;
+  contentSequence?: number;
 }
 
 export function buildSessionFiles(session: SessionState): SessionFilesView {
@@ -71,7 +74,7 @@ export function buildSessionFiles(session: SessionState): SessionFilesView {
 
   const items = [...byPath.values()]
     .sort((a, b) => filePriority(a) - filePriority(b) || b.turnNumber - a.turnNumber || b.sequence - a.sequence || a.path.localeCompare(b.path))
-    .map(({ sequence: _sequence, ...item }) => item);
+    .map(({ sequence: _sequence, contentSequence: _contentSequence, ...item }) => item);
   const failed = items.filter((item) => item.status === "failed").length;
   const running = items.filter((item) => item.status === "running").length;
   const stats = filesStats(items);
@@ -91,6 +94,7 @@ export function fileEvidenceText(item: SessionFileEvidence): string {
   if (item.artifactPath) lines.push(`Evidence artifact: ${item.artifactPath}`);
   if (item.contentPreview) {
     lines.push(`Loaded snapshot: ${item.contentTruncated ? "partial read_file output" : "read_file output"}`);
+    if (item.contentStale) lines.push("Snapshot freshness: predates the latest write/edit action");
   }
   return lines.join("\n");
 }
@@ -227,8 +231,12 @@ export function filesReviewFocus(items: readonly SessionFileEvidence[]): Session
     return {
       label: "Changed file",
       title: changed.path,
-      detail: changed.contentPreview ? "Changed file has a loaded snapshot for review." : changed.detail ?? "Review the changed file before approving.",
-      tone: changed.contentPreview ? "ok" : "attention",
+      detail: changed.contentStale
+        ? "Loaded snapshot predates the latest change; open the current workspace file before review."
+        : changed.contentPreview
+          ? "Changed file has a loaded snapshot for review."
+          : changed.detail ?? "Review the changed file before approving.",
+      tone: changed.contentPreview && !changed.contentStale ? "ok" : "attention",
     };
   }
   const snapshot = items.find((item) => item.contentPreview);
@@ -284,6 +292,12 @@ export function filesReviewFacts(items: readonly SessionFileEvidence[]): Session
       detail: "loaded content",
       tone: stats.total === 0 ? "neutral" : stats.snapshots === stats.total ? "ok" : stats.snapshots > 0 ? "attention" : "neutral",
     },
+    ...(stats.staleSnapshots > 0 ? [{
+      label: "Stale",
+      value: String(stats.staleSnapshots),
+      detail: "verify current file",
+      tone: "attention" as const,
+    }] : []),
     {
       label: "Issues",
       value: String(stats.failed + stats.running),
@@ -326,7 +340,9 @@ function fileEvidenceFromCall(
     contentPreview,
     contentSource: contentPreview ? "read_file" : undefined,
     contentTruncated: contentPreview ? call.resultTruncated : undefined,
+    contentStale: false,
     contentBytes: contentPreview ? call.resultBytes : undefined,
+    contentSequence: contentPreview ? sequence : undefined,
   };
 }
 
@@ -335,16 +351,21 @@ function mergeEvidence(
   next: SessionFileEvidenceInternal,
 ): SessionFileEvidenceInternal {
   const nextResolved = next.status === "available";
+  const contentPreview = next.contentPreview ?? previous.contentPreview;
+  const contentSequence = next.contentPreview ? next.sequence : previous.contentSequence;
+  const changedAfterSnapshot = Boolean(contentPreview && contentSequence != null && next.actions.includes("changed") && next.sequence > contentSequence);
   return {
     ...next,
     actions: mergeActions(previous.actions, next.actions),
     actionCount: previous.actionCount + 1,
     artifactPath: next.artifactPath ?? previous.artifactPath,
     next: nextResolved ? next.next : next.next ?? previous.next,
-    contentPreview: next.contentPreview ?? previous.contentPreview,
+    contentPreview,
     contentSource: next.contentSource ?? previous.contentSource,
     contentTruncated: next.contentPreview ? next.contentTruncated : previous.contentTruncated,
+    contentStale: next.contentPreview ? false : Boolean(previous.contentStale || changedAfterSnapshot),
     contentBytes: next.contentPreview ? next.contentBytes : previous.contentBytes,
+    contentSequence,
   };
 }
 
@@ -411,6 +432,7 @@ function filesStats(items: SessionFileEvidence[]): SessionFilesStats {
     listed: items.filter((item) => item.actions.includes("listed")).length,
     changed: items.filter((item) => item.actions.includes("changed")).length,
     snapshots: items.filter((item) => item.contentPreview).length,
+    staleSnapshots: items.filter((item) => item.contentStale).length,
   };
 }
 

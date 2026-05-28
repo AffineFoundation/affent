@@ -168,7 +168,7 @@ export function SessionFilesPanel({
                 <span>File snapshot</span>
                 <strong title={selectedItem.path}>{selectedItem.path}</strong>
               </div>
-              <small>{selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
+              <small>{selectedItem.contentStale ? "snapshot before latest change" : selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
             </div>
             <div className="session-file-preview-toolbar">
               <label className="session-skills-search">
@@ -273,7 +273,7 @@ export function SessionFilesPanel({
                   {item.next ? <small>Next: {item.next}</small> : null}
                   {item.artifactPath ? <small>Evidence: {artifactLabel(item.artifactPath)}</small> : null}
                   {item.contentPreview ? (
-                    <small>{item.contentTruncated ? "Partial read_file snapshot available" : "read_file snapshot available"}</small>
+                    <small>{item.contentStale ? "Snapshot may predate latest change" : item.contentTruncated ? "Partial read_file snapshot available" : "read_file snapshot available"}</small>
                   ) : null}
                 </div>
                 <span className="session-files-actions">
@@ -554,6 +554,7 @@ function fileStats(files: SessionFilesView) {
     listed: files.items.filter((item) => item.actions.includes("listed")).length,
     changed: files.items.filter((item) => item.actions.includes("changed")).length,
     snapshots: files.items.filter((item) => item.contentPreview).length,
+    staleSnapshots: files.items.filter((item) => item.contentStale).length,
   };
 }
 
