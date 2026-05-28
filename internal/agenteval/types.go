@@ -126,6 +126,11 @@ type Trace struct {
 	// order the LLM emitted them. Empty when the agent answered
 	// without using a tool.
 	Tools []ToolCall
+	// ChildTranscripts references isolated focused-task/subagent
+	// conversation logs produced under the workspace. Checks may inspect
+	// these for hygiene regressions that parent trace isolation would
+	// otherwise hide.
+	ChildTranscripts []DebugTranscriptRef
 	// UserMessages records user.message trace metadata, including product
 	// modes such as plan_only and execute_plan. This lets evals verify the
 	// requested control path instead of inferring it from prompt text.

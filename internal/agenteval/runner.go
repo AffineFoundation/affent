@@ -167,6 +167,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	}
 
 	trace := drainTrace(ctx, events, turnID, s, workspace)
+	trace.ChildTranscripts = collectDebugChildTranscripts(workspace, maxDebugChildTranscriptRefs)
 	results := evaluateChecks(trace, s.Checks)
 	return Outcome{
 		Scenario: s.Name,

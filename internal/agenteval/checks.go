@@ -1,6 +1,7 @@
 package agenteval
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -2269,8 +2270,111 @@ func ShellCommandLacksWorkspaceAbsolutePath() Check {
 					}
 				}
 			}
+			if res := childTranscriptShellCommandsLackNeedles(t, needles); !res.Pass {
+				return res
+			}
 			return CheckResult{Pass: true}
 		},
+	}
+}
+
+func childTranscriptShellCommandsLackNeedles(t Trace, needles []string) CheckResult {
+	for _, ref := range t.ChildTranscripts {
+		path, ok := resolveChildTranscriptPath(t.WorkspaceDir, ref.Path)
+		if !ok {
+			continue
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for lineNo, line := range strings.Split(string(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			calls := childTranscriptShellCalls(line)
+			for _, call := range calls {
+				for _, argName := range []string{"command", "cwd"} {
+					text := call.Args[argName]
+					if text == "" {
+						continue
+					}
+					for _, needle := range needles {
+						if strings.Contains(text, needle) {
+							return CheckResult{
+								Pass:   false,
+								Detail: fmt.Sprintf("%s child transcript %s:%d shell call_id=%s used workspace absolute path in %s: %q", ref.Kind, ref.Path, lineNo+1, call.CallID, argName, previewSubstr(text, 160)),
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return CheckResult{Pass: true}
+}
+
+func resolveChildTranscriptPath(workspace, relPath string) (string, bool) {
+	workspace = strings.TrimSpace(workspace)
+	relPath = strings.TrimSpace(relPath)
+	if workspace == "" || relPath == "" || filepath.IsAbs(relPath) {
+		return "", false
+	}
+	full := filepath.Join(workspace, filepath.FromSlash(relPath))
+	cleanWorkspace := filepath.Clean(workspace)
+	cleanFull := filepath.Clean(full)
+	rel, err := filepath.Rel(cleanWorkspace, cleanFull)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return cleanFull, true
+}
+
+type childTranscriptShellCall struct {
+	CallID string
+	Args   map[string]string
+}
+
+func childTranscriptShellCalls(line string) []childTranscriptShellCall {
+	var msg struct {
+		ToolCalls []struct {
+			ID       string `json:"id"`
+			Function struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			} `json:"function"`
+		} `json:"tool_calls"`
+	}
+	if err := json.Unmarshal([]byte(line), &msg); err != nil || len(msg.ToolCalls) == 0 {
+		return nil
+	}
+	var out []childTranscriptShellCall
+	for _, call := range msg.ToolCalls {
+		if call.Function.Name != "shell" {
+			continue
+		}
+		args := map[string]any{}
+		_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
+		out = append(out, childTranscriptShellCall{
+			CallID: call.ID,
+			Args: map[string]string{
+				"command": stringArgValue(args["command"]),
+				"cwd":     stringArgValue(args["cwd"]),
+			},
+		})
+	}
+	return out
+}
+
+func stringArgValue(v any) string {
+	switch value := v.(type) {
+	case string:
+		return value
+	case nil:
+		return ""
+	default:
+		return fmt.Sprint(value)
 	}
 }
 

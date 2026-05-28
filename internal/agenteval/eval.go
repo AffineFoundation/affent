@@ -1224,6 +1224,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	} else {
 		parsedTrace = &trace
 		trace.WorkspaceDir = workspace
+		trace.ChildTranscripts = collectDebugChildTranscripts(workspace, maxDebugChildTranscriptRefs)
 		populateBatchResultFromTrace(&res, trace)
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}

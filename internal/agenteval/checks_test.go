@@ -1864,6 +1864,25 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 			t.Fatalf("absolute workspace path in cwd should fail: %+v", res)
 		}
 	})
+
+	t.Run("fails for child transcript shell absolute workspace path", func(t *testing.T) {
+		transcriptRel := filepath.ToSlash(filepath.Join(".affentctl", "subagents", "parent", "subagent_child.jsonl"))
+		transcriptPath := filepath.Join(workspace, filepath.FromSlash(transcriptRel))
+		if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		line := `{"role":"assistant","tool_calls":[{"id":"child1","type":"function","function":{"name":"shell","arguments":"{\"command\":\"cat ` + filepath.ToSlash(filepath.Join(workspace, "data/value.txt")) + `\"}"}}]}`
+		if err := os.WriteFile(transcriptPath, []byte(line+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		trace := Trace{
+			WorkspaceDir:     workspace,
+			ChildTranscripts: []DebugTranscriptRef{{Kind: "subagent", Path: transcriptRel}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path in child transcript should fail: %+v", res)
+		}
+	})
 }
 
 func TestFileNotEdited(t *testing.T) {
