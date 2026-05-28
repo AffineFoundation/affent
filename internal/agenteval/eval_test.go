@@ -217,6 +217,7 @@ func TestDebugRecoveryPriorityTagsIncludesVerifierFailures(t *testing.T) {
 
 func TestDebugRecoveryPriorityTagsIncludesLoopProtocolFixture(t *testing.T) {
 	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"loop_protocol:calibration_backlog",
 		"loop_protocol:fixture",
 		"loop_guard:forced_no_tools",
 		"outcome:failed",
@@ -225,6 +226,7 @@ func TestDebugRecoveryPriorityTagsIncludesLoopProtocolFixture(t *testing.T) {
 	want := []string{
 		"outcome:failed",
 		"loop_protocol:fixture",
+		"loop_protocol:calibration_backlog",
 		"loop_guard:forced_no_tools",
 		"misc:later",
 	}
@@ -4587,6 +4589,44 @@ func TestBuildDebugRecoveryGuideAddsLoopProtocolFixtureAction(t *testing.T) {
 	for _, want := range []string{"failures", "expectations", "debug_manifest"} {
 		if !stringSliceContains(guide.Inspect, want) {
 			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsLoopProtocolCalibrationBacklogAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/loop-setup",
+		TimelinePath:      "/tmp/affent-eval/loop-setup/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/loop-setup/affenteval-debug.json",
+		LoopProtocolCalibrationRequests: LoopProtocolCalibrationStats{
+			Count: 4,
+			Latest: LoopProtocolCalibration{
+				LoopID:               "loop-setup",
+				Status:               "draft",
+				CalibrationQuestions: 4,
+				CalibrationAnswers:   1,
+			},
+		},
+		LoopProtocolCalibrations: LoopProtocolCalibrationStats{
+			Count: 1,
+			Latest: LoopProtocolCalibration{
+				LoopID:             "loop-setup",
+				Status:             "draft",
+				CalibrationAnswers: 1,
+			},
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"loop_protocol:calibration_backlog",
+		"setup loop is spending budget without closing the protocol handshake",
+		"loop_protocol_calibration_request_examples",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)
 		}
 	}
 }

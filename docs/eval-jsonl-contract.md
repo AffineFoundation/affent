@@ -271,7 +271,7 @@ Scenario records describe one eval case:
   `browser_scroll:stuck_without_network`,
   `browser_network`, `browser_network:no_matches`,
   `browser_network:unread_refs`, `browser_network:refs`,
-  `loop_protocol:fixture`,
+  `loop_protocol:fixture`, `loop_protocol:calibration_backlog`,
   `memory_update:replace`, `empty_recall`,
   `empty_recall:no_recent_sessions`,
   `empty_recall:recent_sessions`,

@@ -1151,10 +1151,11 @@ into metadata so result files preserve their pass/fail conditions. Use
 runs; it includes minimum trace-event, memory-update, loop-protocol feed,
 loop-protocol calibration request/answer, session-search context-hit,
 scenario-level session-recall debug tag, context-compaction summary gap tags,
-and missing truncation-artifact gates, plus a scenario-level failed tool-repair
-gate, so observability, shared memory, tool recovery, loop startup calibration,
-loop-guard no-tool fallback, and cross-session recovery regressions fail the
-batch. It also requires the batch to include `longrun_recovery`,
+loop-protocol calibration backlog, and missing truncation-artifact gates, plus a
+scenario-level failed tool-repair gate, so observability, shared memory, tool
+recovery, loop startup calibration, loop-guard no-tool fallback, and
+cross-session recovery regressions fail the batch. It also requires the batch to
+include `longrun_recovery`,
 `loop_protocol`, and `session_search`
 expectation capabilities, so a filtered run cannot pass the profile without
 exercising durable recovery. The profile also requires `market`, `bittensor`,
@@ -1332,6 +1333,10 @@ first to timeout/cancel symptoms or a local rerun with a larger output cap.
 Loop protocol fixture failures add `loop_protocol:fixture`, which is gated at
 zero by the `longrun` quality profile and routes recovery to the per-session
 `LOOP.md`/`state.json` lifecycle fixture before any model-behavior diagnosis.
+Loop protocol calibration backlogs add `loop_protocol:calibration_backlog`,
+which is also gated at zero; the signal is based on recorded request/answer
+counters so repeated setup turns that spend budget without closing the
+handshake are visible without parsing assistant prose.
 Failed tool-repair hints add a concrete
 continuation action to inspect `tool_repair_examples` and decide whether the
 durable fix belongs in tool aliasing, argument repair, or model guidance before

@@ -44,6 +44,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"failures": count,
 		}, "loop_protocol", "loop_protocol:fixture")
 	}
+	if counts, ok := loopProtocolCalibrationBacklogCounts(res); ok {
+		add("loop_protocol_calibration_backlog", "warn", "loop protocol calibration requests outpaced recorded answers; inspect setup state before spending more turn budget", []string{"loop_protocol_calibration_request_examples", "loop_protocol_calibration_examples", "trace_events", "timeline"}, counts, "loop_protocol", "loop_protocol:calibration_backlog")
+	}
 	if count := sourceRepoSetupFailureCount(res.Failures); count > 0 {
 		add("source_repo_setup", "fail", "source repository setup failed before the agent turn; fix the eval repository URL, ref, target directory, or setup command before judging model behavior", []string{"failures", "expectations", "debug_manifest", "workspace"}, map[string]int{
 			"failures": count,
@@ -582,6 +585,31 @@ func sourceRepoSetupFailureCount(failures []string) int {
 		}
 	}
 	return count
+}
+
+func loopProtocolCalibrationBacklogCounts(res BatchResult) (map[string]int, bool) {
+	questionEvents := res.LoopProtocolCalibrationRequests.Count
+	answerEvents := res.LoopProtocolCalibrations.Count
+	questions := max(res.LoopProtocolCalibrationRequests.Latest.CalibrationQuestions, res.LoopProtocolCalibrations.Latest.CalibrationQuestions)
+	answers := max(res.LoopProtocolCalibrationRequests.Latest.CalibrationAnswers, res.LoopProtocolCalibrations.Latest.CalibrationAnswers)
+	if questions == 0 {
+		questions = questionEvents
+	}
+	if answers == 0 {
+		answers = answerEvents
+	}
+	backlog := questions - answers
+	if backlog <= 1 {
+		return nil, false
+	}
+	return map[string]int{
+		"backlog":         backlog,
+		"questions":       questions,
+		"answers":         answers,
+		"request_events":  questionEvents,
+		"answer_events":   answerEvents,
+		"pending_allowed": 1,
+	}, true
 }
 
 func researchCheckpointHasExternalEvidence(res BatchResult) bool {

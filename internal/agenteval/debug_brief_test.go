@@ -80,6 +80,56 @@ func TestBuildDebugBriefClassifiesLoopProtocolFixtureFailures(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesLoopProtocolCalibrationBacklog(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopProtocolCalibrationRequests: LoopProtocolCalibrationStats{
+			Count: 8,
+			Latest: LoopProtocolCalibration{
+				LoopID:               "setup-loop",
+				Status:               "draft",
+				CalibrationQuestions: 8,
+				CalibrationAnswers:   1,
+			},
+		},
+		LoopProtocolCalibrations: LoopProtocolCalibrationStats{
+			Count: 1,
+			Latest: LoopProtocolCalibration{
+				LoopID:               "setup-loop",
+				Status:               "draft",
+				CalibrationQuestions: 1,
+				CalibrationAnswers:   1,
+			},
+		},
+	})
+	item := debugBriefItemByKind(brief, "loop_protocol_calibration_backlog")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["backlog"] != 7 ||
+		item.Counts["questions"] != 8 ||
+		item.Counts["answers"] != 1 ||
+		!stringSliceContains(item.Inspect, "loop_protocol_calibration_request_examples") ||
+		!stringSliceContains(brief.Tags, "loop_protocol") ||
+		!stringSliceContains(brief.Tags, "loop_protocol:calibration_backlog") {
+		t.Fatalf("loop protocol calibration backlog item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopProtocolCalibrationRequests: LoopProtocolCalibrationStats{
+			Count: 1,
+			Latest: LoopProtocolCalibration{
+				LoopID:               "setup-loop",
+				Status:               "draft",
+				CalibrationQuestions: 1,
+			},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "loop_protocol_calibration_backlog"); item != nil {
+		t.Fatalf("single pending calibration question should not be a backlog: %+v", item)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSourceRepoSetupFailures(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: false,

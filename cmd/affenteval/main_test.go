@@ -70,6 +70,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=browser_scroll:stuck_without_network=0.000",
 		"max-debug-brief-tag-rate=context_compaction:summary_missing=0.000",
 		"max-debug-brief-tag-rate=empty_recall:no_recent_sessions=0.000",
+		"max-debug-brief-tag-rate=loop_protocol:calibration_backlog=0.000",
 		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
@@ -1216,6 +1217,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		gates.MaxDebugBriefTagRates["context_compaction:summary_empty"] != 0 ||
 		gates.MaxDebugBriefTagRates["context_compaction:summary_missing"] != 0 ||
 		gates.MaxDebugBriefTagRates["empty_recall:no_recent_sessions"] != 0 ||
+		gates.MaxDebugBriefTagRates["loop_protocol:calibration_backlog"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_protocol:fixture"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_guard:forced_no_tools"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:memory_no_topic_anchors"] != 0 ||
