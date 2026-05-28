@@ -3407,6 +3407,26 @@ func TestBuiltinGitCommitPushScenariosVerifyPushedRemoteContent(t *testing.T) {
 	}
 }
 
+func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresDurableMemoryWrite(scenario) || !scenarioRequiresGitCommitAndPush(scenario) {
+			continue
+		}
+		transientTerms := []string{"commit hash", "push result"}
+		if len(scenario.Prompts) > 1 {
+			transientTerms = append(transientTerms, "iteration 1", "iteration 2")
+		}
+		for _, term := range transientTerms {
+			if !scenarioForbidsMemoryContent(scenario, term) {
+				t.Fatalf("%s writes memory during commit/push but does not forbid transient memory content %q; forbidden args=%#v", scenario.Name, term, scenario.ForbiddenToolArgContains)
+			}
+			if !scenarioVerifierRejectsMemoryText(scenario, term) {
+				t.Fatalf("%s writes memory during commit/push but verifier does not reject %q in memory files: %q", scenario.Name, term, scenario.VerifyCommand)
+			}
+		}
+	}
+}
+
 func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresGitCommitAndPush(scenario) || !scenarioRequiresCleanGitStatus(scenario) {
@@ -3426,6 +3446,21 @@ func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {
 
 func scenarioRequiresGitCommitAndPush(scenario BatchScenario) bool {
 	return scenarioHasCommandRequirement(scenario, `git commit`) && scenarioHasCommandRequirement(scenario, `git push`)
+}
+
+func scenarioRequiresDurableMemoryWrite(scenario BatchScenario) bool {
+	if !scenario.EnableMemory {
+		return false
+	}
+	if scenario.RequiredToolStatsAtLeast["memory_updates"] > 0 || scenario.RequiredToolStatsAtLeast["memory_update_add"] > 0 {
+		return true
+	}
+	for _, req := range scenario.RequiredToolArgContains {
+		if req.Tool == "memory" && req.Arg == "action" && req.Substring == "add" {
+			return true
+		}
+	}
+	return false
 }
 
 func scenarioHasCommandRequirement(scenario BatchScenario, command string) bool {
@@ -3450,6 +3485,19 @@ func scenarioHasGitStatusAfterMutation(scenario BatchScenario) bool {
 		}
 	}
 	return false
+}
+
+func scenarioForbidsMemoryContent(scenario BatchScenario, term string) bool {
+	return toolArgRequirementContains(scenario.ForbiddenToolArgContains, ToolArgContainsRequirement{Tool: "memory", Arg: "content", Substring: term})
+}
+
+func scenarioVerifierRejectsMemoryText(scenario BatchScenario, term string) bool {
+	if term == "iteration 1" || term == "iteration 2" {
+		term = "iteration [12]"
+	}
+	return strings.Contains(scenario.VerifyCommand, `! grep`) &&
+		strings.Contains(scenario.VerifyCommand, `.affent/memory`) &&
+		strings.Contains(scenario.VerifyCommand, term)
 }
 
 func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
