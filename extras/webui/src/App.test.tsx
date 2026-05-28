@@ -2760,7 +2760,7 @@ describe("App", () => {
       "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
     );
 
-    await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open file" }));
+    await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open artifact" }));
     await user.click(await screen.findByRole("button", { name: "Use text" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(

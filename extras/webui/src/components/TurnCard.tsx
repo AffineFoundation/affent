@@ -1295,7 +1295,7 @@ function ArtifactStrip({
             ) : null}
             {onOpenArtifact && sessionId ? (
               <button type="button" className="artifact-pill-action" onClick={() => onOpenArtifact(artifact.path)}>
-                Open file
+                Open artifact
               </button>
             ) : null}
           </div>
