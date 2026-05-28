@@ -1044,6 +1044,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if surface.MaxToolCalls > 0 {
 		fmt.Fprintf(b, "- max_tool_calls: `%d`\n", surface.MaxToolCalls)
 	}
+	if surface.MaxTurnInputTokens > 0 {
+		fmt.Fprintf(b, "- max_turn_input_tokens: `%d`\n", surface.MaxTurnInputTokens)
+	}
 	if surface.ToolResultEventCapBytes > 0 || surface.ToolResultContextMaxBytes > 0 || surface.ToolResultContextBudgetBytes > 0 {
 		fmt.Fprintf(b, "- tool_result_limits: event_cap_bytes=`%d`, context_max_bytes=`%d`, context_budget_bytes=`%d`\n",
 			surface.ToolResultEventCapBytes,

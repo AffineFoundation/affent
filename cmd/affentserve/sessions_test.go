@@ -1568,8 +1568,8 @@ func TestSessionPool_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *te
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	if !strings.Contains(msgs[0].Content, s.workspace) {
-		t.Fatalf("eval-mode workspace prompt should mention actual workspace when workspace tools are registered:\n%s", msgs[0].Content)
+	if strings.Contains(msgs[0].Content, s.workspace) {
+		t.Fatalf("eval-mode workspace prompt should not inject the absolute workspace path:\n%s", msgs[0].Content)
 	}
 	if strings.Contains(msgs[0].Content, "Use this exact path") {
 		t.Fatalf("workspace prompt should not steer agents toward absolute paths:\n%s", msgs[0].Content)
@@ -1844,6 +1844,7 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 		"# Loop Protocol: loop-init",
 		"- loop_id: loop-init",
 		"- status: draft",
+		"- workspace: not recorded",
 		"Understand the user's long-run reporting goal.",
 		"North Star",
 		"Evidence And Recovery Index",
@@ -1851,6 +1852,9 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("initialized protocol missing %q:\n%s", want, content)
 		}
+	}
+	if strings.Contains(content, s.workspace) {
+		t.Fatalf("loop protocol should not persist volatile absolute workspace path:\n%s", content)
 	}
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-init"))
 	if err != nil || !found {

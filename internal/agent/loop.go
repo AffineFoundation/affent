@@ -41,6 +41,13 @@ const DefaultPerCallTimeout = 3 * time.Minute
 // typically bump this to 30-100.
 const DefaultMaxTurnSteps = 10
 
+// DefaultMaxTurnInputTokens caps the aggregate provider-reported prompt tokens
+// spent by one user turn across repeated assistant<->tool calls. It is a
+// spend/attention guard, not a context-window limit: a single large step may
+// exceed it, but the loop will then skip further tools and request a final
+// no-tool answer instead of multiplying the same growing context.
+const DefaultMaxTurnInputTokens = 300_000
+
 // DefaultTransientRetries / DefaultTransientBackoff govern how the
 // loop reacts to LLM call failures the caller probably can't fix
 // (HTTP 408/429/5xx, network resets, mid-stream EOF, per-call
@@ -105,6 +112,10 @@ type Loop struct {
 	Log          zerolog.Logger
 	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps
 	MaxToolCalls int // total tool calls per user turn; zero falls back to the effective MaxTurnSteps
+	// MaxTurnInputTokens caps aggregate input tokens reported by the upstream
+	// provider for one user turn. Zero uses DefaultMaxTurnInputTokens; negative
+	// disables the budget for backends that do not report reliable usage.
+	MaxTurnInputTokens int
 
 	// ToolResultMaxBytesInContext caps the tool result bytes persisted
 	// into conversation history for subsequent LLM calls. Zero uses
@@ -236,6 +247,9 @@ type TurnOptions struct {
 	// MaxToolCalls caps total tool calls for this turn only. Zero keeps the
 	// Loop default.
 	MaxToolCalls int
+	// MaxTurnInputTokens caps aggregate input tokens for this turn only.
+	// Zero keeps the Loop default; negative disables the budget for this turn.
+	MaxTurnInputTokens int
 	// FinalNoToolsOnMaxTurns asks for one final no-tool answer after this
 	// turn's tool budget is exhausted.
 	FinalNoToolsOnMaxTurns bool
@@ -1112,6 +1126,18 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		forceNoToolsNext = true
 		forceNoToolsReason = "(tool result context budget exhausted; final no-tool answer requested)"
 	}
+	forceNoToolsForInputBudget := func() bool {
+		budget := l.maxTurnInputTokensForTurn(opts)
+		if budget <= 0 || totalIn < budget {
+			return false
+		}
+		if !forceNoToolsNext {
+			toolStats.ForcedNoTools++
+		}
+		forceNoToolsNext = true
+		forceNoToolsReason = "(turn input token budget exhausted; final no-tool answer requested)"
+		return true
+	}
 	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
@@ -1178,6 +1204,24 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				break
 			}
 			finishedNaturally = true
+			break
+		}
+		if forceNoToolsForInputBudget() {
+			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, forceNoToolsReason)
+			toolStats.ToolRequests += skipped
+			toolStats.ToolErrors += skipped
+			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
+				done, reason, err := runBudgetFinal(forceNoToolsFinalPrompt, "(tools are disabled; final no-tool answer requested)")
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if done {
+					finishedNaturally = true
+					break
+				}
+			}
+			endReason = sse.TurnEndMaxTurns
 			break
 		}
 		if forceNoToolsNext {
@@ -2279,6 +2323,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		TurnID:                       turnID,
 		MaxTurnSteps:                 l.maxTurnStepsForSurface(),
 		MaxToolCalls:                 l.maxToolCallsForTurn(opts),
+		MaxTurnInputTokens:           l.maxTurnInputTokensForTurn(opts),
 		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,
 		ToolResultContextMaxBytes:    l.toolResultMaxBytesInContext(),
 		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),
@@ -2448,6 +2493,16 @@ func (l *Loop) maxToolCallsForTurn(opts TurnOptions) int {
 		return l.MaxToolCalls
 	}
 	return l.maxTurnStepsForSurface()
+}
+
+func (l *Loop) maxTurnInputTokensForTurn(opts TurnOptions) int {
+	if opts.MaxTurnInputTokens != 0 {
+		return opts.MaxTurnInputTokens
+	}
+	if l.MaxTurnInputTokens != 0 {
+		return l.MaxTurnInputTokens
+	}
+	return DefaultMaxTurnInputTokens
 }
 
 func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {

@@ -226,6 +226,11 @@ func TestConfig_Validate_RejectsNegativeTurnAndCompactLimits(t *testing.T) {
 			want: "max_turn_steps",
 		},
 		{
+			name: "max turn input tokens",
+			edit: func(cfg *Config) { cfg.MaxTurnInputTokens = -1 },
+			want: "max_turn_input_tokens",
+		},
+		{
 			name: "compact trigger",
 			edit: func(cfg *Config) { cfg.CompactTrigger = -1 },
 			want: "compact_trigger",

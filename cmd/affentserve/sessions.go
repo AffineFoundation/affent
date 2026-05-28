@@ -703,6 +703,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		Events:                 events,
 		Log:                    p.logger.With().Str("session_id", id).Logger(),
 		MaxTurnSteps:           p.cfg.MaxTurnSteps,
+		MaxTurnInputTokens:     p.cfg.MaxTurnInputTokens,
 		FinalNoToolsOnMaxTurns: true,
 		PerCallTimeout:         perCallTimeout,
 		MaxTransientRetries:    p.cfg.MaxTransientRetries,
@@ -778,12 +779,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	if serveRegistryHasWorkspaceTool(reg) {
-		// Affentserve's per-session workspace is a freshly allocated
-		// temp dir. Expose it as a diagnostic binding while keeping the
-		// operational rule workspace-relative so the agent doesn't paste
-		// long absolute paths into routine shell/file calls.
-		systemPrompt += "\n\nWorkspace: \"" + workspace +
-			"\". Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed. Treat the absolute path as a diagnostic binding, not as the normal command path."
+		systemPrompt += "\n\nWorkspace tools are bound to the active session workspace. Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed."
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)
@@ -1557,7 +1553,7 @@ func (s *Session) ensureLoopProtocolInitializedWithCreated(goal string) (bool, e
 		LoopID:       s.ID,
 		OwnerSession: s.ID,
 		Goal:         goal,
-		Workspace:    s.workspace,
+		Workspace:    "",
 		Status:       "draft",
 		Plan:         serveLoopProtocolCurrentPlanCheckpoint(s.planPath),
 	})

@@ -82,6 +82,11 @@ type Config struct {
 	// MaxTurnSteps overrides agent runtime's default per-turn step cap.
 	MaxTurnSteps int `json:"max_turn_steps"`
 
+	// MaxTurnInputTokens caps aggregate provider-reported prompt tokens spent
+	// by one user turn across repeated assistant/tool calls. Zero falls back to
+	// agent.DefaultMaxTurnInputTokens; negative is invalid.
+	MaxTurnInputTokens int `json:"max_turn_input_tokens"`
+
 	// PerCallTimeout overrides agent.DefaultPerCallTimeout (3 min) on
 	// every LLM call the Loop makes. Reasoning models (o1, Claude
 	// extended-thinking, Qwen QwQ) can take 5+ minutes to think; the
@@ -377,6 +382,7 @@ func (c *Config) Resolve() error {
 	}{
 		{"AFFENTSERVE_MAX_SESSIONS", &c.MaxSessions, &c.maxSessionsSet},
 		{"AFFENTSERVE_MAX_TURN_STEPS", &c.MaxTurnSteps, nil},
+		{"AFFENTSERVE_MAX_TURN_INPUT_TOKENS", &c.MaxTurnInputTokens, nil},
 		{"AFFENTSERVE_MAX_TRANSIENT_RETRIES", &c.MaxTransientRetries, nil},
 		{"AFFENTSERVE_COMPACT_TRIGGER", &c.CompactTrigger, nil},
 		{"AFFENTSERVE_COMPACT_KEEP_LAST", &c.CompactKeepLast, nil},
@@ -790,6 +796,9 @@ func (c Config) Validate() error {
 	}
 	if c.MaxTurnSteps < 0 {
 		return fmt.Errorf("max_turn_steps must be zero or a positive integer")
+	}
+	if c.MaxTurnInputTokens < 0 {
+		return fmt.Errorf("max_turn_input_tokens must be zero or a positive integer")
 	}
 	if c.CompactTrigger < 0 {
 		return fmt.Errorf("compact_trigger must be zero or a positive integer")

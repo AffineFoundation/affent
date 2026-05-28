@@ -68,6 +68,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		sessionIdleTTL     = fs.String("session-idle-ttl", "", "Positive duration for how long an idle session stays in the pool before GC (default 10m). Env: AFFENTSERVE_SESSION_IDLE_TTL.")
 		sessionRetention   = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
 		maxTurnSteps       = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default. Env: AFFENTSERVE_MAX_TURN_STEPS.")
+		maxTurnInputTokens = fs.Int("max-turn-input-tokens", 0, "Aggregate per-turn prompt-token budget across repeated assistant↔tool calls. 0 = agent runtime's default. Env: AFFENTSERVE_MAX_TURN_INPUT_TOKENS.")
 		perCallTimeout     = fs.String("per-call-timeout", "", "Per-LLM-call timeout as a Go duration string (default 3m). Bump for reasoning models that may think for several minutes per call. Env: AFFENTSERVE_PER_CALL_TIMEOUT.")
 		maxRetries         = fs.Int("max-transient-retries", 0, "Retry budget for transient LLM failures (5xx/429/408/net/EOF/timeout). 0 = agent runtime's default (3); negative disables retries. Env: AFFENTSERVE_MAX_TRANSIENT_RETRIES.")
 		retryBackoff       = fs.String("retry-backoff", "", "Initial backoff between transient-error retries (default 4s); each subsequent attempt doubles it. Go duration string. Env: AFFENTSERVE_RETRY_BACKOFF.")
@@ -163,6 +164,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if setFlags["max-turn-steps"] {
 		cfg.MaxTurnSteps = *maxTurnSteps
+	}
+	if setFlags["max-turn-input-tokens"] {
+		cfg.MaxTurnInputTokens = *maxTurnInputTokens
 	}
 	if *perCallTimeout != "" {
 		cfg.PerCallTimeout = *perCallTimeout

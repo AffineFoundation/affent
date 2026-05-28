@@ -744,6 +744,7 @@ func TestParseFlagsAndConfig_RuntimeBoundaryEnv(t *testing.T) {
 	t.Setenv("AFFENTSERVE_MAX_SESSIONS", "7")
 	t.Setenv("AFFENTSERVE_SESSION_IDLE_TTL", "2m")
 	t.Setenv("AFFENTSERVE_MAX_TURN_STEPS", "11")
+	t.Setenv("AFFENTSERVE_MAX_TURN_INPUT_TOKENS", "12345")
 	t.Setenv("AFFENTSERVE_PER_CALL_TIMEOUT", "9m")
 	t.Setenv("AFFENTSERVE_MAX_TRANSIENT_RETRIES", "-1")
 	t.Setenv("AFFENTSERVE_RETRY_BACKOFF", "6s")
@@ -762,6 +763,9 @@ func TestParseFlagsAndConfig_RuntimeBoundaryEnv(t *testing.T) {
 	}
 	if cfg.MaxTurnSteps != 11 {
 		t.Fatalf("MaxTurnSteps = %d, want 11", cfg.MaxTurnSteps)
+	}
+	if cfg.MaxTurnInputTokens != 12345 {
+		t.Fatalf("MaxTurnInputTokens = %d, want 12345", cfg.MaxTurnInputTokens)
 	}
 	if cfg.PerCallTimeout != "9m" {
 		t.Fatalf("PerCallTimeout = %q, want 9m", cfg.PerCallTimeout)

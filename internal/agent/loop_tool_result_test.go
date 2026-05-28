@@ -2554,6 +2554,125 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 	}
 }
 
+func TestRunTurn_MaxTurnInputTokensForcesNoToolSummary(t *testing.T) {
+	var calls int32
+	var toolRan int32
+	var finalRequestHadTools atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"budgeted","type":"function","function":{"name":"expensive","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":60,"completion_tokens":4}}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		if strings.Contains(body, `"tools"`) {
+			finalRequestHadTools.Store(true)
+		}
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"summary after input budget"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":3}}` + "\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "expensive", Description: "expensive", Schema: json.RawMessage(`{"type":"object","properties":{}}`), Execute: func(context.Context, json.RawMessage) (string, error) {
+		atomic.AddInt32(&toolRan, 1)
+		return "should not run", nil
+	}})
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 50, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawSkipped bool
+	var sawFinal bool
+	var usage sse.UsagePayload
+	var endStats *sse.ToolRuntimeStats
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if strings.Contains(p.Result, "turn input token budget exhausted") {
+					sawSkipped = true
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == "summary after input budget" {
+					sawFinal = true
+				}
+			case sse.TypeUsage:
+				if err := json.Unmarshal(ev.Data, &usage); err != nil {
+					t.Fatalf("decode usage: %v", err)
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				endStats = p.ToolStats
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed after no-tool summary", p.Reason)
+				}
+				if atomic.LoadInt32(&toolRan) != 0 {
+					t.Fatal("tool should not run after input budget is exhausted")
+				}
+				if finalRequestHadTools.Load() {
+					t.Fatal("input-budget recovery request must not include tools")
+				}
+				if !sawSkipped || !sawFinal {
+					t.Fatalf("sawSkipped=%t sawFinal=%t", sawSkipped, sawFinal)
+				}
+				if usage.InputTokens != 70 || usage.OutputTokens != 7 {
+					t.Fatalf("usage = %+v, want 70/7", usage)
+				}
+				if endStats == nil || endStats.ForcedNoTools != 1 || endStats.ToolRequests != 1 || endStats.ToolErrors != 1 {
+					t.Fatalf("tool stats = %+v, want one skipped forced no-tool", endStats)
+				}
+				if got := atomic.LoadInt32(&calls); got != 2 {
+					t.Fatalf("LLM calls = %d, want 2", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_SubagentExternalResearchPolicyRejectsDirectCall(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

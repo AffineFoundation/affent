@@ -1337,6 +1337,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		Events:                       events,
 		MaxTurnSteps:                 7,
 		MaxToolCalls:                 5,
+		MaxTurnInputTokens:           12345,
 		ToolResultMaxBytesInContext:  1234,
 		ToolResultContextBudgetBytes: 5678,
 		ToolResultArtifactPathPrefix: ".affent/custom",
@@ -1369,6 +1370,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		t.Fatalf("capabilities should not invent unavailable surfaces: %+v", payload.Capabilities)
 	}
 	if payload.MaxTurnSteps != 7 || payload.MaxToolCalls != 5 ||
+		payload.MaxTurnInputTokens != 12345 ||
 		payload.ToolResultEventCapBytes != MaxToolResultBytesInEvent ||
 		payload.ToolResultContextMaxBytes != 1234 ||
 		payload.ToolResultContextBudgetBytes != 5678 ||

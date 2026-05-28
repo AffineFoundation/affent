@@ -79,6 +79,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.MaxTurnSteps != agent.DefaultMaxTurnSteps {
 		t.Fatalf("Boundaries.MaxTurnSteps = %d, want default %d", resp.Boundaries.MaxTurnSteps, agent.DefaultMaxTurnSteps)
 	}
+	if resp.Boundaries.MaxTurnInputTokens != agent.DefaultMaxTurnInputTokens {
+		t.Fatalf("Boundaries.MaxTurnInputTokens = %d, want default %d", resp.Boundaries.MaxTurnInputTokens, agent.DefaultMaxTurnInputTokens)
+	}
 	if resp.Boundaries.PerCallTimeout != agent.DefaultPerCallTimeout.String() {
 		t.Fatalf("Boundaries.PerCallTimeout = %q, want %q", resp.Boundaries.PerCallTimeout, agent.DefaultPerCallTimeout.String())
 	}
@@ -144,12 +147,16 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 
 func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	got := statsBoundarySnapshot(Config{
-		MaxTurnSteps:     7,
-		PerCallTimeout:   "9s",
-		SubagentMaxDepth: 3,
+		MaxTurnSteps:       7,
+		MaxTurnInputTokens: 12345,
+		PerCallTimeout:     "9s",
+		SubagentMaxDepth:   3,
 	})
 	if got.MaxTurnSteps != 7 {
 		t.Fatalf("MaxTurnSteps = %d, want 7", got.MaxTurnSteps)
+	}
+	if got.MaxTurnInputTokens != 12345 {
+		t.Fatalf("MaxTurnInputTokens = %d, want 12345", got.MaxTurnInputTokens)
 	}
 	if got.PerCallTimeout != "9s" {
 		t.Fatalf("PerCallTimeout = %q, want 9s", got.PerCallTimeout)

@@ -49,6 +49,7 @@ type statsResponse struct {
 
 type statsBoundaries struct {
 	MaxTurnSteps                int    `json:"max_turn_steps"`
+	MaxTurnInputTokens          int    `json:"max_turn_input_tokens"`
 	PerCallTimeout              string `json:"per_call_timeout"`
 	LLMRequestBodyBytes         int    `json:"llm_request_body_bytes"`
 	LLMErrorBodyBytes           int    `json:"llm_error_body_bytes"`
@@ -363,6 +364,10 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 	if maxTurnSteps <= 0 {
 		maxTurnSteps = agent.DefaultMaxTurnSteps
 	}
+	maxTurnInputTokens := cfg.MaxTurnInputTokens
+	if maxTurnInputTokens <= 0 {
+		maxTurnInputTokens = agent.DefaultMaxTurnInputTokens
+	}
 	perCallTimeout := agent.DefaultPerCallTimeout
 	if d, err := cfg.PerCallTimeoutDuration(); err == nil && d > 0 {
 		perCallTimeout = d
@@ -375,6 +380,7 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 	}
 	return statsBoundaries{
 		MaxTurnSteps:                maxTurnSteps,
+		MaxTurnInputTokens:          maxTurnInputTokens,
 		PerCallTimeout:              perCallTimeout.String(),
 		LLMRequestBodyBytes:         ab.LLMRequestBodyBytes,
 		LLMErrorBodyBytes:           ab.LLMErrorBodyBytes,

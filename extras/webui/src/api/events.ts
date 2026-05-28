@@ -69,6 +69,7 @@ export interface RuntimeSurfacePayload {
   capabilities: RuntimeCapabilities;
   max_turn_steps?: number;
   max_tool_calls?: number;
+  max_turn_input_tokens?: number;
   tool_result_event_cap_bytes?: number;
   tool_result_context_max_bytes?: number;
   tool_result_context_budget_bytes?: number;

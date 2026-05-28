@@ -78,6 +78,7 @@ type RuntimeSurfacePayload struct {
 	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
 	MaxTurnSteps                 int                  `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`
+	MaxTurnInputTokens           int                  `json:"max_turn_input_tokens,omitempty"`
 	ToolResultEventCapBytes      int                  `json:"tool_result_event_cap_bytes,omitempty"`
 	ToolResultContextMaxBytes    int                  `json:"tool_result_context_max_bytes,omitempty"`
 	ToolResultContextBudgetBytes int                  `json:"tool_result_context_budget_bytes,omitempty"`
