@@ -1210,6 +1210,28 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", Confidence: "high", Reason: "dynamic widgets lacked text", RequiredAction: "read browser network responses"},
 			},
 		},
+		LoopTurnCheckpoints: agenteval.LoopTurnCheckpointStats{
+			Count: 1,
+			Examples: []agenteval.LoopTurnCheckpoint{{
+				TurnID:             "turn-1",
+				LoopID:             "longrun",
+				Status:             "running",
+				ProtocolPath:       ".affent/loops/longrun/LOOP.md",
+				EventSeq:           6,
+				TurnCheckpoints:    1,
+				EndReason:          "completed",
+				InputTokens:        100,
+				OutputTokens:       25,
+				ToolRequests:       3,
+				ToolErrors:         2,
+				LoopGuards:         2,
+				ForcedNoTools:      1,
+				MemoryUpdates:      1,
+				MemorySearchCalls:  2,
+				MemoryMisses:       1,
+				SessionSearchCalls: 1,
+			}},
+		},
 		LoopProtocolFeeds: agenteval.LoopProtocolFeedStats{
 			Count:  2,
 			ByMode: map[string]int{"digest": 1, "full": 1},
@@ -1352,7 +1374,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -1364,6 +1386,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
+		`loop_turn_checkpoint_example: loop_id=longrun status=running turn=turn-1 end=completed path=.affent/loops/longrun/LOOP.md event_seq=6 checkpoints=1 tokens=100/25 tools=3 errors=2 guards=2 forced_no_tools=1 memory_updates=1 memory_searches=2 memory_misses=1 session_search=1`,
 		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence" situation="current risk: dashboard values need network refs" last_turn="id=turn-prev reason=max_turns memory_searches=3 memory_misses=2 session_search=1"`,
 		`loop_protocol_calibration_request_example: loop_id=longrun status=draft questions=1 answers=0 path=.affent/loops/longrun/LOOP.md event_seq=4 question="What should pause this loop?"`,
 		`loop_protocol_calibration_example: loop_id=longrun status=draft questions=1 answers=1 path=.affent/loops/longrun/LOOP.md event_seq=5 question="What should pause this loop?" answer="Pause when browser evidence is missing."`,
@@ -1833,6 +1856,27 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", RequiredAction: "read browser network responses"},
 			},
 		},
+		LoopTurnCheckpoints: agenteval.LoopTurnCheckpointStats{
+			Count: 1,
+			Examples: []agenteval.LoopTurnCheckpoint{{
+				LoopID:             "taostats-rendered",
+				Status:             "running",
+				TurnID:             "turn-checkpoint",
+				EndReason:          "max_turns",
+				ProtocolPath:       ".affent/loops/taostats-rendered/LOOP.md",
+				EventSeq:           7,
+				TurnCheckpoints:    2,
+				InputTokens:        70,
+				OutputTokens:       15,
+				ToolRequests:       3,
+				ToolErrors:         1,
+				LoopGuards:         2,
+				ForcedNoTools:      1,
+				MemorySearchCalls:  1,
+				MemoryMisses:       1,
+				SessionSearchCalls: 1,
+			}},
+		},
 		LoopProtocolFeeds: agenteval.LoopProtocolFeedStats{
 			Count:  2,
 			ByMode: map[string]int{"digest": 1, "full": 1},
@@ -1933,7 +1977,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120,artifacts=1,missing_artifacts=0") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_protocol_feed:50.0%,loop_protocol_calibration_request:50.0%,loop_protocol_calibration:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
+	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_turn_checkpoint:50.0%,loop_protocol_feed:50.0%,loop_protocol_calibration_request:50.0%,loop_protocol_calibration:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
@@ -1991,6 +2035,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
 		t.Fatalf("summary output missing loop decision rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "loop_turn_checkpoint_scenarios=1 loop_turn_checkpoints=1") {
+		t.Fatalf("summary output missing loop turn checkpoint rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `loop_turn_checkpoint_example: scenario=taostats-rendered loop_id=taostats-rendered status=running turn=turn-checkpoint end=max_turns path=.affent/loops/taostats-rendered/LOOP.md event_seq=7 checkpoints=2 tokens=70/15 tools=3 errors=1 guards=2 forced_no_tools=1 memory_updates=0 memory_searches=1 memory_misses=1 session_search=1`) {
+		t.Fatalf("summary output missing loop turn checkpoint example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_protocol_feed_scenarios=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1") {
 		t.Fatalf("summary output missing loop protocol feed rollup:\n%s", out.String())
@@ -2164,6 +2214,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if len(summary.LoopDecisionExamples) != 1 ||
 		summary.LoopDecisionExamples[0].Scenario != "taostats-rendered" {
 		t.Fatalf("LoopDecisionExamples = %#v", summary.LoopDecisionExamples)
+	}
+	if summary.LoopTurnCheckpointScenarios != 1 || summary.LoopTurnCheckpoints != 1 {
+		t.Fatalf("loop turn checkpoint summary = scenarios:%d count:%d", summary.LoopTurnCheckpointScenarios, summary.LoopTurnCheckpoints)
+	}
+	if len(summary.LoopTurnCheckpointExamples) != 1 ||
+		summary.LoopTurnCheckpointExamples[0].Scenario != "taostats-rendered" ||
+		summary.LoopTurnCheckpointExamples[0].TurnID != "turn-checkpoint" {
+		t.Fatalf("LoopTurnCheckpointExamples = %#v", summary.LoopTurnCheckpointExamples)
 	}
 	if summary.LoopProtocolFeeds != 2 || summary.LoopProtocolFeedByMode["digest"] != 1 || summary.LoopProtocolFeedByMode["full"] != 1 {
 		t.Fatalf("loop protocol feed summary = count:%d modes:%#v", summary.LoopProtocolFeeds, summary.LoopProtocolFeedByMode)

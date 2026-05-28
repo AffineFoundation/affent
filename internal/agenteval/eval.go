@@ -254,6 +254,7 @@ type BatchResult struct {
 	LoopProtocolFeeds               LoopProtocolFeedStats
 	LoopProtocolCalibrationRequests LoopProtocolCalibrationStats
 	LoopProtocolCalibrations        LoopProtocolCalibrationStats
+	LoopTurnCheckpoints             LoopTurnCheckpointStats
 	ContextInjections               ContextInjectionStats
 	ContextCompactions              ContextCompactionStats
 	ToolRepairExamples              []ToolRepairExample
@@ -319,6 +320,7 @@ type DebugManifest struct {
 	ToolRepairExamples                     []ToolRepairExample               `json:"tool_repair_examples,omitempty"`
 	ConversationRepairExamples             []sse.ConversationRepairedPayload `json:"conversation_repair_examples,omitempty"`
 	LoopGuardExamples                      []LoopGuardExample                `json:"loop_guard_examples,omitempty"`
+	LoopTurnCheckpointExamples             []LoopTurnCheckpoint              `json:"loop_turn_checkpoint_examples,omitempty"`
 	LoopProtocolFeedExamples               []LoopProtocolFeed                `json:"loop_protocol_feed_examples,omitempty"`
 	LoopProtocolCalibrationRequestExamples []LoopProtocolCalibration         `json:"loop_protocol_calibration_request_examples,omitempty"`
 	LoopProtocolCalibrationExamples        []LoopProtocolCalibration         `json:"loop_protocol_calibration_examples,omitempty"`
@@ -785,6 +787,7 @@ type DebugMetrics struct {
 	ToolFailureByKind               map[string]int `json:"tool_failure_by_kind,omitempty"`
 	LoopGuardInterventions          int            `json:"loop_guard_interventions"`
 	ForcedNoTools                   int            `json:"forced_no_tools"`
+	LoopTurnCheckpoints             int            `json:"loop_turn_checkpoints,omitempty"`
 	LoopProtocolFeeds               int            `json:"loop_protocol_feeds,omitempty"`
 	LoopProtocolFeedByMode          map[string]int `json:"loop_protocol_feed_by_mode,omitempty"`
 	LatestLoopProtocolFeedNumber    int            `json:"latest_loop_protocol_feed_number,omitempty"`
@@ -1091,6 +1094,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
 		res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
 		res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
+		res.LoopTurnCheckpoints = trace.LoopTurnCheckpointStats(2)
 		res.ContextInjections = trace.ContextInjectionStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
@@ -1230,6 +1234,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ToolRepairExamples:                     append([]ToolRepairExample(nil), res.ToolRepairExamples...),
 		ConversationRepairExamples:             append([]sse.ConversationRepairedPayload(nil), res.ConversationRepairs...),
 		LoopGuardExamples:                      append([]LoopGuardExample(nil), res.LoopGuardExamples...),
+		LoopTurnCheckpointExamples:             append([]LoopTurnCheckpoint(nil), res.LoopTurnCheckpoints.Examples...),
 		LoopProtocolFeedExamples:               append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
 		LoopProtocolCalibrationRequestExamples: append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrationRequests.Examples...),
 		LoopProtocolCalibrationExamples:        append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrations.Examples...),
@@ -1259,6 +1264,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ToolFailureByKind:               cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 			LoopGuardInterventions:          res.ToolStats.LoopGuardInterventions,
 			ForcedNoTools:                   res.ToolStats.ForcedNoTools,
+			LoopTurnCheckpoints:             res.LoopTurnCheckpoints.Count,
 			LoopProtocolFeeds:               res.LoopProtocolFeeds.Count,
 			LoopProtocolFeedByMode:          cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
 			LatestLoopProtocolFeedNumber:    res.LoopProtocolFeeds.Latest.FeedNumber,

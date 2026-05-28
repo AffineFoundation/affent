@@ -264,6 +264,7 @@ func run(args []string) int {
 			MinPassRate:                           fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:                     fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:                   fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
+			MinLoopTurnCheckpointRate:             fs.Float64("min-loop-turn-checkpoint-rate", -1, "optional quality gate: minimum scenario rate with persisted loop turn checkpoints, 0..1"),
 			MinLoopProtocolFeedRate:               fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
 			MinLoopProtocolCalibrationRequestRate: fs.Float64("min-loop-protocol-calibration-request-rate", -1, "optional quality gate: minimum scenario rate with loop protocol calibration requests, 0..1"),
 			MinLoopProtocolCalibrationRate:        fs.Float64("min-loop-protocol-calibration-rate", -1, "optional quality gate: minimum scenario rate with accepted loop protocol calibrations, 0..1"),
@@ -502,6 +503,7 @@ type qualityGateConfig struct {
 	MinPassRate                                    *float64
 	MinCompletionRate                              *float64
 	MinMemoryUpdateRate                            *float64
+	MinLoopTurnCheckpointRate                      *float64
 	MinLoopProtocolFeedRate                        *float64
 	MinLoopProtocolCalibrationRequestRate          *float64
 	MinLoopProtocolCalibrationRate                 *float64
@@ -567,6 +569,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinPassRate:                           float64Ptr(0.80),
 				MinCompletionRate:                     float64Ptr(0.90),
 				MinMemoryUpdateRate:                   float64Ptr(0.10),
+				MinLoopTurnCheckpointRate:             float64Ptr(0.05),
 				MinLoopProtocolFeedRate:               float64Ptr(0.05),
 				MinLoopProtocolCalibrationRequestRate: float64Ptr(0.05),
 				MinLoopProtocolCalibrationRate:        float64Ptr(0.05),
@@ -711,6 +714,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-pass-rate", g.MinPassRate)
 	add("min-completion-rate", g.MinCompletionRate)
 	add("min-memory-update-rate", g.MinMemoryUpdateRate)
+	add("min-loop-turn-checkpoint-rate", g.MinLoopTurnCheckpointRate)
 	add("min-loop-protocol-feed-rate", g.MinLoopProtocolFeedRate)
 	add("min-loop-protocol-calibration-request-rate", g.MinLoopProtocolCalibrationRequestRate)
 	add("min-loop-protocol-calibration-rate", g.MinLoopProtocolCalibrationRate)
@@ -802,6 +806,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-pass-rate", &g.MinPassRate, profileConfig.MinPassRate)
 	apply("min-completion-rate", &g.MinCompletionRate, profileConfig.MinCompletionRate)
 	apply("min-memory-update-rate", &g.MinMemoryUpdateRate, profileConfig.MinMemoryUpdateRate)
+	apply("min-loop-turn-checkpoint-rate", &g.MinLoopTurnCheckpointRate, profileConfig.MinLoopTurnCheckpointRate)
 	apply("min-loop-protocol-feed-rate", &g.MinLoopProtocolFeedRate, profileConfig.MinLoopProtocolFeedRate)
 	apply("min-loop-protocol-calibration-request-rate", &g.MinLoopProtocolCalibrationRequestRate, profileConfig.MinLoopProtocolCalibrationRequestRate)
 	apply("min-loop-protocol-calibration-rate", &g.MinLoopProtocolCalibrationRate, profileConfig.MinLoopProtocolCalibrationRate)
@@ -951,6 +956,9 @@ type batchSummary struct {
 	LoopDecisionByKind                      map[string]int
 	LoopDecisionByDecision                  map[string]int
 	LoopDecisionExamples                    []agenteval.LoopDecision
+	LoopTurnCheckpointScenarios             int
+	LoopTurnCheckpoints                     int
+	LoopTurnCheckpointExamples              []agenteval.LoopTurnCheckpoint
 	LoopProtocolFeedScenarios               int
 	LoopProtocolFeeds                       int
 	LoopProtocolFeedByMode                  map[string]int
@@ -1172,6 +1180,11 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.LoopDecisionByDecision[k] += v
 	}
 	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	if res.LoopTurnCheckpoints.Count > 0 {
+		s.LoopTurnCheckpointScenarios++
+	}
+	s.LoopTurnCheckpoints += res.LoopTurnCheckpoints.Count
+	s.LoopTurnCheckpointExamples = appendLoopTurnCheckpointExamples(s.LoopTurnCheckpointExamples, res.LoopTurnCheckpoints.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	if res.LoopProtocolFeeds.Count > 0 {
 		s.LoopProtocolFeedScenarios++
 	}
@@ -1676,11 +1689,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,memory_search_miss:%s,loop_protocol_feed:%s,loop_protocol_calibration_request:%s,loop_protocol_calibration:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,memory_search_miss:%s,loop_turn_checkpoint:%s,loop_protocol_feed:%s,loop_protocol_calibration_request:%s,loop_protocol_calibration:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
 		formatPercent(batchRatio(s.MemoryUpdates, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls)),
+		formatPercent(batchRatio(s.LoopTurnCheckpointScenarios, s.Total)),
 		formatPercent(batchRatio(s.LoopProtocolFeedScenarios, s.Total)),
 		formatPercent(batchRatio(s.LoopProtocolCalibrationRequestScenarios, s.Total)),
 		formatPercent(batchRatio(s.LoopProtocolCalibrationScenarios, s.Total)),
@@ -1787,6 +1801,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(s.LoopDecisionByDecision))
 		}
 	}
+	if s.LoopTurnCheckpoints > 0 {
+		fmt.Fprintf(w, " loop_turn_checkpoint_scenarios=%d loop_turn_checkpoints=%d", s.LoopTurnCheckpointScenarios, s.LoopTurnCheckpoints)
+	}
 	if s.LoopProtocolFeeds > 0 {
 		fmt.Fprintf(w, " loop_protocol_feed_scenarios=%d loop_protocol_feeds=%d", s.LoopProtocolFeedScenarios, s.LoopProtocolFeeds)
 		if len(s.LoopProtocolFeedByMode) > 0 {
@@ -1877,6 +1894,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
+	printLoopTurnCheckpointExampleLines(w, s.LoopTurnCheckpointExamples, "")
 	printLoopProtocolFeedExampleLines(w, s.LoopProtocolFeedExamples, "")
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_request_example", s.LoopProtocolCalibrationRequestExamples, "")
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_example", s.LoopProtocolCalibrationExamples, "")
@@ -2165,6 +2183,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-pass-rate", g.MinPassRate, true},
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
+		{"--min-loop-turn-checkpoint-rate", g.MinLoopTurnCheckpointRate, true},
 		{"--min-loop-protocol-feed-rate", g.MinLoopProtocolFeedRate, true},
 		{"--min-loop-protocol-calibration-request-rate", g.MinLoopProtocolCalibrationRequestRate, true},
 		{"--min-loop-protocol-calibration-rate", g.MinLoopProtocolCalibrationRate, true},
@@ -2319,6 +2338,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
+	checkMin("loop_turn_checkpoint_rate", batchRatio(s.LoopTurnCheckpointScenarios, s.Total), g.MinLoopTurnCheckpointRate, s.Total > 0)
 	checkMin("loop_protocol_feed_rate", batchRatio(s.LoopProtocolFeedScenarios, s.Total), g.MinLoopProtocolFeedRate, s.Total > 0)
 	checkMin("loop_protocol_calibration_request_rate", batchRatio(s.LoopProtocolCalibrationRequestScenarios, s.Total), g.MinLoopProtocolCalibrationRequestRate, s.Total > 0)
 	checkMin("loop_protocol_calibration_rate", batchRatio(s.LoopProtocolCalibrationScenarios, s.Total), g.MinLoopProtocolCalibrationRate, s.Total > 0)
@@ -2787,6 +2807,49 @@ func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecisio
 			fmt.Fprintf(w, " action=%s", ex.RequiredAction)
 		}
 		fmt.Fprintln(w)
+	}
+}
+
+func printLoopTurnCheckpointExampleLines(w io.Writer, examples []agenteval.LoopTurnCheckpoint, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sloop_turn_checkpoint_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.LoopID != "" {
+			fmt.Fprintf(w, " loop_id=%s", ex.LoopID)
+		}
+		if ex.Status != "" {
+			fmt.Fprintf(w, " status=%s", ex.Status)
+		}
+		if ex.TurnID != "" {
+			fmt.Fprintf(w, " turn=%s", ex.TurnID)
+		}
+		if ex.EndReason != "" {
+			fmt.Fprintf(w, " end=%s", ex.EndReason)
+		}
+		if ex.ProtocolPath != "" {
+			fmt.Fprintf(w, " path=%s", ex.ProtocolPath)
+		}
+		if ex.EventSeq > 0 {
+			fmt.Fprintf(w, " event_seq=%d", ex.EventSeq)
+		}
+		if ex.TurnCheckpoints > 0 {
+			fmt.Fprintf(w, " checkpoints=%d", ex.TurnCheckpoints)
+		}
+		if ex.InputTokens > 0 || ex.OutputTokens > 0 {
+			fmt.Fprintf(w, " tokens=%d/%d", ex.InputTokens, ex.OutputTokens)
+		}
+		fmt.Fprintf(w, " tools=%d errors=%d guards=%d forced_no_tools=%d memory_updates=%d memory_searches=%d memory_misses=%d session_search=%d\n",
+			ex.ToolRequests,
+			ex.ToolErrors,
+			ex.LoopGuards,
+			ex.ForcedNoTools,
+			ex.MemoryUpdates,
+			ex.MemorySearchCalls,
+			ex.MemoryMisses,
+			ex.SessionSearchCalls,
+		)
 	}
 }
 
@@ -3311,6 +3374,7 @@ type evalJSONLMetadata struct {
 	MinPassRate                                    *float64           `json:"min_pass_rate,omitempty"`
 	MinCompletionRate                              *float64           `json:"min_completion_rate,omitempty"`
 	MinMemoryUpdateRate                            *float64           `json:"min_memory_update_rate,omitempty"`
+	MinLoopTurnCheckpointRate                      *float64           `json:"min_loop_turn_checkpoint_rate,omitempty"`
 	MinLoopProtocolFeedRate                        *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
 	MinLoopProtocolCalibrationRequestRate          *float64           `json:"min_loop_protocol_calibration_request_rate,omitempty"`
 	MinLoopProtocolCalibrationRate                 *float64           `json:"min_loop_protocol_calibration_rate,omitempty"`
@@ -3393,6 +3457,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinPassRate:                           enabledQualityGateValue(gates.MinPassRate),
 		MinCompletionRate:                     enabledQualityGateValue(gates.MinCompletionRate),
 		MinMemoryUpdateRate:                   enabledQualityGateValue(gates.MinMemoryUpdateRate),
+		MinLoopTurnCheckpointRate:             enabledQualityGateValue(gates.MinLoopTurnCheckpointRate),
 		MinLoopProtocolFeedRate:               enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
 		MinLoopProtocolCalibrationRequestRate: enabledQualityGateValue(gates.MinLoopProtocolCalibrationRequestRate),
 		MinLoopProtocolCalibrationRate:        enabledQualityGateValue(gates.MinLoopProtocolCalibrationRate),
@@ -3520,6 +3585,8 @@ type batchResultRecord struct {
 	LoopDecisionByKind                     map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision                 map[string]int                             `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples                   []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	LoopTurnCheckpoints                    int                                        `json:"loop_turn_checkpoints,omitempty"`
+	LoopTurnCheckpointExamples             []agenteval.LoopTurnCheckpoint             `json:"loop_turn_checkpoint_examples,omitempty"`
 	LoopProtocolFeeds                      int                                        `json:"loop_protocol_feeds,omitempty"`
 	LoopProtocolFeedByMode                 map[string]int                             `json:"loop_protocol_feed_by_mode,omitempty"`
 	LoopProtocolFeedExamples               []agenteval.LoopProtocolFeed               `json:"loop_protocol_feed_examples,omitempty"`
@@ -3628,6 +3695,7 @@ type batchSummaryRecord struct {
 	CompletionRate                          float64                                          `json:"completion_rate"`
 	MemoryUpdateRate                        float64                                          `json:"memory_update_rate"`
 	MemorySearchMissRate                    *float64                                         `json:"memory_search_miss_rate,omitempty"`
+	LoopTurnCheckpointRate                  float64                                          `json:"loop_turn_checkpoint_rate"`
 	LoopProtocolFeedRate                    float64                                          `json:"loop_protocol_feed_rate"`
 	LoopProtocolCalibrationRequestRate      float64                                          `json:"loop_protocol_calibration_request_rate"`
 	LoopProtocolCalibrationRate             float64                                          `json:"loop_protocol_calibration_rate"`
@@ -3690,6 +3758,9 @@ type batchSummaryRecord struct {
 	LoopDecisionByKind                      map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision                  map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples                    []agenteval.LoopDecision                         `json:"loop_decision_examples,omitempty"`
+	LoopTurnCheckpointScenarios             int                                              `json:"loop_turn_checkpoint_scenarios,omitempty"`
+	LoopTurnCheckpoints                     int                                              `json:"loop_turn_checkpoints,omitempty"`
+	LoopTurnCheckpointExamples              []agenteval.LoopTurnCheckpoint                   `json:"loop_turn_checkpoint_examples,omitempty"`
 	LoopProtocolFeedScenarios               int                                              `json:"loop_protocol_feed_scenarios,omitempty"`
 	LoopProtocolFeeds                       int                                              `json:"loop_protocol_feeds,omitempty"`
 	LoopProtocolFeedByMode                  map[string]int                                   `json:"loop_protocol_feed_by_mode,omitempty"`
@@ -3885,6 +3956,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		LoopDecisionByKind:                     cloneStringIntMap(res.LoopDecisionStats.ByKind),
 		LoopDecisionByDecision:                 cloneStringIntMap(res.LoopDecisionStats.ByDecision),
 		LoopDecisionExamples:                   cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
+		LoopTurnCheckpoints:                    res.LoopTurnCheckpoints.Count,
+		LoopTurnCheckpointExamples:             cloneLoopTurnCheckpointExamples(res.LoopTurnCheckpoints.Examples),
 		LoopProtocolFeeds:                      res.LoopProtocolFeeds.Count,
 		LoopProtocolFeedByMode:                 cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
 		LoopProtocolFeedExamples:               cloneLoopProtocolFeedExamples(res.LoopProtocolFeeds.Examples),
@@ -4087,6 +4160,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		CompletionRate:                          batchRatio(s.EndCompleted, s.Total),
 		MemoryUpdateRate:                        batchRatio(s.MemoryUpdates, s.Total),
 		MemorySearchMissRate:                    batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls),
+		LoopTurnCheckpointRate:                  batchRatio(s.LoopTurnCheckpointScenarios, s.Total),
 		LoopProtocolFeedRate:                    batchRatio(s.LoopProtocolFeedScenarios, s.Total),
 		LoopProtocolCalibrationRequestRate:      batchRatio(s.LoopProtocolCalibrationRequestScenarios, s.Total),
 		LoopProtocolCalibrationRate:             batchRatio(s.LoopProtocolCalibrationScenarios, s.Total),
@@ -4149,6 +4223,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		LoopDecisionByKind:                      cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:                  cloneStringIntMap(s.LoopDecisionByDecision),
 		LoopDecisionExamples:                    cloneLoopDecisionExamples(s.LoopDecisionExamples),
+		LoopTurnCheckpointScenarios:             s.LoopTurnCheckpointScenarios,
+		LoopTurnCheckpoints:                     s.LoopTurnCheckpoints,
+		LoopTurnCheckpointExamples:              cloneLoopTurnCheckpointExamples(s.LoopTurnCheckpointExamples),
 		LoopProtocolFeedScenarios:               s.LoopProtocolFeedScenarios,
 		LoopProtocolFeeds:                       s.LoopProtocolFeeds,
 		LoopProtocolFeedByMode:                  cloneStringIntMap(s.LoopProtocolFeedByMode),
@@ -4289,6 +4366,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 	return meta.MinPassRate != nil ||
 		meta.MinCompletionRate != nil ||
 		meta.MinMemoryUpdateRate != nil ||
+		meta.MinLoopTurnCheckpointRate != nil ||
 		meta.MinLoopProtocolFeedRate != nil ||
 		meta.MinLoopProtocolCalibrationRequestRate != nil ||
 		meta.MinLoopProtocolCalibrationRate != nil ||
@@ -4789,6 +4867,13 @@ func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDeci
 	return append([]agenteval.LoopDecision(nil), in...)
 }
 
+func cloneLoopTurnCheckpointExamples(in []agenteval.LoopTurnCheckpoint) []agenteval.LoopTurnCheckpoint {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.LoopTurnCheckpoint(nil), in...)
+}
+
 func cloneConversationRepairs(in []sse.ConversationRepairedPayload) []sse.ConversationRepairedPayload {
 	if len(in) == 0 {
 		return nil
@@ -4848,6 +4933,22 @@ func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, scenario stri
 }
 
 func appendLoopProtocolFeedExamples(dst, src []agenteval.LoopProtocolFeed, scenario string, limit int) []agenteval.LoopProtocolFeed {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendLoopTurnCheckpointExamples(dst, src []agenteval.LoopTurnCheckpoint, scenario string, limit int) []agenteval.LoopTurnCheckpoint {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -5300,6 +5401,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(res.LoopDecisionStats.ByDecision))
 		}
 	}
+	if res.LoopTurnCheckpoints.Count > 0 {
+		fmt.Fprintf(w, " loop_turn_checkpoints=%d", res.LoopTurnCheckpoints.Count)
+	}
 	if res.LoopProtocolFeeds.Count > 0 {
 		fmt.Fprintf(w, " loop_protocol_feeds=%d", res.LoopProtocolFeeds.Count)
 		if len(res.LoopProtocolFeeds.ByMode) > 0 {
@@ -5374,6 +5478,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
+	printLoopTurnCheckpointExampleLines(w, res.LoopTurnCheckpoints.Examples, "  ")
 	printLoopProtocolFeedExampleLines(w, res.LoopProtocolFeeds.Examples, "  ")
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_request_example", res.LoopProtocolCalibrationRequests.Examples, "  ")
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_example", res.LoopProtocolCalibrations.Examples, "  ")

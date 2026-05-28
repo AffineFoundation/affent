@@ -1140,6 +1140,10 @@ regressions have to expose a retry path or fail the profile. Failed, not-run, or
 abnormal verifier tags also trip the longrun profile so code/PR scenarios do not
 rely only on aggregate verifier pass rate or pass rate to expose verification
 regressions. Use
+The profile also requires at least some scenarios to emit durable
+`loop.turn_checkpoint` coverage, so a long-run batch cannot silently lose the
+per-turn LOOP sidecar recovery write path while still emitting protocol feeds.
+Use
 `--quality-profile web-evidence` for live/current web evidence runs; it also
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads, browser network refs that were not followed by

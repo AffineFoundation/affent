@@ -292,6 +292,33 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			ProtocolPath:            p.ProtocolPath,
 			EventSeq:                p.EventSeq,
 		})
+	case sse.TypeLoopTurnCheckpoint:
+		var p sse.LoopTurnCheckpointPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.LoopTurnCheckpoints = append(t.LoopTurnCheckpoints, LoopTurnCheckpoint{
+			TurnID:             p.TurnID,
+			LoopID:             p.LoopID,
+			Status:             p.Status,
+			ProtocolPath:       p.ProtocolPath,
+			EventSeq:           p.EventSeq,
+			TurnCheckpoints:    p.TurnCheckpoints,
+			EndReason:          p.EndReason,
+			InputTokens:        p.InputTokens,
+			OutputTokens:       p.OutputTokens,
+			ToolRequests:       p.ToolRequests,
+			ToolErrors:         p.ToolErrors,
+			LoopGuards:         p.LoopGuards,
+			ForcedNoTools:      p.ForcedNoTools,
+			MemoryUpdates:      p.MemoryUpdates,
+			MemorySearchCalls:  p.MemorySearchCalls,
+			MemoryMisses:       p.MemoryMisses,
+			SessionSearchCalls: p.SessionSearchCalls,
+		})
 	case sse.TypeContextCompact:
 		var p sse.ContextCompactPayload
 		if err := json.Unmarshal(data, &p); err != nil {

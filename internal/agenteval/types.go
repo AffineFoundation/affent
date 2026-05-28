@@ -163,6 +163,10 @@ type Trace struct {
 	// draft LOOP.md activation. These events prove setup progress even before
 	// a later protocol feed exposes calibration counters.
 	LoopProtocolCalibrations []LoopProtocolCalibration
+	// LoopTurnCheckpoints records successful durable sidecar checkpoint writes
+	// mirrored into the trace. These events prove that a long-run turn's
+	// recovery summary was persisted before the trace claimed the turn ended.
+	LoopTurnCheckpoints []LoopTurnCheckpoint
 	// ContextInjections records hidden system-context blocks injected into the
 	// model prompt. These summaries let evals measure prompt pressure from
 	// account access hints, active plans, and auto-activated skills without
@@ -597,6 +601,27 @@ type LoopProtocolCalibration struct {
 	EventSeq                int    `json:"event_seq,omitempty"`
 }
 
+type LoopTurnCheckpoint struct {
+	Scenario           string `json:"scenario,omitempty"`
+	TurnID             string `json:"turn_id,omitempty"`
+	LoopID             string `json:"loop_id,omitempty"`
+	Status             string `json:"status,omitempty"`
+	ProtocolPath       string `json:"protocol_path,omitempty"`
+	EventSeq           int    `json:"event_seq,omitempty"`
+	TurnCheckpoints    int    `json:"turn_checkpoints,omitempty"`
+	EndReason          string `json:"end_reason,omitempty"`
+	InputTokens        int    `json:"input_tokens,omitempty"`
+	OutputTokens       int    `json:"output_tokens,omitempty"`
+	ToolRequests       int    `json:"tool_requests,omitempty"`
+	ToolErrors         int    `json:"tool_errors,omitempty"`
+	LoopGuards         int    `json:"loop_guards,omitempty"`
+	ForcedNoTools      int    `json:"forced_no_tools,omitempty"`
+	MemoryUpdates      int    `json:"memory_updates,omitempty"`
+	MemorySearchCalls  int    `json:"memory_search_calls,omitempty"`
+	MemoryMisses       int    `json:"memory_search_misses,omitempty"`
+	SessionSearchCalls int    `json:"session_search_calls,omitempty"`
+}
+
 type TraceEventRef struct {
 	Index            int    `json:"index"`
 	Type             string `json:"type"`
@@ -619,6 +644,12 @@ type LoopProtocolCalibrationStats struct {
 	Count    int
 	Latest   LoopProtocolCalibration
 	Examples []LoopProtocolCalibration
+}
+
+type LoopTurnCheckpointStats struct {
+	Count    int
+	Latest   LoopTurnCheckpoint
+	Examples []LoopTurnCheckpoint
 }
 
 type ContextInjection struct {
@@ -1667,6 +1698,37 @@ func (t Trace) LoopProtocolCalibrationStats(maxExamples int) LoopProtocolCalibra
 			LastCalibrationAnswer:   calibration.LastCalibrationAnswer,
 			ProtocolPath:            calibration.ProtocolPath,
 			EventSeq:                calibration.EventSeq,
+		})
+	}
+	return stats
+}
+
+func (t Trace) LoopTurnCheckpointStats(maxExamples int) LoopTurnCheckpointStats {
+	stats := LoopTurnCheckpointStats{}
+	for _, checkpoint := range t.LoopTurnCheckpoints {
+		stats.Count++
+		stats.Latest = checkpoint
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, LoopTurnCheckpoint{
+			TurnID:             checkpoint.TurnID,
+			LoopID:             checkpoint.LoopID,
+			Status:             checkpoint.Status,
+			ProtocolPath:       checkpoint.ProtocolPath,
+			EventSeq:           checkpoint.EventSeq,
+			TurnCheckpoints:    checkpoint.TurnCheckpoints,
+			EndReason:          checkpoint.EndReason,
+			InputTokens:        checkpoint.InputTokens,
+			OutputTokens:       checkpoint.OutputTokens,
+			ToolRequests:       checkpoint.ToolRequests,
+			ToolErrors:         checkpoint.ToolErrors,
+			LoopGuards:         checkpoint.LoopGuards,
+			ForcedNoTools:      checkpoint.ForcedNoTools,
+			MemoryUpdates:      checkpoint.MemoryUpdates,
+			MemorySearchCalls:  checkpoint.MemorySearchCalls,
+			MemoryMisses:       checkpoint.MemoryMisses,
+			SessionSearchCalls: checkpoint.SessionSearchCalls,
 		})
 	}
 	return stats

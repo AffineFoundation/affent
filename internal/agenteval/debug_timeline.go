@@ -247,6 +247,9 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ContextInjections.EstimatedTokens,
 		))
 	}
+	if res.LoopTurnCheckpoints.Count > 0 {
+		parts = append(parts, fmt.Sprintf("loop_turn_checkpoints=%d", res.LoopTurnCheckpoints.Count))
+	}
 	if res.LoopProtocolCalibrations.Count > 0 {
 		parts = append(parts, fmt.Sprintf("loop_calibrations=%d", res.LoopProtocolCalibrations.Count))
 	}

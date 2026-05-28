@@ -42,7 +42,7 @@ Shared metadata fields:
   thresholds are still written as ordinary gate fields, and explicitly supplied
   gate flags override profile defaults.
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
-  `min_loop_protocol_feed_rate`,
+  `min_loop_turn_checkpoint_rate`, `min_loop_protocol_feed_rate`,
   `min_loop_protocol_calibration_request_rate`,
   `min_loop_protocol_calibration_rate`, `min_runtime_surface_rate`,
   `min_trace_event_rate`,
@@ -320,6 +320,13 @@ Scenario records describe one eval case:
   `loop_guard_interventions` or `forced_no_tools` spike and the generic
   failure-kind counts do not show which attempted call was blocked. Summary
   records include the originating scenario.
+- `loop_turn_checkpoints`: optional count of durable per-turn LOOP sidecar
+  checkpoint writes observed in trace for this scenario.
+- `loop_turn_checkpoint_examples`: optional bounded checkpoint samples with
+  turn id, loop id/status, protocol path, event sequence, persisted checkpoint
+  count, turn end reason, token counts, tool/error/guard counts, memory update
+  and recall counts. These prove the run persisted recovery state before the
+  trace claimed a long-run turn finished.
 - `loop_protocol_feeds`: optional count of loop protocol injections into model
   context for this scenario.
 - `loop_protocol_feed_by_mode`: optional map of feed mode to count. Known modes
@@ -547,7 +554,8 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`, `avg_duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
-  `memory_update_rate`, `loop_protocol_feed_rate`, `runtime_surface_rate`,
+  `memory_update_rate`, `loop_turn_checkpoint_rate`,
+  `loop_protocol_feed_rate`, `runtime_surface_rate`,
   `loop_protocol_calibration_request_rate`,
   `loop_protocol_calibration_rate`, `trace_event_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
@@ -626,7 +634,7 @@ Summary records aggregate all scenario records from the same process:
   `memory_search_miss_examples`,
   `session_search_examples`, `tool_truncation_examples`,
   `context_compaction_examples`, `context_injection_examples`,
-  `loop_decision_examples`,
+  `loop_decision_examples`, `loop_turn_checkpoint_examples`,
   `loop_protocol_feed_examples`, `loop_protocol_calibration_request_examples`,
   `loop_protocol_calibration_examples`, and `plan_examples` include their
   originating scenario so long-run batch failures can be routed directly to the
@@ -640,6 +648,11 @@ Summary records aggregate all scenario records from the same process:
   multi-turn drift. `loop_protocol_feed_rate` is scenario coverage, not raw
   feed count divided by scenario count, so repeated feeds in one scenario do
   not hide scenarios that never received their protocol.
+- Loop turn checkpoint totals: `loop_turn_checkpoint_scenarios`,
+  `loop_turn_checkpoints`, and `loop_turn_checkpoint_examples`, useful for
+  checking whether long-run turns persist their recovery sidecar before
+  ending. `loop_turn_checkpoint_rate` is scenario coverage, not raw checkpoint
+  count divided by scenario count.
 - Loop protocol calibration totals:
   `loop_protocol_calibration_request_scenarios`,
   `loop_protocol_calibration_requests`,
