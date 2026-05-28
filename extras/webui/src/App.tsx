@@ -1808,6 +1808,7 @@ export function App() {
     run: sessionRun,
     artifacts: workbenchArtifacts,
     files: sessionFiles,
+    workspaceBrowserActive: workspaceFileBrowser.state !== "idle",
     workspace: sessionWorkspace,
     trace: sessionTrace,
     usage: workbenchContextUsage,

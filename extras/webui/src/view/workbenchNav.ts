@@ -35,6 +35,7 @@ export function buildWorkbenchNavItems({
   run,
   artifacts = [],
   files,
+  workspaceBrowserActive = false,
   workspace,
   trace,
   usage,
@@ -51,6 +52,7 @@ export function buildWorkbenchNavItems({
   run: SessionRunView;
   artifacts?: readonly TurnArtifact[];
   files: SessionFilesView;
+  workspaceBrowserActive?: boolean;
   workspace: SessionWorkspaceView;
   trace?: SessionTraceView;
   usage?: WorkbenchContextUsageView;
@@ -112,12 +114,12 @@ export function buildWorkbenchNavItems({
       badge: artifactBadge(artifacts),
     });
   }
-  if (files.items.length > 0 || attention?.target === "files") {
+  if (files.items.length > 0 || workspaceBrowserActive || attention?.target === "files") {
     currentItems.push({
       key: "files",
       label: "Files",
       scope: "current",
-      detail: files.items.length > 0 ? files.detail : "Task file evidence",
+      detail: files.items.length > 0 ? files.detail : workspaceBrowserActive ? "Workspace browser" : "Task file evidence",
       badge: files.items.length > 0 ? String(files.items.length) : undefined,
       tone: toneForAttention(attention?.target === "files" ? attention.tone : files.tone),
     });

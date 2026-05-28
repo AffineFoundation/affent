@@ -165,6 +165,34 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.filter((item) => item.key === "trace")).toHaveLength(1);
   });
 
+  it("keeps Files reachable while a workspace browser is open even without file evidence", () => {
+    const items = buildWorkbenchNavItems({
+      overview,
+      changes: { summary: "No changed files", detail: "No changes", files: [] },
+      run: { summary: "No commands", detail: "No commands", commands: [] },
+      files: { summary: "No files", detail: "No files", items: [] },
+      workspaceBrowserActive: true,
+      workspace: {
+        hasData: true,
+        summary: "affent bound",
+        shortStatus: "affent",
+        detail: "/repo/affent",
+        verification: "bound",
+        path: "/repo/affent",
+      },
+      runtimeState: { state: "idle" },
+      configState: { state: "idle" },
+      memoryState: { state: "idle" },
+      skillsState: { state: "idle" },
+    });
+
+    expect(items.find((item) => item.key === "files")).toMatchObject({
+      label: "Files",
+      detail: "Workspace browser",
+      scope: "current",
+    });
+  });
+
   it("maps attention targets to Workbench tabs", () => {
     expect(workbenchTabFromAttention("workspace")).toBe("workspace");
     expect(workbenchTabFromAttention("automation")).toBe("loop");
