@@ -244,11 +244,21 @@ func handleSessionArtifactRead(sessionDir, rawPath string, w http.ResponseWriter
 		writeJSONError(w, http.StatusInternalServerError, "seek artifact", err)
 		return
 	}
+	chunkBytes := limit
+	if remaining := info.Size() - offset; remaining < chunkBytes {
+		chunkBytes = remaining
+	}
+	nextOffset := offset + chunkBytes
+	hasMore := nextOffset < info.Size()
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("X-Affent-Artifact-Path", rel)
 	w.Header().Set("X-Affent-Artifact-Bytes", strconv.FormatInt(info.Size(), 10))
 	w.Header().Set("X-Affent-Artifact-Offset", strconv.FormatInt(offset, 10))
-	_, _ = io.Copy(w, io.LimitReader(f, limit))
+	w.Header().Set("X-Affent-Artifact-Limit", strconv.FormatInt(limit, 10))
+	w.Header().Set("X-Affent-Artifact-Chunk-Bytes", strconv.FormatInt(chunkBytes, 10))
+	w.Header().Set("X-Affent-Artifact-Next-Offset", strconv.FormatInt(nextOffset, 10))
+	w.Header().Set("X-Affent-Artifact-Has-More", strconv.FormatBool(hasMore))
+	_, _ = io.Copy(w, io.LimitReader(f, chunkBytes))
 }
 
 func cleanArtifactRequestPath(raw string) (string, error) {

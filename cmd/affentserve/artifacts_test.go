@@ -90,6 +90,43 @@ func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
 	if got := w.Result().Header.Get("X-Affent-Artifact-Path"); got != artifactRel {
 		t.Fatalf("artifact path header = %q, want %q", got, artifactRel)
 	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Bytes"); got != "16" {
+		t.Fatalf("artifact bytes header = %q, want 16", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Offset"); got != "4" {
+		t.Fatalf("artifact offset header = %q, want 4", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Limit"); got != "6" {
+		t.Fatalf("artifact limit header = %q, want 6", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Chunk-Bytes"); got != "6" {
+		t.Fatalf("artifact chunk bytes header = %q, want 6", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Next-Offset"); got != "10" {
+		t.Fatalf("artifact next offset header = %q, want 10", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Has-More"); got != "true" {
+		t.Fatalf("artifact has more header = %q, want true", got)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts/"+artifactRel+"?offset=16&limit=6", nil)
+	w = httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "/"+artifactRel, w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("eof read status = %d: %s", got, w.Body.String())
+	}
+	if got := w.Body.String(); got != "" {
+		t.Fatalf("eof chunk = %q, want empty", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Chunk-Bytes"); got != "0" {
+		t.Fatalf("eof artifact chunk bytes header = %q, want 0", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Next-Offset"); got != "16" {
+		t.Fatalf("eof artifact next offset header = %q, want 16", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Has-More"); got != "false" {
+		t.Fatalf("eof artifact has more header = %q, want false", got)
+	}
 }
 
 func TestHandleSessionArtifacts_PersistsAcrossGracefulShutdown(t *testing.T) {
