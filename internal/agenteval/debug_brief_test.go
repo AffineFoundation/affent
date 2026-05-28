@@ -330,6 +330,76 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
 		t.Fatalf("evidence-backed research checkpoint debug item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Delegation: DelegationStats{
+			FocusedTaskCalls:  1,
+			FocusedTaskByType: map[string]int{"explore": 1},
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "warn" ||
+		!stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("local explore task should not satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Delegation: DelegationStats{
+			FocusedTaskCalls:  1,
+			FocusedTaskByType: map[string]int{"web_extract": 1},
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Counts["focused_task_research"] != 1 ||
+		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("web_extract task should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Delegation: DelegationStats{
+			SubagentCalls:  1,
+			SubagentByMode: map[string]int{"review": 1},
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "warn" ||
+		!stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("review subagent should not satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Delegation: DelegationStats{
+			SubagentCalls:  1,
+			SubagentByMode: map[string]int{"research": 1},
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Counts["subagent_research"] != 1 ||
+		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("research subagent should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {

@@ -170,7 +170,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"decisions":             researchCheckpoints,
 			"source_access_results": res.ToolStats.SourceAccessResults,
 			"focused_task_calls":    res.Delegation.FocusedTaskCalls,
+			"focused_task_research": researchCheckpointFocusedTaskEvidenceCount(res.Delegation),
 			"subagent_calls":        res.Delegation.SubagentCalls,
+			"subagent_research":     res.Delegation.SubagentByMode["research"],
 		}, tags...)
 	}
 	if res.Delegation.HasAny() {
@@ -563,10 +565,17 @@ func researchCheckpointHasExternalEvidence(res BatchResult) bool {
 	if res.ToolStats.SourceAccessResults > 0 {
 		return true
 	}
-	if res.Delegation.FocusedTaskCalls > 0 || res.Delegation.SubagentCalls > 0 {
+	if researchCheckpointFocusedTaskEvidenceCount(res.Delegation) > 0 {
+		return true
+	}
+	if res.Delegation.SubagentByMode["research"] > 0 {
 		return true
 	}
 	return false
+}
+
+func researchCheckpointFocusedTaskEvidenceCount(stats DelegationStats) int {
+	return stats.FocusedTaskByType["research"] + stats.FocusedTaskByType["web_extract"]
 }
 
 func browserNetworkRefsHaveSourceEvidence(res BatchResult) bool {

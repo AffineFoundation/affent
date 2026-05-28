@@ -1254,6 +1254,9 @@ Research checkpoints that trigger without SourceAccess evidence or delegated
 research emit `research_checkpoint:no_external_evidence`; the recovery prompt
 routes the next operator to loop decisions, source evidence, and child
 transcripts before treating a loop-route conclusion as externally calibrated.
+Only focused `research`/`web_extract` tasks and `research` subagents count as
+delegated research evidence; local explore/review children remain internal
+review signals.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

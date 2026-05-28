@@ -257,7 +257,10 @@ Scenario records describe one eval case:
   `LOOP.md` or `state.json` lifecycle state before rerunning model evals.
   Research checkpoint evidence-gap tags route operators to
   `loop_decision_examples`, `source_evidence`, and `child_transcripts` before
-  treating a route change as externally calibrated.
+  treating a route change as externally calibrated. Delegated evidence only
+  satisfies this tag when it came from focused `research`/`web_extract` tasks
+  or a `research` subagent; local explore/review delegation remains an
+  internal review signal.
   JSONL scenario records expose the manifest location through
   `debug_manifest_path`; they do not inline this block.
 - `loop_guard_interventions`: runtime loop guard intervention count.
