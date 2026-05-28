@@ -57,6 +57,8 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("000001-test.txt");
     const focus = screen.getByTestId("session-artifacts-focus");
     expect(focus).toHaveTextContent("turn 3 · shell · call 2");
+    expect(focus).toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(focus).toHaveTextContent("checkout spec failed");
     expect(focus).toHaveTextContent("Open artifact");
     expect(within(focus).getByRole("link", { name: "Download" })).toHaveAttribute(
       "href",
@@ -64,6 +66,10 @@ describe("SessionArtifactsPanel", () => {
     );
     await user.click(within(focus).getByRole("button", { name: "Open artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
+    await user.click(within(focus).getByRole("button", { name: "Copy details" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Artifact evidence for .affent/artifacts/tool-results/000001-test.txt"));
+    await user.click(within(focus).getByRole("button", { name: "Reference" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Source: npm test -- checkout.spec.ts"), "artifact");
     const filters = screen.getByLabelText("Artifact filters");
     expect(within(filters).getByText("Deliverables").closest("button")).toHaveTextContent("1");
     expect(within(filters).getByText("Full output").closest("button")).toHaveTextContent("1");

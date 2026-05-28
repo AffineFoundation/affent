@@ -61,6 +61,10 @@ export function SessionArtifactsPanel({
                 <div className="session-artifacts-focus-main">
                   <small>{[artifactKindLabel(focus), artifactLineageLabel(focus)].filter(Boolean).join(" · ")}</small>
                   <strong title={focus.path}>{focus.name}</strong>
+                  <span className="session-artifacts-focus-source" title={focus.source}>{focus.source}</span>
+                  {artifactSummaryPreview(focus, 120) ? (
+                    <span className="session-artifacts-focus-summary">{artifactSummaryPreview(focus, 120)}</span>
+                  ) : null}
                   <b>{artifactSizeLabel(focus) || "recorded"}</b>
                 </div>
                 <div className="session-artifacts-focus-actions">
@@ -75,6 +79,12 @@ export function SessionArtifactsPanel({
                     </a>
                   ) : null}
                   <CopyButton label="Copy path" value={focus.path} className="ghost-action" />
+                  <CopyButton label="Copy details" value={artifactEvidenceText(focus)} className="ghost-action" />
+                  {onUseAsDraft ? (
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(focus), "artifact")}>
+                      Reference
+                    </button>
+                  ) : null}
                 </div>
               </div>
             ) : null}
