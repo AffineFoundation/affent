@@ -522,12 +522,15 @@ function loopDecisionMeta(event: NormalizedEvent, turn: string | undefined): str
     turn,
     loopDecisionKindLabel(readString(event.data, "kind")),
     readString(event.data, "decision"),
+    loopDecisionBudgetMeta(event),
     streamSummary(readString(event.data, "reason") ?? readString(event.data, "required_action") ?? ""),
   ]);
 }
 
 function loopDecisionKindLabel(kind: string | undefined): string | undefined {
   if (kind === "research_checkpoint") return "research checkpoint";
+  if (kind === "input_budget") return "input budget";
+  if (kind === "tool_context_budget") return "context budget";
   return kind;
 }
 
@@ -633,8 +636,17 @@ function loopProtocolFeedBadges(event: NormalizedEvent): string[] {
 function loopDecisionBadges(event: NormalizedEvent): string[] {
   return compact([
     readString(event.data, "confidence"),
+    loopDecisionBudgetMeta(event),
     readBoolean(event.data, "visible_in_ui") ? "visible" : undefined,
   ]);
+}
+
+function loopDecisionBudgetMeta(event: NormalizedEvent): string | undefined {
+  const tokenBudget = readNumber(event.data, "token_budget");
+  if (tokenBudget && tokenBudget > 0) return `${tokenBudget.toLocaleString()} tokens`;
+  const budgetBytes = readNumber(event.data, "budget_bytes");
+  if (budgetBytes && budgetBytes > 0) return formatByteCount(budgetBytes);
+  return undefined;
 }
 
 function toolRequestMeta(event: NormalizedEvent, turn: string | undefined): string[] {

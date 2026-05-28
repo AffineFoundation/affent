@@ -214,6 +214,49 @@ describe("buildTurnActivity", () => {
     });
   });
 
+  it("surfaces budget loop decisions with concrete budget units", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long task" } },
+      {
+        id: 3,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "tool_context_budget",
+          trigger: "tool_result_context_budget_exhausted",
+          decision: "defer",
+          confidence: "high",
+          reason: "Tool results omitted bytes after exhausting the per-turn model-context budget.",
+          required_action: "Stop taking more tool actions in this turn.",
+          budget_bytes: 32768,
+          visible_in_ui: true,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Context",
+      summary: "Context budget: defer: budget 32 KiB Tool results omitted bytes after exhausting the per-turn model-context budget. Next: Stop taking more tool actions in this turn.",
+      meta: ["1 decision"],
+      tone: "warning",
+    });
+    expect(activity?.brief.rows).toContainEqual({
+      id: "decision:3",
+      label: "Context",
+      value: "defer · budget 32 KiB · Tool results omitted bytes after exhausting the per-turn model-context budget. · Next: Stop taking more tool actions in this ...",
+      tone: "warning",
+      action: {
+        label: "Continue compact",
+        draft: "Continue: Stop taking more tool actions in this turn.",
+        source: "tool_guidance",
+      },
+    });
+  });
+
   it("surfaces context compactions on the owning turn", () => {
     const turn = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

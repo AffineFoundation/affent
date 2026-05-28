@@ -297,6 +297,54 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("labels budget loop decisions in event trace metadata", () => {
+    const model = buildEventTraceModel(normalizeEvents([
+      {
+        id: 1,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "input_budget",
+          decision: "defer",
+          confidence: "high",
+          reason: "Projected next request would exceed this turn budget.",
+          token_budget: 300000,
+          visible_in_ui: true,
+        },
+      },
+      {
+        id: 2,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "tool_context_budget",
+          decision: "defer",
+          confidence: "high",
+          reason: "Tool result context budget exhausted.",
+          budget_bytes: 32768,
+          visible_in_ui: true,
+        },
+      },
+    ]));
+
+    expect(model.items[0]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop decision",
+        meta: ["Request 1", "input budget", "defer", "300,000 tokens", "Projected next request would exceed this turn budget."],
+        badges: ["high", "300,000 tokens", "visible"],
+      },
+    });
+    expect(model.items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop decision",
+        meta: ["Request 1", "context budget", "defer", "32 KiB", "Tool result context budget exhausted."],
+        badges: ["high", "32 KiB", "visible"],
+      },
+    });
+  });
+
   it("summarizes session search match diagnostics", () => {
     const model = buildEventTraceModel(normalizeEvents([
       {

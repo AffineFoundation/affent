@@ -352,6 +352,8 @@ function buildAutomationMetric(session: SessionState): SessionOverviewMetric | u
 
 function loopDecisionMetricName(decision: SessionState["loopDecisions"][number] | undefined): string {
   if (decision?.kind === "research_checkpoint") return "research checkpoint";
+  if (decision?.kind === "input_budget") return "input budget decision";
+  if (decision?.kind === "tool_context_budget") return "context budget decision";
   return "decision";
 }
 

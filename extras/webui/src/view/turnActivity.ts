@@ -657,6 +657,8 @@ function latestVisibleLoopDecision(turn: TurnState) {
 
 function loopDecisionLabel(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
   if (decision.kind === "research_checkpoint") return "Research";
+  if (decision.kind === "input_budget") return "Budget";
+  if (decision.kind === "tool_context_budget") return "Context";
   return "Decision";
 }
 
@@ -666,13 +668,14 @@ function loopDecisionTitle(decision: NonNullable<ReturnType<typeof latestVisible
 }
 
 function loopDecisionDetail(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string | undefined {
-  const parts = [decision.reason, decision.required_action ? `Next: ${decision.required_action}` : undefined].filter(Boolean);
+  const parts = [loopDecisionBudgetMeta(decision), decision.reason, decision.required_action ? `Next: ${decision.required_action}` : undefined].filter(Boolean);
   return parts.length > 0 ? summarize(parts.join(" "), 180) : undefined;
 }
 
 function loopDecisionBrief(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
   const parts = [
     decision.kind === "research_checkpoint" ? "checkpoint triggered" : decision.decision,
+    loopDecisionBudgetMeta(decision),
     decision.reason,
     decision.required_action ? `Next: ${decision.required_action}` : undefined,
   ].filter(Boolean);
@@ -681,17 +684,26 @@ function loopDecisionBrief(decision: NonNullable<ReturnType<typeof latestVisible
 
 function loopDecisionDisplayName(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
   if (decision.kind === "research_checkpoint") return "research checkpoint";
+  if (decision.kind === "input_budget") return "input budget";
+  if (decision.kind === "tool_context_budget") return "context budget";
   return decision.kind ? decision.kind.replace(/_/g, " ") : "runtime";
 }
 
 function loopDecisionActionLabel(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
   if (decision.kind === "research_checkpoint") return "Research next";
+  if (decision.kind === "input_budget" || decision.kind === "tool_context_budget") return "Continue compact";
   return "Use action";
 }
 
 function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): TurnActivityTone {
   if (decision.kind === "research_checkpoint" || decision.decision === "defer" || decision.required_action) return "warning";
   return "muted";
+}
+
+function loopDecisionBudgetMeta(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string | undefined {
+  if (decision.token_budget && decision.token_budget > 0) return `budget ${decision.token_budget.toLocaleString()} tokens`;
+  if (decision.budget_bytes && decision.budget_bytes > 0) return `budget ${formatByteCount(decision.budget_bytes)}`;
+  return undefined;
 }
 
 function latestContextCompaction(turn: TurnState) {

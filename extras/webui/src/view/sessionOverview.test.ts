@@ -348,6 +348,33 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("labels budget decisions in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "input_budget",
+          decision: "defer",
+          token_budget: 300000,
+          visible_in_ui: true,
+        },
+      },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Automation", value: "1 input budget decision defer", tone: undefined },
+    ]));
+  });
+
   it("surfaces context compactions in the session overview", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

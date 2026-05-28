@@ -284,6 +284,7 @@ export interface LoopDecisionPayload {
   reason?: string;
   required_action?: string;
   token_budget?: number;
+  budget_bytes?: number;
   visible_in_ui?: boolean;
 }
 
