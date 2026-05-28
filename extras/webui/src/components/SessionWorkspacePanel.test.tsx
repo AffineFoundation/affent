@@ -8,9 +8,10 @@ describe("SessionWorkspacePanel", () => {
   it("renders workspace binding, cwd, mismatch issue, and copy actions", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
+    const onUseAsDraft = vi.fn();
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
 
-    render(<SessionWorkspacePanel defaultOpen workspace={workspace} />);
+    render(<SessionWorkspacePanel defaultOpen workspace={workspace} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-workspace-panel");
     expect(panel).toHaveAttribute("open");
@@ -25,6 +26,13 @@ describe("SessionWorkspacePanel", () => {
     expect(writeText).toHaveBeenCalledWith("/repo/affent");
     await user.click(within(panel).getByRole("button", { name: "Copy cwd" }));
     expect(writeText).toHaveBeenCalledWith("/tmp");
+    await user.click(within(panel).getByRole("button", { name: "Copy workspace evidence" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Issue: Latest command cwd is outside the session workspace."));
+    await user.click(within(panel).getByRole("button", { name: "Resolve as draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Verify this workspace mismatch before making more file changes or running commands"),
+      "workspace",
+    );
   });
 });
 

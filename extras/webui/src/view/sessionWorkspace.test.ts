@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSummary } from "../api/sessions";
 import type { SessionRunView } from "./sessionRun";
-import { buildSessionWorkspace } from "./sessionWorkspace";
+import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText } from "./sessionWorkspace";
 
 describe("buildSessionWorkspace", () => {
   it("summarizes a recorded workspace binding with the latest command cwd", () => {
@@ -26,16 +26,27 @@ describe("buildSessionWorkspace", () => {
   });
 
   it("flags absolute command cwd outside the session workspace", () => {
-    expect(buildSessionWorkspace(
+    const workspace = buildSessionWorkspace(
       session({ workspace_path: "/repo/affent", workspace_label: "affent", last_agent_cwd: "/tmp" }),
       run(),
-    )).toMatchObject({
+    );
+
+    expect(workspace).toMatchObject({
       hasData: true,
       summary: "Workspace mismatch",
       shortStatus: "Workspace mismatch",
       tone: "warning",
       issue: "Latest command cwd is outside the session workspace.",
     });
+    expect(workspaceEvidenceText(workspace)).toBe([
+      "Workspace evidence",
+      "Status: Workspace mismatch",
+      "Issue: Latest command cwd is outside the session workspace.",
+      "Label: affent",
+      "Workspace path: /repo/affent",
+      "Last agent cwd: /tmp",
+    ].join("\n"));
+    expect(workspaceDraft(workspace)).toContain("Verify this workspace mismatch before making more file changes or running commands");
   });
 
   it("stays absent when no workspace evidence exists", () => {

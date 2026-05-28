@@ -1,12 +1,16 @@
+import type { UseAsDraft } from "../view/draftSource";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
+import { workspaceDraft, workspaceEvidenceText } from "../view/sessionWorkspace";
 import { CopyButton } from "./CopyButton";
 
 export function SessionWorkspacePanel({
   workspace,
   defaultOpen = false,
+  onUseAsDraft,
 }: {
   workspace: SessionWorkspaceView;
   defaultOpen?: boolean;
+  onUseAsDraft?: UseAsDraft;
 }) {
   return (
     <details className="session-skills-panel session-workspace-panel" data-testid="session-workspace-panel" open={defaultOpen}>
@@ -28,6 +32,12 @@ export function SessionWorkspacePanel({
           <span className="session-evidence-actions">
             {workspace.path ? <CopyButton label="Copy path" value={workspace.path} className="ghost-action" /> : null}
             {workspace.lastAgentCwd ? <CopyButton label="Copy cwd" value={workspace.lastAgentCwd} className="ghost-action" /> : null}
+            <CopyButton label="Copy workspace evidence" value={workspaceEvidenceText(workspace)} className="ghost-action" />
+            {onUseAsDraft ? (
+              <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceDraft(workspace), "workspace")}>
+                {workspace.issue ? "Resolve as draft" : "Use workspace as draft"}
+              </button>
+            ) : null}
           </span>
         </div>
       </div>

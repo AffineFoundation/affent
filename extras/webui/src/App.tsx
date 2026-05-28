@@ -1509,7 +1509,7 @@ export function App() {
     }
     if (workbenchTab === "workspace") {
       return sessionWorkspace.hasData ? (
-        <SessionWorkspacePanel workspace={sessionWorkspace} defaultOpen />
+        <SessionWorkspacePanel workspace={sessionWorkspace} defaultOpen onUseAsDraft={handleUseAsDraft} />
       ) : (
         <WorkbenchEmpty title="No workspace evidence" detail="Open or start a chat with workspace-bound file or command activity." />
       );

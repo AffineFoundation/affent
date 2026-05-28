@@ -20,6 +20,7 @@ export type DraftSource =
   | "tool_guidance"
   | "tool_result"
   | "trace"
+  | "workspace"
   | "retry";
 
 export type UseAsDraft = (content: string, source?: DraftSource) => void;
@@ -47,6 +48,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   tool_guidance: "Using suggested next step",
   tool_result: "Using action output",
   trace: "Using trace evidence",
+  workspace: "Using workspace evidence",
   retry: "Retrying failed action",
 };
 
@@ -72,6 +74,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   tool_guidance: "append",
   tool_result: "append",
   trace: "append",
+  workspace: "append",
   retry: "append",
 };
 

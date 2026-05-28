@@ -55,6 +55,32 @@ export function buildSessionWorkspace(
   };
 }
 
+export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
+  const lines = [
+    "Workspace evidence",
+    `Status: ${workspace.summary}`,
+    workspace.issue ? `Issue: ${workspace.issue}` : undefined,
+    workspace.label ? `Label: ${workspace.label}` : undefined,
+    workspace.path ? `Workspace path: ${workspace.path}` : undefined,
+    workspace.lastAgentCwd ? `Last agent cwd: ${workspace.lastAgentCwd}` : undefined,
+    workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? `Latest command cwd: ${workspace.latestCommandCwd}` : undefined,
+    workspace.branch ? `Branch: ${workspace.branch}` : undefined,
+    workspace.dirtyState ? `State: ${workspace.dirtyState}` : undefined,
+  ];
+  return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
+
+export function workspaceDraft(workspace: SessionWorkspaceView): string {
+  const lead = workspace.issue
+    ? "Verify this workspace mismatch before making more file changes or running commands:"
+    : "Use this workspace boundary for the next step:";
+  return [
+    lead,
+    "",
+    workspaceEvidenceText(workspace),
+  ].join("\n");
+}
+
 function workspaceShortStatus({
   summary,
   label,
