@@ -143,6 +143,7 @@ func TestNewRouter_RegistersExpectedRoutes(t *testing.T) {
 		{http.MethodGet, "/v1/skills"},
 		{http.MethodPost, "/v1/skills"},
 		{http.MethodGet, "/v1/skills/coding_repair_workflow"},
+		{http.MethodDelete, "/v1/skills/coding_repair_workflow"},
 		{http.MethodGet, "/v1/sessions"},
 		{http.MethodPost, "/v1/sessions"},
 		{http.MethodGet, "/v1/sessions/abc"},

@@ -23,6 +23,7 @@ import (
 //	GET    /v1/skills
 //	GET    /v1/skills/{name}
 //	POST   /v1/skills
+//	DELETE /v1/skills/{name}
 //	GET    /v1/sessions/{id}
 //	GET    /v1/sessions/{id}/events
 //	GET    /v1/sessions/{id}/history

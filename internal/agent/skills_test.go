@@ -288,6 +288,9 @@ func TestRuntimeSkillOperationsRejectSymlinkRoot(t *testing.T) {
 	if _, err := ConfirmRuntimeSkillProposal(root, "0123456789abcdef"); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("ConfirmRuntimeSkillProposal symlink root err = %v, want symlink rejection", err)
 	}
+	if err := DeleteRuntimeSkill(root, "demo"); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("DeleteRuntimeSkill symlink root err = %v, want symlink rejection", err)
+	}
 	if _, err := os.Lstat(filepath.Join(outsideRoot, "demo")); !os.IsNotExist(err) {
 		t.Fatalf("outside root should not receive installed skill dir, err=%v", err)
 	}
@@ -477,6 +480,26 @@ func TestDeleteRuntimeSkillRemovesInstalledSkill(t *testing.T) {
 	}
 	if len(skills) != 0 {
 		t.Fatalf("loaded skills after delete = %+v", skills)
+	}
+}
+
+func TestDeleteRuntimeSkillRejectsSymlinkSkillDir(t *testing.T) {
+	root := t.TempDir()
+	outsideDir := t.TempDir()
+	outsideFile := filepath.Join(outsideDir, "outside.txt")
+	if err := os.WriteFile(outsideFile, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(root, "demo")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	err := DeleteRuntimeSkill(root, "demo")
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("DeleteRuntimeSkill symlink dir err = %v, want symlink rejection", err)
+	}
+	if _, err := os.Lstat(outsideFile); err != nil {
+		t.Fatalf("outside dir should remain untouched, err=%v", err)
 	}
 }
 

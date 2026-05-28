@@ -653,6 +653,12 @@ export function App() {
         if (current.state !== "ready") return current;
         return { ...current, skills: current.skills.filter((skill) => skill.name !== name) };
       });
+      try {
+        const resp = await listSkills(client);
+        setSkillsState({ state: "ready", skills: resp.skills, installEnabled: resp.install_enabled });
+      } catch {
+        // Deletion already succeeded. Leave the optimistic state in place.
+      }
     },
     [client],
   );

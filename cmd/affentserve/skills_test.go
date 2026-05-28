@@ -151,3 +151,40 @@ func TestHandleAccountSkills_RejectsDeletingBuiltInSkill(t *testing.T) {
 		t.Fatalf("delete built-in response = %s", w.Body.String())
 	}
 }
+
+func TestHandleAccountSkills_DeleteRuntimeOverrideRestoresBuiltIn(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	active, err := pool.GetOrCreate("skills-shadow")
+	if err != nil {
+		t.Fatalf("GetOrCreate active: %v", err)
+	}
+	body := map[string]any{
+		"name":        "coding_repair_workflow",
+		"description": "Runtime override.",
+		"body":        "AFFENT ACTIVE SKILL: coding_repair_workflow\nUse the runtime override.",
+		"triggers":    []string{"runtime override"},
+	}
+	raw, _ := json.Marshal(body)
+	r := httptest.NewRequest(http.MethodPost, "/v1/skills", bytes.NewReader(raw))
+	w := httptest.NewRecorder()
+	handleAccountSkills(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("install override status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	overridden, ok := active.skillRegistry.Lookup("coding_repair_workflow")
+	if !ok || strings.HasPrefix(overridden.Source, "embed:") || !strings.Contains(overridden.Body, "runtime override") {
+		t.Fatalf("active registry should use runtime override, got ok=%v skill=%+v", ok, overridden)
+	}
+
+	r = httptest.NewRequest(http.MethodDelete, "/v1/skills/coding_repair_workflow", nil)
+	w = httptest.NewRecorder()
+	handleAccountSkillRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("delete override status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	restored, ok := active.skillRegistry.Lookup("coding_repair_workflow")
+	if !ok || !strings.HasPrefix(restored.Source, "embed:") || strings.Contains(restored.Body, "runtime override") {
+		t.Fatalf("active registry should restore built-in after runtime delete, got ok=%v skill=%+v", ok, restored)
+	}
+}
