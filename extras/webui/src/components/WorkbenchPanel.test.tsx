@@ -19,7 +19,7 @@ describe("WorkbenchPanel", () => {
     render(
       <WorkbenchPanel
         title="Workbench"
-        subtitle="checkout payment flow"
+        subtitle="Global runtime console"
         navItems={navItems}
         activeTab="context"
         onSelectTab={onSelectTab}
@@ -30,8 +30,8 @@ describe("WorkbenchPanel", () => {
     );
 
     expect(screen.getByTestId("workbench-panel")).toHaveAccessibleName("Workbench");
-    expect(screen.getByText("checkout payment flow")).toBeInTheDocument();
-    expect(screen.getByText("Current work")).toBeInTheDocument();
+    expect(screen.getByText("Global runtime console")).toBeInTheDocument();
+    expect(screen.getByText("Current chat")).toBeInTheDocument();
     expect(screen.getByText("Platform")).toBeInTheDocument();
     expect(screen.getByTestId("active-tab")).toHaveTextContent("Context content");
     expect(within(screen.getByRole("navigation", { name: "Workbench sections" })).getByRole("button", { name: /^Run\b/ })).toHaveAttribute("data-tone", "error");

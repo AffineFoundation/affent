@@ -1842,6 +1842,8 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
 
     expect(screen.getByTestId("workbench-panel")).toBeVisible();
+    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Global runtime console");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("Current chat");
     expect(screen.queryByTestId("workbench-inspector")).toBeNull();
     expect(screen.getByTestId("conversation-scroll")).toBeVisible();
     expect(screen.getByTestId("composer")).toBeVisible();

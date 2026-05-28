@@ -69,7 +69,7 @@ function groupNavItems(items: readonly WorkbenchNavItem[]): { scope: WorkbenchNa
   const current = items.filter((item) => item.scope === "current");
   const platform = items.filter((item) => item.scope === "platform");
   const groups: { scope: WorkbenchNavScope; label: string; items: WorkbenchNavItem[] }[] = [
-    { scope: "current", label: "Current work", items: current },
+    { scope: "current", label: "Current chat", items: current },
     { scope: "platform", label: "Platform", items: platform },
   ];
   return groups.filter((group) => group.items.length > 0);

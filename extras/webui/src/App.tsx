@@ -1722,7 +1722,7 @@ export function App() {
           {workbenchOpen ? (
             <WorkbenchPanel
               title="Workbench"
-              subtitle={selectedSessionTitle ?? "Global runtime workspace"}
+              subtitle="Global runtime console"
               navItems={workbenchNavItems}
               activeTab={workbenchTab}
               onSelectTab={handleSelectWorkbenchTab}
