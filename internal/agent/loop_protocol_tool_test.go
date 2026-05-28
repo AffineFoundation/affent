@@ -132,7 +132,9 @@ func TestLoopProtocolToolRejectsActivationBeforeCalibrationAnswer(t *testing.T) 
 	if err == nil || !strings.Contains(err.Error(), "requires a recorded calibration question and user answer") || !strings.Contains(err.Error(), "ask one concise calibration question") {
 		t.Fatalf("complete_activation without calibration err = %v", err)
 	}
-	if !strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_unready") {
+	if !strings.Contains(err.Error(), "full LOOP.md in the protocol argument") ||
+		!strings.Contains(err.Error(), "metadata status: running") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_unready") {
 		t.Fatalf("complete_activation without calibration should include failure kind, err = %v", err)
 	}
 }
@@ -256,6 +258,10 @@ func TestLoopProtocolToolDraftUpdateDoesNotActivate(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot activate") {
 		t.Fatalf("update_draft running err = %v", err)
 	}
+	if !strings.Contains(err.Error(), "do not call update_draft for status=running") ||
+		!strings.Contains(err.Error(), "full LOOP.md in the protocol argument") {
+		t.Fatalf("update_draft running next step is ambiguous: %v", err)
+	}
 }
 
 func TestLoopProtocolToolRejectsActivationWithoutRunningStatusFailureKind(t *testing.T) {
@@ -280,6 +286,8 @@ func TestLoopProtocolToolRejectsActivationWithoutRunningStatusFailureKind(t *tes
 	})))
 	if err == nil ||
 		!strings.Contains(err.Error(), "metadata status: running") ||
+		!strings.Contains(err.Error(), "do not call update_draft for status=running") ||
+		!strings.Contains(err.Error(), "full LOOP.md in the protocol argument") ||
 		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
 		t.Fatalf("complete_activation without running status err = %v", err)
 	}
@@ -303,6 +311,8 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "Do not complete activation in the same turn") ||
 		!strings.Contains(prompt, "Never claim that a loop is running") ||
+		!strings.Contains(prompt, "protocol argument with metadata status: running") ||
+		!strings.Contains(prompt, "do not use update_draft for running status") ||
 		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("prompt missing loop protocol guidance:\n%s", prompt)
 	}

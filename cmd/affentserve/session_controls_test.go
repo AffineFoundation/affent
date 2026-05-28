@@ -200,7 +200,8 @@ func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 			continue
 		}
 		if strings.Contains(msg.Content, "Loop protocol activation is pending, not active yet.") &&
-			strings.Contains(msg.Content, "Set up loop for: market monitor") {
+			strings.Contains(msg.Content, "Set up loop for: market monitor") &&
+			strings.Contains(msg.Content, "Do not use update_draft to write status: running") {
 			sawSetupPrompt = true
 		}
 		if msg.Content == "market monitor" {
