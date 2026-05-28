@@ -9948,6 +9948,95 @@ pre.code {
   overflow: hidden;
 }
 
+.session-trace-query-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: -2px;
+}
+
+.session-trace-query-tools span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-trace-query-tools button {
+  min-height: 24px;
+  border: 1px solid rgba(217, 224, 232, 0.82);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 0 8px;
+}
+
+.session-trace-query-tools button:hover,
+.session-trace-query-tools button:focus-visible {
+  border-color: rgba(20, 184, 166, 0.32);
+  background: rgba(240, 253, 250, 0.82);
+  color: var(--accent-strong);
+}
+
+.session-trace-focus {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-trace-focus button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  min-height: 36px;
+  border: 1px solid rgba(217, 224, 232, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.74);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.session-trace-focus button:hover:not(:disabled),
+.session-trace-focus button:focus-visible:not(:disabled),
+.session-trace-focus button[data-active="true"] {
+  border-color: rgba(20, 184, 166, 0.34);
+  background: rgba(240, 253, 250, 0.86);
+}
+
+.session-trace-focus button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.session-trace-focus strong {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-trace-focus span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-trace-metrics {
   display: flex;
   flex-wrap: wrap;
@@ -10039,9 +10128,9 @@ pre.code {
   display: grid;
   gap: 6px;
   min-width: 0;
-  border: 1px solid rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(217, 224, 232, 0.78);
   border-radius: calc(var(--radius) - 2px);
-  background: rgba(254, 242, 242, 0.56);
+  background: rgba(255, 255, 255, 0.66);
   padding: 7px 8px;
 }
 
@@ -10055,7 +10144,7 @@ pre.code {
 }
 
 .session-trace-issues-head strong {
-  color: var(--c-error);
+  color: var(--text);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0;
@@ -10070,17 +10159,20 @@ pre.code {
 
 .session-trace-issue-groups {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 
 .session-trace-issue-groups button {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 6px;
   min-height: 24px;
-  border: 1px solid rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(217, 224, 232, 0.82);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--text-muted);
@@ -10091,7 +10183,7 @@ pre.code {
 
 .session-trace-issue-groups button:hover,
 .session-trace-issue-groups button:focus-visible {
-  border-color: rgba(239, 68, 68, 0.32);
+  border-color: rgba(20, 184, 166, 0.32);
   background: rgba(255, 255, 255, 0.92);
 }
 
@@ -10106,7 +10198,7 @@ pre.code {
 }
 
 .session-trace-issue-groups span {
-  color: var(--c-error);
+  color: var(--accent-strong);
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
@@ -10118,12 +10210,23 @@ pre.code {
   min-width: 0;
 }
 
+.session-trace-issues .session-trace-issue-groups {
+  display: flex;
+}
+
+.session-trace-issue-list {
+  max-height: 82px;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
 .session-trace-issue {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 2px 8px;
   min-width: 0;
-  border: 1px solid rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(217, 224, 232, 0.72);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.72);
   color: inherit;
@@ -10134,7 +10237,7 @@ pre.code {
 }
 
 .session-trace-issue:hover {
-  border-color: rgba(239, 68, 68, 0.3);
+  border-color: rgba(20, 184, 166, 0.3);
   background: rgba(255, 255, 255, 0.9);
 }
 
@@ -10164,8 +10267,8 @@ pre.code {
 
 .session-trace-issue-badges b {
   border-radius: 999px;
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--c-error);
+  background: rgba(241, 245, 249, 0.86);
+  color: var(--text-muted);
   font-size: 10px;
   font-weight: 800;
   padding: 2px 5px;
@@ -10908,6 +11011,24 @@ html[data-theme="dark"] .session-trace-issue-groups button:focus-visible {
   background: rgba(127, 29, 29, 0.24);
 }
 
+html[data-theme="dark"] .session-trace-query-tools button,
+html[data-theme="dark"] .session-trace-focus button,
+html[data-theme="dark"] .session-trace-issues,
+html[data-theme="dark"] .session-trace-issue {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(15, 23, 42, 0.52);
+}
+
+html[data-theme="dark"] .session-trace-query-tools button:hover,
+html[data-theme="dark"] .session-trace-query-tools button:focus-visible,
+html[data-theme="dark"] .session-trace-focus button:hover:not(:disabled),
+html[data-theme="dark"] .session-trace-focus button:focus-visible:not(:disabled),
+html[data-theme="dark"] .session-trace-focus button[data-active="true"],
+html[data-theme="dark"] .session-trace-issue:hover {
+  border-color: rgba(45, 212, 191, 0.34);
+  background: rgba(45, 212, 191, 0.12);
+}
+
 html[data-theme="dark"] .session-file-preview {
   border-color: rgba(45, 212, 191, 0.28);
   background:
@@ -11598,6 +11719,12 @@ html[data-theme="dark"] ::selection {
     justify-self: end;
     min-width: max-content;
     padding-inline: 4px;
+  }
+  .session-trace-focus {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .session-trace-issue-list {
+    max-height: 72px;
   }
   .mobile-chrome-restore-bar {
     position: fixed;

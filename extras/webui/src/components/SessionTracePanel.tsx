@@ -23,6 +23,8 @@ export function SessionTracePanel({
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
   const issueGroups = useMemo(() => traceToolIssueGroups(trace.toolIssues), [trace.toolIssues]);
+  const artifactCount = useMemo(() => countFilter(events, "artifacts"), [events]);
+  const actionCount = useMemo(() => countFilter(events, "actions"), [events]);
   const visibleEvents = useMemo(
     () => {
       const source = filterEventsByTraceFilter(events, filter);
@@ -30,7 +32,10 @@ export function SessionTracePanel({
     },
     [events, filter, trimmedQuery],
   );
-  const searchHelp = "Search supports plain text plus type:, tool:, call:, turn:, id:, status:failed, artifact:, path:.";
+  const applySearch = (nextQuery: string, nextFilter: TraceFilter = "all") => {
+    setFilter(nextFilter);
+    setQuery(nextQuery);
+  };
 
   return (
     <details className="session-skills-panel session-trace-panel" data-testid="session-trace-panel" open={defaultOpen}>
@@ -74,7 +79,75 @@ export function SessionTracePanel({
                 </div>
               </div>
             ) : null}
-            {events.length > 1 ? <p className="session-trace-search-help" id="session-trace-search-help">{searchHelp}</p> : null}
+            {events.length > 1 ? (
+              <div className="session-trace-query-tools" id="session-trace-search-help" aria-label="Trace search shortcuts">
+                <span>Quick search</span>
+                <button type="button" onClick={() => applySearch("status:failed", "all")}>status:failed</button>
+                <button type="button" onClick={() => applySearch("tool:shell", "commands")}>tool:shell</button>
+                <button type="button" onClick={() => applySearch("artifact:", "artifacts")}>artifact:</button>
+                <button type="button" onClick={() => applySearch("path:", "files")}>path:</button>
+                <button type="button" onClick={() => applySearch("unclassified", "unclassified")}>unclassified</button>
+              </div>
+            ) : null}
+            <div className="session-trace-focus" data-testid="session-trace-focus">
+              <button
+                type="button"
+                data-active={filter === "issues"}
+                disabled={trace.toolIssueCount === 0}
+                onClick={() => {
+                  setFilter((current) => current === "issues" ? "all" : "issues");
+                  setQuery("");
+                }}
+              >
+                <strong>{trace.toolIssueCount}</strong>
+                <span>tool issues</span>
+              </button>
+              <button
+                type="button"
+                data-active={trimmedQuery === "status:failed"}
+                disabled={trace.toolIssueCount === 0}
+                onClick={() => applySearch("status:failed")}
+              >
+                <strong>{trace.toolIssueCount}</strong>
+                <span>failed calls</span>
+              </button>
+              <button
+                type="button"
+                data-active={filter === "actions"}
+                disabled={actionCount === 0}
+                onClick={() => {
+                  setFilter((current) => current === "actions" ? "all" : "actions");
+                  setQuery("");
+                }}
+              >
+                <strong>{actionCount}</strong>
+                <span>actions</span>
+              </button>
+              <button
+                type="button"
+                data-active={filter === "artifacts"}
+                disabled={artifactCount === 0}
+                onClick={() => {
+                  setFilter((current) => current === "artifacts" ? "all" : "artifacts");
+                  setQuery("");
+                }}
+              >
+                <strong>{artifactCount}</strong>
+                <span>artifacts</span>
+              </button>
+              <button
+                type="button"
+                data-active={filter === "unclassified"}
+                disabled={trace.unknownCount === 0}
+                onClick={() => {
+                  setFilter((current) => current === "unclassified" ? "all" : "unclassified");
+                  setQuery("");
+                }}
+              >
+                <strong>{trace.unknownCount}</strong>
+                <span>unclassified</span>
+              </button>
+            </div>
             <div className="session-trace-metrics" data-testid="session-trace-metrics">
               <span><strong>Entries</strong>{trace.eventCount}</span>
               <span><strong>Records</strong>{trace.recordCount}</span>
@@ -87,7 +160,7 @@ export function SessionTracePanel({
             {trace.toolIssues.length > 0 ? (
               <div className="session-trace-issues" data-testid="session-trace-issues">
                 <div className="session-trace-issues-head">
-                  <strong>Tool issues</strong>
+                  <strong>Issue navigator</strong>
                   <span>{trace.toolIssueCount} {trace.toolIssueCount === 1 ? "issue" : "issues"} across {issueGroups.length} {issueGroups.length === 1 ? "tool" : "tools"}</span>
                 </div>
                 <div className="session-trace-issue-groups" role="group" aria-label="Tool issue groups">
@@ -105,7 +178,7 @@ export function SessionTracePanel({
                     </button>
                   ))}
                 </div>
-                <div>
+                <div className="session-trace-issue-list">
                   {trace.toolIssues.map((issue) => (
                     <button
                       key={`${issue.id}:${issue.title}`}
