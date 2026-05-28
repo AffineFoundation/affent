@@ -36,6 +36,7 @@ export function AccountSettingsPanel({
 }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
+  const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
   const ssh = settings?.ssh;
   const title = loading ? "Loading" : error ? "Unavailable" : accountConfigSummary(settings);
   const detail = error
@@ -50,6 +51,11 @@ export function AccountSettingsPanel({
     await onSetEnv?.(name.trim(), value);
     setName("");
     setValue("");
+  }
+
+  async function deleteEnv(envName: string) {
+    await onDeleteEnv?.(envName);
+    setConfirmDeleteEnv(undefined);
   }
 
   return (
@@ -139,8 +145,18 @@ export function AccountSettingsPanel({
                     <strong>{entry.name}</strong>
                     <span>{entry.configured ? "configured" : "empty"}</span>
                   </span>
-                  {onDeleteEnv ? (
-                    <button type="button" className="ghost-action danger-action" disabled={!!busy} onClick={() => void onDeleteEnv(entry.name)}>
+                  {onDeleteEnv ? confirmDeleteEnv === entry.name ? (
+                    <div className="account-env-confirm" role="group" aria-label={`Confirm delete ${entry.name}`}>
+                      <span>Delete {entry.name}?</span>
+                      <button type="button" disabled={!!busy} onClick={() => setConfirmDeleteEnv(undefined)}>
+                        Cancel
+                      </button>
+                      <button type="button" className="danger" disabled={!!busy} onClick={() => void deleteEnv(entry.name)}>
+                        Confirm
+                      </button>
+                    </div>
+                  ) : (
+                    <button type="button" className="ghost-action danger-action" disabled={!!busy} onClick={() => setConfirmDeleteEnv(entry.name)}>
                       Delete
                     </button>
                   ) : null}

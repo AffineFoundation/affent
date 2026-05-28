@@ -2088,8 +2088,58 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
+}
+
+.account-env-item .session-skill-title {
+  min-width: 0;
+}
+
+.account-env-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: min(100%, 260px);
+}
+
+.account-env-confirm span {
+  color: var(--c-error);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.account-env-confirm button {
+  min-height: 28px;
+  border: 1px solid rgba(217, 224, 232, 0.86);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.account-env-confirm button.danger {
+  border-color: rgba(185, 28, 28, 0.32);
+  color: var(--c-error);
+}
+
+.account-env-confirm button:hover,
+.account-env-confirm button:focus-visible {
+  border-color: rgba(20, 184, 166, 0.44);
+  outline: none;
+}
+
+.account-env-confirm button.danger:hover,
+.account-env-confirm button.danger:focus-visible {
+  border-color: rgba(185, 28, 28, 0.5);
+  background: rgba(254, 226, 226, 0.88);
 }
 
 @media (max-width: 760px) {

@@ -38,7 +38,7 @@ describe("AccountSettingsPanel", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Do not ask for or expose secret values"), "config");
   });
 
-  it("saves and deletes environment variables without displaying the value", async () => {
+  it("saves and confirms deletion for environment variables without displaying the value", async () => {
     const user = userEvent.setup();
     const onSetEnv = vi.fn().mockResolvedValue(undefined);
     const onDeleteEnv = vi.fn().mockResolvedValue(undefined);
@@ -63,7 +63,18 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("1 env");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
     expect(screen.queryByText("gl_secret")).toBeNull();
-    await user.click(within(screen.getByTestId("account-env-list")).getByRole("button", { name: "Delete" }));
+
+    const envList = screen.getByTestId("account-env-list");
+    await user.click(within(envList).getByRole("button", { name: "Delete" }));
+    expect(onDeleteEnv).not.toHaveBeenCalled();
+    const firstConfirm = within(envList).getByRole("group", { name: "Confirm delete GITHUB_TOKEN" });
+    expect(firstConfirm).toHaveTextContent("Delete GITHUB_TOKEN?");
+    await user.click(within(firstConfirm).getByRole("button", { name: "Cancel" }));
+    expect(within(envList).queryByRole("group", { name: "Confirm delete GITHUB_TOKEN" })).toBeNull();
+
+    await user.click(within(envList).getByRole("button", { name: "Delete" }));
+    const confirm = within(envList).getByRole("group", { name: "Confirm delete GITHUB_TOKEN" });
+    await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
     expect(onDeleteEnv).toHaveBeenCalledWith("GITHUB_TOKEN");
   });
 
