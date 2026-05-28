@@ -438,7 +438,11 @@ function SkillReviewFocus({
   const body = bodyState?.body ?? skill.body;
   const triggers = skillTriggers(skill);
   const requiredTools = skill.required_tools ?? [];
-  const preview = body || skill.body_preview;
+  const preview = skill.body_preview || body;
+  const contentState = body ? "Loaded" : onLoadBody ? "Available" : preview ? "Preview only" : "Unavailable";
+  const maintenanceDetail = skill.runtime
+    ? "custom skill can be edited"
+    : "built-in skill is read-only";
   return (
     <section className="session-skills-focus" data-testid="session-skills-focus" aria-label={`Skill review ${skill.name}`}>
       <div className="session-skills-focus-head">
@@ -459,8 +463,14 @@ function SkillReviewFocus({
         </div>
       ) : null}
       <div className="session-skills-focus-body">
-        <span>Content</span>
-        {bodyState?.loading ? <p>Loading full content...</p> : bodyState?.error ? <p className="error">{bodyState.error}</p> : preview ? <pre>{preview}</pre> : <p>No content preview.</p>}
+        <span>Maintenance</span>
+        <div className="session-skills-maintenance-grid">
+          <SkillFocusFact label="Full content" value={contentState} detail={body ? "loaded for review actions" : onLoadBody ? "load only when needed" : undefined} />
+          <SkillFocusFact label="Editable" value={onEdit ? "Yes" : "No"} detail={maintenanceDetail} />
+        </div>
+        {bodyState?.loading ? <p>Loading full content...</p> : null}
+        {bodyState?.error ? <p className="error">{bodyState.error}</p> : null}
+        {!bodyState?.loading && !bodyState?.error && preview ? <p>{summarizeSkillPreview(preview)}</p> : null}
       </div>
       <div className="session-skill-actions">
         <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
@@ -492,6 +502,18 @@ function SkillFocusFact({ label, value, detail }: { label: string; value: string
       {detail ? <small title={detail}>{detail}</small> : null}
     </div>
   );
+}
+
+function summarizeSkillPreview(value: string): string {
+  const normalized = value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^AFFENT ACTIVE SKILL\b/i.test(line))
+    .slice(0, 3)
+    .join(" ");
+  if (!normalized) return "No content preview.";
+  return normalized.length > 180 ? `${normalized.slice(0, 179).trimEnd()}...` : normalized;
 }
 
 function SkillsDashboard({ skills, installEnabled }: { skills: readonly SessionSkillInfo[]; installEnabled: boolean }) {

@@ -6029,11 +6029,17 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-skills-maintenance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
 .session-skills-focus-body pre,
 .session-skills-focus-body p {
-  max-height: 180px;
   margin: 0;
-  overflow: auto;
+  overflow: hidden;
   border: 1px solid rgba(217, 224, 232, 0.76);
   border-radius: var(--radius-sm);
   background: rgba(248, 250, 252, 0.74);
@@ -6042,6 +6048,11 @@ button.workbench-context-runtime-item:focus-visible {
   font-size: 11.5px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.session-skills-focus-body pre {
+  max-height: 180px;
+  overflow: auto;
 }
 
 .session-skills-focus-body p.error {
