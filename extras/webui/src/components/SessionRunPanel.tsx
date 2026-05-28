@@ -42,7 +42,7 @@ export function SessionRunPanel({
                   ) : null}
                   {onUseAsDraft ? (
                     <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runDraft(command), "run_command")}>
-                      Rerun
+                      Rerun as draft
                     </button>
                   ) : null}
                 </span>

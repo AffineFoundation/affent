@@ -2139,7 +2139,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open command output" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout spec failed");
-    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun as draft" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using command");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Rerun this command and report the result:\nnpm test -- checkout.spec.ts\nUse this recovery hint: update payment route then rerun",
