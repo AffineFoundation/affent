@@ -1,5 +1,6 @@
 import type { ContextCompactedPayload, ContextInjectedPayload, DelegationMeta, LoopDecisionPayload, LoopProtocolFeedPayload, MemoryUpdateMeta, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
+import type { ChangeDiffEvidence } from "./changeDiff";
 
 // The structured view of a session that the reducer builds from the
 // event stream. Live SSE and replay produce identical state from
@@ -41,6 +42,7 @@ export interface ToolCallState {
   contextEstimatedTokens?: number;
   /** Workspace-relative path to the full output when the result was capped. */
   resultArtifactPath?: string;
+  changeDiff?: ChangeDiffEvidence;
   delegation?: DelegationMeta;
   memoryUpdate?: MemoryUpdateMeta;
 }

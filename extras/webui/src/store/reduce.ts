@@ -21,6 +21,7 @@ import {
   type UserMessagePayload,
 } from "../api/events";
 import { normalizeEvent, normalizeEvents, type NormalizedEvent } from "../normalize/normalizeEvent";
+import { extractChangeDiff } from "./changeDiff";
 import {
   initialSessionState,
   type SessionState,
@@ -218,6 +219,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         contextOmittedBytes: p.context_omitted_bytes,
         contextEstimatedTokens: p.context_estimated_tokens,
         resultArtifactPath: p.result_artifact_path,
+        changeDiff: extractChangeDiff(p.result ?? p.result_summary) ?? c.changeDiff,
         delegation: p.delegation ?? c.delegation,
         memoryUpdate: p.memory_update,
       }));

@@ -107,6 +107,46 @@ describe("buildSessionChanges", () => {
     ]);
   });
 
+  it("keeps the latest non-empty diff evidence when a file changes again", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "edit-1", tool: "edit_file", args: { path: "src/app.ts" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "edit-1",
+          exit_code: 0,
+          result_summary: "Updated app shell",
+          result: [
+            "Updated app shell",
+            "diff --git a/src/app.ts b/src/app.ts",
+            "index 1111111..2222222 100644",
+            "--- a/src/app.ts",
+            "+++ b/src/app.ts",
+            "@@ -1,2 +1,3 @@",
+            " export const app = true;",
+            "-export const ready = false;",
+            "+export const ready = true;",
+            "+export const active = true;",
+          ].join("\n"),
+        },
+      },
+      { id: 4, type: "tool.request", data: { turn_id: "t1", call_id: "edit-2", tool: "edit_file", args: { path: "src/app.ts" } } },
+      { id: 5, type: "tool.result", data: { call_id: "edit-2", exit_code: 1, failure_kind: "not_found", result_summary: "file moved", result: "file moved" } },
+    ]);
+
+    const [file] = buildSessionChanges(session).files;
+    expect(file).toMatchObject({
+      path: "src/app.ts",
+      status: "failed",
+      actionCount: 2,
+      additions: 2,
+      deletions: 1,
+    });
+    expect(file.diffPreview?.[0]).toMatchObject({ kind: "meta", text: "diff --git a/src/app.ts b/src/app.ts" });
+  });
+
   it("prioritizes failed and running changes before completed edits", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

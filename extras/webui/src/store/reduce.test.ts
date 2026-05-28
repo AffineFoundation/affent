@@ -163,6 +163,62 @@ describe("reduce — tool error", () => {
     expect(c.failureKind).toBe("dynamic_shell");
     expect(c.failureKinds).toEqual(["dynamic_shell", "no_verified_source"]);
   });
+
+  it("captures unified diff evidence on tool results for changed files", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "edit",
+          tool: "edit_file",
+          args: { path: "src/payments.ts" },
+        },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          call_id: "edit",
+          exit_code: 0,
+          result_summary: "Updated payment route",
+          result: [
+            "Updated payment route",
+            "diff --git a/src/payments.ts b/src/payments.ts",
+            "index 1111111..2222222 100644",
+            "--- a/src/payments.ts",
+            "+++ b/src/payments.ts",
+            "@@ -1,3 +1,4 @@",
+            " export function pay() {",
+            "-  return false;",
+            "+  const enabled = true;",
+            "+  return enabled;",
+            " }",
+          ].join("\n"),
+        },
+      },
+    ]);
+
+    expect(s.turns[0].toolCalls[0].changeDiff).toEqual({
+      additions: 2,
+      deletions: 1,
+      truncated: false,
+      preview: [
+        { kind: "meta", text: "diff --git a/src/payments.ts b/src/payments.ts" },
+        { kind: "meta", text: "index 1111111..2222222 100644" },
+        { kind: "meta", text: "--- a/src/payments.ts" },
+        { kind: "meta", text: "+++ b/src/payments.ts" },
+        { kind: "hunk", text: "@@ -1,3 +1,4 @@" },
+        { kind: "context", text: " export function pay() {" },
+        { kind: "remove", text: "-  return false;" },
+        { kind: "add", text: "+  const enabled = true;" },
+        { kind: "add", text: "+  return enabled;" },
+        { kind: "context", text: " }" },
+      ],
+    });
+  });
 });
 
 describe("reduce — repaired args", () => {
