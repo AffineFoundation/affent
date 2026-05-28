@@ -16,7 +16,7 @@ export function WorkbenchPanel({
   activeTab: WorkbenchTab;
   onSelectTab: (tab: WorkbenchTab) => void;
   onClose: () => void;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   const groups = groupNavItems(navItems);
 
@@ -56,9 +56,11 @@ export function WorkbenchPanel({
           </div>
         ))}
       </nav>
-      <div className="workbench-tab-surface" data-testid="workbench-tab-surface">
-        {children}
-      </div>
+      {children ? (
+        <div className="workbench-tab-surface" data-testid="workbench-tab-surface">
+          {children}
+        </div>
+      ) : null}
     </aside>
   );
 }

@@ -1775,6 +1775,8 @@ describe("App", () => {
 
     await user.click(screen.getByLabelText("Workbench"));
 
+    expect(screen.getByTestId("workbench-inspector")).toHaveTextContent("Context");
+    expect(screen.queryByTestId("conversation-scroll")).toBeNull();
     expect(screen.queryByLabelText("Settings")).toBeNull();
     const context = screen.getByTestId("workbench-context-panel");
     expect(context).toHaveAttribute("open");
@@ -1793,6 +1795,7 @@ describe("App", () => {
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
     await user.click(screen.getByRole("button", { name: "Close Workbench" }));
     expect(screen.queryByTestId("workbench-panel")).toBeNull();
+    expect(await screen.findByTestId("conversation-scroll")).toBeVisible();
   });
 
   it("keeps global Workbench sections stable without rendering every panel at once", async () => {
@@ -1904,7 +1907,7 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
 
     expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Changes");
-    expect(screen.getByTestId("workbench-tab-surface")).toHaveTextContent("Changes open in inspector");
+    expect(screen.queryByTestId("workbench-tab-surface")).toBeNull();
     const changes = await screen.findByTestId("session-changes-panel");
     expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
@@ -2784,6 +2787,7 @@ describe("App", () => {
       "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
     );
 
+    await user.click(screen.getByRole("button", { name: "Back to chat" }));
     await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open artifact" }));
     await user.click(await screen.findByRole("button", { name: "Use text" }));
 

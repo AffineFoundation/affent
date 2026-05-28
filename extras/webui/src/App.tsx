@@ -47,7 +47,6 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
-import { SessionArtifactsPanel } from "./components/SessionArtifactsPanel";
 import { SessionAutomationPanel } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
@@ -55,6 +54,7 @@ import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
+import { SessionArtifactsPanel } from "./components/SessionArtifactsPanel";
 import { SessionFilesPanel } from "./components/SessionFilesPanel";
 import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
@@ -1409,7 +1409,7 @@ export function App() {
     latestMemoryUpdate,
   });
   const activeWorkbenchNavItem = workbenchNavItems.find((item) => item.key === workbenchTab);
-  const showWorkbenchInspector = workbenchTab !== "context";
+  const showWorkbenchInspector = workbenchOpen;
 
   useEffect(() => {
     if (!workbenchNavItems.some((item) => item.key === workbenchTab)) setWorkbenchTab("context");
@@ -1422,27 +1422,38 @@ export function App() {
 
   function handleSelectWorkbenchTab(tab: WorkbenchTab) {
     setWorkbenchTab(tab);
-    if (tab !== "context" && typeof window !== "undefined" && window.innerWidth <= 760) {
-      setWorkbenchOpen(false);
-    }
   }
 
   function renderWorkbenchTab() {
     if (workbenchTab === "context") {
       return (
-        <WorkbenchContextPanel
-          overview={overview}
-          hasSelectedSession={!!selectedSessionId}
-          attention={workbenchAttention?.target === "context" ? workbenchAttention : undefined}
-          workspace={sessionWorkspace}
-          files={sessionFiles}
-          changes={sessionChanges}
-          run={sessionRun}
-          automationTitle={automationContext?.title}
-          automationDetail={automationContext?.detail}
-          onSelectSection={handleSelectWorkbenchTab}
-          defaultOpen
-        />
+        <>
+          <WorkbenchContextPanel
+            overview={overview}
+            hasSelectedSession={!!selectedSessionId}
+            attention={workbenchAttention?.target === "context" ? workbenchAttention : undefined}
+            workspace={sessionWorkspace}
+            files={sessionFiles}
+            changes={sessionChanges}
+            run={sessionRun}
+            automationTitle={automationContext?.title}
+            automationDetail={automationContext?.detail}
+            onSelectSection={handleSelectWorkbenchTab}
+            defaultOpen
+          />
+          {sessionArtifacts.length > 0 ? (
+            <SessionArtifactsPanel
+              artifacts={sessionArtifacts}
+              onOpenArtifact={(path) => void handleOpenArtifact(path)}
+              downloadHref={
+                selectedSessionId
+                  ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
+                  : undefined
+              }
+              onUseAsDraft={handleUseAsDraft}
+            />
+          ) : null}
+        </>
       );
     }
     if (workbenchTab === "changes") {
@@ -1493,34 +1504,6 @@ export function App() {
     return renderRuntimeStatsPanel(true);
   }
 
-  function renderWorkbenchRailContent() {
-    if (workbenchTab === "context") {
-      return (
-        <>
-          {renderWorkbenchTab()}
-          {sessionArtifacts.length > 0 ? (
-            <SessionArtifactsPanel
-              artifacts={sessionArtifacts}
-              onOpenArtifact={(path) => void handleOpenArtifact(path)}
-              downloadHref={
-                selectedSessionId
-                  ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
-                  : undefined
-              }
-              onUseAsDraft={handleUseAsDraft}
-            />
-          ) : null}
-        </>
-      );
-    }
-    return (
-      <WorkbenchEmpty
-        title={`${activeWorkbenchNavItem?.label ?? "Section"} open in inspector`}
-        detail="Use the wide work area for evidence, logs, files, config, and trace details."
-      />
-    );
-  }
-
   function renderWorkbenchInspector() {
     return (
       <div className="workbench-inspector" data-testid="workbench-inspector">
@@ -1530,7 +1513,7 @@ export function App() {
             <h2>{activeWorkbenchNavItem?.label ?? "Workbench"}</h2>
             <p>{activeWorkbenchNavItem?.detail ?? "Detailed evidence and controls"}</p>
           </div>
-          <button type="button" className="node-action" onClick={() => setWorkbenchTab("context")}>
+          <button type="button" className="node-action" onClick={() => setWorkbenchOpen(false)}>
             Back to chat
           </button>
         </header>
@@ -1735,9 +1718,7 @@ export function App() {
               activeTab={workbenchTab}
               onSelectTab={handleSelectWorkbenchTab}
               onClose={() => setWorkbenchOpen(false)}
-            >
-              {renderWorkbenchRailContent()}
-            </WorkbenchPanel>
+            />
           ) : null}
         </div>
       </main>
