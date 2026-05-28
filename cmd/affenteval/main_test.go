@@ -222,6 +222,75 @@ func TestRunTraceFileWritesDebugArtifacts(t *testing.T) {
 	}
 }
 
+func TestRunTraceFileAppliesQualityGates(t *testing.T) {
+	dir := t.TempDir()
+	tracePath := filepath.Join(dir, "events.jsonl")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"tool.request","data":{"turn_id":"turn-1","call_id":"c1","tool":"plan","args":{"action":"set","steps":"not an array"}}}`,
+		`{"type":"tool.result","data":{"turn_id":"turn-1","call_id":"c1","exit_code":1,"result":"Error: decode args for plan\nFailure: kind=invalid_args\nNext: retry plan with documented fields"}}`,
+		`{"type":"message.done","data":{"turn_id":"turn-1","text":"Partial answer.","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":1,"tool_errors":1,"tool_failure_by_kind":{"invalid_args":1}}}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := captureStdout(t, func() int {
+		return run([]string{
+			"--trace-file", tracePath,
+			"--trace-output-dir", filepath.Join(dir, "debug"),
+			"--name", "manual-plan-drift",
+			"--max-tool-error-rate", "0",
+			"--max-plan-error-rate", "0",
+			"--max-debug-brief-tag-rate", "tool_failure:invalid_args=0",
+		})
+	})
+	if code != 1 {
+		t.Fatalf("run --trace-file with quality gates exit = %d\n%s", code, out)
+	}
+	for _, want := range []string{
+		"PASS manual-plan-drift",
+		"QUALITY_GATES status=failed",
+		"tool_error_rate 1.000 > max 0.000",
+		"plan_error_rate 1.000 > max 0.000",
+		"debug_brief_tag_rate[tool_failure:invalid_args] 1.000 > max 0.000",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--trace-file quality gate output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestTraceFileQualityGateConfigDisablesProfileScenarioCoverage(t *testing.T) {
+	gates := qualityGateConfig{}
+	if err := applyQualityGateProfile(&gates, "longrun", nil); err != nil {
+		t.Fatalf("applyQualityGateProfile: %v", err)
+	}
+	traceGates := qualityGateConfigForTraceFile(gates, func(string) bool { return false })
+	if traceGates.MinExpectationCapabilityPassRate != nil ||
+		traceGates.MinExpectationDomainPassRate != nil ||
+		len(traceGates.RequiredExpectationCapabilities) != 0 ||
+		len(traceGates.RequiredExpectationDomains) != 0 ||
+		len(traceGates.MinExpectationDomainSourceAccessVerifiedRates) != 0 ||
+		len(traceGates.MaxExpectationDomainToolErrorRates) != 0 {
+		t.Fatalf("trace-file gates should drop profile scenario-coverage gates: %+v", traceGates)
+	}
+	if traceGates.MaxToolErrorRate == nil || *traceGates.MaxToolErrorRate != 0.08 ||
+		traceGates.MaxPlanErrorRate == nil || *traceGates.MaxPlanErrorRate != 0.05 {
+		t.Fatalf("trace-file gates should preserve runtime quality gates: %+v", traceGates)
+	}
+
+	explicitGates := qualityGateConfig{
+		RequiredExpectationCapabilities: []string{"memory"},
+	}
+	traceGates = qualityGateConfigForTraceFile(explicitGates, func(name string) bool {
+		return name == "require-expectation-capability"
+	})
+	if !reflect.DeepEqual(traceGates.RequiredExpectationCapabilities, []string{"memory"}) {
+		t.Fatalf("explicit trace-file expectation gate should be preserved: %+v", traceGates)
+	}
+}
+
 func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 	cases := []struct {
 		name string

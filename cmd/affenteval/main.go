@@ -404,17 +404,31 @@ success and trace-level process quality.`)
 			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
 			return 64
 		}
+		traceGates := qualityGateConfigForTraceFile(gates, func(name string) bool {
+			return flagWasSet(fs, name)
+		})
+		meta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, traceGates)
+		summary := summarizeBatchResults([]agenteval.BatchResult{res})
+		gateFailures := qualityGateFailures(summary, traceGates)
 		if *jsonl {
-			meta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, gates)
 			printBatchResultJSONL(os.Stdout, meta, res)
+			printBatchSummaryJSONL(os.Stdout, meta, summary, gateFailures)
 		} else {
 			printBatchResult(os.Stdout, res)
+			printBatchQualityGates(os.Stdout, meta, summary, gateFailures)
 		}
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
 			return 64
 		}
 		if !res.OK {
+			return 1
+		}
+		if len(gateFailures) > 0 {
+			fmt.Fprintln(os.Stderr, "quality gates failed:")
+			for _, failure := range gateFailures {
+				fmt.Fprintf(os.Stderr, "  - %s\n", failure)
+			}
 			return 1
 		}
 		return 0
@@ -922,6 +936,47 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 		g.RequiredExpectationDomains = uniqueSortedStrings(profileDomains)
 	}
 	return nil
+}
+
+func qualityGateConfigForTraceFile(g qualityGateConfig, flagSet func(name string) bool) qualityGateConfig {
+	out := g
+	if flagSet == nil || !flagSet("require-expectation-capability") {
+		out.RequiredExpectationCapabilities = nil
+	}
+	if flagSet == nil || !flagSet("require-expectation-domain") {
+		out.RequiredExpectationDomains = nil
+	}
+	if flagSet == nil || !flagSet("min-expectation-capability-pass-rate") {
+		out.MinExpectationCapabilityPassRate = nil
+	}
+	if flagSet == nil || !flagSet("min-each-expectation-capability-pass-rate") {
+		out.MinEachExpectationCapabilityPassRate = nil
+	}
+	if flagSet == nil || !flagSet("min-expectation-domain-pass-rate") {
+		out.MinExpectationDomainPassRate = nil
+	}
+	if flagSet == nil || !flagSet("min-each-expectation-domain-pass-rate") {
+		out.MinEachExpectationDomainPassRate = nil
+	}
+	if flagSet == nil || !flagSet("min-expectation-domain-source-access-verified-rate") {
+		out.MinExpectationDomainSourceAccessVerifiedRates = nil
+	}
+	if flagSet == nil || !flagSet("max-expectation-domain-avg-total-tokens") {
+		out.MaxExpectationDomainAvgTotalTokens = nil
+	}
+	if flagSet == nil || !flagSet("max-expectation-domain-avg-tool-calls") {
+		out.MaxExpectationDomainAvgToolCalls = nil
+	}
+	if flagSet == nil || !flagSet("max-expectation-domain-avg-runtime-errors") {
+		out.MaxExpectationDomainAvgRuntimeErrors = nil
+	}
+	if flagSet == nil || !flagSet("max-expectation-domain-tool-error-rate") {
+		out.MaxExpectationDomainToolErrorRates = nil
+	}
+	if flagSet == nil || !flagSet("max-expectation-domain-loop-guard-intervention-rate") {
+		out.MaxExpectationDomainLoopGuardInterventionRates = nil
+	}
+	return out
 }
 
 func qualityGateProfileConfig(profile string) (qualityGateConfig, error) {
