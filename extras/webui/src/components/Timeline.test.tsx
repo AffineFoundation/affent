@@ -278,6 +278,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("start from a draft");
     expect(screen.getByRole("button", { name: /Start loop/ })).toBeInTheDocument();
     expect(screen.getByTestId("starter-preview")).toHaveTextContent("Start a long-running loop for this goal:");
+    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Improve checkout reliability until the release checklist is green.");
+    expect(screen.getByTestId("starter-preview")).not.toHaveTextContent("世界形势");
     expect(screen.getByTestId("starter-preview")).not.toHaveTextContent("Inspect this project");
     expect(screen.getByTestId("timeline-empty")).not.toHaveTextContent("Message");
   });

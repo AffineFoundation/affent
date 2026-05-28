@@ -331,7 +331,7 @@ const starterDrafts = [
   {
     title: "Start loop",
     preview: "Keep improving or checking a long-running goal.",
-    prompt: "Start a long-running loop for this goal: 持续分析最近的世界形势",
+    prompt: "Start a long-running loop for this goal: Improve checkout reliability until the release checklist is green.",
   },
   {
     title: "Daily task",
