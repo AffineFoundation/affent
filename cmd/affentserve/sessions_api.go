@@ -489,6 +489,16 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	s.mu.Unlock()
 	messages := s.conv.Snapshot()
 	latestUser, topicUser := userMessageSummariesFromMessages(messages)
+	if s.sessionDir != "" {
+		if latest, topic, err := userMessageSummariesFromEventsFile(filepath.Join(s.sessionDir, "events.jsonl")); err == nil {
+			if latest != "" {
+				latestUser = latest
+			}
+			if topic != "" {
+				topicUser = topic
+			}
+		}
+	}
 	context := sessionContextSnapshot(len(messages), cfg)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()

@@ -1753,6 +1753,42 @@ func TestUserMessageSummariesPreferDisplayText(t *testing.T) {
 	}
 }
 
+func TestSummarizeActiveSessionPrefersEventDisplayText(t *testing.T) {
+	dir := t.TempDir()
+	conv, err := agent.OpenConversationAt(filepath.Join(dir, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	internalPrompt := sessionLoopSetupPrompt("market monitor")
+	if err := conv.Append(agent.ChatMessage{Role: "user", Content: internalPrompt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID:      "t1",
+		Text:        internalPrompt,
+		DisplayText: "Set up loop: market monitor",
+		Mode:        sessionMessageModeLoopSetup,
+	})), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := summarizeActiveSession(&Session{
+		ID:         "active-loop-display",
+		conv:       conv,
+		registry:   agent.NewRegistry(),
+		sessionDir: dir,
+		workspace:  "/tmp/workspace",
+		createdAt:  time.Now(),
+		lastUsed:   time.Now(),
+	}, Config{})
+	if summary.LatestUserMessage != "Set up loop: market monitor" || summary.TopicUserMessage != "Set up loop: market monitor" {
+		t.Fatalf("active latest/topic = %q/%q, want display text", summary.LatestUserMessage, summary.TopicUserMessage)
+	}
+	if strings.Contains(summary.LatestUserMessage, "Loop protocol activation is pending") {
+		t.Fatalf("active summary leaked internal loop setup prompt: %q", summary.LatestUserMessage)
+	}
+}
+
 func TestSummarizeSessionTitleFromUserMessage(t *testing.T) {
 	for _, tc := range []struct {
 		name string
