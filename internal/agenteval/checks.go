@@ -2284,9 +2284,10 @@ func ShellCommandLacksUnguarded(forbidden string) Check {
 }
 
 // ShellCommandLacksWorkspaceAbsolutePath passes when workspace tool arguments
-// stay workspace-relative. The historical check name is kept for manifest
-// compatibility; the guard now covers shell command/cwd plus common workspace
-// file/search path arguments in both parent traces and child transcripts.
+// and results stay workspace-relative. The historical check name is kept for
+// manifest compatibility; the guard now covers shell command/cwd, common
+// workspace file/search path arguments, workspace tool result text, and child
+// transcript tool arguments.
 func ShellCommandLacksWorkspaceAbsolutePath() Check {
 	return Check{
 		Name: "shell_command_lacks_workspace_absolute_path",
@@ -2297,6 +2298,9 @@ func ShellCommandLacksWorkspaceAbsolutePath() Check {
 			}
 			resolver := workspaceArgPolicyResolverForTrace(t)
 			if res := workspaceToolCallsLackNeedles(t.Tools, needles, resolver); !res.Pass {
+				return res
+			}
+			if res := workspaceToolResultsLackNeedles(t.Tools, needles, resolver); !res.Pass {
 				return res
 			}
 			if res := childTranscriptWorkspaceToolCallsLackNeedles(t, needles, resolver); !res.Pass {
@@ -2318,6 +2322,31 @@ func workspaceToolCallsLackNeedles(calls []ToolCall, needles []string, resolver 
 					return CheckResult{
 						Pass:   false,
 						Detail: fmt.Sprintf("%s call_id=%s used workspace absolute path in %s: %q", c.Tool, c.CallID, argName, previewSubstr(text, 160)),
+					}
+				}
+			}
+		}
+	}
+	return CheckResult{Pass: true}
+}
+
+func workspaceToolResultsLackNeedles(calls []ToolCall, needles []string, resolver workspaceArgPolicyResolver) CheckResult {
+	for _, c := range calls {
+		if len(resolver.workspacePathArgNames(c.Tool, c.TurnID)) == 0 {
+			continue
+		}
+		for field, text := range map[string]string{
+			"result":         c.Result,
+			"result_summary": c.ResultSummary,
+		} {
+			if text == "" {
+				continue
+			}
+			for _, needle := range needles {
+				if strings.Contains(text, needle) {
+					return CheckResult{
+						Pass:   false,
+						Detail: fmt.Sprintf("%s call_id=%s returned workspace absolute path in %s: %q", c.Tool, c.CallID, field, previewSubstr(text, 160)),
 					}
 				}
 			}

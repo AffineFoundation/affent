@@ -1921,6 +1921,42 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 		}
 	})
 
+	t.Run("fails for shell result absolute workspace path", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID:        "c1",
+				Tool:          "shell",
+				Args:          map[string]any{"command": "pwd"},
+				Result:        filepath.Join(workspace, "cmd") + "\n[exit 0]",
+				ResultSummary: filepath.Join(workspace, "cmd"),
+			}},
+		}
+		res := check.Eval(trace)
+		if res.Pass {
+			t.Fatalf("absolute workspace path in shell result should fail: %+v", res)
+		}
+		if !strings.Contains(res.Detail, "returned workspace absolute path in result") {
+			t.Fatalf("failure should identify tool result leak, got: %+v", res)
+		}
+	})
+
+	t.Run("passes for shell result relative workspace path", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID:        "c1",
+				Tool:          "shell",
+				Args:          map[string]any{"command": "pwd"},
+				Result:        ".\n[exit 0]",
+				ResultSummary: ".",
+			}},
+		}
+		if res := check.Eval(trace); !res.Pass {
+			t.Fatalf("relative workspace path in shell result should pass: %+v", res)
+		}
+	})
+
 	t.Run("fails for runtime surface workspace path policy", func(t *testing.T) {
 		trace := Trace{
 			WorkspaceDir: workspace,
