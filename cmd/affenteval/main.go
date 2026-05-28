@@ -307,6 +307,7 @@ func run(args []string) int {
 			MaxAvgToolCalls:                       fs.Float64("max-avg-tool-calls", -1, "optional quality gate: maximum average tool calls per scenario"),
 			MaxAvgDurationMS:                      fs.Float64("max-avg-duration-ms", -1, "optional quality gate: maximum average scenario duration in milliseconds"),
 			MaxAvgTotalTokens:                     fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
+			MaxScenarioTotalTokens:                fs.Float64("max-scenario-total-tokens", -1, "optional quality gate: maximum total tokens for any single scenario"),
 		}
 	)
 	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
@@ -610,6 +611,7 @@ type qualityGateConfig struct {
 	MaxAvgToolCalls                                *float64
 	MaxAvgDurationMS                               *float64
 	MaxAvgTotalTokens                              *float64
+	MaxScenarioTotalTokens                         *float64
 	MaxDebugBriefTagRates                          map[string]float64
 	MinExpectationDomainSourceAccessVerifiedRates  map[string]float64
 	MaxExpectationDomainAvgTotalTokens             map[string]float64
@@ -668,6 +670,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                       float64Ptr(14),
 				MaxAvgDurationMS:                      float64Ptr(180000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
+				MaxScenarioTotalTokens:                float64Ptr(240000),
 				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"},
 				RequiredExpectationDomains:            []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "session_recovery"},
 				MaxDebugBriefTagRates: map[string]float64{
@@ -724,6 +727,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                       float64Ptr(18),
 				MaxAvgDurationMS:                      float64Ptr(240000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
+				MaxScenarioTotalTokens:                float64Ptr(240000),
 				RequiredExpectationCapabilities:       []string{"browser", "delegated_source_evidence", "source_access", "web"},
 				RequiredExpectationDomains:            []string{"web_evidence"},
 				MinExpectationDomainSourceAccessVerifiedRates: map[string]float64{
@@ -823,6 +827,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-tool-calls", g.MaxAvgToolCalls)
 	add("max-avg-duration-ms", g.MaxAvgDurationMS)
 	add("max-avg-total-tokens", g.MaxAvgTotalTokens)
+	add("max-scenario-total-tokens", g.MaxScenarioTotalTokens)
 	for _, tag := range sortedFloatMapKeys(g.MaxDebugBriefTagRates) {
 		value := g.MaxDebugBriefTagRates[tag]
 		if value < 0 {
@@ -915,6 +920,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-tool-calls", &g.MaxAvgToolCalls, profileConfig.MaxAvgToolCalls)
 	apply("max-avg-duration-ms", &g.MaxAvgDurationMS, profileConfig.MaxAvgDurationMS)
 	apply("max-avg-total-tokens", &g.MaxAvgTotalTokens, profileConfig.MaxAvgTotalTokens)
+	apply("max-scenario-total-tokens", &g.MaxScenarioTotalTokens, profileConfig.MaxScenarioTotalTokens)
 	if len(profileConfig.MaxDebugBriefTagRates) > 0 {
 		profileTags := cloneStringFloatMap(profileConfig.MaxDebugBriefTagRates)
 		if flagSet != nil && flagSet("max-debug-brief-tag-rate") {
@@ -1138,6 +1144,8 @@ type batchSummary struct {
 	TraceEventTypes                         map[string]int
 	InputTokens                             int
 	OutputTokens                            int
+	MaxScenarioTotalTokens                  int
+	MaxScenarioTokenScenario                string
 	EndCompleted                            int
 	EndMaxTurns                             int
 	EndErrors                               int
@@ -1399,6 +1407,11 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	}
 	s.InputTokens += res.Usage.InputTokens
 	s.OutputTokens += res.Usage.OutputTokens
+	totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens
+	if totalTokens > s.MaxScenarioTotalTokens {
+		s.MaxScenarioTotalTokens = totalTokens
+		s.MaxScenarioTokenScenario = res.BatchScenario
+	}
 	switch res.TurnEndReason {
 	case sse.TurnEndCompleted:
 		s.EndCompleted++
@@ -1833,6 +1846,13 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
 		formatOptionalPercent(batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls)),
 	)
+	if s.MaxScenarioTotalTokens > 0 {
+		if s.MaxScenarioTokenScenario != "" {
+			fmt.Fprintf(w, " max_scenario_tokens=%d:%s", s.MaxScenarioTotalTokens, s.MaxScenarioTokenScenario)
+		} else {
+			fmt.Fprintf(w, " max_scenario_tokens=%d", s.MaxScenarioTotalTokens)
+		}
+	}
 	if hasBatchRepairStats(s) {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", s.ToolRepairCalls, s.ToolRepairSucceeded, s.ToolRepairFailed)
 	}
@@ -2331,6 +2351,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-tool-calls", g.MaxAvgToolCalls, false},
 		{"--max-avg-duration-ms", g.MaxAvgDurationMS, false},
 		{"--max-avg-total-tokens", g.MaxAvgTotalTokens, false},
+		{"--max-scenario-total-tokens", g.MaxScenarioTotalTokens, false},
 	} {
 		if gate.value == nil {
 			continue
@@ -2499,6 +2520,13 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_tool_calls", batchAverage(s.ToolCalls, s.Total), g.MaxAvgToolCalls, s.Total > 0)
 	checkMax("avg_duration_ms", batchAverageInt64(s.Duration.Milliseconds(), s.Total), g.MaxAvgDurationMS, s.Total > 0)
 	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
+	if g.MaxScenarioTotalTokens != nil && *g.MaxScenarioTotalTokens >= 0 && s.Total > 0 && float64(s.MaxScenarioTotalTokens) > *g.MaxScenarioTotalTokens {
+		scenario := strings.TrimSpace(s.MaxScenarioTokenScenario)
+		if scenario == "" {
+			scenario = "unknown"
+		}
+		failures = append(failures, fmt.Sprintf("scenario_total_tokens[%s] %s > max %s", scenario, formatGateFloat(float64(s.MaxScenarioTotalTokens)), formatGateFloat(*g.MaxScenarioTotalTokens)))
+	}
 	for _, tag := range sortedFloatMapKeys(g.MaxDebugBriefTagRates) {
 		threshold := g.MaxDebugBriefTagRates[tag]
 		if threshold < 0 {
@@ -3524,6 +3552,7 @@ type evalJSONLMetadata struct {
 	MaxAvgToolCalls                                *float64           `json:"max_avg_tool_calls,omitempty"`
 	MaxAvgDurationMS                               *float64           `json:"max_avg_duration_ms,omitempty"`
 	MaxAvgTotalTokens                              *float64           `json:"max_avg_total_tokens,omitempty"`
+	MaxScenarioTotalTokens                         *float64           `json:"max_scenario_total_tokens,omitempty"`
 	MaxDebugBriefTagRates                          map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
 	MinExpectationDomainSourceAccessVerifiedRates  map[string]float64 `json:"min_expectation_domain_source_access_verified_rates,omitempty"`
 	MaxExpectationDomainAvgTotalTokens             map[string]float64 `json:"max_expectation_domain_avg_total_tokens,omitempty"`
@@ -3607,6 +3636,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgToolCalls:                       enabledQualityGateValue(gates.MaxAvgToolCalls),
 		MaxAvgDurationMS:                      enabledQualityGateValue(gates.MaxAvgDurationMS),
 		MaxAvgTotalTokens:                     enabledQualityGateValue(gates.MaxAvgTotalTokens),
+		MaxScenarioTotalTokens:                enabledQualityGateValue(gates.MaxScenarioTotalTokens),
 		MaxDebugBriefTagRates:                 enabledQualityGateMap(gates.MaxDebugBriefTagRates),
 		MinExpectationDomainSourceAccessVerifiedRates:  enabledQualityGateMap(gates.MinExpectationDomainSourceAccessVerifiedRates),
 		MaxExpectationDomainAvgTotalTokens:             enabledQualityGateMap(gates.MaxExpectationDomainAvgTotalTokens),
@@ -3943,6 +3973,8 @@ type batchSummaryRecord struct {
 	AvgInputTokens                          float64                                          `json:"avg_input_tokens"`
 	AvgOutputTokens                         float64                                          `json:"avg_output_tokens"`
 	AvgTotalTokens                          float64                                          `json:"avg_total_tokens"`
+	MaxScenarioTotalTokens                  int                                              `json:"max_scenario_total_tokens,omitempty"`
+	MaxScenarioTokenScenario                string                                           `json:"max_scenario_token_scenario,omitempty"`
 	EndCompleted                            int                                              `json:"end_completed"`
 	EndMaxTurns                             int                                              `json:"end_max_turns"`
 	EndErrors                               int                                              `json:"end_errors"`
@@ -4430,6 +4462,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		AvgInputTokens:                          batchAverage(s.InputTokens, s.Total),
 		AvgOutputTokens:                         batchAverage(s.OutputTokens, s.Total),
 		AvgTotalTokens:                          batchAverage(s.InputTokens+s.OutputTokens, s.Total),
+		MaxScenarioTotalTokens:                  s.MaxScenarioTotalTokens,
+		MaxScenarioTokenScenario:                s.MaxScenarioTokenScenario,
 		EndCompleted:                            s.EndCompleted,
 		EndMaxTurns:                             s.EndMaxTurns,
 		EndErrors:                               s.EndErrors,
@@ -4538,6 +4572,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgToolCalls != nil ||
 		meta.MaxAvgDurationMS != nil ||
 		meta.MaxAvgTotalTokens != nil ||
+		meta.MaxScenarioTotalTokens != nil ||
 		len(meta.MaxDebugBriefTagRates) > 0 ||
 		len(meta.MinExpectationDomainSourceAccessVerifiedRates) > 0 ||
 		len(meta.MaxExpectationDomainAvgTotalTokens) > 0 ||

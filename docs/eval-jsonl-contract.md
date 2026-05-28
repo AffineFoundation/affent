@@ -80,9 +80,9 @@ Shared metadata fields:
   `max_avg_context_summary_missing`, `max_avg_context_summary_empty`,
   `max_avg_context_injections`, `max_avg_context_injection_bytes`,
   `max_avg_context_injection_estimated_tokens`,
-  `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`:
-  optional quality gate thresholds configured for the run. Disabled gates are
-  omitted.
+  `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`, and
+  `max_scenario_total_tokens`: optional quality gate thresholds configured for
+  the run. Disabled gates are omitted.
 - `min_expectation_domain_source_access_verified_rates`,
   `max_expectation_domain_avg_total_tokens`,
   `max_expectation_domain_avg_tool_calls`,
@@ -600,7 +600,8 @@ Summary records aggregate all scenario records from the same process:
   `avg_tool_calls`,
   `tool_context_truncation_rate` and
   `tool_result_truncation_rate` when tool calls were observed,
-  `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
+  `avg_input_tokens`, `avg_output_tokens`, `avg_total_tokens`,
+  `max_scenario_total_tokens`, and `max_scenario_token_scenario`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,

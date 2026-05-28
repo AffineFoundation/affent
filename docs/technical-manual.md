@@ -1152,9 +1152,10 @@ runs; it includes minimum trace-event, memory-update, loop-protocol feed,
 loop-protocol calibration request/answer, session-search context-hit,
 scenario-level session-recall debug tag, context-compaction summary gap tags,
 loop-protocol calibration backlog, and missing truncation-artifact gates, plus a
-scenario-level failed tool-repair gate, so observability, shared memory, tool
-recovery, loop startup calibration, loop-guard no-tool fallback, and
-cross-session recovery regressions fail the batch. It also requires the batch to
+single-scenario token runaway cap and a scenario-level failed tool-repair gate,
+so observability, shared memory, tool recovery, loop startup calibration,
+loop-guard no-tool fallback, and cross-session recovery regressions fail the
+batch. It also requires the batch to
 include `longrun_recovery`,
 `loop_protocol`, and `session_search`
 expectation capabilities, so a filtered run cannot pass the profile without
@@ -1255,7 +1256,7 @@ Use `--min-pass-rate`, `--min-completion-rate`,
 `--max-avg-context-removed-messages`, `--max-avg-context-summary-bytes`,
 `--max-avg-context-summary-missing`, `--max-avg-context-summary-empty`,
 `--max-avg-tool-calls`, `--max-avg-duration-ms`, and `--max-avg-total-tokens`
-for CI or model/provider comparison runs.
+plus `--max-scenario-total-tokens` for CI or model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 
