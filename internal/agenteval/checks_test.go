@@ -1453,6 +1453,19 @@ func TestTurnEndedCleanly(t *testing.T) {
 	}
 }
 
+func TestTurnEndedWithReason(t *testing.T) {
+	check := TurnEndedWithReason("max_turns")
+	if res := check.Eval(Trace{TurnEndReason: "max_turns"}); !res.Pass {
+		t.Fatalf("max_turns should pass explicit turn-end check: %+v", res)
+	}
+	if res := check.Eval(Trace{TurnEndReason: "completed"}); res.Pass {
+		t.Fatalf("completed should fail explicit max_turns turn-end check: %+v", res)
+	}
+	if check.Name != "turn_ended_with_reason:max_turns" {
+		t.Fatalf("check name = %q", check.Name)
+	}
+}
+
 func TestMaxToolCalls(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{Tool: "a"}, {Tool: "b"}, {Tool: "c"}}}
 

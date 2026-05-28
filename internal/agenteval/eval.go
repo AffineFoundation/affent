@@ -149,6 +149,7 @@ type BatchScenario struct {
 	ExecutePlan                                    bool
 	EnableMemory                                   bool
 	EnableLoopProtocol                             bool
+	RequiredTurnEndReason                          string
 	Files                                          map[string]string
 	SetupCommands                                  []string
 	SourceRepoURL                                  string
@@ -375,6 +376,7 @@ type DebugScenarioExpectations struct {
 	ExecutePlan                                    bool                                  `json:"execute_plan,omitempty"`
 	EnableMemory                                   bool                                  `json:"enable_memory,omitempty"`
 	EnableLoopProtocol                             bool                                  `json:"enable_loop_protocol,omitempty"`
+	RequiredTurnEndReason                          string                                `json:"required_turn_end_reason,omitempty"`
 	VerifyCommand                                  string                                `json:"verify_command,omitempty"`
 	SetupCommands                                  []string                              `json:"setup_commands,omitempty"`
 	SourceRepoURL                                  string                                `json:"source_repo_url,omitempty"`
@@ -1872,6 +1874,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ExecutePlan:                             s.ExecutePlan,
 		EnableMemory:                            s.EnableMemory,
 		EnableLoopProtocol:                      s.EnableLoopProtocol,
+		RequiredTurnEndReason:                   strings.TrimSpace(s.RequiredTurnEndReason),
 		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
 		SetupCommands:                           compactNonEmptyStrings(s.SetupCommands),
 		SourceRepoURL:                           strings.TrimSpace(s.SourceRepoURL),
@@ -2729,7 +2732,7 @@ func cloneBoolPtr(value *bool) *bool {
 // ShellCommandLacksUnguarded checks, ProtectedFiles become
 // FileNotEdited checks. Lets one Check library cover both pipelines.
 func BatchScenarioChecks(scenario BatchScenario) []Check {
-	checks := []Check{TurnEndedCleanly()}
+	checks := []Check{batchScenarioTurnEndCheck(scenario)}
 	for _, tool := range scenario.RequiredTools {
 		checks = append(checks, ToolCalled(tool, nil))
 	}

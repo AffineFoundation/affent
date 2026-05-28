@@ -99,6 +99,27 @@ func TestBuildDebugBriefClassifiesSourceRepoSetupFailures(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefHonorsExpectedTurnEndReason(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK:            true,
+		TurnEndReason: "max_turns",
+		Expectations:  &DebugScenarioExpectations{RequiredTurnEndReason: "max_turns"},
+	})
+	if item := debugBriefItemByKind(brief, "turn_end"); item != nil {
+		t.Fatalf("matching expected turn end should not produce debug item: %+v", item)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK:            true,
+		TurnEndReason: "completed",
+		Expectations:  &DebugScenarioExpectations{RequiredTurnEndReason: "max_turns"},
+	})
+	item := debugBriefItemByKind(brief, "turn_end")
+	if item == nil || item.Severity != "fail" || item.Counts["completed"] != 1 {
+		t.Fatalf("mismatched expected turn end debug item = %+v", item)
+	}
+}
+
 func TestBuildDebugBriefTagsBrowserLaunchFailure(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK:                 false,

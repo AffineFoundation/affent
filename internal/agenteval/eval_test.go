@@ -1106,6 +1106,16 @@ func TestCheckBatchTraceRequiresCleanTurnEnd(t *testing.T) {
 	if len(failures) != 1 || !strings.Contains(failures[0], "turn ended with reason") {
 		t.Fatalf("failures = %+v, want turn-end failure", failures)
 	}
+
+	failures = CheckBatchTrace(Trace{TurnEndReason: "max_turns"}, BatchScenario{RequiredTurnEndReason: "max_turns"})
+	if len(failures) != 0 {
+		t.Fatalf("explicit max_turns turn end should pass: %+v", failures)
+	}
+
+	failures = CheckBatchTrace(Trace{TurnEndReason: "completed"}, BatchScenario{RequiredTurnEndReason: "max_turns"})
+	if len(failures) != 1 || !strings.Contains(failures[0], "expected max_turns") {
+		t.Fatalf("failures = %+v, want explicit turn-end mismatch", failures)
+	}
 }
 
 // TestBatchScenarioChecks_UsesSharedCheckLibrary pins the unification:

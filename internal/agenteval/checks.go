@@ -1859,15 +1859,55 @@ func TurnEndedCleanly() Check {
 	return Check{
 		Name: "turn_ended_cleanly",
 		Eval: func(t Trace) CheckResult {
-			if t.TurnEndReason == "completed" {
+			if t.TurnEndReason == defaultExpectedTurnEndReason {
 				return CheckResult{Pass: true}
 			}
 			return CheckResult{
 				Pass:   false,
-				Detail: fmt.Sprintf("turn ended with reason %q (expected completed)", t.TurnEndReason),
+				Detail: fmt.Sprintf("turn ended with reason %q (expected %s)", t.TurnEndReason, defaultExpectedTurnEndReason),
 			}
 		},
 	}
+}
+
+const defaultExpectedTurnEndReason = "completed"
+
+func TurnEndedWithReason(reason string) Check {
+	want := normalizeExpectedTurnEndReason(reason)
+	return Check{
+		Name: "turn_ended_with_reason:" + want,
+		Eval: func(t Trace) CheckResult {
+			if t.TurnEndReason == want {
+				return CheckResult{Pass: true}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("turn ended with reason %q (expected %s)", t.TurnEndReason, want),
+			}
+		},
+	}
+}
+
+func batchScenarioTurnEndCheck(s BatchScenario) Check {
+	if strings.TrimSpace(s.RequiredTurnEndReason) == "" {
+		return TurnEndedCleanly()
+	}
+	return TurnEndedWithReason(s.RequiredTurnEndReason)
+}
+
+func expectedTurnEndReasonFromExpectations(exp *DebugScenarioExpectations) string {
+	if exp == nil {
+		return defaultExpectedTurnEndReason
+	}
+	return normalizeExpectedTurnEndReason(exp.RequiredTurnEndReason)
+}
+
+func normalizeExpectedTurnEndReason(reason string) string {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return defaultExpectedTurnEndReason
+	}
+	return reason
 }
 
 // MaxToolCalls passes when the run made at most n tool invocations.

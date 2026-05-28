@@ -141,8 +141,9 @@ Scenario records describe one eval case:
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
-  plan/delegation constraints, protected files, optional `setup_commands`
-  that prepared the workspace before the agent ran, and related
+  plan/delegation constraints, protected files, optional
+  `required_turn_end_reason` for intentional non-completed endings, optional
+  `setup_commands` that prepared the workspace before the agent ran, and related
   max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
@@ -182,7 +183,9 @@ Scenario records describe one eval case:
   tool-result limits. Retained debug manifests include the fuller
   `runtime_surface` block with per-tool group/source metadata.
 - `run_exit_code`: `affentctl run` exit code for the scenario.
-- `turn_end_reason`: runtime turn end reason, when available.
+- `turn_end_reason`: runtime turn end reason, when available. Scenarios default
+  to expecting `completed`; set `required_turn_end_reason` when a scenario is
+  intentionally validating `max_turns`, `cancelled`, or `error` behavior.
 - `tool_calls`: number of tool calls in the trace.
 - `tool_errors`: runtime tool error count, limited to non-zero tool exits.
 - `tool_repaired`: runtime tool argument repair count.

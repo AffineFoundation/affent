@@ -412,7 +412,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if len(exp.Domains) > 0 {
 		fmt.Fprintf(b, "- domains: `%s`\n", strings.Join(exp.Domains, "`, `"))
 	}
-	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.MaxTurns > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
+	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
 		var parts []string
 		if exp.SessionID != "" {
 			parts = append(parts, fmt.Sprintf("session_id=%s", exp.SessionID))
@@ -422,6 +422,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if exp.EnableMemory {
 			parts = append(parts, "enable_memory=true")
+		}
+		if exp.RequiredTurnEndReason != "" {
+			parts = append(parts, fmt.Sprintf("required_turn_end_reason=%s", exp.RequiredTurnEndReason))
 		}
 		if exp.MaxTurns > 0 {
 			parts = append(parts, fmt.Sprintf("max_turns=%d", exp.MaxTurns))
@@ -734,6 +737,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.SessionID != "" ||
 		exp.ExecutePlan ||
 		exp.EnableMemory ||
+		exp.RequiredTurnEndReason != "" ||
 		exp.VerifyCommand != "" ||
 		exp.SourceRepoURL != "" ||
 		exp.SourceRepoRef != "" ||
