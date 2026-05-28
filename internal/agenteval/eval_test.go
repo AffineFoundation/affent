@@ -2938,6 +2938,40 @@ func TestBuildDebugRecoveryGuideIncludesContextArtifactDir(t *testing.T) {
 	}
 }
 
+func TestBuildDebugRecoveryGuideAddsFailedToolRepairAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/tool-repair",
+		TimelinePath:      "/tmp/affent-eval/tool-repair/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/tool-repair/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/tool-repair/trace.jsonl",
+		Failures:          []string{"tool call could not be repaired"},
+		Repair: ToolRepairStats{
+			Calls:          2,
+			SucceededCalls: 1,
+			FailedCalls:    1,
+			Notes:          1,
+			ByKind:         map[string]int{"malformed_json": 1},
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"tool_repair:failed",
+		"inspect tool_repair_examples",
+		"tool aliasing, argument repair, or model guidance",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	if !stringSliceContains(guide.Inspect, "tool_repair_examples") ||
+		!stringSliceContains(guide.Inspect, "tool_timeline") {
+		t.Fatalf("recovery guide inspect = %#v, want repair examples and timeline", guide.Inspect)
+	}
+}
+
 func TestRedactedCommandArgvHidesAPIKey(t *testing.T) {
 	got := redactedCommandArgv("go", []string{
 		"run", "./cmd/affentctl", "run",

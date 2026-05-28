@@ -1327,6 +1327,9 @@ func debugRecoveryContinuePrompt(res BatchResult, brief *DebugBrief) string {
 	}
 	if tags := debugRecoveryPriorityTags(brief); len(tags) > 0 {
 		parts = append(parts, "Priority debug tags: "+strings.Join(tags, ", ")+".")
+		if action := debugRecoveryPriorityAction(tags); action != "" {
+			parts = append(parts, action)
+		}
 	}
 	return strings.Join(parts, " ")
 }
@@ -1339,6 +1342,15 @@ func debugRecoveryFailurePreview(failures []string) string {
 		}
 	}
 	return ""
+}
+
+func debugRecoveryPriorityAction(tags []string) string {
+	switch {
+	case containsString(tags, "tool_repair:failed"):
+		return "For tool_repair:failed, inspect tool_repair_examples and the tool timeline before rerunning; decide whether the fix belongs in tool aliasing, argument repair, or model guidance."
+	default:
+		return ""
+	}
 }
 
 func debugRecoveryPriorityTags(brief *DebugBrief) []string {

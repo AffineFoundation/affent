@@ -1170,8 +1170,11 @@ next agent can inspect the full output instead of trusting the bounded preview.
 The manifest and JSONL scenario record also include a machine-readable
 `debug_brief` with stable tags and inspection hints; loop guard hints route
 first to `loop_guard_examples` so the blocked call, guard reason, and suggested
-next step are visible before opening full traces. The debug manifest, timeline,
-and JSONL scenario record also include structured
+next step are visible before opening full traces. Failed tool-repair hints add
+a concrete continuation action to inspect `tool_repair_examples` and decide
+whether the durable fix belongs in tool aliasing, argument repair, or model
+guidance before rerunning. The debug manifest, timeline, and JSONL scenario
+record also include structured
 `expectations` plus derived expected capability names/outcome, so
 batch-analysis scripts can group failures by required tools, evidence checks,
 loop protocol feed checkpoints, plan/delegation constraints, and
