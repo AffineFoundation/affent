@@ -148,7 +148,7 @@ describe("App", () => {
     const context = await screen.findByTestId("chat-context-bar");
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
-    expect(screen.queryByTestId("chat-context-details")).toBeNull();
+    expect(screen.getByTestId("chat-context-details")).toHaveTextContent("Tokens 0.0001M");
     expect(context).not.toHaveTextContent("Work 1 action");
     expect(context).not.toHaveTextContent("Tokens 138");
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
@@ -1330,9 +1330,8 @@ describe("App", () => {
     expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
     const details = screen.getByTestId("chat-context-details");
     expect(chatContextMetric(details, "Artifact 1 file")).toBeVisible();
-    expect(within(details).getByLabelText("Session metrics: Work 1 action · 1 source")).toBeInTheDocument();
-    await user.click(within(details).getByLabelText("Session metrics: Work 1 action · 1 source"));
-    expect(chatContextMetric(details, "Work 1 action · 1 source")).toBeVisible();
+    expect(details).not.toHaveTextContent("Work 1 action");
+    expect(details).not.toHaveTextContent("Tool context");
     expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
   });
 

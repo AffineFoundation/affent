@@ -3,7 +3,7 @@ import { completedTurn } from "../fixtures/completedTurn";
 import { completedSubagentTree, runningSubagent } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
 import { deriveWorkflowStatus } from "../store/workflowStatus";
-import { buildSessionOverview, displaySessionOverviewMetrics } from "./sessionOverview";
+import { buildSessionOverview, displayChatContextMetrics, displaySessionOverviewMetrics } from "./sessionOverview";
 
 describe("buildSessionOverview", () => {
   it("keeps the no-session state task-first", () => {
@@ -106,9 +106,12 @@ describe("buildSessionOverview", () => {
     expect(overview.detail).toBe("README.md main.go");
     expect(overview.metrics).toEqual([
       { label: "Work", value: "1 action", tone: undefined },
-      { label: "Tokens", value: "138" },
+      { label: "Session tokens", value: "0.0001M" },
     ]);
     expect(displaySessionOverviewMetrics(overview.metrics)).toEqual([]);
+    expect(displayChatContextMetrics(overview.metrics)).toEqual([
+      { label: "Tokens", value: "0.0001M" },
+    ]);
   });
 
   it("keeps work metrics visible only when they include evidence, risk, or next-step signal", () => {
@@ -127,11 +130,23 @@ describe("buildSessionOverview", () => {
 
   it("keeps warning end reasons in display metrics but drops plain token counts", () => {
     expect(displaySessionOverviewMetrics([
-      { label: "Turn tokens", value: "1.2k" },
-      { label: "Chat tokens", value: "1.7k" },
+      { label: "Turn tokens", value: "0.0012M" },
+      { label: "Session tokens", value: "0.0017M" },
       { label: "End", value: "max_turns", tone: "warning" },
     ])).toEqual([
       { label: "End", value: "max_turns", tone: "warning" },
+    ]);
+  });
+
+  it("keeps default chat metrics focused on status and million-token usage", () => {
+    expect(displayChatContextMetrics([
+      { label: "Work", value: "2 actions · 2 sources" },
+      { label: "Tool context", value: "1 trim · 3 KiB omitted", tone: "warning" },
+      { label: "Session tokens", value: "1.25M" },
+      { label: "Plan", value: "2/4 · step 2 active" },
+    ])).toEqual([
+      { label: "Tokens", value: "1.25M" },
+      { label: "Plan", value: "2/4 · step 2 active" },
     ]);
   });
 
@@ -690,8 +705,8 @@ describe("buildSessionOverview", () => {
       { label: "Automation", value: "1 action limit", tone: "warning" },
       { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Earlier work", value: "1 action" },
-      { label: "Turn tokens", value: "1.2k" },
-      { label: "Chat tokens", value: "1.7k" },
+      { label: "Turn tokens", value: "0.0012M" },
+      { label: "Session tokens", value: "0.0017M" },
     ]);
     expect(overview.metrics).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Work" }),
@@ -909,7 +924,7 @@ describe("buildSessionOverview", () => {
       hasSelectedSession: true,
     });
 
-    expect(overview.metrics).toEqual([{ label: "Chat tokens", value: "2.0k" }]);
+    expect(overview.metrics).toEqual([{ label: "Session tokens", value: "0.0020M" }]);
   });
 
   it("shows current context usage against the compaction trigger", () => {

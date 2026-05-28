@@ -36,7 +36,28 @@ export function displaySessionOverviewMetrics(metrics: readonly SessionOverviewM
   });
 }
 
-const lowSignalMetricLabels = new Set(["Tokens", "Turn tokens", "Chat tokens", "End"]);
+export function displayChatContextMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
+  const visible: SessionOverviewMetric[] = [];
+  const tokenMetric = metrics.find((metric) => metric.label === "Session tokens")
+    ?? metrics.find((metric) => metric.label === "Chat tokens")
+    ?? metrics.find((metric) => metric.label === "Tokens");
+  if (tokenMetric) visible.push({ ...tokenMetric, label: "Tokens" });
+  for (const metric of metrics) {
+    if (metric === tokenMetric) continue;
+    if (chatContextHiddenMetricLabels.has(metric.label)) continue;
+    if (metric.label === "Context" && !metric.tone) continue;
+    if (metric.tone === "error" || metric.tone === "warning" || metric.tone === "running") {
+      visible.push(metric);
+      continue;
+    }
+    if (chatContextStatusMetricLabels.has(metric.label)) visible.push(metric);
+  }
+  return visible.slice(0, 3);
+}
+
+const lowSignalMetricLabels = new Set(["Tokens", "Turn tokens", "Chat tokens", "Session tokens", "End"]);
+const chatContextHiddenMetricLabels = new Set(["Work", "Earlier work", "Tool context", "Source", "Sources", "Recall", "Memory"]);
+const chatContextStatusMetricLabels = new Set(["Plan", "Automation", "Artifact", "Artifacts", "Compaction", "Compactions"]);
 
 function isPlainActionCount(value: string): boolean {
   return /^\d+ actions?$/.test(value.trim());
@@ -203,12 +224,12 @@ function buildMetrics(
   const latestTokens = turnTokenCount(latestTurn);
   const totalTokens = sessionTokenCount(session);
   if (latestTokens > 0 && totalTokens > latestTokens) {
-    metrics.push({ label: "Turn tokens", value: formatCount(latestTokens) });
-    metrics.push({ label: "Chat tokens", value: formatCount(totalTokens) });
+    metrics.push({ label: "Turn tokens", value: formatTokenMillions(latestTokens) });
+    metrics.push({ label: "Session tokens", value: formatTokenMillions(totalTokens) });
   } else if (latestTokens > 0) {
-    metrics.push({ label: "Tokens", value: formatCount(latestTokens) });
+    metrics.push({ label: "Session tokens", value: formatTokenMillions(latestTokens) });
   } else if (totalTokens > 0) {
-    metrics.push({ label: "Chat tokens", value: formatCount(totalTokens) });
+    metrics.push({ label: "Session tokens", value: formatTokenMillions(totalTokens) });
   }
   if (latestTurn?.endReason && latestTurn.endReason !== latestTurn.status) {
     metrics.push({ label: "End", value: latestTurn.endReason, tone: latestTurn.status === "max_turns" ? "warning" : undefined });
@@ -584,6 +605,13 @@ function formatCount(value: number): string {
   if (value < 1000) return String(value);
   if (value < 10_000) return `${(value / 1000).toFixed(1)}k`;
   return `${Math.round(value / 1000)}k`;
+}
+
+function formatTokenMillions(value: number): string {
+  const millions = value / 1_000_000;
+  if (value < 10_000) return `${millions.toFixed(4)}M`;
+  if (value < 100_000) return `${millions.toFixed(3)}M`;
+  return `${millions.toFixed(2)}M`;
 }
 
 function formatBytes(value: number): string {
