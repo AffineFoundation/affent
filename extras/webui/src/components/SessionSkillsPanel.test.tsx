@@ -61,7 +61,7 @@ describe("SessionSkillsPanel", () => {
     }));
     render(<SessionSkillsPanel skills={[]} installEnabled onReadSkill={vi.fn()} onInstallSkill={onInstallSkill} />);
 
-    await user.click(screen.getByText("No skills"));
+    await user.click(screen.getByText("No reusable workflows"));
     await user.click(screen.getByRole("button", { name: "Add skill" }));
     await user.type(screen.getByLabelText("Name"), "manual_demo");
     await user.type(screen.getByLabelText("Summary"), "Manual workflow.");
@@ -84,7 +84,7 @@ describe("SessionSkillsPanel", () => {
     render(<SessionSkillsPanel skills={[]} defaultOpen />);
 
     const panel = screen.getByTestId("session-skills-panel");
-    expect(panel).toHaveTextContent("No skills");
+    expect(panel).toHaveTextContent("No reusable workflows");
     expect(panel).toHaveTextContent("No reusable workflows listed.");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills returned by this runtime.");
     expect(screen.queryByPlaceholderText("Search title or summary")).toBeNull();

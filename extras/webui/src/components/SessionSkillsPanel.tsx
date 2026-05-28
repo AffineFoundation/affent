@@ -54,7 +54,7 @@ export function SessionSkillsPanel({
     : error
       ? "Skills unavailable"
       : allSkills.length === 0
-        ? "No skills"
+        ? "No reusable workflows"
         : `${allSkills.length} ${allSkills.length === 1 ? "skill" : "skills"}`;
   const summaryDetail = loading
     ? "Fetching reusable workflows."
