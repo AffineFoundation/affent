@@ -3,8 +3,10 @@ package browser
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/go-rod/rod/lib/proto"
@@ -29,6 +31,28 @@ func TestChromiumBinaryPathHonorsOverride(t *testing.T) {
 	const want = "/custom/chrome"
 	if got := chromiumBinaryPath(want); got != want {
 		t.Fatalf("chromiumBinaryPath(override) = %q, want %q", got, want)
+	}
+}
+
+func TestBrowserLaunchErrorGuidesMissingSharedLibrary(t *testing.T) {
+	err := browserLaunchError(
+		errors.New("/chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file: No such file or directory"),
+		"/opt/chrome",
+	)
+	if err == nil {
+		t.Fatal("browserLaunchError returned nil")
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		"Failure: kind=browser_launch_failed",
+		"Next: install Chromium runtime dependencies",
+		"binary=/opt/chrome",
+		"missing_shared_library=libglib-2.0.so.0",
+		"browser smoke test",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("launch error missing %q:\n%s", want, msg)
+		}
 	}
 }
 

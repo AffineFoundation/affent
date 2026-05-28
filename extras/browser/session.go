@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -145,7 +146,8 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	s := &Session{cfg: cfg, network: NewNetworkEvidenceLog()}
 
 	l := launcher.New()
-	if bin := chromiumBinaryPath(cfg.BinaryPath); bin != "" {
+	bin := chromiumBinaryPath(cfg.BinaryPath)
+	if bin != "" {
 		l = l.Bin(bin)
 	}
 	l = l.Headless(!cfg.Headed)
@@ -201,7 +203,7 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	url, err := l.Launch()
 	if err != nil {
 		s.cleanupTmpDirs()
-		return nil, fmt.Errorf("launch chromium: %w", err)
+		return nil, browserLaunchError(err, bin)
 	}
 	s.launcher = l
 
@@ -349,6 +351,39 @@ func chromiumBinaryPath(override string) string {
 		}
 	}
 	return ""
+}
+
+func browserLaunchError(err error, binaryPath string) error {
+	if err == nil {
+		return nil
+	}
+	msg := strings.TrimSpace(err.Error())
+	var details []string
+	if binaryPath != "" {
+		details = append(details, "binary="+binaryPath)
+	}
+	if lib := chromiumMissingSharedLibrary(msg); lib != "" {
+		details = append(details, "missing_shared_library="+lib)
+	}
+	detailLine := ""
+	if len(details) > 0 {
+		detailLine = "\nDetails: " + strings.Join(details, "; ")
+	}
+	return fmt.Errorf("launch chromium: %w%s\nFailure: kind=browser_launch_failed\nNext: install Chromium runtime dependencies for the host image, or set AFFENT_BROWSER_BINARY/SessionConfig.BinaryPath to a working Chrome/Chromium binary; then rerun the browser smoke test before trusting browser-based web evidence", err, detailLine)
+}
+
+func chromiumMissingSharedLibrary(msg string) string {
+	const marker = "error while loading shared libraries:"
+	_, tail, ok := strings.Cut(msg, marker)
+	if !ok {
+		return ""
+	}
+	tail = strings.TrimSpace(tail)
+	if tail == "" {
+		return ""
+	}
+	lib, _, _ := strings.Cut(tail, ":")
+	return strings.TrimSpace(lib)
 }
 
 // Close releases the browser, kills Chromium, and removes ephemeral
