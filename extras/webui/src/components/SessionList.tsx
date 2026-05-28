@@ -321,6 +321,8 @@ function sessionChipLabel(chip: string): string {
       return "Plan";
     case "skills":
       return "Skills";
+    case "automation":
+      return "Automation";
     case "unclassified":
       return "Unclassified";
     case "artifacts":

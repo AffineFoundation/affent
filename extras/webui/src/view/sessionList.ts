@@ -812,8 +812,7 @@ function featureChips(session: SessionSummary): string[] {
   if (session.has_artifacts) chips.push("files");
   if (session.has_memory) chips.push("memory");
   if (session.has_plan) chips.push("plan");
-  if (session.has_loop_protocol || session.has_loop_state) chips.push("loop");
-  if (session.has_schedules) chips.push("timers");
+  if (session.has_loop_protocol || session.has_loop_state || session.has_schedules) chips.push("automation");
   if (session.has_runtime_skills) chips.push("skills");
   return chips;
 }

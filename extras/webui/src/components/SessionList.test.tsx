@@ -390,6 +390,38 @@ describe("SessionList", () => {
     expect(row).not.toHaveTextContent("Files");
   });
 
+  it("uses one Automation search term for loop and timer capabilities", async () => {
+    const user = userEvent.setup();
+    render(
+      <SessionList
+        sessions={[
+          session({
+            id: "s1",
+            durable: true,
+            latest_user_message: "monitor the release",
+            has_loop_protocol: true,
+            has_schedules: true,
+          }),
+          session({
+            id: "s2",
+            durable: true,
+            latest_user_message: "review the changelog",
+          }),
+        ]}
+        selectedId="other"
+        demoActive={false}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Search chats" }));
+    await user.type(screen.getByPlaceholderText("Search chats"), "automation");
+
+    expect(screen.getByTestId("session-list")).toHaveTextContent("monitor the release");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("review the changelog");
+  });
+
   it("keeps artifact size in the selected chat row", () => {
     renderList([session({ id: "s1", durable: true, has_events: true })], {
       currentSession: reduceRawEvents([
