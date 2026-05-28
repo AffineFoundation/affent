@@ -2653,6 +2653,8 @@ func failureKindHint(kind string) string {
 		return "upstream closed the SSE stream before finish_reason; inspect model server, proxy, KV-cache, crash, or OOM logs rather than treating this as a verifier failure"
 	case "context_overflow":
 		return "upstream rejected the request because the prompt/context window was too large; compaction, shorter history, or smaller tool context is needed"
+	case "loop_protocol_fixture":
+		return "the eval scenario declares loop protocol feed/calibration expectations but the current-session LOOP.md fixture is missing, non-running, or has unreadable state; fix the fixture before rerunning model evals"
 	default:
 		return ""
 	}
@@ -4586,6 +4588,8 @@ func failureKind(failure string) string {
 		return "verify_command"
 	case strings.HasPrefix(lower, "parse trace:"):
 		return "parse_trace"
+	case strings.Contains(lower, "requires loop protocol feeds"):
+		return "loop_protocol_fixture"
 	case strings.Contains(lower, "turn ended with reason"):
 		return "turn_end"
 	case strings.Contains(lower, "missing required command match"):

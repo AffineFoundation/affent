@@ -464,7 +464,9 @@ Scenario records describe one eval case:
   remain inspectable.
 - `cleanup_error`: workspace cleanup error, when cleanup failed.
 - `failures`: failure details for failed scenarios.
-- `failure_kinds`: grouped failure counters for summaries.
+- `failure_kinds`: grouped failure counters for summaries. Fixture and
+  pre-run authoring failures use stable kinds such as `loop_protocol_fixture`
+  so they can be separated from model/runtime regressions.
 
 Verifier output text is not written to JSONL. Failure reports may include a
 bounded preview in `failures`; the structured verifier fields are the stable
@@ -547,7 +549,8 @@ Summary records aggregate all scenario records from the same process:
   `end_cancelled`, `end_unknown`.
 - Failure totals and examples: `failure_kinds`, plus `failure_examples`, a
   bounded per-kind sample containing scenario name, compact failure text, and
-  retained trace/timeline/debug-manifest paths when available.
+  retained trace/timeline/debug-manifest paths when available. Loop protocol
+  fixture failures are grouped as `loop_protocol_fixture`.
 - Tool failure totals and diagnostics: `tool_failure_by_kind`,
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,

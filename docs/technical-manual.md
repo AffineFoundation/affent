@@ -1286,7 +1286,9 @@ When a scenario declares loop protocol feed/calibration requirements,
 `.affent/loops/<session_id>/LOOP.md` fixture is missing or explicitly marked
 with a non-running status such as `draft`; it also rejects a present sidecar
 `state.json` whose lifecycle status is non-running or unreadable, so long-run
-protocol regressions do not get confused with a misauthored eval fixture.
+protocol regressions do not get confused with a misauthored eval fixture. These
+pre-run failures are grouped under `loop_protocol_fixture` in batch failure
+kinds.
 Built-in scenarios may run bounded setup commands after fixture files are
 written and before protected-file snapshots are taken. Each setup command has a
 short 30-second timeout. This is used for realistic repository tasks, such as

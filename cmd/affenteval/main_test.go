@@ -4251,6 +4251,7 @@ func TestFailureKindsForResult(t *testing.T) {
 		`affentctl run failed: exit=1 err=LLM llm_stream stream idle timeout (model="qwen" endpoint="https://llm.example/v1/chat/completions" stream-idle-timeout=1m0s max-call-timeout/per-call-timeout=4m0s): stream idle timeout`,
 		`affentctl run failed: exit=1 err=LLM llm_stream ended with an incomplete SSE stream (model="qwen" endpoint="https://llm.example/v1/chat/completions"). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk: stream ended without finish`,
 		`affentctl run failed: exit=1 err=LLM llm_request failed (model="qwen" endpoint="https://llm.example/v1/chat/completions"): prompt is too long`,
+		`scenario "loop-draft" requires loop protocol feeds but active protocol file .affent/loops/loop-draft/LOOP.md has status "draft", want running`,
 	})
 	if got["turn_end"] != 1 ||
 		got["missing_command"] != 2 ||
@@ -4260,7 +4261,8 @@ func TestFailureKindsForResult(t *testing.T) {
 		got["skill_install_guard"] != 1 ||
 		got["llm_timeout"] != 2 ||
 		got["llm_incomplete_stream"] != 1 ||
-		got["context_overflow"] != 1 {
+		got["context_overflow"] != 1 ||
+		got["loop_protocol_fixture"] != 1 {
 		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }
@@ -4291,6 +4293,15 @@ func TestToolFailureKindHintIncludesWebSearchRecovery(t *testing.T) {
 				t.Fatalf("toolFailureKindHint(%q) = %q, want contains %q", c.kind, got, c.want)
 			}
 		})
+	}
+}
+
+func TestFailureKindHintIncludesLoopProtocolFixtureRecovery(t *testing.T) {
+	got := failureKindHint("loop_protocol_fixture")
+	for _, want := range []string{"LOOP.md fixture", "missing", "non-running", "unreadable state"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("failureKindHint(loop_protocol_fixture) = %q, want %q", got, want)
+		}
 	}
 }
 
@@ -4335,6 +4346,7 @@ func TestFailureKind(t *testing.T) {
 		{`affentctl run failed: exit=1 err=stream ended without finish`, "llm_incomplete_stream"},
 		{`affentctl run failed: exit=1 err=launch chromium: /chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file
 Failure: kind=browser_launch_failed`, "browser_launch_failed"},
+		{`scenario "loop-missing" requires loop protocol feeds but active protocol file .affent/loops/loop-missing/LOOP.md is missing`, "loop_protocol_fixture"},
 		{`something else`, "other"},
 	}
 	for _, tc := range cases {
