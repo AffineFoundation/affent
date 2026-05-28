@@ -233,7 +233,11 @@ Scenario records describe one eval case:
   transcripts plus debug-brief sections, the exact redacted `affentctl` rerun
   command, a full-trace rerun command when the compact trace skipped streaming
   deltas, and a copyable continuation prompt for handing the failure back to an
-  agent. JSONL scenario records expose the manifest location through
+  agent. If the debug brief reports `browser_network:unread_refs`, the prompt
+  explicitly routes the next agent to `browser_network_examples`,
+  `source_evidence`, and `browser_network_read`, because refs/checks from
+  `browser_network` are leads rather than citable `SourceAccess:` evidence.
+  JSONL scenario records expose the manifest location through
   `debug_manifest_path`; they do not inline this block.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated

@@ -1364,6 +1364,8 @@ func debugRecoveryPriorityAction(tags []string) string {
 	switch {
 	case containsString(tags, "tool_repair:failed"):
 		return "For tool_repair:failed, inspect tool_repair_examples and the tool timeline before rerunning; decide whether the fix belongs in tool aliasing, argument repair, or model guidance."
+	case containsString(tags, "browser_network:unread_refs"):
+		return "For browser_network:unread_refs, inspect browser_network_examples and source_evidence, then call browser_network_read on the listed ref before citing hidden dynamic values; browser_network refs/checks are not citable SourceAccess evidence."
 	default:
 		return ""
 	}

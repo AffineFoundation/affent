@@ -2984,6 +2984,45 @@ func TestBuildDebugRecoveryGuideAddsFailedToolRepairAction(t *testing.T) {
 	}
 }
 
+func TestBuildDebugRecoveryGuideAddsUnreadBrowserNetworkAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/browser-network",
+		TimelinePath:      "/tmp/affent-eval/browser-network/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/browser-network/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/browser-network/trace.jsonl",
+		Failures:          []string{"browser network refs were discovered but not read"},
+		BrowserNetworkExamples: []BrowserNetworkSearchExample{{
+			ToolIndex:      4,
+			CallID:         "call-4",
+			CurrentPageURL: "https://taostats.io/subnets/120",
+			Query:          "market cap",
+			Status:         "matches",
+			Refs:           []string{"n7"},
+			RequiresRead:   true,
+			NotCitable:     true,
+		}},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"browser_network:unread_refs",
+		"inspect browser_network_examples and source_evidence",
+		"call browser_network_read on the listed ref",
+		"browser_network refs/checks are not citable SourceAccess evidence",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	if !stringSliceContains(guide.Inspect, "browser_network_examples") ||
+		!stringSliceContains(guide.Inspect, "source_evidence") ||
+		!stringSliceContains(guide.Inspect, "tool_timeline") {
+		t.Fatalf("recovery guide inspect = %#v, want browser network, source evidence, and timeline", guide.Inspect)
+	}
+}
+
 func TestRedactedCommandArgvHidesAPIKey(t *testing.T) {
 	got := redactedCommandArgv("go", []string{
 		"run", "./cmd/affentctl", "run",

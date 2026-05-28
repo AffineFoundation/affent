@@ -1182,7 +1182,10 @@ first to `loop_guard_examples` so the blocked call, guard reason, and suggested
 next step are visible before opening full traces. Loop protocol feed examples
 also preserve last-turn tool-error/forced-no-tool counts and latest decision
 reason/action, so long-run evals can assert that recovery evidence survived
-context compaction or restart. Failed tool-repair hints add a concrete
+context compaction or restart. Browser-network refs that were discovered but
+not read add a concrete recovery action to inspect `browser_network_examples`
+and `source_evidence`, then call `browser_network_read` on a listed ref before
+citing dynamic values. Failed tool-repair hints add a concrete
 continuation action to inspect `tool_repair_examples` and decide whether the
 durable fix belongs in tool aliasing, argument repair, or model guidance before
 rerunning. The debug manifest, timeline, and JSONL scenario
