@@ -377,6 +377,47 @@ func TestBuildDebugBriefClassifiesForcedNoTools(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesToolBudgetRunaway(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:           3,
+			MaxToolRequests: 25,
+			MaxInputTokens:  712527,
+			MaxTotalTokens:  743745,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			MaxTurnSteps: 10,
+		},
+	})
+	item := debugBriefItemByKind(brief, "tool_budget")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "a turn exceeded the runtime-advertised tool-call budget; inspect checkpoints and tool timeline before trusting token efficiency" ||
+		item.Counts["max_tool_requests"] != 25 ||
+		item.Counts["tool_call_budget"] != 10 ||
+		item.Counts["max_input_tokens"] != 712527 ||
+		item.Counts["max_total_tokens"] != 743745 ||
+		!stringSliceContains(item.Inspect, "runtime_surface") ||
+		!stringSliceContains(item.Inspect, "loop_turn_checkpoint_examples") ||
+		!stringSliceContains(brief.Tags, "tool_budget:turn_overrun") {
+		t.Fatalf("tool budget item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:           1,
+			MaxToolRequests: 8,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			MaxTurnSteps: 10,
+		},
+	}); clean != nil {
+		t.Fatalf("within-budget run should not emit debug brief: %+v", clean)
+	}
+}
+
 func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

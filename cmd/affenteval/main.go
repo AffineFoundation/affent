@@ -700,6 +700,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"recall:weak_context":                0,
 					"recall:weak_matched_terms":          0,
 					"source_repo:setup":                  0,
+					"tool_budget:turn_overrun":           0,
 					"tool_repair:failed":                 0,
 					"truncation:missing_artifact":        0,
 					"verifier:abnormal":                  0,

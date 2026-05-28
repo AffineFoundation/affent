@@ -666,9 +666,12 @@ type LoopProtocolCalibrationStats struct {
 }
 
 type LoopTurnCheckpointStats struct {
-	Count    int
-	Latest   LoopTurnCheckpoint
-	Examples []LoopTurnCheckpoint
+	Count           int
+	MaxToolRequests int
+	MaxInputTokens  int
+	MaxTotalTokens  int
+	Latest          LoopTurnCheckpoint
+	Examples        []LoopTurnCheckpoint
 }
 
 type ContextInjection struct {
@@ -1732,6 +1735,15 @@ func (t Trace) LoopTurnCheckpointStats(maxExamples int) LoopTurnCheckpointStats 
 	stats := LoopTurnCheckpointStats{}
 	for _, checkpoint := range t.LoopTurnCheckpoints {
 		stats.Count++
+		if checkpoint.ToolRequests > stats.MaxToolRequests {
+			stats.MaxToolRequests = checkpoint.ToolRequests
+		}
+		if checkpoint.InputTokens > stats.MaxInputTokens {
+			stats.MaxInputTokens = checkpoint.InputTokens
+		}
+		if total := checkpoint.InputTokens + checkpoint.OutputTokens; total > stats.MaxTotalTokens {
+			stats.MaxTotalTokens = total
+		}
 		stats.Latest = checkpoint
 		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
 			continue

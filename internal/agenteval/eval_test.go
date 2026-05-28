@@ -4631,6 +4631,35 @@ func TestBuildDebugRecoveryGuideAddsLoopProtocolCalibrationBacklogAction(t *test
 	}
 }
 
+func TestBuildDebugRecoveryGuideAddsToolBudgetRunawayAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/tool-budget",
+		TimelinePath:      "/tmp/affent-eval/tool-budget/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/tool-budget/affenteval-debug.json",
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:           2,
+			MaxToolRequests: 25,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			MaxTurnSteps: 10,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"tool_budget:turn_overrun",
+		"align runtime MaxToolCalls/MaxTurnSteps",
+		"runtime_surface",
+		"loop_turn_checkpoint_examples",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)
+		}
+	}
+}
+
 func TestBuildDebugRecoveryGuideAddsResearchCheckpointEvidenceGapAction(t *testing.T) {
 	res := BatchResult{
 		Workspace:         "/tmp/affent-eval/research-checkpoint",

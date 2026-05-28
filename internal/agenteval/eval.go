@@ -1663,6 +1663,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "loop_protocol:calibration_backlog") {
 		add("For loop_protocol:calibration_backlog, inspect calibration request/answer examples and trace events before continuing; the setup loop is spending budget without closing the protocol handshake.")
 	}
+	if containsString(tags, "tool_budget:turn_overrun") {
+		add("For tool_budget:turn_overrun, inspect runtime_surface and loop_turn_checkpoint_examples; align runtime MaxToolCalls/MaxTurnSteps before trusting long-run token cost.")
+	}
 	if containsString(tags, "research_checkpoint:no_external_evidence") {
 		add("For research_checkpoint:no_external_evidence, inspect loop_decision_examples and verify whether source_evidence or child_transcripts are available; if not, treat conclusions as internal review rather than externally calibrated route changes.")
 	}
@@ -1722,6 +1725,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"verifier:output_truncated",
 		"loop_protocol:fixture",
 		"loop_protocol:calibration_backlog",
+		"tool_budget:turn_overrun",
 		"research_checkpoint:no_external_evidence",
 		"loop_guard:forced_no_tools",
 		"tool_failure:loop_guard_call_cap",

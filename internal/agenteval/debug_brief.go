@@ -166,6 +166,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"forced_no_tools": res.ToolStats.ForcedNoTools,
 		}, tags...)
 	}
+	if counts, ok := toolBudgetRunawayCounts(res); ok {
+		add("tool_budget", "warn", "a turn exceeded the runtime-advertised tool-call budget; inspect checkpoints and tool timeline before trusting token efficiency", []string{"loop_turn_checkpoint_examples", "runtime_surface", "tool_timeline", "timeline"}, counts, "tool_budget", "tool_budget:turn_overrun")
+	}
 	if researchCheckpoints := loopDecisionCountByKind(res.LoopDecisionStats, "research_checkpoint"); researchCheckpoints > 0 {
 		severity := "info"
 		message := "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction"
@@ -585,6 +588,35 @@ func sourceRepoSetupFailureCount(failures []string) int {
 		}
 	}
 	return count
+}
+
+func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
+	budget := effectiveToolCallBudget(res)
+	if budget <= 0 || res.LoopTurnCheckpoints.MaxToolRequests <= budget {
+		return nil, false
+	}
+	counts := map[string]int{
+		"max_tool_requests": res.LoopTurnCheckpoints.MaxToolRequests,
+		"tool_call_budget":  budget,
+		"checkpoints":       res.LoopTurnCheckpoints.Count,
+	}
+	if res.LoopTurnCheckpoints.MaxInputTokens > 0 {
+		counts["max_input_tokens"] = res.LoopTurnCheckpoints.MaxInputTokens
+	}
+	if res.LoopTurnCheckpoints.MaxTotalTokens > 0 {
+		counts["max_total_tokens"] = res.LoopTurnCheckpoints.MaxTotalTokens
+	}
+	return counts, true
+}
+
+func effectiveToolCallBudget(res BatchResult) int {
+	if res.RuntimeSurface == nil {
+		return 0
+	}
+	if res.RuntimeSurface.MaxToolCalls > 0 {
+		return res.RuntimeSurface.MaxToolCalls
+	}
+	return res.RuntimeSurface.MaxTurnSteps
 }
 
 func loopProtocolCalibrationBacklogCounts(res BatchResult) (map[string]int, bool) {
