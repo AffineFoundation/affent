@@ -1054,11 +1054,11 @@ func TestLoopProtocolCalibrationCheck(t *testing.T) {
 
 func TestContextCompactionChecks(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
-		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs.", LoopProtocolAnchor: "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md loop_id=longrun mode=digest"},
-		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
+		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, BeforeBytes: 12000, AfterBytes: 5000, ReducedBytes: 7000, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs.", LoopProtocolAnchor: "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md loop_id=longrun mode=digest"},
+		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, BeforeBytes: 9000, AfterBytes: 3000, ReducedBytes: 6000, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
 	}}
 	stats := trace.ContextCompactionStats(1)
-	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.SummaryBytes != 2100 {
+	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.ReducedBytes != 13000 || stats.SummaryBytes != 2100 {
 		t.Fatalf("ContextCompactionStats = %+v", stats)
 	}
 	if len(stats.Examples) != 1 || stats.Examples[0].Reason != "threshold" {
@@ -1072,6 +1072,9 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 	if res := ContextCompactionRemovedMessagesAtLeast(60).Eval(trace); !res.Pass {
 		t.Fatalf("expected removed-message compaction check to pass: %+v", res)
+	}
+	if res := ContextCompactionReducedBytesAtLeast(13000).Eval(trace); !res.Pass {
+		t.Fatalf("expected byte-reduction compaction check to pass: %+v", res)
 	}
 	if res := ContextCompactionSummaryContains("Affine SN120").Eval(trace); !res.Pass {
 		t.Fatalf("expected context summary content check to pass: %+v", res)
@@ -1092,6 +1095,13 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "missing marker") || !strings.Contains(res.Detail, "HRO market marker") {
 		t.Fatalf("failure detail should include requested marker and observed previews: %s", res.Detail)
+	}
+	res = ContextCompactionReducedBytesAtLeast(20000).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected reduced-byte compaction check to fail")
+	}
+	if !strings.Contains(res.Detail, "reduced_bytes=13000") || !strings.Contains(res.Detail, "want >= 20000") {
+		t.Fatalf("reduced-byte failure detail = %q", res.Detail)
 	}
 	res = ContextCompactionLoopProtocolAnchorContains("missing-loop").Eval(trace)
 	if res.Pass {

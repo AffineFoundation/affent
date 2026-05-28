@@ -2907,8 +2907,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if len(compactionRetention.Prompts) != 2 || !strings.Contains(compactionRetention.Prompts[1], "不要调用任何工具") {
 		t.Fatalf("compaction retention Prompts = %#v, want two-turn recovery prompt", compactionRetention.Prompts)
 	}
-	if compactionRetention.RequiredContextCompactions != 1 || compactionRetention.RequiredCompactionRemovedMsgs != 1 {
-		t.Fatalf("compaction retention requirements = compactions:%d removed:%d, want 1/1", compactionRetention.RequiredContextCompactions, compactionRetention.RequiredCompactionRemovedMsgs)
+	if compactionRetention.RequiredContextCompactions != 1 || compactionRetention.RequiredCompactionRemovedMsgs != 1 || compactionRetention.RequiredCompactionReducedBytes != 1 {
+		t.Fatalf("compaction retention requirements = compactions:%d removed:%d reduced:%d, want 1/1/1", compactionRetention.RequiredContextCompactions, compactionRetention.RequiredCompactionRemovedMsgs, compactionRetention.RequiredCompactionReducedBytes)
 	}
 	if compactionRetention.RequiredToolCounts["read_file"] != 5 || compactionRetention.MaxSuccessfulToolCallsByTool["read_file"] != 5 {
 		t.Fatalf("compaction retention read constraints = counts:%#v max:%#v", compactionRetention.RequiredToolCounts, compactionRetention.MaxSuccessfulToolCallsByTool)
@@ -4461,13 +4461,14 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
 			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "browser network evidence", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"},
 		},
-		RequiredFinalText:             []string{"0.06342 T"},
-		ForbiddenFinalText:            []string{"subnet price $277.32"},
-		RequiredTruncatedResults:      []string{"web_fetch"},
-		RequiredResultArtifacts:       []string{"web_fetch"},
-		RequiredContextCompactions:    1,
-		RequiredCompactionRemovedMsgs: 12,
-		RequiredContextSummaryText:    []string{"browser network evidence"},
+		RequiredFinalText:              []string{"0.06342 T"},
+		ForbiddenFinalText:             []string{"subnet price $277.32"},
+		RequiredTruncatedResults:       []string{"web_fetch"},
+		RequiredResultArtifacts:        []string{"web_fetch"},
+		RequiredContextCompactions:     1,
+		RequiredCompactionRemovedMsgs:  12,
+		RequiredCompactionReducedBytes: 1,
+		RequiredContextSummaryText:     []string{"browser network evidence"},
 		RequiredContextLoopProtocolAnchorText: []string{
 			"path=.affent/loops/debug/LOOP.md",
 		},
@@ -4557,6 +4558,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_input_tokens:300000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_total_tokens:320000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_reduced_bytes_at_least:1") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
 		!reflect.DeepEqual(manifest.Expectations.SetupCommands, []string{"git init"}) ||
@@ -4613,6 +4615,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(manifest.Expectations.RequiredResultArtifacts, []string{"web_fetch"}) ||
 		manifest.Expectations.RequiredContextCompactions != 1 ||
 		manifest.Expectations.RequiredCompactionRemovedMsgs != 12 ||
+		manifest.Expectations.RequiredCompactionReducedBytes != 1 ||
 		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") ||
 		!stringSliceContains(manifest.Expectations.RequiredContextLoopProtocolAnchorText, "path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.ProtectedFiles, []string{"README.md"}) ||
@@ -4918,7 +4921,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_truncated_results: `web_fetch`",
 		"required_result_artifacts: `web_fetch`",
 		"required_tool_arg: `browser_network_read.json_path` contains `$.price` min=`1`",
-		"context_requirements: `compactions>=1 removed_messages>=12`",
+		"context_requirements: `compactions>=1 removed_messages>=12 reduced_bytes>=1`",
 		"context_summary_contains: `browser network evidence`",
 		"context_loop_protocol_anchor_contains: `path=.affent/loops/debug/LOOP.md`",
 		"protected_files: `README.md`",

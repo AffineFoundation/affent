@@ -728,7 +728,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- max_tool_arg: `%s.%s` contains `%s` max=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), max)
 		}
 	}
-	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
+	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		var parts []string
 		if exp.RequiredContextCompactions > 0 {
 			parts = append(parts, fmt.Sprintf("compactions>=%d", exp.RequiredContextCompactions))
@@ -738,6 +738,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if exp.RequiredCompactionRemovedMsgs > 0 {
 			parts = append(parts, fmt.Sprintf("removed_messages>=%d", exp.RequiredCompactionRemovedMsgs))
+		}
+		if exp.RequiredCompactionReducedBytes > 0 {
+			parts = append(parts, fmt.Sprintf("reduced_bytes>=%d", exp.RequiredCompactionReducedBytes))
 		}
 		if len(parts) > 0 {
 			fmt.Fprintf(b, "- context_requirements: `%s`\n", strings.Join(parts, " "))
@@ -817,6 +820,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.RequiredContextCompactions > 0 ||
 		exp.RequiredReactiveCompactions > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
+		exp.RequiredCompactionReducedBytes > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||
 		len(exp.RequiredContextLoopProtocolAnchorText) > 0 ||
 		len(exp.ProtectedFiles) > 0 ||

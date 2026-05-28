@@ -1200,6 +1200,22 @@ func ContextCompactionRemovedMessagesAtLeast(min int) Check {
 	}
 }
 
+func ContextCompactionReducedBytesAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("context_compaction_reduced_bytes_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.ContextCompactionStats(0)
+			if stats.ReducedBytes >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("reduced_bytes=%d", stats.ReducedBytes)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("reduced_bytes=%d, want >= %d; context_compactions=%d", stats.ReducedBytes, min, stats.Count),
+			}
+		},
+	}
+}
+
 func ContextCompactionSummaryContains(substr string) Check {
 	return Check{
 		Name: fmt.Sprintf("context_compaction_summary_contains:%s", previewSubstr(substr, 32)),

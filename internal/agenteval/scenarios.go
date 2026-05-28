@@ -2057,8 +2057,9 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			{Tool: "read_file", Arg: "path", Substring: "current/pr.md"},
 			{Tool: "read_file", Arg: "path", Substring: "current/evidence.md"},
 		},
-		RequiredContextCompactions:    1,
-		RequiredCompactionRemovedMsgs: 1,
+		RequiredContextCompactions:     1,
+		RequiredCompactionRemovedMsgs:  1,
+		RequiredCompactionReducedBytes: 1,
 		RequiredContextSummaryText: []string{
 			"COMPRESS-HRO-31",
 			"COMPRESS-SN120-42",

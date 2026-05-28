@@ -191,6 +191,7 @@ type BatchScenario struct {
 	RequiredContextCompactions                     int
 	RequiredReactiveCompactions                    int
 	RequiredCompactionRemovedMsgs                  int
+	RequiredCompactionReducedBytes                 int
 	RequiredContextSummaryText                     []string
 	RequiredContextLoopProtocolAnchorText          []string
 	RequiredCommandBeforeTool                      []CommandToolOrderRequirement
@@ -451,6 +452,7 @@ type DebugScenarioExpectations struct {
 	RequiredContextCompactions                     int                                   `json:"required_context_compactions,omitempty"`
 	RequiredReactiveCompactions                    int                                   `json:"required_reactive_context_compactions,omitempty"`
 	RequiredCompactionRemovedMsgs                  int                                   `json:"required_compaction_removed_messages,omitempty"`
+	RequiredCompactionReducedBytes                 int                                   `json:"required_compaction_reduced_bytes,omitempty"`
 	RequiredContextSummaryText                     []string                              `json:"required_context_summary_text,omitempty"`
 	RequiredContextLoopProtocolAnchorText          []string                              `json:"required_context_loop_protocol_anchor_text,omitempty"`
 	ProtectedFiles                                 []string                              `json:"protected_files,omitempty"`
@@ -523,6 +525,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if exp.RequiredContextCompactions > 0 ||
 		exp.RequiredReactiveCompactions > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
+		exp.RequiredCompactionReducedBytes > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||
 		len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		caps["context_compaction"] = true
@@ -2068,6 +2071,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredContextCompactions:                     s.RequiredContextCompactions,
 		RequiredReactiveCompactions:                    s.RequiredReactiveCompactions,
 		RequiredCompactionRemovedMsgs:                  s.RequiredCompactionRemovedMsgs,
+		RequiredCompactionReducedBytes:                 s.RequiredCompactionReducedBytes,
 		RequiredContextSummaryText:                     append([]string(nil), s.RequiredContextSummaryText...),
 		RequiredContextLoopProtocolAnchorText:          append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
 		ProtectedFiles:                                 append([]string(nil), s.ProtectedFiles...),
@@ -3175,6 +3179,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredCompactionRemovedMsgs > 0 {
 		checks = append(checks, ContextCompactionRemovedMessagesAtLeast(scenario.RequiredCompactionRemovedMsgs))
+	}
+	if scenario.RequiredCompactionReducedBytes > 0 {
+		checks = append(checks, ContextCompactionReducedBytesAtLeast(scenario.RequiredCompactionReducedBytes))
 	}
 	for _, substr := range scenario.RequiredContextSummaryText {
 		checks = append(checks, ContextCompactionSummaryContains(substr))
