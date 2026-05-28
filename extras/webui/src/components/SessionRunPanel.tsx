@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runCommandRequest, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
+import { manualRunDraft, runCommandDraft, runCommandMeta, runCommandRequest, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 
 export type RunCommandAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -30,6 +30,7 @@ export function SessionRunPanel({
   const filteredCommands = filter === "all" ? run.commands : run.commands.filter((command) => command.status === filter);
   const visibleCommands = trimmedQuery ? filteredCommands.filter((command) => runMatchesQuery(command, trimmedQuery)) : filteredCommands;
   const focusCommand = visibleCommands.find((command) => command.status === "failed") ?? visibleCommands.find((command) => command.status === "running");
+  const historyCommands = focusCommand ? visibleCommands.filter((command) => command !== focusCommand) : visibleCommands;
 
   async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -100,11 +101,6 @@ export function SessionRunPanel({
                 <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
                   {onRunCommand ? "Run now" : "Use command as draft"}
                 </button>
-                {onRunCommand && onUseAsDraft ? (
-                  <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>
-                    Use command as draft
-                  </button>
-                ) : null}
               </div>
             </form>
           </details>
@@ -122,9 +118,9 @@ export function SessionRunPanel({
             ) : null}
           </div>
         ) : null}
-        {visibleCommands.length > 0 ? (
+        {historyCommands.length > 0 ? (
           <ol className="session-run-list" data-testid="session-run-list">
-            {visibleCommands.map((command, index) => (
+            {historyCommands.map((command, index) => (
               <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
                 <div className="session-run-main">
                   <strong title={command.command}>{commandLabel(command.command)}</strong>
@@ -136,27 +132,21 @@ export function SessionRunPanel({
                 </div>
                 <span className="session-evidence-actions">
                   <CopyButton label="Copy command" value={command.command} className="ghost-action" />
-                  <CopyButton label="Copy run evidence" value={runCommandEvidenceText(command)} className="ghost-action" />
                   {command.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
                       Open command output
                     </button>
                   ) : null}
-                  {onRunCommand ? (
+                  {onRunCommand && command.status !== "passed" ? (
                     <button type="button" className="ghost-action primary-run-action" disabled={runCommandBusy} onClick={() => onRunCommand(runCommandRequest(command))}>
                       Rerun now
-                    </button>
-                  ) : null}
-                  {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runCommandDraft(command), "run_command")}>
-                      Rerun as draft
                     </button>
                   ) : null}
                 </span>
               </li>
             ))}
           </ol>
-        ) : run.commands.length > 0 ? (
+        ) : visibleCommands.length > 0 ? null : run.commands.length > 0 ? (
           <div className="session-skills-empty">No commands matching "{trimmedQuery}".</div>
         ) : (
           <div className="session-skills-empty">No shell commands in this chat.</div>
@@ -177,6 +167,7 @@ function RunFilterButton({
   active: boolean;
   onClick: () => void;
 }) {
+  if (value === 0 && !active) return null;
   return (
     <button type="button" className="session-run-filter" data-active={active ? "true" : "false"} onClick={onClick}>
       <span>{label}</span>
@@ -232,7 +223,6 @@ function RunFocus({
         {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
       </div>
       <div className="session-evidence-actions">
-        <CopyButton label="Copy run evidence" value={runCommandEvidenceText(command)} className="ghost-action" />
         {command.artifactPath && onOpenArtifact ? (
           <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
             Open command output
@@ -243,11 +233,12 @@ function RunFocus({
             Rerun now
           </button>
         ) : null}
-        {onUseAsDraft ? (
+        {!onRunCommand && onUseAsDraft ? (
           <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runCommandDraft(command), "run_command")}>
             Rerun as draft
           </button>
         ) : null}
+        <CopyButton label="Copy command" value={command.command} className="ghost-action" />
       </div>
     </section>
   );

@@ -2614,16 +2614,15 @@ describe("App", () => {
     const run = await screen.findByTestId("session-run-panel");
     expect(run).toHaveAttribute("open");
     expect(run).toHaveTextContent("1 failed command");
-    expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
-    expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Next: update payment route then rerun");
     expect(within(run).getByText("Run command")).toBeVisible();
     expect(within(run).getByTestId("session-run-manual")).not.toBeVisible();
-    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open command output" }));
+    await user.click(within(screen.getByTestId("session-run-focus")).getByRole("button", { name: "Open command output" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout spec failed");
-    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun as draft" }));
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using command");
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Run evidence for npm test -- checkout.spec.ts");
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Next: update payment route then rerun");
+    expect(within(screen.getByTestId("session-run-focus")).queryByRole("button", { name: "Rerun as draft" })).toBeNull();
+    const composerContext = screen.queryByTestId("composer-context");
+    if (composerContext) expect(composerContext).not.toHaveTextContent("Using command");
 
     await user.click(within(await screen.findByTestId("session-run-focus")).getByRole("button", { name: "Rerun now" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/run-1/commands", expect.objectContaining({ method: "POST" })));
