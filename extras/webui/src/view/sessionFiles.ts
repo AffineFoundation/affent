@@ -23,7 +23,19 @@ export interface SessionFilesView {
   items: SessionFileEvidence[];
   summary: string;
   detail: string;
+  stats?: SessionFilesStats;
   tone?: "warning" | "error";
+}
+
+export interface SessionFilesStats {
+  total: number;
+  available: number;
+  failed: number;
+  running: number;
+  read: number;
+  listed: number;
+  changed: number;
+  snapshots: number;
 }
 
 interface SessionFileEvidenceInternal extends SessionFileEvidence {
@@ -48,10 +60,12 @@ export function buildSessionFiles(session: SessionState): SessionFilesView {
     .map(({ sequence: _sequence, ...item }) => item);
   const failed = items.filter((item) => item.status === "failed").length;
   const running = items.filter((item) => item.status === "running").length;
+  const stats = filesStats(items);
   return {
     items,
     summary: filesSummary(items.length, { failed, running }),
     detail: filesDetail(items),
+    stats,
     tone: failed > 0 ? "error" : running > 0 ? "warning" : undefined,
   };
 }
@@ -68,11 +82,13 @@ export function fileEvidenceText(item: SessionFileEvidence): string {
 }
 
 export function fileEvidenceDraft(item: SessionFileEvidence): string {
-  const lead = item.actions.includes("changed")
-    ? "Review this changed file in the next step"
-    : item.actions.includes("listed")
-      ? "Use this listed directory in the next step"
-      : "Use this file evidence in the next step";
+  const lead = item.status === "failed"
+    ? "Recover this file path before continuing"
+    : item.actions.includes("changed")
+      ? "Review this changed file in the next step"
+      : item.actions.includes("listed")
+        ? "Use this listed directory in the next step"
+        : "Use this file evidence in the next step";
   return `${lead}:\n${fileEvidenceText(item)}`;
 }
 
@@ -205,6 +221,19 @@ function filesDetail(items: SessionFileEvidence[]): string {
     counts.listed > 0 ? `${counts.listed} listed` : undefined,
     counts.changed > 0 ? `${counts.changed} changed` : undefined,
   ].filter(Boolean).join(" · ");
+}
+
+function filesStats(items: SessionFileEvidence[]): SessionFilesStats {
+  return {
+    total: items.length,
+    available: items.filter((item) => item.status === "available").length,
+    failed: items.filter((item) => item.status === "failed").length,
+    running: items.filter((item) => item.status === "running").length,
+    read: items.filter((item) => item.actions.includes("read")).length,
+    listed: items.filter((item) => item.actions.includes("listed")).length,
+    changed: items.filter((item) => item.actions.includes("changed")).length,
+    snapshots: items.filter((item) => item.contentPreview).length,
+  };
 }
 
 function stringArg(call: ToolCallState, key: string): string | undefined {

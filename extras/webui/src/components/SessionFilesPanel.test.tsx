@@ -14,8 +14,13 @@ describe("SessionFilesPanel", () => {
     render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-files-panel");
+    const dashboard = screen.getByLabelText("File work summary");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("2 file references");
+    expect(within(dashboard).getByText("All").closest("button")).toHaveTextContent("2");
+    expect(within(dashboard).getByText("Changed").closest("button")).toHaveTextContent("1");
+    expect(screen.getByText("Changed file")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Review change" }).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Search files")).toBeInTheDocument();
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Read + Changed · available · turn 2 · 2 actions");
@@ -43,7 +48,7 @@ describe("SessionFilesPanel", () => {
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
 
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file as draft" })[0]);
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Review change" })[0]);
     await user.click(screen.getByRole("button", { name: "Use text as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
@@ -58,9 +63,13 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
 
+    await user.click(within(dashboard).getByText("Changed").closest("button")!);
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.queryByTitle("src")).not.toBeInTheDocument();
+
     await user.type(screen.getByLabelText("Search files"), "missing.ts");
     expect(screen.queryByTestId("session-files-list")).toBeNull();
-    expect(panel).toHaveTextContent('No file evidence matching "missing.ts".');
+    expect(panel).toHaveTextContent('No changed result matching "missing.ts".');
   });
 
   it("keeps the panel folded by default", () => {

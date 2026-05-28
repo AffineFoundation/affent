@@ -16,7 +16,20 @@ describe("buildSessionFiles", () => {
 
     const files = buildSessionFiles(session);
 
-    expect(files).toMatchObject({ summary: "2 file references", detail: "1 read · 1 listed · 1 changed" });
+    expect(files).toMatchObject({
+      summary: "2 file references",
+      detail: "1 read · 1 listed · 1 changed",
+      stats: {
+        total: 2,
+        available: 2,
+        failed: 0,
+        running: 0,
+        read: 1,
+        listed: 1,
+        changed: 1,
+        snapshots: 1,
+      },
+    });
     expect(files.items).toEqual([
       expect.objectContaining({
         path: "src/payments.ts",

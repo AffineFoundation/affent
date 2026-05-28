@@ -11,6 +11,8 @@ import {
 import { CopyButton } from "./CopyButton";
 import { HighlightText } from "./HighlightText";
 
+type FileFilter = "all" | "changed" | "snapshots" | "issues" | "listed";
+
 export function SessionFilesPanel({
   files,
   defaultOpen = false,
@@ -25,10 +27,14 @@ export function SessionFilesPanel({
   const [query, setQuery] = useState("");
   const [previewQuery, setPreviewQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
+  const [filter, setFilter] = useState<FileFilter>("all");
   const trimmedQuery = query.trim();
-  const visibleItems = trimmedQuery ? files.items.filter((item) => fileMatchesQuery(item, trimmedQuery)) : files.items;
+  const stats = fileStats(files);
+  const filteredItems = filter === "all" ? files.items : files.items.filter((item) => fileMatchesFilter(item, filter));
+  const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
   const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
+  const focus = filesFocus(files.items);
   return (
     <details className="session-skills-panel session-files-panel" data-testid="session-files-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -37,6 +43,57 @@ export function SessionFilesPanel({
         <span>{files.detail}</span>
       </summary>
       <div className="session-skills-body">
+        <div className="session-files-dashboard" aria-label="File work summary">
+          <FileStatButton
+            label="All"
+            value={stats.total}
+            detail={`${stats.read} read · ${stats.listed} listed · ${stats.changed} changed`}
+            active={filter === "all"}
+            onClick={() => setFilter("all")}
+          />
+          <FileStatButton
+            label="Changed"
+            value={stats.changed}
+            detail="agent wrote or edited"
+            active={filter === "changed"}
+            onClick={() => setFilter("changed")}
+          />
+          <FileStatButton
+            label="Snapshots"
+            value={stats.snapshots}
+            detail="loaded file text"
+            active={filter === "snapshots"}
+            onClick={() => setFilter("snapshots")}
+          />
+          <FileStatButton
+            label="Issues"
+            value={stats.failed + stats.running}
+            detail={`${stats.failed} failed · ${stats.running} pending`}
+            active={filter === "issues"}
+            onClick={() => setFilter("issues")}
+          />
+          <FileStatButton
+            label="Dirs"
+            value={stats.listed}
+            detail="listed roots"
+            active={filter === "listed"}
+            onClick={() => setFilter("listed")}
+          />
+        </div>
+        {focus ? (
+          <div className="session-files-focus" data-tone={focus.tone}>
+            <div className="session-files-focus-main">
+              <span>{focus.label}</span>
+              <strong title={focus.item.path}>{focus.item.path}</strong>
+              <small>{focus.detail}</small>
+            </div>
+            {onUseAsDraft ? (
+              <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(focus.item), "file_evidence")}>
+                {fileDraftActionLabel(focus.item)}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {files.items.length > 1 ? (
           <div className="session-skills-controls">
             <label className="session-skills-search">
@@ -84,7 +141,7 @@ export function SessionFilesPanel({
                   ) : null}
                   {onUseAsDraft ? (
                     <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
-                      Use file as draft
+                      {fileDraftActionLabel(item)}
                     </button>
                   ) : null}
                 </span>
@@ -92,7 +149,7 @@ export function SessionFilesPanel({
             ))}
           </ol>
         ) : files.items.length > 0 ? (
-          <div className="session-skills-empty">No file evidence matching "{trimmedQuery}".</div>
+          <div className="session-skills-empty">No {filter === "all" ? "file evidence" : filter} result matching "{trimmedQuery}".</div>
         ) : (
           <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
         )}
@@ -134,6 +191,28 @@ export function SessionFilesPanel({
   );
 }
 
+function FileStatButton({
+  label,
+  value,
+  detail,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="session-files-stat" data-active={active ? "true" : "false"} onClick={onClick}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <small>{detail}</small>
+    </button>
+  );
+}
+
 function fileMatchesQuery(item: SessionFileEvidence, query: string): boolean {
   const haystack = [
     item.path,
@@ -144,6 +223,57 @@ function fileMatchesQuery(item: SessionFileEvidence, query: string): boolean {
     item.artifactPath,
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
+}
+
+function fileMatchesFilter(item: SessionFileEvidence, filter: FileFilter): boolean {
+  if (filter === "changed") return item.actions.includes("changed");
+  if (filter === "snapshots") return Boolean(item.contentPreview);
+  if (filter === "issues") return item.status === "failed" || item.status === "running";
+  if (filter === "listed") return item.actions.includes("listed");
+  return true;
+}
+
+function fileStats(files: SessionFilesView) {
+  return files.stats ?? {
+    total: files.items.length,
+    available: files.items.filter((item) => item.status === "available").length,
+    failed: files.items.filter((item) => item.status === "failed").length,
+    running: files.items.filter((item) => item.status === "running").length,
+    read: files.items.filter((item) => item.actions.includes("read")).length,
+    listed: files.items.filter((item) => item.actions.includes("listed")).length,
+    changed: files.items.filter((item) => item.actions.includes("changed")).length,
+    snapshots: files.items.filter((item) => item.contentPreview).length,
+  };
+}
+
+function filesFocus(items: readonly SessionFileEvidence[]):
+  | { label: string; detail: string; tone: "error" | "warning" | "changed" | "snapshot"; item: SessionFileEvidence }
+  | undefined {
+  const failed = items.find((item) => item.status === "failed");
+  if (failed) {
+    return {
+      label: "Path issue",
+      detail: failed.next ? `Suggested recovery: ${failed.next}` : failed.detail ?? "A file action failed and needs path recovery.",
+      tone: "error",
+      item: failed,
+    };
+  }
+  const running = items.find((item) => item.status === "running");
+  if (running) return { label: "Pending file action", detail: running.detail ?? "A file action is still running.", tone: "warning", item: running };
+  const changed = items.find((item) => item.actions.includes("changed"));
+  if (changed) return { label: "Changed file", detail: changed.detail ?? "Agent wrote or edited this file.", tone: "changed", item: changed };
+  const snapshot = items.find((item) => item.contentPreview);
+  if (snapshot) return { label: "Loaded snapshot", detail: "read_file text is available for review.", tone: "snapshot", item: snapshot };
+  return undefined;
+}
+
+function fileDraftActionLabel(item: SessionFileEvidence): string {
+  if (item.status === "failed") return "Fix path";
+  if (item.status === "running") return "Check status";
+  if (item.actions.includes("changed")) return "Review change";
+  if (item.contentPreview) return "Inspect file";
+  if (item.actions.includes("listed")) return "Continue here";
+  return "Use evidence";
 }
 
 function fileMeta(item: SessionFileEvidence): string {
