@@ -1265,6 +1265,7 @@ Research checkpoints that trigger without SourceAccess evidence or delegated
 research emit `research_checkpoint:no_external_evidence`; the recovery prompt
 routes the next operator to loop decisions, source evidence, and child
 transcripts before treating a loop-route conclusion as externally calibrated.
+The `web-evidence` quality profile treats that tag as a zero-tolerance failure.
 Only verified or network-backed SourceAccess counts as checkpoint evidence;
 discovery-only and dynamic-partial page evidence remain weak leads. Focused
 `research`/`web_extract` tasks count as delegated evidence only when their
@@ -1273,7 +1274,10 @@ evals assert `required_focused_task_source_counts`; local explore/review
 children remain internal review signals. Research subagents count as delegated
 research evidence only when their report includes source-bearing Evidence,
 Files inspected, Commands run, or Sources lines; evals can assert this with
-`required_subagent_source_counts`.
+`required_subagent_source_counts`. Scenarios with either delegated source
+requirement are tagged as the `delegated_source_evidence` expectation
+capability, so per-family quality gates can distinguish source-backed child
+research regressions from generic delegation failures.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

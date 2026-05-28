@@ -891,6 +891,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxDebugBriefTagRates["source_network:partial_read"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
+		webGates.MaxDebugBriefTagRates["research_checkpoint:no_external_evidence"] != 0 ||
 		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}

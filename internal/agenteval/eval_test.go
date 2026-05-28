@@ -39,6 +39,17 @@ func TestExpectationCapabilityNamesIncludesResearchCheckpoint(t *testing.T) {
 	}
 }
 
+func TestExpectationCapabilityNamesIncludesDelegatedSourceEvidence(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		RequiredFocusedTaskSourceCounts: map[string]int{"research": 2},
+		RequiredSubagentSourceCounts:    map[string]int{"review": 1},
+	})
+	want := []string{"delegated_source_evidence", "delegation"}
+	if !reflect.DeepEqual(caps, want) {
+		t.Fatalf("ExpectationCapabilityNames = %#v, want %#v", caps, want)
+	}
+}
+
 func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
@@ -2072,7 +2083,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 		}
 	}
 	delegatedResearchCaps := ExpectationCapabilityNames(debugScenarioExpectations(delegatedResearch))
-	for _, want := range []string{"delegation", "loop_protocol", "research_checkpoint"} {
+	for _, want := range []string{"delegated_source_evidence", "delegation", "loop_protocol", "research_checkpoint"} {
 		if !stringSliceContains(delegatedResearchCaps, want) {
 			t.Fatalf("delegated research expectation capabilities = %#v, want %q", delegatedResearchCaps, want)
 		}
@@ -2901,7 +2912,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Verifier.OutputCapBytes != 1536 {
 		t.Fatalf("manifest verifier = %+v", manifest.Verifier)
 	}
-	wantCapabilities := []string{"browser", "context_compaction", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
+	wantCapabilities := []string{"browser", "context_compaction", "delegated_source_evidence", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
 		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
@@ -3216,7 +3227,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
-		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
+		"expectation_capabilities: `browser`, `context_compaction`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
 		"checks: `turn_ended_cleanly`",

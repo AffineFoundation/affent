@@ -461,6 +461,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if expectationRequiresResearchCheckpoint(exp) {
 		caps["research_checkpoint"] = true
 	}
+	if expectationRequiresDelegatedSourceEvidence(exp) {
+		caps["delegated_source_evidence"] = true
+	}
 	if len(exp.RequiredFocusedTaskCounts) > 0 ||
 		len(exp.RequiredFocusedTaskSourceCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
@@ -502,6 +505,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func expectationRequiresDelegatedSourceEvidence(exp DebugScenarioExpectations) bool {
+	return len(exp.RequiredFocusedTaskSourceCounts) > 0 || len(exp.RequiredSubagentSourceCounts) > 0
 }
 
 func expectationRequiresResearchCheckpoint(exp DebugScenarioExpectations) bool {

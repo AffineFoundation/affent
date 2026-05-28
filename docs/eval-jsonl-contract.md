@@ -140,7 +140,11 @@ Scenario records describe one eval case:
   scenario rows without reimplementing expectation parsing. Composite
   long-running recovery cases that require loop protocol feeds, no-hit
   recent-session anchors, and a `session_search` to `memory` recovery sequence
-  are tagged as `longrun_recovery`.
+  are tagged as `longrun_recovery`. Scenarios that require
+  `required_focused_task_source_counts` or
+  `required_subagent_source_counts` are also tagged as
+  `delegated_source_evidence`, which lets quality profiles fail unsourced child
+  research/review paths separately from generic delegation failures.
 - `runtime_surface`: compact copy of the latest effective runtime surface when
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and
@@ -625,8 +629,9 @@ Summary records aggregate all scenario records from the same process:
   counts declared source-access statuses such as `network` or `verified`; and
   `expectation_capabilities` counts broad required capability families such as
   `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,
-  `delegation`, `plan`, `loop_protocol`, `context_compaction`, `verifier`,
-  `research_checkpoint`, `longrun_recovery`, and `mcp`.
+  `delegation`, `delegated_source_evidence`, `plan`, `loop_protocol`,
+  `context_compaction`, `verifier`, `research_checkpoint`,
+  `longrun_recovery`, and `mcp`.
   `expectation_capability_passed`, `expectation_capability_failed`, and
   `expectation_capability_pass_rate` split those declared capability families
   by scenario outcome. These are declaration/outcome counters, not observed
