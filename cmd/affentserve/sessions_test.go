@@ -1810,6 +1810,9 @@ func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
 	if len(s.loop.CompletionGuards) == 0 {
 		t.Fatal("active plan should install a completion guard")
 	}
+	if !stringSliceContains(s.loop.CompletionGuardLabels, "active_plan_unfinished") {
+		t.Fatalf("completion guard labels = %#v, want active_plan_unfinished", s.loop.CompletionGuardLabels)
+	}
 	guard := s.loop.CompletionGuards[0]()
 	if !guard.Blocked ||
 		guard.Trigger != "active_plan_unfinished" ||
@@ -1837,6 +1840,9 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	}
 	if s.loop.LoopProtocolPath != path {
 		t.Fatalf("LoopProtocolPath = %q, want %q", s.loop.LoopProtocolPath, path)
+	}
+	if !stringSliceContains(s.loop.CompletionGuardLabels, "loop_protocol_running") {
+		t.Fatalf("completion guard labels = %#v, want loop_protocol_running", s.loop.CompletionGuardLabels)
 	}
 	got := s.loop.SkillProvider("continue")
 	for _, want := range []string{

@@ -67,6 +67,7 @@ export interface RuntimeSurfacePayload {
   turn_id: string;
   tool_count: number;
   tools?: RuntimeSurfaceTool[];
+  completion_guards?: string[];
   capabilities: RuntimeCapabilities;
   max_turn_steps?: number;
   max_tool_calls?: number;

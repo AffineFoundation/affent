@@ -1499,6 +1499,10 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		ToolResultMaxBytesInContext:  1234,
 		ToolResultContextBudgetBytes: 5678,
 		ToolResultArtifactPathPrefix: ".affent/custom",
+		CompletionGuards: []CompletionGuard{
+			func() CompletionGuardResult { return CompletionGuardResult{} },
+		},
+		CompletionGuardLabels: []string{"active_plan_unfinished", "loop_protocol_running"},
 	}
 	loop.publishRuntimeSurface("turn_surface", TurnOptions{})
 	ev := <-events
@@ -1539,6 +1543,28 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		payload.ToolCallCaps[0] != (sse.RuntimeToolCallCap{Tool: "web_fetch", Max: perTurnCallCaps["web_fetch"]}) ||
 		payload.ToolCallCaps[1] != (sse.RuntimeToolCallCap{Tool: "web_search", Max: perTurnCallCaps["web_search"]}) {
 		t.Fatalf("tool call caps = %+v", payload.ToolCallCaps)
+	}
+	if !reflect.DeepEqual(payload.CompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("completion guards = %#v", payload.CompletionGuards)
+	}
+}
+
+func TestPublishRuntimeSurfaceMarksUnlabeledCompletionGuards(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	loop := &Loop{
+		Events: events,
+		CompletionGuards: []CompletionGuard{
+			func() CompletionGuardResult { return CompletionGuardResult{} },
+		},
+	}
+	loop.publishRuntimeSurface("turn_surface", TurnOptions{})
+	ev := <-events
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if !reflect.DeepEqual(payload.CompletionGuards, []string{"custom"}) {
+		t.Fatalf("completion guards = %#v, want custom fallback", payload.CompletionGuards)
 	}
 }
 

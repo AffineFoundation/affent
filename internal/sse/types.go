@@ -76,6 +76,7 @@ type RuntimeSurfacePayload struct {
 	ToolCount                    int                  `json:"tool_count"`
 	Tools                        []RuntimeSurfaceTool `json:"tools,omitempty"`
 	ToolCallCaps                 []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
+	CompletionGuards             []string             `json:"completion_guards,omitempty"`
 	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
 	MaxTurnSteps                 int                  `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`

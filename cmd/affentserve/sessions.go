@@ -738,10 +738,12 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.ActivePlanCompletionGuard(planPath))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "active_plan_unfinished")
 	}
 	if !p.cfg.EvalMode {
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_running")
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	if p.cfg.EnableBuiltins && !p.cfg.EvalMode {

@@ -227,6 +227,10 @@ type Loop struct {
 	// state providers, not text classifiers: they should inspect plan/loop/etc.
 	// state and return a corrective prompt only when that state is unfinished.
 	CompletionGuards []CompletionGuard
+	// CompletionGuardLabels are trace/UI metadata for installed completion
+	// guards. They make runtime.surface auditable without invoking guards at
+	// turn start.
+	CompletionGuardLabels []string
 
 	// FinalNoToolsOnMaxTurns gives the model one final no-tool response
 	// after the tool budget is exhausted. This is useful for bounded
@@ -2572,6 +2576,11 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),
 		ToolResultArtifactPrefix:     l.ToolResultArtifactPathPrefix,
 		TurnToolOverride:             opts.Tools != nil,
+	}
+	if len(l.CompletionGuardLabels) > 0 {
+		payload.CompletionGuards = append([]string(nil), l.CompletionGuardLabels...)
+	} else if len(l.CompletionGuards) > 0 {
+		payload.CompletionGuards = []string{"custom"}
 	}
 	if payload.ToolResultArtifactPrefix == "" {
 		payload.ToolResultArtifactPrefix = defaultArtifactPathPrefix

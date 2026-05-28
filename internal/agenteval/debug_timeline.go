@@ -1079,6 +1079,11 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if surface.TurnToolOverride {
 		fmt.Fprintln(b, "- turn_tool_override: `true`")
 	}
+	if len(surface.CompletionGuards) > 0 {
+		guards := append([]string(nil), surface.CompletionGuards...)
+		sort.Strings(guards)
+		fmt.Fprintf(b, "- completion_guards: `%s`\n", strings.Join(guards, "`, `"))
+	}
 	if len(surface.ToolCallCaps) > 0 {
 		var caps []string
 		for _, cap := range surface.ToolCallCaps {
