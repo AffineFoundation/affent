@@ -1532,9 +1532,7 @@ func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts agent.TurnOptions) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if opts.UserSource == "" {
-		s.recordLoopProtocolCalibrationAnswerIfReady(text)
-	}
+	s.recordLoopProtocolCalibrationAnswerIfReady(text, opts)
 	s.activeTurns.Add(1)
 	s.lastUsed = time.Now()
 	turnID, err := s.loop.SendUserWithOptions(ctx, text, opts)
@@ -1565,8 +1563,20 @@ func (s *Session) ensureLoopProtocolInitializedWithCreated(goal string) (bool, e
 	return created, err
 }
 
-func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
-	if s == nil || strings.TrimSpace(s.loopProtocolPath) == "" || generatedLoopCalibrationPrompt(text) {
+func shouldRecordLoopProtocolCalibrationAnswer(opts agent.TurnOptions) bool {
+	if strings.TrimSpace(opts.UserSource) != "" {
+		return false
+	}
+	switch strings.TrimSpace(opts.UserMode) {
+	case "", agent.UserModeNormal:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string, opts agent.TurnOptions) {
+	if s == nil || strings.TrimSpace(s.loopProtocolPath) == "" || !shouldRecordLoopProtocolCalibrationAnswer(opts) {
 		return
 	}
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(s.loopProtocolPath), loopstate.StateFileName))
@@ -1615,24 +1625,6 @@ func (s *Session) publishSessionEvent(eventType string, payload any) {
 			s.loop.Log.Warn().Str("type", eventType).Msg("session event channel full; dropped")
 		}
 	}
-}
-
-func generatedLoopCalibrationPrompt(text string) bool {
-	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
-	if normalized == "" {
-		return false
-	}
-	markers := []string{
-		"loop protocol activation is pending, not active yet.",
-		"the timer has been created, but calibration is still required before relying on it.",
-		"this is an autonomous long-run tick, not a new human instruction.",
-	}
-	for _, marker := range markers {
-		if strings.Contains(normalized, marker) {
-			return true
-		}
-	}
-	return false
 }
 
 func (s *Session) isActiveTurn() bool {

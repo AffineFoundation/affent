@@ -2029,7 +2029,7 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if err := s.ensureLoopProtocolInitialized("Set up long-running subnet analysis."); err != nil {
 		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("Loop protocol activation is pending, not active yet. Ask exactly one concise calibration question now.")
+	s.recordLoopProtocolCalibrationAnswerIfReady("Loop setup prompt", agent.TurnOptions{UserMode: agent.UserModeLoopSetup})
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
@@ -2040,7 +2040,15 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, "What stop condition should pause this loop?"); err != nil {
 		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("Pause if source quality is weak or weekly report is complete.")
+	s.recordLoopProtocolCalibrationAnswerIfReady("Internal loop setup turn", agent.TurnOptions{UserMode: agent.UserModeLoopSetup})
+	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
+	if err != nil || !found {
+		t.Fatalf("ReadState after structured setup turn found=%v err=%v", found, err)
+	}
+	if state.CalibrationAnswers != 0 {
+		t.Fatalf("structured loop setup turn recorded calibration state = %+v", state)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("Pause if source quality is weak or weekly report is complete.", agent.TurnOptions{UserMode: agent.UserModeNormal})
 	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
 	if err != nil || !found {
 		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
@@ -2100,7 +2108,7 @@ func TestSessionRecordsLoopProtocolAnswerFromPendingCalibrationState(t *testing.
 		!strings.Contains(state.LastCalibrationQuestion, "implementation language") {
 		t.Fatalf("pending calibration question state = %+v", state)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("Python")
+	s.recordLoopProtocolCalibrationAnswerIfReady("Python", agent.TurnOptions{})
 	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-pending-state"))
 	if err != nil || !found {
 		t.Fatalf("ReadState after answer found=%v err=%v", found, err)
@@ -2201,7 +2209,7 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterActivationScopeQuestion
 	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, "草案已就绪。在激活之前，我需要确认：分析范围和产出频率是什么？"); err != nil {
 		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("全面覆盖；每天更新一次，每周进行一次深度分析。")
+	s.recordLoopProtocolCalibrationAnswerIfReady("全面覆盖；每天更新一次，每周进行一次深度分析。", agent.TurnOptions{})
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-activation-scope"))
 	if err != nil || !found {
 		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
@@ -2225,7 +2233,7 @@ func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing
 	if err := s.ensureLoopProtocolInitialized("Set up long-running subnet analysis."); err != nil {
 		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("Please check whether the subnet page is reachable.")
+	s.recordLoopProtocolCalibrationAnswerIfReady("Please check whether the subnet page is reachable.", agent.TurnOptions{})
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-strict"))
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
@@ -2236,7 +2244,7 @@ func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing
 	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, "什么条件应该暂停这个 loop？"); err != nil {
 		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("当网页证据不足或者用户目标改变时暂停。")
+	s.recordLoopProtocolCalibrationAnswerIfReady("当网页证据不足或者用户目标改变时暂停。", agent.TurnOptions{})
 	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-strict"))
 	if err != nil || !found {
 		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)

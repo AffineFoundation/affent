@@ -219,6 +219,7 @@ type Loop struct {
 }
 
 const (
+	UserModeNormal      = "normal"
 	UserModePlanOnly    = "plan_only"
 	UserModeExecutePlan = "execute_plan"
 	UserModeLoopSetup   = "loop_setup"

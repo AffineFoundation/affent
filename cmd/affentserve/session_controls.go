@@ -20,7 +20,7 @@ const (
 )
 
 const (
-	sessionMessageModeNormal      = "normal"
+	sessionMessageModeNormal      = agent.UserModeNormal
 	sessionMessageModePlanOnly    = agent.UserModePlanOnly
 	sessionMessageModeExecutePlan = agent.UserModeExecutePlan
 	sessionMessageModeLoopSetup   = agent.UserModeLoopSetup
