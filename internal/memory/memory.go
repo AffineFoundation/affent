@@ -469,7 +469,7 @@ func (s *FileMemoryStore) Snapshot() string {
 // Add appends content to a bucket. Topic is the per-target sub-bucket
 // for target=memory ("" or "general" → topics/general.md;
 // "core" → core.md; anything else → topics/<topic>.md). Ignored for
-// target=user. Byte-identical duplicates are accepted as no-op
+// target=user. Normalized duplicate entries are accepted as no-op
 // success; over-limit additions return OK=false with current Entries.
 func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (MemoryResponse, error) {
 	if err := validateTarget(target); err != nil {
@@ -602,6 +602,19 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	}
 
 	newEntries := append([]string{}, entries...)
+	newContentKey := normalizedMemoryContentKey(newContent)
+	for i, entry := range entries {
+		if i == idx {
+			continue
+		}
+		if normalizedMemoryContentKey(entryContent(entry)) == newContentKey {
+			newEntries = append(newEntries[:idx], newEntries[idx+1:]...)
+			if err := writeMemoryFile(path, newEntries); err != nil {
+				return MemoryResponse{}, err
+			}
+			return s.respondLocked(target, topic, true, "entry already exists (removed duplicate)", newEntries, nil), nil
+		}
+	}
 	// Re-stamp on replace so the entry's freshness reflects this
 	// update, not the original creation. Helps the model see "I just
 	// re-confirmed this fact" vs "this is from 6 months ago".

@@ -93,6 +93,33 @@ func TestMemoryAddRejectsNormalizedDuplicate(t *testing.T) {
 	}
 }
 
+func TestMemoryReplaceRemovesNormalizedDuplicate(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.Add(TargetMemory, "", "Project uses Go 1.22 with sqlc"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add(TargetMemory, "", "Deploys use blue green rollout"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := s.Replace(TargetMemory, "", "blue green", " project   uses go 1.22\nwith SQLC ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("replace duplicate should not error: %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "duplicate") {
+		t.Fatalf("expected duplicate message, got %q", resp.Message)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("replace to duplicate must remove old entry, got %+v", resp.Entries)
+	}
+	if !strings.Contains(resp.Entries[0], "Project uses Go 1.22 with sqlc") ||
+		strings.Contains(resp.Entries[0], "blue green") {
+		t.Fatalf("unexpected entries after duplicate replace: %+v", resp.Entries)
+	}
+}
+
 func TestMemoryAddOverflow(t *testing.T) {
 	s := newTestStore(t)
 	s.TopicCharLimit = 50
