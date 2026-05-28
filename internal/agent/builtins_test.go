@@ -1904,6 +1904,11 @@ func TestSkillToolRejectsUnknownAndUnusedArgs(t *testing.T) {
 			want: "body, name are not used when action=confirm_install",
 		},
 		{
+			name: "propose_url ignores body",
+			args: `{"action":"propose_url","source":"https://github.com/example/skills/tree/main/demo","body":"AFFENT ACTIVE SKILL: demo"}`,
+			want: "body is not used when action=propose_url",
+		},
+		{
 			name: "install ignores proposal id",
 			args: `{"action":"install","name":"demo","body":"AFFENT ACTIVE SKILL: demo","proposal_id":"1234567890abcdef"}`,
 			want: "proposal_id is not used when action=install",
