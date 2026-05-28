@@ -1068,6 +1068,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "web_search", Arg: "query", Substring: "Bittensor", Min: 2},
 		},
+		ForbiddenToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "commit hash"},
+		},
 		RequiredTruncatedResults: []string{"shell"},
 		RequiredResultArtifacts:  []string{"shell"},
 		RequiredToolOrder: []ToolOrderRequirement{
@@ -1154,6 +1157,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_contains:skill:AFFENT ACTIVE SKILL",
 		"tool_result_contains:subagent_run:report",
 		"tool_arg_contains_at_least:web_search:query:Bittensor:2",
+		"tool_arg_lacks:memory:content:commit hash",
 		"tool_result_truncated:shell",
 		"tool_result_artifact:shell",
 		"tool_called_before:read_file->edit_file",
@@ -1255,6 +1259,20 @@ func TestBatchScenarioChecks_ToolArgContainsDefaultsToOne(t *testing.T) {
 	}
 	if !strings.HasPrefix(checks[1].Name, "tool_arg_contains_at_least:web_search:query:subnet 88:1") {
 		t.Fatalf("default min check name = %q", checks[1].Name)
+	}
+}
+
+func TestBatchScenarioChecks_ForbiddenToolArgContains(t *testing.T) {
+	checks := BatchScenarioChecks(BatchScenario{
+		ForbiddenToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "commit hash"},
+		},
+	})
+	if len(checks) != 2 {
+		t.Fatalf("checks count = %d, want turn-end + forbidden arg check: %+v", len(checks), checks)
+	}
+	if !strings.HasPrefix(checks[1].Name, "tool_arg_lacks:memory:content:commit hash") {
+		t.Fatalf("forbidden arg check name = %q", checks[1].Name)
 	}
 }
 
@@ -1837,6 +1855,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	} {
 		if !toolArgRequirementContains(integrated.RequiredToolArgContains, want) {
 			t.Fatalf("integrated memory recovery RequiredToolArgContains = %#v, want %#v", integrated.RequiredToolArgContains, want)
+		}
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "memory", Arg: "content", Substring: "iteration 1"},
+		{Tool: "memory", Arg: "content", Substring: "iteration 2"},
+		{Tool: "memory", Arg: "content", Substring: "commit hash"},
+		{Tool: "memory", Arg: "content", Substring: "push result"},
+	} {
+		if !toolArgRequirementContains(integrated.ForbiddenToolArgContains, want) {
+			t.Fatalf("integrated memory recovery ForbiddenToolArgContains = %#v, want %#v", integrated.ForbiddenToolArgContains, want)
 		}
 	}
 	for _, field := range []string{"memory_updates", "memory_update_add", "memory_search_calls", "session_search_calls", "session_search_results"} {

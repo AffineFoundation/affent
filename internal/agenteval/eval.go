@@ -187,6 +187,7 @@ type BatchScenario struct {
 	ForbiddenFinalText                      []string
 	RequiredToolResultText                  map[string][]string
 	RequiredToolArgContains                 []ToolArgContainsRequirement
+	ForbiddenToolArgContains                []ToolArgContainsRequirement
 	RequiredTruncatedResults                []string
 	RequiredResultArtifacts                 []string
 	RequiredToolOrder                       []ToolOrderRequirement
@@ -381,6 +382,7 @@ type DebugScenarioExpectations struct {
 	RequireLoopProtocolFullAfterCompact     bool                                  `json:"require_loop_protocol_full_after_compaction,omitempty"`
 	RequiredToolResultText                  map[string][]string                   `json:"required_tool_result_text,omitempty"`
 	RequiredToolArgContains                 []DebugToolArgContainsRequirement     `json:"required_tool_arg_contains,omitempty"`
+	ForbiddenToolArgContains                []DebugToolArgContainsRequirement     `json:"forbidden_tool_arg_contains,omitempty"`
 	RequiredSourceAccess                    []DebugSourceAccessRequirement        `json:"required_source_access,omitempty"`
 	RequiredSessionSearch                   []DebugSessionSearchRequirement       `json:"required_session_search,omitempty"`
 	RequiredRecentSessionSearch             []DebugRecentSessionSearchRequirement `json:"required_recent_session_search,omitempty"`
@@ -591,6 +593,9 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 		add(agent.SessionSearchToolName)
 	}
 	for _, req := range exp.RequiredToolArgContains {
+		add(req.Tool)
+	}
+	for _, req := range exp.ForbiddenToolArgContains {
 		add(req.Tool)
 	}
 	for _, req := range exp.RequiredToolOrder {
@@ -1594,6 +1599,15 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Min:       req.Min,
 		})
 	}
+	forbiddenArgs := make([]DebugToolArgContainsRequirement, 0, len(s.ForbiddenToolArgContains))
+	for _, req := range s.ForbiddenToolArgContains {
+		forbiddenArgs = append(forbiddenArgs, DebugToolArgContainsRequirement{
+			Tool:      req.Tool,
+			Arg:       req.Arg,
+			Substring: req.Substring,
+			Min:       req.Min,
+		})
+	}
 	sourceReqs := make([]DebugSourceAccessRequirement, 0, len(s.RequiredSourceAccess))
 	for _, req := range s.RequiredSourceAccess {
 		sourceReqs = append(sourceReqs, DebugSourceAccessRequirement{
@@ -1728,6 +1742,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequireLoopProtocolFullAfterCompact:     s.RequireLoopProtocolFullAfterCompact,
 		RequiredToolResultText:                  cloneStringSliceMap(s.RequiredToolResultText),
 		RequiredToolArgContains:                 reqArgs,
+		ForbiddenToolArgContains:                forbiddenArgs,
 		RequiredSourceAccess:                    sourceReqs,
 		RequiredSessionSearch:                   sessionSearchReqs,
 		RequiredRecentSessionSearch:             recentSessionSearchReqs,
@@ -2407,6 +2422,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 			min = 1
 		}
 		checks = append(checks, ToolArgContainsAtLeast(req.Tool, req.Arg, req.Substring, min))
+	}
+	for _, req := range scenario.ForbiddenToolArgContains {
+		checks = append(checks, ToolArgLacksSubstring(req.Tool, req.Arg, req.Substring))
 	}
 	for _, tool := range scenario.RequiredTruncatedResults {
 		checks = append(checks, ToolResultTruncated(tool))

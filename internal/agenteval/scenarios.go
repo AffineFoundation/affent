@@ -3196,6 +3196,12 @@ if __name__ == "__main__":
 			{Tool: "memory", Arg: "content", Substring: "JSON"},
 			{Tool: "session_search", Arg: "query", Substring: "INTEGRATED-HANDOFF-26"},
 		},
+		ForbiddenToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "content", Substring: "iteration 1"},
+			{Tool: "memory", Arg: "content", Substring: "iteration 2"},
+			{Tool: "memory", Arg: "content", Substring: "commit hash"},
+			{Tool: "memory", Arg: "content", Substring: "push result"},
+		},
 		RequiredToolResultText: map[string][]string{
 			"memory": {
 				"AUTO-MEM-64",

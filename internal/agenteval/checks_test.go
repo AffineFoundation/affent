@@ -112,6 +112,28 @@ func TestToolArgContainsAtLeast(t *testing.T) {
 	}
 }
 
+func TestToolArgLacksSubstring(t *testing.T) {
+	trace := Trace{
+		Tools: []ToolCall{
+			{CallID: "m1", Tool: "memory", Args: map[string]any{"content": "Durable JSON outputs include AUTO-MEM-64"}},
+			{CallID: "m2", Tool: "memory", Args: map[string]any{"content": "temporary commit hash abc123"}},
+			{CallID: "s1", Tool: "session_search", Args: map[string]any{"query": "commit hash"}},
+		},
+	}
+	if res := ToolArgLacksSubstring("memory", "content", "push result").Eval(trace); !res.Pass {
+		t.Fatalf("expected unrelated forbidden substring to pass: %+v", res)
+	}
+	res := ToolArgLacksSubstring("memory", "content", "commit hash").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected memory content pollution check to fail")
+	}
+	for _, want := range []string{"memory", "content", "commit hash", "m2"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail missing %q: %s", want, res.Detail)
+		}
+	}
+}
+
 func TestToolCalledAtMost(t *testing.T) {
 	trace := Trace{
 		Tools: []ToolCall{

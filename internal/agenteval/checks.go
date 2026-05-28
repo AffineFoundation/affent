@@ -238,6 +238,45 @@ func ToolArgContainsAtLeast(toolName, argName, substr string, min int) Check {
 	}
 }
 
+// ToolArgLacksSubstring passes when no calls to toolName have argName
+// containing substr. It is useful for pollution guards, for example ensuring
+// memory writes do not persist one-turn progress details.
+func ToolArgLacksSubstring(toolName, argName, substr string) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_arg_lacks:%s:%s:%s", toolName, argName, previewSubstr(substr, 24)),
+		Eval: func(t Trace) CheckResult {
+			var matches []string
+			var observed []string
+			for _, c := range t.Tools {
+				if c.Tool != toolName {
+					continue
+				}
+				value, ok := c.Args[argName]
+				if !ok {
+					if len(observed) < 3 {
+						observed = append(observed, fmt.Sprintf("%s=<missing>", c.CallID))
+					}
+					continue
+				}
+				text := fmt.Sprint(value)
+				if len(observed) < 3 {
+					observed = append(observed, fmt.Sprintf("%s=%q", c.CallID, previewSubstr(text, 80)))
+				}
+				if strings.Contains(text, substr) {
+					matches = append(matches, c.CallID)
+				}
+			}
+			if len(matches) == 0 {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s.%s lacks %q; observed=%v", toolName, argName, substr, observed)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected no %q call arg %q containing %q, matched call(s): %v", toolName, argName, substr, matches),
+			}
+		},
+	}
+}
+
 func ToolCalledAtMost(toolName string, max int) Check {
 	return ToolCalledAtMostMatching(toolName, max, nil)
 }

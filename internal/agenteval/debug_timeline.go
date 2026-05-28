@@ -672,6 +672,11 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- required_tool_arg: `%s.%s` contains `%s` min=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), min)
 		}
 	}
+	if len(exp.ForbiddenToolArgContains) > 0 {
+		for _, req := range exp.ForbiddenToolArgContains {
+			fmt.Fprintf(b, "- forbidden_tool_arg: `%s.%s` contains `%s`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160))
+		}
+	}
 	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		var parts []string
 		if exp.RequiredContextCompactions > 0 {
@@ -739,6 +744,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.RequireNoPlanErrors ||
 		len(exp.RequiredToolResultText) > 0 ||
 		len(exp.RequiredToolArgContains) > 0 ||
+		len(exp.ForbiddenToolArgContains) > 0 ||
 		len(exp.RequiredSourceAccess) > 0 ||
 		len(exp.RequiredRecentSessionSearch) > 0 ||
 		len(exp.RequiredFinalText) > 0 ||
