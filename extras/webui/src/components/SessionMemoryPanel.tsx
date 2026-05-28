@@ -65,13 +65,14 @@ export function SessionMemoryPanel({
     return filtered.reduce((sum, bucket) => sum + memoryBucketMatchingEntries(bucket, trimmedQuery).length, 0);
   }, [filtered, trimmedQuery]);
   const hasSearch = buckets.length > 0;
+  const hasMemorySnapshot = !!memory;
   const entryCount = buckets.reduce((sum, bucket) => sum + bucket.entry_count, 0);
   const topicCount = memory?.topics?.length ?? 0;
   const summary = noSession
     ? "Session memory unavailable"
     : loading
       ? "Loading memory"
-      : error
+      : error && !hasMemorySnapshot
         ? "Memory unavailable"
         : memory?.has_memory
           ? `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`
@@ -81,7 +82,9 @@ export function SessionMemoryPanel({
     : loading
       ? "Reading durable buckets."
       : error
-        ? panelErrorSummary("Memory API", error)
+        ? hasMemorySnapshot
+          ? `${panelErrorSummary("Memory API", error)} · showing last loaded memory`
+          : panelErrorSummary("Memory API", error)
         : memory?.has_memory
           ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalMemoryChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";
@@ -156,7 +159,7 @@ export function SessionMemoryPanel({
             ) : null}
           </div>
         ) : null}
-        {!loading && error && onUseAsDraft ? (
+        {!loading && error && !hasMemorySnapshot && onUseAsDraft ? (
           <>
             <div className="session-runtime-fallback" data-testid="session-memory-fallback">
               <strong>Memory can still be prepared</strong>
@@ -177,7 +180,7 @@ export function SessionMemoryPanel({
           </>
         ) : null}
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
-        {!loading && !error && !noSession ? (
+        {!loading && !noSession && (!error || hasMemorySnapshot) ? (
           <>
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
@@ -412,7 +415,7 @@ function MemoryDraftForm({
         {busy ? "Saving" : submitLabel}
       </button>
       {status?.message ? (
-        <span className="session-memory-form-status" data-tone={status.state === "error" ? "error" : "success"}>{status.message}</span>
+        <span className="session-memory-form-status" data-tone={status.state === "error" ? "error" : "success"} role="status" aria-live="polite">{status.message}</span>
       ) : null}
     </form>
   );

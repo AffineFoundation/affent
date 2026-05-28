@@ -127,15 +127,20 @@ type SkillsState =
 type MemoryState =
   | { state: "idle" }
   | { state: "empty" }
-  | { state: "loading" }
+  | { state: "loading"; memory?: SessionMemoryResponse }
   | { state: "ready"; memory: SessionMemoryResponse }
-  | { state: "error"; error: string };
+  | { state: "error"; error: string; memory?: SessionMemoryResponse };
 
 type RuntimeStatsState =
   | { state: "idle" }
   | { state: "loading" }
   | { state: "ready"; stats: ServerStatsResponse }
   | { state: "error"; error: string };
+
+function memoryStateSnapshot(state: MemoryState): SessionMemoryResponse | undefined {
+  if (state.state === "ready" || state.state === "loading" || state.state === "error") return state.memory;
+  return undefined;
+}
 
 type AccountSettingsState =
   | { state: "idle" }
@@ -483,14 +488,14 @@ export function App() {
     }
     if (!workbenchOpen || workbenchTab !== "memory") return;
     const ac = new AbortController();
-    setMemoryState({ state: "loading" });
+    setMemoryState((current) => ({ state: "loading", memory: memoryStateSnapshot(current) }));
     getSessionMemory(client, selectedSessionId, ac.signal)
       .then((memory) => {
         setMemoryState({ state: "ready", memory });
       })
       .catch((err) => {
         if (isAbortError(err)) return;
-        setMemoryState({ state: "error", error: formatError(err) });
+        setMemoryState((current) => ({ state: "error", error: formatError(err), memory: memoryStateSnapshot(current) }));
       });
     return () => ac.abort();
   }, [client, demoActive, memoryUpdateCount, selectedSessionId, workbenchOpen, workbenchTab]);
@@ -650,12 +655,12 @@ export function App() {
       setMemoryState({ state: "empty" });
       return;
     }
-    setMemoryState({ state: "loading" });
+    setMemoryState((current) => ({ state: "loading", memory: memoryStateSnapshot(current) }));
     try {
       const memory = await getSessionMemory(client, selectedSessionId);
       setMemoryState({ state: "ready", memory });
     } catch (err) {
-      setMemoryState({ state: "error", error: formatError(err) });
+      setMemoryState((current) => ({ state: "error", error: formatError(err), memory: memoryStateSnapshot(current) }));
       throw err;
     }
   }, [client, selectedSessionId]);
@@ -665,14 +670,14 @@ export function App() {
       setMemoryState({ state: "empty" });
       throw new Error("Open a saved chat before saving memory.");
     }
-    setMemoryState({ state: "loading" });
+    setMemoryState((current) => ({ state: "loading", memory: memoryStateSnapshot(current) }));
     try {
       const memory = await addSessionMemory(client, selectedSessionId, request);
       setMemoryState({ state: "ready", memory });
       setSessions((current) => current.map((item) => item.id === selectedSessionId ? { ...item, has_memory: true } : item));
       return memory;
     } catch (err) {
-      setMemoryState({ state: "error", error: formatError(err) });
+      setMemoryState((current) => ({ state: "error", error: formatError(err), memory: memoryStateSnapshot(current) }));
       throw err;
     }
   }, [client, selectedSessionId]);
@@ -682,14 +687,14 @@ export function App() {
       setMemoryState({ state: "empty" });
       throw new Error("Open a saved chat before editing memory.");
     }
-    setMemoryState({ state: "loading" });
+    setMemoryState((current) => ({ state: "loading", memory: memoryStateSnapshot(current) }));
     try {
       const memory = await removeSessionMemory(client, selectedSessionId, request);
       setMemoryState({ state: "ready", memory });
       setSessions((current) => current.map((item) => item.id === selectedSessionId ? { ...item, has_memory: memory.has_memory } : item));
       return memory;
     } catch (err) {
-      setMemoryState({ state: "error", error: formatError(err) });
+      setMemoryState((current) => ({ state: "error", error: formatError(err), memory: memoryStateSnapshot(current) }));
       throw err;
     }
   }, [client, selectedSessionId]);
@@ -699,14 +704,14 @@ export function App() {
       setMemoryState({ state: "empty" });
       throw new Error("Open a saved chat before editing memory.");
     }
-    setMemoryState({ state: "loading" });
+    setMemoryState((current) => ({ state: "loading", memory: memoryStateSnapshot(current) }));
     try {
       const memory = await replaceSessionMemory(client, selectedSessionId, request);
       setMemoryState({ state: "ready", memory });
       setSessions((current) => current.map((item) => item.id === selectedSessionId ? { ...item, has_memory: memory.has_memory } : item));
       return memory;
     } catch (err) {
-      setMemoryState({ state: "error", error: formatError(err) });
+      setMemoryState((current) => ({ state: "error", error: formatError(err), memory: memoryStateSnapshot(current) }));
       throw err;
     }
   }, [client, selectedSessionId]);
@@ -826,9 +831,10 @@ export function App() {
       try {
         const resp = await listSessions(client, { limit: 100, signal: ac.signal });
         if (ac.signal.aborted) return;
-        setSessions(resp.sessions);
+        const mergedSessions = mergeSessionIndex(resp.sessions, sessionsRef.current);
+        setSessions(mergedSessions);
         const requestedSessionId = initialUrlSessionIdRef.current;
-        const activeSessionId = resp.sessions.find((s) => s.active)?.id;
+        const activeSessionId = mergedSessions.find((s) => s.active)?.id;
         const nextSelected = requestedSessionId ?? activeSessionId;
         setSelectedSessionId((current) => current ?? nextSelected);
         if (!requestedSessionId) setSession(initialSessionState());
@@ -836,13 +842,13 @@ export function App() {
           setStatus({
             state: "loading",
             label: "Loading chat",
-            detail: loadingSessionDetail(nextSelected, resp.sessions),
+            detail: loadingSessionDetail(nextSelected, mergedSessions),
           });
         } else {
           setStatus({
             state: "connected",
             label: "Connected",
-            detail: sessionListDetail(resp.sessions),
+            detail: sessionListDetail(mergedSessions),
           });
         }
         setSessionIndexReady(true);
@@ -1606,7 +1612,7 @@ export function App() {
   function renderMemoryPanel(defaultOpen = false) {
     return (
       <SessionMemoryPanel
-        memory={memoryState.state === "ready" ? memoryState.memory : undefined}
+        memory={memoryStateSnapshot(memoryState)}
         latestUpdate={latestMemoryUpdate}
         loading={memoryState.state === "loading"}
         error={memoryState.state === "error" ? memoryState.error : undefined}
@@ -2391,6 +2397,22 @@ function sessionListDetail(sessions: readonly SessionSummary[]): string {
   const active = sessions.filter((session) => session.active).length;
   if (active > 0) return `${active} live · ${sessions.length} total`;
   return `${sessions.length} saved ${sessions.length === 1 ? "chat" : "chats"}`;
+}
+
+function mergeSessionIndex(serverSessions: readonly SessionSummary[], currentSessions: readonly SessionSummary[]): SessionSummary[] {
+  const serverIds = new Set(serverSessions.map((session) => session.id));
+  const optimistic = currentSessions.filter((session) => !serverIds.has(session.id) && shouldPreserveOptimisticSession(session));
+  return [...optimistic, ...serverSessions];
+}
+
+function shouldPreserveOptimisticSession(session: SessionSummary): boolean {
+  return Boolean(
+    session.active ||
+    session.has_conversation ||
+    session.has_events ||
+    session.latest_user_message?.trim() ||
+    session.topic_user_message?.trim(),
+  );
 }
 
 function demoDelayFor(event: RawEvent): number {

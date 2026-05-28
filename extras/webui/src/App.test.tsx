@@ -579,6 +579,57 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
 
+  it("keeps a newly submitted chat in the session list when the initial index returns stale", async () => {
+    const user = userEvent.setup();
+    const sessionIndex = deferred<Response>();
+    const messageResponse = deferred<Response>();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") return sessionIndex.promise;
+      if (url === "/v1/sessions" && init?.method === "POST") {
+        return jsonResponse({
+          session: {
+            id: "new-1",
+            active: true,
+            durable: true,
+            has_conversation: false,
+            has_events: false,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        });
+      }
+      if (url === "/v1/sessions/new-1/messages" && init?.method === "POST") return messageResponse.promise;
+      if (url === "/v1/sessions/new-1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "new-1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/new-1/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText("Message Affent...");
+    await user.type(input, "summarize the repo");
+    await user.keyboard("{Enter}");
+
+    expect(await screen.findByTestId("pending-turn")).toHaveTextContent("summarize the repo");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("repo");
+
+    sessionIndex.resolve(jsonResponse({ sessions: [], has_more: false }));
+    await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Loading"));
+
+    expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("repo");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("New chat");
+    expect(screen.queryByText("What should we work on?")).toBeNull();
+
+    messageResponse.resolve(jsonResponse({ session_id: "new-1", turn_id: "t1" }));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/new-1/messages", expect.objectContaining({ method: "POST" })));
+  });
+
   it("renders plan tool state when the durable plan endpoint has no snapshot yet", async () => {
     const planResult = JSON.stringify({
       version: 1,

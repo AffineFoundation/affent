@@ -267,6 +267,38 @@ describe("SessionMemoryPanel", () => {
     expect(panel).not.toHaveTextContent("No matching memory.");
   });
 
+  it("keeps the last loaded memory visible when a later API action fails", () => {
+    render(
+      <SessionMemoryPanel
+        defaultOpen
+        error="memory storage is read-only"
+        memory={{
+          session_id: "s1",
+          has_memory: true,
+          topics: [
+            {
+              target: "memory",
+              topic: "research",
+              entries: ["keep current evidence rule"],
+              entry_count: 1,
+              chars_used: 26,
+              chars_limit: 4400,
+              percent: 1,
+            },
+          ],
+        }}
+        onAddMemory={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("1 entry");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Memory API failed: memory storage is read-only · showing last loaded memory");
+    expect(screen.getByRole("alert")).toHaveTextContent("memory storage is read-only");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("keep current evidence rule");
+    expect(screen.getByTestId("session-memory-form")).toBeInTheDocument();
+    expect(screen.queryByTestId("session-memory-fallback")).toBeNull();
+  });
+
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
     const onUseAsDraft = vi.fn();
     const diagnostic = "API route /v1/sessions/s1/memory returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
