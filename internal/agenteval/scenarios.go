@@ -1280,6 +1280,9 @@ Resume only the active persisted plan step and preserve current evidence across 
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{Mode: "full", PlanLabelContains: "plan:1/3:active", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "read current launch evidence", CurrentSituation: "docs/current-plan.md"},
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
+		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "read_file", Arg: "path", Substring: "docs/current-plan.md"},
 			{Tool: "plan", Arg: "action", Substring: "update"},
@@ -1787,6 +1790,9 @@ If direct session search misses, use recent-session anchors and durable memory b
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{Mode: "full", CurrentSituation: "recent-session anchors then memory"},
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
+		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "session_search", Arg: "query", Substring: "ZETAABSENT404"},
 			{Tool: "memory", Arg: "action", Substring: "search"},
@@ -2063,6 +2069,9 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{Mode: "full", CurrentSituation: "current/*.md handoff files", LastTurnEndReason: "completed", MinLastTurnToolRequests: 5},
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 2,
+		},
 		RequireLoopProtocolFullAfterCompact: true,
 		RequiredFinalText: []string{
 			"COMPRESS-PHASE-09",
@@ -2325,6 +2334,9 @@ func liveWebResearchCheckpointEvidenceScenario() BatchScenario {
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 1,
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
+		},
 		RequiredToolStatsAtLeast: map[string]int{
 			"source_access_results":  1,
 			"source_access_verified": 1,
@@ -2424,6 +2436,9 @@ func liveWebResearchCheckpointDelegatedEvidenceScenario() BatchScenario {
 		RequiredLoopProtocolFeeds: 1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
 		},
 		RequiredFinalText: []string{
 			"RESEARCH-DELEGATED-58",

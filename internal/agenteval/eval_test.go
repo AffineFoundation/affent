@@ -3425,6 +3425,17 @@ func TestBuiltinGitCommitPushScenariosRequireLongrunPathAndTokenGuards(t *testin
 	}
 }
 
+func TestBuiltinLoopProtocolFeedScenariosRequireTurnCheckpoints(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if scenario.RequiredLoopProtocolFeeds == 0 {
+			continue
+		}
+		if got := scenario.RequiredTraceEventCounts["loop.turn_checkpoint"]; got < scenario.RequiredLoopProtocolFeeds {
+			t.Fatalf("%s requires %d loop protocol feed(s) but only %d loop turn checkpoint(s); trace checkpoints must cover every feed-bearing turn", scenario.Name, scenario.RequiredLoopProtocolFeeds, got)
+		}
+	}
+}
+
 func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresDurableMemoryWrite(scenario) || !scenarioRequiresGitCommitAndPush(scenario) {
