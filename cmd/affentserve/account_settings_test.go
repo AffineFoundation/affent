@@ -143,6 +143,30 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	}
 }
 
+func TestAccountSettingsSSHKeyUsesConfiguredAccountRoot(t *testing.T) {
+	accountRoot := filepath.Join(t.TempDir(), "isolated-account")
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool.cfg.AccountRoot = accountRoot
+
+	info, err := ensureAccountSSHKey(pool)
+	if err != nil {
+		t.Fatalf("ensure ssh key: %v", err)
+	}
+	if !info.Exists || !info.Created {
+		t.Fatalf("ssh info = %+v, want created key", info)
+	}
+	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if !strings.HasPrefix(privatePath, accountRoot+string(os.PathSeparator)) {
+		t.Fatalf("private key path = %q, want under account root %q", privatePath, accountRoot)
+	}
+	if _, err := os.Stat(privatePath); err != nil {
+		t.Fatalf("stat private key: %v", err)
+	}
+	if _, err := os.Stat(publicPath); err != nil {
+		t.Fatalf("stat public key: %v", err)
+	}
+}
+
 func TestAccountSettingsEnvOverridesGeneratedGitSSHCommand(t *testing.T) {
 	t.Setenv("GIT_SSH_COMMAND", "")
 	pool := newPoolWithMemoryRoot(t, t.TempDir())

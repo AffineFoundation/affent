@@ -765,6 +765,9 @@ func syncAccountDir(path string) {
 }
 
 func accountSettingsDir(pool *SessionPool) string {
+	if pool != nil && strings.TrimSpace(pool.cfg.AccountRoot) != "" {
+		return pool.cfg.AccountRoot
+	}
 	return filepath.Join(pool.sessionRootPath(), ".affentserve")
 }
 

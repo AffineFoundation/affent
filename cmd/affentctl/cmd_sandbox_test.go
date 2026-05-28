@@ -261,6 +261,8 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	body := string(raw)
 	for _, want := range []string{
 		"IMAGE_WORKSPACE ?= $(CURDIR)/.tmp/runtime-workspace",
+		"SERVE_ACCOUNT_DIR ?= $(CURDIR)/.tmp/runtime-account",
+		"SERVE_ACCOUNT_ROOT ?= /account",
 		"IMAGE_BUILD_REVISION ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)",
 		"IMAGE_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)",
 		"IMAGE_BUILD_ARGS ?= --build-arg AFFENT_BUILD_REVISION=\"$(IMAGE_BUILD_REVISION)\" --build-arg AFFENT_BUILD_DATE=\"$(IMAGE_BUILD_DATE)\"",
@@ -289,6 +291,8 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SERVE_HEALTH_ATTEMPTS ?= 30",
 		"SERVE_HEALTH_INTERVAL ?= 1",
 		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
+		`--account-dir "$(SERVE_ACCOUNT_DIR)"`,
+		`--account-root "$(SERVE_ACCOUNT_ROOT)"`,
 		"image-run: image-build",
 		"image-serve: image-build",
 		"image-serve-up:",
@@ -349,7 +353,8 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`actual_listen=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.listen"}}'`,
 		`actual_serve_workspace_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.workspace_root"}}'`,
 		`actual_serve_memory_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.memory_root"}}'`,
-		`was created with listen=$$actual_listen workspace_root=$$actual_serve_workspace_root memory_root=$$actual_serve_memory_root`,
+		`actual_serve_account_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.account_root"}}'`,
+		`was created with listen=$$actual_listen workspace_root=$$actual_serve_workspace_root memory_root=$$actual_serve_memory_root account_root=$$actual_serve_account_root`,
 		`run make image-serve-restart to recreate it with the requested affentserve paths`,
 		`expected_serve_builtins=true`,
 		`expected_serve_eval_mode="$(AFFENTSERVE_EVAL_MODE)"`,
@@ -396,7 +401,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`$(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)")`,
 		`$(if $(SERVE_MODEL),--model "$(SERVE_MODEL)")`,
 		`--detach --rm=false --publish "$(SERVE_PUBLISH)"`,
-		"affentserve --listen \"$(SERVE_LISTEN)\" $(if $(SERVE_BASE_URL),--base-url \"$(SERVE_BASE_URL)\") $(if $(SERVE_API_KEY),--api-key \"$(SERVE_API_KEY)\") $(if $(SERVE_MODEL),--model \"$(SERVE_MODEL)\") --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)",
+		"affentserve --listen \"$(SERVE_LISTEN)\" $(if $(SERVE_BASE_URL),--base-url \"$(SERVE_BASE_URL)\") $(if $(SERVE_API_KEY),--api-key \"$(SERVE_API_KEY)\") $(if $(SERVE_MODEL),--model \"$(SERVE_MODEL)\") --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --account-root \"$(SERVE_ACCOUNT_ROOT)\" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)",
 		`args="--eval-mode"`,
 		`browser) args="$$args --browser=true"`,
 		`browser-screenshot) args="$$args --browser=true --browser-screenshot=true"`,
@@ -506,7 +511,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
 		},
 		"image-serve": {
-			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false`,
+			`image run --workspace "$(IMAGE_WORKSPACE)" --account-dir "$(SERVE_ACCOUNT_DIR)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false`,
 		},
 		"image-serve-restart": {
 			`$(MAKE) image-serve`,
@@ -988,20 +993,22 @@ func TestDefaultRuntimeRunOptionsUseMeaningfulDefaults(t *testing.T) {
 func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 	t.Setenv("AFFENTCTL_API_KEY", "host-key")
 	workspace := filepath.Join(t.TempDir(), "runtime ws")
+	accountDir := filepath.Join(t.TempDir(), "account")
 	runner := &fakeCommandRunner{}
 	opts := runtimeRunOptions{
-		Name:      "affent-runtime",
-		Image:     "example/affent:local",
-		Workspace: workspace,
-		Memory:    "768m",
-		CPUs:      "1.5",
-		PIDsLimit: "256",
-		User:      "123:456",
-		TTY:       true,
-		Remove:    true,
-		Env:       []string{"AFFENTCTL_API_KEY=explicit-key", "EXTRA_FLAG=1"},
-		Publish:   []string{"7777:7777"},
-		Command:   []string{"affentctl", "run", "--prompt", "hi"},
+		Name:       "affent-runtime",
+		Image:      "example/affent:local",
+		Workspace:  workspace,
+		AccountDir: accountDir,
+		Memory:     "768m",
+		CPUs:       "1.5",
+		PIDsLimit:  "256",
+		User:       "123:456",
+		TTY:        true,
+		Remove:     true,
+		Env:        []string{"AFFENTCTL_API_KEY=explicit-key", "EXTRA_FLAG=1"},
+		Publish:    []string{"7777:7777"},
+		Command:    []string{"affentctl", "run", "--prompt", "hi"},
 	}
 	if err := runRuntimeImage(opts, runner); err != nil {
 		t.Fatalf("runRuntimeImage: %v", err)
@@ -1031,6 +1038,7 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 		"--label", runtimeLabelUser + "=123:456",
 		"--label", runtimeLabelPublish + "=7777:7777",
 		"-v", workspace + ":/workspace",
+		"-v", accountDir + ":/account",
 		"-w", "/workspace",
 		"-t",
 		"--user", "123:456",
@@ -1040,6 +1048,7 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 		"-e", "GOMODCACHE=/workspace/.cache/go-mod",
 		"-e", "NPM_CONFIG_CACHE=/workspace/.cache/npm",
 		"-e", "PIP_CACHE_DIR=/workspace/.cache/pip",
+		"-e", "AFFENTSERVE_ACCOUNT_ROOT=/account",
 		"-e", "AFFENTCTL_API_KEY=explicit-key",
 		"-e", "EXTRA_FLAG=1",
 		"-p", "7777:7777",
@@ -1060,6 +1069,9 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 		if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 			t.Fatalf("persistent dir %s not created; stat=%v err=%v", dir, st, err)
 		}
+	}
+	if st, err := os.Stat(accountDir); err != nil || !st.IsDir() {
+		t.Fatalf("account dir %s not created; stat=%v err=%v", accountDir, st, err)
 	}
 }
 
@@ -1097,18 +1109,21 @@ func TestRunRuntimeImageDetachRunsInBackground(t *testing.T) {
 
 func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "runtime")
+	accountDir := filepath.Join(t.TempDir(), "account")
 	runner := &fakeCommandRunner{}
 	opts := runtimeRunOptions{
-		Image:     "example/affent:local",
-		Workspace: workspace,
-		Memory:    "768m",
-		CPUs:      "1.5",
-		PIDsLimit: "256",
+		Image:      "example/affent:local",
+		Workspace:  workspace,
+		AccountDir: accountDir,
+		Memory:     "768m",
+		CPUs:       "1.5",
+		PIDsLimit:  "256",
 		Command: []string{
 			"affentserve",
 			"--listen=0.0.0.0:7777",
 			"--workspace-root", "/workspace/sessions",
 			"--memory-root", "/workspace/session-state",
+			"--account-root", "/custom-account",
 			"--builtins",
 			"--eval-mode",
 			"--browser=true",
@@ -1125,6 +1140,7 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 		"--label", runtimeLabelServeListen + "=0.0.0.0:7777",
 		"--label", runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
 		"--label", runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+		"--label", runtimeLabelServeAccountRoot + "=/custom-account",
 		"--label", runtimeLabelServeBuiltins + "=true",
 		"--label", runtimeLabelServeEvalMode + "=true",
 		"--label", runtimeLabelServeBrowser + "=true",
@@ -1139,6 +1155,7 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 		if strings.HasPrefix(arg, runtimeLabelServeListen+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeWorkspaceRoot+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeMemoryRoot+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeAccountRoot+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeBuiltins+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeEvalMode+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeBrowser+"=") ||
@@ -1165,6 +1182,7 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 		"--workspace-root", "/workspace/sessions",
 		"--unknown-flag",
 		"--memory-root=/workspace/session-state",
+		"--account-root=/account",
 		"--api-key", "secret-value",
 		"--listen", "0.0.0.0:7777",
 	})
@@ -1173,6 +1191,7 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 		runtimeLabelServeListen + "=0.0.0.0:7777",
 		runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
 		runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+		runtimeLabelServeAccountRoot + "=/account",
 		runtimeLabelServeBuiltins + "=true",
 		runtimeLabelServeEvalMode + "=true",
 		runtimeLabelServeBrowser + "=true",
@@ -1230,6 +1249,7 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 		"AFFENTCTL_EXECUTOR",
 		"AFFENTSERVE_WORKSPACE_ROOT",
 		"AFFENTSERVE_MEMORY_ROOT",
+		"AFFENTSERVE_ACCOUNT_ROOT",
 	} {
 		t.Setenv(name, "host-"+name)
 	}
@@ -1313,6 +1333,7 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 		"AFFENTCTL_EXECUTOR",
 		"AFFENTSERVE_WORKSPACE_ROOT",
 		"AFFENTSERVE_MEMORY_ROOT",
+		"AFFENTSERVE_ACCOUNT_ROOT",
 	} {
 		if _, ok := env[name]; ok {
 			t.Fatalf("%s should not be auto-forwarded from the host into the runtime container", name)
@@ -1339,6 +1360,7 @@ func TestImageRunCmdDefaultsCommandAndLimits(t *testing.T) {
 		t.Fatalf("exit = %d stderr=%s", code, stderr.String())
 	}
 	workspace := filepath.Join(base, "affent", "runtime", "workspace")
+	accountDir := filepath.Join(base, "affent", "runtime", "account")
 	if stdout.String() != "" {
 		t.Fatalf("stdout = %q, want command output only", stdout.String())
 	}
@@ -1353,8 +1375,10 @@ func TestImageRunCmdDefaultsCommandAndLimits(t *testing.T) {
 		"--cpus", defaultSandboxCPUs,
 		"--pids-limit", defaultSandboxPIDs,
 		"-v", workspace + ":/workspace",
+		"-v", accountDir + ":/account",
 		"-e", "GOMEMLIMIT=768MiB",
 		"-e", "GOMAXPROCS=2",
+		"-e", "AFFENTSERVE_ACCOUNT_ROOT=/account",
 		"example/affent:local",
 		"affentctl",
 		"--help",
@@ -1561,6 +1585,7 @@ func TestRunRuntimeImageRejectsManagedEnvBeforeAutoBuild(t *testing.T) {
 		"PIP_CACHE_DIR",
 		"GOMEMLIMIT",
 		"GOMAXPROCS",
+		"AFFENTSERVE_ACCOUNT_ROOT",
 	} {
 		t.Run(name, func(t *testing.T) {
 			workspace := filepath.Join(t.TempDir(), "ws")

@@ -28,6 +28,7 @@ func TestLoadConfig_File(t *testing.T) {
         "listen": "127.0.0.1:9000",
         "base_url": "https://example/v1",
         "model": "demo",
+        "account_root": "/var/lib/affent/account",
         "max_sessions": 8,
         "session_idle_ttl": "30s",
         "enable_browser": true,
@@ -51,6 +52,9 @@ func TestLoadConfig_File(t *testing.T) {
 	}
 	if cfg.MaxSessions != 8 {
 		t.Errorf("MaxSessions = %d", cfg.MaxSessions)
+	}
+	if cfg.AccountRoot != "/var/lib/affent/account" {
+		t.Errorf("AccountRoot = %q", cfg.AccountRoot)
 	}
 	if !cfg.EnableBrowser {
 		t.Errorf("EnableBrowser should be true")
@@ -134,6 +138,17 @@ func TestConfigResolveSharedUserMemoryFromEnv(t *testing.T) {
 	}
 	if !cfg.SharedUserMemory {
 		t.Fatal("SharedUserMemory should follow AFFENTSERVE_SHARED_USER_MEMORY")
+	}
+}
+
+func TestConfigResolveAccountRootFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_ACCOUNT_ROOT", "/var/lib/affent/account")
+	cfg := Config{BaseURL: "https://example/v1"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AccountRoot != "/var/lib/affent/account" {
+		t.Fatalf("AccountRoot = %q", cfg.AccountRoot)
 	}
 }
 

@@ -50,6 +50,7 @@ const (
 	runtimeLabelServeListen        = "affent.runtime.serve.listen"
 	runtimeLabelServeWorkspaceRoot = "affent.runtime.serve.workspace_root"
 	runtimeLabelServeMemoryRoot    = "affent.runtime.serve.memory_root"
+	runtimeLabelServeAccountRoot   = "affent.runtime.serve.account_root"
 	runtimeLabelServeBuiltins      = "affent.runtime.serve.builtins"
 	runtimeLabelServeEvalMode      = "affent.runtime.serve.eval_mode"
 	runtimeLabelServeMemory        = "affent.runtime.serve.memory"
@@ -314,20 +315,21 @@ func (f *stringListFlag) Set(v string) error {
 }
 
 type runtimeRunOptions struct {
-	Name      string
-	Image     string
-	Workspace string
-	Memory    string
-	CPUs      string
-	PIDsLimit string
-	User      string
-	Timeout   time.Duration
-	TTY       bool
-	Detach    bool
-	Remove    bool
-	Env       []string
-	Publish   []string
-	Command   []string
+	Name       string
+	Image      string
+	Workspace  string
+	AccountDir string
+	Memory     string
+	CPUs       string
+	PIDsLimit  string
+	User       string
+	Timeout    time.Duration
+	TTY        bool
+	Detach     bool
+	Remove     bool
+	Env        []string
+	Publish    []string
+	Command    []string
 }
 
 func imageRunCmd(args []string, runner commandRunner, _ io.Writer, stderr io.Writer) int {
@@ -339,6 +341,7 @@ func imageRunCmd(args []string, runner commandRunner, _ io.Writer, stderr io.Wri
 	fs.StringVar(&opts.Name, "name", opts.Name, "optional Docker container name; empty lets Docker choose")
 	fs.StringVar(&opts.Image, "image", opts.Image, "Docker image to run")
 	fs.StringVar(&opts.Workspace, "workspace", opts.Workspace, "persistent host workspace mounted at /workspace")
+	fs.StringVar(&opts.AccountDir, "account-dir", opts.AccountDir, "persistent host account state mounted at /account")
 	fs.StringVar(&opts.Memory, "memory", opts.Memory, "Docker memory limit")
 	fs.StringVar(&opts.CPUs, "cpus", opts.CPUs, "Docker CPU limit")
 	fs.StringVar(&opts.PIDsLimit, "pids-limit", opts.PIDsLimit, "Docker process-count limit")
@@ -382,19 +385,32 @@ host workspace mounted at /workspace. With no command, runs affentctl --help.`)
 
 func defaultRuntimeRunOptions(workspace string) runtimeRunOptions {
 	return runtimeRunOptions{
-		Image:     defaultRuntimeImage,
-		Workspace: workspace,
-		Memory:    defaultSandboxMemory,
-		CPUs:      defaultSandboxCPUs,
-		PIDsLimit: defaultSandboxPIDs,
-		User:      defaultSandboxUser(),
-		Timeout:   runtimeDockerRunTimeout,
-		Remove:    true,
+		Image:      defaultRuntimeImage,
+		Workspace:  workspace,
+		AccountDir: defaultRuntimeAccountDir(),
+		Memory:     defaultSandboxMemory,
+		CPUs:       defaultSandboxCPUs,
+		PIDsLimit:  defaultSandboxPIDs,
+		User:       defaultSandboxUser(),
+		Timeout:    runtimeDockerRunTimeout,
+		Remove:     true,
 	}
 }
 
 func defaultRuntimeWorkspace() string {
 	return filepath.Join(defaultAffentDataRoot(), "affent", "runtime", "workspace")
+}
+
+func defaultRuntimeAccountDir() string {
+	return filepath.Join(defaultAffentDataRoot(), "affent", "runtime", "account")
+}
+
+func defaultRuntimeAccountDirForWorkspace(workspace string) string {
+	workspace = strings.TrimSpace(workspace)
+	if workspace == "" {
+		return defaultRuntimeAccountDir()
+	}
+	return filepath.Join(filepath.Dir(workspace), "account")
 }
 
 type sandboxStartOptions struct {
@@ -607,6 +623,7 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	opts.Image = strings.TrimSpace(opts.Image)
 	opts.Name = strings.TrimSpace(opts.Name)
 	opts.Workspace = strings.TrimSpace(opts.Workspace)
+	opts.AccountDir = strings.TrimSpace(opts.AccountDir)
 	opts.Memory = strings.TrimSpace(opts.Memory)
 	opts.CPUs = strings.TrimSpace(opts.CPUs)
 	opts.PIDsLimit = strings.TrimSpace(opts.PIDsLimit)
@@ -624,6 +641,9 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	}
 	if opts.Workspace == "" {
 		return errors.New("--workspace is required")
+	}
+	if opts.AccountDir == "" {
+		opts.AccountDir = defaultRuntimeAccountDirForWorkspace(opts.Workspace)
 	}
 	if opts.Memory == "" {
 		return errors.New("--memory is required; use an explicit Docker memory limit such as 1g")
@@ -672,6 +692,14 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	if err := os.MkdirAll(opts.Workspace, 0o755); err != nil {
 		return fmt.Errorf("mkdir workspace %s: %w", opts.Workspace, err)
 	}
+	accountDir, err := filepath.Abs(opts.AccountDir)
+	if err != nil {
+		return fmt.Errorf("resolve account dir: %w", err)
+	}
+	opts.AccountDir = accountDir
+	if err := os.MkdirAll(opts.AccountDir, 0o700); err != nil {
+		return fmt.Errorf("mkdir account dir %s: %w", opts.AccountDir, err)
+	}
 	for _, dir := range runtimePersistentDirs(opts.Workspace) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("mkdir runtime directory %s: %w", dir, err)
@@ -703,9 +731,10 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		"--label", runtimeLabelUser+"="+opts.User,
 		"--label", runtimeLabelPublish+"="+strings.Join(publishValues, ","),
 		"-v", opts.Workspace+":/workspace",
+		"-v", opts.AccountDir+":/account",
 		"-w", "/workspace",
 	)
-	for _, label := range runtimeServeLabels(opts.Command, envs) {
+	for _, label := range runtimeServeLabels(opts.Command, append(envs, "AFFENTSERVE_ACCOUNT_ROOT=/account")) {
 		runArgs = append(runArgs, "--label", label)
 	}
 	if opts.Detach {
@@ -720,6 +749,7 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		runArgs = append(runArgs, "--user", opts.User)
 	}
 	runArgs = append(runArgs, runtimePersistentEnv(opts.Memory, opts.CPUs)...)
+	runArgs = append(runArgs, "-e", "AFFENTSERVE_ACCOUNT_ROOT=/account")
 	for _, env := range envs {
 		runArgs = append(runArgs, "-e", env)
 	}
@@ -773,6 +803,7 @@ func runtimeServeLabels(command []string, envs []string) []string {
 		runtimeLabelServeListen,
 		runtimeLabelServeWorkspaceRoot,
 		runtimeLabelServeMemoryRoot,
+		runtimeLabelServeAccountRoot,
 		runtimeLabelServeBuiltins,
 		runtimeLabelServeEvalMode,
 		runtimeLabelServeMemory,
@@ -801,6 +832,8 @@ func setRuntimeServeEnvLabelValue(values map[string]string, name, value string) 
 		values[runtimeLabelServeMemory] = value
 	case "AFFENTSERVE_BROWSER":
 		values[runtimeLabelServeBrowser] = value
+	case "AFFENTSERVE_ACCOUNT_ROOT":
+		values[runtimeLabelServeAccountRoot] = value
 	case "AFFENTSERVE_BROWSER_SCREENSHOT":
 		values[runtimeLabelServeScreenshot] = value
 	case "AFFENTSERVE_WEB":
@@ -816,7 +849,7 @@ func setRuntimeServeEnvLabelValue(values map[string]string, name, value string) 
 
 func runtimeServeLabelFlag(name string) bool {
 	switch name {
-	case "--listen", "--workspace-root", "--memory-root", "--browser-cache-dir":
+	case "--listen", "--workspace-root", "--memory-root", "--account-root", "--browser-cache-dir":
 		return true
 	default:
 		return false
@@ -856,6 +889,8 @@ func setRuntimeServeLabelValue(values map[string]string, name, value string) {
 		values[runtimeLabelServeWorkspaceRoot] = value
 	case "--memory-root":
 		values[runtimeLabelServeMemoryRoot] = value
+	case "--account-root":
+		values[runtimeLabelServeAccountRoot] = value
 	case "--builtins":
 		values[runtimeLabelServeBuiltins] = value
 	case "--eval-mode":
@@ -975,7 +1010,8 @@ func runtimeManagedEnvName(name string) bool {
 		"NPM_CONFIG_CACHE",
 		"PIP_CACHE_DIR",
 		"GOMEMLIMIT",
-		"GOMAXPROCS":
+		"GOMAXPROCS",
+		"AFFENTSERVE_ACCOUNT_ROOT":
 		return true
 	default:
 		return false

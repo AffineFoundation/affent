@@ -224,7 +224,10 @@ enable direct web fetch, the real browser toolset, and a persistent browser
 cache at `/workspace/browser-cache` by default, while keeping `web_search`
 disabled unless a search backend is explicitly configured. Those paths live
 inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long as `IMAGE_WORKSPACE` is the same host path, and it preserves browser cache data
-under the same workspace. Deleting a session with
+under the same workspace. Account-level state, including WebUI-generated SSH
+keys, is mounted separately at `/account` from `SERVE_ACCOUNT_DIR` and wired via
+`AFFENTSERVE_ACCOUNT_ROOT`/`--account-root`, so runtime credentials survive
+container restarts without mounting the host `~/.ssh`. Deleting a session with
 `DELETE /v1/sessions/{id}` intentionally removes that durable state.
 `make image-serve-up` refuses to reuse an existing named container when its
 runtime image revision differs from the current checkout; run
@@ -759,6 +762,7 @@ AFFENTSERVE_MODEL
 AFFENTSERVE_AUTH_TOKEN
 AFFENTSERVE_WORKSPACE_ROOT
 AFFENTSERVE_MEMORY_ROOT
+AFFENTSERVE_ACCOUNT_ROOT
 AFFENTSERVE_BROWSER
 AFFENTSERVE_BROWSER_SCREENSHOT
 AFFENTSERVE_WEB

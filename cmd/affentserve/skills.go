@@ -179,7 +179,7 @@ func accountSkillDir(pool *SessionPool) string {
 	if pool == nil {
 		return ""
 	}
-	return filepath.Join(pool.sessionRootPath(), ".affentserve", "account-skills")
+	return filepath.Join(accountSettingsDir(pool), "account-skills")
 }
 
 func upsertAccountSkillIntoActiveSessions(pool *SessionPool, skill agent.Skill) {

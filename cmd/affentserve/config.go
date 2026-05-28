@@ -51,6 +51,13 @@ type Config struct {
 	// when WorkspaceRoot itself is empty).
 	MemoryRoot string `json:"memory_root"`
 
+	// AccountRoot is durable account-level state shared by all sessions:
+	// account env settings, SSH keys, and account-installed skills. Keep it
+	// outside host ~/.ssh and outside per-session state so container restarts
+	// preserve credentials without exposing the operator's host SSH config.
+	// Empty defaults to "<session root>/.affentserve" for compatibility.
+	AccountRoot string `json:"account_root"`
+
 	// MaxSessions caps the in-memory session pool size. Sessions
 	// past the cap are LRU-evicted. Default 32.
 	MaxSessions    int `json:"max_sessions"`
@@ -351,6 +358,7 @@ func (c *Config) Resolve() error {
 		{[]string{"AFFENTSERVE_AUTH_TOKEN"}, &c.AuthToken},
 		{[]string{"AFFENTSERVE_WORKSPACE_ROOT"}, &c.WorkspaceRoot},
 		{[]string{"AFFENTSERVE_MEMORY_ROOT"}, &c.MemoryRoot},
+		{[]string{"AFFENTSERVE_ACCOUNT_ROOT"}, &c.AccountRoot},
 		{[]string{"AFFENTSERVE_SESSION_IDLE_TTL"}, &c.SessionIdleTTL},
 		{[]string{"AFFENTSERVE_SESSION_RETENTION"}, &c.SessionRetention},
 		{[]string{"AFFENTSERVE_PER_CALL_TIMEOUT"}, &c.PerCallTimeout},
