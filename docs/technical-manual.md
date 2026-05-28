@@ -1253,9 +1253,10 @@ The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, partial workspace tool lists, and
 key tool-result limits. The timeline also surfaces the operational limits that
-shape a turn, including max turn steps, max tool calls, tool-result event/model
-context caps, artifact prefixes, turn-level tool overrides, and broad
-capability flags. The manifest includes `recovery_guide`, which orders
+shape a turn, including max turn steps, max tool calls, per-tool loop-guard
+call caps, tool-result event/model context caps, artifact prefixes, turn-level
+tool overrides, and broad capability flags. The manifest includes
+`recovery_guide`, which orders
 the files and sections to inspect, keeps the exact redacted rerun command, adds
 a full-trace rerun command when the compact trace skipped streaming deltas, and
 provides a continuation prompt for handing the failure back to an agent. When

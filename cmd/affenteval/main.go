@@ -3826,6 +3826,7 @@ type batchSummaryRecord struct {
 type runtimeSurfaceSummary struct {
 	ToolCount                    int                      `json:"tool_count"`
 	Tools                        []string                 `json:"tools,omitempty"`
+	ToolCallCaps                 map[string]int           `json:"tool_call_caps,omitempty"`
 	Capabilities                 *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
 	MaxTurnSteps                 int                      `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                      `json:"max_tool_calls,omitempty"`
@@ -3985,6 +3986,7 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 	return &runtimeSurfaceSummary{
 		ToolCount:                    surface.ToolCount,
 		Tools:                        tools,
+		ToolCallCaps:                 runtimeSurfaceToolCallCaps(surface),
 		Capabilities:                 &caps,
 		MaxTurnSteps:                 surface.MaxTurnSteps,
 		MaxToolCalls:                 surface.MaxToolCalls,
@@ -4012,6 +4014,24 @@ func runtimeSurfaceToolNames(surface *sse.RuntimeSurfacePayload) []string {
 	}
 	sort.Strings(tools)
 	return tools
+}
+
+func runtimeSurfaceToolCallCaps(surface *sse.RuntimeSurfacePayload) map[string]int {
+	if surface == nil || len(surface.ToolCallCaps) == 0 {
+		return nil
+	}
+	caps := make(map[string]int, len(surface.ToolCallCaps))
+	for _, cap := range surface.ToolCallCaps {
+		name := strings.TrimSpace(cap.Tool)
+		if name == "" || cap.Max <= 0 {
+			continue
+		}
+		caps[name] = cap.Max
+	}
+	if len(caps) == 0 {
+		return nil
+	}
+	return caps
 }
 
 func runtimeSurfaceCapabilityNames(c sse.RuntimeCapabilities) []string {

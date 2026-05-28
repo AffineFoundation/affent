@@ -3135,6 +3135,7 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 				{Name: "web_fetch"},
 			},
 			Capabilities:                 sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file", "repo_search"}, WebFetch: true, Browser: true},
+			ToolCallCaps:                 []sse.RuntimeToolCallCap{{Tool: "web_fetch", Max: 8}, {Tool: "browser_find", Max: 8}},
 			MaxTurnSteps:                 12,
 			MaxToolCalls:                 40,
 			ToolResultEventCapBytes:      8192,
@@ -3180,6 +3181,10 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	tools, ok := surface["tools"].([]any)
 	if !ok || len(tools) != 2 || tools[0] != "browser_find" || tools[1] != "web_fetch" {
 		t.Fatalf("runtime_surface tools = %#v\njson=%s", surface["tools"], out.String())
+	}
+	toolCallCaps, ok := surface["tool_call_caps"].(map[string]any)
+	if !ok || toolCallCaps["web_fetch"] != float64(8) || toolCallCaps["browser_find"] != float64(8) {
+		t.Fatalf("runtime_surface tool_call_caps = %#v\njson=%s", surface["tool_call_caps"], out.String())
 	}
 	caps, ok := surface["capabilities"].(map[string]any)
 	if !ok || caps["web_fetch"] != true || caps["browser"] != true {

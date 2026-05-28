@@ -95,6 +95,10 @@ window and Affent repaired it before continuing the session.
 - `tool_count`: count of tools registered for the turn.
 - `tools`: optional effective tool list with `name`, `raw_name`, `group`, and
   `source` metadata.
+- `tool_call_caps`: optional per-turn loop-guard caps for registered tools,
+  listed as `{tool, max}` entries. Tools omitted from this list may still be
+  limited by the global turn-step/tool-call settings or by failure/repeat
+  guards.
 - `capabilities`: broad runtime capability flags. `builtins` means the core
   workspace tools (`shell`, `read_file`, `write_file`, `edit_file`,
   `list_files`) are all present. `workspace_tools` lists the concrete

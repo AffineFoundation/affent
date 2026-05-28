@@ -1804,6 +1804,7 @@ func cloneRuntimeSurface(surface *sse.RuntimeSurfacePayload) *sse.RuntimeSurface
 	}
 	out := *surface
 	out.Tools = append([]sse.RuntimeSurfaceTool(nil), surface.Tools...)
+	out.ToolCallCaps = append([]sse.RuntimeToolCallCap(nil), surface.ToolCallCaps...)
 	return &out
 }
 

@@ -71,6 +71,7 @@ type RuntimeSurfacePayload struct {
 	TurnID                       string               `json:"turn_id"`
 	ToolCount                    int                  `json:"tool_count"`
 	Tools                        []RuntimeSurfaceTool `json:"tools,omitempty"`
+	ToolCallCaps                 []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
 	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
 	MaxTurnSteps                 int                  `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`
@@ -86,6 +87,11 @@ type RuntimeSurfaceTool struct {
 	RawName string `json:"raw_name,omitempty"`
 	Group   string `json:"group,omitempty"`
 	Source  string `json:"source,omitempty"`
+}
+
+type RuntimeToolCallCap struct {
+	Tool string `json:"tool"`
+	Max  int    `json:"max"`
 }
 
 type RuntimeCapabilities struct {

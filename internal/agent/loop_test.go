@@ -1346,6 +1346,11 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		payload.ToolResultArtifactPrefix != ".affent/custom" {
 		t.Fatalf("limits = %+v", payload)
 	}
+	if len(payload.ToolCallCaps) != 2 ||
+		payload.ToolCallCaps[0] != (sse.RuntimeToolCallCap{Tool: "web_fetch", Max: perTurnCallCaps["web_fetch"]}) ||
+		payload.ToolCallCaps[1] != (sse.RuntimeToolCallCap{Tool: "web_search", Max: perTurnCallCaps["web_search"]}) {
+		t.Fatalf("tool call caps = %+v", payload.ToolCallCaps)
+	}
 }
 
 // TestPreviewN_UTF8Safe covers the event-bus preview path the same way.

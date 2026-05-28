@@ -2245,6 +2245,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 				Source:  tool.Source,
 			})
 		}
+		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(catalog)
 		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)
 	}
 	l.publish(sse.TypeRuntimeSurface, payload)
@@ -2276,6 +2277,19 @@ func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
 		Skill:          hasRegisteredTool(reg, SkillToolName),
 		MCP:            registryHasMCPTools(reg),
 	}
+}
+
+func runtimeToolCallCapsForCatalog(catalog []ToolCatalogEntry) []sse.RuntimeToolCallCap {
+	if len(catalog) == 0 {
+		return nil
+	}
+	caps := make([]sse.RuntimeToolCallCap, 0, len(catalog))
+	for _, tool := range catalog {
+		if cap, ok := perTurnCallCaps[tool.Name]; ok && cap > 0 {
+			caps = append(caps, sse.RuntimeToolCallCap{Tool: tool.Name, Max: cap})
+		}
+	}
+	return caps
 }
 
 func runtimeWorkspaceToolsForRegistry(reg *Registry) []string {
