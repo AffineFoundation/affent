@@ -412,18 +412,20 @@ function userMessageLabel(event: NormalizedEvent | undefined): string {
 
 function userMessageOriginMeta(event: NormalizedEvent | undefined): string | undefined {
   const source = readString(event?.data, "source");
+  const mode = userMessageModeLabel(readString(event?.data, "mode"));
   if (source === "schedule") {
     const scheduleID = readString(event?.data, "schedule_id");
     const kind = scheduleKindLabel(readString(event?.data, "schedule_kind"));
-    return compact([kind ?? "timer", scheduleID]).join(" ");
+    return compact([kind ?? "timer", scheduleID, mode]).join(" ");
   }
-  return undefined;
+  return mode;
 }
 
 function userMessageBadges(event: NormalizedEvent | undefined): string[] {
   const source = readString(event?.data, "source");
-  if (source === "schedule") return compact(["scheduled", readString(event?.data, "schedule_kind"), readString(event?.data, "schedule_id")]);
-  return [];
+  const mode = userMessageModeBadge(readString(event?.data, "mode"));
+  if (source === "schedule") return compact(["scheduled", readString(event?.data, "schedule_kind"), readString(event?.data, "schedule_id"), mode]);
+  return compact([mode]);
 }
 
 function scheduleKindLabel(kind: string | undefined): string | undefined {
@@ -432,6 +434,18 @@ function scheduleKindLabel(kind: string | undefined): string | undefined {
   if (kind === "checkin") return "check-in";
   if (kind === "custom") return "timer";
   return undefined;
+}
+
+function userMessageModeLabel(mode: string | undefined): string | undefined {
+  if (mode === "loop_setup") return "loop setup";
+  if (mode === "plan_only") return "plan only";
+  if (mode === "execute_plan") return "execute plan";
+  return undefined;
+}
+
+function userMessageModeBadge(mode: string | undefined): string | undefined {
+  if (mode === "normal") return undefined;
+  return mode;
 }
 
 function runtimeSurfaceMeta(event: NormalizedEvent, turn: string | undefined): string[] {

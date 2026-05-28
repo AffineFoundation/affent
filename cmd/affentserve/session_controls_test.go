@@ -104,12 +104,16 @@ func TestHandleSessionMessage_PublishesDisplayTextForGeneratedPrompts(t *testing
 		var payload struct {
 			Text        string `json:"text"`
 			DisplayText string `json:"display_text"`
+			Mode        string `json:"mode"`
 		}
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			t.Fatalf("decode user payload: %v", err)
 		}
 		if payload.Text != "internal loop setup prompt with detailed tool instructions" || payload.DisplayText != "Set up loop: market monitor" {
 			t.Fatalf("user payload = %+v", payload)
+		}
+		if payload.Mode != sessionMessageModeNormal {
+			t.Fatalf("user payload mode = %q, want %q", payload.Mode, sessionMessageModeNormal)
 		}
 		return
 	}
@@ -207,6 +211,7 @@ func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 		t.Fatalf("conversation should include backend loop setup prompt, got %+v", messages)
 	}
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"display_text":"Set up loop: market monitor"`)
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"mode":"loop_setup"`)
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"type":"turn.end"`)
 }
 

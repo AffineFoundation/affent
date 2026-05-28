@@ -55,6 +55,7 @@ export interface UserMessagePayload {
   turn_id: string;
   text: string;
   display_text?: string;
+  mode?: "normal" | "plan_only" | "execute_plan" | "loop_setup" | string;
   source?: string;
   schedule_id?: string;
   schedule_kind?: string;

@@ -503,6 +503,21 @@ describe("eventTrace view model", () => {
     ]);
   });
 
+  it("surfaces non-normal message modes in request trace records", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "market monitor", display_text: "Set up loop: market monitor", mode: "loop_setup" } },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]));
+
+    expect(items[0]).toMatchObject({
+      kind: "eventGroup",
+      label: "Request trace",
+      meta: ["Request 1", "loop setup", "Set up loop: market monitor", "completed"],
+      badges: ["loop_setup"],
+    });
+  });
+
   it("promotes long-run runtime counters into request trace summaries", () => {
     const items = buildEventTraceItems(normalizeEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

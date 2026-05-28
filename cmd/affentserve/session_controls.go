@@ -129,6 +129,7 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		return
 	}
 	opts.UserDisplayText = displayText
+	opts.UserMode = mode
 	turnID, err := sess.SendUserWithOptions(r.Context(), content, opts)
 	if err != nil {
 		switch {
