@@ -898,6 +898,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCodePRScenario(),
 		longRunCodeCommitPushScenario(),
 		longRunFocusedTaskRecoveryScenario(),
+		liveWebSkillURLInstallActivationScenario(),
 		liveWebResearchCheckpointEvidenceScenario(),
 		liveWebResearchCheckpointDelegatedEvidenceScenario(),
 		liveWebTaostatsDynamicEvidenceScenario(),

@@ -959,6 +959,63 @@ func skillRemoteInstallGuardScenario() BatchScenario {
 	}
 }
 
+func liveWebSkillURLInstallActivationScenario() BatchScenario {
+	const source = "https://raw.githubusercontent.com/openai/skills/b0401f07213a66414d84a65cb50c1d226f99485a/skills/.curated/playwright/SKILL.md"
+	const proposalID = "54e64fbbf4bfaf9f"
+	return BatchScenario{
+		Name:      "live-web-skill-url-install-activation",
+		Suites:    []string{liveWebSuite},
+		Domains:   []string{webEvidenceDomain},
+		SessionID: "skill-url-install-activation",
+		Prompts: []string{
+			"请安装这个 GitHub skill URL,但本轮只准备安装提案,不要确认安装:" + source + "。必须调用 skill action=propose_url,source 使用这个 URL,triggers 必须只包含 playwright_eval;不要传 name、description 或 required_tools。最终答复必须包含 proposal_id=" + proposalID + "、playwright 和 propose_url。不要读写文件,不要运行 shell。",
+			"确认安装 proposal_id=" + proposalID + "。请调用 skill action=confirm_install 并使用这个 proposal_id。最终答复必须包含 installed skill、active_now=true、proposal_id=" + proposalID + " 和 playwright。不要读写文件,不要运行 shell。",
+			"playwright_eval: 不要调用任何工具。请只根据当前已激活的 skill 回答:这个 skill 的标题是什么,prerequisite check 的第一条命令是什么。最终答复必须包含 Playwright CLI Skill 和 command -v npx。",
+		},
+		Files: map[string]string{
+			"README.md": "# Skill URL Install Activation Eval\n\nThis scenario validates URL proposal, explicit confirmation, and same-session skill activation.\n",
+		},
+		RequiredTools: []string{"skill"},
+		RequiredToolCounts: map[string]int{
+			"skill": 2,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "skill", Arg: "action", Substring: "propose_url"},
+			{Tool: "skill", Arg: "source", Substring: source},
+			{Tool: "skill", Arg: "triggers", Substring: "playwright_eval"},
+			{Tool: "skill", Arg: "action", Substring: "confirm_install"},
+			{Tool: "skill", Arg: "proposal_id", Substring: proposalID},
+		},
+		RequiredToolResultText: map[string][]string{
+			"skill": {
+				"prepared skill install proposal_id=" + proposalID,
+				"source=" + source,
+				"installed skill \"playwright\"",
+				"active_now=true",
+			},
+		},
+		RequiredContextInjectionSources: map[string]int{
+			"skill_provider": 1,
+		},
+		RequiredFinalText: []string{
+			"Playwright CLI Skill",
+			"command -v npx",
+		},
+		ForbiddenTools: []string{
+			"read_file", "write_file", "edit_file", "shell", "web_fetch", "web_search",
+			"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read",
+			"run_task", "subagent_run",
+		},
+		ProtectedFiles:     []string{"README.md"},
+		MaxParentToolCalls: 2,
+		MaxTurns:           8,
+		ForbiddenFinalText: []string{"proposal is still pending explicit user confirmation"},
+		RequiredTraceEventCounts: map[string]int{
+			"context.injected": 1,
+		},
+	}
+}
+
 func planCodingRepairScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "plan-coding-repair",

@@ -2097,12 +2097,50 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 6 {
-		t.Fatalf("live-web suite size = %d, want 6", len(scenarios))
+	if len(scenarios) != 7 {
+		t.Fatalf("live-web suite size = %d, want 7", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
 		seen[scenario.Name] = scenario
+	}
+	skillURL, ok := seen["live-web-skill-url-install-activation"]
+	if !ok {
+		t.Fatalf("live-web suite missing skill URL install activation scenario")
+	}
+	if skillURL.SessionID != "skill-url-install-activation" || len(skillURL.Prompts) != 3 {
+		t.Fatalf("skill URL scenario session/prompts = %q/%d", skillURL.SessionID, len(skillURL.Prompts))
+	}
+	if skillURL.RequiredToolCounts["skill"] != 2 {
+		t.Fatalf("skill URL RequiredToolCounts = %#v, want skill=2", skillURL.RequiredToolCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "skill", Arg: "action", Substring: "propose_url"},
+		{Tool: "skill", Arg: "source", Substring: "https://raw.githubusercontent.com/openai/skills/b0401f07213a66414d84a65cb50c1d226f99485a/skills/.curated/playwright/SKILL.md"},
+		{Tool: "skill", Arg: "triggers", Substring: "playwright_eval"},
+		{Tool: "skill", Arg: "action", Substring: "confirm_install"},
+		{Tool: "skill", Arg: "proposal_id", Substring: "54e64fbbf4bfaf9f"},
+	} {
+		if !toolArgRequirementContains(skillURL.RequiredToolArgContains, want) {
+			t.Fatalf("skill URL RequiredToolArgContains = %#v, want %#v", skillURL.RequiredToolArgContains, want)
+		}
+	}
+	for _, want := range []string{"prepared skill install proposal_id=54e64fbbf4bfaf9f", "installed skill \"playwright\"", "active_now=true"} {
+		if !stringSliceContains(skillURL.RequiredToolResultText["skill"], want) {
+			t.Fatalf("skill URL tool result requirements = %#v, want %q", skillURL.RequiredToolResultText["skill"], want)
+		}
+	}
+	if skillURL.RequiredContextInjectionSources["skill_provider"] != 1 ||
+		skillURL.RequiredTraceEventCounts["context.injected"] != 1 {
+		t.Fatalf("skill URL context requirements = sources:%#v trace:%#v", skillURL.RequiredContextInjectionSources, skillURL.RequiredTraceEventCounts)
+	}
+	for _, want := range []string{"Playwright CLI Skill", "command -v npx"} {
+		if !stringSliceContains(skillURL.RequiredFinalText, want) {
+			t.Fatalf("skill URL RequiredFinalText = %#v, want %q", skillURL.RequiredFinalText, want)
+		}
+	}
+	if !stringSliceContains(skillURL.ForbiddenTools, "shell") || !stringSliceContains(skillURL.ForbiddenTools, "web_fetch") {
+		t.Fatalf("skill URL ForbiddenTools = %#v, want no shell/web_fetch", skillURL.ForbiddenTools)
 	}
 	researchEvidence, ok := seen["live-web-research-checkpoint-evidence"]
 	if !ok {
