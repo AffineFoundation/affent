@@ -2581,6 +2581,114 @@ func TestItemsReturnsCopy(t *testing.T) {
 	}
 }
 
+func longRunCodeCommitPushScenario() BatchScenario {
+	return BatchScenario{
+		Name:    "longrun-code-commit-push-local-remote",
+		Suites:  []string{longRunSuite},
+		Domains: []string{codePRDomain},
+		Prompt:  "这个 Go 项目有一个失败测试。请先运行测试复现失败，然后只修复 set/set.go 中的 Remove 行为，不要修改测试。修复后再次运行 go test ./... 确认，通过后创建一个与修复相关的 git commit，并 push 到 origin main。最终答复必须包含修改摘要、测试命令、commit hash 和 push 结果。",
+		Files: map[string]string{
+			"go.mod": `module example.com/stringset
+
+go 1.22
+`,
+			"set/set.go": `package set
+
+type Set struct {
+	items map[string]struct{}
+}
+
+func New(values ...string) *Set {
+	s := &Set{items: map[string]struct{}{}}
+	for _, value := range values {
+		s.Add(value)
+	}
+	return s
+}
+
+func (s *Set) Add(value string) {
+	if s.items == nil {
+		s.items = map[string]struct{}{}
+	}
+	s.items[value] = struct{}{}
+}
+
+func (s *Set) Remove(value string) bool {
+	if _, ok := s.items[value]; ok {
+		return true
+	}
+	return false
+}
+
+func (s *Set) Has(value string) bool {
+	_, ok := s.items[value]
+	return ok
+}
+
+func (s *Set) Size() int {
+	return len(s.items)
+}
+`,
+			"set/set_test.go": `package set
+
+import "testing"
+
+func TestRemoveDeletesExistingValue(t *testing.T) {
+	s := New("alpha", "beta", "gamma")
+	if !s.Remove("beta") {
+		t.Fatal("Remove returned false for existing value")
+	}
+	if s.Has("beta") {
+		t.Fatal("Remove did not delete beta")
+	}
+	if got := s.Size(); got != 2 {
+		t.Fatalf("Size after Remove = %d, want 2", got)
+	}
+}
+
+func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
+	s := New("alpha")
+	if s.Remove("missing") {
+		t.Fatal("Remove returned true for missing value")
+	}
+	if !s.Has("alpha") || s.Size() != 1 {
+		t.Fatalf("Remove missing changed set: has alpha=%v size=%d", s.Has("alpha"), s.Size())
+	}
+}
+`,
+		},
+		SetupCommands: []string{
+			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
+		},
+		VerifyCommand:    "go test ./... && git diff --quiet && git diff --cached --quiet && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`go test`, `git commit`, `git push`},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
+		RequiredTools: []string{"read_file", "edit_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "set/set.go"},
+			{Tool: "edit_file", Arg: "path", Substring: "set/set.go"},
+		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git commit`, Tool: "edit_file"},
+			{Command: `git push`, Tool: "edit_file"},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "edit_file"},
+		},
+		RequiredFinalText: []string{"go test ./...", "commit", "push"},
+		ForbiddenCommands: defaultForbiddenCommands,
+		ProtectedFiles:    []string{"set/set_test.go"},
+		MaxTurns:          16,
+	}
+}
+
 func longRunFocusedTaskRecoveryScenario() BatchScenario {
 	return BatchScenario{
 		Name:    "longrun-focused-task-recovery-synthesis",

@@ -1536,8 +1536,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 17 {
-		t.Fatalf("long-run suite size = %d, want 17", len(scenarios))
+	if len(scenarios) != 18 {
+		t.Fatalf("long-run suite size = %d, want 18", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1640,6 +1640,44 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(pr.Domains, codePRDomain) {
 		t.Fatalf("code PR scenario Domains = %#v, want code_pr", pr.Domains)
+	}
+
+	commitPush, ok := seen["longrun-code-commit-push-local-remote"]
+	if !ok {
+		t.Fatalf("long-run suite missing commit/push scenario")
+	}
+	if len(commitPush.SetupCommands) != 1 ||
+		!strings.Contains(commitPush.SetupCommands[0], "git init") ||
+		!strings.Contains(commitPush.SetupCommands[0], "git init --bare ../remote.git") ||
+		!strings.Contains(commitPush.SetupCommands[0], "git push -u origin main") {
+		t.Fatalf("commit/push SetupCommands = %#v, want local bare remote initialization", commitPush.SetupCommands)
+	}
+	for _, want := range []string{"git diff --quiet", "git diff --cached --quiet", "git log -1", "git ls-remote --heads origin main"} {
+		if !strings.Contains(commitPush.VerifyCommand, want) {
+			t.Fatalf("commit/push VerifyCommand = %q, want %q", commitPush.VerifyCommand, want)
+		}
+	}
+	for _, want := range []string{`go test`, `git commit`, `git push`} {
+		if !stringSliceContains(commitPush.RequiredCommands, want) {
+			t.Fatalf("commit/push RequiredCommands = %#v, want %q", commitPush.RequiredCommands, want)
+		}
+	}
+	if commitPush.RequiredCommandCounts[`go test`] != 2 {
+		t.Fatalf("commit/push RequiredCommandCounts = %#v, want go test=2", commitPush.RequiredCommandCounts)
+	}
+	for _, want := range []CommandToolOrderRequirement{
+		{Command: `git commit`, Tool: "edit_file"},
+		{Command: `git push`, Tool: "edit_file"},
+	} {
+		if !commandToolOrderContains(commitPush.RequiredCommandAfterTool, want) {
+			t.Fatalf("commit/push RequiredCommandAfterTool = %#v, want %#v", commitPush.RequiredCommandAfterTool, want)
+		}
+	}
+	if !stringSliceContains(commitPush.ProtectedFiles, "set/set_test.go") {
+		t.Fatalf("commit/push ProtectedFiles = %#v, want test protection", commitPush.ProtectedFiles)
+	}
+	if !stringSliceContains(commitPush.Domains, codePRDomain) {
+		t.Fatalf("commit/push Domains = %#v, want code_pr", commitPush.Domains)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]
