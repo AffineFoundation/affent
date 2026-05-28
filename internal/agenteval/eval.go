@@ -1446,6 +1446,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "verifier:output_truncated") {
 		add("For verifier:output_truncated, rerun the verifier in the retained workspace or raise --verifier-output-cap before inferring the exact failing assertion from the bounded preview.")
 	}
+	if containsString(tags, "loop_protocol:fixture") {
+		add("For loop_protocol:fixture, fix the per-session .affent/loops/<session_id>/LOOP.md fixture and state.json lifecycle status before rerunning; this is scenario setup, not model behavior.")
+	}
 	if containsString(tags, "loop_guard:forced_no_tools") {
 		add("For loop_guard:forced_no_tools, inspect loop_guard_examples and the previous successful evidence before retrying tools; change the tool sequence or finish with a marked gap instead of repeating the blocked call.")
 	}
@@ -1485,6 +1488,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"verifier:not_run",
 		"verifier:abnormal",
 		"verifier:output_truncated",
+		"loop_protocol:fixture",
 		"loop_guard:forced_no_tools",
 		"source_dynamic_without_network",
 		"source_dynamic_without_decision",

@@ -215,6 +215,7 @@ Scenario records describe one eval case:
   `browser_scroll:stuck_without_network`,
   `browser_network`, `browser_network:no_matches`,
   `browser_network:unread_refs`, `browser_network:refs`,
+  `loop_protocol:fixture`,
   `memory_update:replace`, `empty_recall`,
   `empty_recall:no_recent_sessions`,
   `empty_recall:recent_sessions`,
@@ -250,7 +251,9 @@ Scenario records describe one eval case:
   `LOOP.md`, plan state, session search, memory, or authoritative files;
   recent-session and weak-recall tags route retry through
   `session_search_examples`; memory misses without topic anchors route retry
-  through `memory_search_miss_examples` and explicit target/topic discovery.
+  through `memory_search_miss_examples` and explicit target/topic discovery;
+  loop protocol fixture tags route operators to repair the per-session
+  `LOOP.md` or `state.json` lifecycle state before rerunning model evals.
   JSONL scenario records expose the manifest location through
   `debug_manifest_path`; they do not inline this block.
 - `loop_guard_interventions`: runtime loop guard intervention count.

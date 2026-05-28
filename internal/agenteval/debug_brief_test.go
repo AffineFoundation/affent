@@ -62,6 +62,24 @@ func TestBuildDebugBriefIncludesDelegationAndPlanSignals(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesLoopProtocolFixtureFailures(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: false,
+		Failures: []string{
+			`scenario "loop-draft" requires loop protocol feeds but active protocol file .affent/loops/loop-draft/LOOP.md has status "draft", want running`,
+		},
+	})
+	item := debugBriefItemByKind(brief, "loop_protocol_fixture")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["failures"] != 1 ||
+		!stringSliceContains(item.Inspect, "expectations") ||
+		!stringSliceContains(brief.Tags, "loop_protocol") ||
+		!stringSliceContains(brief.Tags, "loop_protocol:fixture") {
+		t.Fatalf("loop protocol fixture debug brief item=%+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefTagsBrowserLaunchFailure(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK:                 false,

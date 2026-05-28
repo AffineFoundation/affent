@@ -39,6 +39,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if !res.OK {
 		add("outcome", "fail", "scenario failed; inspect failures before trusting final answer", []string{"failures"}, nil, "outcome:failed")
 	}
+	if count := loopProtocolFixtureFailureCount(res.Failures); count > 0 {
+		add("loop_protocol_fixture", "fail", "loop protocol fixture is missing or inactive; fix the scenario LOOP.md/state before trusting model behavior", []string{"failures", "expectations", "debug_manifest"}, map[string]int{
+			"failures": count,
+		}, "loop_protocol", "loop_protocol:fixture")
+	}
 	if res.TurnEndReason != "" && res.TurnEndReason != "completed" {
 		add("turn_end", "fail", fmt.Sprintf("turn ended with reason %q", res.TurnEndReason), []string{"final_text", "tool_timeline"}, map[string]int{res.TurnEndReason: 1}, "turn_end:"+res.TurnEndReason)
 	}
@@ -531,6 +536,16 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	}
 	sort.Strings(tags)
 	return &DebugBrief{Tags: tags, Items: items}
+}
+
+func loopProtocolFixtureFailureCount(failures []string) int {
+	count := 0
+	for _, failure := range failures {
+		if strings.Contains(strings.ToLower(failure), "requires loop protocol feeds") {
+			count++
+		}
+	}
+	return count
 }
 
 func browserNetworkRefsHaveSourceEvidence(res BatchResult) bool {

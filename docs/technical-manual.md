@@ -1207,6 +1207,9 @@ verifiers add concrete continuation actions to inspect the Verifier section,
 failures, retained workspace diff, and exact verifier command before blaming
 runtime behavior; abnormal verifier exits and truncated verifier output route
 first to timeout/cancel symptoms or a local rerun with a larger output cap.
+Loop protocol fixture failures add `loop_protocol:fixture`, which is gated at
+zero by the `longrun` quality profile and routes recovery to the per-session
+`LOOP.md`/`state.json` lifecycle fixture before any model-behavior diagnosis.
 Failed tool-repair hints add a concrete
 continuation action to inspect `tool_repair_examples` and decide whether the
 durable fix belongs in tool aliasing, argument repair, or model guidance before
@@ -1288,7 +1291,8 @@ with a non-running status such as `draft`; it also rejects a present sidecar
 `state.json` whose lifecycle status is non-running or unreadable, so long-run
 protocol regressions do not get confused with a misauthored eval fixture. These
 pre-run failures are grouped under `loop_protocol_fixture` in batch failure
-kinds.
+kinds and emit the `loop_protocol:fixture` debug-brief tag, which the built-in
+`longrun` quality profile treats as a zero-tolerance setup regression.
 Built-in scenarios may run bounded setup commands after fixture files are
 written and before protected-file snapshots are taken. Each setup command has a
 short 30-second timeout. This is used for realistic repository tasks, such as

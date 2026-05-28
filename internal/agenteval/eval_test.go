@@ -163,6 +163,24 @@ func TestDebugRecoveryPriorityTagsIncludesVerifierFailures(t *testing.T) {
 	}
 }
 
+func TestDebugRecoveryPriorityTagsIncludesLoopProtocolFixture(t *testing.T) {
+	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"loop_protocol:fixture",
+		"loop_guard:forced_no_tools",
+		"outcome:failed",
+		"misc:later",
+	}})
+	want := []string{
+		"outcome:failed",
+		"loop_protocol:fixture",
+		"loop_guard:forced_no_tools",
+		"misc:later",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",
@@ -3307,6 +3325,36 @@ func TestBuildDebugRecoveryGuideAddsVerifierRecoveryActions(t *testing.T) {
 		}
 	}
 	for _, want := range []string{"verifier", "failures", "timeline"} {
+		if !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsLoopProtocolFixtureAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/loop-draft",
+		TimelinePath:      "/tmp/affent-eval/loop-draft/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/loop-draft/affenteval-debug.json",
+		Failures: []string{
+			`scenario "loop-draft" requires loop protocol feeds but active protocol file .affent/loops/loop-draft/LOOP.md has status "draft", want running`,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"loop_protocol:fixture",
+		"fix the per-session .affent/loops/<session_id>/LOOP.md fixture",
+		"state.json lifecycle status",
+		"scenario setup, not model behavior",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	for _, want := range []string{"failures", "expectations", "debug_manifest"} {
 		if !stringSliceContains(guide.Inspect, want) {
 			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
 		}
