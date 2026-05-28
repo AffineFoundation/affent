@@ -890,6 +890,7 @@ func TestMemoryTopicBucketIsolation(t *testing.T) {
 // appear only as an index hint (model uses search to read them).
 func TestMemorySnapshotInlinesGeneralButIndexesCustomTopics(t *testing.T) {
 	s := newTestStore(t)
+	s.TopicCharLimit = 120
 	_, _ = s.Add(TargetMemory, "", "general fact one")
 	_, _ = s.Add(TargetMemory, CoreTopic, "core durable fact")
 	_, _ = s.Add(TargetMemory, "auth", "details about auth that grow over time")
@@ -906,6 +907,9 @@ func TestMemorySnapshotInlinesGeneralButIndexesCustomTopics(t *testing.T) {
 	}
 	if !strings.Contains(snap, "auth: 1 entry") {
 		t.Errorf("custom topic index missing in snapshot:\n%s", snap)
+	}
+	if !strings.Contains(snap, "/120 chars") {
+		t.Errorf("custom topic index should expose topic capacity:\n%s", snap)
 	}
 }
 

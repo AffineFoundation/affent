@@ -1234,6 +1234,8 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 	type topicInfo struct {
 		name     string
 		count    int
+		chars    int
+		limit    int
 		newestAt string
 	}
 	var topics []topicInfo
@@ -1251,6 +1253,8 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 		topics = append(topics, topicInfo{
 			name:     tf.name,
 			count:    len(es),
+			chars:    joinedLen(es),
+			limit:    s.limitFor(TargetMemory, tf.name),
 			newestAt: newestEntryTimestamp(es),
 		})
 	}
@@ -1285,7 +1289,11 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 				fresh = ", newest " + parsed.Format("2006-01-02")
 			}
 		}
-		fmt.Fprintf(&b, "- %s: %d entry(ies)%s\n", t.name, t.count, fresh)
+		usage := ""
+		if t.limit > 0 {
+			usage = fmt.Sprintf(", %d/%d chars", t.chars, t.limit)
+		}
+		fmt.Fprintf(&b, "- %s: %d entry(ies)%s%s\n", t.name, t.count, usage, fresh)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
