@@ -121,6 +121,11 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "last message must have role=user with non-empty content", nil)
 			return
 		}
+		loopSetupGoal := sessionLoopSetupGoalFromMessage(userText)
+		if loopSetupGoal != "" && (!pool.cfg.EnableLoopProtocol || pool.cfg.EvalMode) {
+			writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("loop protocol is not available"), "mode_unavailable")
+			return
+		}
 
 		// X-Affent-Session-Id header takes precedence over body fields
 		// so proxies / middleware can pin a session without rewriting
@@ -140,6 +145,16 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			writeJSONError(w, http.StatusInternalServerError, "create session", err)
 			return
 		}
+		turnOpts := agent.TurnOptions{}
+		if loopSetupGoal != "" {
+			if _, err := sess.ensureLoopProtocolInitializedWithCreated(loopSetupGoal); err != nil {
+				writeJSONError(w, http.StatusInternalServerError, "initialize loop protocol", err)
+				return
+			}
+			userText = sessionLoopSetupPrompt(loopSetupGoal)
+			turnOpts.UserMode = sessionMessageModeLoopSetup
+			turnOpts.UserDisplayText = sessionLoopSetupDisplayText(loopSetupGoal)
+		}
 
 		// Subscribe BEFORE SendUser so we never miss the turn.start
 		// event. Generous buffer; fanout drops events to slow
@@ -148,7 +163,7 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 		defer sess.Unsubscribe(subID)
 
 		ctx := r.Context()
-		turnID, err := sess.SendUser(ctx, userText)
+		turnID, err := sess.SendUserWithOptions(ctx, userText, turnOpts)
 		if err != nil {
 			switch {
 			case errors.Is(err, agent.ErrTurnInFlight):

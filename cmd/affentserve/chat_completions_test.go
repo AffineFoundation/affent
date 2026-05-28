@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -118,6 +120,62 @@ func TestChatCompletions_ResponseLabelsEchoRequestWhenCfgEmpty(t *testing.T) {
 	}
 	if resp.Model != "gpt-5" {
 		t.Errorf("response model = %q, want gpt-5 (cfg.Model empty → echo request)", resp.Model)
+	}
+}
+
+func TestChatCompletions_LoopStarterUsesProtocolSetup(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"What should pause this loop?\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	pool.cfg.EnableLoopProtocol = true
+	cfg := Config{Model: "fake", BaseURL: srv.URL}
+	handler := handleChatCompletions(cfg, pool)
+
+	body := `{"model":"fake","session_id":"chat-loop","messages":[{"role":"user","content":"Start a long-running loop for this goal: 持续分析最近的世界形势"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, rec.Body.String())
+	}
+
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "chat-loop"))
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "draft" || !strings.Contains(protocol, "持续分析最近的世界形势") {
+		t.Fatalf("loop setup protocol:\n%s", protocol)
+	}
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("chat-loop"), "events.jsonl"), `"mode":"loop_setup"`)
+	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("chat-loop"), "events.jsonl"), `"display_text":"Set up loop: 持续分析最近的世界形势"`)
+
+	sess, err := pool.Get("chat-loop")
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := sess.conv.Snapshot()
+	sawSetupPrompt := false
+	for _, msg := range messages {
+		if msg.Role != "user" {
+			continue
+		}
+		if strings.Contains(msg.Content, "Loop protocol activation is pending, not active yet.") &&
+			strings.Contains(msg.Content, "Set up loop for: 持续分析最近的世界形势") {
+			sawSetupPrompt = true
+		}
+		if msg.Content == "Start a long-running loop for this goal: 持续分析最近的世界形势" {
+			t.Fatalf("conversation should contain backend loop setup prompt, not raw marker: %+v", messages)
+		}
+	}
+	if !sawSetupPrompt {
+		t.Fatalf("conversation should include backend loop setup prompt, got %+v", messages)
 	}
 }
 
