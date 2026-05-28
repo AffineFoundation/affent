@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -40,6 +41,7 @@ func proposeRuntimeSkillFromURL(ctx context.Context, root, rawURL string, opts R
 	if body == "" {
 		return RuntimeSkillProposal{}, fmt.Errorf("remote SKILL.md is empty")
 	}
+	frontmatter := parseSkillMarkdownFrontmatter(body)
 	manifest := runtimeSkillManifest{}
 	if target.ManifestURL != "" {
 		if manifestRaw, err := fetch(ctx, target.ManifestURL, maxRuntimeSkillManifestBytes); err == nil && len(strings.TrimSpace(string(manifestRaw))) > 0 {
@@ -49,8 +51,8 @@ func proposeRuntimeSkillFromURL(ctx context.Context, root, rawURL string, opts R
 		}
 	}
 	skill := Skill{
-		Name:           firstNonEmpty(opts.Name, manifest.Name, inferRuntimeSkillNameFromBody(body), target.DefaultName),
-		Description:    firstNonEmpty(opts.Description, manifest.Description, "Runtime skill imported from URL."),
+		Name:           firstNonEmpty(opts.Name, manifest.Name, frontmatter.Name, inferRuntimeSkillNameFromBody(body), target.DefaultName),
+		Description:    firstNonEmpty(opts.Description, manifest.Description, frontmatter.Description, "Runtime skill imported from URL."),
 		Source:         target.Source,
 		Body:           body,
 		AutoActivation: manifest.AutoActivation,
@@ -97,25 +99,26 @@ func parseRuntimeSkillGitHubURL(raw string) (runtimeSkillURLTarget, error) {
 }
 
 func parseRawGitHubSkillURL(raw string, parts []string) (runtimeSkillURLTarget, error) {
-	if len(parts) < 5 {
-		return runtimeSkillURLTarget{}, fmt.Errorf("raw GitHub URL must include owner/repo/ref/path/SKILL.md")
+	if len(parts) < 4 {
+		return runtimeSkillURLTarget{}, fmt.Errorf("raw GitHub URL must include owner/repo/ref/SKILL.md")
 	}
 	if parts[len(parts)-1] != "SKILL.md" {
 		return runtimeSkillURLTarget{}, fmt.Errorf("raw GitHub URL must point to SKILL.md")
 	}
-	dir := strings.Join(parts[3:len(parts)-1], "/")
-	manifestParts := append(append([]string(nil), parts[:3]...), append(strings.Split(dir, "/"), "skill.json")...)
+	owner, repo, ref := parts[0], parts[1], parts[2]
+	dirParts := append([]string(nil), parts[3:len(parts)-1]...)
+	manifestParts := append(append([]string(nil), dirParts...), "skill.json")
 	return runtimeSkillURLTarget{
-		BodyURL:     "https://raw.githubusercontent.com/" + strings.Join(parts, "/"),
-		ManifestURL: "https://raw.githubusercontent.com/" + strings.Join(manifestParts, "/"),
+		BodyURL:     rawGitHubURL(owner, repo, ref, append(append([]string(nil), dirParts...), "SKILL.md")...),
+		ManifestURL: rawGitHubURL(owner, repo, ref, manifestParts...),
 		Source:      raw,
-		DefaultName: defaultSkillNameFromPath(dir),
+		DefaultName: defaultSkillNameFromPath(strings.Join(dirParts, "/")),
 	}, nil
 }
 
 func parseGitHubSkillURL(raw string, parts []string) (runtimeSkillURLTarget, error) {
-	if len(parts) < 5 {
-		return runtimeSkillURLTarget{}, fmt.Errorf("GitHub URL must include owner/repo/tree-or-blob/ref/path")
+	if len(parts) < 4 {
+		return runtimeSkillURLTarget{}, fmt.Errorf("GitHub URL must include owner/repo/tree-or-blob/ref")
 	}
 	owner, repo, kind, ref := parts[0], parts[1], parts[2], parts[3]
 	if kind != "tree" && kind != "blob" {
@@ -131,16 +134,18 @@ func parseGitHubSkillURL(raw string, parts []string) (runtimeSkillURLTarget, err
 	if len(targetParts) > 0 && targetParts[len(targetParts)-1] == "SKILL.md" {
 		targetParts = targetParts[:len(targetParts)-1]
 	}
-	if len(targetParts) == 0 {
-		return runtimeSkillURLTarget{}, fmt.Errorf("GitHub URL must point to a skill directory or SKILL.md path")
-	}
-	base := "https://raw.githubusercontent.com/" + strings.Join([]string{owner, repo, ref}, "/") + "/" + strings.Join(targetParts, "/")
 	return runtimeSkillURLTarget{
-		BodyURL:     base + "/SKILL.md",
-		ManifestURL: base + "/skill.json",
+		BodyURL:     rawGitHubURL(owner, repo, ref, append(append([]string(nil), targetParts...), "SKILL.md")...),
+		ManifestURL: rawGitHubURL(owner, repo, ref, append(append([]string(nil), targetParts...), "skill.json")...),
 		Source:      raw,
 		DefaultName: defaultSkillNameFromPath(strings.Join(targetParts, "/")),
 	}, nil
+}
+
+func rawGitHubURL(owner, repo, ref string, pathParts ...string) string {
+	parts := []string{"https://raw.githubusercontent.com", owner, repo, ref}
+	parts = append(parts, pathParts...)
+	return strings.Join(parts, "/")
 }
 
 func compactPathParts(rawPath string) []string {
@@ -174,6 +179,58 @@ func inferRuntimeSkillNameFromBody(body string) string {
 		}
 	}
 	return ""
+}
+
+type skillMarkdownFrontmatter struct {
+	Name        string
+	Description string
+}
+
+func parseSkillMarkdownFrontmatter(body string) skillMarkdownFrontmatter {
+	lines := strings.Split(body, "\n")
+	if len(lines) < 3 || strings.TrimSpace(lines[0]) != "---" {
+		return skillMarkdownFrontmatter{}
+	}
+	var frontmatter skillMarkdownFrontmatter
+	for i := 1; i < len(lines) && i <= 80; i++ {
+		line := strings.TrimSpace(lines[i])
+		if line == "---" {
+			return frontmatter
+		}
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(key)) {
+		case "name":
+			frontmatter.Name = parseSkillFrontmatterScalar(value)
+		case "description":
+			frontmatter.Description = parseSkillFrontmatterScalar(value)
+		}
+	}
+	return skillMarkdownFrontmatter{}
+}
+
+func parseSkillFrontmatterScalar(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if strings.HasPrefix(value, "\"") {
+		if unquoted, err := strconv.Unquote(value); err == nil {
+			return strings.TrimSpace(unquoted)
+		}
+	}
+	if len(value) >= 2 && value[0] == '\'' && value[len(value)-1] == '\'' {
+		return strings.TrimSpace(strings.ReplaceAll(value[1:len(value)-1], "''", "'"))
+	}
+	if comment := strings.Index(value, " #"); comment >= 0 {
+		value = value[:comment]
+	}
+	return strings.TrimSpace(value)
 }
 
 func firstNonEmpty(values ...string) string {
