@@ -254,7 +254,7 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 			"BODY_BYTES: 32000\n" +
 			strings.Repeat("large metric row\n", 400) +
 			"\n\n[... 4096 more bytes truncated from browser_network_read before model context.]\n" +
-			"Use the saved artifact with read_file if you need the complete output: " + artifactPath
+			"Use the saved artifact if you need the complete output: " + artifactPath + " (use read_file when this path is inside the workspace; in affentserve/WebUI, open the session artifact from the artifacts panel or /v1/sessions/{id}/artifacts)."
 		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network_read", Content: raw})
 		for _, want := range []string{
 			"TOOL_RESULT[browser_network_read]",

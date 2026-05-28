@@ -752,5 +752,5 @@ func artifactReadHint(artifactPath string) string {
 	if artifactPath == "" {
 		return ""
 	}
-	return "\nUse the saved artifact with read_file if you need the complete output: " + artifactPath
+	return "\nUse the saved artifact if you need the complete output: " + artifactPath + " (use read_file when this path is inside the workspace; in affentserve/WebUI, open the session artifact from the artifacts panel or /v1/sessions/{id}/artifacts)."
 }

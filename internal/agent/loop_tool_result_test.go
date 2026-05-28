@@ -728,8 +728,9 @@ func TestRunTurn_ContextTruncatedToolResultGetsArtifactHint(t *testing.T) {
 				if !strings.Contains(secondReq, toolResultPath) {
 					t.Fatalf("next request missing artifact path hint:\n%s", secondReq)
 				}
-				if !strings.Contains(secondReq, "Use the saved artifact with read_file") {
-					t.Fatalf("next request missing read_file artifact hint:\n%s", secondReq)
+				if !strings.Contains(secondReq, "Use the saved artifact if you need the complete output") ||
+					!strings.Contains(secondReq, "artifacts panel") {
+					t.Fatalf("next request missing artifact recovery hint:\n%s", secondReq)
 				}
 				return
 			}
@@ -2270,8 +2271,9 @@ func TestRunTurn_ToolResultArtifactPathIsIncludedInNextContext(t *testing.T) {
 			if !strings.Contains(secondRequest, ".affent/artifacts/tool-results/000001-c1.txt") {
 				t.Fatalf("next request missing artifact path hint:\n%s", secondRequest)
 			}
-			if !strings.Contains(secondRequest, "Use the saved artifact with read_file") {
-				t.Fatalf("next request missing read_file artifact hint:\n%s", secondRequest)
+			if !strings.Contains(secondRequest, "Use the saved artifact if you need the complete output") ||
+				!strings.Contains(secondRequest, "/v1/sessions/{id}/artifacts") {
+				t.Fatalf("next request missing artifact recovery hint:\n%s", secondRequest)
 			}
 			return
 		case <-deadline:

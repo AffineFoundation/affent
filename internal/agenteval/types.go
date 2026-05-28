@@ -245,9 +245,10 @@ type ToolCall struct {
 	ResultBytes        int
 	ResultOmittedBytes int
 	ResultCapBytes     int
-	// ResultArtifactPath is a workspace-relative path to the complete
-	// tool result when the event payload was truncated and the runtime
-	// persisted an artifact.
+	// ResultArtifactPath is a relative path to the complete tool result when
+	// the event payload was truncated and the runtime persisted an artifact.
+	// Eval traces resolve it under WorkspaceDir; affentserve exposes the same
+	// relative path through the session artifact API.
 	ResultArtifactPath string
 	// ContextBytes/ContextOmittedBytes describe the tool-result text that was
 	// actually appended to the model conversation after context caps. These are

@@ -117,7 +117,8 @@ type Loop struct {
 	// ToolResultArtifactDir, when set, stores full tool outputs that were
 	// too large for the tool.result event or would be shortened before
 	// re-entering model context. ToolResultArtifactPathPrefix is the
-	// workspace-relative prefix exposed in the event payload.
+	// relative prefix exposed in the event payload; callers may back it by
+	// a workspace directory or a durable session artifact directory.
 	ToolResultArtifactDir        string
 	ToolResultArtifactPathPrefix string
 

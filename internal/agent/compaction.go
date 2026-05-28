@@ -463,20 +463,27 @@ func compactToolResultSummaryWithArtifacts(toolName, content string) string {
 }
 
 func toolResultArtifactPathsFromText(content string) []string {
-	const marker = "Use the saved artifact with read_file if you need the complete output:"
+	markers := []string{
+		"Use the saved artifact if you need the complete output:",
+		"Use the saved artifact with read_file if you need the complete output:",
+	}
 	seen := map[string]bool{}
 	var paths []string
 	for _, line := range strings.Split(content, "\n") {
-		idx := strings.Index(line, marker)
-		if idx < 0 {
-			continue
+		rest := ""
+		for _, marker := range markers {
+			idx := strings.Index(line, marker)
+			if idx < 0 {
+				continue
+			}
+			rest = strings.TrimSpace(line[idx+len(marker):])
+			break
 		}
-		rest := strings.TrimSpace(line[idx+len(marker):])
 		if rest == "" {
 			continue
 		}
 		path := strings.Fields(rest)[0]
-		path = strings.Trim(path, "`'\",;")
+		path = strings.Trim(path, "`'\",;()")
 		if path == "" || seen[path] {
 			continue
 		}
