@@ -916,6 +916,10 @@ export function App() {
       content: webLoopProtocolDraftPrompt(goal, status, calibrationQuestions, calibrationQuestion, calibrationAnswers, calibrationPreview),
     });
     setComposerFocusSignal((current) => current + 1);
+    if (workbenchInspectorOpen || (workbenchOpen && shouldReturnToChatForDraft())) {
+      setWorkbenchOpen(false);
+      setWorkbenchInspectorOpen(false);
+    }
   }
 
   async function handleSend(content: string) {
@@ -1259,7 +1263,7 @@ export function App() {
 
   function handleUseAsDraft(content: string, source?: DraftSource) {
     setComposerDraft((current) => ({ id: (current?.id ?? 0) + 1, content, source }));
-    if (workbenchOpen && shouldReturnToChatForDraft()) {
+    if (workbenchInspectorOpen || (workbenchOpen && shouldReturnToChatForDraft())) {
       setWorkbenchOpen(false);
       setWorkbenchInspectorOpen(false);
     }
@@ -1746,25 +1750,27 @@ export function App() {
                 />
               </div>
             )}
-            <Composer
-              disabled={demoActive}
-              disabledReason={status.detail}
-              busy={actionBusy || session.status === "running"}
-              cancelling={cancelBusy}
-              hasSession={!!selectedSessionId}
-              resumeSession={composerResumesSavedChat}
-              draft={composerDraft}
-              focusSignal={composerFocusSignal}
-              runtimeCapabilities={capabilityView}
-              onSubmit={handleSend}
-              onStartLoop={handleStartLoop}
-              onScheduleLoopTick={() => handleCreateSchedule("loop")}
-              onScheduleCheckIn={() => handleCreateSchedule("checkin")}
-              onScheduleDaily={() => handleCreateSchedule("daily")}
-              automationAvailable={showAutomationContext}
-              automationBusy={scheduleBusy}
-              onCancel={handleCancel}
-            />
+            {!showWorkbenchInspector ? (
+              <Composer
+                disabled={demoActive}
+                disabledReason={status.detail}
+                busy={actionBusy || session.status === "running"}
+                cancelling={cancelBusy}
+                hasSession={!!selectedSessionId}
+                resumeSession={composerResumesSavedChat}
+                draft={composerDraft}
+                focusSignal={composerFocusSignal}
+                runtimeCapabilities={capabilityView}
+                onSubmit={handleSend}
+                onStartLoop={handleStartLoop}
+                onScheduleLoopTick={() => handleCreateSchedule("loop")}
+                onScheduleCheckIn={() => handleCreateSchedule("checkin")}
+                onScheduleDaily={() => handleCreateSchedule("daily")}
+                automationAvailable={showAutomationContext}
+                automationBusy={scheduleBusy}
+                onCancel={handleCancel}
+              />
+            ) : null}
           </section>
           {workbenchOpen ? (
             <WorkbenchPanel

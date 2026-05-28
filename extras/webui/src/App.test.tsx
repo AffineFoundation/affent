@@ -949,7 +949,7 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
     await selectWorkbenchTab(user, "Automation");
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running");
-    const panel = await screen.findByTestId("session-loop-panel");
+    let panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("Running protocol");
     expect(panel).toHaveTextContent("watch market evidence for several days");
@@ -960,6 +960,9 @@ describe("App", () => {
     await user.click(within(panel).getByRole("button", { name: "Update via chat" }));
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Review and update LOOP.md");
 
+    await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
+    panel = await screen.findByTestId("session-loop-panel");
     await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-control/loop-protocol", expect.objectContaining({ method: "DELETE" })));
@@ -1849,6 +1852,7 @@ describe("App", () => {
     expect(screen.queryByTestId("session-skills-panel")).toBeNull();
     await selectWorkbenchTab(user, "Trace");
     expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Trace");
+    expect(screen.queryByTestId("composer")).toBeNull();
     const runtime = await screen.findByTestId("runtime-stats-panel");
     expect(runtime).toHaveTextContent("Diagnostics");
     expect(runtime).toHaveTextContent("qwen-small");
@@ -1857,6 +1861,8 @@ describe("App", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs");
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
+    await user.click(screen.getByRole("button", { name: "Back to chat" }));
+    expect(screen.getByTestId("composer")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Close Workbench" }));
     expect(screen.queryByTestId("workbench-panel")).toBeNull();
     expect(await screen.findByTestId("conversation-scroll")).toBeVisible();
