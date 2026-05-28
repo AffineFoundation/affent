@@ -34,12 +34,17 @@ describe("buildWorkbenchNavItems", () => {
       "trace",
     ]);
     expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Current chat" });
+    expect(items.find((item) => item.key === "loop")).toMatchObject({
+      label: "Automation",
+      detail: "Loop and timers",
+      scope: "platform",
+    });
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
     expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
       "context",
-      "loop",
     ]);
     expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
+      "loop",
       "memory",
       "skills",
       "config",
@@ -115,7 +120,12 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 generated file · 1 full output · 4 KiB" });
     expect(items.find((item) => item.key === "workspace")).toMatchObject({ badge: "!" });
     expect(items.find((item) => item.key === "workspace")?.tone).toBeUndefined();
-    expect(items.find((item) => item.key === "loop")).toMatchObject({ badge: "active", detail: "Loop waiting" });
+    expect(items.find((item) => item.key === "loop")).toMatchObject({
+      label: "Automation",
+      badge: "active",
+      detail: "Loop waiting",
+      scope: "current",
+    });
     expect(items.find((item) => item.key === "memory")).toMatchObject({ badge: "updated", detail: "1 topics" });
     expect(items.find((item) => item.key === "skills")).toMatchObject({ badge: "1", detail: "1 reusable workflows" });
     expect(items.find((item) => item.key === "config")).toMatchObject({ badge: "1", detail: "1 env configured" });

@@ -967,7 +967,7 @@ describe("App", () => {
     expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Workbench");
     expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Loop review");
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Loop");
+    await selectWorkbenchTab(user, "Automation");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Activation review");
     await user.click(within(panel).getByRole("button", { name: "Review in chat" }));
@@ -1043,7 +1043,7 @@ describe("App", () => {
     expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Workbench");
     expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Loop waiting");
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Loop");
+    await selectWorkbenchTab(user, "Automation");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Waiting for your calibration answer");
     await user.click(within(panel).getByRole("button", { name: "Open answer draft" }));
@@ -1136,7 +1136,7 @@ describe("App", () => {
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Loop");
+    await selectWorkbenchTab(user, "Automation");
     let panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("Running protocol");
