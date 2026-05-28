@@ -46,8 +46,10 @@ const DefaultSummaryTriggerMsgs = 240
 // DefaultSummaryTriggerBytes caps approximate persisted conversation
 // pressure before proactive summarization. Message-count thresholds miss
 // long-running coding sessions where a few write_file or shell tool-call
-// arguments carry most of the context.
-const DefaultSummaryTriggerBytes = 512 * 1024
+// arguments carry most of the context. Keep this below typical provider
+// pressure cliffs because tool schemas and tokenizer differences are not
+// fully represented in the persisted conversation byte count.
+const DefaultSummaryTriggerBytes = 192 * 1024
 
 // DefaultSummaryKeepLast is the OpenHands V1 keep_last value (10).
 const DefaultSummaryKeepLast = 10

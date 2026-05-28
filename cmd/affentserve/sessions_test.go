@@ -1850,6 +1850,47 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	}
 }
 
+func TestSessionPool_LoopProtocolCompletionGuardBlocksRunningLoop(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-guard")
+	path := sessionLoopProtocolPath(pool, "loop-guard")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 0. Metadata\n\n- loop_id: loop-guard\n- status: running\n\n## 1. North Star\n\nFinish the project."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := pool.GetOrCreate("loop-guard")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	var blocked agent.CompletionGuardResult
+	for _, guard := range s.loop.CompletionGuards {
+		if res := guard(); res.Blocked {
+			blocked = res
+			break
+		}
+	}
+	if !blocked.Blocked ||
+		blocked.Trigger != "loop_protocol_running" ||
+		!strings.Contains(blocked.Reason, "loop-guard") ||
+		!strings.Contains(blocked.RequiredAction, "loop_protocol action=close") ||
+		!strings.Contains(blocked.Prompt, "Do not leave a running loop behind a final answer") {
+		t.Fatalf("loop protocol completion guard = %+v", blocked)
+	}
+
+	if _, _, err := loopstate.RecordProtocolStatus(path, "completed", "test completed"); err != nil {
+		t.Fatalf("RecordProtocolStatus: %v", err)
+	}
+	for _, guard := range s.loop.CompletionGuards {
+		if res := guard(); res.Blocked {
+			t.Fatalf("closed loop should not block completion: %+v", res)
+		}
+	}
+}
+
 func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
