@@ -23,8 +23,32 @@ describe("SessionLoopPanel", () => {
 
     const panel = screen.getByTestId("session-loop-panel");
     expect(panel.tagName).toBe("SECTION");
+    expect(panel).toHaveAccessibleName("Automation");
     expect(panel).toHaveTextContent("Set up long-running work only when this chat needs it");
     expect(panel).not.toHaveAttribute("open");
+  });
+
+  it("uses a compact embedded running state for Workbench automation", () => {
+    render(
+      <SessionLoopPanel
+        embedded
+        summary={{ path: ".affent/loops/loop-1/LOOP.md", status: "running", bytes: 512 }}
+        state={{
+          version: 1,
+          loop_id: "loop-1",
+          status: "running",
+          initial_goal_preview: "watch market evidence for several days",
+        }}
+        onUseAsDraft={() => undefined}
+      />,
+    );
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Automation");
+    expect(panel).toHaveTextContent("Loop running");
+    expect(panel).not.toHaveTextContent("Running protocol");
+    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Keep LOOP.md compact");
+    expect(screen.getByRole("button", { name: "Update LOOP.md" })).toBeInTheDocument();
   });
 
   it("puts the pending calibration question next to the chat action", () => {

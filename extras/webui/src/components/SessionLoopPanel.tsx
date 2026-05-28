@@ -49,7 +49,7 @@ export function SessionLoopPanel({
         testId="session-loop-panel"
         embedded={embedded}
         defaultOpen={defaultOpen}
-        kicker="Loop"
+        kicker={embedded ? "Automation" : "Loop"}
         title="Off"
         detail="Set up long-running work only when this chat needs it"
       >
@@ -108,12 +108,14 @@ export function SessionLoopPanel({
       testId="session-loop-panel"
       embedded={embedded}
       defaultOpen={defaultOpen}
-      kicker="Loop"
-      title={title}
+      kicker={embedded ? "Automation" : "Loop"}
+      title={embedded ? loopEmbeddedTitle(title) : title}
       detail={detail}
     >
       <div className="session-plan-body session-loop-body">
-        <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
+        {!(embedded && status === "running") ? (
+          <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
+        ) : null}
         <LoopNextStep
           status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"}
           goal={goal}
@@ -237,9 +239,9 @@ function loopNextStepCopy(
   }
   if (status === "running") {
     return {
-      kicker: "Active",
-      title: "Loop can receive timers",
-      detail: "Use chat for durable protocol changes; concrete task progress should stay in plan state and trace.",
+      kicker: "Next action",
+      title: "Keep LOOP.md compact",
+      detail: "Use chat for durable protocol changes; scheduled ticks should advance one compact step.",
     };
   }
   if (status === "disabled") {
@@ -259,8 +261,15 @@ function loopNextStepCopy(
 function loopNextStepActionLabel(status: "off" | "draft" | "running" | "disabled" | "unknown", calibrationAnswers = 0): string | undefined {
   if (status === "draft" && calibrationAnswers <= 0) return "Open answer draft";
   if (status === "draft") return "Review in chat";
-  if (status === "running") return "Update via chat";
+  if (status === "running") return "Update LOOP.md";
   return undefined;
+}
+
+function loopEmbeddedTitle(title: string): string {
+  if (title === "Running") return "Loop running";
+  if (title === "Disabled") return "Loop disabled";
+  if (title === "Draft") return "Loop draft";
+  return title;
 }
 
 function LoopActivationChecklist({ status, calibrationAnswers = 0 }: { status: "off" | "draft" | "running" | "disabled" | "unknown"; calibrationAnswers?: number }) {
