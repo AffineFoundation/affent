@@ -631,6 +631,15 @@ Summary records aggregate all scenario records from the same process:
   multi-turn drift. `loop_protocol_feed_rate` is scenario coverage, not raw
   feed count divided by scenario count, so repeated feeds in one scenario do
   not hide scenarios that never received their protocol.
+- Loop protocol calibration totals:
+  `loop_protocol_calibration_request_scenarios`,
+  `loop_protocol_calibration_requests`,
+  `loop_protocol_calibration_scenarios`,
+  `loop_protocol_calibrations`, and their bounded example arrays. The summary
+  rates `loop_protocol_calibration_request_rate` and
+  `loop_protocol_calibration_rate` are scenario coverage rates, so one noisy
+  loop cannot mask that other loop-activation scenarios never asked for or
+  recorded calibration.
 - Context pressure totals: `context_compactions`,
   `context_compactions_reactive`, `context_compaction_removed_messages`,
   `context_compaction_summary_bytes`, `context_compaction_summary_missing`, and

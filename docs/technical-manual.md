@@ -1115,9 +1115,10 @@ trace/timeline/debug-manifest paths. JSONL records copy the enabled thresholds
 into metadata so result files preserve their pass/fail conditions. Use
 `--quality-profile longrun` for general long-run regression
 runs; it includes minimum trace-event, memory-update, loop-protocol feed,
-session-search context-hit, scenario-level session-recall debug tag, and missing
-truncation-artifact gates, plus a scenario-level failed tool-repair gate, so
-observability, shared memory, tool recovery, loop-guard no-tool fallback, and
+loop-protocol calibration request/answer, session-search context-hit,
+scenario-level session-recall debug tag, and missing truncation-artifact gates,
+plus a scenario-level failed tool-repair gate, so observability, shared memory,
+tool recovery, loop startup calibration, loop-guard no-tool fallback, and
 cross-session recovery regressions fail the batch. It also requires the batch
 to include `longrun_recovery`, `loop_protocol`, and `session_search`
 expectation capabilities, so a filtered run cannot pass the profile without
@@ -1407,6 +1408,12 @@ eval mode, `affentctl` injects that protocol when present and emits
 calibration answer count/latest preview. This lets long-run evals assert that
 the loop protocol was actually fed, rather than only checking that the file
 existed in the workspace.
+Calibration-only loop activation scenarios may start from a draft protocol and
+assert `loop.protocol_calibration_request` plus `loop.protocol_calibration`
+before the protocol becomes active. `affenteval` aggregates these as
+`loop_protocol_calibration_request_rate` and `loop_protocol_calibration_rate`;
+the `longrun` quality profile requires both so a suite cannot pass while
+skipping user-intent calibration for newly started loops.
 Batch scenarios can also define multiple ordered prompts. The harness reruns
 `affentctl run` with the same workspace, trace, and explicit session id, so the
 second and later turns exercise real persisted conversation state instead of a

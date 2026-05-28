@@ -265,6 +265,8 @@ func run(args []string) int {
 			MinCompletionRate:                     fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:                   fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
 			MinLoopProtocolFeedRate:               fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
+			MinLoopProtocolCalibrationRequestRate: fs.Float64("min-loop-protocol-calibration-request-rate", -1, "optional quality gate: minimum scenario rate with loop protocol calibration requests, 0..1"),
+			MinLoopProtocolCalibrationRate:        fs.Float64("min-loop-protocol-calibration-rate", -1, "optional quality gate: minimum scenario rate with accepted loop protocol calibrations, 0..1"),
 			MinRuntimeSurfaceRate:                 fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
 			MinTraceEventRate:                     fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
 			MinSourceNetworkRate:                  fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
@@ -501,6 +503,8 @@ type qualityGateConfig struct {
 	MinCompletionRate                              *float64
 	MinMemoryUpdateRate                            *float64
 	MinLoopProtocolFeedRate                        *float64
+	MinLoopProtocolCalibrationRequestRate          *float64
+	MinLoopProtocolCalibrationRate                 *float64
 	MinRuntimeSurfaceRate                          *float64
 	MinTraceEventRate                              *float64
 	MinSourceNetworkRate                           *float64
@@ -564,6 +568,8 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinCompletionRate:                     float64Ptr(0.90),
 				MinMemoryUpdateRate:                   float64Ptr(0.10),
 				MinLoopProtocolFeedRate:               float64Ptr(0.05),
+				MinLoopProtocolCalibrationRequestRate: float64Ptr(0.05),
+				MinLoopProtocolCalibrationRate:        float64Ptr(0.05),
 				MinExpectationCapabilityPassRate:      float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate:  float64Ptr(0.50),
 				MinExpectationDomainPassRate:          float64Ptr(0.80),
@@ -702,6 +708,8 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-completion-rate", g.MinCompletionRate)
 	add("min-memory-update-rate", g.MinMemoryUpdateRate)
 	add("min-loop-protocol-feed-rate", g.MinLoopProtocolFeedRate)
+	add("min-loop-protocol-calibration-request-rate", g.MinLoopProtocolCalibrationRequestRate)
+	add("min-loop-protocol-calibration-rate", g.MinLoopProtocolCalibrationRate)
 	add("min-runtime-surface-rate", g.MinRuntimeSurfaceRate)
 	add("min-trace-event-rate", g.MinTraceEventRate)
 	add("min-source-network-rate", g.MinSourceNetworkRate)
@@ -791,6 +799,8 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-completion-rate", &g.MinCompletionRate, profileConfig.MinCompletionRate)
 	apply("min-memory-update-rate", &g.MinMemoryUpdateRate, profileConfig.MinMemoryUpdateRate)
 	apply("min-loop-protocol-feed-rate", &g.MinLoopProtocolFeedRate, profileConfig.MinLoopProtocolFeedRate)
+	apply("min-loop-protocol-calibration-request-rate", &g.MinLoopProtocolCalibrationRequestRate, profileConfig.MinLoopProtocolCalibrationRequestRate)
+	apply("min-loop-protocol-calibration-rate", &g.MinLoopProtocolCalibrationRate, profileConfig.MinLoopProtocolCalibrationRate)
 	apply("min-runtime-surface-rate", &g.MinRuntimeSurfaceRate, profileConfig.MinRuntimeSurfaceRate)
 	apply("min-trace-event-rate", &g.MinTraceEventRate, profileConfig.MinTraceEventRate)
 	apply("min-source-network-rate", &g.MinSourceNetworkRate, profileConfig.MinSourceNetworkRate)
@@ -904,126 +914,132 @@ func cloneFloat64Ptr(value *float64) *float64 {
 }
 
 type batchSummary struct {
-	Total                                int
-	Passed                               int
-	Failed                               int
-	Duration                             time.Duration
-	ToolCalls                            int
-	ToolErrors                           int
-	ToolRepaired                         int
-	ToolNameCanonicalized                int
-	ToolRepairCalls                      int
-	ToolRepairSucceeded                  int
-	ToolRepairFailed                     int
-	ToolRepairNotes                      int
-	ToolRepairByKind                     map[string]int
-	ToolRepairExamples                   []agenteval.ToolRepairExample
-	ConversationRepairs                  int
-	ConversationRepairMissingToolResults int
-	ConversationRepairDuplicateResults   int
-	ConversationRepairUnexpectedResults  int
-	ConversationRepairByKind             map[string]int
-	ConversationRepairExamples           []batchConversationRepairExample
-	ToolFailureByKind                    map[string]int
-	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample
-	LoopGuardExamples                    []agenteval.LoopGuardExample
-	RuntimeErrors                        int
-	RuntimeErrorByKind                   map[string]int
-	RuntimeErrorExamples                 map[string][]agenteval.RuntimeErrorExample
-	RuntimeSurfaceScenarios              int
-	RuntimeSurfaceTools                  map[string]int
-	RuntimeSurfaceCapabilities           map[string]int
-	LoopDecisions                        int
-	LoopDecisionByKind                   map[string]int
-	LoopDecisionByDecision               map[string]int
-	LoopDecisionExamples                 []agenteval.LoopDecision
-	LoopProtocolFeedScenarios            int
-	LoopProtocolFeeds                    int
-	LoopProtocolFeedByMode               map[string]int
-	LoopProtocolFeedExamples             []agenteval.LoopProtocolFeed
-	ContextCompactions                   int
-	ContextCompactionsReactive           int
-	ContextCompactionRemoved             int
-	ContextCompactionSummary             int
-	ContextCompactionSummaryMissing      int
-	ContextCompactionSummaryEmpty        int
-	ContextCompactionExamples            []agenteval.ContextCompaction
-	ContextInjections                    int
-	ContextInjectionBySource             map[string]int
-	ContextInjectionBytes                int
-	ContextInjectionEstimatedTokens      int
-	ContextInjectionExamples             []agenteval.ContextInjection
-	LoopGuardInterventions               int
-	ForcedNoTools                        int
-	SourceAccessResults                  int
-	SourceAccessVerified                 int
-	SourceAccessDiscoveryOnly            int
-	SourceAccessNetwork                  int
-	SourceAccessDynamicPartial           int
-	SourceAccessExamples                 []agenteval.SourceAccessExample
-	BrowserScrollExamples                []agenteval.BrowserScrollExample
-	BrowserNetworkExamples               []agenteval.BrowserNetworkSearchExample
-	MemoryUpdates                        int
-	MemoryUpdateAdd                      int
-	MemoryUpdateReplace                  int
-	MemoryUpdateRemove                   int
-	MemorySearchCalls                    int
-	MemorySearchMisses                   int
-	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample
-	MemorySearchMissExamples             []agenteval.MemorySearchMissExample
-	SessionSearchCalls                   int
-	SessionSearchResults                 int
-	SessionSearchContextHits             int
-	SessionSearchMatchedTerms            int
-	SessionSearchRecent                  int
-	SessionSearchExamples                []agenteval.SessionSearchExample
-	ToolDurationMS                       int64
-	ToolContextTruncated                 int
-	ToolContextOmittedBytes              int
-	ToolArgsTruncated                    int
-	ToolArgsOmittedBytes                 int
-	ToolResultsTruncated                 int
-	ToolResultsOmittedBytes              int
-	ToolResultArtifacts                  int
-	ToolResultMissingArtifacts           int
-	ToolContextArtifacts                 int
-	ToolContextMissingArtifacts          int
-	ToolTruncationExamples               []agenteval.ToolTruncationExample
-	VerifierRuns                         int
-	VerifierPassed                       int
-	VerifierFailed                       int
-	VerifierOutputTruncated              int
-	VerifierOutputOmittedBytes           int
-	TraceSchemaVersions                  map[int]int
-	TraceEventScenarios                  int
-	TraceEvents                          int
-	TraceEventTypes                      map[string]int
-	InputTokens                          int
-	OutputTokens                         int
-	EndCompleted                         int
-	EndMaxTurns                          int
-	EndErrors                            int
-	EndCancelled                         int
-	EndUnknown                           int
-	FailureKinds                         map[string]int
-	FailureExamples                      map[string][]batchFailureExample
-	DebugBriefByTag                      map[string]int
-	DebugBriefTagExamples                map[string][]batchDebugBriefTagExample
-	ExpectationScenarios                 int
-	ExpectationSuites                    map[string]int
-	ExpectationDomains                   map[string]int
-	ExpectationDomainPass                map[string]int
-	ExpectationDomainFail                map[string]int
-	ExpectationDomainFailureExamples     map[string][]expectationDomainFailureExample
-	ExpectationDomainRuntime             map[string]*expectationDomainRuntimeTotals
-	ExpectationCapabilities              map[string]int
-	ExpectationCapabilityPass            map[string]int
-	ExpectationCapabilityFail            map[string]int
-	ExpectationCapabilityFailureExamples map[string][]expectationCapabilityFailureExample
-	ExpectationRequiredTools             map[string]int
-	ExpectationSourceAccess              map[string]int
-	RemovedWorkspaces                    int
-	CleanupErrors                        int
+	Total                                   int
+	Passed                                  int
+	Failed                                  int
+	Duration                                time.Duration
+	ToolCalls                               int
+	ToolErrors                              int
+	ToolRepaired                            int
+	ToolNameCanonicalized                   int
+	ToolRepairCalls                         int
+	ToolRepairSucceeded                     int
+	ToolRepairFailed                        int
+	ToolRepairNotes                         int
+	ToolRepairByKind                        map[string]int
+	ToolRepairExamples                      []agenteval.ToolRepairExample
+	ConversationRepairs                     int
+	ConversationRepairMissingToolResults    int
+	ConversationRepairDuplicateResults      int
+	ConversationRepairUnexpectedResults     int
+	ConversationRepairByKind                map[string]int
+	ConversationRepairExamples              []batchConversationRepairExample
+	ToolFailureByKind                       map[string]int
+	ToolFailureExamples                     map[string][]agenteval.ToolFailureExample
+	LoopGuardExamples                       []agenteval.LoopGuardExample
+	RuntimeErrors                           int
+	RuntimeErrorByKind                      map[string]int
+	RuntimeErrorExamples                    map[string][]agenteval.RuntimeErrorExample
+	RuntimeSurfaceScenarios                 int
+	RuntimeSurfaceTools                     map[string]int
+	RuntimeSurfaceCapabilities              map[string]int
+	LoopDecisions                           int
+	LoopDecisionByKind                      map[string]int
+	LoopDecisionByDecision                  map[string]int
+	LoopDecisionExamples                    []agenteval.LoopDecision
+	LoopProtocolFeedScenarios               int
+	LoopProtocolFeeds                       int
+	LoopProtocolFeedByMode                  map[string]int
+	LoopProtocolFeedExamples                []agenteval.LoopProtocolFeed
+	LoopProtocolCalibrationRequestScenarios int
+	LoopProtocolCalibrationRequests         int
+	LoopProtocolCalibrationRequestExamples  []agenteval.LoopProtocolCalibration
+	LoopProtocolCalibrationScenarios        int
+	LoopProtocolCalibrations                int
+	LoopProtocolCalibrationExamples         []agenteval.LoopProtocolCalibration
+	ContextCompactions                      int
+	ContextCompactionsReactive              int
+	ContextCompactionRemoved                int
+	ContextCompactionSummary                int
+	ContextCompactionSummaryMissing         int
+	ContextCompactionSummaryEmpty           int
+	ContextCompactionExamples               []agenteval.ContextCompaction
+	ContextInjections                       int
+	ContextInjectionBySource                map[string]int
+	ContextInjectionBytes                   int
+	ContextInjectionEstimatedTokens         int
+	ContextInjectionExamples                []agenteval.ContextInjection
+	LoopGuardInterventions                  int
+	ForcedNoTools                           int
+	SourceAccessResults                     int
+	SourceAccessVerified                    int
+	SourceAccessDiscoveryOnly               int
+	SourceAccessNetwork                     int
+	SourceAccessDynamicPartial              int
+	SourceAccessExamples                    []agenteval.SourceAccessExample
+	BrowserScrollExamples                   []agenteval.BrowserScrollExample
+	BrowserNetworkExamples                  []agenteval.BrowserNetworkSearchExample
+	MemoryUpdates                           int
+	MemoryUpdateAdd                         int
+	MemoryUpdateReplace                     int
+	MemoryUpdateRemove                      int
+	MemorySearchCalls                       int
+	MemorySearchMisses                      int
+	MemoryUpdateExamples                    []agenteval.MemoryUpdateExample
+	MemorySearchMissExamples                []agenteval.MemorySearchMissExample
+	SessionSearchCalls                      int
+	SessionSearchResults                    int
+	SessionSearchContextHits                int
+	SessionSearchMatchedTerms               int
+	SessionSearchRecent                     int
+	SessionSearchExamples                   []agenteval.SessionSearchExample
+	ToolDurationMS                          int64
+	ToolContextTruncated                    int
+	ToolContextOmittedBytes                 int
+	ToolArgsTruncated                       int
+	ToolArgsOmittedBytes                    int
+	ToolResultsTruncated                    int
+	ToolResultsOmittedBytes                 int
+	ToolResultArtifacts                     int
+	ToolResultMissingArtifacts              int
+	ToolContextArtifacts                    int
+	ToolContextMissingArtifacts             int
+	ToolTruncationExamples                  []agenteval.ToolTruncationExample
+	VerifierRuns                            int
+	VerifierPassed                          int
+	VerifierFailed                          int
+	VerifierOutputTruncated                 int
+	VerifierOutputOmittedBytes              int
+	TraceSchemaVersions                     map[int]int
+	TraceEventScenarios                     int
+	TraceEvents                             int
+	TraceEventTypes                         map[string]int
+	InputTokens                             int
+	OutputTokens                            int
+	EndCompleted                            int
+	EndMaxTurns                             int
+	EndErrors                               int
+	EndCancelled                            int
+	EndUnknown                              int
+	FailureKinds                            map[string]int
+	FailureExamples                         map[string][]batchFailureExample
+	DebugBriefByTag                         map[string]int
+	DebugBriefTagExamples                   map[string][]batchDebugBriefTagExample
+	ExpectationScenarios                    int
+	ExpectationSuites                       map[string]int
+	ExpectationDomains                      map[string]int
+	ExpectationDomainPass                   map[string]int
+	ExpectationDomainFail                   map[string]int
+	ExpectationDomainFailureExamples        map[string][]expectationDomainFailureExample
+	ExpectationDomainRuntime                map[string]*expectationDomainRuntimeTotals
+	ExpectationCapabilities                 map[string]int
+	ExpectationCapabilityPass               map[string]int
+	ExpectationCapabilityFail               map[string]int
+	ExpectationCapabilityFailureExamples    map[string][]expectationCapabilityFailureExample
+	ExpectationRequiredTools                map[string]int
+	ExpectationSourceAccess                 map[string]int
+	RemovedWorkspaces                       int
+	CleanupErrors                           int
 
 	// Delegation aggregates focused-task / subagent usage across all
 	// scenarios in the batch. Zero-valued when no scenario used a
@@ -1163,6 +1179,16 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.LoopProtocolFeedByMode[k] += v
 	}
 	s.LoopProtocolFeedExamples = appendLoopProtocolFeedExamples(s.LoopProtocolFeedExamples, res.LoopProtocolFeeds.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	if res.LoopProtocolCalibrationRequests.Count > 0 {
+		s.LoopProtocolCalibrationRequestScenarios++
+	}
+	s.LoopProtocolCalibrationRequests += res.LoopProtocolCalibrationRequests.Count
+	s.LoopProtocolCalibrationRequestExamples = appendLoopProtocolCalibrationExamples(s.LoopProtocolCalibrationRequestExamples, res.LoopProtocolCalibrationRequests.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	if res.LoopProtocolCalibrations.Count > 0 {
+		s.LoopProtocolCalibrationScenarios++
+	}
+	s.LoopProtocolCalibrations += res.LoopProtocolCalibrations.Count
+	s.LoopProtocolCalibrationExamples = appendLoopProtocolCalibrationExamples(s.LoopProtocolCalibrationExamples, res.LoopProtocolCalibrations.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ContextCompactions += res.ContextCompactions.Count
 	s.ContextCompactionsReactive += res.ContextCompactions.Reactive
 	s.ContextCompactionRemoved += res.ContextCompactions.RemovedMessages
@@ -1646,12 +1672,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,memory_search_miss:%s,loop_protocol_feed:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,memory_search_miss:%s,loop_protocol_feed:%s,loop_protocol_calibration_request:%s,loop_protocol_calibration:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tools=%.1f avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
 		formatPercent(batchRatio(s.MemoryUpdates, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls)),
 		formatPercent(batchRatio(s.LoopProtocolFeedScenarios, s.Total)),
+		formatPercent(batchRatio(s.LoopProtocolCalibrationRequestScenarios, s.Total)),
+		formatPercent(batchRatio(s.LoopProtocolCalibrationScenarios, s.Total)),
 		formatPercent(batchRatio(s.RuntimeSurfaceScenarios, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolErrors, s.ToolCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls)),
@@ -1761,6 +1789,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " loop_protocol_feed_modes=%s", formatStringIntCounts(s.LoopProtocolFeedByMode))
 		}
 	}
+	if s.LoopProtocolCalibrationRequests > 0 || s.LoopProtocolCalibrations > 0 {
+		fmt.Fprintf(w, " loop_protocol_calibration=scenarios:%d/%d,requests:%d,answers:%d",
+			s.LoopProtocolCalibrationRequestScenarios,
+			s.LoopProtocolCalibrationScenarios,
+			s.LoopProtocolCalibrationRequests,
+			s.LoopProtocolCalibrations,
+		)
+	}
 	if s.ContextCompactions > 0 {
 		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			s.ContextCompactions,
@@ -1838,6 +1874,8 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
 	printLoopProtocolFeedExampleLines(w, s.LoopProtocolFeedExamples, "")
+	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_request_example", s.LoopProtocolCalibrationRequestExamples, "")
+	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_example", s.LoopProtocolCalibrationExamples, "")
 	printContextCompactionExampleLines(w, s.ContextCompactionExamples, "")
 	printContextInjectionExampleLines(w, s.ContextInjectionExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
@@ -2124,6 +2162,8 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
 		{"--min-loop-protocol-feed-rate", g.MinLoopProtocolFeedRate, true},
+		{"--min-loop-protocol-calibration-request-rate", g.MinLoopProtocolCalibrationRequestRate, true},
+		{"--min-loop-protocol-calibration-rate", g.MinLoopProtocolCalibrationRate, true},
 		{"--min-runtime-surface-rate", g.MinRuntimeSurfaceRate, true},
 		{"--min-trace-event-rate", g.MinTraceEventRate, true},
 		{"--min-source-network-rate", g.MinSourceNetworkRate, true},
@@ -2276,6 +2316,8 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
 	checkMin("loop_protocol_feed_rate", batchRatio(s.LoopProtocolFeedScenarios, s.Total), g.MinLoopProtocolFeedRate, s.Total > 0)
+	checkMin("loop_protocol_calibration_request_rate", batchRatio(s.LoopProtocolCalibrationRequestScenarios, s.Total), g.MinLoopProtocolCalibrationRequestRate, s.Total > 0)
+	checkMin("loop_protocol_calibration_rate", batchRatio(s.LoopProtocolCalibrationScenarios, s.Total), g.MinLoopProtocolCalibrationRate, s.Total > 0)
 	checkMin("runtime_surface_rate", batchRatio(s.RuntimeSurfaceScenarios, s.Total), g.MinRuntimeSurfaceRate, s.Total > 0)
 	checkMin("trace_event_rate", batchRatio(s.TraceEventScenarios, s.Total), g.MinTraceEventRate, s.Total > 0)
 	checkMin("source_network_rate", batchRatio(s.SourceAccessNetwork, s.SourceAccessResults), g.MinSourceNetworkRate, s.SourceAccessResults > 0)
@@ -2782,6 +2824,35 @@ func printLoopProtocolFeedExampleLines(w io.Writer, examples []agenteval.LoopPro
 	}
 }
 
+func printLoopProtocolCalibrationExampleLines(w io.Writer, label string, examples []agenteval.LoopProtocolCalibration, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%s%s:", indent, label)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.LoopID != "" {
+			fmt.Fprintf(w, " loop_id=%s", ex.LoopID)
+		}
+		if ex.Status != "" {
+			fmt.Fprintf(w, " status=%s", ex.Status)
+		}
+		fmt.Fprintf(w, " questions=%d answers=%d", ex.CalibrationQuestions, ex.CalibrationAnswers)
+		if ex.ProtocolPath != "" {
+			fmt.Fprintf(w, " path=%s", ex.ProtocolPath)
+		}
+		if ex.EventSeq > 0 {
+			fmt.Fprintf(w, " event_seq=%d", ex.EventSeq)
+		}
+		if ex.LastCalibrationQuestion != "" {
+			fmt.Fprintf(w, " question=%q", textutil.Preview(ex.LastCalibrationQuestion, 120))
+		}
+		if ex.LastCalibrationAnswer != "" {
+			fmt.Fprintf(w, " answer=%q", textutil.Preview(ex.LastCalibrationAnswer, 120))
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func loopProtocolFeedLastTurnSummary(ex agenteval.LoopProtocolFeed) string {
 	var parts []string
 	if ex.LastTurnID != "" {
@@ -3237,6 +3308,8 @@ type evalJSONLMetadata struct {
 	MinCompletionRate                              *float64           `json:"min_completion_rate,omitempty"`
 	MinMemoryUpdateRate                            *float64           `json:"min_memory_update_rate,omitempty"`
 	MinLoopProtocolFeedRate                        *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
+	MinLoopProtocolCalibrationRequestRate          *float64           `json:"min_loop_protocol_calibration_request_rate,omitempty"`
+	MinLoopProtocolCalibrationRate                 *float64           `json:"min_loop_protocol_calibration_rate,omitempty"`
 	MinRuntimeSurfaceRate                          *float64           `json:"min_runtime_surface_rate,omitempty"`
 	MinTraceEventRate                              *float64           `json:"min_trace_event_rate,omitempty"`
 	MinSourceNetworkRate                           *float64           `json:"min_source_network_rate,omitempty"`
@@ -3317,6 +3390,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinCompletionRate:                     enabledQualityGateValue(gates.MinCompletionRate),
 		MinMemoryUpdateRate:                   enabledQualityGateValue(gates.MinMemoryUpdateRate),
 		MinLoopProtocolFeedRate:               enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
+		MinLoopProtocolCalibrationRequestRate: enabledQualityGateValue(gates.MinLoopProtocolCalibrationRequestRate),
+		MinLoopProtocolCalibrationRate:        enabledQualityGateValue(gates.MinLoopProtocolCalibrationRate),
 		MinRuntimeSurfaceRate:                 enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
 		MinTraceEventRate:                     enabledQualityGateValue(gates.MinTraceEventRate),
 		MinSourceNetworkRate:                  enabledQualityGateValue(gates.MinSourceNetworkRate),
@@ -3396,122 +3471,126 @@ func normalizedEvalExecutor(executor string) string {
 
 type batchResultRecord struct {
 	evalJSONLMetadata
-	Type                             string                                     `json:"type"`
-	Scenario                         string                                     `json:"scenario"`
-	OK                               bool                                       `json:"ok"`
-	RunExitCode                      int                                        `json:"run_exit_code"`
-	DurationMS                       int64                                      `json:"duration_ms"`
-	Workspace                        string                                     `json:"workspace"`
-	TracePath                        string                                     `json:"trace_path"`
-	DebugManifestPath                string                                     `json:"debug_manifest_path,omitempty"`
-	TimelinePath                     string                                     `json:"timeline_path,omitempty"`
-	FinalTextPath                    string                                     `json:"final_text_path,omitempty"`
-	StdoutPath                       string                                     `json:"stdout_path,omitempty"`
-	StderrPath                       string                                     `json:"stderr_path,omitempty"`
-	AffentctlCommand                 []string                                   `json:"affentctl_command,omitempty"`
-	Expectations                     *agenteval.DebugScenarioExpectations       `json:"expectations,omitempty"`
-	ExpectationCapabilityNames       []string                                   `json:"expectation_capability_names,omitempty"`
-	ExpectationCapabilityOutcome     string                                     `json:"expectation_capability_outcome,omitempty"`
-	ExpectationCapabilityPassedNames []string                                   `json:"expectation_capability_passed_names,omitempty"`
-	ExpectationCapabilityFailedNames []string                                   `json:"expectation_capability_failed_names,omitempty"`
-	TraceSchemaVersion               int                                        `json:"trace_schema_version,omitempty"`
-	TurnEndReason                    string                                     `json:"turn_end_reason,omitempty"`
-	ToolCalls                        int                                        `json:"tool_calls"`
-	ToolErrors                       int                                        `json:"tool_errors"`
-	ToolRepaired                     int                                        `json:"tool_repaired"`
-	ToolNameCanonicalized            int                                        `json:"tool_name_canonicalized"`
-	ToolRepairCalls                  int                                        `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded              int                                        `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed                 int                                        `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes                  int                                        `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind                 map[string]int                             `json:"tool_repair_by_kind,omitempty"`
-	ToolRepairExamples               []agenteval.ToolRepairExample              `json:"tool_repair_examples,omitempty"`
-	ConversationRepairs              []sse.ConversationRepairedPayload          `json:"conversation_repairs,omitempty"`
-	ToolFailureByKind                map[string]int                             `json:"tool_failure_by_kind,omitempty"`
-	ToolFailureExamples              map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
-	LoopGuardExamples                []agenteval.LoopGuardExample               `json:"loop_guard_examples,omitempty"`
-	MemoryUpdateExamples             []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
-	RuntimeErrorByKind               map[string]int                             `json:"runtime_error_by_kind,omitempty"`
-	RuntimeErrorExamples             map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
-	RuntimeSurface                   *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
-	RuntimeSurfaceScenarios          int                                        `json:"runtime_surface_scenarios,omitempty"`
-	RuntimeSurfaceTools              map[string]int                             `json:"runtime_surface_tools,omitempty"`
-	RuntimeSurfaceCapabilities       map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
-	LoopDecisions                    int                                        `json:"loop_decisions,omitempty"`
-	LoopDecisionByKind               map[string]int                             `json:"loop_decision_by_kind,omitempty"`
-	LoopDecisionByDecision           map[string]int                             `json:"loop_decision_by_decision,omitempty"`
-	LoopDecisionExamples             []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
-	LoopProtocolFeeds                int                                        `json:"loop_protocol_feeds,omitempty"`
-	LoopProtocolFeedByMode           map[string]int                             `json:"loop_protocol_feed_by_mode,omitempty"`
-	LoopProtocolFeedExamples         []agenteval.LoopProtocolFeed               `json:"loop_protocol_feed_examples,omitempty"`
-	ContextCompactions               int                                        `json:"context_compactions,omitempty"`
-	ContextCompactionsReactive       int                                        `json:"context_compactions_reactive,omitempty"`
-	ContextCompactionRemoved         int                                        `json:"context_compaction_removed_messages,omitempty"`
-	ContextCompactionSummary         int                                        `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionSummaryMissing  int                                        `json:"context_compaction_summary_missing,omitempty"`
-	ContextCompactionSummaryEmpty    int                                        `json:"context_compaction_summary_empty,omitempty"`
-	ContextCompactionExamples        []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
-	ContextInjections                int                                        `json:"context_injections,omitempty"`
-	ContextInjectionBySource         map[string]int                             `json:"context_injection_by_source,omitempty"`
-	ContextInjectionBytes            int                                        `json:"context_injection_bytes,omitempty"`
-	ContextInjectionEstimatedTokens  int                                        `json:"context_injection_estimated_tokens,omitempty"`
-	ContextInjectionExamples         []agenteval.ContextInjection               `json:"context_injection_examples,omitempty"`
-	LoopGuardInterventions           int                                        `json:"loop_guard_interventions"`
-	ForcedNoTools                    int                                        `json:"forced_no_tools"`
-	SourceAccessResults              int                                        `json:"source_access_results"`
-	SourceAccessVerified             int                                        `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly        int                                        `json:"source_access_discovery_only"`
-	SourceAccessNetwork              int                                        `json:"source_access_network"`
-	SourceAccessDynamicPartial       int                                        `json:"source_access_dynamic_partial"`
-	SourceAccessExamples             []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
-	BrowserScrollExamples            []agenteval.BrowserScrollExample           `json:"browser_scroll_examples,omitempty"`
-	BrowserNetworkExamples           []agenteval.BrowserNetworkSearchExample    `json:"browser_network_examples,omitempty"`
-	MemoryUpdates                    int                                        `json:"memory_updates"`
-	MemoryUpdateAdd                  int                                        `json:"memory_update_add"`
-	MemoryUpdateReplace              int                                        `json:"memory_update_replace"`
-	MemoryUpdateRemove               int                                        `json:"memory_update_remove"`
-	MemorySearchCalls                int                                        `json:"memory_search_calls,omitempty"`
-	MemorySearchMisses               int                                        `json:"memory_search_misses,omitempty"`
-	MemorySearchMissExamples         []agenteval.MemorySearchMissExample        `json:"memory_search_miss_examples,omitempty"`
-	SessionSearchCalls               int                                        `json:"session_search_calls,omitempty"`
-	SessionSearchResults             int                                        `json:"session_search_results,omitempty"`
-	SessionSearchContextHits         int                                        `json:"session_search_context_hits,omitempty"`
-	SessionSearchMatchedTerms        int                                        `json:"session_search_matched_terms,omitempty"`
-	SessionSearchRecent              int                                        `json:"session_search_recent_sessions,omitempty"`
-	SessionSearchExamples            []agenteval.SessionSearchExample           `json:"session_search_examples,omitempty"`
-	ToolDurationMS                   int64                                      `json:"tool_duration_ms"`
-	ToolContextTruncated             int                                        `json:"tool_context_truncated"`
-	ToolContextOmittedBytes          int                                        `json:"tool_context_omitted_bytes"`
-	ToolArgsTruncated                int                                        `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes             int                                        `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated             int                                        `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes          int                                        `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts              int                                        `json:"tool_result_artifacts"`
-	ToolResultMissingArtifacts       int                                        `json:"tool_result_missing_artifacts,omitempty"`
-	ToolContextArtifacts             int                                        `json:"tool_context_artifacts,omitempty"`
-	ToolContextMissingArtifacts      int                                        `json:"tool_context_missing_artifacts,omitempty"`
-	ToolTruncationExamples           []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
-	VerifierCommand                  string                                     `json:"verifier_command,omitempty"`
-	VerifierRan                      bool                                       `json:"verifier_ran"`
-	VerifierOK                       bool                                       `json:"verifier_ok"`
-	VerifierExitCode                 int                                        `json:"verifier_exit_code"`
-	VerifierDurationMS               int64                                      `json:"verifier_duration_ms"`
-	VerifierOutputBytes              int                                        `json:"verifier_output_bytes"`
-	VerifierOutputTruncated          bool                                       `json:"verifier_output_truncated"`
-	VerifierOutputOmittedBytes       int                                        `json:"verifier_output_omitted_bytes"`
-	VerifierOutputCapBytes           int                                        `json:"verifier_output_cap_bytes"`
-	TraceEvents                      int                                        `json:"trace_events,omitempty"`
-	TraceEventTypes                  map[string]int                             `json:"trace_event_types,omitempty"`
-	InputTokens                      int                                        `json:"input_tokens"`
-	OutputTokens                     int                                        `json:"output_tokens"`
-	WorkspaceRemoved                 bool                                       `json:"workspace_removed,omitempty"`
-	CleanupError                     string                                     `json:"cleanup_error,omitempty"`
-	Failures                         []string                                   `json:"failures,omitempty"`
-	FailureKinds                     map[string]int                             `json:"failure_kinds,omitempty"`
-	FailureHints                     failureHintMap                             `json:"failure_hints,omitempty"`
-	ToolFailureHints                 failureHintMap                             `json:"tool_failure_hints,omitempty"`
-	RuntimeErrorHints                failureHintMap                             `json:"runtime_error_hints,omitempty"`
-	DebugBrief                       *agenteval.DebugBrief                      `json:"debug_brief,omitempty"`
+	Type                                   string                                     `json:"type"`
+	Scenario                               string                                     `json:"scenario"`
+	OK                                     bool                                       `json:"ok"`
+	RunExitCode                            int                                        `json:"run_exit_code"`
+	DurationMS                             int64                                      `json:"duration_ms"`
+	Workspace                              string                                     `json:"workspace"`
+	TracePath                              string                                     `json:"trace_path"`
+	DebugManifestPath                      string                                     `json:"debug_manifest_path,omitempty"`
+	TimelinePath                           string                                     `json:"timeline_path,omitempty"`
+	FinalTextPath                          string                                     `json:"final_text_path,omitempty"`
+	StdoutPath                             string                                     `json:"stdout_path,omitempty"`
+	StderrPath                             string                                     `json:"stderr_path,omitempty"`
+	AffentctlCommand                       []string                                   `json:"affentctl_command,omitempty"`
+	Expectations                           *agenteval.DebugScenarioExpectations       `json:"expectations,omitempty"`
+	ExpectationCapabilityNames             []string                                   `json:"expectation_capability_names,omitempty"`
+	ExpectationCapabilityOutcome           string                                     `json:"expectation_capability_outcome,omitempty"`
+	ExpectationCapabilityPassedNames       []string                                   `json:"expectation_capability_passed_names,omitempty"`
+	ExpectationCapabilityFailedNames       []string                                   `json:"expectation_capability_failed_names,omitempty"`
+	TraceSchemaVersion                     int                                        `json:"trace_schema_version,omitempty"`
+	TurnEndReason                          string                                     `json:"turn_end_reason,omitempty"`
+	ToolCalls                              int                                        `json:"tool_calls"`
+	ToolErrors                             int                                        `json:"tool_errors"`
+	ToolRepaired                           int                                        `json:"tool_repaired"`
+	ToolNameCanonicalized                  int                                        `json:"tool_name_canonicalized"`
+	ToolRepairCalls                        int                                        `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded                    int                                        `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed                       int                                        `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes                        int                                        `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind                       map[string]int                             `json:"tool_repair_by_kind,omitempty"`
+	ToolRepairExamples                     []agenteval.ToolRepairExample              `json:"tool_repair_examples,omitempty"`
+	ConversationRepairs                    []sse.ConversationRepairedPayload          `json:"conversation_repairs,omitempty"`
+	ToolFailureByKind                      map[string]int                             `json:"tool_failure_by_kind,omitempty"`
+	ToolFailureExamples                    map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
+	LoopGuardExamples                      []agenteval.LoopGuardExample               `json:"loop_guard_examples,omitempty"`
+	MemoryUpdateExamples                   []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
+	RuntimeErrorByKind                     map[string]int                             `json:"runtime_error_by_kind,omitempty"`
+	RuntimeErrorExamples                   map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	RuntimeSurface                         *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
+	RuntimeSurfaceScenarios                int                                        `json:"runtime_surface_scenarios,omitempty"`
+	RuntimeSurfaceTools                    map[string]int                             `json:"runtime_surface_tools,omitempty"`
+	RuntimeSurfaceCapabilities             map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
+	LoopDecisions                          int                                        `json:"loop_decisions,omitempty"`
+	LoopDecisionByKind                     map[string]int                             `json:"loop_decision_by_kind,omitempty"`
+	LoopDecisionByDecision                 map[string]int                             `json:"loop_decision_by_decision,omitempty"`
+	LoopDecisionExamples                   []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	LoopProtocolFeeds                      int                                        `json:"loop_protocol_feeds,omitempty"`
+	LoopProtocolFeedByMode                 map[string]int                             `json:"loop_protocol_feed_by_mode,omitempty"`
+	LoopProtocolFeedExamples               []agenteval.LoopProtocolFeed               `json:"loop_protocol_feed_examples,omitempty"`
+	LoopProtocolCalibrationRequests        int                                        `json:"loop_protocol_calibration_requests,omitempty"`
+	LoopProtocolCalibrationRequestExamples []agenteval.LoopProtocolCalibration        `json:"loop_protocol_calibration_request_examples,omitempty"`
+	LoopProtocolCalibrations               int                                        `json:"loop_protocol_calibrations,omitempty"`
+	LoopProtocolCalibrationExamples        []agenteval.LoopProtocolCalibration        `json:"loop_protocol_calibration_examples,omitempty"`
+	ContextCompactions                     int                                        `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive             int                                        `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemoved               int                                        `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummary               int                                        `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing        int                                        `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty          int                                        `json:"context_compaction_summary_empty,omitempty"`
+	ContextCompactionExamples              []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
+	ContextInjections                      int                                        `json:"context_injections,omitempty"`
+	ContextInjectionBySource               map[string]int                             `json:"context_injection_by_source,omitempty"`
+	ContextInjectionBytes                  int                                        `json:"context_injection_bytes,omitempty"`
+	ContextInjectionEstimatedTokens        int                                        `json:"context_injection_estimated_tokens,omitempty"`
+	ContextInjectionExamples               []agenteval.ContextInjection               `json:"context_injection_examples,omitempty"`
+	LoopGuardInterventions                 int                                        `json:"loop_guard_interventions"`
+	ForcedNoTools                          int                                        `json:"forced_no_tools"`
+	SourceAccessResults                    int                                        `json:"source_access_results"`
+	SourceAccessVerified                   int                                        `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly              int                                        `json:"source_access_discovery_only"`
+	SourceAccessNetwork                    int                                        `json:"source_access_network"`
+	SourceAccessDynamicPartial             int                                        `json:"source_access_dynamic_partial"`
+	SourceAccessExamples                   []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
+	BrowserScrollExamples                  []agenteval.BrowserScrollExample           `json:"browser_scroll_examples,omitempty"`
+	BrowserNetworkExamples                 []agenteval.BrowserNetworkSearchExample    `json:"browser_network_examples,omitempty"`
+	MemoryUpdates                          int                                        `json:"memory_updates"`
+	MemoryUpdateAdd                        int                                        `json:"memory_update_add"`
+	MemoryUpdateReplace                    int                                        `json:"memory_update_replace"`
+	MemoryUpdateRemove                     int                                        `json:"memory_update_remove"`
+	MemorySearchCalls                      int                                        `json:"memory_search_calls,omitempty"`
+	MemorySearchMisses                     int                                        `json:"memory_search_misses,omitempty"`
+	MemorySearchMissExamples               []agenteval.MemorySearchMissExample        `json:"memory_search_miss_examples,omitempty"`
+	SessionSearchCalls                     int                                        `json:"session_search_calls,omitempty"`
+	SessionSearchResults                   int                                        `json:"session_search_results,omitempty"`
+	SessionSearchContextHits               int                                        `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms              int                                        `json:"session_search_matched_terms,omitempty"`
+	SessionSearchRecent                    int                                        `json:"session_search_recent_sessions,omitempty"`
+	SessionSearchExamples                  []agenteval.SessionSearchExample           `json:"session_search_examples,omitempty"`
+	ToolDurationMS                         int64                                      `json:"tool_duration_ms"`
+	ToolContextTruncated                   int                                        `json:"tool_context_truncated"`
+	ToolContextOmittedBytes                int                                        `json:"tool_context_omitted_bytes"`
+	ToolArgsTruncated                      int                                        `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes                   int                                        `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated                   int                                        `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes                int                                        `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts                    int                                        `json:"tool_result_artifacts"`
+	ToolResultMissingArtifacts             int                                        `json:"tool_result_missing_artifacts,omitempty"`
+	ToolContextArtifacts                   int                                        `json:"tool_context_artifacts,omitempty"`
+	ToolContextMissingArtifacts            int                                        `json:"tool_context_missing_artifacts,omitempty"`
+	ToolTruncationExamples                 []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
+	VerifierCommand                        string                                     `json:"verifier_command,omitempty"`
+	VerifierRan                            bool                                       `json:"verifier_ran"`
+	VerifierOK                             bool                                       `json:"verifier_ok"`
+	VerifierExitCode                       int                                        `json:"verifier_exit_code"`
+	VerifierDurationMS                     int64                                      `json:"verifier_duration_ms"`
+	VerifierOutputBytes                    int                                        `json:"verifier_output_bytes"`
+	VerifierOutputTruncated                bool                                       `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes             int                                        `json:"verifier_output_omitted_bytes"`
+	VerifierOutputCapBytes                 int                                        `json:"verifier_output_cap_bytes"`
+	TraceEvents                            int                                        `json:"trace_events,omitempty"`
+	TraceEventTypes                        map[string]int                             `json:"trace_event_types,omitempty"`
+	InputTokens                            int                                        `json:"input_tokens"`
+	OutputTokens                           int                                        `json:"output_tokens"`
+	WorkspaceRemoved                       bool                                       `json:"workspace_removed,omitempty"`
+	CleanupError                           string                                     `json:"cleanup_error,omitempty"`
+	Failures                               []string                                   `json:"failures,omitempty"`
+	FailureKinds                           map[string]int                             `json:"failure_kinds,omitempty"`
+	FailureHints                           failureHintMap                             `json:"failure_hints,omitempty"`
+	ToolFailureHints                       failureHintMap                             `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints                      failureHintMap                             `json:"runtime_error_hints,omitempty"`
+	DebugBrief                             *agenteval.DebugBrief                      `json:"debug_brief,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -3537,179 +3616,187 @@ type batchResultRecord struct {
 
 type batchSummaryRecord struct {
 	evalJSONLMetadata
-	Type                                 string                                           `json:"type"`
-	Scenarios                            int                                              `json:"scenarios"`
-	Passed                               int                                              `json:"passed"`
-	Failed                               int                                              `json:"failed"`
-	PassRate                             float64                                          `json:"pass_rate"`
-	CompletionRate                       float64                                          `json:"completion_rate"`
-	MemoryUpdateRate                     float64                                          `json:"memory_update_rate"`
-	MemorySearchMissRate                 *float64                                         `json:"memory_search_miss_rate,omitempty"`
-	LoopProtocolFeedRate                 float64                                          `json:"loop_protocol_feed_rate"`
-	ToolErrorRate                        *float64                                         `json:"tool_error_rate,omitempty"`
-	FocusedTaskErrorRate                 *float64                                         `json:"focused_task_error_rate,omitempty"`
-	SubagentErrorRate                    *float64                                         `json:"subagent_error_rate,omitempty"`
-	ForcedNoToolsRate                    *float64                                         `json:"forced_no_tools_rate,omitempty"`
-	LoopGuardInterventionRate            *float64                                         `json:"loop_guard_intervention_rate,omitempty"`
-	PlanErrorRate                        *float64                                         `json:"plan_error_rate,omitempty"`
-	ToolRepairSuccessRate                *float64                                         `json:"tool_repair_success_rate,omitempty"`
-	VerifierPassRate                     *float64                                         `json:"verifier_pass_rate,omitempty"`
-	SourceAccessVerifiedRate             *float64                                         `json:"source_access_verified_rate,omitempty"`
-	SourceNetworkRate                    *float64                                         `json:"source_network_rate,omitempty"`
-	SourceDiscoveryOnlyRate              *float64                                         `json:"source_discovery_only_rate,omitempty"`
-	SourceDynamicPartialRate             *float64                                         `json:"source_dynamic_partial_rate,omitempty"`
-	SessionSearchContextHitRate          *float64                                         `json:"session_search_context_hit_rate,omitempty"`
-	SessionSearchMatchedTermsPerCall     *float64                                         `json:"session_search_matched_terms_per_call,omitempty"`
-	TraceEventRate                       float64                                          `json:"trace_event_rate"`
-	AvgRuntimeErrors                     float64                                          `json:"avg_runtime_errors"`
-	AvgContextCompactions                float64                                          `json:"avg_context_compactions"`
-	AvgReactiveCompactions               float64                                          `json:"avg_reactive_context_compactions"`
-	AvgContextRemovedMessages            float64                                          `json:"avg_context_removed_messages"`
-	AvgContextSummaryBytes               float64                                          `json:"avg_context_summary_bytes"`
-	AvgContextSummaryMissing             float64                                          `json:"avg_context_summary_missing"`
-	AvgContextSummaryEmpty               float64                                          `json:"avg_context_summary_empty"`
-	AvgContextInjections                 float64                                          `json:"avg_context_injections"`
-	AvgContextInjectionBytes             float64                                          `json:"avg_context_injection_bytes"`
-	AvgContextInjectionEstimatedTokens   float64                                          `json:"avg_context_injection_estimated_tokens"`
-	AvgToolCalls                         float64                                          `json:"avg_tool_calls"`
-	ToolContextTruncationRate            *float64                                         `json:"tool_context_truncation_rate,omitempty"`
-	ToolResultTruncationRate             *float64                                         `json:"tool_result_truncation_rate,omitempty"`
-	DurationMS                           int64                                            `json:"duration_ms"`
-	AvgDurationMS                        float64                                          `json:"avg_duration_ms"`
-	ToolCalls                            int                                              `json:"tool_calls"`
-	ToolErrors                           int                                              `json:"tool_errors"`
-	ToolRepaired                         int                                              `json:"tool_repaired"`
-	ToolNameCanonicalized                int                                              `json:"tool_name_canonicalized"`
-	ToolRepairCalls                      int                                              `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded                  int                                              `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed                     int                                              `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes                      int                                              `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind                     map[string]int                                   `json:"tool_repair_by_kind,omitempty"`
-	ToolRepairExamples                   []agenteval.ToolRepairExample                    `json:"tool_repair_examples,omitempty"`
-	ConversationRepairs                  int                                              `json:"conversation_repairs,omitempty"`
-	ConversationRepairMissingToolResults int                                              `json:"conversation_repair_missing_tool_results,omitempty"`
-	ConversationRepairDuplicateResults   int                                              `json:"conversation_repair_duplicate_tool_results,omitempty"`
-	ConversationRepairUnexpectedResults  int                                              `json:"conversation_repair_unexpected_tool_results,omitempty"`
-	ConversationRepairByKind             map[string]int                                   `json:"conversation_repair_by_kind,omitempty"`
-	ConversationRepairExamples           []batchConversationRepairExample                 `json:"conversation_repair_examples,omitempty"`
-	ToolFailureByKind                    map[string]int                                   `json:"tool_failure_by_kind,omitempty"`
-	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample        `json:"tool_failure_examples,omitempty"`
-	LoopGuardExamples                    []agenteval.LoopGuardExample                     `json:"loop_guard_examples,omitempty"`
-	RuntimeErrorByKind                   map[string]int                                   `json:"runtime_error_by_kind,omitempty"`
-	RuntimeErrorExamples                 map[string][]agenteval.RuntimeErrorExample       `json:"runtime_error_examples,omitempty"`
-	RuntimeSurfaceRate                   float64                                          `json:"runtime_surface_rate"`
-	RuntimeSurfaceScenarios              int                                              `json:"runtime_surface_scenarios,omitempty"`
-	RuntimeSurfaceTools                  map[string]int                                   `json:"runtime_surface_tools,omitempty"`
-	RuntimeSurfaceCapabilities           map[string]int                                   `json:"runtime_surface_capabilities,omitempty"`
-	LoopDecisions                        int                                              `json:"loop_decisions,omitempty"`
-	LoopDecisionByKind                   map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
-	LoopDecisionByDecision               map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
-	LoopDecisionExamples                 []agenteval.LoopDecision                         `json:"loop_decision_examples,omitempty"`
-	LoopProtocolFeedScenarios            int                                              `json:"loop_protocol_feed_scenarios,omitempty"`
-	LoopProtocolFeeds                    int                                              `json:"loop_protocol_feeds,omitempty"`
-	LoopProtocolFeedByMode               map[string]int                                   `json:"loop_protocol_feed_by_mode,omitempty"`
-	LoopProtocolFeedExamples             []agenteval.LoopProtocolFeed                     `json:"loop_protocol_feed_examples,omitempty"`
-	ContextCompactions                   int                                              `json:"context_compactions,omitempty"`
-	ContextCompactionsReactive           int                                              `json:"context_compactions_reactive,omitempty"`
-	ContextCompactionRemoved             int                                              `json:"context_compaction_removed_messages,omitempty"`
-	ContextCompactionSummary             int                                              `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionSummaryMissing      int                                              `json:"context_compaction_summary_missing,omitempty"`
-	ContextCompactionSummaryEmpty        int                                              `json:"context_compaction_summary_empty,omitempty"`
-	ContextCompactionExamples            []agenteval.ContextCompaction                    `json:"context_compaction_examples,omitempty"`
-	ContextInjections                    int                                              `json:"context_injections,omitempty"`
-	ContextInjectionBySource             map[string]int                                   `json:"context_injection_by_source,omitempty"`
-	ContextInjectionBytes                int                                              `json:"context_injection_bytes,omitempty"`
-	ContextInjectionEstimatedTokens      int                                              `json:"context_injection_estimated_tokens,omitempty"`
-	ContextInjectionExamples             []agenteval.ContextInjection                     `json:"context_injection_examples,omitempty"`
-	LoopGuardInterventions               int                                              `json:"loop_guard_interventions"`
-	ForcedNoTools                        int                                              `json:"forced_no_tools"`
-	SourceAccessResults                  int                                              `json:"source_access_results"`
-	SourceAccessVerified                 int                                              `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly            int                                              `json:"source_access_discovery_only"`
-	SourceAccessNetwork                  int                                              `json:"source_access_network"`
-	SourceAccessDynamicPartial           int                                              `json:"source_access_dynamic_partial"`
-	SourceAccessExamples                 []agenteval.SourceAccessExample                  `json:"source_access_examples,omitempty"`
-	BrowserScrollExamples                []agenteval.BrowserScrollExample                 `json:"browser_scroll_examples,omitempty"`
-	BrowserNetworkExamples               []agenteval.BrowserNetworkSearchExample          `json:"browser_network_examples,omitempty"`
-	MemoryUpdates                        int                                              `json:"memory_updates"`
-	MemoryUpdateAdd                      int                                              `json:"memory_update_add"`
-	MemoryUpdateReplace                  int                                              `json:"memory_update_replace"`
-	MemoryUpdateRemove                   int                                              `json:"memory_update_remove"`
-	MemorySearchCalls                    int                                              `json:"memory_search_calls,omitempty"`
-	MemorySearchMisses                   int                                              `json:"memory_search_misses,omitempty"`
-	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample                  `json:"memory_update_examples,omitempty"`
-	MemorySearchMissExamples             []agenteval.MemorySearchMissExample              `json:"memory_search_miss_examples,omitempty"`
-	SessionSearchCalls                   int                                              `json:"session_search_calls,omitempty"`
-	SessionSearchResults                 int                                              `json:"session_search_results,omitempty"`
-	SessionSearchContextHits             int                                              `json:"session_search_context_hits,omitempty"`
-	SessionSearchMatchedTerms            int                                              `json:"session_search_matched_terms,omitempty"`
-	SessionSearchRecent                  int                                              `json:"session_search_recent_sessions,omitempty"`
-	SessionSearchExamples                []agenteval.SessionSearchExample                 `json:"session_search_examples,omitempty"`
-	ToolDurationMS                       int64                                            `json:"tool_duration_ms"`
-	ToolContextTruncated                 int                                              `json:"tool_context_truncated"`
-	ToolContextOmittedBytes              int                                              `json:"tool_context_omitted_bytes"`
-	ToolArgsTruncated                    int                                              `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes                 int                                              `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated                 int                                              `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes              int                                              `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts                  int                                              `json:"tool_result_artifacts"`
-	ToolResultMissingArtifacts           int                                              `json:"tool_result_missing_artifacts,omitempty"`
-	ToolContextArtifacts                 int                                              `json:"tool_context_artifacts,omitempty"`
-	ToolContextMissingArtifacts          int                                              `json:"tool_context_missing_artifacts,omitempty"`
-	ToolTruncationExamples               []agenteval.ToolTruncationExample                `json:"tool_truncation_examples,omitempty"`
-	VerifierRuns                         int                                              `json:"verifier_runs"`
-	VerifierPassed                       int                                              `json:"verifier_passed"`
-	VerifierFailed                       int                                              `json:"verifier_failed"`
-	VerifierOutputTruncated              int                                              `json:"verifier_output_truncated"`
-	VerifierOutputOmittedBytes           int                                              `json:"verifier_output_omitted_bytes"`
-	TraceSchemaVersions                  map[int]int                                      `json:"trace_schema_versions,omitempty"`
-	TraceEventScenarios                  int                                              `json:"trace_event_scenarios,omitempty"`
-	TraceEvents                          int                                              `json:"trace_events,omitempty"`
-	TraceEventTypes                      map[string]int                                   `json:"trace_event_types,omitempty"`
-	InputTokens                          int                                              `json:"input_tokens"`
-	OutputTokens                         int                                              `json:"output_tokens"`
-	AvgInputTokens                       float64                                          `json:"avg_input_tokens"`
-	AvgOutputTokens                      float64                                          `json:"avg_output_tokens"`
-	AvgTotalTokens                       float64                                          `json:"avg_total_tokens"`
-	EndCompleted                         int                                              `json:"end_completed"`
-	EndMaxTurns                          int                                              `json:"end_max_turns"`
-	EndErrors                            int                                              `json:"end_errors"`
-	EndCancelled                         int                                              `json:"end_cancelled"`
-	EndUnknown                           int                                              `json:"end_unknown"`
-	FailureKinds                         map[string]int                                   `json:"failure_kinds,omitempty"`
-	FailureExamples                      map[string][]batchFailureExample                 `json:"failure_examples,omitempty"`
-	FailureHints                         failureHintMap                                   `json:"failure_hints,omitempty"`
-	ToolFailureHints                     failureHintMap                                   `json:"tool_failure_hints,omitempty"`
-	RuntimeErrorHints                    failureHintMap                                   `json:"runtime_error_hints,omitempty"`
-	DebugBriefByTag                      map[string]int                                   `json:"debug_brief_by_tag,omitempty"`
-	DebugBriefTagExamples                map[string][]batchDebugBriefTagExample           `json:"debug_brief_tag_examples,omitempty"`
-	ExpectationScenarios                 int                                              `json:"expectation_scenarios,omitempty"`
-	ExpectationSuites                    map[string]int                                   `json:"expectation_suites,omitempty"`
-	ExpectationDomains                   map[string]int                                   `json:"expectation_domains,omitempty"`
-	ExpectationDomainPassed              map[string]int                                   `json:"expectation_domain_passed,omitempty"`
-	ExpectationDomainFailed              map[string]int                                   `json:"expectation_domain_failed,omitempty"`
-	ExpectationDomainRate                map[string]float64                               `json:"expectation_domain_pass_rate,omitempty"`
-	ExpectationDomainMetrics             map[string]expectationDomainMetrics              `json:"expectation_domain_metrics,omitempty"`
-	ExpectationDomainTotal               *int                                             `json:"expectation_domain_total,omitempty"`
-	ExpectationDomainPassedTotal         *int                                             `json:"expectation_domain_passed_total,omitempty"`
-	ExpectationDomainFailedTotal         *int                                             `json:"expectation_domain_failed_total,omitempty"`
-	ExpectationDomainPassRateTotal       *float64                                         `json:"expectation_domain_pass_rate_total,omitempty"`
-	ExpectationDomainFailureExamples     map[string][]expectationDomainFailureExample     `json:"expectation_domain_failure_examples,omitempty"`
-	ExpectationCapabilities              map[string]int                                   `json:"expectation_capabilities,omitempty"`
-	ExpectationCapabilityPassed          map[string]int                                   `json:"expectation_capability_passed,omitempty"`
-	ExpectationCapabilityFailed          map[string]int                                   `json:"expectation_capability_failed,omitempty"`
-	ExpectationCapabilityRate            map[string]float64                               `json:"expectation_capability_pass_rate,omitempty"`
-	ExpectationCapabilityTotal           *int                                             `json:"expectation_capability_total,omitempty"`
-	ExpectationCapabilityPassedTotal     *int                                             `json:"expectation_capability_passed_total,omitempty"`
-	ExpectationCapabilityFailedTotal     *int                                             `json:"expectation_capability_failed_total,omitempty"`
-	ExpectationCapabilityPassRateTotal   *float64                                         `json:"expectation_capability_pass_rate_total,omitempty"`
-	ExpectationCapabilityFailureExamples map[string][]expectationCapabilityFailureExample `json:"expectation_capability_failure_examples,omitempty"`
-	ExpectationRequiredTools             map[string]int                                   `json:"expectation_required_tools,omitempty"`
-	ExpectationSourceAccess              map[string]int                                   `json:"expectation_source_access,omitempty"`
-	QualityGatesPassed                   *bool                                            `json:"quality_gates_passed,omitempty"`
-	QualityGateFailures                  []string                                         `json:"quality_gate_failures,omitempty"`
-	RemovedWorkspaces                    int                                              `json:"removed_workspaces"`
-	CleanupErrors                        int                                              `json:"cleanup_errors"`
+	Type                                    string                                           `json:"type"`
+	Scenarios                               int                                              `json:"scenarios"`
+	Passed                                  int                                              `json:"passed"`
+	Failed                                  int                                              `json:"failed"`
+	PassRate                                float64                                          `json:"pass_rate"`
+	CompletionRate                          float64                                          `json:"completion_rate"`
+	MemoryUpdateRate                        float64                                          `json:"memory_update_rate"`
+	MemorySearchMissRate                    *float64                                         `json:"memory_search_miss_rate,omitempty"`
+	LoopProtocolFeedRate                    float64                                          `json:"loop_protocol_feed_rate"`
+	LoopProtocolCalibrationRequestRate      float64                                          `json:"loop_protocol_calibration_request_rate"`
+	LoopProtocolCalibrationRate             float64                                          `json:"loop_protocol_calibration_rate"`
+	ToolErrorRate                           *float64                                         `json:"tool_error_rate,omitempty"`
+	FocusedTaskErrorRate                    *float64                                         `json:"focused_task_error_rate,omitempty"`
+	SubagentErrorRate                       *float64                                         `json:"subagent_error_rate,omitempty"`
+	ForcedNoToolsRate                       *float64                                         `json:"forced_no_tools_rate,omitempty"`
+	LoopGuardInterventionRate               *float64                                         `json:"loop_guard_intervention_rate,omitempty"`
+	PlanErrorRate                           *float64                                         `json:"plan_error_rate,omitempty"`
+	ToolRepairSuccessRate                   *float64                                         `json:"tool_repair_success_rate,omitempty"`
+	VerifierPassRate                        *float64                                         `json:"verifier_pass_rate,omitempty"`
+	SourceAccessVerifiedRate                *float64                                         `json:"source_access_verified_rate,omitempty"`
+	SourceNetworkRate                       *float64                                         `json:"source_network_rate,omitempty"`
+	SourceDiscoveryOnlyRate                 *float64                                         `json:"source_discovery_only_rate,omitempty"`
+	SourceDynamicPartialRate                *float64                                         `json:"source_dynamic_partial_rate,omitempty"`
+	SessionSearchContextHitRate             *float64                                         `json:"session_search_context_hit_rate,omitempty"`
+	SessionSearchMatchedTermsPerCall        *float64                                         `json:"session_search_matched_terms_per_call,omitempty"`
+	TraceEventRate                          float64                                          `json:"trace_event_rate"`
+	AvgRuntimeErrors                        float64                                          `json:"avg_runtime_errors"`
+	AvgContextCompactions                   float64                                          `json:"avg_context_compactions"`
+	AvgReactiveCompactions                  float64                                          `json:"avg_reactive_context_compactions"`
+	AvgContextRemovedMessages               float64                                          `json:"avg_context_removed_messages"`
+	AvgContextSummaryBytes                  float64                                          `json:"avg_context_summary_bytes"`
+	AvgContextSummaryMissing                float64                                          `json:"avg_context_summary_missing"`
+	AvgContextSummaryEmpty                  float64                                          `json:"avg_context_summary_empty"`
+	AvgContextInjections                    float64                                          `json:"avg_context_injections"`
+	AvgContextInjectionBytes                float64                                          `json:"avg_context_injection_bytes"`
+	AvgContextInjectionEstimatedTokens      float64                                          `json:"avg_context_injection_estimated_tokens"`
+	AvgToolCalls                            float64                                          `json:"avg_tool_calls"`
+	ToolContextTruncationRate               *float64                                         `json:"tool_context_truncation_rate,omitempty"`
+	ToolResultTruncationRate                *float64                                         `json:"tool_result_truncation_rate,omitempty"`
+	DurationMS                              int64                                            `json:"duration_ms"`
+	AvgDurationMS                           float64                                          `json:"avg_duration_ms"`
+	ToolCalls                               int                                              `json:"tool_calls"`
+	ToolErrors                              int                                              `json:"tool_errors"`
+	ToolRepaired                            int                                              `json:"tool_repaired"`
+	ToolNameCanonicalized                   int                                              `json:"tool_name_canonicalized"`
+	ToolRepairCalls                         int                                              `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded                     int                                              `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed                        int                                              `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes                         int                                              `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind                        map[string]int                                   `json:"tool_repair_by_kind,omitempty"`
+	ToolRepairExamples                      []agenteval.ToolRepairExample                    `json:"tool_repair_examples,omitempty"`
+	ConversationRepairs                     int                                              `json:"conversation_repairs,omitempty"`
+	ConversationRepairMissingToolResults    int                                              `json:"conversation_repair_missing_tool_results,omitempty"`
+	ConversationRepairDuplicateResults      int                                              `json:"conversation_repair_duplicate_tool_results,omitempty"`
+	ConversationRepairUnexpectedResults     int                                              `json:"conversation_repair_unexpected_tool_results,omitempty"`
+	ConversationRepairByKind                map[string]int                                   `json:"conversation_repair_by_kind,omitempty"`
+	ConversationRepairExamples              []batchConversationRepairExample                 `json:"conversation_repair_examples,omitempty"`
+	ToolFailureByKind                       map[string]int                                   `json:"tool_failure_by_kind,omitempty"`
+	ToolFailureExamples                     map[string][]agenteval.ToolFailureExample        `json:"tool_failure_examples,omitempty"`
+	LoopGuardExamples                       []agenteval.LoopGuardExample                     `json:"loop_guard_examples,omitempty"`
+	RuntimeErrorByKind                      map[string]int                                   `json:"runtime_error_by_kind,omitempty"`
+	RuntimeErrorExamples                    map[string][]agenteval.RuntimeErrorExample       `json:"runtime_error_examples,omitempty"`
+	RuntimeSurfaceRate                      float64                                          `json:"runtime_surface_rate"`
+	RuntimeSurfaceScenarios                 int                                              `json:"runtime_surface_scenarios,omitempty"`
+	RuntimeSurfaceTools                     map[string]int                                   `json:"runtime_surface_tools,omitempty"`
+	RuntimeSurfaceCapabilities              map[string]int                                   `json:"runtime_surface_capabilities,omitempty"`
+	LoopDecisions                           int                                              `json:"loop_decisions,omitempty"`
+	LoopDecisionByKind                      map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
+	LoopDecisionByDecision                  map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
+	LoopDecisionExamples                    []agenteval.LoopDecision                         `json:"loop_decision_examples,omitempty"`
+	LoopProtocolFeedScenarios               int                                              `json:"loop_protocol_feed_scenarios,omitempty"`
+	LoopProtocolFeeds                       int                                              `json:"loop_protocol_feeds,omitempty"`
+	LoopProtocolFeedByMode                  map[string]int                                   `json:"loop_protocol_feed_by_mode,omitempty"`
+	LoopProtocolFeedExamples                []agenteval.LoopProtocolFeed                     `json:"loop_protocol_feed_examples,omitempty"`
+	LoopProtocolCalibrationRequestScenarios int                                              `json:"loop_protocol_calibration_request_scenarios,omitempty"`
+	LoopProtocolCalibrationRequests         int                                              `json:"loop_protocol_calibration_requests,omitempty"`
+	LoopProtocolCalibrationRequestExamples  []agenteval.LoopProtocolCalibration              `json:"loop_protocol_calibration_request_examples,omitempty"`
+	LoopProtocolCalibrationScenarios        int                                              `json:"loop_protocol_calibration_scenarios,omitempty"`
+	LoopProtocolCalibrations                int                                              `json:"loop_protocol_calibrations,omitempty"`
+	LoopProtocolCalibrationExamples         []agenteval.LoopProtocolCalibration              `json:"loop_protocol_calibration_examples,omitempty"`
+	ContextCompactions                      int                                              `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive              int                                              `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemoved                int                                              `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummary                int                                              `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing         int                                              `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty           int                                              `json:"context_compaction_summary_empty,omitempty"`
+	ContextCompactionExamples               []agenteval.ContextCompaction                    `json:"context_compaction_examples,omitempty"`
+	ContextInjections                       int                                              `json:"context_injections,omitempty"`
+	ContextInjectionBySource                map[string]int                                   `json:"context_injection_by_source,omitempty"`
+	ContextInjectionBytes                   int                                              `json:"context_injection_bytes,omitempty"`
+	ContextInjectionEstimatedTokens         int                                              `json:"context_injection_estimated_tokens,omitempty"`
+	ContextInjectionExamples                []agenteval.ContextInjection                     `json:"context_injection_examples,omitempty"`
+	LoopGuardInterventions                  int                                              `json:"loop_guard_interventions"`
+	ForcedNoTools                           int                                              `json:"forced_no_tools"`
+	SourceAccessResults                     int                                              `json:"source_access_results"`
+	SourceAccessVerified                    int                                              `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly               int                                              `json:"source_access_discovery_only"`
+	SourceAccessNetwork                     int                                              `json:"source_access_network"`
+	SourceAccessDynamicPartial              int                                              `json:"source_access_dynamic_partial"`
+	SourceAccessExamples                    []agenteval.SourceAccessExample                  `json:"source_access_examples,omitempty"`
+	BrowserScrollExamples                   []agenteval.BrowserScrollExample                 `json:"browser_scroll_examples,omitempty"`
+	BrowserNetworkExamples                  []agenteval.BrowserNetworkSearchExample          `json:"browser_network_examples,omitempty"`
+	MemoryUpdates                           int                                              `json:"memory_updates"`
+	MemoryUpdateAdd                         int                                              `json:"memory_update_add"`
+	MemoryUpdateReplace                     int                                              `json:"memory_update_replace"`
+	MemoryUpdateRemove                      int                                              `json:"memory_update_remove"`
+	MemorySearchCalls                       int                                              `json:"memory_search_calls,omitempty"`
+	MemorySearchMisses                      int                                              `json:"memory_search_misses,omitempty"`
+	MemoryUpdateExamples                    []agenteval.MemoryUpdateExample                  `json:"memory_update_examples,omitempty"`
+	MemorySearchMissExamples                []agenteval.MemorySearchMissExample              `json:"memory_search_miss_examples,omitempty"`
+	SessionSearchCalls                      int                                              `json:"session_search_calls,omitempty"`
+	SessionSearchResults                    int                                              `json:"session_search_results,omitempty"`
+	SessionSearchContextHits                int                                              `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms               int                                              `json:"session_search_matched_terms,omitempty"`
+	SessionSearchRecent                     int                                              `json:"session_search_recent_sessions,omitempty"`
+	SessionSearchExamples                   []agenteval.SessionSearchExample                 `json:"session_search_examples,omitempty"`
+	ToolDurationMS                          int64                                            `json:"tool_duration_ms"`
+	ToolContextTruncated                    int                                              `json:"tool_context_truncated"`
+	ToolContextOmittedBytes                 int                                              `json:"tool_context_omitted_bytes"`
+	ToolArgsTruncated                       int                                              `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes                    int                                              `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated                    int                                              `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes                 int                                              `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts                     int                                              `json:"tool_result_artifacts"`
+	ToolResultMissingArtifacts              int                                              `json:"tool_result_missing_artifacts,omitempty"`
+	ToolContextArtifacts                    int                                              `json:"tool_context_artifacts,omitempty"`
+	ToolContextMissingArtifacts             int                                              `json:"tool_context_missing_artifacts,omitempty"`
+	ToolTruncationExamples                  []agenteval.ToolTruncationExample                `json:"tool_truncation_examples,omitempty"`
+	VerifierRuns                            int                                              `json:"verifier_runs"`
+	VerifierPassed                          int                                              `json:"verifier_passed"`
+	VerifierFailed                          int                                              `json:"verifier_failed"`
+	VerifierOutputTruncated                 int                                              `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes              int                                              `json:"verifier_output_omitted_bytes"`
+	TraceSchemaVersions                     map[int]int                                      `json:"trace_schema_versions,omitempty"`
+	TraceEventScenarios                     int                                              `json:"trace_event_scenarios,omitempty"`
+	TraceEvents                             int                                              `json:"trace_events,omitempty"`
+	TraceEventTypes                         map[string]int                                   `json:"trace_event_types,omitempty"`
+	InputTokens                             int                                              `json:"input_tokens"`
+	OutputTokens                            int                                              `json:"output_tokens"`
+	AvgInputTokens                          float64                                          `json:"avg_input_tokens"`
+	AvgOutputTokens                         float64                                          `json:"avg_output_tokens"`
+	AvgTotalTokens                          float64                                          `json:"avg_total_tokens"`
+	EndCompleted                            int                                              `json:"end_completed"`
+	EndMaxTurns                             int                                              `json:"end_max_turns"`
+	EndErrors                               int                                              `json:"end_errors"`
+	EndCancelled                            int                                              `json:"end_cancelled"`
+	EndUnknown                              int                                              `json:"end_unknown"`
+	FailureKinds                            map[string]int                                   `json:"failure_kinds,omitempty"`
+	FailureExamples                         map[string][]batchFailureExample                 `json:"failure_examples,omitempty"`
+	FailureHints                            failureHintMap                                   `json:"failure_hints,omitempty"`
+	ToolFailureHints                        failureHintMap                                   `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints                       failureHintMap                                   `json:"runtime_error_hints,omitempty"`
+	DebugBriefByTag                         map[string]int                                   `json:"debug_brief_by_tag,omitempty"`
+	DebugBriefTagExamples                   map[string][]batchDebugBriefTagExample           `json:"debug_brief_tag_examples,omitempty"`
+	ExpectationScenarios                    int                                              `json:"expectation_scenarios,omitempty"`
+	ExpectationSuites                       map[string]int                                   `json:"expectation_suites,omitempty"`
+	ExpectationDomains                      map[string]int                                   `json:"expectation_domains,omitempty"`
+	ExpectationDomainPassed                 map[string]int                                   `json:"expectation_domain_passed,omitempty"`
+	ExpectationDomainFailed                 map[string]int                                   `json:"expectation_domain_failed,omitempty"`
+	ExpectationDomainRate                   map[string]float64                               `json:"expectation_domain_pass_rate,omitempty"`
+	ExpectationDomainMetrics                map[string]expectationDomainMetrics              `json:"expectation_domain_metrics,omitempty"`
+	ExpectationDomainTotal                  *int                                             `json:"expectation_domain_total,omitempty"`
+	ExpectationDomainPassedTotal            *int                                             `json:"expectation_domain_passed_total,omitempty"`
+	ExpectationDomainFailedTotal            *int                                             `json:"expectation_domain_failed_total,omitempty"`
+	ExpectationDomainPassRateTotal          *float64                                         `json:"expectation_domain_pass_rate_total,omitempty"`
+	ExpectationDomainFailureExamples        map[string][]expectationDomainFailureExample     `json:"expectation_domain_failure_examples,omitempty"`
+	ExpectationCapabilities                 map[string]int                                   `json:"expectation_capabilities,omitempty"`
+	ExpectationCapabilityPassed             map[string]int                                   `json:"expectation_capability_passed,omitempty"`
+	ExpectationCapabilityFailed             map[string]int                                   `json:"expectation_capability_failed,omitempty"`
+	ExpectationCapabilityRate               map[string]float64                               `json:"expectation_capability_pass_rate,omitempty"`
+	ExpectationCapabilityTotal              *int                                             `json:"expectation_capability_total,omitempty"`
+	ExpectationCapabilityPassedTotal        *int                                             `json:"expectation_capability_passed_total,omitempty"`
+	ExpectationCapabilityFailedTotal        *int                                             `json:"expectation_capability_failed_total,omitempty"`
+	ExpectationCapabilityPassRateTotal      *float64                                         `json:"expectation_capability_pass_rate_total,omitempty"`
+	ExpectationCapabilityFailureExamples    map[string][]expectationCapabilityFailureExample `json:"expectation_capability_failure_examples,omitempty"`
+	ExpectationRequiredTools                map[string]int                                   `json:"expectation_required_tools,omitempty"`
+	ExpectationSourceAccess                 map[string]int                                   `json:"expectation_source_access,omitempty"`
+	QualityGatesPassed                      *bool                                            `json:"quality_gates_passed,omitempty"`
+	QualityGateFailures                     []string                                         `json:"quality_gate_failures,omitempty"`
+	RemovedWorkspaces                       int                                              `json:"removed_workspaces"`
+	CleanupErrors                           int                                              `json:"cleanup_errors"`
 
 	// Per-batch delegation aggregates. Same omitempty discipline as
 	// the per-scenario record so a batch with zero delegation usage
@@ -3750,134 +3837,138 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 	expectationCapabilityNames := batchResultExpectationCapabilityNames(res)
 	expectationCapabilityOutcome := batchResultExpectationCapabilityOutcome(res, expectationCapabilityNames)
 	writeJSONLine(w, batchResultRecord{
-		evalJSONLMetadata:                meta,
-		Type:                             "scenario",
-		Scenario:                         res.BatchScenario,
-		OK:                               res.OK,
-		RunExitCode:                      res.RunExitCode,
-		DurationMS:                       res.Duration.Milliseconds(),
-		Workspace:                        res.Workspace,
-		TracePath:                        res.TracePath,
-		DebugManifestPath:                retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
-		TimelinePath:                     retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
-		FinalTextPath:                    retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
-		StdoutPath:                       retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
-		StderrPath:                       retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
-		AffentctlCommand:                 append([]string(nil), res.AffentctlCommand...),
-		Expectations:                     res.Expectations,
-		ExpectationCapabilityNames:       expectationCapabilityNames,
-		ExpectationCapabilityOutcome:     expectationCapabilityOutcome,
-		ExpectationCapabilityPassedNames: batchResultExpectationCapabilityPassedNames(res, expectationCapabilityNames),
-		ExpectationCapabilityFailedNames: batchResultExpectationCapabilityFailedNames(res, expectationCapabilityNames),
-		TraceSchemaVersion:               res.TraceSchemaVersion,
-		TurnEndReason:                    res.TurnEndReason,
-		ToolCalls:                        res.ToolCalls,
-		ToolErrors:                       res.ToolStats.ToolErrors,
-		ToolRepaired:                     res.ToolStats.ToolArgsRepaired,
-		ToolNameCanonicalized:            res.ToolStats.ToolNameCanonicalized,
-		ToolRepairCalls:                  res.Repair.Calls,
-		ToolRepairSucceeded:              res.Repair.SucceededCalls,
-		ToolRepairFailed:                 res.Repair.FailedCalls,
-		ToolRepairNotes:                  res.Repair.Notes,
-		ToolRepairByKind:                 cloneStringIntMap(res.Repair.ByKind),
-		ToolRepairExamples:               cloneToolRepairExamples(res.ToolRepairExamples),
-		ConversationRepairs:              cloneConversationRepairs(res.ConversationRepairs),
-		ToolFailureByKind:                cloneStringIntMap(res.ToolStats.ToolFailureByKind),
-		ToolFailureExamples:              cloneToolFailureExamples(res.ToolFailureExamples),
-		LoopGuardExamples:                cloneLoopGuardExamples(res.LoopGuardExamples),
-		MemoryUpdateExamples:             cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
-		RuntimeErrorByKind:               cloneStringIntMap(res.RuntimeErrorByKind),
-		RuntimeErrorExamples:             cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
-		RuntimeSurface:                   runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
-		LoopDecisions:                    res.LoopDecisionStats.Count,
-		LoopDecisionByKind:               cloneStringIntMap(res.LoopDecisionStats.ByKind),
-		LoopDecisionByDecision:           cloneStringIntMap(res.LoopDecisionStats.ByDecision),
-		LoopDecisionExamples:             cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
-		LoopProtocolFeeds:                res.LoopProtocolFeeds.Count,
-		LoopProtocolFeedByMode:           cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
-		LoopProtocolFeedExamples:         cloneLoopProtocolFeedExamples(res.LoopProtocolFeeds.Examples),
-		ContextCompactions:               res.ContextCompactions.Count,
-		ContextCompactionsReactive:       res.ContextCompactions.Reactive,
-		ContextCompactionRemoved:         res.ContextCompactions.RemovedMessages,
-		ContextCompactionSummary:         res.ContextCompactions.SummaryBytes,
-		ContextCompactionSummaryMissing:  res.ContextCompactions.SummaryMissing,
-		ContextCompactionSummaryEmpty:    res.ContextCompactions.SummaryEmpty,
-		ContextCompactionExamples:        cloneContextCompactionExamples(res.ContextCompactions.Examples),
-		ContextInjections:                res.ContextInjections.Count,
-		ContextInjectionBySource:         cloneStringIntMap(res.ContextInjections.BySource),
-		ContextInjectionBytes:            res.ContextInjections.Bytes,
-		ContextInjectionEstimatedTokens:  res.ContextInjections.EstimatedTokens,
-		ContextInjectionExamples:         cloneContextInjectionExamples(res.ContextInjections.Examples),
-		LoopGuardInterventions:           res.ToolStats.LoopGuardInterventions,
-		ForcedNoTools:                    res.ToolStats.ForcedNoTools,
-		SourceAccessResults:              res.ToolStats.SourceAccessResults,
-		SourceAccessVerified:             res.ToolStats.SourceAccessVerified,
-		SourceAccessDiscoveryOnly:        res.ToolStats.SourceAccessDiscoveryOnly,
-		SourceAccessNetwork:              res.ToolStats.SourceAccessNetwork,
-		SourceAccessDynamicPartial:       res.ToolStats.SourceAccessDynamicPartial,
-		SourceAccessExamples:             cloneSourceAccessExamples(res.SourceAccessExamples),
-		BrowserScrollExamples:            cloneBrowserScrollExamples(res.BrowserScrollExamples),
-		BrowserNetworkExamples:           cloneBrowserNetworkExamples(res.BrowserNetworkExamples),
-		MemoryUpdates:                    res.ToolStats.MemoryUpdates,
-		MemoryUpdateAdd:                  res.ToolStats.MemoryUpdateAdd,
-		MemoryUpdateReplace:              res.ToolStats.MemoryUpdateReplace,
-		MemoryUpdateRemove:               res.ToolStats.MemoryUpdateRemove,
-		MemorySearchCalls:                res.ToolStats.MemorySearchCalls,
-		MemorySearchMisses:               res.ToolStats.MemorySearchMisses,
-		MemorySearchMissExamples:         cloneMemorySearchMissExamples(res.MemorySearchMissExamples),
-		SessionSearchCalls:               res.ToolStats.SessionSearchCalls,
-		SessionSearchResults:             res.ToolStats.SessionSearchResults,
-		SessionSearchContextHits:         res.ToolStats.SessionSearchContextHits,
-		SessionSearchMatchedTerms:        res.ToolStats.SessionSearchMatchedTerms,
-		SessionSearchRecent:              res.ToolStats.SessionSearchRecent,
-		SessionSearchExamples:            cloneSessionSearchExamples(res.SessionSearchExamples),
-		ToolDurationMS:                   res.ToolStats.ToolDurationMS,
-		ToolContextTruncated:             max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated),
-		ToolContextOmittedBytes:          max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes),
-		ToolArgsTruncated:                res.ToolTruncation.ArgsTruncated,
-		ToolArgsOmittedBytes:             res.ToolTruncation.ArgsOmittedBytes,
-		ToolResultsTruncated:             res.ToolTruncation.ResultsTruncated,
-		ToolResultsOmittedBytes:          res.ToolTruncation.ResultsOmittedBytes,
-		ToolResultArtifacts:              res.ToolTruncation.ResultArtifacts,
-		ToolResultMissingArtifacts:       toolResultMissingArtifacts(res.ToolTruncation),
-		ToolContextArtifacts:             res.ToolTruncation.ContextArtifacts,
-		ToolContextMissingArtifacts:      res.ToolTruncation.ContextMissingArtifacts,
-		ToolTruncationExamples:           cloneToolTruncationExamples(res.ToolTruncationExamples),
-		VerifierCommand:                  res.Verifier.Command,
-		VerifierRan:                      res.Verifier.Ran,
-		VerifierOK:                       res.Verifier.OK,
-		VerifierExitCode:                 res.Verifier.ExitCode,
-		VerifierDurationMS:               res.Verifier.Duration.Milliseconds(),
-		VerifierOutputBytes:              res.Verifier.OutputBytes,
-		VerifierOutputTruncated:          res.Verifier.OutputTruncated,
-		VerifierOutputOmittedBytes:       res.Verifier.OutputOmittedBytes,
-		VerifierOutputCapBytes:           res.Verifier.OutputCapBytes,
-		TraceEvents:                      res.TraceEvents,
-		TraceEventTypes:                  cloneStringIntMap(res.TraceEventTypes),
-		InputTokens:                      res.Usage.InputTokens,
-		OutputTokens:                     res.Usage.OutputTokens,
-		WorkspaceRemoved:                 res.WorkspaceRemoved,
-		CleanupError:                     res.CleanupError,
-		Failures:                         res.Failures,
-		FailureKinds:                     failureKinds,
-		FailureHints:                     failureHintsForKinds(failureKinds),
-		ToolFailureHints:                 toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
-		RuntimeErrorHints:                failureHintsForKinds(res.RuntimeErrorByKind),
-		DebugBrief:                       agenteval.BuildDebugBrief(res),
-		FocusedTaskCalls:                 res.Delegation.FocusedTaskCalls,
-		FocusedTaskByType:                res.Delegation.FocusedTaskByType,
-		FocusedTaskSources:               res.Delegation.FocusedTaskSourceFindingsByType,
-		FocusedTaskErrors:                res.Delegation.FocusedTaskErrors,
-		FocusedTaskIncomplete:            res.Delegation.FocusedTaskIncomplete,
-		SubagentCalls:                    res.Delegation.SubagentCalls,
-		SubagentByMode:                   res.Delegation.SubagentByMode,
-		SubagentSources:                  res.Delegation.SubagentSourceEvidenceByMode,
-		SubagentErrors:                   res.Delegation.SubagentErrors,
-		SubagentIncomplete:               res.Delegation.SubagentIncomplete,
-		PlanCalls:                        res.Plan.Calls,
-		PlanByAction:                     cloneStringIntMap(res.Plan.ByAction),
-		PlanErrors:                       res.Plan.Errors,
-		PlanExamples:                     clonePlanExamples(res.PlanExamples),
+		evalJSONLMetadata:                      meta,
+		Type:                                   "scenario",
+		Scenario:                               res.BatchScenario,
+		OK:                                     res.OK,
+		RunExitCode:                            res.RunExitCode,
+		DurationMS:                             res.Duration.Milliseconds(),
+		Workspace:                              res.Workspace,
+		TracePath:                              res.TracePath,
+		DebugManifestPath:                      retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
+		TimelinePath:                           retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
+		FinalTextPath:                          retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
+		StdoutPath:                             retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
+		StderrPath:                             retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
+		AffentctlCommand:                       append([]string(nil), res.AffentctlCommand...),
+		Expectations:                           res.Expectations,
+		ExpectationCapabilityNames:             expectationCapabilityNames,
+		ExpectationCapabilityOutcome:           expectationCapabilityOutcome,
+		ExpectationCapabilityPassedNames:       batchResultExpectationCapabilityPassedNames(res, expectationCapabilityNames),
+		ExpectationCapabilityFailedNames:       batchResultExpectationCapabilityFailedNames(res, expectationCapabilityNames),
+		TraceSchemaVersion:                     res.TraceSchemaVersion,
+		TurnEndReason:                          res.TurnEndReason,
+		ToolCalls:                              res.ToolCalls,
+		ToolErrors:                             res.ToolStats.ToolErrors,
+		ToolRepaired:                           res.ToolStats.ToolArgsRepaired,
+		ToolNameCanonicalized:                  res.ToolStats.ToolNameCanonicalized,
+		ToolRepairCalls:                        res.Repair.Calls,
+		ToolRepairSucceeded:                    res.Repair.SucceededCalls,
+		ToolRepairFailed:                       res.Repair.FailedCalls,
+		ToolRepairNotes:                        res.Repair.Notes,
+		ToolRepairByKind:                       cloneStringIntMap(res.Repair.ByKind),
+		ToolRepairExamples:                     cloneToolRepairExamples(res.ToolRepairExamples),
+		ConversationRepairs:                    cloneConversationRepairs(res.ConversationRepairs),
+		ToolFailureByKind:                      cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+		ToolFailureExamples:                    cloneToolFailureExamples(res.ToolFailureExamples),
+		LoopGuardExamples:                      cloneLoopGuardExamples(res.LoopGuardExamples),
+		MemoryUpdateExamples:                   cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
+		RuntimeErrorByKind:                     cloneStringIntMap(res.RuntimeErrorByKind),
+		RuntimeErrorExamples:                   cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
+		RuntimeSurface:                         runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
+		LoopDecisions:                          res.LoopDecisionStats.Count,
+		LoopDecisionByKind:                     cloneStringIntMap(res.LoopDecisionStats.ByKind),
+		LoopDecisionByDecision:                 cloneStringIntMap(res.LoopDecisionStats.ByDecision),
+		LoopDecisionExamples:                   cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
+		LoopProtocolFeeds:                      res.LoopProtocolFeeds.Count,
+		LoopProtocolFeedByMode:                 cloneStringIntMap(res.LoopProtocolFeeds.ByMode),
+		LoopProtocolFeedExamples:               cloneLoopProtocolFeedExamples(res.LoopProtocolFeeds.Examples),
+		LoopProtocolCalibrationRequests:        res.LoopProtocolCalibrationRequests.Count,
+		LoopProtocolCalibrationRequestExamples: cloneLoopProtocolCalibrationExamples(res.LoopProtocolCalibrationRequests.Examples),
+		LoopProtocolCalibrations:               res.LoopProtocolCalibrations.Count,
+		LoopProtocolCalibrationExamples:        cloneLoopProtocolCalibrationExamples(res.LoopProtocolCalibrations.Examples),
+		ContextCompactions:                     res.ContextCompactions.Count,
+		ContextCompactionsReactive:             res.ContextCompactions.Reactive,
+		ContextCompactionRemoved:               res.ContextCompactions.RemovedMessages,
+		ContextCompactionSummary:               res.ContextCompactions.SummaryBytes,
+		ContextCompactionSummaryMissing:        res.ContextCompactions.SummaryMissing,
+		ContextCompactionSummaryEmpty:          res.ContextCompactions.SummaryEmpty,
+		ContextCompactionExamples:              cloneContextCompactionExamples(res.ContextCompactions.Examples),
+		ContextInjections:                      res.ContextInjections.Count,
+		ContextInjectionBySource:               cloneStringIntMap(res.ContextInjections.BySource),
+		ContextInjectionBytes:                  res.ContextInjections.Bytes,
+		ContextInjectionEstimatedTokens:        res.ContextInjections.EstimatedTokens,
+		ContextInjectionExamples:               cloneContextInjectionExamples(res.ContextInjections.Examples),
+		LoopGuardInterventions:                 res.ToolStats.LoopGuardInterventions,
+		ForcedNoTools:                          res.ToolStats.ForcedNoTools,
+		SourceAccessResults:                    res.ToolStats.SourceAccessResults,
+		SourceAccessVerified:                   res.ToolStats.SourceAccessVerified,
+		SourceAccessDiscoveryOnly:              res.ToolStats.SourceAccessDiscoveryOnly,
+		SourceAccessNetwork:                    res.ToolStats.SourceAccessNetwork,
+		SourceAccessDynamicPartial:             res.ToolStats.SourceAccessDynamicPartial,
+		SourceAccessExamples:                   cloneSourceAccessExamples(res.SourceAccessExamples),
+		BrowserScrollExamples:                  cloneBrowserScrollExamples(res.BrowserScrollExamples),
+		BrowserNetworkExamples:                 cloneBrowserNetworkExamples(res.BrowserNetworkExamples),
+		MemoryUpdates:                          res.ToolStats.MemoryUpdates,
+		MemoryUpdateAdd:                        res.ToolStats.MemoryUpdateAdd,
+		MemoryUpdateReplace:                    res.ToolStats.MemoryUpdateReplace,
+		MemoryUpdateRemove:                     res.ToolStats.MemoryUpdateRemove,
+		MemorySearchCalls:                      res.ToolStats.MemorySearchCalls,
+		MemorySearchMisses:                     res.ToolStats.MemorySearchMisses,
+		MemorySearchMissExamples:               cloneMemorySearchMissExamples(res.MemorySearchMissExamples),
+		SessionSearchCalls:                     res.ToolStats.SessionSearchCalls,
+		SessionSearchResults:                   res.ToolStats.SessionSearchResults,
+		SessionSearchContextHits:               res.ToolStats.SessionSearchContextHits,
+		SessionSearchMatchedTerms:              res.ToolStats.SessionSearchMatchedTerms,
+		SessionSearchRecent:                    res.ToolStats.SessionSearchRecent,
+		SessionSearchExamples:                  cloneSessionSearchExamples(res.SessionSearchExamples),
+		ToolDurationMS:                         res.ToolStats.ToolDurationMS,
+		ToolContextTruncated:                   max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated),
+		ToolContextOmittedBytes:                max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes),
+		ToolArgsTruncated:                      res.ToolTruncation.ArgsTruncated,
+		ToolArgsOmittedBytes:                   res.ToolTruncation.ArgsOmittedBytes,
+		ToolResultsTruncated:                   res.ToolTruncation.ResultsTruncated,
+		ToolResultsOmittedBytes:                res.ToolTruncation.ResultsOmittedBytes,
+		ToolResultArtifacts:                    res.ToolTruncation.ResultArtifacts,
+		ToolResultMissingArtifacts:             toolResultMissingArtifacts(res.ToolTruncation),
+		ToolContextArtifacts:                   res.ToolTruncation.ContextArtifacts,
+		ToolContextMissingArtifacts:            res.ToolTruncation.ContextMissingArtifacts,
+		ToolTruncationExamples:                 cloneToolTruncationExamples(res.ToolTruncationExamples),
+		VerifierCommand:                        res.Verifier.Command,
+		VerifierRan:                            res.Verifier.Ran,
+		VerifierOK:                             res.Verifier.OK,
+		VerifierExitCode:                       res.Verifier.ExitCode,
+		VerifierDurationMS:                     res.Verifier.Duration.Milliseconds(),
+		VerifierOutputBytes:                    res.Verifier.OutputBytes,
+		VerifierOutputTruncated:                res.Verifier.OutputTruncated,
+		VerifierOutputOmittedBytes:             res.Verifier.OutputOmittedBytes,
+		VerifierOutputCapBytes:                 res.Verifier.OutputCapBytes,
+		TraceEvents:                            res.TraceEvents,
+		TraceEventTypes:                        cloneStringIntMap(res.TraceEventTypes),
+		InputTokens:                            res.Usage.InputTokens,
+		OutputTokens:                           res.Usage.OutputTokens,
+		WorkspaceRemoved:                       res.WorkspaceRemoved,
+		CleanupError:                           res.CleanupError,
+		Failures:                               res.Failures,
+		FailureKinds:                           failureKinds,
+		FailureHints:                           failureHintsForKinds(failureKinds),
+		ToolFailureHints:                       toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
+		RuntimeErrorHints:                      failureHintsForKinds(res.RuntimeErrorByKind),
+		DebugBrief:                             agenteval.BuildDebugBrief(res),
+		FocusedTaskCalls:                       res.Delegation.FocusedTaskCalls,
+		FocusedTaskByType:                      res.Delegation.FocusedTaskByType,
+		FocusedTaskSources:                     res.Delegation.FocusedTaskSourceFindingsByType,
+		FocusedTaskErrors:                      res.Delegation.FocusedTaskErrors,
+		FocusedTaskIncomplete:                  res.Delegation.FocusedTaskIncomplete,
+		SubagentCalls:                          res.Delegation.SubagentCalls,
+		SubagentByMode:                         res.Delegation.SubagentByMode,
+		SubagentSources:                        res.Delegation.SubagentSourceEvidenceByMode,
+		SubagentErrors:                         res.Delegation.SubagentErrors,
+		SubagentIncomplete:                     res.Delegation.SubagentIncomplete,
+		PlanCalls:                              res.Plan.Calls,
+		PlanByAction:                           cloneStringIntMap(res.Plan.ByAction),
+		PlanErrors:                             res.Plan.Errors,
+		PlanExamples:                           clonePlanExamples(res.PlanExamples),
 	})
 }
 
@@ -3963,194 +4054,202 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 	expectationCapabilityPassed, expectationCapabilityTotal := expectationCapabilityPassTotals(s)
 	expectationDomainPassed, expectationDomainTotal := expectationDomainPassTotals(s)
 	writeJSONLine(w, batchSummaryRecord{
-		evalJSONLMetadata:                    meta,
-		Type:                                 "summary",
-		Scenarios:                            s.Total,
-		Passed:                               s.Passed,
-		Failed:                               s.Failed,
-		PassRate:                             batchRatio(s.Passed, s.Total),
-		CompletionRate:                       batchRatio(s.EndCompleted, s.Total),
-		MemoryUpdateRate:                     batchRatio(s.MemoryUpdates, s.Total),
-		MemorySearchMissRate:                 batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls),
-		LoopProtocolFeedRate:                 batchRatio(s.LoopProtocolFeedScenarios, s.Total),
-		ToolErrorRate:                        batchOptionalRatio(s.ToolErrors, s.ToolCalls),
-		FocusedTaskErrorRate:                 batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls),
-		SubagentErrorRate:                    batchOptionalRatio(s.SubagentErrors, s.SubagentCalls),
-		ForcedNoToolsRate:                    batchOptionalRatio(s.ForcedNoTools, s.ToolCalls),
-		LoopGuardInterventionRate:            batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
-		PlanErrorRate:                        batchOptionalRatio(s.PlanErrors, s.PlanCalls),
-		ToolRepairSuccessRate:                batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
-		VerifierPassRate:                     batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
-		SourceAccessVerifiedRate:             batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
-		SourceNetworkRate:                    batchOptionalRatio(s.SourceAccessNetwork, s.SourceAccessResults),
-		SourceDiscoveryOnlyRate:              batchOptionalRatio(s.SourceAccessDiscoveryOnly, s.SourceAccessResults),
-		SourceDynamicPartialRate:             batchOptionalRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults),
-		SessionSearchContextHitRate:          batchOptionalRatio(s.SessionSearchContextHits, s.SessionSearchResults),
-		SessionSearchMatchedTermsPerCall:     batchOptionalRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls),
-		TraceEventRate:                       batchRatio(s.TraceEventScenarios, s.Total),
-		AvgRuntimeErrors:                     batchAverage(s.RuntimeErrors, s.Total),
-		AvgContextCompactions:                batchAverage(s.ContextCompactions, s.Total),
-		AvgReactiveCompactions:               batchAverage(s.ContextCompactionsReactive, s.Total),
-		AvgContextRemovedMessages:            batchAverage(s.ContextCompactionRemoved, s.Total),
-		AvgContextSummaryBytes:               batchAverage(s.ContextCompactionSummary, s.Total),
-		AvgContextSummaryMissing:             batchAverage(s.ContextCompactionSummaryMissing, s.Total),
-		AvgContextSummaryEmpty:               batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
-		AvgContextInjections:                 batchAverage(s.ContextInjections, s.Total),
-		AvgContextInjectionBytes:             batchAverage(s.ContextInjectionBytes, s.Total),
-		AvgContextInjectionEstimatedTokens:   batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
-		AvgToolCalls:                         batchAverage(s.ToolCalls, s.Total),
-		ToolContextTruncationRate:            batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
-		ToolResultTruncationRate:             batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
-		DurationMS:                           s.Duration.Milliseconds(),
-		AvgDurationMS:                        batchAverageInt64(s.Duration.Milliseconds(), s.Total),
-		ToolCalls:                            s.ToolCalls,
-		ToolErrors:                           s.ToolErrors,
-		ToolRepaired:                         s.ToolRepaired,
-		ToolNameCanonicalized:                s.ToolNameCanonicalized,
-		ToolRepairCalls:                      s.ToolRepairCalls,
-		ToolRepairSucceeded:                  s.ToolRepairSucceeded,
-		ToolRepairFailed:                     s.ToolRepairFailed,
-		ToolRepairNotes:                      s.ToolRepairNotes,
-		ToolRepairByKind:                     cloneStringIntMap(s.ToolRepairByKind),
-		ToolRepairExamples:                   cloneToolRepairExamples(s.ToolRepairExamples),
-		ConversationRepairs:                  s.ConversationRepairs,
-		ConversationRepairMissingToolResults: s.ConversationRepairMissingToolResults,
-		ConversationRepairDuplicateResults:   s.ConversationRepairDuplicateResults,
-		ConversationRepairUnexpectedResults:  s.ConversationRepairUnexpectedResults,
-		ConversationRepairByKind:             cloneStringIntMap(s.ConversationRepairByKind),
-		ConversationRepairExamples:           cloneConversationRepairExamples(s.ConversationRepairExamples),
-		ToolFailureByKind:                    cloneStringIntMap(s.ToolFailureByKind),
-		ToolFailureExamples:                  cloneToolFailureExamples(s.ToolFailureExamples),
-		LoopGuardExamples:                    cloneLoopGuardExamples(s.LoopGuardExamples),
-		RuntimeErrorByKind:                   cloneStringIntMap(s.RuntimeErrorByKind),
-		RuntimeErrorExamples:                 cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
-		RuntimeSurfaceRate:                   batchRatio(s.RuntimeSurfaceScenarios, s.Total),
-		RuntimeSurfaceScenarios:              s.RuntimeSurfaceScenarios,
-		RuntimeSurfaceTools:                  cloneStringIntMap(s.RuntimeSurfaceTools),
-		RuntimeSurfaceCapabilities:           cloneStringIntMap(s.RuntimeSurfaceCapabilities),
-		LoopDecisions:                        s.LoopDecisions,
-		LoopDecisionByKind:                   cloneStringIntMap(s.LoopDecisionByKind),
-		LoopDecisionByDecision:               cloneStringIntMap(s.LoopDecisionByDecision),
-		LoopDecisionExamples:                 cloneLoopDecisionExamples(s.LoopDecisionExamples),
-		LoopProtocolFeedScenarios:            s.LoopProtocolFeedScenarios,
-		LoopProtocolFeeds:                    s.LoopProtocolFeeds,
-		LoopProtocolFeedByMode:               cloneStringIntMap(s.LoopProtocolFeedByMode),
-		LoopProtocolFeedExamples:             cloneLoopProtocolFeedExamples(s.LoopProtocolFeedExamples),
-		ContextCompactions:                   s.ContextCompactions,
-		ContextCompactionsReactive:           s.ContextCompactionsReactive,
-		ContextCompactionRemoved:             s.ContextCompactionRemoved,
-		ContextCompactionSummary:             s.ContextCompactionSummary,
-		ContextCompactionSummaryMissing:      s.ContextCompactionSummaryMissing,
-		ContextCompactionSummaryEmpty:        s.ContextCompactionSummaryEmpty,
-		ContextCompactionExamples:            cloneContextCompactionExamples(s.ContextCompactionExamples),
-		ContextInjections:                    s.ContextInjections,
-		ContextInjectionBySource:             cloneStringIntMap(s.ContextInjectionBySource),
-		ContextInjectionBytes:                s.ContextInjectionBytes,
-		ContextInjectionEstimatedTokens:      s.ContextInjectionEstimatedTokens,
-		ContextInjectionExamples:             cloneContextInjectionExamples(s.ContextInjectionExamples),
-		LoopGuardInterventions:               s.LoopGuardInterventions,
-		ForcedNoTools:                        s.ForcedNoTools,
-		SourceAccessResults:                  s.SourceAccessResults,
-		SourceAccessVerified:                 s.SourceAccessVerified,
-		SourceAccessDiscoveryOnly:            s.SourceAccessDiscoveryOnly,
-		SourceAccessNetwork:                  s.SourceAccessNetwork,
-		SourceAccessDynamicPartial:           s.SourceAccessDynamicPartial,
-		SourceAccessExamples:                 cloneSourceAccessExamples(s.SourceAccessExamples),
-		BrowserScrollExamples:                cloneBrowserScrollExamples(s.BrowserScrollExamples),
-		BrowserNetworkExamples:               cloneBrowserNetworkExamples(s.BrowserNetworkExamples),
-		MemoryUpdates:                        s.MemoryUpdates,
-		MemoryUpdateAdd:                      s.MemoryUpdateAdd,
-		MemoryUpdateReplace:                  s.MemoryUpdateReplace,
-		MemoryUpdateRemove:                   s.MemoryUpdateRemove,
-		MemorySearchCalls:                    s.MemorySearchCalls,
-		MemorySearchMisses:                   s.MemorySearchMisses,
-		MemoryUpdateExamples:                 cloneMemoryUpdateExamples(s.MemoryUpdateExamples),
-		MemorySearchMissExamples:             cloneMemorySearchMissExamples(s.MemorySearchMissExamples),
-		SessionSearchCalls:                   s.SessionSearchCalls,
-		SessionSearchResults:                 s.SessionSearchResults,
-		SessionSearchContextHits:             s.SessionSearchContextHits,
-		SessionSearchMatchedTerms:            s.SessionSearchMatchedTerms,
-		SessionSearchRecent:                  s.SessionSearchRecent,
-		SessionSearchExamples:                cloneSessionSearchExamples(s.SessionSearchExamples),
-		ToolDurationMS:                       s.ToolDurationMS,
-		ToolContextTruncated:                 s.ToolContextTruncated,
-		ToolContextOmittedBytes:              s.ToolContextOmittedBytes,
-		ToolArgsTruncated:                    s.ToolArgsTruncated,
-		ToolArgsOmittedBytes:                 s.ToolArgsOmittedBytes,
-		ToolResultsTruncated:                 s.ToolResultsTruncated,
-		ToolResultsOmittedBytes:              s.ToolResultsOmittedBytes,
-		ToolResultArtifacts:                  s.ToolResultArtifacts,
-		ToolResultMissingArtifacts:           s.ToolResultMissingArtifacts,
-		ToolContextArtifacts:                 s.ToolContextArtifacts,
-		ToolContextMissingArtifacts:          s.ToolContextMissingArtifacts,
-		ToolTruncationExamples:               cloneToolTruncationExamples(s.ToolTruncationExamples),
-		VerifierRuns:                         s.VerifierRuns,
-		VerifierPassed:                       s.VerifierPassed,
-		VerifierFailed:                       s.VerifierFailed,
-		VerifierOutputTruncated:              s.VerifierOutputTruncated,
-		VerifierOutputOmittedBytes:           s.VerifierOutputOmittedBytes,
-		TraceSchemaVersions:                  cloneTraceSchemaVersions(s.TraceSchemaVersions),
-		TraceEventScenarios:                  s.TraceEventScenarios,
-		TraceEvents:                          s.TraceEvents,
-		TraceEventTypes:                      cloneStringIntMap(s.TraceEventTypes),
-		InputTokens:                          s.InputTokens,
-		OutputTokens:                         s.OutputTokens,
-		AvgInputTokens:                       batchAverage(s.InputTokens, s.Total),
-		AvgOutputTokens:                      batchAverage(s.OutputTokens, s.Total),
-		AvgTotalTokens:                       batchAverage(s.InputTokens+s.OutputTokens, s.Total),
-		EndCompleted:                         s.EndCompleted,
-		EndMaxTurns:                          s.EndMaxTurns,
-		EndErrors:                            s.EndErrors,
-		EndCancelled:                         s.EndCancelled,
-		EndUnknown:                           s.EndUnknown,
-		FailureKinds:                         cloneFailureKinds(s.FailureKinds),
-		FailureExamples:                      cloneBatchFailureExamples(s.FailureExamples),
-		FailureHints:                         failureHintsForKinds(s.FailureKinds),
-		ToolFailureHints:                     toolFailureHintsForKinds(s.ToolFailureByKind),
-		RuntimeErrorHints:                    failureHintsForKinds(s.RuntimeErrorByKind),
-		DebugBriefByTag:                      cloneStringIntMap(s.DebugBriefByTag),
-		DebugBriefTagExamples:                cloneBatchDebugBriefTagExamples(s.DebugBriefTagExamples),
-		ExpectationScenarios:                 s.ExpectationScenarios,
-		ExpectationSuites:                    cloneStringIntMap(s.ExpectationSuites),
-		ExpectationDomains:                   cloneStringIntMap(s.ExpectationDomains),
-		ExpectationDomainPassed:              cloneStringIntMap(s.ExpectationDomainPass),
-		ExpectationDomainFailed:              cloneStringIntMap(s.ExpectationDomainFail),
-		ExpectationDomainRate:                expectationDomainPassRates(s.ExpectationDomains, s.ExpectationDomainPass),
-		ExpectationDomainMetrics:             expectationDomainRuntimeMetrics(s.ExpectationDomainRuntime),
-		ExpectationDomainTotal:               optionalInt(expectationDomainTotal, expectationDomainTotal > 0),
-		ExpectationDomainPassedTotal:         optionalInt(expectationDomainPassed, expectationDomainTotal > 0),
-		ExpectationDomainFailedTotal:         optionalInt(expectationDomainTotal-expectationDomainPassed, expectationDomainTotal > 0),
-		ExpectationDomainPassRateTotal:       batchOptionalRatio(expectationDomainPassed, expectationDomainTotal),
-		ExpectationDomainFailureExamples:     cloneExpectationDomainFailureExamples(s.ExpectationDomainFailureExamples),
-		ExpectationCapabilities:              cloneStringIntMap(s.ExpectationCapabilities),
-		ExpectationCapabilityPassed:          cloneStringIntMap(s.ExpectationCapabilityPass),
-		ExpectationCapabilityFailed:          cloneStringIntMap(s.ExpectationCapabilityFail),
-		ExpectationCapabilityRate:            expectationCapabilityPassRates(s.ExpectationCapabilities, s.ExpectationCapabilityPass),
-		ExpectationCapabilityTotal:           optionalInt(expectationCapabilityTotal, expectationCapabilityTotal > 0),
-		ExpectationCapabilityPassedTotal:     optionalInt(expectationCapabilityPassed, expectationCapabilityTotal > 0),
-		ExpectationCapabilityFailedTotal:     optionalInt(expectationCapabilityTotal-expectationCapabilityPassed, expectationCapabilityTotal > 0),
-		ExpectationCapabilityPassRateTotal:   batchOptionalRatio(expectationCapabilityPassed, expectationCapabilityTotal),
-		ExpectationCapabilityFailureExamples: cloneExpectationCapabilityFailureExamples(s.ExpectationCapabilityFailureExamples),
-		ExpectationRequiredTools:             cloneStringIntMap(s.ExpectationRequiredTools),
-		ExpectationSourceAccess:              cloneStringIntMap(s.ExpectationSourceAccess),
-		QualityGatesPassed:                   qualityGatesPassedForJSONL(meta, gateFailures),
-		QualityGateFailures:                  append([]string(nil), gateFailures...),
-		RemovedWorkspaces:                    s.RemovedWorkspaces,
-		CleanupErrors:                        s.CleanupErrors,
-		FocusedTaskCalls:                     s.FocusedTaskCalls,
-		FocusedTaskByType:                    cloneStringIntMap(s.FocusedTaskByType),
-		FocusedTaskSources:                   cloneStringIntMap(s.FocusedTaskSources),
-		FocusedTaskErrors:                    s.FocusedTaskErrors,
-		FocusedTaskIncomplete:                s.FocusedTaskIncomplete,
-		SubagentCalls:                        s.SubagentCalls,
-		SubagentByMode:                       cloneStringIntMap(s.SubagentByMode),
-		SubagentSources:                      cloneStringIntMap(s.SubagentSources),
-		SubagentErrors:                       s.SubagentErrors,
-		SubagentIncomplete:                   s.SubagentIncomplete,
-		PlanCalls:                            s.PlanCalls,
-		PlanByAction:                         cloneStringIntMap(s.PlanByAction),
-		PlanErrors:                           s.PlanErrors,
-		PlanExamples:                         clonePlanExamples(s.PlanExamples),
+		evalJSONLMetadata:                       meta,
+		Type:                                    "summary",
+		Scenarios:                               s.Total,
+		Passed:                                  s.Passed,
+		Failed:                                  s.Failed,
+		PassRate:                                batchRatio(s.Passed, s.Total),
+		CompletionRate:                          batchRatio(s.EndCompleted, s.Total),
+		MemoryUpdateRate:                        batchRatio(s.MemoryUpdates, s.Total),
+		MemorySearchMissRate:                    batchOptionalRatio(s.MemorySearchMisses, s.MemorySearchCalls),
+		LoopProtocolFeedRate:                    batchRatio(s.LoopProtocolFeedScenarios, s.Total),
+		LoopProtocolCalibrationRequestRate:      batchRatio(s.LoopProtocolCalibrationRequestScenarios, s.Total),
+		LoopProtocolCalibrationRate:             batchRatio(s.LoopProtocolCalibrationScenarios, s.Total),
+		ToolErrorRate:                           batchOptionalRatio(s.ToolErrors, s.ToolCalls),
+		FocusedTaskErrorRate:                    batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls),
+		SubagentErrorRate:                       batchOptionalRatio(s.SubagentErrors, s.SubagentCalls),
+		ForcedNoToolsRate:                       batchOptionalRatio(s.ForcedNoTools, s.ToolCalls),
+		LoopGuardInterventionRate:               batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
+		PlanErrorRate:                           batchOptionalRatio(s.PlanErrors, s.PlanCalls),
+		ToolRepairSuccessRate:                   batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
+		VerifierPassRate:                        batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
+		SourceAccessVerifiedRate:                batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
+		SourceNetworkRate:                       batchOptionalRatio(s.SourceAccessNetwork, s.SourceAccessResults),
+		SourceDiscoveryOnlyRate:                 batchOptionalRatio(s.SourceAccessDiscoveryOnly, s.SourceAccessResults),
+		SourceDynamicPartialRate:                batchOptionalRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults),
+		SessionSearchContextHitRate:             batchOptionalRatio(s.SessionSearchContextHits, s.SessionSearchResults),
+		SessionSearchMatchedTermsPerCall:        batchOptionalRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls),
+		TraceEventRate:                          batchRatio(s.TraceEventScenarios, s.Total),
+		AvgRuntimeErrors:                        batchAverage(s.RuntimeErrors, s.Total),
+		AvgContextCompactions:                   batchAverage(s.ContextCompactions, s.Total),
+		AvgReactiveCompactions:                  batchAverage(s.ContextCompactionsReactive, s.Total),
+		AvgContextRemovedMessages:               batchAverage(s.ContextCompactionRemoved, s.Total),
+		AvgContextSummaryBytes:                  batchAverage(s.ContextCompactionSummary, s.Total),
+		AvgContextSummaryMissing:                batchAverage(s.ContextCompactionSummaryMissing, s.Total),
+		AvgContextSummaryEmpty:                  batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
+		AvgContextInjections:                    batchAverage(s.ContextInjections, s.Total),
+		AvgContextInjectionBytes:                batchAverage(s.ContextInjectionBytes, s.Total),
+		AvgContextInjectionEstimatedTokens:      batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
+		AvgToolCalls:                            batchAverage(s.ToolCalls, s.Total),
+		ToolContextTruncationRate:               batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
+		ToolResultTruncationRate:                batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
+		DurationMS:                              s.Duration.Milliseconds(),
+		AvgDurationMS:                           batchAverageInt64(s.Duration.Milliseconds(), s.Total),
+		ToolCalls:                               s.ToolCalls,
+		ToolErrors:                              s.ToolErrors,
+		ToolRepaired:                            s.ToolRepaired,
+		ToolNameCanonicalized:                   s.ToolNameCanonicalized,
+		ToolRepairCalls:                         s.ToolRepairCalls,
+		ToolRepairSucceeded:                     s.ToolRepairSucceeded,
+		ToolRepairFailed:                        s.ToolRepairFailed,
+		ToolRepairNotes:                         s.ToolRepairNotes,
+		ToolRepairByKind:                        cloneStringIntMap(s.ToolRepairByKind),
+		ToolRepairExamples:                      cloneToolRepairExamples(s.ToolRepairExamples),
+		ConversationRepairs:                     s.ConversationRepairs,
+		ConversationRepairMissingToolResults:    s.ConversationRepairMissingToolResults,
+		ConversationRepairDuplicateResults:      s.ConversationRepairDuplicateResults,
+		ConversationRepairUnexpectedResults:     s.ConversationRepairUnexpectedResults,
+		ConversationRepairByKind:                cloneStringIntMap(s.ConversationRepairByKind),
+		ConversationRepairExamples:              cloneConversationRepairExamples(s.ConversationRepairExamples),
+		ToolFailureByKind:                       cloneStringIntMap(s.ToolFailureByKind),
+		ToolFailureExamples:                     cloneToolFailureExamples(s.ToolFailureExamples),
+		LoopGuardExamples:                       cloneLoopGuardExamples(s.LoopGuardExamples),
+		RuntimeErrorByKind:                      cloneStringIntMap(s.RuntimeErrorByKind),
+		RuntimeErrorExamples:                    cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
+		RuntimeSurfaceRate:                      batchRatio(s.RuntimeSurfaceScenarios, s.Total),
+		RuntimeSurfaceScenarios:                 s.RuntimeSurfaceScenarios,
+		RuntimeSurfaceTools:                     cloneStringIntMap(s.RuntimeSurfaceTools),
+		RuntimeSurfaceCapabilities:              cloneStringIntMap(s.RuntimeSurfaceCapabilities),
+		LoopDecisions:                           s.LoopDecisions,
+		LoopDecisionByKind:                      cloneStringIntMap(s.LoopDecisionByKind),
+		LoopDecisionByDecision:                  cloneStringIntMap(s.LoopDecisionByDecision),
+		LoopDecisionExamples:                    cloneLoopDecisionExamples(s.LoopDecisionExamples),
+		LoopProtocolFeedScenarios:               s.LoopProtocolFeedScenarios,
+		LoopProtocolFeeds:                       s.LoopProtocolFeeds,
+		LoopProtocolFeedByMode:                  cloneStringIntMap(s.LoopProtocolFeedByMode),
+		LoopProtocolFeedExamples:                cloneLoopProtocolFeedExamples(s.LoopProtocolFeedExamples),
+		LoopProtocolCalibrationRequestScenarios: s.LoopProtocolCalibrationRequestScenarios,
+		LoopProtocolCalibrationRequests:         s.LoopProtocolCalibrationRequests,
+		LoopProtocolCalibrationRequestExamples:  cloneLoopProtocolCalibrationExamples(s.LoopProtocolCalibrationRequestExamples),
+		LoopProtocolCalibrationScenarios:        s.LoopProtocolCalibrationScenarios,
+		LoopProtocolCalibrations:                s.LoopProtocolCalibrations,
+		LoopProtocolCalibrationExamples:         cloneLoopProtocolCalibrationExamples(s.LoopProtocolCalibrationExamples),
+		ContextCompactions:                      s.ContextCompactions,
+		ContextCompactionsReactive:              s.ContextCompactionsReactive,
+		ContextCompactionRemoved:                s.ContextCompactionRemoved,
+		ContextCompactionSummary:                s.ContextCompactionSummary,
+		ContextCompactionSummaryMissing:         s.ContextCompactionSummaryMissing,
+		ContextCompactionSummaryEmpty:           s.ContextCompactionSummaryEmpty,
+		ContextCompactionExamples:               cloneContextCompactionExamples(s.ContextCompactionExamples),
+		ContextInjections:                       s.ContextInjections,
+		ContextInjectionBySource:                cloneStringIntMap(s.ContextInjectionBySource),
+		ContextInjectionBytes:                   s.ContextInjectionBytes,
+		ContextInjectionEstimatedTokens:         s.ContextInjectionEstimatedTokens,
+		ContextInjectionExamples:                cloneContextInjectionExamples(s.ContextInjectionExamples),
+		LoopGuardInterventions:                  s.LoopGuardInterventions,
+		ForcedNoTools:                           s.ForcedNoTools,
+		SourceAccessResults:                     s.SourceAccessResults,
+		SourceAccessVerified:                    s.SourceAccessVerified,
+		SourceAccessDiscoveryOnly:               s.SourceAccessDiscoveryOnly,
+		SourceAccessNetwork:                     s.SourceAccessNetwork,
+		SourceAccessDynamicPartial:              s.SourceAccessDynamicPartial,
+		SourceAccessExamples:                    cloneSourceAccessExamples(s.SourceAccessExamples),
+		BrowserScrollExamples:                   cloneBrowserScrollExamples(s.BrowserScrollExamples),
+		BrowserNetworkExamples:                  cloneBrowserNetworkExamples(s.BrowserNetworkExamples),
+		MemoryUpdates:                           s.MemoryUpdates,
+		MemoryUpdateAdd:                         s.MemoryUpdateAdd,
+		MemoryUpdateReplace:                     s.MemoryUpdateReplace,
+		MemoryUpdateRemove:                      s.MemoryUpdateRemove,
+		MemorySearchCalls:                       s.MemorySearchCalls,
+		MemorySearchMisses:                      s.MemorySearchMisses,
+		MemoryUpdateExamples:                    cloneMemoryUpdateExamples(s.MemoryUpdateExamples),
+		MemorySearchMissExamples:                cloneMemorySearchMissExamples(s.MemorySearchMissExamples),
+		SessionSearchCalls:                      s.SessionSearchCalls,
+		SessionSearchResults:                    s.SessionSearchResults,
+		SessionSearchContextHits:                s.SessionSearchContextHits,
+		SessionSearchMatchedTerms:               s.SessionSearchMatchedTerms,
+		SessionSearchRecent:                     s.SessionSearchRecent,
+		SessionSearchExamples:                   cloneSessionSearchExamples(s.SessionSearchExamples),
+		ToolDurationMS:                          s.ToolDurationMS,
+		ToolContextTruncated:                    s.ToolContextTruncated,
+		ToolContextOmittedBytes:                 s.ToolContextOmittedBytes,
+		ToolArgsTruncated:                       s.ToolArgsTruncated,
+		ToolArgsOmittedBytes:                    s.ToolArgsOmittedBytes,
+		ToolResultsTruncated:                    s.ToolResultsTruncated,
+		ToolResultsOmittedBytes:                 s.ToolResultsOmittedBytes,
+		ToolResultArtifacts:                     s.ToolResultArtifacts,
+		ToolResultMissingArtifacts:              s.ToolResultMissingArtifacts,
+		ToolContextArtifacts:                    s.ToolContextArtifacts,
+		ToolContextMissingArtifacts:             s.ToolContextMissingArtifacts,
+		ToolTruncationExamples:                  cloneToolTruncationExamples(s.ToolTruncationExamples),
+		VerifierRuns:                            s.VerifierRuns,
+		VerifierPassed:                          s.VerifierPassed,
+		VerifierFailed:                          s.VerifierFailed,
+		VerifierOutputTruncated:                 s.VerifierOutputTruncated,
+		VerifierOutputOmittedBytes:              s.VerifierOutputOmittedBytes,
+		TraceSchemaVersions:                     cloneTraceSchemaVersions(s.TraceSchemaVersions),
+		TraceEventScenarios:                     s.TraceEventScenarios,
+		TraceEvents:                             s.TraceEvents,
+		TraceEventTypes:                         cloneStringIntMap(s.TraceEventTypes),
+		InputTokens:                             s.InputTokens,
+		OutputTokens:                            s.OutputTokens,
+		AvgInputTokens:                          batchAverage(s.InputTokens, s.Total),
+		AvgOutputTokens:                         batchAverage(s.OutputTokens, s.Total),
+		AvgTotalTokens:                          batchAverage(s.InputTokens+s.OutputTokens, s.Total),
+		EndCompleted:                            s.EndCompleted,
+		EndMaxTurns:                             s.EndMaxTurns,
+		EndErrors:                               s.EndErrors,
+		EndCancelled:                            s.EndCancelled,
+		EndUnknown:                              s.EndUnknown,
+		FailureKinds:                            cloneFailureKinds(s.FailureKinds),
+		FailureExamples:                         cloneBatchFailureExamples(s.FailureExamples),
+		FailureHints:                            failureHintsForKinds(s.FailureKinds),
+		ToolFailureHints:                        toolFailureHintsForKinds(s.ToolFailureByKind),
+		RuntimeErrorHints:                       failureHintsForKinds(s.RuntimeErrorByKind),
+		DebugBriefByTag:                         cloneStringIntMap(s.DebugBriefByTag),
+		DebugBriefTagExamples:                   cloneBatchDebugBriefTagExamples(s.DebugBriefTagExamples),
+		ExpectationScenarios:                    s.ExpectationScenarios,
+		ExpectationSuites:                       cloneStringIntMap(s.ExpectationSuites),
+		ExpectationDomains:                      cloneStringIntMap(s.ExpectationDomains),
+		ExpectationDomainPassed:                 cloneStringIntMap(s.ExpectationDomainPass),
+		ExpectationDomainFailed:                 cloneStringIntMap(s.ExpectationDomainFail),
+		ExpectationDomainRate:                   expectationDomainPassRates(s.ExpectationDomains, s.ExpectationDomainPass),
+		ExpectationDomainMetrics:                expectationDomainRuntimeMetrics(s.ExpectationDomainRuntime),
+		ExpectationDomainTotal:                  optionalInt(expectationDomainTotal, expectationDomainTotal > 0),
+		ExpectationDomainPassedTotal:            optionalInt(expectationDomainPassed, expectationDomainTotal > 0),
+		ExpectationDomainFailedTotal:            optionalInt(expectationDomainTotal-expectationDomainPassed, expectationDomainTotal > 0),
+		ExpectationDomainPassRateTotal:          batchOptionalRatio(expectationDomainPassed, expectationDomainTotal),
+		ExpectationDomainFailureExamples:        cloneExpectationDomainFailureExamples(s.ExpectationDomainFailureExamples),
+		ExpectationCapabilities:                 cloneStringIntMap(s.ExpectationCapabilities),
+		ExpectationCapabilityPassed:             cloneStringIntMap(s.ExpectationCapabilityPass),
+		ExpectationCapabilityFailed:             cloneStringIntMap(s.ExpectationCapabilityFail),
+		ExpectationCapabilityRate:               expectationCapabilityPassRates(s.ExpectationCapabilities, s.ExpectationCapabilityPass),
+		ExpectationCapabilityTotal:              optionalInt(expectationCapabilityTotal, expectationCapabilityTotal > 0),
+		ExpectationCapabilityPassedTotal:        optionalInt(expectationCapabilityPassed, expectationCapabilityTotal > 0),
+		ExpectationCapabilityFailedTotal:        optionalInt(expectationCapabilityTotal-expectationCapabilityPassed, expectationCapabilityTotal > 0),
+		ExpectationCapabilityPassRateTotal:      batchOptionalRatio(expectationCapabilityPassed, expectationCapabilityTotal),
+		ExpectationCapabilityFailureExamples:    cloneExpectationCapabilityFailureExamples(s.ExpectationCapabilityFailureExamples),
+		ExpectationRequiredTools:                cloneStringIntMap(s.ExpectationRequiredTools),
+		ExpectationSourceAccess:                 cloneStringIntMap(s.ExpectationSourceAccess),
+		QualityGatesPassed:                      qualityGatesPassedForJSONL(meta, gateFailures),
+		QualityGateFailures:                     append([]string(nil), gateFailures...),
+		RemovedWorkspaces:                       s.RemovedWorkspaces,
+		CleanupErrors:                           s.CleanupErrors,
+		FocusedTaskCalls:                        s.FocusedTaskCalls,
+		FocusedTaskByType:                       cloneStringIntMap(s.FocusedTaskByType),
+		FocusedTaskSources:                      cloneStringIntMap(s.FocusedTaskSources),
+		FocusedTaskErrors:                       s.FocusedTaskErrors,
+		FocusedTaskIncomplete:                   s.FocusedTaskIncomplete,
+		SubagentCalls:                           s.SubagentCalls,
+		SubagentByMode:                          cloneStringIntMap(s.SubagentByMode),
+		SubagentSources:                         cloneStringIntMap(s.SubagentSources),
+		SubagentErrors:                          s.SubagentErrors,
+		SubagentIncomplete:                      s.SubagentIncomplete,
+		PlanCalls:                               s.PlanCalls,
+		PlanByAction:                            cloneStringIntMap(s.PlanByAction),
+		PlanErrors:                              s.PlanErrors,
+		PlanExamples:                            clonePlanExamples(s.PlanExamples),
 	})
 }
 
@@ -4167,6 +4266,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinCompletionRate != nil ||
 		meta.MinMemoryUpdateRate != nil ||
 		meta.MinLoopProtocolFeedRate != nil ||
+		meta.MinLoopProtocolCalibrationRequestRate != nil ||
+		meta.MinLoopProtocolCalibrationRate != nil ||
 		meta.MinRuntimeSurfaceRate != nil ||
 		meta.MinTraceEventRate != nil ||
 		meta.MinSourceNetworkRate != nil ||
@@ -4685,6 +4786,13 @@ func cloneLoopProtocolFeedExamples(in []agenteval.LoopProtocolFeed) []agenteval.
 	return append([]agenteval.LoopProtocolFeed(nil), in...)
 }
 
+func cloneLoopProtocolCalibrationExamples(in []agenteval.LoopProtocolCalibration) []agenteval.LoopProtocolCalibration {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.LoopProtocolCalibration(nil), in...)
+}
+
 func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteval.ContextCompaction {
 	if len(in) == 0 {
 		return nil
@@ -4716,6 +4824,22 @@ func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, scenario stri
 }
 
 func appendLoopProtocolFeedExamples(dst, src []agenteval.LoopProtocolFeed, scenario string, limit int) []agenteval.LoopProtocolFeed {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendLoopProtocolCalibrationExamples(dst, src []agenteval.LoopProtocolCalibration, scenario string, limit int) []agenteval.LoopProtocolCalibration {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -5158,6 +5282,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			fmt.Fprintf(w, " loop_protocol_feed_modes=%s", formatStringIntCounts(res.LoopProtocolFeeds.ByMode))
 		}
 	}
+	if res.LoopProtocolCalibrationRequests.Count > 0 || res.LoopProtocolCalibrations.Count > 0 {
+		fmt.Fprintf(w, " loop_protocol_calibration=requests:%d,answers:%d", res.LoopProtocolCalibrationRequests.Count, res.LoopProtocolCalibrations.Count)
+	}
 	if res.ContextCompactions.Count > 0 {
 		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			res.ContextCompactions.Count,
@@ -5224,6 +5351,8 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
 	printLoopProtocolFeedExampleLines(w, res.LoopProtocolFeeds.Examples, "  ")
+	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_request_example", res.LoopProtocolCalibrationRequests.Examples, "  ")
+	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_example", res.LoopProtocolCalibrations.Examples, "  ")
 	printContextCompactionExampleLines(w, res.ContextCompactions.Examples, "  ")
 	printContextInjectionExampleLines(w, res.ContextInjections.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
