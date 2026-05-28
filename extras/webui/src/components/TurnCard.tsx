@@ -1596,16 +1596,6 @@ function MessageStep({
       aria-label={`${label} message`}
     >
       <div className="message-bubble-row" data-side={variant}>
-        {variant === "user" && onReuse ? (
-          <MessageOptions text={text} onReuse={onReuse} />
-        ) : null}
-        <div className={`flow-text${streaming ? " streaming-caret" : ""}`}>
-          {variant === "assistant" ? (
-            <MarkdownText text={text} query={searchQuery} />
-          ) : (
-            <HighlightText text={text} query={searchQuery} />
-          )}
-        </div>
         {variant === "assistant" ? (
           <MessageOptions
             text={text}
@@ -1614,6 +1604,16 @@ function MessageStep({
             onContinue={onContinue}
             onRetry={onRetry}
           />
+        ) : null}
+        <div className={`flow-text${streaming ? " streaming-caret" : ""}`}>
+          {variant === "assistant" ? (
+            <MarkdownText text={text} query={searchQuery} />
+          ) : (
+            <HighlightText text={text} query={searchQuery} />
+          )}
+        </div>
+        {variant === "user" && onReuse ? (
+          <MessageOptions text={text} onReuse={onReuse} />
         ) : null}
       </div>
       {variant === "assistant" && streaming ? (

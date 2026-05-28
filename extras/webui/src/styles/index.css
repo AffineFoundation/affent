@@ -5894,21 +5894,22 @@ mark {
   z-index: 4;
   display: inline-flex;
   flex: 0 0 28px;
+  align-self: flex-end;
   align-items: center;
   justify-content: center;
   width: 28px;
-  min-height: 30px;
+  min-height: 28px;
   max-width: none;
   margin-top: 0;
   padding: 0;
 }
 
 .message-side-actions[data-side="user"] {
-  order: 0;
+  order: 2;
 }
 
 .message-side-actions[data-side="assistant"] {
-  order: 2;
+  order: 0;
 }
 
 .flow-step-user .message-actions {
@@ -5942,7 +5943,7 @@ mark {
   font-weight: 800;
   line-height: 1;
   letter-spacing: 0;
-  padding: 0 0 5px;
+  padding: 0 0 3px;
   cursor: pointer;
   opacity: 0.58;
   transition: opacity 140ms ease, color 140ms ease, background 140ms ease, border-color 140ms ease;
