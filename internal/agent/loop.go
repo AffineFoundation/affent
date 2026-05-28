@@ -2418,13 +2418,48 @@ Do not call tools again. ` + finalEvidenceDiscipline + ` Start the final answer 
 
 func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (*FinishInfo, string, error) {
 	if digest := finalEvidenceDigest(l.Conv.Snapshot()); digest != "" {
+		digest = strings.TrimSpace(redactSecretValues(digest, l.SecretValuesProvider))
 		prompt = prompt + "\n\n" + digest
+		l.publishFinalEvidenceDigestInjected(turnID, digest)
 	}
 	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append final no-tools prompt")
 		return nil, sse.TurnEndError, err
 	}
 	return l.runStep(ctx, turnID, nil)
+}
+
+func (l *Loop) publishFinalEvidenceDigestInjected(turnID, digest string) {
+	digest = strings.TrimSpace(digest)
+	if digest == "" {
+		return
+	}
+	l.publish(sse.TypeContextInjected, sse.ContextInjectedPayload{
+		TurnID:          turnID,
+		Source:          "final_evidence_digest",
+		Title:           "Final evidence digest injected",
+		Summary:         "A bounded digest of prior citable tool evidence was appended to an internal no-tool finalization prompt.",
+		Preview:         textutil.Preview(finalEvidenceDigestContextPreview(digest), 360),
+		Bytes:           len([]byte(digest)),
+		EstimatedTokens: estimateContextTokens(digest),
+	})
+}
+
+func finalEvidenceDigestContextPreview(digest string) string {
+	var evidence []string
+	for _, line := range strings.Split(digest, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "- ") {
+			evidence = append(evidence, line)
+			if len(evidence) >= 2 {
+				break
+			}
+		}
+	}
+	if len(evidence) > 0 {
+		return strings.Join(evidence, "\n")
+	}
+	return digest
 }
 
 func (l *Loop) toolResultMaxBytesInContext() int {

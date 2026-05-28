@@ -1841,6 +1841,8 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	var finalText string
+	var finalDigestContext sse.ContextInjectedPayload
+	sawFinalDigestContext := false
 	for {
 		select {
 		case ev, ok := <-events:
@@ -1854,6 +1856,15 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 					t.Fatalf("decode message.done: %v", err)
 				}
 				finalText = p.Text
+			case sse.TypeContextInjected:
+				var p sse.ContextInjectedPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode context.injected: %v", err)
+				}
+				if p.Source == "final_evidence_digest" {
+					finalDigestContext = p
+					sawFinalDigestContext = true
+				}
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -1876,6 +1887,16 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 				}
 				if !finalRequestHadEvidenceDigest.Load() {
 					t.Fatal("final max-turns recovery request must include compact evidence digest")
+				}
+				if !sawFinalDigestContext {
+					t.Fatal("final evidence digest should emit context.injected for trace/debug visibility")
+				}
+				if finalDigestContext.Title != "Final evidence digest injected" ||
+					finalDigestContext.Bytes == 0 ||
+					finalDigestContext.EstimatedTokens == 0 ||
+					!strings.Contains(finalDigestContext.Preview, "SourceAccess") ||
+					!strings.Contains(finalDigestContext.Preview, "tao.app") {
+					t.Fatalf("final evidence context payload = %+v", finalDigestContext)
 				}
 				return
 			}

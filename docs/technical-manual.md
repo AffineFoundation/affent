@@ -1263,6 +1263,11 @@ provides a continuation prompt for handing the failure back to an agent. When
 truncated tool output has either result artifacts or model-context artifacts,
 the recovery guide points at the retained artifact directory so the operator or
 next agent can inspect the full output instead of trusting the bounded preview.
+When max-turn/tool-call budget, loop-guard, truncation, or process-narration
+recovery forces a no-tool finalization pass, the runtime may append a bounded
+final evidence digest from prior citable tool results; this is emitted as
+`context.injected` with `source=final_evidence_digest`, so retained timelines
+can prove the model received the compact evidence anchor before answering.
 The manifest and JSONL scenario record also include a machine-readable
 `debug_brief` with stable tags and inspection hints; loop guard hints route
 first to `loop_guard_examples` so the blocked call, guard reason, and suggested

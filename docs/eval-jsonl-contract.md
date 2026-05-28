@@ -653,7 +653,10 @@ Summary records aggregate all scenario records from the same process:
 - Context injection totals: `context_injections`,
   `context_injection_by_source`, `context_injection_bytes`, and
   `context_injection_estimated_tokens`, plus bounded
-  `context_injection_examples`.
+  `context_injection_examples`. No-tool finalization recovery may emit
+  `source=final_evidence_digest` when the runtime appended a compact digest of
+  prior citable tool evidence before forcing the model to answer without more
+  tools.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag. Verifier tags such as
   `verifier:failed`, `verifier:not_run`, `verifier:abnormal`, and

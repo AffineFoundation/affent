@@ -113,7 +113,8 @@ window and Affent repaired it before continuing the session.
 
 - `turn_id`: runtime turn id.
 - `source`: stable context source, such as `account_access`, `active_plan`,
-  `skill`, `skill_provider`, or `research_checkpoint`.
+  `skill`, `skill_provider`, `research_checkpoint`, or
+  `final_evidence_digest`.
 - `title`: short UI label.
 - `summary`: bounded human-readable explanation of why the hidden context was
   injected.
@@ -123,7 +124,10 @@ window and Affent repaired it before continuing the session.
 `AFFENT LOOP PROTOCOL` blocks use the dedicated `loop.protocol_feed` event and
 are not duplicated as `context.injected`. Research checkpoint reminders use
 `source=research_checkpoint` so traces can prove the model received the
-external-calibration reminder paired with a `loop.decision`.
+external-calibration reminder paired with a `loop.decision`. No-tool
+finalization recovery prompts may use `source=final_evidence_digest` when the
+runtime appended a bounded digest of prior citable tool evidence before asking
+the model to answer without more tools.
 
 ### `message.delta`
 
