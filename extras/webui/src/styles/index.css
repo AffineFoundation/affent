@@ -11202,6 +11202,11 @@ pre.code {
   background: rgba(255, 255, 255, 0.9);
 }
 
+.session-trace-issue[data-selected="true"] {
+  border-color: rgba(20, 184, 166, 0.42);
+  background: rgba(240, 253, 250, 0.86);
+}
+
 .session-trace-issue span:first-child {
   overflow: hidden;
   color: var(--text);
@@ -11234,6 +11239,100 @@ pre.code {
   font-weight: 800;
   padding: 2px 5px;
   white-space: nowrap;
+}
+
+.session-trace-issue-focus {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(240, 253, 250, 0.76), rgba(255, 255, 255, 0.58));
+  padding: 9px;
+}
+
+.session-trace-issue-focus-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.session-trace-issue-focus-head span,
+.session-trace-issue-next span,
+.session-trace-issue-facts small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-trace-issue-focus-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-trace-issue-focus-head small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.session-trace-issue-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-trace-issue-facts > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.76);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.64);
+  padding: 6px 7px;
+}
+
+.session-trace-issue-facts strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-trace-issue-next {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.session-trace-issue-next p {
+  margin: 0;
+  border: 1px solid rgba(217, 224, 232, 0.76);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 252, 0.74);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.4;
+  padding: 7px 8px;
+  overflow-wrap: anywhere;
+}
+
+.session-trace-issue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .session-trace-results {
@@ -12101,7 +12200,10 @@ html[data-theme="dark"] .session-trace-resultbar,
 html[data-theme="dark"] .session-trace-resultbar > span,
 html[data-theme="dark"] .session-trace-resultbar button,
 html[data-theme="dark"] .session-trace-issues,
-html[data-theme="dark"] .session-trace-issue {
+html[data-theme="dark"] .session-trace-issue,
+html[data-theme="dark"] .session-trace-issue-focus,
+html[data-theme="dark"] .session-trace-issue-facts > span,
+html[data-theme="dark"] .session-trace-issue-next p {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(15, 23, 42, 0.52);
 }
@@ -12113,6 +12215,12 @@ html[data-theme="dark"] .session-trace-resultbar button:focus-visible,
 html[data-theme="dark"] .session-trace-issue:hover {
   border-color: rgba(45, 212, 191, 0.34);
   background: rgba(45, 212, 191, 0.12);
+}
+
+html[data-theme="dark"] .session-trace-issue[data-selected="true"],
+html[data-theme="dark"] .session-trace-issue-focus {
+  border-color: rgba(45, 212, 191, 0.3);
+  background: rgba(13, 40, 38, 0.34);
 }
 
 html[data-theme="dark"] .session-file-preview {

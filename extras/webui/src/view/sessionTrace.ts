@@ -24,6 +24,11 @@ export interface TraceToolIssueView {
   tool: string;
   detail: string;
   badges: string[];
+  turnNumber: number;
+  exitCode?: number;
+  durationMs?: number;
+  artifactPath?: string;
+  next?: string;
 }
 
 export function buildSessionTrace(session: SessionState): SessionTraceView {
@@ -78,6 +83,11 @@ function buildTraceToolIssues(session: SessionState): TraceToolIssueView[] {
           call.exitCode != null && call.exitCode !== 0 ? `exit ${call.exitCode}` : undefined,
           ...failureKinds,
         ]),
+        turnNumber: turnIndex + 1,
+        exitCode: call.exitCode,
+        durationMs: call.durationMs,
+        artifactPath: call.resultArtifactPath,
+        next: issueNextHint(call.resultSummary, call.result),
       });
     }
   });
@@ -151,6 +161,13 @@ function issueSummary(summary?: string, result?: string): string | undefined {
     .filter((line) => line && !/^Failure:/i.test(line))
     .join(" ");
   return compactWhitespace(stripped);
+}
+
+function issueNextHint(summary?: string, result?: string): string | undefined {
+  const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
+  const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
+  const value = match?.[1]?.trim();
+  return value ? streamSummary(value) : undefined;
 }
 
 function stripTraceNextBlocks(value: string): string {

@@ -46,6 +46,8 @@ describe("buildSessionTrace", () => {
           failure_kind: "invalid_args",
           result_summary: "failed\nNext: rerun npm test after fixing checkout\nFailure: kind=invalid_args",
           result: "failed\nNext: rerun npm test after fixing checkout\nFailure: kind=invalid_args",
+          result_artifact_path: ".affent/artifacts/tool-results/000001-shell.txt",
+          duration_ms: 340,
         },
       },
     ]);
@@ -61,6 +63,11 @@ describe("buildSessionTrace", () => {
         tool: "shell",
         detail: "invalid_args · failed",
         badges: ["exit 1", "invalid_args"],
+        turnNumber: 1,
+        exitCode: 1,
+        durationMs: 340,
+        artifactPath: ".affent/artifacts/tool-results/000001-shell.txt",
+        next: "rerun npm test after fixing checkout",
       },
     ]);
     expect(sessionTraceEvidenceText(trace)).toContain("Tool issue: Request 1 · shell · invalid_args · failed");

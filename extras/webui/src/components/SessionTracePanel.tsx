@@ -5,6 +5,7 @@ import { filterEventTraceEvents } from "../view/eventTrace";
 import {
   type SessionTraceView,
 } from "../view/sessionTrace";
+import { CopyButton } from "./CopyButton";
 import { EventTrace } from "./EventTrace";
 
 export function SessionTracePanel({
@@ -20,9 +21,11 @@ export function SessionTracePanel({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TraceFilter>("all");
+  const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
   const issueGroups = useMemo(() => traceToolIssueGroups(trace.toolIssues), [trace.toolIssues]);
+  const activeIssue = trace.toolIssues.find((issue) => issue.id === activeIssueId);
   const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(
     () => {
@@ -101,6 +104,7 @@ export function SessionTracePanel({
                   onClick={() => {
                     setFilter("all");
                     setQuery("");
+                    setActiveIssueId(undefined);
                   }}
                 >
                   Reset
@@ -139,7 +143,9 @@ export function SessionTracePanel({
                       key={`${issue.id}:${issue.title}`}
                       type="button"
                       className="session-trace-issue"
+                      data-selected={activeIssueId === issue.id ? "true" : "false"}
                       onClick={() => {
+                        setActiveIssueId(issue.id);
                         setFilter("issues");
                         setQuery(issue.query);
                       }}
@@ -154,6 +160,45 @@ export function SessionTracePanel({
                     </button>
                   ))}
                 </div>
+                {activeIssue ? (
+                  <div className="session-trace-issue-focus" data-testid="session-trace-issue-focus">
+                    <div className="session-trace-issue-focus-head">
+                      <span>Selected issue</span>
+                      <strong>{activeIssue.title}</strong>
+                      <small>{activeIssue.detail}</small>
+                    </div>
+                    <div className="session-trace-issue-facts">
+                      <TraceIssueFact label="Tool" value={activeIssue.tool} />
+                      <TraceIssueFact label="Turn" value={String(activeIssue.turnNumber)} />
+                      {activeIssue.exitCode != null ? <TraceIssueFact label="Exit" value={String(activeIssue.exitCode)} /> : null}
+                      {activeIssue.durationMs != null ? <TraceIssueFact label="Duration" value={formatTraceDuration(activeIssue.durationMs)} /> : null}
+                    </div>
+                    {activeIssue.next ? (
+                      <div className="session-trace-issue-next">
+                        <span>Next from trace</span>
+                        <p>{activeIssue.next}</p>
+                      </div>
+                    ) : null}
+                    <div className="session-trace-issue-actions">
+                      <button
+                        type="button"
+                        className="ghost-action"
+                        onClick={() => {
+                          setFilter("issues");
+                          setQuery(activeIssue.query);
+                        }}
+                      >
+                        Show event pair
+                      </button>
+                      {activeIssue.artifactPath && onOpenArtifact ? (
+                        <button type="button" className="ghost-action" onClick={() => onOpenArtifact(activeIssue.artifactPath ?? "")}>
+                          Open artifact
+                        </button>
+                      ) : null}
+                      <CopyButton label="Copy query" value={activeIssue.query} className="ghost-action" />
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {!trimmedQuery && trace.latest ? (
@@ -199,6 +244,20 @@ function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceTool
   return [...counts.entries()]
     .map(([tool, count]) => ({ tool, count }))
     .sort((a, b) => b.count - a.count || a.tool.localeCompare(b.tool));
+}
+
+function TraceIssueFact({ label, value }: { label: string; value: string }) {
+  return (
+    <span>
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </span>
+  );
+}
+
+function formatTraceDuration(ms: number): string {
+  if (ms < 1000) return `${ms} ms`;
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)}s`;
 }
 
 function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number): TraceFilterItem[] {

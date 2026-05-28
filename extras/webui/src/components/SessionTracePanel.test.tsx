@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
 import { buildSessionTrace } from "../view/sessionTrace";
 import { SessionTracePanel } from "./SessionTracePanel";
@@ -8,6 +8,7 @@ import { SessionTracePanel } from "./SessionTracePanel";
 describe("SessionTracePanel", () => {
   it("renders trace summary, filters, and normalized event rows", async () => {
     const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
     const session = reduceRawEvents([
       { id: 0, type: "trace.meta", data: { schema_version: 1 } },
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -30,7 +31,7 @@ describe("SessionTracePanel", () => {
       },
     ]);
 
-    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen onOpenArtifact={onOpenArtifact} />);
 
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("7 trace entries");
     expect(screen.getByLabelText("Search trace")).toBeInTheDocument();
@@ -69,6 +70,14 @@ describe("SessionTracePanel", () => {
     await user.click(within(screen.getByTestId("session-trace-issues")).getByRole("button", { name: /Request 1/ }));
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Selected issue");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Tool");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("shell");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Exit");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("1");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("rerun npm test after fixing checkout");
+    await user.click(within(screen.getByTestId("session-trace-issue-focus")).getByRole("button", { name: "Open artifact" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-shell.txt");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("SourceAccess");
     await user.click(screen.getByRole("button", { name: "Clear" }));
