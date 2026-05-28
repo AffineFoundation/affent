@@ -1879,6 +1879,30 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 		}
 	})
 
+	t.Run("fails for runtime surface workspace path policy", func(t *testing.T) {
+		trace := Trace{
+			WorkspaceDir: workspace,
+			RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+				TurnID: "turn-custom",
+				Tools: []sse.RuntimeSurfaceTool{{
+					Name: "artifact_write",
+					ArgPolicy: &sse.RuntimeToolArgPolicy{
+						WorkspacePathArgs: []string{"output_path"},
+					},
+				}},
+			}},
+			Tools: []ToolCall{{
+				TurnID: "turn-custom",
+				CallID: "c1",
+				Tool:   "artifact_write",
+				Args:   map[string]any{"output_path": filepath.Join(workspace, "artifacts/result.txt")},
+			}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path from runtime surface policy should fail: %+v", res)
+		}
+	})
+
 	t.Run("fails for child transcript shell absolute workspace path", func(t *testing.T) {
 		transcriptRel := filepath.ToSlash(filepath.Join(".affentctl", "subagents", "parent", "subagent_child.jsonl"))
 		transcriptPath := filepath.Join(workspace, filepath.FromSlash(transcriptRel))
@@ -1895,6 +1919,33 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 		}
 		if res := check.Eval(trace); res.Pass {
 			t.Fatalf("absolute workspace path in child transcript should fail: %+v", res)
+		}
+	})
+
+	t.Run("fails for child transcript runtime surface workspace path policy", func(t *testing.T) {
+		transcriptRel := filepath.ToSlash(filepath.Join(".affentctl", "subagents", "parent", "subagent_child_custom.jsonl"))
+		transcriptPath := filepath.Join(workspace, filepath.FromSlash(transcriptRel))
+		if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		line := `{"role":"assistant","tool_calls":[{"id":"child1","type":"function","function":{"name":"artifact_write","arguments":"{\"output_path\":\"` + filepath.ToSlash(filepath.Join(workspace, "artifacts/result.txt")) + `\"}"}}]}`
+		if err := os.WriteFile(transcriptPath, []byte(line+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		trace := Trace{
+			WorkspaceDir: workspace,
+			RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+				Tools: []sse.RuntimeSurfaceTool{{
+					Name: "artifact_write",
+					ArgPolicy: &sse.RuntimeToolArgPolicy{
+						WorkspacePathArgs: []string{"output_path"},
+					},
+				}},
+			}},
+			ChildTranscripts: []DebugTranscriptRef{{Kind: "subagent", Path: transcriptRel}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("absolute workspace path in child transcript runtime surface policy should fail: %+v", res)
 		}
 	})
 

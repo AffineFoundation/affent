@@ -2251,10 +2251,11 @@ func ShellCommandLacksWorkspaceAbsolutePath() Check {
 			if len(needles) == 0 {
 				return CheckResult{Pass: true, Detail: "workspace path unavailable; skipped absolute-path check"}
 			}
-			if res := workspaceToolCallsLackNeedles(t.Tools, needles); !res.Pass {
+			resolver := workspaceArgPolicyResolverForTrace(t)
+			if res := workspaceToolCallsLackNeedles(t.Tools, needles, resolver); !res.Pass {
 				return res
 			}
-			if res := childTranscriptWorkspaceToolCallsLackNeedles(t, needles); !res.Pass {
+			if res := childTranscriptWorkspaceToolCallsLackNeedles(t, needles, resolver); !res.Pass {
 				return res
 			}
 			return CheckResult{Pass: true}
@@ -2262,9 +2263,9 @@ func ShellCommandLacksWorkspaceAbsolutePath() Check {
 	}
 }
 
-func workspaceToolCallsLackNeedles(calls []ToolCall, needles []string) CheckResult {
+func workspaceToolCallsLackNeedles(calls []ToolCall, needles []string, resolver workspaceArgPolicyResolver) CheckResult {
 	for _, c := range calls {
-		for argName, text := range workspaceAbsoluteArgTexts(c.Tool, c.Args) {
+		for argName, text := range workspaceAbsoluteArgTexts(c.Tool, c.TurnID, c.Args, resolver) {
 			if text == "" {
 				continue
 			}
@@ -2281,7 +2282,7 @@ func workspaceToolCallsLackNeedles(calls []ToolCall, needles []string) CheckResu
 	return CheckResult{Pass: true}
 }
 
-func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string) CheckResult {
+func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string, resolver workspaceArgPolicyResolver) CheckResult {
 	for _, ref := range t.ChildTranscripts {
 		path, ok := resolveChildTranscriptPath(t.WorkspaceDir, ref.Path)
 		if !ok {
@@ -2296,9 +2297,9 @@ func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string) Che
 			if line == "" {
 				continue
 			}
-			calls := childTranscriptWorkspaceToolCalls(line)
+			calls := childTranscriptWorkspaceToolCalls(line, resolver)
 			for _, call := range calls {
-				for argName, text := range workspaceAbsoluteArgTexts(call.Tool, call.Args) {
+				for argName, text := range workspaceAbsoluteArgTexts(call.Tool, "", call.Args, resolver) {
 					if text == "" {
 						continue
 					}
@@ -2317,8 +2318,8 @@ func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string) Che
 	return CheckResult{Pass: true}
 }
 
-func workspaceAbsoluteArgTexts(tool string, args map[string]any) map[string]string {
-	names := agent.WorkspacePathArgNames(tool)
+func workspaceAbsoluteArgTexts(tool, turnID string, args map[string]any, resolver workspaceArgPolicyResolver) map[string]string {
+	names := resolver.workspacePathArgNames(tool, turnID)
 	if len(names) == 0 {
 		return nil
 	}
@@ -2329,6 +2330,65 @@ func workspaceAbsoluteArgTexts(tool string, args map[string]any) map[string]stri
 		}
 	}
 	return out
+}
+
+type workspaceArgPolicyResolver struct {
+	byTool     map[string][]string
+	byTurnTool map[string]map[string][]string
+}
+
+func workspaceArgPolicyResolverForTrace(t Trace) workspaceArgPolicyResolver {
+	resolver := workspaceArgPolicyResolver{
+		byTool:     map[string][]string{},
+		byTurnTool: map[string]map[string][]string{},
+	}
+	for _, surface := range t.RuntimeSurfaces {
+		for _, tool := range surface.Tools {
+			names := workspacePathArgNamesForSurfaceTool(tool)
+			if len(names) == 0 {
+				continue
+			}
+			resolver.byTool[tool.Name] = names
+			if strings.TrimSpace(surface.TurnID) != "" {
+				turnTools := resolver.byTurnTool[surface.TurnID]
+				if turnTools == nil {
+					turnTools = map[string][]string{}
+					resolver.byTurnTool[surface.TurnID] = turnTools
+				}
+				turnTools[tool.Name] = names
+			}
+		}
+	}
+	return resolver
+}
+
+func workspacePathArgNamesForSurfaceTool(tool sse.RuntimeSurfaceTool) []string {
+	if tool.ArgPolicy == nil || len(tool.ArgPolicy.WorkspacePathArgs) == 0 {
+		return nil
+	}
+	return append([]string(nil), tool.ArgPolicy.WorkspacePathArgs...)
+}
+
+func (r workspaceArgPolicyResolver) workspacePathArgNames(tool, turnID string) []string {
+	names := r.workspacePathArgNamesFromTrace(tool, turnID)
+	if len(names) > 0 {
+		return names
+	}
+	return agent.WorkspacePathArgNames(tool)
+}
+
+func (r workspaceArgPolicyResolver) workspacePathArgNamesFromTrace(tool, turnID string) []string {
+	if turnID != "" {
+		if turnTools := r.byTurnTool[turnID]; len(turnTools) > 0 {
+			if names := turnTools[tool]; len(names) > 0 {
+				return names
+			}
+		}
+	}
+	if names := r.byTool[tool]; len(names) > 0 {
+		return names
+	}
+	return nil
 }
 
 func resolveChildTranscriptPath(workspace, relPath string) (string, bool) {
@@ -2353,7 +2413,7 @@ type childTranscriptWorkspaceToolCall struct {
 	Args   map[string]any
 }
 
-func childTranscriptWorkspaceToolCalls(line string) []childTranscriptWorkspaceToolCall {
+func childTranscriptWorkspaceToolCalls(line string, resolver workspaceArgPolicyResolver) []childTranscriptWorkspaceToolCall {
 	var msg struct {
 		ToolCalls []struct {
 			ID       string `json:"id"`
@@ -2368,7 +2428,7 @@ func childTranscriptWorkspaceToolCalls(line string) []childTranscriptWorkspaceTo
 	}
 	var out []childTranscriptWorkspaceToolCall
 	for _, call := range msg.ToolCalls {
-		if len(agent.WorkspacePathArgNames(call.Function.Name)) == 0 {
+		if len(resolver.workspacePathArgNames(call.Function.Name, "")) == 0 {
 			continue
 		}
 		args := map[string]any{}
