@@ -828,6 +828,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunMemorySessionJoinScenario(),
 		longRunMultiTaskSessionRecoveryScenario(),
 		longRunRecentSessionAnchorRecoveryScenario(),
+		longRunLoopMemoryAnchorRecoveryScenario(),
 		longRunCrashMissingToolResultResumeScenario(),
 		longRunCrashDuplicateToolResultResumeScenario(),
 		longRunContextCompactionRetentionScenario(),

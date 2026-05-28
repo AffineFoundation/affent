@@ -1512,6 +1512,182 @@ Use session_search recent-session anchors when direct hits are empty.
 	}
 }
 
+func longRunLoopMemoryAnchorRecoveryScenario() BatchScenario {
+	return BatchScenario{
+		Name:         "longrun-loop-memory-anchor-recovery",
+		Suites:       []string{longRunSuite},
+		SessionID:    "loop-memory-anchor-reader",
+		EnableMemory: true,
+		Prompt:       "你正在恢复一个长期运行的 Helio Pricing Review session，但当前只记得错误关键词 ZETAABSENT404。必须先用 session_search 查询 ZETAABSENT404；如果没有直接命中，就使用返回的 recent_sessions 锚点恢复任务名、handoff marker、当前风险、下一步和证据 session。随后必须用 memory 搜索 Helio Pricing Review 来校验长期规则。最终回答必须同时包含 handoff marker、memory marker、长期规则、当前风险、下一步、loop feed 状态、恢复原因和证据 session。不要读取文件、运行 shell 或修改文件。",
+		Files: map[string]string{
+			".affent/memory/topics/agent-recovery.md": "2026-05-27T00:00:00Z Helio Pricing Review long-run recovery rule: include memory marker MEM-LOOP-61 and rule evidence-before-synthesis when resuming from stale or wrong-keyword context.\n",
+			".affent/loops/loop-memory-anchor-reader/LOOP.md": `# Loop Protocol: loop-memory-anchor-reader
+
+## 0. Metadata
+
+- loop_id: loop-memory-anchor-reader
+- owner_session: loop-memory-anchor-reader
+- status: running
+
+## 1. North Star
+
+Recover active long-run work from durable anchors, then verify durable rules through memory before synthesizing.
+
+## 2. Current Situation
+
+- current intent: use recent-session anchors then memory to recover Helio Pricing Review.
+- current risk: the operator supplied a wrong keyword, so direct lexical recall may fail.
+
+## 3. Evolution Protocol
+
+When direct recall is empty, prefer bounded anchor recovery over restarting the task.
+`,
+			".affentctl/loop-anchor-recovery/conversation.jsonl": `{"role":"user","content":"Continue Helio Pricing Review after source verification degraded"}
+{"role":"assistant","content":"Latest handoff marker LOOP-ANCHOR-61. Current risk: api-price-mismatch. Evidence should cite session loop-anchor-recovery and continue the current loop, not restart research."}
+`,
+			".affentctl/loop-anchor-recovery/plan.json": `{
+  "version": 1,
+  "updated_at": "2026-05-27T00:00:00Z",
+  "steps": [
+    {
+      "text": "collect Helio Pricing Review primary source refs",
+      "status": "completed",
+      "evidence": ["sources/helio-pricing-api.json"]
+    },
+    {
+      "text": "continue LOOP-ANCHOR-61 by reconciling API price ref hx9 before synthesis",
+      "status": "in_progress",
+      "evidence": ["browser-network:helio-pricing-ref-hx9"]
+    }
+  ]
+}
+`,
+			".affentctl/loop-anchor-recovery/.affent/loops/loop-anchor-recovery/LOOP.md": `# Loop Protocol: loop-anchor-recovery
+
+## 0. Metadata
+
+- loop_id: loop-anchor-recovery
+- owner_session: loop-anchor-recovery
+- status: running
+
+## 1. North Star
+
+Recover Helio Pricing Review from durable loop and plan anchors, then verify memory rules before final synthesis.
+
+## 2. Current Situation
+
+- current intent: continue LOOP-ANCHOR-61 from API price ref hx9.
+- current risk: api-price-mismatch must be resolved before citing numbers.
+
+## 3. Evolution Protocol
+
+If direct session search misses, use recent-session anchors and durable memory before answering.
+`,
+			".affentctl/loop-anchor-recovery/.affent/loops/loop-anchor-recovery/events.jsonl": `{"seq":1,"time":"2026-05-27T00:00:00Z","type":"loop.protocol_feed","summary":"full feed preserved LOOP-ANCHOR-61 and API price recovery anchors","mode":"full","feed_number":6,"plan_label":"plan:1/2:active","plan_step_index":2,"plan_step_status":"in_progress","plan_step":"continue LOOP-ANCHOR-61 by reconciling API price ref hx9 before synthesis","turn_end_reason":"max_turns","memory_searches":1,"memory_misses":1,"session_search_calls":1,"loop_guards":1,"decision_kind":"evidence_quality","decision":"defer","confidence":"high","required_action":"search memory for Helio Pricing Review, then reconcile API price ref hx9"}
+`,
+			".affentctl/loop-anchor-recovery/events.jsonl": `{"type":"turn.end","data":{"turn_id":"turn-prev","reason":"max_turns","tool_stats":{"memory_search_calls":1,"memory_search_misses":1,"session_search_calls":1,"tool_failure_by_kind":{"loop_guard_no_new_evidence":1},"loop_guard_interventions":1}}}
+`,
+			"README.md": "# Loop Memory Anchor Recovery Eval\n\nThe answer must come from session_search recent_sessions plus memory, not this file.\n",
+		},
+		RequiredTools: []string{"session_search", "memory"},
+		RequiredToolCounts: map[string]int{
+			"session_search": 1,
+			"memory":         1,
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "full", CurrentSituation: "recent-session anchors then memory"},
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "session_search", Arg: "query", Substring: "ZETAABSENT404"},
+			{Tool: "memory", Arg: "action", Substring: "search"},
+			{Tool: "memory", Arg: "query", Substring: "Helio Pricing Review"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"session_search": {
+				`"total":0`,
+				`"recent_sessions"`,
+				"loop-anchor-recovery",
+				"LOOP-ANCHOR-61",
+				"api-price-mismatch",
+				"loop.protocol_feed",
+				"API price ref hx9",
+				"loop_guard_no_new_evidence",
+			},
+			"memory": {
+				"MEM-LOOP-61",
+				"evidence-before-synthesis",
+				"agent-recovery",
+			},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"session_search_calls":           1,
+			"session_search_recent_sessions": 1,
+			"memory_search_calls":            1,
+		},
+		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
+			{
+				QueryContains:    "ZETAABSENT404",
+				SessionID:        "loop-anchor-recovery",
+				PlanContains:     "LOOP-ANCHOR-61",
+				LoopContains:     "loop.protocol_feed",
+				RecoveryContains: "loop_guard_no_new_evidence",
+				MessageContains:  "recent_sessions",
+			},
+			{
+				QueryContains:   "ZETAABSENT404",
+				SessionID:       "loop-anchor-recovery",
+				LoopContains:    "API price ref hx9",
+				MessageContains: "recent_sessions",
+			},
+			{
+				QueryContains:     "ZETAABSENT404",
+				SessionID:         "loop-anchor-recovery",
+				AssistantContains: "LOOP-ANCHOR-61",
+				LoopContains:      "search memory for Helio Pricing Review",
+				MessageContains:   "recent_sessions",
+			},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "session_search", Later: "memory"},
+		},
+		RequiredFinalText: []string{
+			"LOOP-ANCHOR-61",
+			"MEM-LOOP-61",
+			"evidence-before-synthesis",
+			"api-price-mismatch",
+			"API price ref hx9",
+			"loop.protocol_feed",
+			"loop_guard_no_new_evidence",
+			"loop-anchor-recovery",
+		},
+		ForbiddenFinalText: []string{
+			"ZETAABSENT404 是真实结论",
+			"没有历史",
+			"直接重新开始",
+		},
+		ForbiddenTools: []string{"read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles: []string{
+			".affent/memory/topics/agent-recovery.md",
+			".affent/loops/loop-memory-anchor-reader/LOOP.md",
+			".affentctl/loop-anchor-recovery/conversation.jsonl",
+			".affentctl/loop-anchor-recovery/plan.json",
+			".affentctl/loop-anchor-recovery/.affent/loops/loop-anchor-recovery/LOOP.md",
+			".affentctl/loop-anchor-recovery/.affent/loops/loop-anchor-recovery/events.jsonl",
+			".affentctl/loop-anchor-recovery/events.jsonl",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"session_search": 1,
+			"memory":         1,
+		},
+		MaxTurns: 8,
+	}
+}
+
 func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-crash-missing-tool-result-resume",

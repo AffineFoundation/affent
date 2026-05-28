@@ -1358,8 +1358,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 15 {
-		t.Fatalf("long-run suite size = %d, want 15", len(scenarios))
+	if len(scenarios) != 16 {
+		t.Fatalf("long-run suite size = %d, want 16", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1587,6 +1587,51 @@ func TestSelectLongRunSuite(t *testing.T) {
 		if !stringSliceContains(recentAnchorRecovery.RequiredFinalText, want) {
 			t.Fatalf("recent anchor recovery RequiredFinalText = %#v, want %q", recentAnchorRecovery.RequiredFinalText, want)
 		}
+	}
+
+	loopMemoryAnchor, ok := seen["longrun-loop-memory-anchor-recovery"]
+	if !ok {
+		t.Fatalf("long-run suite missing loop/memory anchor recovery scenario")
+	}
+	if !loopMemoryAnchor.EnableMemory || loopMemoryAnchor.SessionID != "loop-memory-anchor-reader" {
+		t.Fatalf("loop/memory anchor fields = memory:%v session:%q", loopMemoryAnchor.EnableMemory, loopMemoryAnchor.SessionID)
+	}
+	if loopMemoryAnchor.RequiredToolCounts["session_search"] != 1 ||
+		loopMemoryAnchor.RequiredToolCounts["memory"] != 1 ||
+		loopMemoryAnchor.MaxSuccessfulToolCallsByTool["session_search"] != 1 ||
+		loopMemoryAnchor.MaxSuccessfulToolCallsByTool["memory"] != 1 {
+		t.Fatalf("loop/memory anchor tool constraints = counts:%#v max:%#v", loopMemoryAnchor.RequiredToolCounts, loopMemoryAnchor.MaxSuccessfulToolCallsByTool)
+	}
+	if !toolOrderContains(loopMemoryAnchor.RequiredToolOrder, ToolOrderRequirement{Earlier: "session_search", Later: "memory"}) {
+		t.Fatalf("loop/memory anchor RequiredToolOrder = %#v, want session_search before memory", loopMemoryAnchor.RequiredToolOrder)
+	}
+	if loopMemoryAnchor.RequiredLoopProtocolFeeds != 1 ||
+		loopMemoryAnchor.RequiredLoopProtocolFeedModes["full"] != 1 ||
+		len(loopMemoryAnchor.RequiredLoopProtocolFeedMatches) != 1 ||
+		!strings.Contains(loopMemoryAnchor.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "recent-session anchors then memory") {
+		t.Fatalf("loop/memory anchor loop protocol constraints = feeds:%d modes:%#v matches:%#v", loopMemoryAnchor.RequiredLoopProtocolFeeds, loopMemoryAnchor.RequiredLoopProtocolFeedModes, loopMemoryAnchor.RequiredLoopProtocolFeedMatches)
+	}
+	if loopMemoryAnchor.RequiredToolStatsAtLeast["session_search_recent_sessions"] != 1 ||
+		loopMemoryAnchor.RequiredToolStatsAtLeast["memory_search_calls"] != 1 {
+		t.Fatalf("loop/memory anchor stats = %#v, want recent sessions and memory search", loopMemoryAnchor.RequiredToolStatsAtLeast)
+	}
+	if len(loopMemoryAnchor.RequiredRecentSessionSearch) != 3 ||
+		loopMemoryAnchor.RequiredRecentSessionSearch[0].SessionID != "loop-anchor-recovery" ||
+		loopMemoryAnchor.RequiredRecentSessionSearch[0].QueryContains != "ZETAABSENT404" ||
+		loopMemoryAnchor.RequiredRecentSessionSearch[0].LoopContains != "loop.protocol_feed" ||
+		loopMemoryAnchor.RequiredRecentSessionSearch[0].RecoveryContains != "loop_guard_no_new_evidence" {
+		t.Fatalf("loop/memory anchor recent-session requirements = %#v", loopMemoryAnchor.RequiredRecentSessionSearch)
+	}
+	for _, want := range []string{"LOOP-ANCHOR-61", "MEM-LOOP-61", "evidence-before-synthesis", "api-price-mismatch", "API price ref hx9", "loop.protocol_feed", "loop_guard_no_new_evidence", "loop-anchor-recovery"} {
+		if !stringSliceContains(loopMemoryAnchor.RequiredFinalText, want) {
+			t.Fatalf("loop/memory anchor RequiredFinalText = %#v, want %q", loopMemoryAnchor.RequiredFinalText, want)
+		}
+	}
+	if _, ok := loopMemoryAnchor.Files[".affent/loops/loop-memory-anchor-reader/LOOP.md"]; !ok {
+		t.Fatalf("loop/memory anchor scenario missing active LOOP.md")
+	}
+	if !stringSliceContains(loopMemoryAnchor.ProtectedFiles, ".affent/loops/loop-memory-anchor-reader/LOOP.md") {
+		t.Fatalf("loop/memory anchor ProtectedFiles = %#v, want active LOOP.md", loopMemoryAnchor.ProtectedFiles)
 	}
 
 	crashResume, ok := seen["longrun-crash-missing-tool-result-resume"]

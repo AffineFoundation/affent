@@ -1187,7 +1187,11 @@ first to `loop_guard_examples` so the blocked call, guard reason, and suggested
 next step are visible before opening full traces. Loop protocol feed examples
 also preserve last-turn tool-error/forced-no-tool counts and latest decision
 reason/action, so long-run evals can assert that recovery evidence survived
-context compaction or restart. Browser-network refs that were discovered but
+context compaction or restart. The long-run suite also includes a combined
+wrong-keyword recovery case that requires a current loop protocol feed, no-hit
+session recall with recent-session anchors, a follow-up memory search, and a
+bounded final answer that cites the recovered handoff marker, durable rule, risk,
+next action, and evidence session. Browser-network refs that were discovered but
 not read add a concrete recovery action to inspect `browser_network_examples`
 and `source_evidence`, then call `browser_network_read` on a listed ref before
 citing dynamic values. Context-compaction summary gaps add a bounded action to
