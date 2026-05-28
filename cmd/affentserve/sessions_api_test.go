@@ -672,6 +672,81 @@ func TestSummarizeDurableSessionIgnoresRoutineLoopProtocolFeedHint(t *testing.T)
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopTurnCheckpoint(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-turn-checkpoint-hint")
+	dir := pool.sessionDirPath("loop-turn-checkpoint-hint")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeLoopTurnCheckpoint, sse.LoopTurnCheckpointPayload{
+			TurnID:             "turn-checkpoint",
+			LoopID:             "longrun",
+			Status:             "running",
+			EndReason:          sse.TurnEndMaxTurns,
+			ToolErrors:         2,
+			LoopGuards:         1,
+			ForcedNoTools:      1,
+			MemoryMisses:       1,
+			SessionSearchCalls: 1,
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-turn-checkpoint-hint")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{
+		"loop turn checkpoint recovery",
+		"end=max_turns",
+		"guards=1",
+		"tool_errors=2",
+		"forced_no_tools=1",
+		"mem_miss=1",
+		"sess_search=1",
+		"loop=longrun",
+		"inspect LOOP/plan",
+	} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestSummarizeDurableSessionIgnoresRoutineLoopTurnCheckpointHint(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "loop-turn-checkpoint-routine")
+	dir := pool.sessionDirPath("loop-turn-checkpoint-routine")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeLoopTurnCheckpoint, sse.LoopTurnCheckpointPayload{
+			TurnID:    "turn-checkpoint",
+			LoopID:    "longrun",
+			Status:    "running",
+			EndReason: sse.TurnEndCompleted,
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "loop-turn-checkpoint-routine")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "" {
+		t.Fatalf("latest_recovery_hint = %q, want no routine checkpoint hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromMaxTurns(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

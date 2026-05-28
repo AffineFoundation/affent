@@ -1993,6 +1993,16 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			}
 			continue
 		}
+		if ev.Type == sse.TypeLoopTurnCheckpoint {
+			var p sse.LoopTurnCheckpointPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if hint := recoveryHintFromLoopTurnCheckpoint(p); hint != "" {
+				setLatest(hint, p.TurnID)
+			}
+			continue
+		}
 		if ev.Type == sse.TypeLoopDecision {
 			var p sse.LoopDecisionPayload
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -2197,6 +2207,43 @@ func recoveryHintFromLoopProtocolFeed(p sse.LoopProtocolFeedPayload) string {
 		parts = append(parts, "step="+step)
 	} else if label := strings.TrimSpace(p.PlanLabel); label != "" {
 		parts = append(parts, "plan="+label)
+	}
+	parts = append(parts, "inspect LOOP/plan")
+	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func recoveryHintFromLoopTurnCheckpoint(p sse.LoopTurnCheckpointPayload) string {
+	endReason := strings.TrimSpace(p.EndReason)
+	hasRecoverySignal := endReason == sse.TurnEndMaxTurns ||
+		endReason == sse.TurnEndError ||
+		p.ToolErrors > 0 ||
+		p.ForcedNoTools > 0 ||
+		p.LoopGuards > 0 ||
+		p.MemoryMisses > 0
+	if !hasRecoverySignal {
+		return ""
+	}
+	parts := []string{"loop turn checkpoint recovery"}
+	if endReason != "" {
+		parts = append(parts, "end="+endReason)
+	}
+	if p.LoopGuards > 0 {
+		parts = append(parts, fmt.Sprintf("guards=%d", p.LoopGuards))
+	}
+	if p.ToolErrors > 0 {
+		parts = append(parts, fmt.Sprintf("tool_errors=%d", p.ToolErrors))
+	}
+	if p.ForcedNoTools > 0 {
+		parts = append(parts, fmt.Sprintf("forced_no_tools=%d", p.ForcedNoTools))
+	}
+	if p.MemoryMisses > 0 {
+		parts = append(parts, fmt.Sprintf("mem_miss=%d", p.MemoryMisses))
+	}
+	if p.SessionSearchCalls > 0 {
+		parts = append(parts, fmt.Sprintf("sess_search=%d", p.SessionSearchCalls))
+	}
+	if loopID := strings.TrimSpace(p.LoopID); loopID != "" {
+		parts = append(parts, "loop="+loopID)
 	}
 	parts = append(parts, "inspect LOOP/plan")
 	return recoveryHintFromText(strings.Join(parts, "; "))
