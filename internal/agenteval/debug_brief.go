@@ -328,6 +328,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 				message = "session recall returned no direct hits but exposed recent session anchors for retry"
 			} else {
 				severity = "warn"
+				tags = append(tags, "empty_recall:no_recent_sessions")
 				message = "session recall returned no results"
 			}
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {

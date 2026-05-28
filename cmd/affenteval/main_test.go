@@ -55,6 +55,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-source-dynamic-partial-rate=0.200",
 		"max-debug-brief-tag-rate=browser_network:unread_refs=0.000",
 		"max-debug-brief-tag-rate=browser_scroll:stuck_without_network=0.000",
+		"max-debug-brief-tag-rate=empty_recall:no_recent_sessions=0.000",
 		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
@@ -840,6 +841,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		t.Fatalf("longrun profile should not gate memory search miss rate by default: %#v", gates.MaxMemorySearchMissRate)
 	}
 	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
+		gates.MaxDebugBriefTagRates["empty_recall:no_recent_sessions"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_guard:forced_no_tools"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:no_context"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:no_matched_terms"] != 0 ||

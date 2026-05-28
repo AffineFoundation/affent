@@ -284,7 +284,8 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 		empty.Severity != "warn" ||
 		empty.Message != "session recall returned no results" ||
 		!stringSliceContains(empty.Inspect, "session_search_examples") ||
-		!stringSliceContains(brief.Tags, "empty_recall") {
+		!stringSliceContains(brief.Tags, "empty_recall") ||
+		!stringSliceContains(brief.Tags, "empty_recall:no_recent_sessions") {
 		t.Fatalf("empty recall debug item = %+v tags=%+v", empty, brief.Tags)
 	}
 

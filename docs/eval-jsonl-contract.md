@@ -210,6 +210,7 @@ Scenario records describe one eval case:
   `browser_network`, `browser_network:no_matches`,
   `browser_network:unread_refs`, `browser_network:refs`,
   `memory_update:replace`, `empty_recall`,
+  `empty_recall:no_recent_sessions`,
   `empty_recall:recent_sessions`,
   `loop_guard:forced_no_tools`,
   `recall:no_context`, `recall:no_matched_terms`,

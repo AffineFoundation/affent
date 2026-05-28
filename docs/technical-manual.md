@@ -1065,7 +1065,10 @@ runs; it includes minimum trace-event, memory-update, loop-protocol feed,
 session-search context-hit, scenario-level session-recall debug tag, and missing
 truncation-artifact gates, plus a scenario-level failed tool-repair gate, so
 observability, shared memory, tool recovery, loop-guard no-tool fallback, and
-cross-session recovery regressions fail the batch. Use
+cross-session recovery regressions fail the batch. No-hit session recall is
+allowed only when `recent_sessions` exposes recovery anchors; no-hit recall
+without recent anchors trips the `empty_recall:no_recent_sessions` debug tag
+gate. Use
 `--quality-profile web-evidence` for live/current web evidence runs; it also
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads, browser network refs that were not followed by
