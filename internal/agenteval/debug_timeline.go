@@ -968,6 +968,25 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	b.WriteString("\n## Runtime Surface\n\n")
 	fmt.Fprintf(b, "- turn_id: `%s`\n", surface.TurnID)
 	fmt.Fprintf(b, "- tool_count: `%d`\n", surface.ToolCount)
+	if surface.MaxTurnSteps > 0 {
+		fmt.Fprintf(b, "- max_turn_steps: `%d`\n", surface.MaxTurnSteps)
+	}
+	if surface.MaxToolCalls > 0 {
+		fmt.Fprintf(b, "- max_tool_calls: `%d`\n", surface.MaxToolCalls)
+	}
+	if surface.ToolResultEventCapBytes > 0 || surface.ToolResultContextMaxBytes > 0 || surface.ToolResultContextBudgetBytes > 0 {
+		fmt.Fprintf(b, "- tool_result_limits: event_cap_bytes=`%d`, context_max_bytes=`%d`, context_budget_bytes=`%d`\n",
+			surface.ToolResultEventCapBytes,
+			surface.ToolResultContextMaxBytes,
+			surface.ToolResultContextBudgetBytes,
+		)
+	}
+	if surface.ToolResultArtifactPrefix != "" {
+		fmt.Fprintf(b, "- tool_result_artifacts: `%s`\n", surface.ToolResultArtifactPrefix)
+	}
+	if surface.TurnToolOverride {
+		fmt.Fprintln(b, "- turn_tool_override: `true`")
+	}
 	var names []string
 	for _, tool := range surface.Tools {
 		if tool.Name != "" {
@@ -999,11 +1018,20 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if surface.Capabilities.Plan {
 		caps = append(caps, "plan")
 	}
+	if surface.Capabilities.SessionSearch {
+		caps = append(caps, "session_search")
+	}
 	if surface.Capabilities.Subagent {
 		caps = append(caps, "subagent")
 	}
 	if surface.Capabilities.FocusedTasks {
 		caps = append(caps, "focused_tasks")
+	}
+	if surface.Capabilities.Skill {
+		caps = append(caps, "skill")
+	}
+	if surface.Capabilities.MCP {
+		caps = append(caps, "mcp")
 	}
 	if len(caps) > 0 {
 		fmt.Fprintf(b, "- capabilities: `%s`\n", strings.Join(caps, "`, `"))

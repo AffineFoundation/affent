@@ -499,7 +499,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	body := strings.Join([]string{
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"conversation.repaired","data":{"session_id":"resume","missing_tool_results":1,"failure_kind":"resume_missing_tool_result","next":"do not assume the tool succeeded"}}`,
-		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results"}}`,
+		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true,"session_search":true,"skill":true,"mcp":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results","turn_tool_override":true}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"account_access","title":"Account access context injected","summary":"Account-level environment and SSH access hints were made available for this turn.","preview":"Configured environment variables available to shell commands: GITHUB_TOKEN.","bytes":240,"estimated_tokens":60}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"active_plan","title":"Active plan context injected","summary":"Current step: 2. Execute this step before broadening.","preview":"Current step: 2. Execute this step before broadening. - [ ] verify browser network evidence","bytes":360,"estimated_tokens":90}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
@@ -556,6 +556,13 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	timeline := renderDebugTimeline(BatchResult{BatchScenario: "trace-parse", ContextInjections: contextInjections}, BatchScenario{Prompt: "inspect"}, &trace)
 	for _, want := range []string{
+		"## Runtime Surface",
+		"- max_turn_steps: `12`",
+		"- max_tool_calls: `7`",
+		"- tool_result_limits: event_cap_bytes=`262144`, context_max_bytes=`5120`, context_budget_bytes=`32768`",
+		"- tool_result_artifacts: `.affent/artifacts/tool-results`",
+		"- turn_tool_override: `true`",
+		"- capabilities: `web_fetch`, `web_search`, `session_search`, `skill`, `mcp`",
 		"## Context Injections",
 		"- count: `2`",
 		"- by_source: `account_access=1`, `active_plan=1`",
