@@ -3471,6 +3471,18 @@ func TestBuiltinContextInjectionScenariosRequireTraceEvents(t *testing.T) {
 	}
 }
 
+func TestBuiltinConversationRepairScenariosRequireTraceEvents(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		required := conversationRepairTraceEventRequirement(scenario)
+		if required == 0 {
+			continue
+		}
+		if got := scenario.RequiredTraceEventCounts["conversation.repaired"]; got < required {
+			t.Fatalf("%s requires conversation repair evidence but only %d raw conversation.repaired trace event(s), want >= %d; stats=%#v kinds=%#v trace=%#v", scenario.Name, got, required, scenario.RequiredConversationRepairStatsAtLeast, scenario.RequiredConversationRepairKinds, scenario.RequiredTraceEventCounts)
+		}
+	}
+}
+
 func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresDurableMemoryWrite(scenario) || !scenarioRequiresGitCommitAndPush(scenario) {
@@ -3553,6 +3565,17 @@ func scenarioHasGitStatusAfterMutation(scenario BatchScenario) bool {
 
 func scenarioRequiresSkillInstallConfirmation(scenario BatchScenario) bool {
 	return toolArgRequirementContains(scenario.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "skill", Arg: "action", Substring: "confirm_install"})
+}
+
+func conversationRepairTraceEventRequirement(scenario BatchScenario) int {
+	required := scenario.RequiredConversationRepairStatsAtLeast["events"]
+	if kindTotal := sumStringIntMap(scenario.RequiredConversationRepairKinds); kindTotal > required {
+		required = kindTotal
+	}
+	if required == 0 && sumStringIntMap(scenario.RequiredConversationRepairStatsAtLeast) > 0 {
+		required = 1
+	}
+	return required
 }
 
 func scenarioForbidsMemoryContent(scenario BatchScenario, term string) bool {
