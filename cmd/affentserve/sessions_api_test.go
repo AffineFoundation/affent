@@ -2772,6 +2772,89 @@ func TestReadSessionLoopProtocolReturnsStateAndRecentEvents(t *testing.T) {
 	}
 }
 
+func TestActivateSessionLoopProtocolRepairsRecordedCalibrationFromProtocol(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	sessionID := "loop-recorded-calibration"
+	protocolPath := sessionLoopProtocolPath(pool, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "Maintain a recurring global situation report.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "# Loop Protocol: "+sessionID, `# Loop Protocol: `+sessionID+`
+
+## Calibration Q&A (recorded)
+
+- **Q1**: Analysis scope? A: Cover major geopolitical, economic, and technology policy changes.
+- **Q2**: Output cadence? A: Update the daily report each day and write one deeper weekly synthesis.`, 1)
+	for _, replacement := range [][2]string{
+		{"- status: draft", "- status: running"},
+		{"- hard constraints:", "- hard constraints: cite current sources and stop when evidence is unavailable"},
+		{"- known evidence:", "- known evidence: user requested recurring global situation reporting"},
+		{"- current risk or blocker:", "- current risk or blocker: source freshness may vary by region"},
+		{"- important artifacts:", "- important artifacts: reports/daily and reports/weekly"},
+		{"- important trace spans:", "- important trace spans: loop setup calibration"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md, plan state, and recent trace before continuing"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+
+	body, err := json.Marshal(sessionLoopProtocolUpdateRequest{
+		Protocol: protocol,
+		Activate: true,
+		Reason:   "activate from recorded calibration section",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+sessionID+"/loop-protocol", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil ||
+		resp.State.Status != "running" ||
+		resp.State.CalibrationQuestions != 2 ||
+		resp.State.CalibrationAnswers != 2 ||
+		!strings.Contains(resp.State.LastCalibrationAnswer, "weekly synthesis") {
+		t.Fatalf("state = %+v", resp.State)
+	}
+	if len(resp.Events) != 6 ||
+		resp.Events[1].Type != "loop.protocol_calibration_request" ||
+		resp.Events[2].Type != "loop.protocol_calibration" ||
+		resp.Events[3].Type != "loop.protocol_calibration_request" ||
+		resp.Events[4].Type != "loop.protocol_calibration" ||
+		resp.Events[5].Type != "loop.protocol_activate" {
+		t.Fatalf("events = %+v", resp.Events)
+	}
+}
+
+func TestRecordedLoopCalibrationPairsAcceptsChineseInlineAnswer(t *testing.T) {
+	pairs := recordedLoopCalibrationPairs(`## Calibration Q&A (recorded)
+
+- **Q1**: 分析范围？A: 全面覆盖，优先关注中美关系和全球经济。
+- **Q2**: 产出频率？A: 每天更新一次，每周深度分析。`)
+	if len(pairs) != 2 ||
+		!strings.Contains(pairs[0].question, "分析范围") ||
+		!strings.Contains(pairs[0].answer, "全面覆盖") ||
+		!strings.Contains(pairs[1].answer, "每周深度分析") {
+		t.Fatalf("pairs = %+v", pairs)
+	}
+}
+
 func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

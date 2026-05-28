@@ -174,12 +174,24 @@ func readSessionLoopProtocol(pool *SessionPool, sessionID string) (string, sessi
 	if err != nil || !found {
 		return "", sessionLoopProtocolSummary{}, nil, nil, false, err
 	}
-	summary, found, err := loopstate.SummarizeFile(path, loopstate.ProtocolRelPath(sessionID))
-	if err != nil || !found {
-		return "", sessionLoopProtocolSummary{}, nil, nil, false, err
-	}
 	state, stateFound, err := loopstate.ReadState(sessionLoopStatePath(pool, sessionID))
 	if err != nil {
+		return "", sessionLoopProtocolSummary{}, nil, nil, false, err
+	}
+	if stateFound {
+		repaired, repairErr := repairRecordedLoopCalibration(path, protocol, state)
+		if repairErr != nil {
+			return "", sessionLoopProtocolSummary{}, nil, nil, false, repairErr
+		}
+		if repaired {
+			state, stateFound, err = loopstate.ReadState(sessionLoopStatePath(pool, sessionID))
+			if err != nil {
+				return "", sessionLoopProtocolSummary{}, nil, nil, false, err
+			}
+		}
+	}
+	summary, found, err := loopstate.SummarizeFile(path, loopstate.ProtocolRelPath(sessionID))
+	if err != nil || !found {
 		return "", sessionLoopProtocolSummary{}, nil, nil, false, err
 	}
 	events, _, err := readSessionLoopEvents(pool, sessionID)
@@ -190,6 +202,86 @@ func readSessionLoopProtocol(pool *SessionPool, sessionID string) (string, sessi
 		return protocol, summary, &state, events, true, nil
 	}
 	return protocol, summary, nil, events, true, nil
+}
+
+func repairRecordedLoopCalibration(protocolPath, protocol string, state loopstate.State) (bool, error) {
+	if state.Status != "draft" || state.CalibrationAnswers > 0 {
+		return false, nil
+	}
+	pairs := recordedLoopCalibrationPairs(protocol)
+	if len(pairs) == 0 {
+		return false, nil
+	}
+	repaired := false
+	if state.CalibrationQuestions <= 0 {
+		for _, pair := range pairs {
+			if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, pair.question); err != nil {
+				return repaired, err
+			}
+			if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, pair.answer); err != nil {
+				return repaired, err
+			}
+			repaired = true
+		}
+		return repaired, nil
+	}
+	missingAnswers := state.CalibrationQuestions - state.CalibrationAnswers
+	for i := 0; i < missingAnswers && i < len(pairs); i++ {
+		if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, pairs[i].answer); err != nil {
+			return repaired, err
+		}
+		repaired = true
+	}
+	return repaired, nil
+}
+
+type recordedLoopCalibrationPair struct {
+	question string
+	answer   string
+}
+
+func recordedLoopCalibrationPairs(protocol string) []recordedLoopCalibrationPair {
+	lines := strings.Split(protocol, "\n")
+	inRecordedSection := false
+	pairs := []recordedLoopCalibrationPair{}
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(trimmed, "## ") {
+			inRecordedSection = strings.Contains(lower, "calibration q&a") && strings.Contains(lower, "recorded")
+			continue
+		}
+		if !inRecordedSection || !strings.HasPrefix(trimmed, "-") {
+			continue
+		}
+		if pair, ok := recordedLoopCalibrationPairFromLine(trimmed); ok {
+			pairs = append(pairs, pair)
+		}
+	}
+	return pairs
+}
+
+func recordedLoopCalibrationPairFromLine(line string) (recordedLoopCalibrationPair, bool) {
+	line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
+	if line == "" {
+		return recordedLoopCalibrationPair{}, false
+	}
+	if before, after, ok := strings.Cut(line, "**:"); ok && strings.Contains(before, "**Q") {
+		line = strings.TrimSpace(after)
+	}
+	answerSplitters := []string{" A: ", " A：", " 答: ", " 答：", "A: ", "A：", "答: ", "答："}
+	for _, splitter := range answerSplitters {
+		question, answer, ok := strings.Cut(line, splitter)
+		if !ok {
+			continue
+		}
+		question = strings.TrimSpace(question)
+		answer = strings.TrimSpace(answer)
+		if question != "" && answer != "" {
+			return recordedLoopCalibrationPair{question: question, answer: answer}, true
+		}
+	}
+	return recordedLoopCalibrationPair{}, false
 }
 
 func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLoopProtocolUpdateRequest) (string, sessionLoopProtocolSummary, loopstate.State, []loopstate.Event, error) {
@@ -223,6 +315,15 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 		}
 		if err := loopstate.ValidateProtocolActivation(req.Protocol); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
+		}
+		state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, sessionID))
+		if err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+		}
+		if found {
+			if _, err := repairRecordedLoopCalibration(path, req.Protocol, state); err != nil {
+				return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+			}
 		}
 		if err := loopstate.ValidateProtocolActivationReady(path); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
