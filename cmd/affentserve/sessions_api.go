@@ -21,6 +21,7 @@ import (
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sessionsearch"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
@@ -2194,29 +2195,97 @@ func recoveryHintFromSessionSearchResult(text string) string {
 	}
 	recent := resp.RecentSessions[0]
 	parts := []string{"session recall found no direct hits"}
-	if len(resp.RecentSessions) > 1 {
-		parts = append(parts, "recent session anchors are available")
-	}
 	if sid := strings.TrimSpace(recent.SessionID); sid != "" {
 		parts = append(parts, "retry from recent session "+sid)
 	}
-	preview := strings.TrimSpace(recent.LatestUser)
-	if preview == "" {
-		preview = strings.TrimSpace(recent.LatestAssistant)
-	}
-	if preview == "" {
-		preview = strings.TrimSpace(recent.Plan)
-	}
-	if preview == "" {
-		preview = strings.TrimSpace(recent.Loop)
-	}
-	if preview == "" {
-		preview = strings.TrimSpace(recent.Recovery)
-	}
-	if preview != "" {
-		parts = append(parts, "preview: "+preview)
+	if preview := recoveryHintRecentSessionPreview(recent); preview != "" {
+		parts = append(parts, preview)
 	}
 	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func recoveryHintRecentSessionPreview(recent sessionsearch.RecentSession) string {
+	var parts []string
+	appendPreview := func(label, value string) {
+		value = compactRecentSessionAnchor(label, value)
+		if value == "" {
+			return
+		}
+		parts = append(parts, label+"="+value)
+	}
+	appendPreview("recovery", recent.Recovery)
+	appendPreview("loop", recent.Loop)
+	appendPreview("plan", recent.Plan)
+	if len(parts) == 0 {
+		appendPreview("user", recent.LatestUser)
+		appendPreview("assistant", recent.LatestAssistant)
+	}
+	return strings.Join(parts, " ")
+}
+
+func compactRecentSessionAnchor(label, value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return ""
+	}
+	switch label {
+	case "recovery":
+		return compactRecoveryAnchor(value)
+	case "loop":
+		return compactLoopAnchor(value)
+	case "plan":
+		return compactPlanAnchor(value)
+	case "user", "assistant":
+		return textutil.Preview(value, 80)
+	default:
+		return textutil.Preview(value, 80)
+	}
+}
+
+func compactRecoveryAnchor(value string) string {
+	var parts []string
+	for i, field := range strings.Fields(value) {
+		field = strings.Trim(field, ";,")
+		switch {
+		case i == 0 && !strings.Contains(field, "="):
+			parts = append(parts, strings.TrimSuffix(field, ":"))
+		case strings.HasPrefix(field, "reason="):
+			parts = append(parts, field)
+		case strings.HasPrefix(field, "top_failure="):
+			parts = append(parts, field)
+		case strings.HasPrefix(field, "loop_guards="):
+			parts = append(parts, field)
+		}
+	}
+	if len(parts) == 0 {
+		return textutil.Preview(value, 80)
+	}
+	return textutil.Preview(strings.Join(parts, " "), 95)
+}
+
+func compactLoopAnchor(value string) string {
+	var parts []string
+	if strings.Contains(value, "recent_loop_events") {
+		parts = append(parts, "recent_loop_events")
+	}
+	for _, field := range strings.Fields(value) {
+		field = strings.Trim(field, ";,")
+		if strings.HasPrefix(field, "type=") {
+			parts = append(parts, strings.TrimPrefix(field, "type="))
+		}
+	}
+	if len(parts) == 0 {
+		return textutil.Preview(value, 80)
+	}
+	return textutil.Preview(strings.Join(parts, " "), 95)
+}
+
+func compactPlanAnchor(value string) string {
+	value = strings.ReplaceAll(value, "plan_status: ", "")
+	if idx := strings.Index(value, "current_step:"); idx >= 0 {
+		value = value[idx:]
+	}
+	return textutil.Preview(value, 85)
 }
 
 func recoveryHintFromWeakSessionSearchResults(resp agent.SessionSearchResponse) string {

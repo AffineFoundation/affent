@@ -754,6 +754,19 @@ func TestRecoveryHintFromConversationSessionSearchRecentLoopAnchor(t *testing.T)
 	}
 }
 
+func TestRecoveryHintFromConversationSessionSearchPrefersRecoveryAnchors(t *testing.T) {
+	result := `{"query":"missing marker","total":0,"results":[],"recent_sessions":[{"session_id":"recent-loop","latest_user":"Continue the previous task","loop":"recent_loop_events: event: type=loop.protocol_feed mode=digest feed=4","recovery":"turn_end: reason=max_turns"}]}`
+	got := recoveryHintFromConversationMessage(agent.ChatMessage{
+		Role:    "tool",
+		Content: result,
+	})
+	for _, want := range []string{"session recall found no direct hits", "retry from recent session recent-loop", "recovery=turn_end", "loop=recent_loop_events", "loop.protocol_feed"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation recovery hint missing %q: %q", want, got)
+		}
+	}
+}
+
 func TestRecoveryHintFromConversationSessionSearchRecentRecoveryAnchor(t *testing.T) {
 	result := `{"query":"missing marker","total":0,"results":[],"recent_sessions":[{"session_id":"recent-recovery","recovery":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2; loop_guards=2"}]}`
 	got := recoveryHintFromConversationMessage(agent.ChatMessage{
