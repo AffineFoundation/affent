@@ -1633,6 +1633,13 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(loopMemoryAnchor.ProtectedFiles, ".affent/loops/loop-memory-anchor-reader/LOOP.md") {
 		t.Fatalf("loop/memory anchor ProtectedFiles = %#v, want active LOOP.md", loopMemoryAnchor.ProtectedFiles)
 	}
+	loopMemoryAnchorCaps := ExpectationCapabilityNames(debugScenarioExpectations(loopMemoryAnchor))
+	if !stringSliceContains(loopMemoryAnchorCaps, "longrun_recovery") ||
+		!stringSliceContains(loopMemoryAnchorCaps, "loop_protocol") ||
+		!stringSliceContains(loopMemoryAnchorCaps, "memory") ||
+		!stringSliceContains(loopMemoryAnchorCaps, "session_search") {
+		t.Fatalf("loop/memory anchor expectation capabilities = %#v, want longrun recovery stack", loopMemoryAnchorCaps)
+	}
 
 	crashResume, ok := seen["longrun-crash-missing-tool-result-resume"]
 	if !ok {

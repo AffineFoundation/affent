@@ -131,7 +131,10 @@ Scenario records describe one eval case:
   `expectation_capability_failed_names`: optional scenario-level derived
   capability families and their scenario outcome. These use the same broad
   capability inference as summary records, so consumers can group individual
-  scenario rows without reimplementing expectation parsing.
+  scenario rows without reimplementing expectation parsing. Composite
+  long-running recovery cases that require loop protocol feeds, no-hit
+  recent-session anchors, and a `session_search` to `memory` recovery sequence
+  are tagged as `longrun_recovery`.
 - `runtime_surface`: compact copy of the latest effective runtime surface when
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and
@@ -597,7 +600,7 @@ Summary records aggregate all scenario records from the same process:
   `expectation_capabilities` counts broad required capability families such as
   `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,
   `delegation`, `plan`, `loop_protocol`, `context_compaction`, `verifier`,
-  and `mcp`.
+  `longrun_recovery`, and `mcp`.
   `expectation_capability_passed`, `expectation_capability_failed`, and
   `expectation_capability_pass_rate` split those declared capability families
   by scenario outcome. These are declaration/outcome counters, not observed

@@ -449,6 +449,11 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 			}
 		}
 	}
+	if exp.RequiredLoopProtocolFeeds > 0 &&
+		len(exp.RequiredRecentSessionSearch) > 0 &&
+		expectationRequiresToolOrder(exp, agent.SessionSearchToolName, agent.MemoryToolName) {
+		caps["longrun_recovery"] = true
+	}
 	if len(exp.RequiredFocusedTaskCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
 		exp.RequireNoDelegationErrors {
@@ -488,6 +493,15 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func expectationRequiresToolOrder(exp DebugScenarioExpectations, earlier, later string) bool {
+	for _, req := range exp.RequiredToolOrder {
+		if req.Earlier == earlier && req.Later == later {
+			return true
+		}
+	}
+	return false
 }
 
 func ExpectationCapabilityOutcome(ok bool, names []string) string {
