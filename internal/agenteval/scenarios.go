@@ -2801,7 +2801,7 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		},
 		VerifyCommand:    cleanPushedNonInitialVerifyCommand("go test ./..."),
 		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands: []string{`go test`, `git commit`, `git push`},
+		RequiredCommands: []string{`go test`, `git status`, `git commit`, `git push`},
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
@@ -2815,6 +2815,7 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git status`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
 		},
@@ -2824,7 +2825,7 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},
-		RequiredFinalText: []string{"go test ./...", "commit", "push"},
+		RequiredFinalText: []string{"go test ./...", "status", "commit", "push"},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"set/set_test.go"},
 		MaxTurns:          16,
@@ -2898,6 +2899,7 @@ func TestClampAboveRange(t *testing.T) {
 		RequiredCommands: []string{
 			`git clone`,
 			`go test`,
+			`git status`,
 			`git commit`,
 			`git push`,
 		},
@@ -2915,6 +2917,7 @@ func TestClampAboveRange(t *testing.T) {
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git status`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
 		},
@@ -2933,6 +2936,7 @@ func TestClampAboveRange(t *testing.T) {
 			"git clone",
 			"go test ./...",
 			"mathutil/clamp.go",
+			"status",
 			"commit",
 			"push",
 		},
@@ -3108,6 +3112,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
 			pythonUnittestDiscoverCommand,
+			`git status`,
 			`git commit`,
 			`git push`,
 		},
@@ -3122,6 +3127,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `python3 -m unittest`, Tool: "write_file"},
+			{Command: `git status`, Tool: "write_file"},
 			{Command: `git commit`, Tool: "write_file"},
 			{Command: `git push`, Tool: "write_file"},
 		},
@@ -3146,6 +3152,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 			pythonUnittestDiscoverCommand,
 			"todo_core/store.py",
 			"tests/test_store.py",
+			"status",
 			"commit",
 			"push",
 		},
@@ -3244,11 +3251,13 @@ This repository starts almost empty. The agent must create the project over two 
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
 			pythonUnittestDiscoverCommand,
+			`git status`,
 			`git commit`,
 			`git push`,
 		},
 		RequiredCommandCounts: map[string]int{
 			`python3 -m unittest`: 4,
+			`git status`:          2,
 			`git commit`:          2,
 			`git push`:            2,
 		},
@@ -3260,6 +3269,7 @@ This repository starts almost empty. The agent must create the project over two 
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `python3 -m unittest`, Tool: "write_file"},
+			{Command: `git status`, Tool: "write_file"},
 			{Command: `git commit`, Tool: "write_file"},
 			{Command: `git push`, Tool: "write_file"},
 		},
@@ -3453,11 +3463,13 @@ if __name__ == "__main__":
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
 			pythonUnittestDiscoverCommand,
+			`git status`,
 			`git commit`,
 			`git push`,
 		},
 		RequiredCommandCounts: map[string]int{
 			`python3 -m unittest`: 4,
+			`git status`:          2,
 			`git commit`:          2,
 			`git push`:            2,
 		},
@@ -3522,6 +3534,7 @@ if __name__ == "__main__":
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `python3 -m unittest`, Tool: "edit_file"},
+			{Command: `git status`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
 		},

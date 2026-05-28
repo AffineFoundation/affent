@@ -1833,7 +1833,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("commit/push VerifyCommand = %q, want %q", commitPush.VerifyCommand, want)
 		}
 	}
-	for _, want := range []string{`go test`, `git commit`, `git push`} {
+	for _, want := range []string{`go test`, `git status`, `git commit`, `git push`} {
 		if !stringSliceContains(commitPush.RequiredCommands, want) {
 			t.Fatalf("commit/push RequiredCommands = %#v, want %q", commitPush.RequiredCommands, want)
 		}
@@ -1842,12 +1842,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("commit/push RequiredCommandCounts = %#v, want go test=2", commitPush.RequiredCommandCounts)
 	}
 	for _, want := range []CommandToolOrderRequirement{
+		{Command: `git status`, Tool: "edit_file"},
 		{Command: `git commit`, Tool: "edit_file"},
 		{Command: `git push`, Tool: "edit_file"},
 	} {
 		if !commandToolOrderContains(commitPush.RequiredCommandAfterTool, want) {
 			t.Fatalf("commit/push RequiredCommandAfterTool = %#v, want %#v", commitPush.RequiredCommandAfterTool, want)
 		}
+	}
+	if !stringSliceContains(commitPush.RequiredFinalText, "status") {
+		t.Fatalf("commit/push RequiredFinalText = %#v, want status", commitPush.RequiredFinalText)
 	}
 	if !stringSliceContains(commitPush.ProtectedFiles, "set/set_test.go") {
 		t.Fatalf("commit/push ProtectedFiles = %#v, want test protection", commitPush.ProtectedFiles)
@@ -1873,7 +1877,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("clone/push VerifyCommand = %q, want %q", clonePush.VerifyCommand, want)
 		}
 	}
-	for _, want := range []string{`git clone`, `go test`, `git commit`, `git push`} {
+	for _, want := range []string{`git clone`, `go test`, `git status`, `git commit`, `git push`} {
 		if !stringSliceContains(clonePush.RequiredCommands, want) {
 			t.Fatalf("clone/push RequiredCommands = %#v, want %q", clonePush.RequiredCommands, want)
 		}
@@ -1892,6 +1896,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	for _, want := range []CommandToolOrderRequirement{
 		{Command: `git clone`, Tool: "read_file"},
 		{Command: `go test`, Tool: "edit_file"},
+		{Command: `git status`, Tool: "edit_file"},
 		{Command: `git commit`, Tool: "edit_file"},
 		{Command: `git push`, Tool: "edit_file"},
 	} {
@@ -1902,8 +1907,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if got := clonePush.RequiredFileSubstrings["app/mathutil/clamp.go"]; !stringSliceContains(got, "return max") {
 		t.Fatalf("clone/push RequiredFileSubstrings = %#v, want fixed clamp", clonePush.RequiredFileSubstrings)
 	}
-	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") {
-		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command and changed file", clonePush.RequiredFinalText)
+	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") || !stringSliceContains(clonePush.RequiredFinalText, "status") {
+		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command, changed file, and status", clonePush.RequiredFinalText)
 	}
 	if strings.Contains(clonePush.Prompt, "请") || !strings.Contains(clonePush.Prompt, "Clone remote.git into app") {
 		t.Fatalf("clone/push prompt should be English and clone-specific: %q", clonePush.Prompt)
@@ -1986,13 +1991,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !strings.Contains(scratchProject.Prompt, "Build a small Python project") || strings.Contains(scratchProject.Prompt, "请") {
 		t.Fatalf("scratch project prompt should be English and task-specific: %q", scratchProject.Prompt)
 	}
-	for _, want := range []string{"python3 -m unittest discover -s tests", "git commit", "git push"} {
+	for _, want := range []string{"python3 -m unittest discover -s tests", "git status", "git commit", "git push"} {
 		if !stringSliceContains(scratchProject.RequiredCommands, want) {
 			t.Fatalf("scratch project RequiredCommands = %#v, want %q", scratchProject.RequiredCommands, want)
 		}
 	}
 	if scratchProject.RequiredCommandCounts[`python3 -m unittest`] != 2 {
 		t.Fatalf("scratch project RequiredCommandCounts = %#v, want unittest=2", scratchProject.RequiredCommandCounts)
+	}
+	if !commandToolOrderContains(scratchProject.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "write_file"}) {
+		t.Fatalf("scratch project RequiredCommandAfterTool = %#v, want git status after write_file", scratchProject.RequiredCommandAfterTool)
 	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "write_file", Arg: "path", Substring: "todo_core/store.py"},
@@ -2016,6 +2024,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if scratchProject.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 {
 		t.Fatalf("scratch project trace event requirements = %#v, want loop.turn_checkpoint=1", scratchProject.RequiredTraceEventCounts)
+	}
+	if !stringSliceContains(scratchProject.RequiredFinalText, "status") {
+		t.Fatalf("scratch project RequiredFinalText = %#v, want status", scratchProject.RequiredFinalText)
 	}
 	if !stringSliceContains(scratchProject.ProtectedFiles, ".affent/loops/scratch-project-loop/LOOP.md") {
 		t.Fatalf("scratch project ProtectedFiles = %#v, want LOOP.md", scratchProject.ProtectedFiles)
@@ -2048,15 +2059,19 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if _, ok := iterativeProject.Files[".affent/loops/scratch-project-iterative-loop/LOOP.md"]; !ok {
 		t.Fatalf("iterative scratch project scenario missing active LOOP.md")
 	}
-	for _, want := range []string{"python3 -m unittest discover -s tests", "git commit", "git push"} {
+	for _, want := range []string{"python3 -m unittest discover -s tests", "git status", "git commit", "git push"} {
 		if !stringSliceContains(iterativeProject.RequiredCommands, want) {
 			t.Fatalf("iterative scratch project RequiredCommands = %#v, want %q", iterativeProject.RequiredCommands, want)
 		}
 	}
 	if iterativeProject.RequiredCommandCounts[`python3 -m unittest`] != 4 ||
+		iterativeProject.RequiredCommandCounts[`git status`] != 2 ||
 		iterativeProject.RequiredCommandCounts[`git commit`] != 2 ||
 		iterativeProject.RequiredCommandCounts[`git push`] != 2 {
-		t.Fatalf("iterative scratch project RequiredCommandCounts = %#v, want unittest=4 commit=2 push=2", iterativeProject.RequiredCommandCounts)
+		t.Fatalf("iterative scratch project RequiredCommandCounts = %#v, want unittest=4 status=2 commit=2 push=2", iterativeProject.RequiredCommandCounts)
+	}
+	if !commandToolOrderContains(iterativeProject.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "write_file"}) {
+		t.Fatalf("iterative scratch project RequiredCommandAfterTool = %#v, want git status after write_file", iterativeProject.RequiredCommandAfterTool)
 	}
 	for _, want := range []string{"def save_json", "def load_json", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main"} {
 		if !strings.Contains(iterativeProject.VerifyCommand, want) {
@@ -2111,15 +2126,19 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("integrated memory recovery RequiredTools = %#v, want %q", integrated.RequiredTools, want)
 		}
 	}
-	for _, want := range []string{"python3 -m unittest discover -s tests", "git commit", "git push"} {
+	for _, want := range []string{"python3 -m unittest discover -s tests", "git status", "git commit", "git push"} {
 		if !stringSliceContains(integrated.RequiredCommands, want) {
 			t.Fatalf("integrated memory recovery RequiredCommands = %#v, want %q", integrated.RequiredCommands, want)
 		}
 	}
 	if integrated.RequiredCommandCounts[`python3 -m unittest`] != 4 ||
+		integrated.RequiredCommandCounts[`git status`] != 2 ||
 		integrated.RequiredCommandCounts[`git commit`] != 2 ||
 		integrated.RequiredCommandCounts[`git push`] != 2 {
-		t.Fatalf("integrated memory recovery RequiredCommandCounts = %#v, want unittest=4 commit=2 push=2", integrated.RequiredCommandCounts)
+		t.Fatalf("integrated memory recovery RequiredCommandCounts = %#v, want unittest=4 status=2 commit=2 push=2", integrated.RequiredCommandCounts)
+	}
+	if !commandToolOrderContains(integrated.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "edit_file"}) {
+		t.Fatalf("integrated memory recovery RequiredCommandAfterTool = %#v, want git status after edit_file", integrated.RequiredCommandAfterTool)
 	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "memory", Arg: "action", Substring: "add"},
@@ -2981,6 +3000,23 @@ func TestBuiltinGitCommitPushScenariosRequireCommandOrder(t *testing.T) {
 	}
 }
 
+func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresGitCommitAndPush(scenario) || !scenarioRequiresCleanGitStatus(scenario) {
+			continue
+		}
+		if !scenarioHasCommandRequirement(scenario, `git status`) {
+			t.Fatalf("%s requires a clean git status but lacks a git status command requirement; commands=%#v counts=%#v", scenario.Name, scenario.RequiredCommands, scenario.RequiredCommandCounts)
+		}
+		if !scenarioHasGitStatusAfterMutation(scenario) {
+			t.Fatalf("%s requires a clean git status but lacks git status after mutation; after=%#v", scenario.Name, scenario.RequiredCommandAfterTool)
+		}
+		if !stringSliceContains(scenario.RequiredFinalText, "status") && !stringSliceContains(scenario.RequiredFinalText, "clean") {
+			t.Fatalf("%s requires a clean git status but final text does not require status/clean evidence: %#v", scenario.Name, scenario.RequiredFinalText)
+		}
+	}
+}
+
 func scenarioRequiresGitCommitAndPush(scenario BatchScenario) bool {
 	return scenarioHasCommandRequirement(scenario, `git commit`) && scenarioHasCommandRequirement(scenario, `git push`)
 }
@@ -2991,6 +3027,22 @@ func scenarioHasCommandRequirement(scenario BatchScenario, command string) bool 
 	}
 	_, ok := scenario.RequiredCommandCounts[command]
 	return ok
+}
+
+func scenarioRequiresCleanGitStatus(scenario BatchScenario) bool {
+	text := strings.ToLower(scenario.Prompt + "\n" + strings.Join(scenario.Prompts, "\n") + "\n" + scenario.VerifyCommand)
+	return strings.Contains(text, "git status clean") ||
+		strings.Contains(text, "clean git status") ||
+		strings.Contains(text, "git status --porcelain")
+}
+
+func scenarioHasGitStatusAfterMutation(scenario BatchScenario) bool {
+	for _, tool := range []string{"edit_file", "write_file"} {
+		if commandToolOrderContains(scenario.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: tool}) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
