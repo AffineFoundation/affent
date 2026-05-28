@@ -27,7 +27,7 @@ describe("Timeline", () => {
     const user = userEvent.setup();
     renderTimeline(completedTurn);
     expect(screen.getByTestId("msg-assistant")).toHaveTextContent("There are two files.");
-    expect(screen.getByTestId("agent-activity")).toHaveTextContent("What Affent did");
+    expect(screen.getByTestId("agent-activity")).toHaveTextContent("Work");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Result");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("README.md main.go");
     expect(screen.getByTestId("agent-activity-digest")).not.toHaveTextContent("138 tokens");
@@ -451,7 +451,7 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("turn-navigator")).toBeNull();
     expect(screen.queryByTestId("turn-nav-glance")).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy answer" })).toBeNull();
-    expect(screen.getByTestId("agent-activity")).toHaveTextContent("What Affent is doing");
+    expect(screen.getByTestId("agent-activity")).toHaveTextContent("Work");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Now");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Inspect docs for WebUI trace requirements");
     expect(screen.getByTestId("agent-activity-brief")).not.toHaveTextContent("Current focus");

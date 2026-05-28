@@ -6362,9 +6362,10 @@ mark {
   width: 100%;
   min-width: 0;
   border: 0;
+  border-left: 2px solid rgba(20, 184, 166, 0.42);
   border-radius: var(--radius-sm);
   background: transparent;
-  padding-left: 17px;
+  padding-left: 10px;
   color: var(--text);
   cursor: pointer;
   font: inherit;
@@ -6380,7 +6381,7 @@ mark {
   grid-template-columns: auto 8px;
   width: auto;
   min-height: 28px;
-  padding: 2px 3px 2px 17px;
+  padding: 2px 3px 2px 8px;
   white-space: nowrap;
 }
 
@@ -6461,6 +6462,8 @@ mark {
   grid-row: 1;
   margin-left: 0;
   overflow: hidden;
+  border-left: 0;
+  padding-left: 0;
   padding-top: 3px;
   padding-bottom: 3px;
 }
@@ -6959,7 +6962,7 @@ a.agent-activity-evidence-chip:focus-visible {
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   color: var(--text-faint);
-  transform: rotate(45deg);
+  transform: rotate(-45deg);
   opacity: 0;
   transition: transform 140ms ease, opacity 140ms ease;
 }
@@ -6969,7 +6972,7 @@ a.agent-activity-evidence-chip:focus-visible {
 }
 
 .agent-activity[data-open="true"] > .agent-activity-head .agent-activity-chevron {
-  transform: translateY(2px) rotate(225deg);
+  transform: rotate(45deg);
 }
 
 .agent-activity-node-toggle .agent-activity-chevron {
@@ -6977,7 +6980,7 @@ a.agent-activity-evidence-chip:focus-visible {
 }
 
 .agent-activity-node[data-open="true"] > .agent-activity-node-row .agent-activity-node-toggle .agent-activity-chevron {
-  transform: translateY(2px) rotate(225deg);
+  transform: rotate(45deg);
 }
 
 .agent-activity-children {

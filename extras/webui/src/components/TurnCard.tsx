@@ -512,6 +512,8 @@ function AgentActivity({
   const evidenceSummary = summarizeAgentActivityEvidence(activity.evidencePreview, activity.evidenceCount, 2);
   const foldedEvidenceOverflow = summarizeFoldedEvidenceOverflow(activity.evidencePreview, activity.evidenceCount);
   const digestLabel = agentActivityDigestLabel(activity, showDigestLabel, evidenceSummary);
+  const displayTitle = agentActivityDisplayTitle(activity.title);
+  const buttonLabel = showStatusLabel ? `${activity.title} ${activity.statusLabel}` : activity.title;
 
   return (
     <section
@@ -523,8 +525,8 @@ function AgentActivity({
       aria-label={activity.title}
     >
       <div className="agent-activity-headbar">
-        <button type="button" className="agent-activity-head" aria-expanded={open} onClick={toggleOpen}>
-          <span>{activity.title}</span>
+        <button type="button" className="agent-activity-head" aria-label={buttonLabel} aria-expanded={open} onClick={toggleOpen}>
+          <span className="agent-activity-title">{displayTitle}</span>
           {showStatusLabel ? <small>{activity.statusLabel}</small> : null}
           <span className="agent-activity-chevron" aria-hidden="true" />
         </button>
@@ -734,6 +736,11 @@ function activityIssueNodes(nodes: readonly TurnActivityNode[]): TurnActivityNod
     ...(node.status === "error" ? [node] : []),
     ...activityIssueNodes(node.children),
   ]);
+}
+
+function agentActivityDisplayTitle(title: string): string {
+  if (title === "What Affent did" || title === "What Affent is doing") return "Work";
+  return title;
 }
 
 function activityIssueCopyText(nodes: readonly TurnActivityNode[]): string {
