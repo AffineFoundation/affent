@@ -2778,6 +2778,113 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 	}
 }
 
+func longRunCodeCloneCommitPushScenario() BatchScenario {
+	return BatchScenario{
+		Name:    "longrun-code-clone-modify-push-local-remote",
+		Suites:  []string{longRunSuite},
+		Domains: []string{codePRDomain},
+		Prompt:  "The workspace contains a local remote repository at remote.git and no checked-out working copy. Clone remote.git into app, enter the cloned repository, run go test ./... to reproduce the failure, fix only mathutil/clamp.go, and do not modify tests. After the fix, run go test ./... again, create a git commit, push it to origin main, and leave app with a clean git status. The final answer must include the clone command, the test command, the changed file, the commit hash, and the push result.",
+		Files: map[string]string{
+			"README.md": `# Clone Modify Push Eval
+
+This workspace intentionally starts without a checked-out app directory. Clone remote.git into app, fix the failing Go test, commit, and push.
+`,
+			"seed/go.mod": `module example.com/clamp
+
+go 1.22
+`,
+			"seed/mathutil/clamp.go": `package mathutil
+
+func Clamp(n, min, max int) int {
+	if n < min {
+		return min
+	}
+	if n > max {
+		return min
+	}
+	return n
+}
+`,
+			"seed/mathutil/clamp_test.go": `package mathutil
+
+import "testing"
+
+func TestClampWithinRange(t *testing.T) {
+	if got := Clamp(5, 1, 10); got != 5 {
+		t.Fatalf("Clamp within range = %d, want 5", got)
+	}
+}
+
+func TestClampBelowRange(t *testing.T) {
+	if got := Clamp(-3, 1, 10); got != 1 {
+		t.Fatalf("Clamp below range = %d, want 1", got)
+	}
+}
+
+func TestClampAboveRange(t *testing.T) {
+	if got := Clamp(12, 1, 10); got != 10 {
+		t.Fatalf("Clamp above range = %d, want 10", got)
+	}
+}
+`,
+		},
+		SetupCommands: []string{
+			"(cd seed && git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial) && git clone --bare seed remote.git && rm -rf seed",
+		},
+		VerifyCommand: shellAnd(
+			`test -d app/.git`,
+			`test ! -d seed`,
+			`cd app`,
+			`go test ./...`,
+			`test -z "$(git status --porcelain)"`,
+			`test "$(git log -1 --format=%s)" != "initial"`,
+			`test "$(git diff --name-only HEAD~1..HEAD)" = "mathutil/clamp.go"`,
+			`git ls-remote --heads origin main | grep -q "$(git rev-parse HEAD)"`,
+		),
+		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{
+			`git clone`,
+			`go test`,
+			`git commit`,
+			`git push`,
+		},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
+		RequiredTools: []string{"read_file", "edit_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
+			{Tool: "edit_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
+		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `git clone`, Tool: "read_file"},
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git commit`, Tool: "edit_file"},
+			{Command: `git push`, Tool: "edit_file"},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "edit_file"},
+		},
+		RequiredFileSubstrings: map[string][]string{
+			"app/mathutil/clamp.go": {
+				"return max",
+			},
+		},
+		RequiredFinalText: []string{
+			"git clone",
+			"go test ./...",
+			"mathutil/clamp.go",
+			"commit",
+			"push",
+		},
+		ForbiddenCommands: defaultForbiddenCommands,
+		MaxTurns:          18,
+	}
+}
+
 func longRunScratchProjectLoopPushScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-scratch-project-loop-push",

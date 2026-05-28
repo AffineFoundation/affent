@@ -1576,8 +1576,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 21 {
-		t.Fatalf("long-run suite size = %d, want 21", len(scenarios))
+	if len(scenarios) != 22 {
+		t.Fatalf("long-run suite size = %d, want 22", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -1750,6 +1750,62 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(commitPush.Domains, codePRDomain) {
 		t.Fatalf("commit/push Domains = %#v, want code_pr", commitPush.Domains)
+	}
+
+	clonePush, ok := seen["longrun-code-clone-modify-push-local-remote"]
+	if !ok {
+		t.Fatalf("long-run suite missing clone/modify/push scenario")
+	}
+	if len(clonePush.SetupCommands) != 1 ||
+		!strings.Contains(clonePush.SetupCommands[0], "git clone --bare seed remote.git") ||
+		!strings.Contains(clonePush.SetupCommands[0], "rm -rf seed") {
+		t.Fatalf("clone/push SetupCommands = %#v, want seeded local bare remote without checkout", clonePush.SetupCommands)
+	}
+	if _, ok := clonePush.Files["seed/mathutil/clamp.go"]; !ok {
+		t.Fatalf("clone/push scenario missing seed clamp implementation")
+	}
+	for _, want := range []string{"test -d app/.git", "test ! -d seed", "go test ./...", `git diff --name-only HEAD~1..HEAD`, "git ls-remote --heads origin main"} {
+		if !strings.Contains(clonePush.VerifyCommand, want) {
+			t.Fatalf("clone/push VerifyCommand = %q, want %q", clonePush.VerifyCommand, want)
+		}
+	}
+	for _, want := range []string{`git clone`, `go test`, `git commit`, `git push`} {
+		if !stringSliceContains(clonePush.RequiredCommands, want) {
+			t.Fatalf("clone/push RequiredCommands = %#v, want %q", clonePush.RequiredCommands, want)
+		}
+	}
+	if clonePush.RequiredCommandCounts[`go test`] != 2 {
+		t.Fatalf("clone/push RequiredCommandCounts = %#v, want go test=2", clonePush.RequiredCommandCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "read_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
+		{Tool: "edit_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
+	} {
+		if !toolArgRequirementContains(clonePush.RequiredToolArgContains, want) {
+			t.Fatalf("clone/push RequiredToolArgContains = %#v, want %#v", clonePush.RequiredToolArgContains, want)
+		}
+	}
+	for _, want := range []CommandToolOrderRequirement{
+		{Command: `git clone`, Tool: "read_file"},
+		{Command: `go test`, Tool: "edit_file"},
+		{Command: `git commit`, Tool: "edit_file"},
+		{Command: `git push`, Tool: "edit_file"},
+	} {
+		if !commandToolOrderContains(append(clonePush.RequiredCommandBeforeTool, clonePush.RequiredCommandAfterTool...), want) {
+			t.Fatalf("clone/push command order requirements = before:%#v after:%#v, want %#v", clonePush.RequiredCommandBeforeTool, clonePush.RequiredCommandAfterTool, want)
+		}
+	}
+	if got := clonePush.RequiredFileSubstrings["app/mathutil/clamp.go"]; !stringSliceContains(got, "return max") {
+		t.Fatalf("clone/push RequiredFileSubstrings = %#v, want fixed clamp", clonePush.RequiredFileSubstrings)
+	}
+	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") {
+		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command and changed file", clonePush.RequiredFinalText)
+	}
+	if strings.Contains(clonePush.Prompt, "请") || !strings.Contains(clonePush.Prompt, "Clone remote.git into app") {
+		t.Fatalf("clone/push prompt should be English and clone-specific: %q", clonePush.Prompt)
+	}
+	if !stringSliceContains(clonePush.Domains, codePRDomain) {
+		t.Fatalf("clone/push Domains = %#v, want code_pr", clonePush.Domains)
 	}
 
 	scratchProject, ok := seen["longrun-scratch-project-loop-push"]

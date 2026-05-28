@@ -959,6 +959,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunBittensorSubnetScenario(),
 		longRunCodePRScenario(),
 		longRunCodeCommitPushScenario(),
+		longRunCodeCloneCommitPushScenario(),
 		longRunScratchProjectLoopPushScenario(),
 		longRunScratchProjectIterativeLoopPushScenario(),
 		longRunIntegratedMemoryRecoveryScenario(),
