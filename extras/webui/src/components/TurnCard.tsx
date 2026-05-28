@@ -800,7 +800,7 @@ function AgentActivityNode({
               className="agent-activity-node-action"
               onClick={() => onUseAsDraft(nextAction.draft, "tool_guidance")}
             >
-              Use this next step
+              Use next step as draft
             </button>
           ) : null}
         </span>
