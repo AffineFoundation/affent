@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionChanges, changedFileDiffText, changedFileDraft } from "./sessionChanges";
+import { buildSessionChanges, changedFileDiffText, changedFileDraft, changesReviewFacts, changesReviewFocus } from "./sessionChanges";
 
 describe("buildSessionChanges", () => {
   it("summarizes write and edit tool calls from reducer state", () => {
@@ -127,7 +127,7 @@ describe("buildSessionChanges", () => {
     ]);
   });
 
-  it("keeps the latest non-empty diff evidence when a file changes again", () => {
+  it("keeps the latest non-empty diff evidence but marks it stale when a file changes again", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "edit-1", tool: "edit_file", args: { path: "src/app.ts" } } },
@@ -163,8 +163,33 @@ describe("buildSessionChanges", () => {
       actionCount: 2,
       additions: 2,
       deletions: 1,
+      diffStale: true,
     });
     expect(file.diffPreview?.[0]).toMatchObject({ kind: "meta", text: "diff --git a/src/app.ts b/src/app.ts" });
+    expect(changedFileDiffText(file)).toContain("Diff preview may predate the latest change");
+    expect(changedFileDraft(file)).toContain("Verify the current file before using this diff");
+  });
+
+  it("surfaces stale diff review state when later edits lack fresh diff evidence", () => {
+    const files = [{
+      path: "src/app.ts",
+      operation: "edit" as const,
+      status: "changed" as const,
+      turnNumber: 2,
+      actionCount: 2,
+      diffPreview: [{ kind: "add" as const, text: "+export const ready = true;" }],
+      diffStale: true,
+    }];
+
+    expect(changesReviewFocus(files)).toMatchObject({
+      label: "Verify current file",
+      title: "1 diff may be stale",
+      tone: "attention",
+    });
+    expect(changesReviewFacts(files)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Diff", value: "1/1", detail: "1 stale", tone: "attention" }),
+      expect.objectContaining({ label: "Verify", value: "1", detail: "current file first", tone: "attention" }),
+    ]));
   });
 
   it("shows diff-backed completed changes before artifact-only changes", () => {

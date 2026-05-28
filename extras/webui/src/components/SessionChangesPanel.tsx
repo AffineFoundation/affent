@@ -3,7 +3,7 @@ import type { UseAsDraft } from "../view/draftSource";
 import { changedFileDiffText, changedFileDraft, changesReviewFacts, changesReviewFocus, type SessionChangedFile, type SessionChangesView } from "../view/sessionChanges";
 import { CopyButton } from "./CopyButton";
 
-type ChangeFilter = "all" | "changed" | "issues" | "diff";
+type ChangeFilter = "all" | "changed" | "issues" | "diff" | "stale";
 
 export function SessionChangesPanel({
   changes,
@@ -93,12 +93,12 @@ export function SessionChangesPanel({
                   Open current
                 </button>
               ) : null}
-              {onOpenFilesPanel && !hasDiffPreview(focusFile) ? (
+              {onOpenFilesPanel && (!hasDiffPreview(focusFile) || focusFile.diffStale) ? (
                 <button type="button" className="ghost-action" onClick={onOpenFilesPanel}>
                   Open Files
                 </button>
               ) : null}
-              {onOpenWorkspacePanel && !focusFile.diffPreview?.length ? (
+              {onOpenWorkspacePanel && (!focusFile.diffPreview?.length || focusFile.diffStale) ? (
                 <button type="button" className="ghost-action" onClick={onOpenWorkspacePanel}>
                   Open Workspace
                 </button>
@@ -192,6 +192,7 @@ export function SessionChangesPanel({
 function ChangeDiff({ file }: { file: SessionChangedFile }) {
   return (
     <pre className="session-change-diff" data-testid="session-change-diff" aria-label={`Diff preview for ${file.path}`}>
+      {file.diffStale ? <span data-kind="meta">Diff preview may predate the latest change</span> : null}
       {file.diffPreview?.map((line, index) => (
         <span key={`${index}:${line.text}`} data-kind={line.kind}>{line.text}</span>
       ))}
@@ -225,6 +226,7 @@ function changeStats(files: readonly SessionChangedFile[]) {
     changed: files.filter((file) => file.status === "changed").length,
     issues: files.filter((file) => file.status === "failed" || file.status === "running").length,
     diff: files.filter((file) => file.diffPreview && file.diffPreview.length > 0).length,
+    stale: files.filter((file) => file.diffStale).length,
   };
 }
 
@@ -234,6 +236,7 @@ function changeFilterItems(stats: ReturnType<typeof changeStats>): Array<{ filte
     stats.changed > 0 ? { filter: "changed", label: "Changed", value: stats.changed } : undefined,
     stats.issues > 0 ? { filter: "issues", label: "Issues", value: stats.issues } : undefined,
     stats.diff > 0 ? { filter: "diff", label: "Diff", value: stats.diff } : undefined,
+    stats.stale > 0 ? { filter: "stale", label: "Verify", value: stats.stale } : undefined,
   ].filter((item): item is { filter: ChangeFilter; label: string; value: number } => Boolean(item));
 }
 
@@ -241,10 +244,12 @@ function changeMatchesFilter(file: SessionChangedFile, filter: ChangeFilter): bo
   if (filter === "changed") return file.status === "changed";
   if (filter === "issues") return file.status === "failed" || file.status === "running";
   if (filter === "diff") return !!file.diffPreview && file.diffPreview.length > 0;
+  if (filter === "stale") return !!file.diffStale;
   return true;
 }
 
-function changeEvidenceState(file: SessionChangedFile): { state: "diff" | "artifact" | "missing"; label: string } {
+function changeEvidenceState(file: SessionChangedFile): { state: "diff" | "artifact" | "missing" | "stale"; label: string } {
+  if (file.diffStale) return { state: "stale", label: "Diff may predate latest change" };
   if (file.diffPreview && file.diffPreview.length > 0) return { state: "diff", label: "Diff preview captured" };
   if (file.artifactPath) return { state: "artifact", label: "Evidence artifact captured" };
   return { state: "missing", label: "No diff preview captured" };
@@ -255,6 +260,7 @@ function hasDiffPreview(file: SessionChangedFile): boolean {
 }
 
 function changeDraftActionLabel(file: SessionChangedFile): string {
+  if (file.diffStale) return "Verify file";
   if (file.diffPreview && file.diffPreview.length > 0) return "Revise diff";
   return "Review file";
 }
@@ -291,6 +297,7 @@ function statusLabel(status: SessionChangedFile["status"]): string {
 function changeFocusLabel(file: SessionChangedFile): string {
   if (file.status === "failed") return "Fix needed";
   if (file.status === "running") return "Changing now";
+  if (file.diffStale) return "Verify current file";
   if (file.diffPreview && file.diffPreview.length > 0) return "Diff ready";
   return "Changed file";
 }

@@ -24,8 +24,10 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("1/2");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Scale");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("+2 -1");
-    expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("Diff ready");
+    expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("Verify current file");
+    expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("Diff may predate latest change");
     expect(screen.getByLabelText("Search changes")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Change filters")).getByRole("button", { name: /Verify/ })).toBeInTheDocument();
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Edit · changed · +2 -1 · turn 2");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Updated payment route");
@@ -43,14 +45,16 @@ describe("SessionChangesPanel", () => {
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Copy diff" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Diff for src/payments.ts"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Diff preview may predate the latest change"));
 
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/edit.txt");
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Revise diff" })[0]);
+    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Verify file" })[0]);
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: src/payments.ts"), "changed_file");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"), "changed_file");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Verify the current file before using this diff"), "changed_file");
 
     await user.type(screen.getByLabelText("Search changes"), "spec");
     expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("src/payments.ts");
@@ -65,6 +69,11 @@ describe("SessionChangesPanel", () => {
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
     await user.click(within(screen.getByLabelText("Change filters")).getByRole("button", { name: /Diff/ }));
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("tests/payments.spec.ts");
+    await user.click(within(screen.getByLabelText("Change filters")).getByRole("button", { name: /All/ }));
+
+    await user.click(within(screen.getByLabelText("Change filters")).getByRole("button", { name: /Verify/ }));
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("tests/payments.spec.ts");
     await user.click(within(screen.getByLabelText("Change filters")).getByRole("button", { name: /All/ }));
@@ -169,6 +178,7 @@ const changes: SessionChangesView = {
       deletions: 1,
       detail: "Updated payment route",
       artifactPath: ".affent/artifacts/tool-results/edit.txt",
+      diffStale: true,
       diffPreview: [
         { kind: "meta", text: "diff --git a/src/payments.ts b/src/payments.ts" },
         { kind: "meta", text: "--- a/src/payments.ts" },

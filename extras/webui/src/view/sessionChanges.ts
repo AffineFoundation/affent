@@ -16,6 +16,7 @@ export interface SessionChangedFile {
   artifactPath?: string;
   diffPreview?: SessionChangeDiffLine[];
   diffTruncated?: boolean;
+  diffStale?: boolean;
 }
 
 export interface SessionChangesView {
@@ -43,6 +44,7 @@ export type SessionChangeDiffLine = ChangeDiffLine;
 
 interface SessionChangedFileInternal extends SessionChangedFile {
   sequence: number;
+  diffSequence?: number;
 }
 
 export function buildSessionChanges(session: SessionState): SessionChangesView {
@@ -65,7 +67,7 @@ export function buildSessionChanges(session: SessionState): SessionChangesView {
       || b.sequence - a.sequence
       || a.path.localeCompare(b.path)
     )
-    .map(({ sequence: _sequence, ...file }) => file);
+    .map(({ sequence: _sequence, diffSequence: _diffSequence, ...file }) => file);
   const failed = files.filter((file) => file.status === "failed").length;
   const running = files.filter((file) => file.status === "running").length;
   const changed = files.filter((file) => file.status === "changed").length;
@@ -80,6 +82,7 @@ export function buildSessionChanges(session: SessionState): SessionChangesView {
 export function changedFileDiffText(file: SessionChangedFile): string {
   if (!file.diffPreview || file.diffPreview.length === 0) return "";
   const lines = [`Diff for ${file.path}`, ...file.diffPreview.map((line) => line.text)];
+  if (file.diffStale) lines.push("Diff preview may predate the latest change");
   if (file.diffTruncated) lines.push("Diff preview truncated");
   return lines.join("\n");
 }
@@ -98,7 +101,12 @@ export function changedFileDraft(file: SessionChangedFile): string {
       "No diff preview was captured, so read the current file before making changes.",
     ].filter((line): line is string => Boolean(line)).join("\n");
   }
-  return `Review and revise this diff if needed:\nPath: ${file.path}\n\n${diff}`;
+  return [
+    file.diffStale ? "Verify the current file before using this diff; the preview may predate the latest change." : "Review and revise this diff if needed:",
+    `Path: ${file.path}`,
+    "",
+    diff,
+  ].join("\n");
 }
 
 export function changesReviewFocus(files: readonly SessionChangedFile[]): SessionChangesReview {
@@ -137,6 +145,15 @@ export function changesReviewFocus(files: readonly SessionChangedFile[]): Sessio
       tone: "attention",
     };
   }
+  const staleDiffs = files.filter((file) => file.diffStale).length;
+  if (staleDiffs > 0) {
+    return {
+      label: "Verify current file",
+      title: `${staleDiffs} ${plural("diff", staleDiffs)} may be stale`,
+      detail: `The diff for ${files.find((file) => file.diffStale)?.path ?? "one changed file"} may predate a later change.`,
+      tone: "attention",
+    };
+  }
   return {
     label: "Diff ready",
     title: `${files.length} changed ${plural("file", files.length)} ready to review`,
@@ -148,6 +165,7 @@ export function changesReviewFocus(files: readonly SessionChangedFile[]): Sessio
 export function changesReviewFacts(files: readonly SessionChangedFile[]): SessionChangesFact[] {
   const total = files.length;
   const diff = files.filter((file) => file.diffPreview?.length).length;
+  const stale = files.filter((file) => file.diffStale).length;
   const evidence = files.filter((file) => file.diffPreview?.length || file.artifactPath).length;
   const additions = sumKnown(files.map((file) => file.additions));
   const deletions = sumKnown(files.map((file) => file.deletions));
@@ -161,8 +179,8 @@ export function changesReviewFacts(files: readonly SessionChangedFile[]): Sessio
     {
       label: "Diff",
       value: total > 0 ? `${diff}/${total}` : "0/0",
-      detail: "preview captured",
-      tone: total === 0 ? "neutral" : diff === total ? "ok" : "attention",
+      detail: stale > 0 ? `${stale} stale` : "preview captured",
+      tone: total === 0 ? "neutral" : stale > 0 ? "attention" : diff === total ? "ok" : "attention",
     },
     {
       label: "Evidence",
@@ -176,6 +194,12 @@ export function changesReviewFacts(files: readonly SessionChangedFile[]): Sessio
       detail: additions != null || deletions != null ? "from diff metadata" : "diff stats unavailable",
       tone: additions != null || deletions != null ? "neutral" : total > 0 ? "attention" : "neutral",
     },
+    ...(stale > 0 ? [{
+      label: "Verify",
+      value: String(stale),
+      detail: "current file first",
+      tone: "attention" as const,
+    }] : []),
   ];
 }
 
@@ -186,6 +210,7 @@ function changePriority(file: SessionChangedFile): number {
 }
 
 function changeEvidencePriority(file: SessionChangedFile): number {
+  if (file.diffStale) return 1;
   return file.diffPreview && file.diffPreview.length > 0 ? 0 : 1;
 }
 
@@ -194,16 +219,18 @@ function changeFromCall(call: ToolCallState, turnNumber: number, sequence: numbe
   if (!operation) return undefined;
   const path = normalizeChangePath(stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename"));
   if (!path) return undefined;
+  const diffPreview = call.changeDiff?.preview;
   return {
     path,
     operation,
     status: changeStatus(call),
     turnNumber,
     sequence,
+    diffSequence: diffPreview && diffPreview.length > 0 ? sequence : undefined,
     actionCount: 1,
     additions: call.changeDiff?.additions,
     deletions: call.changeDiff?.deletions,
-    diffPreview: call.changeDiff?.preview,
+    diffPreview,
     diffTruncated: call.changeDiff?.truncated,
     detail: changeDetail(call),
     artifactPath: call.resultArtifactPath,
@@ -211,6 +238,10 @@ function changeFromCall(call: ToolCallState, turnNumber: number, sequence: numbe
 }
 
 function mergeChange(previous: SessionChangedFileInternal, next: SessionChangedFileInternal): SessionChangedFileInternal {
+  const nextHasDiff = Boolean(next.diffPreview && next.diffPreview.length > 0);
+  const diffSequence = nextHasDiff ? next.sequence : previous.diffSequence;
+  const diffPreview = next.diffPreview ?? previous.diffPreview;
+  const latestChangePredatesDiff = Boolean(diffPreview?.length && diffSequence != null && next.sequence > diffSequence && !nextHasDiff);
   return {
     ...previous,
     ...next,
@@ -219,7 +250,9 @@ function mergeChange(previous: SessionChangedFileInternal, next: SessionChangedF
     artifactPath: next.artifactPath ?? previous.artifactPath,
     additions: next.additions ?? previous.additions,
     deletions: next.deletions ?? previous.deletions,
-    diffPreview: next.diffPreview ?? previous.diffPreview,
+    diffPreview,
+    diffSequence,
+    diffStale: nextHasDiff ? false : Boolean(previous.diffStale || latestChangePredatesDiff),
     diffTruncated: next.diffTruncated ?? previous.diffTruncated,
   };
 }
