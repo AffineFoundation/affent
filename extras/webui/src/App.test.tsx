@@ -529,7 +529,7 @@ describe("App", () => {
         return jsonResponse({
           session: {
             id: "new-1",
-            active: true,
+            active: false,
             durable: true,
             has_conversation: false,
             has_events: false,

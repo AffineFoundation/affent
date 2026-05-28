@@ -1102,9 +1102,11 @@ export function App() {
       if (!targetSessionId) {
         const created = await createSession(client);
         targetSessionId = created.session.id;
-        setSessions((current) => [created.session, ...current.filter((s) => s.id !== created.session.id)]);
         setSelectedSessionId(targetSessionId);
         setSession(initialSessionState());
+        markSessionLive(targetSessionId, content, created.session);
+      } else if (pendingKind === "task") {
+        markSessionLive(targetSessionId, content);
       }
       await sendSessionMessage(client, targetSessionId, { content });
       sendInFlightRef.current = false;
@@ -1149,9 +1151,11 @@ export function App() {
       if (!targetSessionId) {
         const created = await createSession(client);
         targetSessionId = created.session.id;
-        setSessions((current) => [created.session, ...current.filter((s) => s.id !== created.session.id)]);
         setSelectedSessionId(targetSessionId);
         setSession(initialSessionState());
+        markSessionLive(targetSessionId, displayText, created.session);
+      } else {
+        markSessionLive(targetSessionId, displayText);
       }
       await sendSessionMessage(client, targetSessionId, {
         content: trimmedGoal,
@@ -1298,7 +1302,7 @@ export function App() {
     setActionBusy(false);
   }
 
-  function markSessionLive(sessionId: string, latestUserMessage: string) {
+  function markSessionLive(sessionId: string, latestUserMessage: string, baseSession?: SessionSummary) {
     setSessions((current) => {
       let found = false;
       const next = current.map((item) => {
@@ -1320,6 +1324,7 @@ export function App() {
       if (found) return next;
       return [
         {
+          ...baseSession,
           id: sessionId,
           active: true,
           durable: true,
