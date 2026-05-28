@@ -1925,7 +1925,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("source repo VerifyCommand = %q, want %q", sourceRepo.VerifyCommand, want)
 		}
 	}
-	for _, want := range []string{`go test`, `git commit`, `git push`} {
+	for _, want := range []string{`go test`, `git status`, `git commit`, `git push`} {
 		if !stringSliceContains(sourceRepo.RequiredCommands, want) {
 			t.Fatalf("source repo RequiredCommands = %#v, want %q", sourceRepo.RequiredCommands, want)
 		}

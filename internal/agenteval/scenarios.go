@@ -2995,6 +2995,7 @@ func TestMessageUsesName(t *testing.T) {
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
 			`go test`,
+			`git status`,
 			`git commit`,
 			`git push`,
 		},
