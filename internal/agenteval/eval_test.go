@@ -2970,6 +2970,29 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	}
 }
 
+func TestBuiltinGitCommitPushScenariosRequireCommandOrder(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresGitCommitAndPush(scenario) {
+			continue
+		}
+		if !commandOrderContains(scenario.RequiredCommandOrder, CommandOrderRequirement{Earlier: `git commit`, Later: `git push`}) {
+			t.Fatalf("%s requires git commit and git push but lacks RequiredCommandOrder git commit -> git push; order=%#v", scenario.Name, scenario.RequiredCommandOrder)
+		}
+	}
+}
+
+func scenarioRequiresGitCommitAndPush(scenario BatchScenario) bool {
+	return scenarioHasCommandRequirement(scenario, `git commit`) && scenarioHasCommandRequirement(scenario, `git push`)
+}
+
+func scenarioHasCommandRequirement(scenario BatchScenario, command string) bool {
+	if stringSliceContains(scenario.RequiredCommands, command) {
+		return true
+	}
+	_, ok := scenario.RequiredCommandCounts[command]
+	return ok
+}
+
 func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if scenario.Name != "focused-task-project-facts" {

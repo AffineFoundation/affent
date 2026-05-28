@@ -2818,6 +2818,9 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
 		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
+		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},
@@ -2914,6 +2917,9 @@ func TestClampAboveRange(t *testing.T) {
 			{Command: `go test`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
+		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
@@ -3119,6 +3125,9 @@ This repository starts almost empty. The agent must create the project, tests, d
 			{Command: `git commit`, Tool: "write_file"},
 			{Command: `git push`, Tool: "write_file"},
 		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
+		},
 		RequiredLoopProtocolFeeds: 1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 1,
@@ -3253,6 +3262,9 @@ This repository starts almost empty. The agent must create the project over two 
 			{Command: `python3 -m unittest`, Tool: "write_file"},
 			{Command: `git commit`, Tool: "write_file"},
 			{Command: `git push`, Tool: "write_file"},
+		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
@@ -3512,6 +3524,9 @@ if __name__ == "__main__":
 			{Command: `python3 -m unittest`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
+		},
+		RequiredCommandOrder: []CommandOrderRequirement{
+			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
