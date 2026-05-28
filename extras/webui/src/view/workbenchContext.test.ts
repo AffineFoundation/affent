@@ -4,6 +4,7 @@ import { reduceRawEvents } from "../store/reduce";
 import {
   buildWorkbenchContextEvidence,
   buildWorkbenchContextUsage,
+  workbenchContextUsageSummary,
   workbenchContextEvidenceDraft,
   workbenchContextEvidenceText,
   workbenchContextStatusDetail,
@@ -66,6 +67,7 @@ describe("workbenchContext", () => {
       expect.objectContaining({ label: "Focused task tokens", value: "278 tokens (220 in / 58 out)" }),
       expect.objectContaining({ label: "Subagent tokens", value: "392 tokens (310 in / 82 out)" }),
     ]));
+    expect(workbenchContextUsageSummary(usage)).toBe("1,540 tokens");
     expect(workbenchContextEvidenceText(input)).toContain("Workspace path: /home/claudeuser/work/affent");
     expect(workbenchContextEvidenceText(input)).toContain("Session tokens: 1,540 tokens (1,200 in / 340 out)");
     expect(workbenchContextEvidenceText(input)).toContain("Subagent tokens: 392 tokens (310 in / 82 out)");

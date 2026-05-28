@@ -1427,6 +1427,7 @@ export function App() {
     files: sessionFiles,
     workspace: sessionWorkspace,
     trace: sessionTrace,
+    usage: workbenchContextUsage,
     automation: automationContext,
     attention: workbenchAttention,
     runtimeState: runtimeStatsState,

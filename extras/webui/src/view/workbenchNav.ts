@@ -8,6 +8,7 @@ import type { SessionTraceView } from "./sessionTrace";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
 import type { TurnArtifact } from "./turnArtifacts";
 import type { WorkbenchAttention, WorkbenchAttentionTarget } from "./workbenchAttention";
+import { workbenchContextUsageSummary, type WorkbenchContextUsageView } from "./workbenchContext";
 import {
   shouldShowWorkbenchAccessPanel,
   shouldShowWorkbenchMemoryPanel,
@@ -36,6 +37,7 @@ export function buildWorkbenchNavItems({
   files,
   workspace,
   trace,
+  usage,
   automation,
   attention,
   runtimeState,
@@ -51,6 +53,7 @@ export function buildWorkbenchNavItems({
   files: SessionFilesView;
   workspace: SessionWorkspaceView;
   trace?: SessionTraceView;
+  usage?: WorkbenchContextUsageView;
   automation?: { title: string };
   attention?: WorkbenchAttention;
   runtimeState: WorkbenchRuntimePanelState;
@@ -69,7 +72,7 @@ export function buildWorkbenchNavItems({
       key: "context",
       label: "Context",
       scope: "current",
-      detail: overview.stateLabel || "Current session",
+      detail: contextNavDetail(overview, usage),
       badge: attention?.target === "context" ? attention.label : undefined,
       tone: attention?.target === "context" ? attention.tone : undefined,
     },
@@ -181,6 +184,12 @@ export function buildWorkbenchNavItems({
         tone: runtimeState.state === "error" ? "error" as const : undefined,
       }]),
   ];
+}
+
+function contextNavDetail(overview: SessionOverview, usage?: WorkbenchContextUsageView): string {
+  const usageSummary = workbenchContextUsageSummary(usage);
+  if (usageSummary) return `${overview.stateLabel || "Current session"} · ${usageSummary}`;
+  return overview.stateLabel || "Current session";
 }
 
 function artifactNavDetail(artifacts: readonly TurnArtifact[]): string {

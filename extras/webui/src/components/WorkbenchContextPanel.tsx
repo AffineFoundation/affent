@@ -82,8 +82,12 @@ export function WorkbenchContextPanel({
           summaryLabel="Context metrics"
           inlineLimit={2}
         />
-        {workspace?.hasData || runtimeItems.length > 0 ? (
+        {workspace?.hasData || runtimeItems.length > 0 || hasSelectedSession ? (
           <div className="workbench-context-runtime" data-testid="workbench-context-runtime">
+            <div className="workbench-context-runtime-head">
+              <strong>Runtime evidence</strong>
+              <span>{runtimeItems.length > 0 ? "Usage reported" : "Usage pending"}</span>
+            </div>
             {workspace?.hasData ? (
               <button
                 type="button"
@@ -103,6 +107,13 @@ export function WorkbenchContextPanel({
                 {item.detail ? <small>{item.detail}</small> : null}
               </div>
             ))}
+            {runtimeItems.length === 0 && hasSelectedSession ? (
+              <div className="workbench-context-runtime-item">
+                <strong>Token usage</strong>
+                <span>Not reported yet</span>
+                <small>Usage appears after a turn ends or when the session index reports totals.</small>
+              </div>
+            ) : null}
           </div>
         ) : null}
         {hasSelectedSession ? (

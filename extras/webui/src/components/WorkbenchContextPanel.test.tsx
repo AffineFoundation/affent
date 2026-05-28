@@ -77,6 +77,8 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-details")).not.toHaveTextContent("Tokens 12k");
     expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Workspace path");
     expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("/work/affent");
+    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Token usage");
+    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Not reported yet");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("affent");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Changes");
@@ -129,6 +131,8 @@ describe("WorkbenchContextPanel", () => {
     );
 
     const runtime = screen.getByTestId("workbench-context-runtime");
+    expect(runtime).toHaveTextContent("Runtime evidence");
+    expect(runtime).toHaveTextContent("Usage reported");
     expect(runtime).toHaveTextContent("Workspace path");
     expect(runtime).toHaveTextContent("/home/claudeuser/work/affent");
     expect(runtime).toHaveTextContent("Session tokens");

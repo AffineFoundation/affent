@@ -161,6 +161,12 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
   return { items };
 }
 
+export function workbenchContextUsageSummary(usage?: WorkbenchContextUsageView): string | undefined {
+  const sessionTokens = usage?.items.find((item) => item.label === "Session tokens");
+  if (!sessionTokens) return undefined;
+  return compactTokenValue(sessionTokens.value);
+}
+
 export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInput): string {
   const lines = [
     "Workbench context evidence",
@@ -227,4 +233,8 @@ function tokenTotal(inputTokens: number, outputTokens: number): number {
 
 function formatInteger(value: number): string {
   return value.toLocaleString("en-US");
+}
+
+function compactTokenValue(value: string): string {
+  return value.replace(/\s*\(.+\)\s*$/, "");
 }

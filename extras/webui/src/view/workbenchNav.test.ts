@@ -48,6 +48,7 @@ describe("buildWorkbenchNavItems", () => {
   it("surfaces only actionable counts and attention tones", () => {
     const items = buildWorkbenchNavItems({
       overview,
+      usage: { items: [{ label: "Session tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "1 turn from loaded trace" }] },
       changes: {
         summary: "1 changed file",
         detail: "1 changed",
@@ -102,6 +103,7 @@ describe("buildWorkbenchNavItems", () => {
       latestMemoryUpdate: { action: "add", target: "memory", topic: "checkout", location: "memory:checkout", preview: "payment fixture" },
     });
 
+    expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Review needed · 1,540 tokens" });
     expect(items.find((item) => item.key === "changes")).toMatchObject({ badge: "1" });
     expect(items.find((item) => item.key === "run")).toMatchObject({ badge: "1", tone: "error" });
     expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 generated file · 1 full output · 4 KiB" });
