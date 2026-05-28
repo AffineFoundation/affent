@@ -4607,7 +4607,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-skill-item > summary {
   display: grid;
-  grid-template-columns: minmax(170px, 0.48fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(150px, 0.42fr) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 38px;
@@ -4633,12 +4633,13 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-skill-title strong {
-  white-space: normal;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
 }
 
 .session-skill-desc {
-  white-space: nowrap;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 
 .session-skill-title strong {
@@ -4651,6 +4652,24 @@ button.workbench-context-runtime-item:focus-visible {
 .session-skill-meta {
   color: var(--text-faint);
   font-size: 11.5px;
+}
+
+.session-skill-desc > span,
+.session-skill-desc > small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skill-desc > span {
+  color: var(--text-muted);
+}
+
+.session-skill-desc > small {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 650;
 }
 
 .session-skill-status {

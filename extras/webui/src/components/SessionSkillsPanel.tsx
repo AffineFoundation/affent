@@ -314,7 +314,10 @@ export function SessionSkillsPanel({
                           <strong>{skill.name}</strong>
                           <span>{skillKindLabel(skill)}</span>
                         </span>
-                        <span className="session-skill-desc">{skill.description || "No summary"}</span>
+                        <span className="session-skill-desc">
+                          <span>{skill.description || "No summary"}</span>
+                          {activationSummary(skill) ? <small data-testid={`skill-activation-${skill.name}`}>{activationSummary(skill)}</small> : null}
+                        </span>
                         <span className="session-skill-status">
                           {skillSummaryTags(skill).map((tag) => (
                             <span key={tag} title={tag}>{tag}</span>

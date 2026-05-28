@@ -44,6 +44,7 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Repair code by reproducing failures first.");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
+    expect(screen.getByTestId("skill-activation-coding_repair_workflow")).toHaveTextContent("Triggers: fix, repair");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
     expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("embed:skillembed:skill");
