@@ -123,7 +123,7 @@ function scheduleAutomationLabel(
   if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} active`;
   const count = Math.max(summary?.count ?? 0, visibleSchedules);
   if (count > 0) return `${count} timer${count === 1 ? "" : "s"} paused`;
-  if (session?.has_schedules) return "Schedule details not loaded";
+  if (session?.has_schedules) return "Timer details needed";
   return undefined;
 }
 
@@ -144,7 +144,7 @@ function scheduleAutomationDetail(
   if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} enabled; open Automation to inspect the next run.`;
   const count = Math.max(summary?.count ?? 0, visibleSchedules.length);
   if (count > 0) return `${count} timer${count === 1 ? "" : "s"} paused; resume before the next needed check-in or delete it.`;
-  if (session?.has_schedules) return "Load schedule details before pausing, resuming, or deleting timers.";
+  if (session?.has_schedules) return "Load timer details before pausing, resuming, or deleting timers.";
   return undefined;
 }
 

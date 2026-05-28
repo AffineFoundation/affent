@@ -203,12 +203,12 @@ function ScheduleField({ label, value }: { label: string; value: string }) {
 }
 
 function scheduleLoadLabel(loading: boolean, loaded: boolean): string {
-  if (loading) return "Loading schedule details";
-  return loaded ? "Refresh schedule details" : "Load schedule details";
+  if (loading) return "Loading timer details";
+  return loaded ? "Refresh timer details" : "Load timer details";
 }
 
 function schedulePanelTitle(summary: SessionSchedulesSummary | undefined, pendingLoopTimers: number): string {
-  if (!summary) return "Not loaded";
+  if (!summary) return "Timer details needed";
   if (pendingLoopTimers > 0) return `${pendingLoopTimers} pending`;
   if (summary.enabled > 0) return `${summary.enabled} active`;
   if (summary.count > 0) return `${summary.count} paused`;
@@ -229,7 +229,7 @@ function schedulePanelDetail(
     preview?: string;
   },
 ): string {
-  if (!summary) return "Schedule details not loaded.";
+  if (!summary) return "Load details before pausing, resuming, or deleting timers.";
   if (lastError) return `${summary.error_count ?? 1} error${summary.error_count === 1 ? "" : "s"} · ${lastError}`;
   if (pendingLoopTimers > 0) return "Loop timer waits for LOOP.md activation";
   if (next) return `Next ${next}${preview ? ` · ${preview}` : ""}`;

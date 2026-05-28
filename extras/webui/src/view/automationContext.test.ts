@@ -142,8 +142,8 @@ describe("automationContext view model", () => {
       { state: "idle" },
       { state: "idle" },
     )).toEqual({
-      title: "Schedule details not loaded",
-      detail: "Load schedule details before pausing, resuming, or deleting timers.",
+      title: "Timer details needed",
+      detail: "Load timer details before pausing, resuming, or deleting timers.",
     });
   });
 });

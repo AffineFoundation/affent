@@ -160,26 +160,26 @@ describe("SessionSchedulePanel", () => {
     expect(panel).not.toHaveAttribute("open");
   });
 
-  it("separates unloaded schedule details from an empty timer state", () => {
+  it("separates unloaded timer details from an empty timer state", () => {
     render(<SessionSchedulePanel defaultOpen onLoadSchedules={() => undefined} />);
 
     const panel = screen.getByTestId("session-schedule-panel");
-    expect(panel).toHaveTextContent("Not loaded");
-    expect(panel).toHaveTextContent("Schedule details not loaded.");
-    expect(screen.getByRole("button", { name: "Load schedule details" })).toBeInTheDocument();
+    expect(panel).toHaveTextContent("Timer details needed");
+    expect(panel).toHaveTextContent("Load details before pausing, resuming, or deleting timers.");
+    expect(screen.getByRole("button", { name: "Load timer details" })).toBeInTheDocument();
     expect(panel).not.toHaveTextContent("Off");
     expect(panel).not.toHaveTextContent("No scheduled follow-ups for this chat.");
   });
 
-  it("loads schedule details without presenting Timers as a separate entry", () => {
+  it("loads timer details without presenting Timers as a separate entry", () => {
     const onLoadSchedules = () => undefined;
     const { rerender } = render(<SessionSchedulePanel summary={{ count: 1, enabled: 1 }} defaultOpen onLoadSchedules={onLoadSchedules} />);
 
-    expect(screen.getByRole("button", { name: "Load schedule details" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Load timer details" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "View timers" })).toBeNull();
 
     rerender(<SessionSchedulePanel summary={{ count: 1, enabled: 1 }} defaultOpen loading onLoadSchedules={onLoadSchedules} />);
-    expect(screen.getByRole("button", { name: "Loading schedule details" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Loading timer details" })).toBeDisabled();
 
     rerender(
       <SessionSchedulePanel
@@ -199,6 +199,6 @@ describe("SessionSchedulePanel", () => {
         ]}
       />,
     );
-    expect(screen.getByRole("button", { name: "Refresh schedule details" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh timer details" })).toBeInTheDocument();
   });
 });
