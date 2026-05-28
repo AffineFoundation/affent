@@ -376,6 +376,46 @@ func TestBatchRunnerRejectsLoopProtocolExpectationWithDraftProtocol(t *testing.T
 	}
 }
 
+func TestBatchRunnerRejectsLoopProtocolExpectationWithInactiveState(t *testing.T) {
+	res := (BatchRunner{WorkRoot: t.TempDir()}).Run(context.Background(), BatchScenario{
+		Name:                      "loop-paused-state",
+		SessionID:                 "loop-paused-state",
+		RequiredLoopProtocolFeeds: 1,
+		Files: map[string]string{
+			".affent/loops/loop-paused-state/LOOP.md":    "# Loop Protocol\n\n## 0. Metadata\n\n- status: running\n",
+			".affent/loops/loop-paused-state/state.json": `{"status":"paused"}`,
+		},
+	})
+	if res.OK || len(res.Failures) == 0 {
+		t.Fatalf("loop protocol expectation with paused state should fail early: %+v", res)
+	}
+	for _, want := range []string{"requires loop protocol feeds", ".affent/loops/loop-paused-state/LOOP.md", `status "paused"`, "want running"} {
+		if !strings.Contains(res.Failures[0], want) {
+			t.Fatalf("failure missing %q: %+v", want, res.Failures)
+		}
+	}
+}
+
+func TestBatchRunnerRejectsLoopProtocolExpectationWithInvalidState(t *testing.T) {
+	res := (BatchRunner{WorkRoot: t.TempDir()}).Run(context.Background(), BatchScenario{
+		Name:                      "loop-invalid-state",
+		SessionID:                 "loop-invalid-state",
+		RequiredLoopProtocolFeeds: 1,
+		Files: map[string]string{
+			".affent/loops/loop-invalid-state/LOOP.md":    "# Loop Protocol\n\n## 0. Metadata\n\n- status: running\n",
+			".affent/loops/loop-invalid-state/state.json": `{not-json`,
+		},
+	})
+	if res.OK || len(res.Failures) == 0 {
+		t.Fatalf("loop protocol expectation with invalid state should fail early: %+v", res)
+	}
+	for _, want := range []string{"read loop protocol state", ".affent/loops/loop-invalid-state/LOOP.md", "invalid character"} {
+		if !strings.Contains(res.Failures[0], want) {
+			t.Fatalf("failure missing %q: %+v", want, res.Failures)
+		}
+	}
+}
+
 func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
