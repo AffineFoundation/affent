@@ -77,7 +77,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=source_repo:setup=0.000",
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
-		"require-expectation-capability=context_compaction,delegation,longrun_recovery,loop_protocol,memory,plan,research_checkpoint,session,session_search,skill,source_repo,trace,verifier,workspace",
+		"require-expectation-capability=context_compaction,delegation,longrun_recovery,loop_protocol,memory,plan,research_checkpoint,session,session_search,skill,skill_install,source_repo,trace,verifier,workspace",
 		"require-expectation-capability=browser,delegated_source_evidence,source_access,web",
 		"require-expectation-domain=bittensor,code_pr,context_compaction,longrun_recovery,market,memory,session_recovery",
 		"require-expectation-domain=web_evidence",
@@ -114,6 +114,7 @@ func TestRunQualityProfilePreflightRejectsNarrowScenarioSelection(t *testing.T) 
 		"quality gate preflight failed:",
 		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
 		"expectation_capability[skill] unavailable, want >= 1 selected scenario",
+		"expectation_capability[skill_install] unavailable, want >= 1 selected scenario",
 		"expectation_capability[source_repo] unavailable, want >= 1 selected scenario",
 		"expectation_domain[memory] unavailable, want >= 1 selected scenario",
 	} {
@@ -1119,7 +1120,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinEachExpectationDomainPassRate == nil || *gates.MinEachExpectationDomainPassRate != 0.50 {
 		t.Fatalf("longrun min each expectation domain pass rate = %#v, want 0.50", gates.MinEachExpectationDomainPassRate)
 	}
-	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "source_repo", "trace", "verifier", "workspace"}) {
+	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"}) {
 		t.Fatalf("longrun required expectation capabilities = %#v", gates.RequiredExpectationCapabilities)
 	}
 	if !reflect.DeepEqual(gates.RequiredExpectationDomains, []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "session_recovery"}) {
@@ -1258,6 +1259,7 @@ func TestQualityGatePreflightFailures(t *testing.T) {
 	for _, want := range []string{
 		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
 		"expectation_capability[skill] unavailable, want >= 1 selected scenario",
+		"expectation_capability[skill_install] unavailable, want >= 1 selected scenario",
 		"expectation_capability[source_repo] unavailable, want >= 1 selected scenario",
 		"expectation_domain[memory] unavailable, want >= 1 selected scenario",
 	} {

@@ -461,6 +461,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if strings.TrimSpace(exp.ExpectedSkill) != "" {
 		caps["skill"] = true
 	}
+	if expectationRequiresSkillInstall(exp) {
+		caps["skill"] = true
+		caps["skill_install"] = true
+	}
 	if strings.TrimSpace(exp.SourceRepoURL) != "" {
 		caps["source_repo"] = true
 		caps["workspace"] = true
@@ -587,6 +591,19 @@ func ScenarioExpectationDomains(s BatchScenario) []string {
 
 func expectationRequiresDelegatedSourceEvidence(exp DebugScenarioExpectations) bool {
 	return len(exp.RequiredFocusedTaskSourceCounts) > 0 || len(exp.RequiredSubagentSourceCounts) > 0
+}
+
+func expectationRequiresSkillInstall(exp DebugScenarioExpectations) bool {
+	for _, req := range exp.RequiredToolArgContains {
+		if req.Tool != agent.SkillToolName || req.Arg != "action" {
+			continue
+		}
+		switch strings.TrimSpace(req.Substring) {
+		case "install", "propose_url", "propose_install", "confirm_install":
+			return true
+		}
+	}
+	return false
 }
 
 func expectationRequiresResearchCheckpoint(exp DebugScenarioExpectations) bool {
@@ -718,6 +735,8 @@ func addExpectationToolCapabilities(caps map[string]bool, tool string) {
 		caps["session_search"] = true
 	case tool == agent.PlanToolName:
 		caps["plan"] = true
+	case tool == agent.SkillToolName:
+		caps["skill"] = true
 	case tool == agent.SubagentToolName || tool == agent.FocusedTaskToolName:
 		caps["delegation"] = true
 	case tool == "web_fetch" || tool == "web_search":
@@ -967,6 +986,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		defaultRuntimeRepoSearchScenario(),
 		skillToolReadScenario(),
 		skillRemoteInstallGuardScenario(),
+		skillReviewedInstallActivationScenario(),
 		planCodingRepairScenario(),
 		planNotForSimpleReadScenario(),
 		planResumeCurrentStepScenario(),

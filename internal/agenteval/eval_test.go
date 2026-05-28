@@ -51,6 +51,20 @@ func TestExpectationCapabilityNamesIncludesDelegatedSourceEvidence(t *testing.T)
 	}
 }
 
+func TestExpectationCapabilityNamesIncludesSkillInstall(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		RequiredToolArgContains: []DebugToolArgContainsRequirement{{
+			Tool:      "skill",
+			Arg:       "action",
+			Substring: "confirm_install",
+		}},
+	})
+	want := []string{"skill", "skill_install"}
+	if !reflect.DeepEqual(caps, want) {
+		t.Fatalf("ExpectationCapabilityNames = %#v, want %#v", caps, want)
+	}
+}
+
 func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
@@ -1382,6 +1396,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundRepeatedRead := false
 	foundEditRecovery := false
 	foundSkillInstallGuard := false
+	foundSkillInstallActivation := false
 	foundPlanRepair := false
 	foundPlanSkip := false
 	foundPlanResume := false
@@ -1427,6 +1442,32 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				if !strings.Contains(required, want) {
 					t.Fatalf("skill-remote-install-guard RequiredToolResultText = %#v, want %q", scenario.RequiredToolResultText, want)
 				}
+			}
+		}
+		if scenario.Name == "skill-reviewed-install-activation" {
+			foundSkillInstallActivation = true
+			if scenario.SessionID != "skill-reviewed-install" || len(scenario.Prompts) != 3 {
+				t.Fatalf("skill-reviewed-install-activation session/prompts = %q/%d", scenario.SessionID, len(scenario.Prompts))
+			}
+			if scenario.RequiredToolCounts["skill"] != 2 || scenario.MaxParentToolCalls != 2 {
+				t.Fatalf("skill-reviewed-install-activation tool counts = required:%#v max_parent:%d", scenario.RequiredToolCounts, scenario.MaxParentToolCalls)
+			}
+			for _, want := range []ToolArgContainsRequirement{
+				{Tool: "skill", Arg: "action", Substring: "propose_install"},
+				{Tool: "skill", Arg: "action", Substring: "confirm_install"},
+				{Tool: "skill", Arg: "proposal_id", Substring: "1fa99168bf1a0338"},
+			} {
+				if !toolArgRequirementContains(scenario.RequiredToolArgContains, want) {
+					t.Fatalf("skill-reviewed-install-activation RequiredToolArgContains = %#v, want %#v", scenario.RequiredToolArgContains, want)
+				}
+			}
+			caps := ScenarioExpectationCapabilityNames(scenario)
+			if !stringSliceContains(caps, "skill_install") || !stringSliceContains(caps, "skill") {
+				t.Fatalf("skill-reviewed-install-activation capabilities = %#v, want skill and skill_install", caps)
+			}
+			if scenario.RequiredContextInjectionSources["skill_provider"] != 1 ||
+				scenario.RequiredTraceEventCounts["context.injected"] != 1 {
+				t.Fatalf("skill-reviewed-install-activation context requirements = sources:%#v trace:%#v", scenario.RequiredContextInjectionSources, scenario.RequiredTraceEventCounts)
 			}
 		}
 		if scenario.Name == "plan-coding-repair" {
@@ -1640,6 +1681,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundSkillInstallGuard {
 		t.Fatalf("small-model-tools suite missing skill-remote-install-guard")
 	}
+	if !foundSkillInstallActivation {
+		t.Fatalf("small-model-tools suite missing skill-reviewed-install-activation")
+	}
 	if !foundPlanRepair {
 		t.Fatalf("small-model-tools suite missing plan-coding-repair")
 	}
@@ -1690,8 +1734,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 24 {
-		t.Fatalf("long-run suite size = %d, want 24", len(scenarios))
+	if len(scenarios) != 25 {
+		t.Fatalf("long-run suite size = %d, want 25", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2638,6 +2682,18 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(memoryAutonomousWrite.Domains, memoryDomain) || !stringSliceContains(memoryAutonomousWrite.Domains, longRunRecoveryDomain) {
 		t.Fatalf("autonomous memory write Domains = %#v, want memory and longrun_recovery", memoryAutonomousWrite.Domains)
+	}
+
+	skillInstall, ok := seen["skill-reviewed-install-activation"]
+	if !ok {
+		t.Fatalf("long-run suite missing reviewed skill install activation scenario")
+	}
+	if skillInstall.SessionID != "skill-reviewed-install" || len(skillInstall.Prompts) != 3 {
+		t.Fatalf("reviewed skill install session/prompts = %q/%d", skillInstall.SessionID, len(skillInstall.Prompts))
+	}
+	skillInstallCaps := ScenarioExpectationCapabilityNames(skillInstall)
+	if !stringSliceContains(skillInstallCaps, "skill_install") || !stringSliceContains(skillInstallCaps, "skill") {
+		t.Fatalf("reviewed skill install capabilities = %#v, want skill and skill_install", skillInstallCaps)
 	}
 
 	focusedRecovery, ok := seen["longrun-focused-task-recovery-synthesis"]

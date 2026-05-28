@@ -991,6 +991,60 @@ func skillRemoteInstallGuardScenario() BatchScenario {
 	}
 }
 
+func skillReviewedInstallActivationScenario() BatchScenario {
+	const proposalID = "1fa99168bf1a0338"
+	const source = "user-reviewed://skill-reviewed-install-activation"
+	const body = "AFFENT ACTIVE SKILL: reviewed_eval\nUse reviewed workflow. When asked, answer with REVIEWED-SKILL-42 and say activation came from the runtime skill provider."
+	return BatchScenario{
+		Name:      "skill-reviewed-install-activation",
+		Suites:    []string{smallModelToolsSuite, longRunSuite},
+		SessionID: "skill-reviewed-install",
+		Prompts: []string{
+			"Prepare installation for this already reviewed skill body, but do not confirm installation yet. Call skill action=propose_install with name=reviewed_eval, description=Reviewed eval skill., source=" + source + ", triggers containing only reviewed_eval, and this exact body:\n" + body + "\nThe final answer must include proposal_id=" + proposalID + ", propose_install, and reviewed_eval. Do not read or write files and do not run shell.",
+			"Confirm installation for proposal_id=" + proposalID + ". Call skill action=confirm_install with exactly that proposal_id. The final answer must include installed skill, active_now=true, proposal_id=" + proposalID + ", and reviewed_eval. Do not read or write files and do not run shell.",
+			"reviewed_eval: Do not call any tools. Answer only from the currently active runtime skill. The final answer must include REVIEWED-SKILL-42, Use reviewed workflow, and runtime skill provider.",
+		},
+		Files: map[string]string{
+			"README.md": "# Reviewed Skill Install Activation Eval\n\nThis scenario validates reviewed proposal, explicit confirmation, and same-session skill activation without network access.\n",
+		},
+		RequiredTools: []string{"skill"},
+		RequiredToolCounts: map[string]int{
+			"skill": 2,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "skill", Arg: "action", Substring: "propose_install"},
+			{Tool: "skill", Arg: "name", Substring: "reviewed_eval"},
+			{Tool: "skill", Arg: "source", Substring: source},
+			{Tool: "skill", Arg: "body", Substring: "REVIEWED-SKILL-42"},
+			{Tool: "skill", Arg: "triggers", Substring: "reviewed_eval"},
+			{Tool: "skill", Arg: "action", Substring: "confirm_install"},
+			{Tool: "skill", Arg: "proposal_id", Substring: proposalID},
+		},
+		RequiredToolResultText: map[string][]string{
+			"skill": {
+				"prepared skill install proposal_id=" + proposalID,
+				"installed skill \"reviewed_eval\"",
+				"active_now=true",
+			},
+		},
+		RequiredContextInjectionSources: map[string]int{
+			"skill_provider": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"context.injected": 1,
+		},
+		RequiredFinalText: []string{
+			"REVIEWED-SKILL-42",
+			"Use reviewed workflow",
+			"runtime skill provider",
+		},
+		ForbiddenTools:     []string{"read_file", "write_file", "edit_file", "shell", "web_fetch", "web_search", "run_task", "subagent_run"},
+		ProtectedFiles:     []string{"README.md"},
+		MaxParentToolCalls: 2,
+		MaxTurns:           8,
+	}
+}
+
 func liveWebSkillURLInstallActivationScenario() BatchScenario {
 	const source = "https://raw.githubusercontent.com/openai/skills/b0401f07213a66414d84a65cb50c1d226f99485a/skills/.curated/playwright/SKILL.md"
 	const proposalID = "54e64fbbf4bfaf9f"

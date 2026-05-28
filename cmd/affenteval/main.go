@@ -654,7 +654,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                       float64Ptr(14),
 				MaxAvgDurationMS:                      float64Ptr(180000),
 				MaxAvgTotalTokens:                     float64Ptr(120000),
-				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "source_repo", "trace", "verifier", "workspace"},
+				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"},
 				RequiredExpectationDomains:            []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "session_recovery"},
 				MaxDebugBriefTagRates: map[string]float64{
 					"context_compaction:summary_empty":   0,
