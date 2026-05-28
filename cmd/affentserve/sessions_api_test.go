@@ -298,17 +298,34 @@ func TestSummarizeActiveSessionUsesMainSessionEventsForRecoveryHintAndCWD(t *tes
 }
 
 func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
-	got := sessionContextSnapshot(96, Config{CompactTrigger: 120})
-	if got.MessageCount != 96 || got.CompactTrigger != 120 || got.CompactPercent != 80 || got.MessagesUntilCompact != 24 {
+	got := sessionContextSnapshot(96, 16*1024, Config{CompactTrigger: 120})
+	if got.MessageCount != 96 || got.CompactTrigger != 120 || got.CompactPercent != 80 || got.MessageCompactPercent != 80 || got.MessagesUntilCompact != 24 {
 		t.Fatalf("context snapshot = %+v, want 96/120 at 80%% with 24 remaining", got)
 	}
-	over := sessionContextSnapshot(130, Config{CompactTrigger: 120})
+	over := sessionContextSnapshot(130, 16*1024, Config{CompactTrigger: 120})
 	if over.CompactPercent != 108 || over.MessagesUntilCompact != 0 {
 		t.Fatalf("over-trigger snapshot = %+v, want 108%% and no remaining messages", over)
 	}
-	def := sessionContextSnapshot(1, Config{})
+	def := sessionContextSnapshot(1, 1024, Config{})
 	if def.CompactTrigger != agent.DefaultSummaryTriggerMsgs {
 		t.Fatalf("default trigger = %d, want %d", def.CompactTrigger, agent.DefaultSummaryTriggerMsgs)
+	}
+	if def.CompactTriggerBytes != agent.DefaultSummaryTriggerBytes {
+		t.Fatalf("default byte trigger = %d, want %d", def.CompactTriggerBytes, agent.DefaultSummaryTriggerBytes)
+	}
+}
+
+func TestSessionContextSnapshotUsesBytePressure(t *testing.T) {
+	contextBytes := agent.DefaultSummaryTriggerBytes + agent.DefaultSummaryTriggerBytes/4
+	got := sessionContextSnapshot(12, contextBytes, Config{CompactTrigger: 240})
+	if got.CompactPercent != 125 || got.ByteCompactPercent != 125 || got.MessageCompactPercent != 5 {
+		t.Fatalf("context snapshot = %+v, want byte pressure to dominate at 125%%", got)
+	}
+	if got.BytesUntilCompact != 0 {
+		t.Fatalf("bytes_until_compact = %d, want 0", got.BytesUntilCompact)
+	}
+	if got.ContextBytes != contextBytes {
+		t.Fatalf("context_bytes = %d, want %d", got.ContextBytes, contextBytes)
 	}
 }
 

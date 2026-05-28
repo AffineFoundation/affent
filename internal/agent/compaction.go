@@ -272,13 +272,17 @@ func (c *LLMSummaryCompactor) shouldCompact(msgs []ChatMessage) bool {
 	if c.TriggerMsgs > 0 && len(msgs) > c.TriggerMsgs {
 		return true
 	}
-	if c.TriggerBytes > 0 && approximateConversationBytes(msgs) > c.TriggerBytes {
+	if c.TriggerBytes > 0 && ApproximateConversationBytes(msgs) > c.TriggerBytes {
 		return true
 	}
 	return false
 }
 
-func approximateConversationBytes(msgs []ChatMessage) int {
+// ApproximateConversationBytes estimates how much persisted conversation text
+// will be resent to the model. It intentionally includes tool-call arguments,
+// since large write_file/shell args can dominate long-run context pressure even
+// when the message count is still below the compaction trigger.
+func ApproximateConversationBytes(msgs []ChatMessage) int {
 	total := 0
 	for _, m := range msgs {
 		total += len(m.Role) + len(m.Content) + len(m.ReasoningContent) + len(m.Name) + len(m.ToolCallID) + 32

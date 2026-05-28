@@ -437,6 +437,11 @@ export interface SessionContextSummary {
   compact_trigger: number;
   compact_percent: number;
   messages_until_compact: number;
+  context_bytes?: number;
+  compact_trigger_bytes?: number;
+  byte_compact_percent?: number;
+  bytes_until_compact?: number;
+  message_compact_percent?: number;
 }
 
 export interface SessionContextCompactionSummary {

@@ -1,6 +1,7 @@
 import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import { latestAssistantMessageText, type SessionState } from "../store/sessionState";
+import { formatByteCount } from "./byteFormat";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
@@ -752,7 +753,10 @@ function sessionContextMetric(context: SessionContextSummary | undefined): strin
   const remaining = context.messages_until_compact;
   if (percent < 80 && remaining > 10) return undefined;
   const parts = [`Context ${Math.max(0, percent)}%`];
-  if (remaining >= 0 && remaining <= 10) {
+  const byteDominant = (context.byte_compact_percent ?? 0) > (context.message_compact_percent ?? 0);
+  if (byteDominant && context.bytes_until_compact != null && context.bytes_until_compact <= 64 * 1024) {
+    parts.push(`${formatByteCount(context.bytes_until_compact)} left`);
+  } else if (remaining >= 0 && remaining <= 10) {
     parts.push(`${remaining} msg${remaining === 1 ? "" : "s"} left`);
   }
   return parts.join(", ");

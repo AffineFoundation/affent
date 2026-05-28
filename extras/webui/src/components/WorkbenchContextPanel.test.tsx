@@ -348,6 +348,33 @@ describe("WorkbenchContextPanel", () => {
     expect(panel).not.toHaveTextContent("run evidence, changes, memory, and automation");
     expect(screen.queryByRole("button", { name: "Copy context" })).toBeNull();
   });
+
+  it("shows byte pressure when large tool arguments dominate context", () => {
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        overview={overview({ headline: "Long run", detail: "Generating a project." })}
+        contextSummary={{
+          message_count: 130,
+          compact_trigger: 240,
+          compact_percent: 125,
+          messages_until_compact: 110,
+          context_bytes: 655360,
+          compact_trigger_bytes: 524288,
+          byte_compact_percent: 125,
+          bytes_until_compact: 0,
+          message_compact_percent: 54,
+        }}
+      />,
+    );
+
+    const health = screen.getByTestId("workbench-context-health");
+    expect(health).toHaveTextContent("Compaction likely");
+    expect(health).toHaveTextContent("100%");
+    expect(health).toHaveTextContent("640 KiB of 512 KiB context bytes are loaded.");
+    expect(health).toHaveTextContent("Compaction byte threshold reached");
+  });
 });
 
 function overview(overrides: Partial<SessionOverview>): SessionOverview {

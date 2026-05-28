@@ -1,6 +1,7 @@
 import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
 import type { SessionChangesView } from "../view/sessionChanges";
 import type { SessionContextSummary } from "../api/sessions";
+import { formatByteCount } from "../view/byteFormat";
 import type { SessionFilesView } from "../view/sessionFiles";
 import type { SessionRunView } from "../view/sessionRun";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
@@ -285,19 +286,29 @@ function contextHealthView(context?: SessionContextSummary, tokenSummary?: strin
     };
   }
   const percent = Math.max(0, Math.min(100, Math.round(context.compact_percent)));
+  const bytePercent = Math.max(0, Math.round(context.byte_compact_percent ?? 0));
+  const messagePercent = Math.max(0, Math.round(context.message_compact_percent ?? context.compact_percent));
+  const byteDominant = bytePercent > messagePercent && (context.compact_trigger_bytes ?? 0) > 0 && (context.context_bytes ?? 0) > 0;
   const tone = percent >= 95 ? "error" : percent >= 72 ? "attention" : "ready";
   const label = percent >= 95
     ? "Compaction likely"
     : percent >= 72
       ? "Context is getting tight"
       : "Context has room";
-  const remaining = context.messages_until_compact > 0
+  const remaining = byteDominant && context.bytes_until_compact != null
+    ? context.bytes_until_compact > 0
+      ? `${formatByteCount(context.bytes_until_compact)} before compaction`
+      : "Compaction byte threshold reached"
+    : context.messages_until_compact > 0
     ? `${formatContextCount(context.messages_until_compact)} messages before compaction`
     : "Compaction threshold reached";
+  const detail = byteDominant
+    ? `${formatByteCount(context.context_bytes ?? 0)} of ${formatByteCount(context.compact_trigger_bytes ?? 0)} context bytes are loaded.`
+    : `${formatContextCount(context.message_count)} of ${formatContextCount(context.compact_trigger)} context messages are loaded.`;
   return {
     percent,
     label,
-    detail: `${formatContextCount(context.message_count)} of ${formatContextCount(context.compact_trigger)} context messages are loaded.`,
+    detail,
     remaining,
     tokenSummary,
     tone,

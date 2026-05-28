@@ -101,10 +101,15 @@ type sessionSummary struct {
 }
 
 type sessionContextSummary struct {
-	MessageCount         int `json:"message_count"`
-	CompactTrigger       int `json:"compact_trigger"`
-	CompactPercent       int `json:"compact_percent"`
-	MessagesUntilCompact int `json:"messages_until_compact"`
+	MessageCount          int `json:"message_count"`
+	CompactTrigger        int `json:"compact_trigger"`
+	CompactPercent        int `json:"compact_percent"`
+	MessagesUntilCompact  int `json:"messages_until_compact"`
+	ContextBytes          int `json:"context_bytes,omitempty"`
+	CompactTriggerBytes   int `json:"compact_trigger_bytes,omitempty"`
+	ByteCompactPercent    int `json:"byte_compact_percent,omitempty"`
+	BytesUntilCompact     int `json:"bytes_until_compact,omitempty"`
+	MessageCompactPercent int `json:"message_compact_percent,omitempty"`
 }
 
 type sessionContextCompactionSummary struct {
@@ -499,7 +504,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			}
 		}
 	}
-	context := sessionContextSnapshot(len(messages), cfg)
+	context := sessionContextSnapshot(len(messages), agent.ApproximateConversationBytes(messages), cfg)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
 	runtime := s.RuntimeStatsSnapshot()
@@ -1292,7 +1297,7 @@ func workspaceLabel(path string) string {
 	return path
 }
 
-func sessionContextSnapshot(messageCount int, cfg Config) sessionContextSummary {
+func sessionContextSnapshot(messageCount, contextBytes int, cfg Config) sessionContextSummary {
 	trigger := cfg.CompactTrigger
 	if trigger <= 0 {
 		trigger = agent.DefaultSummaryTriggerMsgs
@@ -1301,15 +1306,33 @@ func sessionContextSnapshot(messageCount int, cfg Config) sessionContextSummary 
 	if remaining < 0 {
 		remaining = 0
 	}
-	percent := 0
+	messagePercent := 0
 	if trigger > 0 {
-		percent = (messageCount*100 + trigger/2) / trigger
+		messagePercent = (messageCount*100 + trigger/2) / trigger
+	}
+	byteTrigger := agent.DefaultSummaryTriggerBytes
+	bytesUntilCompact := byteTrigger - contextBytes
+	if bytesUntilCompact < 0 {
+		bytesUntilCompact = 0
+	}
+	bytePercent := 0
+	if byteTrigger > 0 && contextBytes > 0 {
+		bytePercent = (contextBytes*100 + byteTrigger/2) / byteTrigger
+	}
+	percent := messagePercent
+	if bytePercent > percent {
+		percent = bytePercent
 	}
 	return sessionContextSummary{
-		MessageCount:         messageCount,
-		CompactTrigger:       trigger,
-		CompactPercent:       percent,
-		MessagesUntilCompact: remaining,
+		MessageCount:          messageCount,
+		CompactTrigger:        trigger,
+		CompactPercent:        percent,
+		MessagesUntilCompact:  remaining,
+		ContextBytes:          contextBytes,
+		CompactTriggerBytes:   byteTrigger,
+		ByteCompactPercent:    bytePercent,
+		BytesUntilCompact:     bytesUntilCompact,
+		MessageCompactPercent: messagePercent,
 	}
 }
 

@@ -445,7 +445,11 @@ function buildContextUsageMetric(session: SessionState, context?: SessionContext
   const summaryCount = context?.message_count ?? 0;
   const count = Math.max(eventCount, summaryCount);
   if (count <= 0) return undefined;
-  const percent = Math.round((count / limit) * 100);
+  const localPercent = Math.round((count / limit) * 100);
+  const summaryPercent = context?.compact_percent != null && context.compact_percent > 0
+    ? Math.round(context.compact_percent)
+    : 0;
+  const percent = Math.max(localPercent, summaryPercent);
   return {
     label: "Context",
     value: `${formatCount(count)}/${formatCount(limit)} · ${percent}%`,
