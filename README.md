@@ -1,85 +1,131 @@
 # Affent
 
 Affent is an OpenAI-compatible agent runtime for durable, tool-using AI
-sessions. It sits between an LLM provider and a product surface, owning the
-parts that make agents reliable in practice: session state, tool execution,
-runtime limits, recovery, memory, traces, and deployment entry points.
-
-Affent is not positioned as an embeddable Go SDK. Its integration surfaces are
-`affentctl`, `affentserve`, durable state on disk, and structured event streams.
+sessions. It owns the parts that make agents work in practice — session
+state, tool execution, recovery, memory, traces, long-running discipline,
+and bounded autonomy — and exposes them through a CLI, an HTTP service,
+and a web Workbench.
 
 ## Why Affent
 
-Most agent prototypes start as a chat-completions call plus tools. Production
-systems quickly need more:
+Real agent work is more than a chat-completions call plus tools. Sessions
+need to survive multi-turn drift, restarts, and cancellation. Tool output
+needs bounds before it floods every future model prompt. Long-running work
+needs structured state, not rolling text. Memory and prior sessions need
+to be searchable without dumping everything into the prompt. Tool access
+needs to be scoped, governed, and revocable. Eval needs trace evidence,
+not screenshots. The operator needs to see what actually happened, not
+just the final assistant message.
 
-- A session must survive multiple turns, retries, cancellation, and restarts.
-- Tool output must be bounded before it pollutes every future model request.
-- The runtime must show what happened, not just the final assistant message.
-- Memory and prior sessions must be searchable without dumping everything into
-  the prompt.
-- Tool access must be explicit, scoped, and deployable behind a sandbox.
-- Eval tooling needs trace evidence, not screenshots of chat transcripts.
+Affent is built around those concerns. Every session is inspectable on
+disk. Every event is on a versioned schema. Every tool call goes through
+bounded execution. Every long-running task is observable in a Workbench
+panel.
 
-Affent is built around those runtime concerns. The result is a small,
-inspectable foundation for agent products, eval harnesses, and local workflows
-that need more control than a raw provider SDK gives them.
+## What You Get
 
-## What Affent Does Well
+### Durable, inspectable sessions
 
-- **OpenAI-compatible surface**: drive Affent through familiar chat-completions
-  request shapes while still getting Affent-native session and event streams.
-- **Durable sessions**: conversations, events, plans, memory, runtime skills,
-  transcripts, and artifacts are persisted as files that can be inspected,
-  replayed, backed up, or deleted deliberately.
-- **Bounded autonomy**: per-turn step caps, tool-call budgets, output caps,
-  retry limits, loop guards, and compaction keep long-running sessions from
-  drifting into unbounded work.
-- **Observable execution**: every turn can produce structured events for model
-  deltas, reasoning deltas, tool requests, tool results, usage, errors,
-  delegation, and turn endings.
-- **Configurable tool surface**: shell, file, memory, session search, MCP, web,
-  browser, subagent, focused-task, and skill tools are enabled intentionally
-  instead of assumed globally.
-- **Workspace-aware execution**: file tools are scoped to a workspace, and shell
-  commands go through an executor boundary that can be local, Docker-backed, or
-  replaced by a stronger sandbox.
-- **Weak-model tolerance**: argument repair, tool-name canonicalization,
-  explicit plans, focused tasks, and loop guards help less consistent models
-  complete practical work with fewer unrecoverable failures.
-- **Eval-ready traces**: `affenteval` consumes the same runtime events that UIs
-  and operators see, so product behavior and benchmark behavior share evidence.
+Conversations, events, plans, memory, runtime skills, transcripts, and
+artifacts are persisted as ordinary files. Inspect them with `tail`,
+search them with `grep`, diff them across runs, back them up like any
+other directory tree. The HTTP server resumes mid-stream after restart;
+the CLI replays from the same trace files an evaluator reads.
 
-## Core Design
+### Bounded autonomy by default
 
-Affent is organized around product entry points rather than a root Go package.
-The supported external surfaces are:
+Per-turn step caps, tool-call budgets, output caps, retry limits, loop
+guards over repeated calls and repeated failures, structured context
+compaction, and a hard cap on delegation depth. The runtime stops a
+runaway turn before it drains the model context or the operator's wallet.
 
-- `affentctl`: local CLI for one-shot runs, interactive sessions, plans,
-  memory, tracing, MCP, and executor selection.
-- `affentserve`: HTTP runtime exposing OpenAI-compatible chat completions plus
-  native session, event, artifact, transcript, and stats endpoints.
-- `affenteval`: scenario runner for repeatable agent-runtime checks.
-- JSONL/JSON state files: durable conversation, event, plan, memory, skill,
-  transcript, and artifact records.
-- SSE events: the stable observability stream for UIs, replay, and eval.
+### Governed tool execution
 
-The internal runtime owns the model cycle, tool dispatch, event publication,
-conversation persistence, compaction, memory wiring, project context, session
-search, delegation, and runtime limits. Optional capabilities are registered by
-configuration, so deployments can keep their tool surface as small as the job
-requires.
+Tool calls go through deterministic governance, not LLM-mediated etiquette.
+Argument repair handles malformed JSON, schema-driven coercion, alias
+rename, and wrapper unwrap. Loop guards catch repeated calls, repeated
+failures, host-level fetch traps, and no-new-evidence patterns. Three
+policy mechanisms — first-tool, post-result, and pre-dispatch — let the
+runtime steer a turn without coupling the loop to feature-specific logic.
+
+### Long-running discipline
+
+The loop protocol gives a session a structured north-star file
+(`LOOP.md`), a sidecar event log, and per-turn checkpoints. Long sessions
+get a digest of the protocol fed back into context on a cadence; after
+context compaction the next feed is a full re-injection. Plans persist
+across turns and across restarts with explicit current-step semantics.
+Compaction preserves delegated reports, artifact references, and the
+loop-protocol anchor instead of summarizing them away.
+
+### First-class delegation
+
+`run_task` runs a typed, bounded child agent (recall, explore,
+web-extract, research, verify, review) with a per-profile tool whitelist
+and a structured output schema. `subagent_run` runs a looser child agent
+in one of four exploratory modes when the work needs more freedom. Both
+are bounded in budget and depth, observable through trace, and treated as
+first-class delegation surfaces with their own delegation metadata on
+every tool event.
+
+### Skill-driven workflows
+
+Skills are reusable workflow files with `auto_activation` rules and
+required-tools gating. Built-in skills cover code repair, evidence
+extraction, web-snapshot facts, and skill install workflows; runtime
+skills go through a propose/confirm/install lifecycle so an agent can
+suggest a new workflow without writing it silently.
+
+### Workspace-scoped execution
+
+File tools are scoped to a workspace. Shell commands go through an
+executor abstraction — a `LocalExecutor` for plain CLI use, a
+`DockerExecExecutor` for per-session container isolation, or any future
+backend behind the same interface. Web fetch enforces an SSRF guard and
+size caps. Browser tools record source-access evidence and capture
+same-site XHR responses for dynamic dashboards.
+
+### Eval as a first-class product surface
+
+`affenteval` ships forty-plus scenarios across four suites covering
+small-model tool stability, hard agent tasks, long-running recovery, and
+live web evidence. Scenarios assert structured runtime evidence — tool
+order, loop decisions, source-access quality, session search hits, plan
+state, tool-repair kinds — not just final text. Failed scenarios emit a
+`DebugRecoveryGuide` with the exact inspect commands and full-trace
+reproduction line, so a regression is a five-minute investigation, not a
+half-day grep.
+
+### Web Workbench
+
+`affentserve` serves a React Workbench that opens as a clean Chat by
+default and reveals professional surfaces on demand — Workspace, Run,
+Files, Changes, Memory, Skills, Automation, Config, Trace. Runtime
+internals stay in the Trace surface; everyday use sees only what the
+agent is doing and what it produced.
+
+### OpenAI-compatible surface, plus native endpoints
+
+Drive Affent through familiar chat-completions request shapes when an
+existing client integration is the easier path. Use the native session,
+event, history, plan, loop-protocol, schedule, memory, skill, artifact,
+transcript, and stats endpoints when you want the full runtime contract.
+Both speak the same SSE event stream.
 
 ## Documentation
 
+- [Architecture](docs/architecture.md): package boundaries, runtime
+  governance, state model, design rules.
 - [Technical manual](docs/technical-manual.md): build, run, configuration,
-  Docker, server, state, tools, eval, and security notes.
-- [Architecture](docs/architecture.md): package boundaries, entry points, and
-  design rules.
-- [Event trace contract](docs/event-trace-contract.md): runtime event envelope
-  and compatibility rules.
-- [Eval JSONL contract](docs/eval-jsonl-contract.md): machine-readable eval
-  output schema.
+  Docker, server, state, tools, eval, security.
+- [Event trace contract](docs/event-trace-contract.md): runtime event
+  envelope, payload schemas, compatibility rules.
+- [Eval JSONL contract](docs/eval-jsonl-contract.md): machine-readable
+  eval output schema and quality gates.
+- [Focused tasks](docs/focused-tasks.md): typed delegation surface, task
+  profiles, output contract.
+- [Browser access architecture](docs/browser-access-architecture.md):
+  rendered web access pipeline, source-access evidence, network capture.
 
 ## First Commands
 
