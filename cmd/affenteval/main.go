@@ -3394,7 +3394,7 @@ func toolFailureKindHint(kind string) string {
 	case "tool_policy_active":
 		return "runtime policy blocked parent-side exploration after a successful workflow result; answer from the prior structured evidence"
 	case "loop_protocol_activation_status":
-		return "loop_protocol complete_activation was attempted before LOOP.md metadata status was running; keep the protocol draft, ask/record calibration as needed, then retry with status: running"
+		return "loop_protocol complete_activation was attempted with missing or invalid LOOP.md metadata status; keep the protocol draft, ask/record calibration as needed, then retry activation after the protocol is complete"
 	case "loop_protocol_activation_invalid":
 		return "loop_protocol activation failed validation; fill unresolved LOOP.md fields, keep Current Situation compact, and retry only after the protocol is complete"
 	case "loop_protocol_activation_unready":

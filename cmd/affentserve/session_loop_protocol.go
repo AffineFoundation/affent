@@ -218,8 +218,15 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 		return protocol, summary, *statePtr, events, nil
 	}
 	if req.Activate {
-		if loopstate.ProtocolStatus(req.Protocol) != "running" {
-			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate requires LOOP.md metadata status: running")}
+		status := loopstate.ProtocolStatus(req.Protocol)
+		if status == "draft" {
+			var ok bool
+			req.Protocol, ok = loopstate.ProtocolWithStatus(req.Protocol, "running")
+			if !ok {
+				return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate could not update LOOP.md metadata status to running")}
+			}
+		} else if status != "running" {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate requires LOOP.md metadata status draft or running")}
 		}
 		if err := loopstate.ValidateProtocolActivation(req.Protocol); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}

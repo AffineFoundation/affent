@@ -846,6 +846,29 @@ func ProtocolStatus(content string) string {
 	return ""
 }
 
+func ProtocolWithStatus(content, status string) (string, bool) {
+	status = templateStatus(status)
+	if status == "" {
+		return content, false
+	}
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		key, _, ok := parseMetadataLine(line)
+		if !ok || key != "status" {
+			continue
+		}
+		indentLen := len(line) - len(strings.TrimLeft(line, " \t"))
+		prefix := line[:indentLen]
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "-") {
+			prefix += "- "
+		}
+		lines[i] = prefix + "status: " + status
+		return strings.Join(lines, "\n"), true
+	}
+	return content, false
+}
+
 func ProtocolStatusFromFile(path string) string {
 	content, found, err := ReadProtocol(path)
 	if err != nil || !found {

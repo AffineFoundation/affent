@@ -338,8 +338,8 @@ func sessionLoopSetupPrompt(goal string) string {
 		"Ask exactly one concise calibration question now before activation, even when the initial goal seems clear.",
 		"Do not complete activation in the same turn that created the draft unless this turn is responding to an earlier explicit calibration answer.",
 		"After asking, wait for the user's answer; do not continue autonomous work or claim the loop is running while LOOP.md is still draft.",
-		"Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
-		"Do not use update_draft to write status: running; complete_activation receives and writes the full running protocol when activation is ready.",
+		"Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation; the tool performs the draft-to-running transition.",
+		"Do not use update_draft to write status: running.",
 		"Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
 	}, "\n")
 }

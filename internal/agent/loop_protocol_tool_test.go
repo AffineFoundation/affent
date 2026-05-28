@@ -101,6 +101,57 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolCompletesActivationFromSavedDraft(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, replacement := range [][2]string{
+		{"- hard constraints:", "- hard constraints: keep evidence cited and stop on unresolved user intent"},
+		{"- known evidence:", "- known evidence: user requested durable market analysis"},
+		{"- current risk or blocker:", "- current risk or blocker: needs live source verification"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state before continuing"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	if err := loopstate.WriteProtocol(path, protocol); err != nil {
+		t.Fatalf("WriteProtocol: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"complete_activation","reason":"user intent understood"}`))
+	if err != nil {
+		t.Fatalf("complete_activation: %v", err)
+	}
+	if !strings.Contains(out, "activated LOOP.md status=running") {
+		t.Fatalf("activation output = %q", out)
+	}
+	written, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol after activation found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(written) != "running" {
+		t.Fatalf("protocol status after activation = %q\n%s", loopstate.ProtocolStatus(written), written)
+	}
+}
+
 func TestLoopProtocolToolCompletesActivationFromRecordedCalibrationSection(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
@@ -187,8 +238,7 @@ func TestLoopProtocolToolRejectsActivationBeforeCalibrationAnswer(t *testing.T) 
 	if err == nil || !strings.Contains(err.Error(), "requires a recorded calibration question and user answer") || !strings.Contains(err.Error(), "ask one concise calibration question") {
 		t.Fatalf("complete_activation without calibration err = %v", err)
 	}
-	if !strings.Contains(err.Error(), "full LOOP.md in the protocol argument") ||
-		!strings.Contains(err.Error(), "metadata status: running") ||
+	if !strings.Contains(err.Error(), "retry loop_protocol action=complete_activation") ||
 		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_unready") {
 		t.Fatalf("complete_activation without calibration should include failure kind, err = %v", err)
 	}
@@ -313,13 +363,13 @@ func TestLoopProtocolToolDraftUpdateDoesNotActivate(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "cannot activate") {
 		t.Fatalf("update_draft running err = %v", err)
 	}
-	if !strings.Contains(err.Error(), "do not call update_draft for status=running") ||
-		!strings.Contains(err.Error(), "full LOOP.md in the protocol argument") {
+	if !strings.Contains(err.Error(), "tool performs the draft-to-running transition") ||
+		!strings.Contains(err.Error(), "keep the saved draft status=draft") {
 		t.Fatalf("update_draft running next step is ambiguous: %v", err)
 	}
 }
 
-func TestLoopProtocolToolRejectsActivationWithoutRunningStatusFailureKind(t *testing.T) {
+func TestLoopProtocolToolRejectsActivationWithoutStatusFailureKind(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
 	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
@@ -334,17 +384,17 @@ func TestLoopProtocolToolRejectsActivationWithoutRunningStatusFailureKind(t *tes
 	if err != nil || !found {
 		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
 	}
+	protocol = strings.Replace(protocol, "- status: draft\n", "", 1)
 	tool := loopProtocolTool(path)
 	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
 		"action":   "complete_activation",
 		"protocol": protocol,
 	})))
 	if err == nil ||
-		!strings.Contains(err.Error(), "metadata status: running") ||
-		!strings.Contains(err.Error(), "do not call update_draft for status=running") ||
-		!strings.Contains(err.Error(), "full LOOP.md in the protocol argument") ||
+		!strings.Contains(err.Error(), "metadata status: draft or running") ||
+		!strings.Contains(err.Error(), "tool performs the draft-to-running transition") ||
 		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
-		t.Fatalf("complete_activation without running status err = %v", err)
+		t.Fatalf("complete_activation without status err = %v", err)
 	}
 }
 
@@ -366,7 +416,7 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "Do not complete activation in the same turn") ||
 		!strings.Contains(prompt, "Never claim that a loop is running") ||
-		!strings.Contains(prompt, "protocol argument with metadata status: running") ||
+		!strings.Contains(prompt, "draft-to-running transition") ||
 		!strings.Contains(prompt, "do not use update_draft for running status") ||
 		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("prompt missing loop protocol guidance:\n%s", prompt)

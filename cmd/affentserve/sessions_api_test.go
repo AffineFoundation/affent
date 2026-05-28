@@ -2842,6 +2842,63 @@ func TestActivateSessionLoopProtocolRepairsRecordedCalibrationFromProtocol(t *te
 	}
 }
 
+func TestActivateSessionLoopProtocolAcceptsCompletedDraft(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	sessionID := "loop-completed-draft"
+	protocolPath := sessionLoopProtocolPath(pool, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "Maintain a recurring global situation report.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, replacement := range [][2]string{
+		{"- hard constraints:", "- hard constraints: cite current sources and stop when evidence is unavailable"},
+		{"- known evidence:", "- known evidence: user requested recurring global situation reporting"},
+		{"- current risk or blocker:", "- current risk or blocker: source freshness may vary by region"},
+		{"- important artifacts:", "- important artifacts: reports/daily and reports/weekly"},
+		{"- important trace spans:", "- important trace spans: loop setup calibration"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md, plan state, and recent trace before continuing"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "What cadence should this loop use?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Update daily and write one deeper weekly synthesis."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+
+	body, err := json.Marshal(sessionLoopProtocolUpdateRequest{
+		Protocol: protocol,
+		Activate: true,
+		Reason:   "activate completed draft",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+sessionID+"/loop-protocol", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil || resp.State.Status != "running" || loopstate.ProtocolStatus(resp.Protocol) != "running" {
+		t.Fatalf("response state/status = %+v protocol status=%q", resp.State, loopstate.ProtocolStatus(resp.Protocol))
+	}
+}
+
 func TestReadSessionLoopProtocolDoesNotRepairRecordedCalibration(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

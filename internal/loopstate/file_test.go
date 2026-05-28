@@ -581,6 +581,20 @@ func TestStatePersistsAtomicallyAndSummaryPrefersState(t *testing.T) {
 	}
 }
 
+func TestProtocolWithStatusUpdatesMetadataLine(t *testing.T) {
+	protocol := "# Loop\n\n## 0. Metadata\n\n  - status: draft\n\n## 1. North Star\n"
+	got, ok := ProtocolWithStatus(protocol, "running")
+	if !ok {
+		t.Fatal("ProtocolWithStatus ok=false")
+	}
+	if !strings.Contains(got, "  - status: running") || strings.Contains(got, "status: draft") {
+		t.Fatalf("updated protocol:\n%s", got)
+	}
+	if ProtocolStatus(got) != "running" {
+		t.Fatalf("ProtocolStatus = %q", ProtocolStatus(got))
+	}
+}
+
 func TestRecordContextCompactionForcesNextFullProtocolFeed(t *testing.T) {
 	dir := t.TempDir()
 	protocolPath := ProtocolPath(dir, "market-run")

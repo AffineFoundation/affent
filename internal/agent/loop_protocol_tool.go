@@ -18,7 +18,7 @@ const (
 	loopProtocolActivationStatusFailureKind  = "loop_protocol_activation_status"
 	loopProtocolActivationInvalidFailureKind = "loop_protocol_activation_invalid"
 	loopProtocolActivationUnreadyFailureKind = "loop_protocol_activation_unready"
-	loopProtocolActivationStatusNext         = "Next: do not call update_draft for status=running. If the user has answered a calibration question and the protocol is complete, retry loop_protocol action=complete_activation with the full LOOP.md in the protocol argument and metadata status: running. If intent is still unclear, ask one concise follow-up in a later turn and keep the saved draft status=draft."
+	loopProtocolActivationStatusNext         = "Next: if the user has answered a calibration question and the protocol is complete, call loop_protocol action=complete_activation. The tool performs the draft-to-running transition. If intent is still unclear, ask one concise follow-up in a later turn and keep the saved draft status=draft."
 	maxLoopProtocolActionBytes               = 32
 	maxLoopProtocolGoalBytes                 = 1024
 	maxLoopProtocolReasonBytes               = 1024
@@ -46,7 +46,7 @@ func loopProtocolTool(protocolPath string) *Tool {
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["start_setup", "read", "update_draft", "complete_activation"], "description": "start_setup initializes a non-active draft LOOP.md for chat-driven activation; read returns the current LOOP.md; update_draft writes a non-active draft; complete_activation accepts the full supplemented LOOP.md in protocol with metadata status: running, writes it, and marks it active after calibration is recorded."},
+            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["start_setup", "read", "update_draft", "complete_activation"], "description": "start_setup initializes a non-active draft LOOP.md for chat-driven activation; read returns the current LOOP.md; update_draft writes a non-active draft; complete_activation accepts the saved or supplied supplemented LOOP.md, writes it as running, and marks it active after calibration is recorded."},
             "goal": {"type": "string", "maxLength": %d, "description": "Compact long-run goal for start_setup. Use the user's own intent, not a broad generic goal."},
             "protocol": {"type": "string", "maxLength": %d, "description": "Full LOOP.md markdown for update_draft or complete_activation."},
             "reason": {"type": "string", "maxLength": %d, "description": "Short reason for the protocol update or activation."},
@@ -55,12 +55,12 @@ func loopProtocolTool(protocolPath string) *Tool {
     }`, maxLoopProtocolActionBytes, maxLoopProtocolGoalBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes))
 	return &Tool{
 		Name:         LoopProtocolToolName,
-		Description:  "Start setup, read, update, or complete activation for this session's LOOP.md. Use during loop activation or long-run protocol maintenance. If the user asks in chat to enable loop and LOOP.md is missing, call start_setup, then ask a concise calibration question. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, call complete_activation with the full supplemented LOOP.md in the protocol argument and metadata status: running; do not use update_draft to write running status.",
+		Description:  "Start setup, read, update, or complete activation for this session's LOOP.md. Use during loop activation or long-run protocol maintenance. If the user asks in chat to enable loop and LOOP.md is missing, call start_setup, then ask a concise calibration question. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, call complete_activation with the saved or supplied supplemented LOOP.md; do not use update_draft to write running status.",
 		Schema:       schema,
 		CatalogGroup: "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			_ = ctx
-			p, err := decodeBuiltinToolArgs[loopProtocolToolArgs](LoopProtocolToolName, args, "action, goal, protocol, reason, sections_changed", "Use action=start_setup when the user asks to enable loop and LOOP.md is missing; use action=read when unsure; use update_draft for incomplete draft protocols; use complete_activation with the full protocol argument containing metadata status: running after calibration is recorded.")
+			p, err := decodeBuiltinToolArgs[loopProtocolToolArgs](LoopProtocolToolName, args, "action, goal, protocol, reason, sections_changed", "Use action=start_setup when the user asks to enable loop and LOOP.md is missing; use action=read when unsure; use update_draft for incomplete draft protocols; use complete_activation after calibration is recorded and the saved or supplied protocol is complete.")
 			if err != nil {
 				return "", err
 			}
@@ -171,9 +171,19 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 			return "", errors.New("LOOP.md is not initialized for this session\nNext: start loop activation before completing activation")
 		}
 	}
-	if loopstate.ProtocolStatus(protocol) != "running" {
+	status := loopstate.ProtocolStatus(protocol)
+	if status == "draft" {
+		var ok bool
+		protocol, ok = loopstate.ProtocolWithStatus(protocol, "running")
+		if !ok {
+			return "", loopProtocolFailure(
+				"complete_activation could not update LOOP.md metadata status to running\n"+loopProtocolActivationStatusNext,
+				loopProtocolActivationStatusFailureKind,
+			)
+		}
+	} else if status != "running" {
 		return "", loopProtocolFailure(
-			"complete_activation requires LOOP.md metadata status: running\n"+loopProtocolActivationStatusNext,
+			"complete_activation requires LOOP.md metadata status: draft or running\n"+loopProtocolActivationStatusNext,
 			loopProtocolActivationStatusFailureKind,
 		)
 	}
@@ -188,14 +198,12 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 	}
 	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
 		return "", loopProtocolFailure(
-			fmt.Sprintf("%v\nNext: ask one concise calibration question, wait for the user's answer, then retry loop_protocol action=complete_activation with the full LOOP.md in the protocol argument and metadata status: running after the runtime records that answer", err),
+			fmt.Sprintf("%v\nNext: ask one concise calibration question, wait for the user's answer, then retry loop_protocol action=complete_activation after the runtime records that answer", err),
 			loopProtocolActivationUnreadyFailureKind,
 		)
 	}
-	if strings.TrimSpace(p.Protocol) != "" {
-		if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
-			return "", err
-		}
+	if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
+		return "", err
 	}
 	state, event, err := loopstate.RecordProtocolActivation(protocolPath, p.Reason)
 	if err != nil {
@@ -245,6 +253,6 @@ func WithLoopProtocolSystemGuidance(prompt string) string {
 - During loop activation, first understand the user's concrete long-run intent and ask exactly one concise calibration question before activation, even when the initial goal seems clear. If the goal, stop conditions, memory policy, or recovery expectations remain unclear after the answer, ask one focused follow-up in a later turn and leave LOOP.md as draft until complete.
 - Do not complete activation in the same turn that created or first discovered a draft unless this turn is responding to an earlier explicit calibration answer. The useful behavior is to ask, wait, then supplement and activate.
 - Use loop_protocol action=start_setup/read/update_draft/complete_activation to maintain the session LOOP.md; do not use ordinary workspace file tools for server-managed loop state.
-- Never claim that a loop is running after only draft creation. Only call complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors. Pass the full LOOP.md in the protocol argument with metadata status: running; do not use update_draft for running status.
+- Never claim that a loop is running after only draft creation. Only call complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors. Use complete_activation for the draft-to-running transition; do not use update_draft for running status.
 - Keep LOOP.md compact. Put detailed task progress in the plan, artifacts, memory, or trace instead of duplicating it in the protocol.`
 }
