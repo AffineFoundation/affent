@@ -43,6 +43,9 @@ describe("SessionSkillsPanel", () => {
     await user.click(screen.getByText("1 skill"));
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Repair code by reproducing failures first.");
+    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Activation coverage");
+    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("fix");
+    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("workspace");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
     expect(screen.getByTestId("skill-activation-coding_repair_workflow")).toHaveTextContent("Triggers: fix, repair");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
@@ -55,7 +58,7 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
     await user.click(screen.getByRole("button", { name: "Clear" }));
-    await user.click(screen.getByRole("button", { name: /Custom\s+0/ }));
+    await user.click(within(screen.getByRole("group", { name: "Filter skills" })).getByRole("button", { name: /Custom\s+0/ }));
     expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
 
     await user.click(within(screen.getByTestId("session-skills-list")).getByText("coding_repair_workflow"));
@@ -294,6 +297,53 @@ describe("SessionSkillsPanel", () => {
 
     expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("browser_source_workflow");
+  });
+
+  it("filters maintenance gaps and drafts a skill from an empty search", async () => {
+    const user = userEvent.setup();
+    render(
+      <SessionSkillsPanel
+        defaultOpen
+        installEnabled
+        onInstallSkill={vi.fn()}
+        skills={[
+          {
+            name: "manual_workflow",
+            source: "file:///account-skills/manual_workflow/SKILL.md",
+            runtime: true,
+            required_tools: ["workspace"],
+            body_bytes: 48,
+          },
+          {
+            name: "browser_source_workflow",
+            description: "Verify browser network evidence.",
+            source: "embed:skill",
+            runtime: false,
+            triggers: ["browser"],
+            body_bytes: 88,
+          },
+        ]}
+      />,
+    );
+
+    const filterGroup = screen.getByRole("group", { name: "Filter skills" });
+    await user.click(within(filterGroup).getByRole("button", { name: /Manual-only\s+1/ }));
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_workflow");
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("browser_source_workflow");
+
+    await user.click(within(filterGroup).getByRole("button", { name: /Needs summary\s+1/ }));
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_workflow");
+
+    await user.type(screen.getByPlaceholderText("Search title or summary"), "release audit");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No matching skills.");
+    await user.click(screen.getByRole("button", { name: "Draft matching skill" }));
+
+    expect(screen.getByRole("status")).toHaveTextContent("Draft release_audit");
+    expect(screen.getByLabelText("Name")).toHaveValue("release_audit");
+    expect(screen.getByLabelText("Summary")).toHaveValue("Reusable workflow for release audit");
+    expect(screen.getByLabelText("Triggers")).toHaveValue("release audit");
+    expect(screen.getByRole("button", { name: "Save skill" })).toBeDisabled();
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {

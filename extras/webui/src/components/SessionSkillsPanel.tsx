@@ -260,6 +260,12 @@ export function SessionSkillsPanel({
         {!loading && !error ? (
           <>
             <SkillsDashboard skills={allSkills} installEnabled={installEnabled} />
+            {allSkills.length > 0 ? (
+              <SkillCoverageMap
+                skills={allSkills}
+                onFilter={setSkillFilter}
+              />
+            ) : null}
             {hasSearch || canInstall || onRefresh ? (
               <div className="session-skills-controls">
                 {hasSearch ? <SkillFilters skills={allSkills} value={skillFilter} onChange={setSkillFilter} /> : null}
@@ -419,7 +425,31 @@ export function SessionSkillsPanel({
                   );
                 })
               ) : (
-                <div className="session-skills-empty">{allSkills.length > 0 ? "No matching skills." : emptySkillsText(canInstall)}</div>
+                <>
+                  <div className="session-skills-empty">{allSkills.length > 0 ? "No matching skills." : emptySkillsText(canInstall)}</div>
+                  {allSkills.length > 0 && canInstall && trimmedQuery ? (
+                    <button
+                      type="button"
+                      className="session-skills-add-toggle"
+                      onClick={() => {
+                        const name = skillNameFromQuery(trimmedQuery);
+                        setForm({
+                          name,
+                          description: `Reusable workflow for ${trimmedQuery}`,
+                          triggers: trimmedQuery,
+                          requiredTools: "",
+                          body: "",
+                        });
+                        setEditingSkillName(undefined);
+                        setInstallError(undefined);
+                        setShowForm(true);
+                        setSkillActionStatus({ tone: "success", message: `Draft ${name}; fill full content before saving.` });
+                      }}
+                    >
+                      Draft matching skill
+                    </button>
+                  ) : null}
+                </>
               )}
             </div>
           </>
@@ -429,7 +459,7 @@ export function SessionSkillsPanel({
   );
 }
 
-type SkillFilter = "all" | "custom" | "built-in" | "triggerable" | "tool-bound";
+type SkillFilter = "all" | "custom" | "built-in" | "triggerable" | "tool-bound" | "manual" | "needs-summary";
 
 function SkillFilters({
   skills,
@@ -446,6 +476,8 @@ function SkillFilters({
     "built-in": skills.filter((skill) => !skill.runtime).length,
     triggerable: skills.filter((skill) => skillTriggers(skill).length > 0).length,
     "tool-bound": skills.filter((skill) => (skill.required_tools?.length ?? 0) > 0).length,
+    manual: skills.filter((skill) => skillTriggers(skill).length === 0).length,
+    "needs-summary": skills.filter((skill) => !skill.description?.trim()).length,
   };
   const options: Array<{ value: SkillFilter; label: string; count: number }> = [
     { value: "all", label: "All", count: counts.all },
@@ -453,6 +485,8 @@ function SkillFilters({
     { value: "built-in", label: "Built in", count: counts["built-in"] },
     { value: "triggerable", label: "Triggerable", count: counts.triggerable },
     { value: "tool-bound", label: "Tool-bound", count: counts["tool-bound"] },
+    { value: "manual", label: "Manual-only", count: counts.manual },
+    { value: "needs-summary", label: "Needs summary", count: counts["needs-summary"] },
   ];
   return (
     <div className="session-filter-pills" role="group" aria-label="Filter skills">
@@ -477,7 +511,67 @@ function skillMatchesFilter(skill: SessionSkillInfo, filter: SkillFilter): boole
   if (filter === "built-in") return !skill.runtime;
   if (filter === "triggerable") return skillTriggers(skill).length > 0;
   if (filter === "tool-bound") return (skill.required_tools?.length ?? 0) > 0;
+  if (filter === "manual") return skillTriggers(skill).length === 0;
+  if (filter === "needs-summary") return !skill.description?.trim();
   return true;
+}
+
+function SkillCoverageMap({ skills, onFilter }: { skills: readonly SessionSkillInfo[]; onFilter: (filter: SkillFilter) => void }) {
+  const triggerable = skills.filter((skill) => skillTriggers(skill).length > 0).length;
+  const manual = skills.length - triggerable;
+  const missingSummary = skills.filter((skill) => !skill.description?.trim()).length;
+  const custom = skills.filter((skill) => skill.runtime).length;
+  const triggerPercent = skills.length > 0 ? Math.round((triggerable / skills.length) * 100) : 0;
+  const tools = topCounts(skills.flatMap((skill) => skill.required_tools ?? []));
+  const triggers = topCounts(skills.flatMap((skill) => skillTriggers(skill)));
+  return (
+    <section className="session-skills-coverage" data-testid="session-skills-coverage" aria-label="Skills coverage">
+      <div className="session-skills-coverage-main">
+        <div className="session-skills-coverage-head">
+          <span>Activation coverage</span>
+          <strong>{triggerable}/{skills.length}</strong>
+        </div>
+        <div className="session-skills-bar" aria-label={`${triggerPercent}% triggerable`}>
+          <span style={{ width: `${triggerPercent}%` }} />
+        </div>
+        <div className="session-skills-coverage-actions">
+          <button type="button" onClick={() => onFilter("triggerable")}>Show triggerable</button>
+          <button type="button" onClick={() => onFilter("manual")} disabled={manual === 0}>Manual-only {manual}</button>
+          <button type="button" onClick={() => onFilter("custom")} disabled={custom === 0}>Custom {custom}</button>
+          <button type="button" onClick={() => onFilter("needs-summary")} disabled={missingSummary === 0}>Needs summary {missingSummary}</button>
+        </div>
+      </div>
+      <SkillCoverageChips title="Top triggers" empty="No trigger rules" items={triggers} />
+      <SkillCoverageChips title="Tool surface" empty="No tool requirements" items={tools} />
+    </section>
+  );
+}
+
+function SkillCoverageChips({ title, empty, items }: { title: string; empty: string; items: Array<{ name: string; count: number }> }) {
+  return (
+    <div className="session-skills-coverage-group">
+      <span>{title}</span>
+      <div>
+        {items.length > 0 ? items.slice(0, 8).map((item) => (
+          <small key={item.name} title={`${item.name}: ${item.count}`}>
+            {item.name}
+            <strong>{item.count}</strong>
+          </small>
+        )) : <em>{empty}</em>}
+      </div>
+    </div>
+  );
+}
+
+function topCounts(values: readonly string[]): Array<{ name: string; count: number }> {
+  const counts = new Map<string, number>();
+  values.forEach((raw) => {
+    const value = raw.trim();
+    if (!value) return;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  });
+  return Array.from(counts, ([name, count]) => ({ name, count }))
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
 }
 
 function SkillReviewFocus({
@@ -703,6 +797,16 @@ function splitList(text: string): string[] | undefined {
     .map((part) => part.trim())
     .filter(Boolean);
   return parts.length > 0 ? parts : undefined;
+}
+
+function skillNameFromQuery(query: string): string {
+  const slug = query
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 48);
+  return slug || "new_skill";
 }
 
 function emptySkillsText(canInstall: boolean): string {

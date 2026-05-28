@@ -6407,6 +6407,119 @@ button.workbench-context-runtime-item:focus-visible {
   gap: 8px;
 }
 
+.session-skills-coverage {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.9fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.54);
+  padding: 9px;
+}
+
+.session-skills-coverage-main,
+.session-skills-coverage-group {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.session-skills-coverage-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-skills-coverage-head span,
+.session-skills-coverage-group > span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.session-skills-coverage-head strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+}
+
+.session-skills-bar {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.82);
+}
+
+.session-skills-bar span {
+  display: block;
+  min-width: 4px;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(20, 184, 166, 0.86), rgba(59, 130, 246, 0.74));
+}
+
+.session-skills-coverage-actions,
+.session-skills-coverage-group > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-skills-coverage-actions button,
+.session-skills-coverage-group small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-height: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(217, 224, 232, 0.9);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--text-muted);
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-coverage-actions button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.session-skills-coverage-actions button:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.session-skills-coverage-group small strong {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.78);
+  color: var(--text-faint);
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.session-skills-coverage-group em {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-style: normal;
+}
+
 .session-skills-stat {
   display: grid;
   gap: 3px;
@@ -12954,6 +13067,7 @@ html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
 html[data-theme="dark"] .session-skills-stat,
+html[data-theme="dark"] .session-skills-coverage,
 html[data-theme="dark"] .session-skills-focus,
 html[data-theme="dark"] .session-skills-focus-fact,
 html[data-theme="dark"] .session-skill-item,
@@ -13051,6 +13165,16 @@ html[data-theme="dark"] .account-config-verify input {
 html[data-theme="dark"] .session-skills-focus-chips span[data-kind="tool"] {
   border-color: rgba(96, 165, 250, 0.28);
   background: rgba(30, 58, 138, 0.22);
+}
+
+html[data-theme="dark"] .session-skills-bar {
+  background: rgba(45, 55, 72, 0.74);
+}
+
+html[data-theme="dark"] .session-skills-coverage-actions button,
+html[data-theme="dark"] .session-skills-coverage-group small {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(14, 17, 22, 0.76);
 }
 
 html[data-theme="dark"] .session-skill-item[data-selected="true"] {
@@ -14778,6 +14902,9 @@ html[data-theme="dark"] ::selection {
   }
   .session-skills-body {
     padding: 0 10px 10px;
+  }
+  .session-skills-coverage {
+    grid-template-columns: minmax(0, 1fr);
   }
   .session-skills-controls,
   .session-skill-form,
