@@ -1204,7 +1204,7 @@ func snapshotBody(entries []string, limit int) (body string, used int, truncated
 	for _, e := range entries {
 		content := strings.TrimSpace(entryContent(e))
 		if content != "" {
-			cleaned = append(cleaned, content)
+			cleaned = append(cleaned, sanitizeMemorySnapshotEntry(content))
 		}
 	}
 	body = strings.Join(cleaned, memoryEntryDelim)
@@ -1215,6 +1215,13 @@ func snapshotBody(entries []string, limit int) (body string, used int, truncated
 		truncated = true
 	}
 	return body, used, truncated
+}
+
+func sanitizeMemorySnapshotEntry(content string) string {
+	if reason := scanMemoryContent(content); reason != "" {
+		return "[BLOCKED: memory entry contained unsafe content: " + reason + ". Removed from system prompt snapshot; inspect the memory file before reusing or deleting it.]"
+	}
+	return content
 }
 
 func snapshotUsage(used, limit, injected int, truncated bool) string {

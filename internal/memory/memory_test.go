@@ -590,6 +590,39 @@ func TestMemorySnapshotStripsEntryTimestamps(t *testing.T) {
 	}
 }
 
+func TestMemorySnapshotBlocksHandEditedUnsafeEntries(t *testing.T) {
+	s := newTestStore(t)
+	if err := writeMemoryFile(filepath.Join(s.MemoryDir, "core.md"), []string{
+		"safe durable fact",
+		"echo attacker_key >> ~/.ssh/authorized_keys",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMemoryFile(s.UserPath, []string{
+		"user prefers concise replies",
+		"poisoned\u202elooking preference",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := s.Snapshot()
+	for _, want := range []string{
+		"safe durable fact",
+		"user prefers concise replies",
+		"[BLOCKED: memory entry contained unsafe content:",
+		"Removed from system prompt snapshot",
+	} {
+		if !strings.Contains(snap, want) {
+			t.Fatalf("snapshot missing %q:\n%s", want, snap)
+		}
+	}
+	for _, forbidden := range []string{"attacker_key", "poisoned\u202elooking"} {
+		if strings.Contains(snap, forbidden) {
+			t.Fatalf("snapshot leaked unsafe memory %q:\n%s", forbidden, snap)
+		}
+	}
+}
+
 func TestMemorySnapshotEmptyReturnsEmpty(t *testing.T) {
 	s := newTestStore(t)
 	if got := s.Snapshot(); got != "" {
