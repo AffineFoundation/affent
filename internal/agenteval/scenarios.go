@@ -50,7 +50,7 @@ func cleanPushedNonInitialVerifyCommand(commands ...string) string {
 		`test "$(git log -1 --format=%s)" != "initial"`,
 		`git ls-remote --heads origin main | grep -q "$(git rev-parse HEAD)"`,
 	)
-	return shellAnd(commands...)
+	return shellAndFreshRemoteClone(commands...)
 }
 
 func cleanPushedMinCommitsVerifyCommand(minCommits string, commands ...string) string {
@@ -59,7 +59,22 @@ func cleanPushedMinCommitsVerifyCommand(minCommits string, commands ...string) s
 		`test "$(git rev-list --count HEAD)" -ge `+minCommits,
 		`git ls-remote --heads origin main | grep -q "$(git rev-parse HEAD)"`,
 	)
+	return shellAndFreshRemoteClone(commands...)
+}
+
+func shellAndFreshRemoteClone(commands ...string) string {
+	commands = append(commands, freshRemoteCloneVerifyCommands()...)
 	return shellAnd(commands...)
+}
+
+func freshRemoteCloneVerifyCommands() []string {
+	return []string{
+		`remote_check="$(mktemp -d)"`,
+		`remote_url="$(git remote get-url origin)"`,
+		`git clone --quiet --branch main "$remote_url" "$remote_check/repo"`,
+		`test "$(git -C "$remote_check/repo" rev-parse HEAD)" = "$(git rev-parse HEAD)"`,
+		`rm -rf "$remote_check"`,
+	}
 }
 
 func goMedianScenario() BatchScenario {
@@ -3042,7 +3057,7 @@ func TestClampAboveRange(t *testing.T) {
 		SetupCommands: []string{
 			"(cd seed && git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial) && git clone --bare seed remote.git && rm -rf seed",
 		},
-		VerifyCommand: shellAnd(
+		VerifyCommand: shellAndFreshRemoteClone(
 			`test -d app/.git`,
 			`test ! -d seed`,
 			`cd app`,
@@ -3149,7 +3164,7 @@ func TestMessageUsesName(t *testing.T) {
 		SetupCommands: []string{
 			"(cd seed && git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial) && git clone --bare seed remote.git && rm -rf seed",
 		},
-		VerifyCommand: shellAnd(
+		VerifyCommand: shellAndFreshRemoteClone(
 			`test -d app/.git`,
 			`test ! -d seed`,
 			`cd app`,

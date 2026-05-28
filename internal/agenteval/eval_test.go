@@ -1933,7 +1933,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!strings.Contains(commitPush.SetupCommands[0], "git push -u origin main") {
 		t.Fatalf("commit/push SetupCommands = %#v, want local bare remote initialization", commitPush.SetupCommands)
 	}
-	for _, want := range []string{"git status --porcelain", "git log -1", "git ls-remote --heads origin main"} {
+	for _, want := range []string{"git status --porcelain", "git log -1", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(commitPush.VerifyCommand, want) {
 			t.Fatalf("commit/push VerifyCommand = %q, want %q", commitPush.VerifyCommand, want)
 		}
@@ -1977,7 +1977,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if _, ok := clonePush.Files["seed/mathutil/clamp.go"]; !ok {
 		t.Fatalf("clone/push scenario missing seed clamp implementation")
 	}
-	for _, want := range []string{"test -d app/.git", "test ! -d seed", "go test ./...", `git diff --name-only HEAD~1..HEAD`, "git ls-remote --heads origin main"} {
+	for _, want := range []string{"test -d app/.git", "test ! -d seed", "go test ./...", `git diff --name-only HEAD~1..HEAD`, "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(clonePush.VerifyCommand, want) {
 			t.Fatalf("clone/push VerifyCommand = %q, want %q", clonePush.VerifyCommand, want)
 		}
@@ -2034,7 +2034,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!strings.Contains(sourceRepo.SetupCommands[0], "rm -rf seed") {
 		t.Fatalf("source repo SetupCommands = %#v, want seeded local bare remote", sourceRepo.SetupCommands)
 	}
-	for _, want := range []string{"test -d app/.git", "test ! -d seed", "go test ./...", `git diff --name-only HEAD~1..HEAD`, "git ls-remote --heads origin main"} {
+	for _, want := range []string{"test -d app/.git", "test ! -d seed", "go test ./...", `git diff --name-only HEAD~1..HEAD`, "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(sourceRepo.VerifyCommand, want) {
 			t.Fatalf("source repo VerifyCommand = %q, want %q", sourceRepo.VerifyCommand, want)
 		}
@@ -2115,7 +2115,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("scratch project RequiredToolArgContains = %#v, want %#v", scratchProject.RequiredToolArgContains, want)
 		}
 	}
-	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git status --porcelain", "git ls-remote --heads origin main"} {
+	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(scratchProject.VerifyCommand, want) {
 			t.Fatalf("scratch project VerifyCommand = %q, want %q", scratchProject.VerifyCommand, want)
 		}
@@ -2178,7 +2178,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !commandToolOrderContains(iterativeProject.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "write_file"}) {
 		t.Fatalf("iterative scratch project RequiredCommandAfterTool = %#v, want git status after write_file", iterativeProject.RequiredCommandAfterTool)
 	}
-	for _, want := range []string{"def save_json", "def load_json", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main"} {
+	for _, want := range []string{"def save_json", "def load_json", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(iterativeProject.VerifyCommand, want) {
 			t.Fatalf("iterative scratch project VerifyCommand = %q, want %q", iterativeProject.VerifyCommand, want)
 		}
@@ -2286,7 +2286,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!integrated.RequiredSessionSearch[0].ContextIncluded {
 		t.Fatalf("integrated memory recovery RequiredSessionSearch = %#v", integrated.RequiredSessionSearch)
 	}
-	for _, want := range []string{"AUTO-MEM-64", "JSON", "--summary", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main"} {
+	for _, want := range []string{"AUTO-MEM-64", "JSON", "--summary", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(integrated.VerifyCommand, want) {
 			t.Fatalf("integrated memory recovery VerifyCommand = %q, want %q", integrated.VerifyCommand, want)
 		}
