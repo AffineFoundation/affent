@@ -409,8 +409,8 @@ function nextBrief(
   }
   if (turn.error?.recoverable) {
     return {
-      value: "Continue with the error context attached.",
-      action: { label: "Continue", draft: `Continue after ${turn.error.code}: ${turn.error.message}`, source: "error" },
+      value: "Use the error diagnostic as an editable draft.",
+      action: { label: "Use diagnostic as draft", draft: `Continue after ${turn.error.code}: ${turn.error.message}`, source: "error" },
     };
   }
   return undefined;

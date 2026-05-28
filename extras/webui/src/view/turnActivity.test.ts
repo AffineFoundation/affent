@@ -522,6 +522,17 @@ describe("buildTurnActivity", () => {
       tone: "error",
     });
     expect(activity?.brief.rows).not.toContainEqual(expect.objectContaining({ id: "focus" }));
+    expect(activity?.brief.rows).toContainEqual({
+      id: "next",
+      label: "Next",
+      value: "Use the error diagnostic as an editable draft.",
+      tone: "warning",
+      action: {
+        label: "Use diagnostic as draft",
+        draft: "Continue after upstream_5xx: provider returned 503",
+        source: "error",
+      },
+    });
   });
 
   it("does not turn a completed answer into an issue digest just because one tool failed", () => {

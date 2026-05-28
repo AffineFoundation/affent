@@ -1530,13 +1530,23 @@ describe("Timeline", () => {
     expect(card).toHaveTextContent("continue from the message box below");
     expect(card).toHaveTextContent("details stay attached to this chat");
 
-    await user.click(screen.getByRole("button", { name: "Use diagnostic as draft" }));
+    await user.click(within(card).getByRole("button", { name: "Use diagnostic as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith("Continue after upstream_5xx: provider returned 503", "error");
 
     await user.click(screen.getByRole("button", { name: "Copy diagnostic" }));
 
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("code: upstream_5xx"));
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
+  it("turns activity error diagnostics into an editable draft", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline(turnError, undefined, undefined, onUseAsDraft);
+
+    await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Use diagnostic as draft" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith("Continue after upstream_5xx: provider returned 503", "error");
   });
 
   it("copies runtime diagnostics with the shared fallback path", async () => {
