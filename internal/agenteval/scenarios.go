@@ -1955,6 +1955,9 @@ func longRunResearchCheckpointScenario() BatchScenario {
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 1,
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
+		},
 		RequiredFinalText: []string{"RESEARCH-CHECKPOINT-37"},
 		ForbiddenTools: []string{
 			"read_file", "repo_search", "shell", "web_fetch", "web_search",

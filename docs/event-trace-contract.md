@@ -371,6 +371,23 @@ loop context pressure
 without separately reading loop files. Plan checkpoint fields are recovery
 pointers only; the persisted plan state remains the step authority.
 
+### `loop.turn_checkpoint`
+
+Emitted after a turn checkpoint was successfully persisted to the loop sidecar
+state. It mirrors `.affent/loops/<id>/state.json` and `events.jsonl` into the
+normal trace/SSE stream so WebUI and eval tooling can verify durable long-run
+recovery checkpoints without opening sidecar files.
+
+- `turn_id`: runtime turn id that was checkpointed.
+- `loop_id`, `status`, `protocol_path`: optional loop identity and protocol
+  metadata from the sidecar state.
+- `event_seq`: sequence number of the mirrored sidecar event.
+- `turn_checkpoints`: durable count after this checkpoint.
+- `end_reason`, `input_tokens`, `output_tokens`, `tool_requests`,
+  `tool_errors`, `loop_guards`, `forced_no_tools`, `memory_updates`,
+  `memory_search_calls`, `memory_search_misses`, and
+  `session_search_calls`: compact runtime summary for the completed turn.
+
 ### `loop.protocol_calibration_request`
 
 Records that the assistant asked the required setup question for a draft

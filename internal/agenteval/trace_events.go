@@ -376,6 +376,16 @@ func traceEventRefFromPayload(typ string, data json.RawMessage, turnID string) (
 			ContextReason:   p.Reason,
 			ContextReactive: p.Reactive,
 		}, true
+	case sse.TypeLoopTurnCheckpoint:
+		var p sse.LoopTurnCheckpointPayload
+		if err := json.Unmarshal(data, &p); err != nil || !traceEventMatchesTurn(p.TurnID, turnID) {
+			return TraceEventRef{}, false
+		}
+		return TraceEventRef{
+			Type:             typ,
+			TurnID:           p.TurnID,
+			LoopProtocolPath: p.ProtocolPath,
+		}, true
 	default:
 		return TraceEventRef{}, false
 	}

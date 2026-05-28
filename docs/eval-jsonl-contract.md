@@ -343,6 +343,10 @@ Scenario records describe one eval case:
   Use these fields to verify that long-running loop sessions actually refreshed
   `LOOP.md` without overfeeding the model context, and that each feed preserved
   pointers back to authoritative plan and recall state.
+- `loop.turn_checkpoint` trace events are counted in `trace_event_types` and
+  can be asserted with `required_trace_event_counts`. They are emitted only
+  after the loop sidecar checkpoint write succeeds, so they are a direct
+  long-run durability signal rather than just another `turn.end` summary.
 - `loop_protocol_calibration_requests`: optional count of assistant calibration
   questions asked for draft `LOOP.md` activation.
 - `loop_protocol_calibration_request_examples`: optional bounded examples of

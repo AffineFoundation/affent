@@ -1549,7 +1549,7 @@ func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, o
 	} else if !found {
 		return
 	}
-	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
+	state, event, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
 		TurnID:             turnID,
 		EndReason:          endReason,
 		InputTokens:        inputTokens,
@@ -1562,9 +1562,30 @@ func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, o
 		MemorySearchCalls:  stats.MemorySearchCalls,
 		MemorySearchMisses: stats.MemorySearchMisses,
 		SessionSearchCalls: stats.SessionSearchCalls,
-	}); err != nil {
+	})
+	if err != nil {
 		l.Log.Warn().Err(err).Msg("record loop turn checkpoint failed")
+		return
 	}
+	l.publish(sse.TypeLoopTurnCheckpoint, sse.LoopTurnCheckpointPayload{
+		TurnID:             event.TurnID,
+		LoopID:             state.LoopID,
+		Status:             state.Status,
+		ProtocolPath:       state.ProtocolPath,
+		EventSeq:           event.Seq,
+		TurnCheckpoints:    state.TurnCheckpoints,
+		EndReason:          event.TurnEndReason,
+		InputTokens:        event.InputTokens,
+		OutputTokens:       event.OutputTokens,
+		ToolRequests:       event.ToolRequests,
+		ToolErrors:         event.ToolErrors,
+		LoopGuards:         event.LoopGuards,
+		ForcedNoTools:      event.ForcedNoTools,
+		MemoryUpdates:      event.MemoryUpdates,
+		MemorySearchCalls:  event.MemorySearches,
+		MemoryMisses:       event.MemoryMisses,
+		SessionSearchCalls: event.SessionSearch,
+	})
 }
 
 const researchCheckpointSkillMarker = "AFFENT RESEARCH CHECKPOINT:"

@@ -758,7 +758,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nAudit every long-run turn."), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	loop := &Loop{LoopProtocolPath: path}
+	eventsCh := make(chan sse.Event, 1)
+	loop := &Loop{LoopProtocolPath: path, Events: eventsCh}
 	loop.recordLoopTurnCheckpoint("turn_runtime", sse.TurnEndMaxTurns, 300, 80, sse.ToolRuntimeStats{
 		ToolRequests:           4,
 		ToolErrors:             2,
@@ -795,6 +796,33 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 	}
 	if events[0].Type != "loop.turn_checkpoint" || events[0].TurnID != "turn_runtime" || events[0].TurnEndReason != sse.TurnEndMaxTurns {
 		t.Fatalf("event = %+v", events[0])
+	}
+	select {
+	case ev := <-eventsCh:
+		if ev.Type != sse.TypeLoopTurnCheckpoint {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeLoopTurnCheckpoint)
+		}
+		var payload sse.LoopTurnCheckpointPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode loop turn checkpoint: %v", err)
+		}
+		if payload.TurnID != "turn_runtime" ||
+			payload.EndReason != sse.TurnEndMaxTurns ||
+			payload.TurnCheckpoints != 1 ||
+			payload.ToolRequests != 4 ||
+			payload.ToolErrors != 2 ||
+			payload.LoopGuards != 1 ||
+			payload.ForcedNoTools != 1 ||
+			payload.MemoryUpdates != 1 ||
+			payload.MemorySearchCalls != 4 ||
+			payload.MemoryMisses != 2 ||
+			payload.SessionSearchCalls != 2 ||
+			payload.ProtocolPath == "" ||
+			payload.EventSeq != events[0].Seq {
+			t.Fatalf("payload = %+v", payload)
+		}
+	default:
+		t.Fatal("expected loop.turn_checkpoint event")
 	}
 }
 

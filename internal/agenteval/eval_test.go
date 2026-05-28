@@ -511,6 +511,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"loop.protocol_calibration","data":{"loop_id":"longrun","status":"draft","calibration_questions":1,"last_calibration_question_preview":"What should pause this loop?","calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":3}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t1","loop_id":"longrun","status":"running","mode":"digest","feed_number":4,"protocol_feeds":4,"calibration_answers":1,"last_calibration_answer_preview":"Stop if browser network evidence is missing.","protocol_path":".affent/loops/longrun/LOOP.md","current_situation_preview":"current intent: verify browser network evidence; current risk: dashboard metrics are partial until network refs are read","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence","last_turn_id":"turn_previous","last_turn_end_reason":"max_turns","last_turn_tool_requests":5,"last_turn_tool_errors":1,"last_turn_forced_no_tools":1,"last_turn_memory_updates":1,"last_turn_memory_search_calls":3,"last_turn_memory_search_misses":2,"last_turn_session_search_calls":1,"last_turn_loop_guards":1,"last_decision_kind":"evidence_quality","last_decision_trigger":"source_access_dynamic_partial","last_decision":"defer","last_decision_confidence":"high","last_decision_reason":"Dynamic widgets had no text values.","last_decision_required_action":"Read browser network responses before citing metrics."}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
+		`{"type":"loop.turn_checkpoint","data":{"turn_id":"t1","loop_id":"longrun","status":"running","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":7,"turn_checkpoints":1,"end_reason":"max_turns","input_tokens":101,"output_tokens":17,"tool_requests":2,"tool_errors":1,"loop_guards":1,"forced_no_tools":1,"memory_updates":2,"memory_search_calls":2,"memory_search_misses":1,"session_search_calls":1}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t2","loop_id":"longrun","status":"running","mode":"full","feed_number":5,"protocol_feeds":5,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
@@ -758,6 +759,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if got := trace.RawTypes["context.injected"]; got != 2 {
 		t.Fatalf("RawTypes[context.injected] = %d", got)
+	}
+	if got := trace.RawTypes["loop.turn_checkpoint"]; got != 1 {
+		t.Fatalf("RawTypes[loop.turn_checkpoint] = %d", got)
 	}
 }
 
@@ -1995,6 +1999,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if researchCheckpoint.RequiredLoopProtocolFeeds != 1 || researchCheckpoint.RequiredLoopProtocolFeedModes["full"] != 1 {
 		t.Fatalf("research checkpoint loop protocol constraints = feeds:%d modes:%#v", researchCheckpoint.RequiredLoopProtocolFeeds, researchCheckpoint.RequiredLoopProtocolFeedModes)
+	}
+	if researchCheckpoint.RequiredTraceEventCounts["loop.turn_checkpoint"] != 1 {
+		t.Fatalf("research checkpoint trace event constraints = %#v, want loop.turn_checkpoint", researchCheckpoint.RequiredTraceEventCounts)
 	}
 	if _, ok := researchCheckpoint.Files[".affent/loops/longrun-research-checkpoint/LOOP.md"]; !ok {
 		t.Fatalf("research checkpoint missing seeded LOOP.md")

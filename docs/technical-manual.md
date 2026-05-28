@@ -907,7 +907,10 @@ Affent stores durable state as inspectable files:
   loop-decision count and the latest gate decision, including kind, trigger,
   decision, confidence, reason, and required action. The latest loop event is
   mirrored so restart/resume code and WebUI do not have to parse Markdown or
-  replay the full trace for common status panels. WebUI session rows surface
+  replay the full trace for common status panels. Successful turn checkpoint
+  writes also emit `loop.turn_checkpoint` into the normal trace/SSE stream, so
+  evals can assert durable checkpointing without reading sidecar files. WebUI
+  session rows surface
   recent calibration answers, memory updates, loop decisions, and last-turn
   checkpoint state from these fields. Feed count is durable, so
   reopening a session continues the
