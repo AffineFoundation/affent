@@ -1,6 +1,10 @@
 package agenteval
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/affinefoundation/affent/internal/agent"
+)
 
 const (
 	smallModelToolsSuite = "small-model-tools"
@@ -2143,8 +2147,11 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 		SessionID:          "loop-activation-calibration",
 		EnableLoopProtocol: true,
 		Prompts: []string{
-			"请为这个 session 开启长期 loop setup，但现在不要激活 LOOP.md。你必须只问一个很短的 loop 校准问题，问题要询问 stop condition 或 pause condition，并包含标记 LOOP-CALIBRATION-Q17。不要调用工具，不要读写文件。",
-			"校准回答：Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. 请确认已收到这个校准答案，最终回答必须包含 LOOP-CALIBRATION-A17、Pause if source evidence is unavailable、repeated tool failures、objective changed。不要调用工具，不要读写文件。",
+			"Start long-running loop setup for this session, but do not activate LOOP.md yet. Ask exactly one short loop calibration question about the stop condition or pause condition, and include marker LOOP-CALIBRATION-Q17. Do not call tools and do not read or write files.",
+			"Calibration answer: Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. Confirm that you received this calibration answer. The final answer must include LOOP-CALIBRATION-A17, Pause if source evidence is unavailable, repeated tool failures, and objective changed. Do not call tools and do not read or write files.",
+		},
+		RequiredUserMessageModes: map[string]int{
+			agent.UserModeLoopSetup: 1,
 		},
 		RequiredLoopProtocolCalibrationRequests: 1,
 		RequiredLoopProtocolCalibrations:        1,

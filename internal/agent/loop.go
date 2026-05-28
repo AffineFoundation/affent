@@ -221,6 +221,7 @@ type Loop struct {
 const (
 	UserModePlanOnly    = "plan_only"
 	UserModeExecutePlan = "execute_plan"
+	UserModeLoopSetup   = "loop_setup"
 )
 
 // TurnOptions scopes runtime controls to one SendUser call. Empty options

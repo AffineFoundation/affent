@@ -21,9 +21,9 @@ const (
 
 const (
 	sessionMessageModeNormal      = "normal"
-	sessionMessageModePlanOnly    = "plan_only"
-	sessionMessageModeExecutePlan = "execute_plan"
-	sessionMessageModeLoopSetup   = "loop_setup"
+	sessionMessageModePlanOnly    = agent.UserModePlanOnly
+	sessionMessageModeExecutePlan = agent.UserModeExecutePlan
+	sessionMessageModeLoopSetup   = agent.UserModeLoopSetup
 )
 
 const sessionLoopSetupMarker = "Start a long-running loop for this goal:"

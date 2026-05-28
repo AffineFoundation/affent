@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -2600,13 +2601,19 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("loop calibration fields = enable:%v session:%q", loopCalibration.EnableLoopProtocol, loopCalibration.SessionID)
 	}
 	if len(loopCalibration.Prompts) != 2 ||
+		loopCalibration.RequiredUserMessageModes[agent.UserModeLoopSetup] != 1 ||
 		loopCalibration.RequiredLoopProtocolCalibrationRequests != 1 ||
 		loopCalibration.RequiredLoopProtocolCalibrations != 1 ||
 		loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses["draft"] != 1 ||
 		loopCalibration.RequiredLoopProtocolCalibrationStatuses["draft"] != 1 ||
 		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration_request"] != 1 ||
 		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
-		t.Fatalf("loop calibration expectations = prompts:%d requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopCalibration.Prompts), loopCalibration.RequiredLoopProtocolCalibrationRequests, loopCalibration.RequiredLoopProtocolCalibrations, loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses, loopCalibration.RequiredLoopProtocolCalibrationStatuses, loopCalibration.RequiredTraceEventCounts)
+		t.Fatalf("loop calibration expectations = prompts:%d modes:%#v requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopCalibration.Prompts), loopCalibration.RequiredUserMessageModes, loopCalibration.RequiredLoopProtocolCalibrationRequests, loopCalibration.RequiredLoopProtocolCalibrations, loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses, loopCalibration.RequiredLoopProtocolCalibrationStatuses, loopCalibration.RequiredTraceEventCounts)
+	}
+	for _, prompt := range loopCalibration.Prompts {
+		if strings.Contains(prompt, "请") {
+			t.Fatalf("loop calibration prompt should be English: %q", prompt)
+		}
 	}
 	for _, want := range []string{"LOOP-CALIBRATION-Q17", "LOOP-CALIBRATION-A17", "Pause if source evidence is unavailable", "repeated tool failures", "objective changed"} {
 		if !stringSliceContains(loopCalibration.RequiredFinalText, want) {

@@ -160,6 +160,52 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 	}
 }
 
+func TestRunLoopProtocolInitialTurnRecordsLoopSetupMode(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "run-loop-setup"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"What pause condition should stop this loop?\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprintf(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	tracePath := filepath.Join(workspace, "trace.jsonl")
+	out := captureStdout(t, func() {
+		code := runCmd([]string{
+			"--workspace", workspace,
+			"--session-id", sessionID,
+			"--model", "fake-model",
+			"--base-url", srv.URL,
+			"--prompt", "Start a long-running loop for repo reliability.",
+			"--loop-protocol",
+			"--trace", tracePath,
+			"--trace-skip-deltas",
+			"--quiet",
+			"--max-turns", "1",
+		})
+		if code != 0 {
+			t.Fatalf("runCmd exit = %d", code)
+		}
+	})
+	if !strings.Contains(out, "pause condition") {
+		t.Fatalf("runCmd stdout = %q", out)
+	}
+	trace, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatalf("read trace: %v", err)
+	}
+	for _, want := range []string{
+		`"type":"user.message"`,
+		`"mode":"loop_setup"`,
+		`Start a long-running loop for repo reliability.`,
+	} {
+		if !strings.Contains(string(trace), want) {
+			t.Fatalf("trace missing %q:\n%s", want, trace)
+		}
+	}
+}
+
 func TestValidateRunModeFlags(t *testing.T) {
 	for _, tc := range []struct {
 		name        string

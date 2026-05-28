@@ -1256,6 +1256,9 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	if b.loop.LoopProtocolPath != protocolPath {
 		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, protocolPath)
 	}
+	if b.loopProtocolInitialized {
+		t.Fatal("existing active LOOP.md must not mark the next turn as loop setup")
+	}
 	got := b.loop.SkillProvider("continue")
 	for _, want := range []string{
 		"AFFENT LOOP PROTOCOL:",
@@ -1318,6 +1321,9 @@ Pending user calibration.
 	if b.loopProtocolSkillInstalled {
 		t.Fatal("draft LOOP.md without state must not install active loop protocol feeds")
 	}
+	if b.loopProtocolInitialized {
+		t.Fatal("existing draft LOOP.md must not mark the next turn as loop setup")
+	}
 	if b.loop.SkillProvider != nil {
 		if got := b.loop.SkillProvider("continue"); strings.Contains(got, "AFFENT LOOP PROTOCOL:") {
 			t.Fatalf("draft LOOP.md without state was injected:\n%s", got)
@@ -1356,6 +1362,9 @@ func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
 	}
 	if b.loopProtocolSkillInstalled {
 		t.Fatal("draft protocol must not install active loop protocol feeds before agent supplementation")
+	}
+	if !b.loopProtocolInitialized {
+		t.Fatal("fresh --loop-protocol setup should mark the next run turn as loop setup")
 	}
 	if _, ok := b.loop.Tools.Get(agent.LoopProtocolToolName); !ok {
 		t.Fatal("loop_protocol tool should be available to supplement draft protocol")

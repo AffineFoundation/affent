@@ -793,6 +793,7 @@ type loopBundle struct {
 
 	loopProtocolPath           string
 	loopProtocolSkillInstalled bool
+	loopProtocolInitialized    bool
 
 	// turnsSeen / inputTokens / outputTokens accumulate across every
 	// drain*() pass for this REPL session. drainInteractive bumps them
@@ -1533,6 +1534,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
+	loopProtocolInitialized := false
 	if c.loopProtocol {
 		if created, _, _, err := loopstate.EnsureProtocolTemplate(loopProtocolPath, loopstate.ProtocolTemplateOptions{
 			LoopID:       sid,
@@ -1545,6 +1547,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			log.Error().Err(err).Msg("loop protocol")
 			return nil, exitRuntime
 		} else if created {
+			loopProtocolInitialized = true
 			log.Info().Str("session_id", sid).Str("path", loopstate.ProtocolRelPath(sid)).Msg("loop protocol initialized")
 		}
 	}
@@ -1593,6 +1596,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		resumeRepair:               resumeRepair,
 		loopProtocolPath:           loopProtocolPath,
 		loopProtocolSkillInstalled: loopProtocolSkillInstalled,
+		loopProtocolInitialized:    loopProtocolInitialized,
 		mcpClients:                 mcpClients,
 	}, 0
 }

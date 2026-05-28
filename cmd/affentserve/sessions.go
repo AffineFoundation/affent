@@ -1611,13 +1611,13 @@ func looksLikeLoopCalibrationQuestion(text string) bool {
 	if normalized == "" || (!strings.Contains(normalized, "?") && !strings.Contains(normalized, "？")) {
 		return false
 	}
-	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "长期", "循环"}
+	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "activation", "draft", "protocol", "长期", "循环", "激活", "草案", "协议"}
 	if !containsAny(normalized, loopishMarkers) {
 		return false
 	}
 	calibrationMarkers := []string{
-		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule",
-		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时",
+		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule", "scope", "cadence", "frequency", "output",
+		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时", "范围", "频率", "产出", "目录", "位置",
 	}
 	return containsAny(normalized, calibrationMarkers)
 }

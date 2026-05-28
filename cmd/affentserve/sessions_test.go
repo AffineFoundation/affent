@@ -2079,6 +2079,33 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	}
 }
 
+func TestSessionRecordsLoopProtocolCalibrationAnswerAfterActivationScopeQuestion(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-calibration-activation-scope")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if err := s.ensureLoopProtocolInitialized("Set up recurring global situation reporting."); err != nil {
+		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
+	}
+	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "草案已就绪。在激活之前，我需要确认：分析范围和产出频率是什么？"}); err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("全面覆盖；每天更新一次，每周进行一次深度分析。")
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-activation-scope"))
+	if err != nil || !found {
+		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
+	}
+	if state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		!strings.Contains(state.LastCalibrationQuestion, "激活之前") ||
+		!strings.Contains(state.LastCalibrationAnswer, "全面覆盖") {
+		t.Fatalf("calibration state = %+v", state)
+	}
+}
+
 func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
