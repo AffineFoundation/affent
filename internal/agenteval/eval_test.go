@@ -513,6 +513,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	tracePath := filepath.Join(dir, "trace.jsonl")
 	body := strings.Join([]string{
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"user.message","data":{"turn_id":"t1","text":"Proceed with the active persisted plan.","display_text":"Run plan step 2","mode":"execute_plan"}}`,
 		`{"type":"conversation.repaired","data":{"session_id":"resume","missing_tool_results":1,"failure_kind":"resume_missing_tool_result","next":"do not assume the tool succeeded"}}`,
 		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"tool_call_caps":[{"tool":"web_fetch","max":8},{"tool":"web_search","max":4}],"capabilities":{"web_fetch":true,"web_search":true,"session_search":true,"skill":true,"mcp":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results","turn_tool_override":true}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"account_access","title":"Account access context injected","summary":"Account-level environment and SSH access hints were made available for this turn.","preview":"Configured environment variables available to shell commands: GITHUB_TOKEN.","bytes":240,"estimated_tokens":60}}`,
@@ -541,6 +542,12 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if trace.SchemaVersion != 1 {
 		t.Fatalf("SchemaVersion = %d, want 1", trace.SchemaVersion)
+	}
+	if len(trace.UserMessages) != 1 ||
+		trace.UserMessages[0].TurnID != "t1" ||
+		trace.UserMessages[0].Mode != "execute_plan" ||
+		trace.UserMessages[0].DisplayText != "Run plan step 2" {
+		t.Fatalf("UserMessages = %+v", trace.UserMessages)
 	}
 	if len(trace.ConversationRepairs) != 1 ||
 		trace.ConversationRepairs[0].SessionID != "resume" ||
@@ -759,6 +766,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if got := trace.RawTypes["trace.meta"]; got != 1 {
 		t.Fatalf("RawTypes[trace.meta] = %d", got)
+	}
+	if got := trace.RawTypes["user.message"]; got != 1 {
+		t.Fatalf("RawTypes[user.message] = %d", got)
 	}
 	if got := trace.RawTypes["conversation.repaired"]; got != 1 {
 		t.Fatalf("RawTypes[conversation.repaired] = %d", got)
@@ -1501,6 +1511,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			}
 			if scenario.RequiredToolCounts["plan"] != 1 {
 				t.Fatalf("plan-resume-current-step RequiredToolCounts = %#v, want plan=1", scenario.RequiredToolCounts)
+			}
+			if scenario.RequiredUserMessageModes["execute_plan"] != 1 {
+				t.Fatalf("plan-resume-current-step RequiredUserMessageModes = %#v, want execute_plan=1", scenario.RequiredUserMessageModes)
 			}
 			if scenario.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
 				t.Fatalf("plan-resume-current-step read_file cap = %#v, want 1", scenario.MaxSuccessfulToolCallsByTool)
@@ -2271,6 +2284,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !planResume.ExecutePlan || planResume.SessionID != "plan-resume" {
 		t.Fatalf("plan resume execution fields = execute_plan:%v session:%q", planResume.ExecutePlan, planResume.SessionID)
+	}
+	if planResume.RequiredUserMessageModes["execute_plan"] != 1 {
+		t.Fatalf("plan resume RequiredUserMessageModes = %#v, want execute_plan=1", planResume.RequiredUserMessageModes)
 	}
 	if !stringSliceContains(planResume.RequiredFinalText, "RESUME-CURRENT-42") || !stringSliceContains(planResume.ForbiddenFinalText, "STALE-PLAN-99") {
 		t.Fatalf("plan resume final text constraints = required:%#v forbidden:%#v", planResume.RequiredFinalText, planResume.ForbiddenFinalText)

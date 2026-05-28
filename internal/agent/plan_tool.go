@@ -580,6 +580,7 @@ func PlanOnlyTurnOptions(reg *Registry, maxToolCalls int) (TurnOptions, error) {
 		FirstToolPolicy:        PlanFirstToolPolicy(),
 		MaxToolCalls:           maxToolCalls,
 		FinalNoToolsOnMaxTurns: true,
+		UserMode:               UserModePlanOnly,
 	}, nil
 }
 
@@ -590,6 +591,7 @@ func ExecutePlanTurnOptions() TurnOptions {
 func ExecutePlanTurnOptionsForStep(currentStepIndex int) TurnOptions {
 	return TurnOptions{
 		ToolCallPolicies: []*ToolCallPolicy{PlanExecuteToolCallPolicyForStep(currentStepIndex)},
+		UserMode:         UserModeExecutePlan,
 	}
 }
 

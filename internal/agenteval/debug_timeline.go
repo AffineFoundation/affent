@@ -469,6 +469,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "max_tool_failure_kind_counts", exp.MaxToolFailureKindCounts)
 	writeTimelineCountsLine(b, "required_tool_stats_at_least", exp.RequiredToolStatsAtLeast)
 	writeTimelineCountsLine(b, "required_trace_event_counts", exp.RequiredTraceEventCounts)
+	writeTimelineCountsLine(b, "required_user_message_modes", exp.RequiredUserMessageModes)
 	writeTimelineCountsLine(b, "required_context_injection_sources", exp.RequiredContextInjectionSources)
 	writeTimelineCountsLine(b, "required_conversation_repair_stats_at_least", exp.RequiredConversationRepairStatsAtLeast)
 	writeTimelineCountsLine(b, "required_conversation_repair_kinds", exp.RequiredConversationRepairKinds)
@@ -757,6 +758,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.MaxToolFailureKindCounts) > 0 ||
 		len(exp.RequiredToolStatsAtLeast) > 0 ||
 		len(exp.RequiredTraceEventCounts) > 0 ||
+		len(exp.RequiredUserMessageModes) > 0 ||
 		len(exp.RequiredContextInjectionSources) > 0 ||
 		len(exp.RequiredConversationRepairStatsAtLeast) > 0 ||
 		len(exp.RequiredConversationRepairKinds) > 0 ||

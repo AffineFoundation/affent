@@ -166,6 +166,7 @@ type BatchScenario struct {
 	MaxToolFailureKindCounts                       map[string]int
 	RequiredToolStatsAtLeast                       map[string]int
 	RequiredTraceEventCounts                       map[string]int
+	RequiredUserMessageModes                       map[string]int
 	RequiredConversationRepairStatsAtLeast         map[string]int
 	RequiredConversationRepairKinds                map[string]int
 	RequiredLoopDecisionKinds                      map[string]int
@@ -394,6 +395,7 @@ type DebugScenarioExpectations struct {
 	MaxToolFailureKindCounts                       map[string]int                        `json:"max_tool_failure_kind_counts,omitempty"`
 	RequiredToolStatsAtLeast                       map[string]int                        `json:"required_tool_stats_at_least,omitempty"`
 	RequiredTraceEventCounts                       map[string]int                        `json:"required_trace_event_counts,omitempty"`
+	RequiredUserMessageModes                       map[string]int                        `json:"required_user_message_modes,omitempty"`
 	RequiredConversationRepairStatsAtLeast         map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
 	RequiredConversationRepairKinds                map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
 	RequiredLoopDecisionKinds                      map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
@@ -451,6 +453,17 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	caps := map[string]bool{}
 	if strings.TrimSpace(exp.SessionID) != "" {
 		caps["session"] = true
+	}
+	if len(exp.RequiredUserMessageModes) > 0 {
+		caps["session"] = true
+		for mode := range exp.RequiredUserMessageModes {
+			switch mode {
+			case agent.UserModePlanOnly, agent.UserModeExecutePlan:
+				caps["plan"] = true
+			case "loop_setup":
+				caps["loop_protocol"] = true
+			}
+		}
 	}
 	if exp.ExecutePlan || exp.RequireNoPlanErrors {
 		caps["plan"] = true
@@ -531,7 +544,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	for stat := range exp.RequiredToolStatsAtLeast {
 		addExpectationStatCapabilities(caps, stat)
 	}
-	if len(exp.RequiredTraceEventCounts) > 0 {
+	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 {
 		caps["trace"] = true
 	}
 	if len(exp.RequiredConversationRepairStatsAtLeast) > 0 || len(exp.RequiredConversationRepairKinds) > 0 {
@@ -1911,6 +1924,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		MaxToolFailureKindCounts:                cloneStringIntMap(s.MaxToolFailureKindCounts),
 		RequiredToolStatsAtLeast:                cloneStringIntMap(s.RequiredToolStatsAtLeast),
 		RequiredTraceEventCounts:                cloneStringIntMap(s.RequiredTraceEventCounts),
+		RequiredUserMessageModes:                cloneStringIntMap(s.RequiredUserMessageModes),
 		RequiredConversationRepairStatsAtLeast:  cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
 		RequiredConversationRepairKinds:         cloneStringIntMap(s.RequiredConversationRepairKinds),
 		RequiredLoopDecisionKinds:               cloneStringIntMap(s.RequiredLoopDecisionKinds),
@@ -2811,6 +2825,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, eventType := range sortedStringMapKeys(scenario.RequiredTraceEventCounts) {
 		checks = append(checks, TraceEventCountAtLeast(eventType, scenario.RequiredTraceEventCounts[eventType]))
+	}
+	for _, mode := range sortedStringMapKeys(scenario.RequiredUserMessageModes) {
+		checks = append(checks, UserMessageModeAtLeast(mode, scenario.RequiredUserMessageModes[mode]))
 	}
 	for _, field := range sortedStringMapKeys(scenario.RequiredConversationRepairStatsAtLeast) {
 		checks = append(checks, ConversationRepairStatsAtLeast(field, scenario.RequiredConversationRepairStatsAtLeast[field]))

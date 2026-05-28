@@ -126,6 +126,10 @@ type Trace struct {
 	// order the LLM emitted them. Empty when the agent answered
 	// without using a tool.
 	Tools []ToolCall
+	// UserMessages records user.message trace metadata, including product
+	// modes such as plan_only and execute_plan. This lets evals verify the
+	// requested control path instead of inferring it from prompt text.
+	UserMessages []UserMessage
 
 	// Usage is the aggregated token accounting for the run.
 	Usage Usage
@@ -191,6 +195,16 @@ type Trace struct {
 	// ParseTraceFile path so checks that just want "did at least
 	// one usage event arrive" can read this without scanning Tools.
 	RawTypes map[string]int
+}
+
+type UserMessage struct {
+	TurnID       string
+	Text         string
+	DisplayText  string
+	Mode         string
+	Source       string
+	ScheduleID   string
+	ScheduleKind string
 }
 
 // ToolCall is one tool invocation by the agent, with its result.

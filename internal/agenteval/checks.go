@@ -78,6 +78,39 @@ func TraceEventCountAtLeast(eventType string, min int) Check {
 	}
 }
 
+func UserMessageModeAtLeast(mode string, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	mode = strings.TrimSpace(mode)
+	return Check{
+		Name: fmt.Sprintf("user_message_mode_at_least:%s:%d", mode, min),
+		Eval: func(t Trace) CheckResult {
+			got := 0
+			var observed []string
+			for _, msg := range t.UserMessages {
+				observedMode := strings.TrimSpace(msg.Mode)
+				if observedMode == "" {
+					observedMode = "normal"
+				}
+				if len(observed) < 6 {
+					observed = append(observed, observedMode)
+				}
+				if observedMode == mode {
+					got++
+				}
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", mode, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d user.message mode %q event(s), got %d; observed=%v", min, mode, got, observed),
+			}
+		},
+	}
+}
+
 func ContextInjectionSourceAtLeast(source string, min int) Check {
 	if min <= 0 {
 		min = 1

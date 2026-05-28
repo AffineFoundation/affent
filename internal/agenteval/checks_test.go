@@ -627,6 +627,24 @@ func TestTraceEventCountAtLeast(t *testing.T) {
 	}
 }
 
+func TestUserMessageModeAtLeast(t *testing.T) {
+	trace := Trace{UserMessages: []UserMessage{
+		{TurnID: "t1", Mode: "normal"},
+		{TurnID: "t2", Mode: "execute_plan", DisplayText: "Run plan step 2"},
+	}}
+
+	if res := UserMessageModeAtLeast("execute_plan", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected execute_plan mode check to pass: %+v", res)
+	}
+	res := UserMessageModeAtLeast("loop_setup", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing loop_setup mode to fail")
+	}
+	if !strings.Contains(res.Detail, "execute_plan") {
+		t.Fatalf("failure detail should include observed modes: %s", res.Detail)
+	}
+}
+
 func TestConversationRepairChecks(t *testing.T) {
 	trace := Trace{ConversationRepairs: []sse.ConversationRepairedPayload{
 		{

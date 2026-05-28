@@ -79,6 +79,9 @@ func TestPlanOnlyTurnOptionsNarrowsToolSurface(t *testing.T) {
 	if opts.MaxToolCalls != 2 || !opts.FinalNoToolsOnMaxTurns {
 		t.Fatalf("options = %+v, want bounded plan-only turn", opts)
 	}
+	if opts.UserMode != agent.UserModePlanOnly {
+		t.Fatalf("UserMode = %q, want %q", opts.UserMode, agent.UserModePlanOnly)
+	}
 	defs := opts.Tools.Defs()
 	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
 		t.Fatalf("plan-only defs = %+v, want only plan", defs)

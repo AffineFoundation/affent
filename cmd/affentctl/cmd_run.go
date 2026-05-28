@@ -76,6 +76,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 			return exitUsage
 		}
 		prompt = agent.PlanOnlyUserPrompt(prompt)
+		turnOpts.UserMode = agent.UserModePlanOnly
 	} else if *executePlan {
 		var err error
 		var executePlanStepIndex int

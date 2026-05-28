@@ -218,6 +218,11 @@ type Loop struct {
 	FinalNoToolsOnMaxTurns bool
 }
 
+const (
+	UserModePlanOnly    = "plan_only"
+	UserModeExecutePlan = "execute_plan"
+)
+
 // TurnOptions scopes runtime controls to one SendUser call. Empty options
 // preserve the Loop's configured behavior.
 type TurnOptions struct {
