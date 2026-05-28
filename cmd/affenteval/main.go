@@ -234,11 +234,12 @@ func run(args []string) int {
 		prompt                                    = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
 		promptFile                                = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
 		adHocName                                 = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
-		adHocSessionID                            = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
+		adHocSessionID                            = fs.String("session-id", "", "session id for --prompt/--prompt-file runs; without a prompt, diagnose SESSION/events.jsonl from --session-state-root")
 		adHocMaxTurns                             = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
 		adHocVerify                               = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
 		traceFile                                 = fs.String("trace-file", "", "parse an existing trace/events JSONL file and write debug artifacts without running a model")
 		traceOutputDir                            = fs.String("trace-output-dir", "", "directory for --trace-file debug artifacts; default is TRACE_DIR/affenteval-debug")
+		sessionStateRoot                          = fs.String("session-state-root", "", "parent directory for --session-id trace debug artifacts; default AFFENTSERVE_MEMORY_ROOT or repo-local .tmp/runtime-workspace/session-state")
 		repoRoot                                  = fs.String("repo-root", ".", "Affent repository root")
 		workRoot                                  = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
 		baseURL                                   = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
@@ -409,11 +410,24 @@ success and trace-level process quality.`)
 		printScenarioCoverage(os.Stdout, scenarios, gates, *qualityProfile)
 		return 0
 	}
-	if strings.TrimSpace(*traceFile) != "" {
+	tracePath := strings.TrimSpace(*traceFile)
+	traceName := strings.TrimSpace(*adHocName)
+	if tracePath == "" && strings.TrimSpace(*adHocSessionID) != "" && strings.TrimSpace(*prompt) == "" && strings.TrimSpace(*promptFile) == "" {
+		resolved, err := resolveSessionTracePath(strings.TrimSpace(*adHocSessionID), strings.TrimSpace(*sessionStateRoot), strings.TrimSpace(*repoRoot))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "session-id: %v\n", err)
+			return 64
+		}
+		tracePath = resolved
+		if !flagWasSet(fs, "name") || traceName == "" || traceName == "adhoc" {
+			traceName = strings.TrimSpace(*adHocSessionID)
+		}
+	}
+	if tracePath != "" {
 		res, err := agenteval.WriteTraceDebugArtifacts(agenteval.TraceDebugOptions{
-			TracePath: strings.TrimSpace(*traceFile),
+			TracePath: tracePath,
 			OutputDir: strings.TrimSpace(*traceOutputDir),
-			Name:      strings.TrimSpace(*adHocName),
+			Name:      traceName,
 		})
 		if err != nil && strings.TrimSpace(res.BatchScenario) == "" {
 			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
@@ -6113,6 +6127,59 @@ func evalWorkspaceToolNames() []string {
 
 func evalReadonlyWorkspaceToolNames() []string {
 	return []string{"read_file", "file_context", "list_files", "symbol_context", "repo_search"}
+}
+
+func resolveSessionTracePath(sessionID, sessionStateRoot, repoRoot string) (string, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if err := agent.ValidateSessionID(sessionID); err != nil {
+		return "", err
+	}
+	var roots []string
+	if root := strings.TrimSpace(sessionStateRoot); root != "" {
+		roots = append(roots, root)
+	} else {
+		for _, root := range []string{
+			os.Getenv("AFFENTEVAL_SESSION_STATE_ROOT"),
+			os.Getenv("AFFENTSERVE_MEMORY_ROOT"),
+			repoLocalSessionStateRoot(repoRoot),
+		} {
+			root = strings.TrimSpace(root)
+			if root != "" {
+				roots = append(roots, root)
+			}
+		}
+	}
+	seen := map[string]bool{}
+	var inspected []string
+	for _, root := range roots {
+		root = filepath.Clean(root)
+		if root == "." || seen[root] {
+			continue
+		}
+		seen[root] = true
+		tracePath := filepath.Join(root, sessionID, "events.jsonl")
+		inspected = append(inspected, tracePath)
+		if info, err := os.Stat(tracePath); err == nil {
+			if info.IsDir() {
+				return "", fmt.Errorf("session %q trace path is a directory: %s", sessionID, tracePath)
+			}
+			return tracePath, nil
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return "", fmt.Errorf("stat session %q trace path %s: %w", sessionID, tracePath, err)
+		}
+	}
+	if len(inspected) == 0 {
+		return "", fmt.Errorf("session %q trace not found; set --session-state-root or AFFENTSERVE_MEMORY_ROOT", sessionID)
+	}
+	return "", fmt.Errorf("session %q trace not found; inspected: %s", sessionID, strings.Join(inspected, ", "))
+}
+
+func repoLocalSessionStateRoot(repoRoot string) string {
+	repoRoot = strings.TrimSpace(repoRoot)
+	if repoRoot == "" {
+		repoRoot = "."
+	}
+	return filepath.Join(repoRoot, ".tmp", "runtime-workspace", "session-state")
 }
 
 func evalBrowserToolNames() []string {

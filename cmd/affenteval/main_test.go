@@ -364,6 +364,73 @@ func TestRunTraceFileAppliesQualityGates(t *testing.T) {
 	}
 }
 
+func TestRunSessionIDWritesTraceDebugArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	sessionID := "sess_manual_debug"
+	sessionRoot := filepath.Join(dir, "session-state")
+	sessionDir := filepath.Join(sessionRoot, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tracePath := filepath.Join(sessionDir, "events.jsonl")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"usage","data":{"turn_id":"turn-1","input_tokens":7,"output_tokens":3}}`,
+		`{"type":"message.done","data":{"turn_id":"turn-1","text":"Manual session finished.","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":0,"tool_errors":0}}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outDir := filepath.Join(dir, "debug")
+	out, code := captureStdout(t, func() int {
+		return run([]string{
+			"--session-id", sessionID,
+			"--session-state-root", sessionRoot,
+			"--trace-output-dir", outDir,
+			"--max-scenario-total-tokens", "20",
+		})
+	})
+	if code != 0 {
+		t.Fatalf("run --session-id trace debug exit = %d\n%s", code, out)
+	}
+	for _, want := range []string{
+		"PASS " + sessionID,
+		"tokens=7/3",
+		"QUALITY_GATES status=passed",
+		filepath.Join(outDir, "affenteval-debug.json"),
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--session-id trace debug output missing %q:\n%s", want, out)
+		}
+	}
+	var manifest agenteval.DebugManifest
+	raw, err := os.ReadFile(filepath.Join(outDir, "affenteval-debug.json"))
+	if err != nil {
+		t.Fatalf("read debug manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
+	}
+	if manifest.Scenario != sessionID ||
+		manifest.TracePath != tracePath ||
+		manifest.Metrics.InputTokens != 7 ||
+		manifest.Metrics.OutputTokens != 3 ||
+		manifest.QualityGatesPassed == nil ||
+		!*manifest.QualityGatesPassed {
+		t.Fatalf("session trace manifest = %+v", manifest)
+	}
+}
+
+func TestRunSessionIDRejectsPathTraversal(t *testing.T) {
+	_, code := captureStdout(t, func() int {
+		return run([]string{"--session-id", "../escape", "--session-state-root", t.TempDir()})
+	})
+	if code != 64 {
+		t.Fatalf("run --session-id traversal exit = %d", code)
+	}
+}
+
 func TestTraceFileQualityGateConfigDisablesProfileScenarioCoverage(t *testing.T) {
 	gates := qualityGateConfig{}
 	if err := applyQualityGateProfile(&gates, "longrun", nil); err != nil {

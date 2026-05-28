@@ -1289,6 +1289,12 @@ as citable. By default, eval
 traces pass `affentctl --trace-skip-deltas` so token
 streaming deltas do not bury the tool timeline; use `--trace-deltas` only for
 deep provider/stream debugging when the raw `message.delta` sequence matters.
+Existing affentserve sessions can be diagnosed through the same path without
+copying an absolute `events.jsonl` path: run `affenteval --session-id <id>
+--session-state-root <root>` or set `AFFENTSERVE_MEMORY_ROOT`. When no prompt is
+provided, `--session-id` resolves `<root>/<id>/events.jsonl`, writes the same
+debug manifest and timeline as `--trace-file`, and applies any enabled quality
+gates to that single session.
 The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, partial workspace tool lists, and
