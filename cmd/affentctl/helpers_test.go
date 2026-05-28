@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -505,6 +506,37 @@ func TestChatLoopSlashOnCreatesDraftAndActivationPrompt(t *testing.T) {
 	}
 	if _, ok := b.loop.Tools.Get(agent.LoopProtocolToolName); !ok {
 		t.Fatal("loop_protocol tool should be registered for dynamic draft activation")
+	}
+}
+
+func TestFinalizeCurrentSessionLoopActivationLabelsCompletionGuard(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "loop-finalize"
+	path := loopstate.ProtocolPath(workspace, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "finish a durable loop",
+		Workspace:    workspace,
+		Status:       "running",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	b := &loopBundle{
+		loop:             &agent.Loop{Tools: agent.NewRegistry()},
+		workspace:        workspace,
+		sessionID:        sessionID,
+		loopProtocolPath: path,
+	}
+	finalizeCurrentSessionLoopActivation(b)
+	if !b.loopProtocolSkillInstalled {
+		t.Fatal("finalized running loop should install loop protocol skill")
+	}
+	if !slices.Contains(b.loop.CompletionGuardLabels, "loop_protocol_running") {
+		t.Fatalf("completion guard labels = %#v, want loop_protocol_running", b.loop.CompletionGuardLabels)
+	}
+	if len(b.loop.CompletionGuards) == 0 {
+		t.Fatal("finalized running loop should install completion guard")
 	}
 }
 

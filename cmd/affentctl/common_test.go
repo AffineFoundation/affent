@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1275,6 +1276,11 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	if len(b.loop.CompletionGuards) == 0 {
 		t.Fatal("active LOOP.md should install a completion guard")
 	}
+	for _, label := range []string{"active_plan_unfinished", "loop_protocol_running"} {
+		if !slices.Contains(b.loop.CompletionGuardLabels, label) {
+			t.Fatalf("completion guard labels = %#v, want %s", b.loop.CompletionGuardLabels, label)
+		}
+	}
 	var loopBlocked, planBlocked agent.CompletionGuardResult
 	for _, guard := range b.loop.CompletionGuards {
 		switch result := guard(); result.Trigger {
@@ -1720,6 +1726,9 @@ func TestSetupLoop_SkillProviderInjectsActivePlan(t *testing.T) {
 	}
 	if !strings.Contains(got, "cmd/affentctl/common.go") {
 		t.Fatalf("active plan evidence missing, got %q", got)
+	}
+	if !slices.Contains(b.loop.CompletionGuardLabels, "active_plan_unfinished") {
+		t.Fatalf("completion guard labels = %#v, want active_plan_unfinished", b.loop.CompletionGuardLabels)
 	}
 	var blocked agent.CompletionGuardResult
 	for _, guard := range b.loop.CompletionGuards {

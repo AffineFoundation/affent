@@ -1533,6 +1533,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.ActivePlanCompletionGuard(planPath))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "active_plan_unfinished")
 	}
 	loopProtocolInitialized := false
 	if c.loopProtocol {
@@ -1558,6 +1559,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if loopProtocolActive {
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_running")
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	loopProtocolSkillInstalled := loopProtocolActive
