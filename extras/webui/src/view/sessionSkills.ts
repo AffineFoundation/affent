@@ -95,7 +95,7 @@ export function skillUpdateDraft(skill: SessionSkillInfo, body?: string): string
   ].join("\n");
 }
 
-function skillTriggers(skill: SessionSkillInfo): string[] {
+export function skillTriggers(skill: SessionSkillInfo): string[] {
   return skill.triggers ?? skill.auto_activation?.any ?? [];
 }
 

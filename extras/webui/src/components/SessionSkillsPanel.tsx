@@ -12,6 +12,7 @@ import {
   skillSearchMatches,
   skillSizeLabel,
   skillSummaryTags,
+  skillTriggers,
   skillUpdateDraft,
 } from "../view/sessionSkills";
 import { CopyButton } from "./CopyButton";
@@ -59,6 +60,7 @@ export function SessionSkillsPanel({
   const [editingSkillName, setEditingSkillName] = useState<string | undefined>();
   const [deleteConfirmName, setDeleteConfirmName] = useState<string | undefined>();
   const [deletingSkillName, setDeletingSkillName] = useState<string | undefined>();
+  const [selectedSkillName, setSelectedSkillName] = useState<string | undefined>();
   const allSkills = skills ?? [];
   const hasSearch = allSkills.length > 0;
   const canInstall = installEnabled && !!onInstallSkill;
@@ -67,6 +69,14 @@ export function SessionSkillsPanel({
     if (!trimmedQuery) return allSkills;
     return allSkills.filter((skill) => skillMatchesQuery(skill, trimmedQuery));
   }, [allSkills, trimmedQuery]);
+  const focusedSkill = useMemo(() => {
+    if (filteredSkills.length === 0) return undefined;
+    const selected = selectedSkillName ? filteredSkills.find((skill) => skill.name === selectedSkillName) : undefined;
+    if (selected) return selected;
+    return filteredSkills.find((skill) => skill.runtime)
+      ?? filteredSkills.find((skill) => (skill.required_tools?.length ?? 0) > 0)
+      ?? filteredSkills[0];
+  }, [filteredSkills, selectedSkillName]);
   const runtimeCount = allSkills.filter((skill) => skill.runtime).length;
   const canDraftSkill = !!onUseAsDraft;
   const summary = loading
@@ -294,6 +304,15 @@ export function SessionSkillsPanel({
                 submitLabel: editingSkillName ? "Update skill" : "Save skill",
               })
             ) : null}
+            {focusedSkill ? (
+              <SkillReviewFocus
+                skill={focusedSkill}
+                bodyState={bodyByName[focusedSkill.name]}
+                onLoadBody={onReadSkill ? () => void loadBody(focusedSkill.name) : undefined}
+                onEdit={canInstall && focusedSkill.runtime ? () => void editSkill(focusedSkill) : undefined}
+                onUseAsDraft={onUseAsDraft}
+              />
+            ) : null}
             <div className="session-skills-list" data-testid="session-skills-list">
               {filteredSkills.length > 0 ? (
                 filteredSkills.map((skill) => {
@@ -304,12 +323,14 @@ export function SessionSkillsPanel({
                     <details
                       key={skill.name}
                       className="session-skill-item"
+                      data-selected={focusedSkill?.name === skill.name ? "true" : "false"}
                       open={trimmedQuery ? true : undefined}
                       onToggle={(event) => {
+                        if (event.currentTarget.open) setSelectedSkillName(skill.name);
                         if (event.currentTarget.open && !trimmedQuery) void loadBody(skill.name);
                       }}
                     >
-                      <summary>
+                      <summary onClick={() => setSelectedSkillName(skill.name)}>
                         <span className="session-skill-title">
                           <strong>{skill.name}</strong>
                           <span>{skillKindLabel(skill)}</span>
@@ -398,6 +419,78 @@ export function SessionSkillsPanel({
         ) : null}
       </div>
     </details>
+  );
+}
+
+function SkillReviewFocus({
+  skill,
+  bodyState,
+  onLoadBody,
+  onEdit,
+  onUseAsDraft,
+}: {
+  skill: SessionSkillInfo;
+  bodyState?: SkillBodyState;
+  onLoadBody?: () => void;
+  onEdit?: () => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  const body = bodyState?.body ?? skill.body;
+  const triggers = skillTriggers(skill);
+  const requiredTools = skill.required_tools ?? [];
+  const preview = body || skill.body_preview;
+  return (
+    <section className="session-skills-focus" data-testid="session-skills-focus" aria-label={`Skill review ${skill.name}`}>
+      <div className="session-skills-focus-head">
+        <span>{skillKindLabel(skill)}</span>
+        <strong>{skill.name}</strong>
+        <small>{skill.description || "No summary"}</small>
+      </div>
+      <div className="session-skills-focus-grid">
+        <SkillFocusFact label="Source" value={skillOriginLabel(skill) ?? "Runtime"} />
+        <SkillFocusFact label="Size" value={skillSizeLabel(skill)} />
+        <SkillFocusFact label="Triggers" value={triggers.length > 0 ? `${triggers.length}` : "None"} detail={triggers.slice(0, 5).join(", ")} />
+        <SkillFocusFact label="Tools" value={requiredTools.length > 0 ? `${requiredTools.length}` : "None"} detail={requiredTools.join(", ")} />
+      </div>
+      {triggers.length > 0 || requiredTools.length > 0 ? (
+        <div className="session-skills-focus-chips">
+          {triggers.slice(0, 8).map((trigger) => <span key={`trigger:${trigger}`}>trigger:{trigger}</span>)}
+          {requiredTools.map((tool) => <span key={`tool:${tool}`} data-kind="tool">tool:{tool}</span>)}
+        </div>
+      ) : null}
+      <div className="session-skills-focus-body">
+        <span>Content</span>
+        {bodyState?.loading ? <p>Loading full content...</p> : bodyState?.error ? <p className="error">{bodyState.error}</p> : preview ? <pre>{preview}</pre> : <p>No content preview.</p>}
+      </div>
+      <div className="session-skill-actions">
+        <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
+        {onLoadBody && !body ? (
+          <button type="button" className="node-action" onClick={onLoadBody}>
+            Load content
+          </button>
+        ) : null}
+        {onEdit ? (
+          <button type="button" className="node-action" onClick={onEdit}>
+            Edit skill
+          </button>
+        ) : null}
+        {onUseAsDraft ? (
+          <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
+            Revise skill
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SkillFocusFact({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="session-skills-focus-fact">
+      <span>{label}</span>
+      <strong title={detail || value}>{value}</strong>
+      {detail ? <small title={detail}>{detail}</small> : null}
+    </div>
   );
 }
 

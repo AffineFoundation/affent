@@ -48,12 +48,15 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
     expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("embed:skillembed:skill");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("coding_repair_workflow");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("trigger:fix");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("tool:workspace");
 
-    await user.click(screen.getByText("coding_repair_workflow"));
+    await user.click(within(screen.getByTestId("session-skills-list")).getByText("coding_repair_workflow"));
 
     expect(onReadSkill).toHaveBeenCalledWith("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Origin: Built-in library");
-    expect(await screen.findByText(/Reproduce first/)).toBeInTheDocument();
+    expect(await within(screen.getByTestId("session-skills-list")).findByText(/Reproduce first/)).toBeInTheDocument();
 
     await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Copy details" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Skill evidence for coding_repair_workflow"));
@@ -142,7 +145,7 @@ describe("SessionSkillsPanel", () => {
     }
     render(<Harness />);
 
-    await user.click(screen.getByText("runtime_demo"));
+    await user.click(within(screen.getByTestId("session-skills-list")).getByText("runtime_demo"));
     await user.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByRole("status")).toHaveTextContent("Editing runtime_demo");
     expect(screen.getByLabelText("Name")).toHaveValue("runtime_demo");

@@ -4847,6 +4847,160 @@ button.workbench-context-runtime-item:focus-visible {
   gap: 6px;
 }
 
+.session-skills-focus {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(240, 253, 250, 0.78), rgba(255, 255, 255, 0.62));
+  padding: 10px;
+}
+
+.session-skills-focus-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 2px 8px;
+  min-width: 0;
+}
+
+.session-skills-focus-head > span {
+  align-self: center;
+  border: 1px solid rgba(20, 184, 166, 0.28);
+  border-radius: 999px;
+  background: rgba(240, 253, 250, 0.84);
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  font-weight: 750;
+  line-height: 1;
+  padding: 4px 7px;
+}
+
+.session-skills-focus-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-head small {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.session-skills-focus-fact {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.76);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.62);
+  padding: 7px 8px;
+}
+
+.session-skills-focus-fact span,
+.session-skills-focus-fact small,
+.session-skills-focus-body > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-fact span,
+.session-skills-focus-body > span {
+  text-transform: uppercase;
+}
+
+.session-skills-focus-fact strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-fact small {
+  color: var(--text-muted);
+}
+
+.session-skills-focus-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-skills-focus-chips span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(20, 184, 166, 0.24);
+  border-radius: 999px;
+  background: rgba(240, 253, 250, 0.78);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 0 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-chips span[data-kind="tool"] {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: rgba(239, 246, 255, 0.76);
+}
+
+.session-skills-focus-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-skills-focus-body pre,
+.session-skills-focus-body p {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  border: 1px solid rgba(217, 224, 232, 0.76);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 252, 0.74);
+  color: var(--text);
+  padding: 8px 9px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.session-skills-focus-body p.error {
+  color: var(--c-error);
+}
+
 .session-skills-dashboard {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
@@ -4897,6 +5051,11 @@ button.workbench-context-runtime-item:focus-visible {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.66);
   overflow: hidden;
+}
+
+.session-skill-item[data-selected="true"] {
+  border-color: rgba(20, 184, 166, 0.34);
+  background: rgba(240, 253, 250, 0.66);
 }
 
 .session-skill-item > summary {
@@ -11127,6 +11286,8 @@ html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
 html[data-theme="dark"] .session-skills-stat,
+html[data-theme="dark"] .session-skills-focus,
+html[data-theme="dark"] .session-skills-focus-fact,
 html[data-theme="dark"] .session-skill-item,
 html[data-theme="dark"] .session-search input,
 html[data-theme="dark"] .session-skills-search input,
@@ -11167,6 +11328,34 @@ html[data-theme="dark"] .workbench-panel {
   background:
     linear-gradient(180deg, rgba(17, 20, 24, 0.98), rgba(9, 12, 17, 0.96)),
     #111418;
+}
+
+html[data-theme="dark"] .session-skills-focus {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(13, 40, 38, 0.42);
+}
+
+html[data-theme="dark"] .session-skills-focus-head > span,
+html[data-theme="dark"] .session-skills-focus-chips span {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(13, 40, 38, 0.5);
+  color: rgba(153, 246, 228, 0.88);
+}
+
+html[data-theme="dark"] .session-skills-focus-chips span[data-kind="tool"] {
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(30, 58, 138, 0.22);
+}
+
+html[data-theme="dark"] .session-skill-item[data-selected="true"] {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(13, 40, 38, 0.34);
+}
+
+html[data-theme="dark"] .session-skills-focus-body pre,
+html[data-theme="dark"] .session-skills-focus-body p {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(14, 17, 22, 0.78);
 }
 
 html[data-theme="dark"] .session-automation-metric[data-tone="ok"] {
