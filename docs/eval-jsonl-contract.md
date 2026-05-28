@@ -585,6 +585,9 @@ Summary records aggregate all scenario records from the same process:
   `verifier:failed`, `verifier:not_run`, `verifier:abnormal`, and
   `verifier:output_truncated` let code/PR batches separate implementation or
   test failures from browser, memory, plan, context, or tool-call regressions.
+  `debug_brief_tag_examples` is a bounded map from tag to scenarios and
+  retained trace/timeline/debug-manifest paths, so tag-rate gate failures can
+  jump directly to representative artifacts.
 - Expectation coverage totals:
   `expectation_scenarios` counts scenarios that carried declarative
   expectations; `expectation_suites` counts suite markers; `expectation_required_tools`

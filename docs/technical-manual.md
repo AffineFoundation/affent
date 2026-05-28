@@ -1224,8 +1224,10 @@ acceptable. JSONL summary records also aggregate debug brief tags as
 `debug_brief_by_tag` for batch triage. Verifier failures, abnormal verifier
 exits, configured-but-not-run verifiers, and truncated verifier output are
 tagged separately so code/PR batches can be grouped without opening each
-retained timeline. Tool result truncation and model-context
-trimming are split by tags such as `truncation:missing_artifact` and
+retained timeline. Summary records also include bounded
+`debug_brief_tag_examples` so a tag-rate gate failure can jump from the tag to
+representative trace/timeline/debug-manifest paths. Tool result truncation and
+model-context trimming are split by tags such as `truncation:missing_artifact` and
 `truncation:tool_context`, so long-run regressions can separate lost raw output
 from output that existed but was shortened before re-entering the model.
 JSONL scenario records also include a compact `runtime_surface` summary so

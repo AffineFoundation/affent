@@ -1753,6 +1753,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		!strings.Contains(out.String(), "timeline=/tmp/affenteval/taostats-rendered/affenteval-timeline.md") {
 		t.Fatalf("summary output missing grouped failure example:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "debug_brief_example[verifier:failed]: scenario=taostats-rendered failure_kinds=missing_command:1,turn_end:1") ||
+		!strings.Contains(out.String(), "debug_manifest=/tmp/affenteval/taostats-rendered/affenteval-debug.json") {
+		t.Fatalf("summary output missing debug brief tag example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
 	}
@@ -3033,7 +3037,12 @@ func TestBatchSummaryAggregatesDebugBriefTags(t *testing.T) {
 		},
 	})
 	summary.add(agenteval.BatchResult{
-		OK: false,
+		BatchScenario:     "code-pr",
+		OK:                false,
+		TracePath:         "/tmp/affenteval/code-pr/trace.jsonl",
+		TimelinePath:      "/tmp/affenteval/code-pr/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affenteval/code-pr/affenteval-debug.json",
+		Failures:          []string{"verify command failed: go test ./..."},
 		Verifier: agenteval.VerifierResult{
 			Command:  "go test ./...",
 			Ran:      true,
@@ -3049,6 +3058,15 @@ func TestBatchSummaryAggregatesDebugBriefTags(t *testing.T) {
 		summary.DebugBriefByTag["verifier:failed"] != 1 ||
 		summary.DebugBriefByTag["verifier:abnormal"] != 1 {
 		t.Fatalf("DebugBriefByTag = %#v", summary.DebugBriefByTag)
+	}
+	examples := summary.DebugBriefTagExamples["verifier:failed"]
+	if len(examples) != 1 ||
+		examples[0].Scenario != "code-pr" ||
+		examples[0].FailureKinds["verify_command"] != 1 ||
+		examples[0].TracePath != "/tmp/affenteval/code-pr/trace.jsonl" ||
+		examples[0].TimelinePath != "/tmp/affenteval/code-pr/affenteval-timeline.md" ||
+		examples[0].DebugManifestPath != "/tmp/affenteval/code-pr/affenteval-debug.json" {
+		t.Fatalf("DebugBriefTagExamples[verifier:failed] = %#v", examples)
 	}
 }
 
@@ -3482,7 +3500,16 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				TimelinePath: "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
 			}},
 		},
-		DebugBriefByTag:           map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
+		DebugBriefByTag: map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
+		DebugBriefTagExamples: map[string][]batchDebugBriefTagExample{
+			"tool_failure:blocked": {{
+				Scenario:          "taostats-rendered",
+				FailureKinds:      map[string]int{"turn_end": 1},
+				TracePath:         "/tmp/affenteval/taostats-rendered/trace.jsonl",
+				TimelinePath:      "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
+				DebugManifestPath: "/tmp/affenteval/taostats-rendered/affenteval-debug.json",
+			}},
+		},
 		ExpectationScenarios:      2,
 		ExpectationSuites:         map[string]int{"long-run": 1, "live-web": 1},
 		ExpectationCapabilities:   map[string]int{"browser": 2, "source_access": 2, "web": 1},
@@ -3856,6 +3883,22 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		debugBriefByTag["tool_failure:blocked"] != float64(1) ||
 		debugBriefByTag["runtime_error:llm_timeout"] != float64(1) {
 		t.Fatalf("debug_brief_by_tag = %#v\njson=%s", got["debug_brief_by_tag"], out.String())
+	}
+	debugBriefTagExamples, ok := got["debug_brief_tag_examples"].(map[string]any)
+	if !ok {
+		t.Fatalf("debug_brief_tag_examples = %#v\njson=%s", got["debug_brief_tag_examples"], out.String())
+	}
+	blockedTagExamples, ok := debugBriefTagExamples["tool_failure:blocked"].([]any)
+	if !ok || len(blockedTagExamples) != 1 {
+		t.Fatalf("blocked debug_brief_tag_examples = %#v\njson=%s", debugBriefTagExamples["tool_failure:blocked"], out.String())
+	}
+	blockedTagExample, ok := blockedTagExamples[0].(map[string]any)
+	if !ok ||
+		blockedTagExample["scenario"] != "taostats-rendered" ||
+		blockedTagExample["trace_path"] != "/tmp/affenteval/taostats-rendered/trace.jsonl" ||
+		blockedTagExample["timeline_path"] != "/tmp/affenteval/taostats-rendered/affenteval-timeline.md" ||
+		blockedTagExample["debug_manifest_path"] != "/tmp/affenteval/taostats-rendered/affenteval-debug.json" {
+		t.Fatalf("blocked debug_brief_tag_example = %#v\njson=%s", blockedTagExamples[0], out.String())
 	}
 	expectationCapabilities, ok := got["expectation_capabilities"].(map[string]any)
 	if !ok ||
