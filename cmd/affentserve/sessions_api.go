@@ -2105,6 +2105,7 @@ func recoveryHintFromTurnEnd(p sse.TurnEndPayload, latestTurnID string) string {
 			if p.ToolStats.LoopGuardInterventions > 0 {
 				parts = append(parts, "loop guards fired")
 			}
+			appendToolRepairFailureHint(&parts, p.ToolStats)
 			if p.ToolStats.ToolContextTruncated > 0 {
 				parts = append(parts, "inspect artifacts/trace for omitted output")
 			}
@@ -2116,8 +2117,31 @@ func recoveryHintFromTurnEnd(p sse.TurnEndPayload, latestTurnID string) string {
 		}
 		return recoveryHintFromText("turn ended with a runtime error; inspect recent error/tool events and resume from persisted evidence before retrying.")
 	default:
+		return recoveryHintFromToolRepairFailure(p)
+	}
+}
+
+func appendToolRepairFailureHint(parts *[]string, stats *sse.ToolRuntimeStats) {
+	if parts == nil || stats == nil || stats.ToolRepairFailed <= 0 {
+		return
+	}
+	item := fmt.Sprintf("tool repair failed=%d", stats.ToolRepairFailed)
+	if kind, count := topToolFailureKind(stats.ToolRepairByKind); kind != "" {
+		item += fmt.Sprintf(" kind=%s:%d", kind, count)
+	}
+	*parts = append(*parts, item)
+}
+
+func recoveryHintFromToolRepairFailure(p sse.TurnEndPayload) string {
+	if p.ToolStats == nil || p.ToolStats.ToolRepairFailed <= 0 {
 		return ""
 	}
+	parts := []string{"tool-call repair failed; inspect tool name/args before retrying"}
+	appendToolRepairFailureHint(&parts, p.ToolStats)
+	if p.ToolStats.ToolErrors > 0 {
+		parts = append(parts, fmt.Sprintf("tool_errors=%d", p.ToolStats.ToolErrors))
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
 }
 
 func topToolFailureKind(counts map[string]int) (string, int) {

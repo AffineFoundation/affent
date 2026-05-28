@@ -710,6 +710,74 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromMaxTurns(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromToolRepairFailure(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "tool-repair-failed")
+	dir := pool.sessionDirPath("tool-repair-failed")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+			ToolStats: &sse.ToolRuntimeStats{
+				ToolErrors:          1,
+				ToolRepairFailed:    1,
+				ToolRepairByKind:    map[string]int{"malformed_json": 1},
+				ToolRepairSucceeded: 2,
+			},
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "tool-repair-failed")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{"tool-call repair failed", "tool repair failed=1", "kind=malformed_json:1", "tool_errors=1"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestSummarizeDurableSessionIgnoresSuccessfulToolRepairHint(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "tool-repair-success")
+	dir := pool.sessionDirPath("tool-repair-success")
+
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+			ToolStats: &sse.ToolRuntimeStats{
+				ToolRepairCalls:     2,
+				ToolRepairSucceeded: 2,
+				ToolRepairNotes:     2,
+				ToolRepairByKind:    map[string]int{"alias_rename": 2},
+			},
+		}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "tool-repair-success")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestRecoveryHint != "" {
+		t.Fatalf("latest_recovery_hint = %q, want no successful repair hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromTruncatedArtifact(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
