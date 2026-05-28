@@ -139,6 +139,36 @@ export function fileContentDraft(item: SessionFileEvidence): string {
   ].join("\n");
 }
 
+export function fileRangeDraft(
+  item: SessionFileEvidence,
+  startLine: number,
+  endLine: number,
+  intent: "ask" | "edit",
+): string {
+  const lines = fileLines(item);
+  const start = Math.max(1, Math.min(startLine, endLine));
+  const end = Math.min(lines.length, Math.max(startLine, endLine));
+  const selected = lines.slice(start - 1, end).join("\n");
+  const lead = intent === "edit"
+    ? "Edit this selected file range in the next step:"
+    : "Review this selected file range in the next step:";
+  return [
+    lead,
+    `File: ${item.path}`,
+    `Lines: ${start}-${end}`,
+    "",
+    boundedDraftContent(selected),
+  ].join("\n");
+}
+
+export function fileLines(item: SessionFileEvidence): string[] {
+  const content = item.contentPreview ?? "";
+  if (!content) return [];
+  const lines = content.split(/\r?\n/);
+  if (lines.length > 1 && lines.at(-1) === "") return lines.slice(0, -1);
+  return lines;
+}
+
 function filePriority(item: SessionFileEvidence): number {
   if (item.status === "failed") return 0;
   if (item.status === "running") return 1;

@@ -2505,10 +2505,73 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-file-range-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: var(--radius-sm);
+  background: rgba(240, 253, 250, 0.64);
+  padding: 6px;
+}
+
+.session-file-range-actions > span {
+  color: var(--accent-strong);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 760;
+  padding: 0 4px;
+}
+
 .session-file-preview-code {
   max-height: min(46vh, 520px);
   min-height: 180px;
   margin: 0;
+  overflow: auto;
+  padding: 0;
+}
+
+.session-file-code-line {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  width: 100%;
+  min-width: max-content;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.48;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+
+.session-file-code-line:hover,
+.session-file-code-line:focus-visible,
+.session-file-code-line[data-selected="true"] {
+  background: rgba(20, 184, 166, 0.1);
+  outline: none;
+}
+
+.session-file-code-line-number {
+  position: sticky;
+  left: 0;
+  border-right: 1px solid rgba(217, 224, 232, 0.72);
+  background: rgba(248, 250, 252, 0.96);
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  padding: 0 8px;
+  text-align: right;
+  user-select: none;
+}
+
+.session-file-code-line-text {
+  min-width: 0;
+  padding: 0 10px;
+  white-space: pre;
 }
 
 .session-run-manual-disclosure {
@@ -11995,6 +12058,22 @@ html[data-theme="dark"] .session-file-preview {
   background:
     linear-gradient(180deg, rgba(22, 27, 34, 0.82), rgba(13, 17, 23, 0.68)),
     rgba(17, 20, 24, 0.7);
+}
+
+html[data-theme="dark"] .session-file-range-actions {
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(13, 40, 38, 0.34);
+}
+
+html[data-theme="dark"] .session-file-code-line:hover,
+html[data-theme="dark"] .session-file-code-line:focus-visible,
+html[data-theme="dark"] .session-file-code-line[data-selected="true"] {
+  background: rgba(45, 212, 191, 0.14);
+}
+
+html[data-theme="dark"] .session-file-code-line-number {
+  border-right-color: rgba(58, 68, 81, 0.82);
+  background: rgba(14, 17, 22, 0.96);
 }
 
 html[data-theme="dark"] .session-run-manual input {

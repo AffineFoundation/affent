@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   fileContentText,
+  fileLines,
+  fileRangeDraft,
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
@@ -14,6 +16,7 @@ export function SessionFilesPanel({
   files,
   defaultOpen = false,
   onOpenArtifact,
+  onUseAsDraft,
 }: {
   files: SessionFilesView;
   defaultOpen?: boolean;
@@ -23,6 +26,7 @@ export function SessionFilesPanel({
   const [query, setQuery] = useState("");
   const [previewQuery, setPreviewQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
+  const [selectedRange, setSelectedRange] = useState<{ path: string; start: number; end: number } | undefined>();
   const [filter, setFilter] = useState<FileFilter>("all");
   const trimmedQuery = query.trim();
   const stats = fileStats(files);
@@ -30,7 +34,22 @@ export function SessionFilesPanel({
   const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
   const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
+  const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
+  const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
   const focus = filesFocus(files.items);
+  function selectPreviewLine(lineNumber: number) {
+    if (!selectedItem) return;
+    setSelectedRange((current) => {
+      if (!current || current.path !== selectedItem.path || current.start !== current.end) {
+        return { path: selectedItem.path, start: lineNumber, end: lineNumber };
+      }
+      return {
+        path: selectedItem.path,
+        start: Math.min(current.start, lineNumber),
+        end: Math.max(current.end, lineNumber),
+      };
+    });
+  }
   return (
     <details className="session-skills-panel session-files-panel" data-testid="session-files-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -97,9 +116,47 @@ export function SessionFilesPanel({
               </label>
               <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
             </div>
-            <pre className="code session-file-preview-code" data-testid="session-file-preview-content">
-              <HighlightText text={selectedItem.contentPreview ?? ""} query={previewQuery} />
-            </pre>
+            {activeRange && onUseAsDraft ? (
+              <div className="session-file-range-actions" data-testid="session-file-range-actions">
+                <span>
+                  Lines {activeRange.start}-{activeRange.end}
+                </span>
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "ask"), "file_range")}
+                >
+                  Ask about range
+                </button>
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "edit"), "file_range")}
+                >
+                  Edit range
+                </button>
+              </div>
+            ) : null}
+            <div className="code session-file-preview-code" data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot">
+              {snapshotLines.map((line, index) => {
+                const lineNumber = index + 1;
+                const selected = activeRange ? lineNumber >= activeRange.start && lineNumber <= activeRange.end : false;
+                return (
+                  <button
+                    key={lineNumber}
+                    type="button"
+                    className="session-file-code-line"
+                    data-selected={selected ? "true" : "false"}
+                    onClick={() => selectPreviewLine(lineNumber)}
+                  >
+                    <span className="session-file-code-line-number">{lineNumber}</span>
+                    <span className="session-file-code-line-text">
+                      <HighlightText text={line || " "} query={previewQuery} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : files.items.some((item) => item.contentPreview) && visibleItems.length > 0 ? (
           <div className="session-skills-empty">No loaded file snapshot in the visible results.</div>

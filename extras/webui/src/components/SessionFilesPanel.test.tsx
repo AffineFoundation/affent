@@ -8,9 +8,10 @@ describe("SessionFilesPanel", () => {
   it("renders file evidence with review-first actions", async () => {
     const user = userEvent.setup();
     const onOpenArtifact = vi.fn();
+    const onUseAsDraft = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} />);
+    render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-files-panel");
     const dashboard = screen.getByLabelText("File work summary");
@@ -34,6 +35,18 @@ describe("SessionFilesPanel", () => {
 
     await user.type(screen.getByLabelText("Search file snapshot"), "route");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("route");
+    expect(screen.getByRole("button", { name: /2 return route/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /1 export function checkout/ }));
+    expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 1-1");
+    await user.click(screen.getByRole("button", { name: /3 }/ }));
+    expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 1-3");
+    await user.click(screen.getByRole("button", { name: "Ask about range" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File: src/payments.ts"), "file_range");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Lines: 1-3"), "file_range");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("export function checkout"), "file_range");
+    await user.click(screen.getByRole("button", { name: "Edit range" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Edit this selected file range"), "file_range");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");

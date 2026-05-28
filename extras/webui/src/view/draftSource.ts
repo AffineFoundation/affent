@@ -8,6 +8,7 @@ export type DraftSource =
   | "evidence"
   | "error"
   | "file_evidence"
+  | "file_range"
   | "file_snapshot"
   | "guidance_receipt"
   | "memory"
@@ -37,6 +38,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   evidence: "Using evidence",
   error: "Using error diagnostic",
   file_evidence: "Using file evidence",
+  file_range: "Using file range",
   file_snapshot: "Using file snapshot",
   guidance_receipt: "Editing sent guidance",
   memory: "Using memory evidence",
@@ -64,6 +66,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   evidence: "append",
   error: "append",
   file_evidence: "append",
+  file_range: "append",
   file_snapshot: "append",
   guidance_receipt: "replace",
   memory: "append",
