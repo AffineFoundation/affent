@@ -143,7 +143,8 @@ describe("App", () => {
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
 
     await user.click(screen.getByRole("button", { name: /Open latest chat/ }));
-    expect(window.location.search).toBe("?sessionId=s1");
+    expect(window.location.pathname).toBe("/session/s1");
+    expect(window.location.search).toBe("");
 
     const context = await screen.findByTestId("chat-context-bar");
     expect(context).toHaveTextContent("Result ready");
@@ -224,7 +225,51 @@ describe("App", () => {
     const sessionList = screen.getByTestId("session-list");
     expect(sessionList).toHaveTextContent("list the files");
     expect(within(sessionList).getByRole("button", { name: /list the files/i })).toHaveAttribute("aria-current", "true");
-    expect(window.location.search).toBe("?sessionId=saved-2");
+    expect(window.location.pathname).toBe("/session/saved-2");
+    expect(window.location.search).toBe("");
+  });
+
+  it("opens a saved session directly from a session path", async () => {
+    window.history.replaceState(null, "", "/session/saved-2");
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "saved-2",
+              active: false,
+              durable: true,
+              topic_user_message: "path linked session",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/saved-2/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "saved-2",
+          events: completedTurn,
+          next_after: 11,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-2/history?after=-1&limit=500", expect.anything()));
+    expect(await screen.findByText("There are two files.")).toBeVisible();
+    expect(window.location.pathname).toBe("/session/saved-2");
+    expect(window.location.search).toBe("");
   });
 
   it("filters empty durable session directories from the chat list", async () => {
@@ -2459,8 +2504,16 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/run-1/events") return eventStreamResponse("");
-      if (url === "/v1/sessions/run-1/messages" && init?.method === "POST") {
-        return jsonResponse({ session_id: "run-1", turn_id: "rerun-1" });
+      if (url === "/v1/sessions/run-1/commands" && init?.method === "POST") {
+        return jsonResponse({
+          session_id: "run-1",
+          turn_id: "rerun-1",
+          call_id: "manual-shell-1",
+          exit_code: 0,
+          result: "checkout spec passed\n[exit 0]",
+          workspace: "/tmp/affent/run-1",
+          completed_at: "2026-05-28T16:00:00Z",
+        });
       }
       if (url === "/v1/sessions/run-1/artifacts/.affent/artifacts/tool-results/test.txt?offset=0&limit=65536") {
         return new Response("checkout spec failed\nexpected payment route", {
@@ -2507,10 +2560,9 @@ describe("App", () => {
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Next: update payment route then rerun");
 
     await user.click(within(await screen.findByTestId("session-run-focus")).getByRole("button", { name: "Rerun now" }));
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/run-1/messages", expect.objectContaining({ method: "POST" })));
-    const rerunCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/run-1/messages" && (init as RequestInit | undefined)?.method === "POST");
-    expect((rerunCall?.[1] as RequestInit).body).toEqual(expect.stringContaining("Rerun this command in the session workspace now"));
-    expect((rerunCall?.[1] as RequestInit).body).toEqual(expect.stringContaining("npm test -- checkout.spec.ts"));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/run-1/commands", expect.objectContaining({ method: "POST" })));
+    const rerunCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/run-1/commands" && (init as RequestInit | undefined)?.method === "POST");
+    expect((rerunCall?.[1] as RequestInit).body).toEqual(JSON.stringify({ command: "npm test -- checkout.spec.ts" }));
     expect(screen.getByTestId("workbench-panel")).toBeVisible();
     expect(screen.getByTestId("conversation-scroll")).toBeVisible();
   });

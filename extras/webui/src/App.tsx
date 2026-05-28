@@ -2117,11 +2117,22 @@ function initialTheme(): ThemeMode {
 function sessionIdFromCurrentUrl(): string | undefined {
   if (typeof window === "undefined") return undefined;
   try {
+    const pathSessionId = sessionIdFromPath(window.location.pathname);
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get(sessionUrlParam)?.trim() || params.get(legacySessionUrlParam)?.trim();
-    return sessionId || undefined;
+    return sessionId || pathSessionId || undefined;
   } catch {
     return undefined;
+  }
+}
+
+function sessionIdFromPath(pathname: string): string | undefined {
+  const match = pathname.match(/^\/session\/([^/]+)\/?$/);
+  if (!match) return undefined;
+  try {
+    return decodeURIComponent(match[1]).trim() || undefined;
+  } catch {
+    return match[1]?.trim() || undefined;
   }
 }
 
@@ -2143,13 +2154,17 @@ function syncSessionIdToUrl(sessionId?: string) {
   if (typeof window === "undefined") return;
   try {
     const url = new URL(window.location.href);
-    const current = url.searchParams.get(sessionUrlParam) || url.searchParams.get(legacySessionUrlParam) || undefined;
+    const pathSessionId = sessionIdFromPath(url.pathname);
+    const current = url.searchParams.get(sessionUrlParam) || url.searchParams.get(legacySessionUrlParam) || pathSessionId || undefined;
     if (sessionId) {
-      if (current === sessionId && !url.searchParams.has(legacySessionUrlParam)) return;
-      url.searchParams.set(sessionUrlParam, sessionId);
+      const nextPath = `/session/${encodeURIComponent(sessionId)}`;
+      if (current === sessionId && url.pathname === nextPath && !url.searchParams.has(sessionUrlParam) && !url.searchParams.has(legacySessionUrlParam)) return;
+      url.pathname = nextPath;
+      url.searchParams.delete(sessionUrlParam);
       url.searchParams.delete(legacySessionUrlParam);
     } else {
       if (!current && !url.searchParams.has(sessionUrlParam) && !url.searchParams.has(legacySessionUrlParam)) return;
+      if (pathSessionId) url.pathname = "/";
       url.searchParams.delete(sessionUrlParam);
       url.searchParams.delete(legacySessionUrlParam);
     }
