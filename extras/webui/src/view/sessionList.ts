@@ -19,7 +19,7 @@ const enTitleActions = [
   "improve", "refactor", "implement", "build", "create", "design", "understand",
 ].join("|");
 
-export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "evidence" | "guard" | "issues";
+export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "automation" | "evidence" | "guard" | "issues";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
 type SessionTitleSource = "provided" | "topic" | "fallback";
 
@@ -472,6 +472,7 @@ export function countSessionsByFilter(rows: readonly SessionRowView[]): Record<S
     artifacts: rows.filter((row) => row.chips.includes("files") || row.chips.includes("artifacts")).length,
     memory: rows.filter((row) => row.chips.includes("memory")).length,
     plan: rows.filter((row) => row.chips.includes("plan")).length,
+    automation: rows.filter((row) => row.chips.includes("automation")).length,
     evidence: rows.filter(hasEvidenceMetric).length,
     guard: rows.filter(hasGuardMetric).length,
     issues: rows.filter(needsAttention).length,
@@ -485,6 +486,7 @@ function matchesFilter(row: SessionRowView, filter: SessionListFilter): boolean 
   if (filter === "artifacts") return row.chips.includes("files") || row.chips.includes("artifacts");
   if (filter === "memory") return row.chips.includes("memory");
   if (filter === "plan") return row.chips.includes("plan");
+  if (filter === "automation") return row.chips.includes("automation");
   if (filter === "evidence") return hasEvidenceMetric(row);
   if (filter === "guard") return hasGuardMetric(row);
   if (filter === "issues") return needsAttention(row);

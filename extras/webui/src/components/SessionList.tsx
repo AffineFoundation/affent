@@ -17,6 +17,7 @@ const filters: { mode: SessionListFilter; label: string }[] = [
   { mode: "artifacts", label: "Files" },
   { mode: "memory", label: "Memory" },
   { mode: "plan", label: "Plan" },
+  { mode: "automation", label: "Automation" },
   { mode: "evidence", label: "Evidence" },
   { mode: "guard", label: "Guard" },
   { mode: "issues", label: "Issues" },

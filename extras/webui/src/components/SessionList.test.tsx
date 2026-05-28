@@ -569,6 +569,7 @@ describe("SessionList", () => {
       session({ id: "memory-two", durable: true, has_memory: true }),
       session({ id: "artifact-three", durable: true, has_artifacts: true }),
       session({ id: "plan-four", durable: true, has_plan: true }),
+      session({ id: "automation-eight", durable: true, latest_user_message: "monitor release automation", has_loop_protocol: true, has_schedules: true }),
       session({
         id: "evidence-five",
         durable: true,
@@ -618,6 +619,10 @@ describe("SessionList", () => {
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Plan/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("Planned chat");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("Memory chat");
+
+    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Automation/ }));
+    expect(screen.getByTestId("session-list")).toHaveTextContent("monitor release automation");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("Planned chat");
 
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Evidence/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("taostats subnet metrics");

@@ -481,6 +481,7 @@ describe("sessionList view model", () => {
       session({ id: "saved-b", durable: true, has_memory: true }),
       session({ id: "artifact-c", durable: true, has_artifacts: true }),
       session({ id: "planned-d", durable: true, has_plan: true }),
+      session({ id: "automation-h", durable: true, has_loop_protocol: true, has_schedules: true }),
       session({
         id: "evidence-e",
         durable: true,
@@ -512,10 +513,11 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(countSessionsByFilter(rows)).toMatchObject({ all: 7, active: 1, saved: 6, artifacts: 1, memory: 1, plan: 1, evidence: 1, guard: 1, issues: 2 });
+    expect(countSessionsByFilter(rows)).toMatchObject({ all: 8, active: 1, saved: 7, artifacts: 1, memory: 1, plan: 1, automation: 1, evidence: 1, guard: 1, issues: 2 });
     expect(filterSessionRows(rows, "active", "")).toHaveLength(1);
     expect(filterSessionRows(rows, "memory", "")[0].id).toBe("saved-b");
     expect(filterSessionRows(rows, "plan", "")[0].id).toBe("planned-d");
+    expect(filterSessionRows(rows, "automation", "")[0].id).toBe("automation-h");
     expect(filterSessionRows(rows, "evidence", "")[0].id).toBe("evidence-e");
     expect(filterSessionRows(rows, "guard", "")[0].id).toBe("guard-g");
     expect(filterSessionRows(rows, "issues", "").map((row) => row.id).sort()).toEqual(["guard-g", "issue-f"]);
