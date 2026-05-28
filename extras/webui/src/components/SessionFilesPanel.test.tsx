@@ -17,11 +17,16 @@ describe("SessionFilesPanel", () => {
     const dashboard = screen.getByLabelText("File work summary");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("2 file references");
+    expect(screen.getByTestId("session-files-review")).toHaveTextContent("Changed file");
+    expect(screen.getByTestId("session-files-review")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByLabelText("File review facts")).toHaveTextContent("Snapshots");
+    expect(screen.getByLabelText("File review facts")).toHaveTextContent("1/2");
+    expect(screen.queryByTestId("session-workspace-browser")).toBeNull();
     expect(within(dashboard).getByText("All").closest("button")).toHaveTextContent("2");
-    expect(within(dashboard).getByText("Changed").closest("button")).toHaveTextContent("1");
+    expect(within(within(dashboard).getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ })).toHaveTextContent("1");
     expect(within(dashboard).getByText("Snapshot").closest("button")).toHaveTextContent("1");
-    expect(within(dashboard).queryByText("Issues")).toBeNull();
-    expect(screen.getByText("Changed file")).toBeInTheDocument();
+    expect(within(within(dashboard).getByRole("group", { name: "File filters" })).queryByText("Issues")).toBeNull();
+    expect(within(screen.getByTestId("session-files-review")).getByText("Changed file")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "View snapshot" }).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Search files")).toBeInTheDocument();
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
@@ -70,7 +75,7 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
 
-    await user.click(within(dashboard).getByText("Changed").closest("button")!);
+    await user.click(within(within(dashboard).getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ }));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.queryByTitle("src")).not.toBeInTheDocument();
 
@@ -83,6 +88,20 @@ describe("SessionFilesPanel", () => {
     render(<SessionFilesPanel files={files} />);
 
     expect(screen.getByTestId("session-files-panel")).not.toHaveAttribute("open");
+  });
+
+  it("does not render an idle workspace browser shell", () => {
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={files}
+        workspaceBrowser={{ state: "idle", workspacePath: "/work/affent" }}
+        onOpenWorkspacePath={() => undefined}
+      />,
+    );
+
+    expect(screen.queryByTestId("session-workspace-browser")).toBeNull();
+    expect(screen.getByRole("button", { name: "Browse workspace" })).toBeInTheDocument();
   });
 
   it("browses workspace directories and file snapshots", async () => {

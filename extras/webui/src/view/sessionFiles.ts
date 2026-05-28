@@ -38,6 +38,20 @@ export interface SessionFilesStats {
   snapshots: number;
 }
 
+export interface SessionFilesReview {
+  label: string;
+  title: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
+export interface SessionFilesFact {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
 interface SessionFileEvidenceInternal extends SessionFileEvidence {
   sequence: number;
 }
@@ -169,6 +183,104 @@ export function fileLines(item: SessionFileEvidence): string[] {
   return lines;
 }
 
+export function filesReviewFocus(items: readonly SessionFileEvidence[]): SessionFilesReview {
+  if (items.length === 0) {
+    return {
+      label: "Idle",
+      title: "No file evidence recorded",
+      detail: "Read, list, write, and edit actions will appear here.",
+      tone: "neutral",
+    };
+  }
+  const failed = items.find((item) => item.status === "failed");
+  if (failed) {
+    return {
+      label: "Path issue",
+      title: failed.path,
+      detail: failed.next ? `Suggested recovery: ${failed.next}` : failed.detail ?? "A file action failed and needs path recovery.",
+      tone: "danger",
+    };
+  }
+  const running = items.find((item) => item.status === "running");
+  if (running) {
+    return {
+      label: "Pending",
+      title: running.path,
+      detail: running.detail ?? "A file action is still running.",
+      tone: "attention",
+    };
+  }
+  const changed = items.find((item) => item.actions.includes("changed"));
+  if (changed) {
+    return {
+      label: "Changed file",
+      title: changed.path,
+      detail: changed.contentPreview ? "Changed file has a loaded snapshot for review." : changed.detail ?? "Review the changed file before approving.",
+      tone: changed.contentPreview ? "ok" : "attention",
+    };
+  }
+  const snapshot = items.find((item) => item.contentPreview);
+  if (snapshot) {
+    return {
+      label: "Snapshot ready",
+      title: snapshot.path,
+      detail: snapshot.contentTruncated ? "Partial read_file output is available." : "Loaded read_file output is available.",
+      tone: "ok",
+    };
+  }
+  const listed = items.find((item) => item.actions.includes("listed"));
+  if (listed) {
+    return {
+      label: "Directory evidence",
+      title: listed.path,
+      detail: "Directory listing evidence is available; open the workspace browser for current contents.",
+      tone: "neutral",
+    };
+  }
+  return {
+    label: "File evidence",
+    title: `${items.length} ${plural("file reference", items.length)}`,
+    detail: "Inspect file evidence before asking for targeted edits.",
+    tone: "neutral",
+  };
+}
+
+export function filesReviewFacts(items: readonly SessionFileEvidence[]): SessionFilesFact[] {
+  const stats = filesStats([...items]);
+  return [
+    {
+      label: "Files",
+      value: String(stats.total),
+      detail: stats.total === 1 ? "referenced path" : "referenced paths",
+      tone: stats.total > 0 ? "neutral" : "neutral",
+    },
+    {
+      label: "Read",
+      value: String(stats.read),
+      detail: "file snapshots",
+      tone: stats.read > 0 ? "ok" : "neutral",
+    },
+    {
+      label: "Changed",
+      value: String(stats.changed),
+      detail: "write/edit paths",
+      tone: stats.changed > 0 ? "attention" : "neutral",
+    },
+    {
+      label: "Snapshots",
+      value: stats.total > 0 ? `${stats.snapshots}/${stats.total}` : "0/0",
+      detail: "loaded content",
+      tone: stats.total === 0 ? "neutral" : stats.snapshots === stats.total ? "ok" : stats.snapshots > 0 ? "attention" : "neutral",
+    },
+    {
+      label: "Issues",
+      value: String(stats.failed + stats.running),
+      detail: stats.failed > 0 ? "path failures" : stats.running > 0 ? "pending actions" : "none",
+      tone: stats.failed > 0 ? "danger" : stats.running > 0 ? "attention" : "neutral",
+    },
+  ];
+}
+
 function filePriority(item: SessionFileEvidence): number {
   if (item.status === "failed") return 0;
   if (item.status === "running") return 1;
@@ -288,6 +400,10 @@ function filesStats(items: SessionFileEvidence[]): SessionFilesStats {
     changed: items.filter((item) => item.actions.includes("changed")).length,
     snapshots: items.filter((item) => item.contentPreview).length,
   };
+}
+
+function plural(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
 }
 
 function stringArg(call: ToolCallState, key: string): string | undefined {

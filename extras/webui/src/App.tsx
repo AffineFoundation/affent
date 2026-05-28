@@ -1595,13 +1595,14 @@ export function App() {
 
   async function handleOpenWorkspacePath(path: string) {
     const cleanPath = path.trim() || ".";
-    if (!selectedSessionId) return;
-    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath: sessionWorkspace.path });
+    if (!selectedSessionId || !sessionWorkspace.path) return;
+    const workspacePath = sessionWorkspace.path;
+    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath });
     try {
       const resp = await readSessionFile(client, selectedSessionId, { path: cleanPath, limit: 64 * 1024 });
-      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath: sessionWorkspace.path });
+      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath });
     } catch (err) {
-      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath: sessionWorkspace.path });
+      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath });
     }
   }
 
@@ -1955,7 +1956,7 @@ export function App() {
           files={sessionFiles}
           workspaceBrowser={workspaceFileBrowser}
           defaultOpen
-          onOpenWorkspacePath={sessionWorkspace.hasData ? (path) => void handleOpenWorkspacePath(path) : undefined}
+          onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
         />

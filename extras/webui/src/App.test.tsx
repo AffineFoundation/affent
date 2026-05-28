@@ -2429,7 +2429,6 @@ describe("App", () => {
     const files = await screen.findByTestId("session-files-panel");
     expect(files).toHaveAttribute("open");
     expect(files).toHaveTextContent("2 file references");
-    await user.click(within(files).getByText("Files"));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence: read.txt");
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));

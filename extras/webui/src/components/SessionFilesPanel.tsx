@@ -4,6 +4,8 @@ import {
   fileContentText,
   fileLines,
   fileRangeDraft,
+  filesReviewFacts,
+  filesReviewFocus,
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
@@ -36,6 +38,8 @@ export function SessionFilesPanel({
   const [filter, setFilter] = useState<FileFilter>("all");
   const trimmedQuery = query.trim();
   const stats = fileStats(files);
+  const review = filesReviewFocus(files.items);
+  const reviewFacts = filesReviewFacts(files.items);
   const filteredItems = filter === "all" ? files.items : files.items.filter((item) => fileMatchesFilter(item, filter));
   const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
@@ -70,6 +74,20 @@ export function SessionFilesPanel({
             <strong>{files.summary}</strong>
             <small>{files.detail || "No file actions recorded."}</small>
           </div>
+          <div className="session-files-review" data-tone={review.tone ?? "neutral"} data-testid="session-files-review">
+            <span>{review.label}</span>
+            <strong title={review.title}>{displayPath(review.title)}</strong>
+            <small>{review.detail}</small>
+          </div>
+          <div className="session-files-facts" aria-label="File review facts">
+            {reviewFacts.map((fact) => (
+              <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+                <small>{fact.label}</small>
+                <strong>{fact.value}</strong>
+                <b>{fact.detail}</b>
+              </span>
+            ))}
+          </div>
           <div className="session-files-filterbar" role="group" aria-label="File filters">
             <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
             <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
@@ -85,7 +103,7 @@ export function SessionFilesPanel({
             </span>
           ) : null}
         </div>
-        {workspaceBrowser ? (
+        {workspaceBrowser && workspaceBrowser.state !== "idle" ? (
           <WorkspaceBrowser
             browser={workspaceBrowser}
             query={workspaceQuery}
