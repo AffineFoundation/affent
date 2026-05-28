@@ -54,6 +54,11 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Full output");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Latest turn");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("4");
+    const sourceIndex = screen.getByLabelText("Artifact source index");
+    expect(sourceIndex).toHaveTextContent("Sources");
+    expect(sourceIndex).toHaveTextContent("shell: npm test -- checkout.spec.ts");
+    expect(sourceIndex).toHaveTextContent("1 file · Full output · turn 3 · 8 KiB");
+    expect(sourceIndex).toHaveTextContent("write_file");
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("000001-test.txt");
     const focus = screen.getByTestId("session-artifacts-focus");
     expect(focus).toHaveTextContent("turn 3 · shell · call 2");
@@ -100,6 +105,13 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
     await user.click(within(filters).getByText("All").closest("button")!);
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
+    await user.click(within(sourceIndex).getByRole("button", { name: /shell: npm test/ }));
+    expect(screen.getByLabelText("Search artifacts")).toHaveValue("");
+    expect(sourceIndex).toHaveTextContent("Clear source");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("checkout-report.md");
+    await user.click(within(sourceIndex).getByRole("button", { name: "Clear source" }));
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
     await user.type(screen.getByLabelText("Search artifacts"), "report");
     expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("000001-test.txt");
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
@@ -118,7 +130,7 @@ describe("SessionArtifactsPanel", () => {
     const panel = screen.getByTestId("session-artifacts-panel");
     expect(panel).toHaveTextContent("No artifacts");
     expect(panel).toHaveTextContent("No artifacts yet");
-    expect(panel).toHaveTextContent("When a tool stores a full output or the agent creates a deliverable");
+    expect(panel).toHaveTextContent("No generated files or stored full outputs in this chat.");
     expect(screen.queryByLabelText("Search artifacts")).toBeNull();
   });
 });

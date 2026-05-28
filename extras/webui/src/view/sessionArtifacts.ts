@@ -1,4 +1,5 @@
 import type { SessionState } from "../store/sessionState";
+import { formatByteCount } from "./byteFormat";
 import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, type TurnArtifact } from "./turnArtifacts";
 
 export type SessionArtifactKind = "deliverable" | "full_output";
@@ -17,6 +18,16 @@ export interface SessionArtifactFact {
   value: string;
   detail: string;
   tone?: "ok" | "attention" | "neutral";
+}
+
+export interface SessionArtifactSourceGroup {
+  key: string;
+  label: string;
+  count: number;
+  kindLabel: string;
+  turns: string;
+  sizeLabel?: string;
+  latestArtifact: TurnArtifact;
 }
 
 export function buildSessionArtifacts(session: SessionState): TurnArtifact[] {
@@ -135,6 +146,51 @@ export function artifactReviewFacts(artifacts: readonly TurnArtifact[]): Session
   ];
 }
 
+export function artifactSourceGroups(artifacts: readonly TurnArtifact[]): SessionArtifactSourceGroup[] {
+  const groups = new Map<string, {
+    artifacts: TurnArtifact[];
+    tool?: string;
+    source: string;
+    bytes: number;
+    hasBytes: boolean;
+  }>();
+  for (const artifact of artifacts) {
+    const source = artifact.source || artifact.tool || "artifact";
+    const key = artifactSourceGroupKey(artifact);
+    const group = groups.get(key) ?? { artifacts: [], tool: artifact.tool, source, bytes: 0, hasBytes: false };
+    group.artifacts.push(artifact);
+    if (artifact.bytes != null) {
+      group.bytes += artifact.bytes;
+      group.hasBytes = true;
+    }
+    groups.set(key, group);
+  }
+
+  return [...groups.entries()]
+    .map(([key, group]) => {
+      const latestArtifact = [...group.artifacts].sort((a, b) => (b.turnNumber ?? 0) - (a.turnNumber ?? 0) || (b.callIndex ?? 0) - (a.callIndex ?? 0))[0];
+      const kinds = new Set(group.artifacts.map(artifactKind));
+      const turns = turnRangeLabel(group.artifacts);
+      return {
+        key,
+        label: artifactSourceLabel(group.tool, group.source),
+        count: group.artifacts.length,
+        kindLabel: kinds.size === 1
+          ? artifactKindLabel(group.artifacts[0])
+          : `${kinds.size} types`,
+        turns,
+        sizeLabel: group.hasBytes ? formatByteCount(group.bytes) : undefined,
+        latestArtifact,
+      };
+    })
+    .sort((a, b) => b.count - a.count || latestTurnNumber(b.latestArtifact) - latestTurnNumber(a.latestArtifact) || a.label.localeCompare(b.label));
+}
+
+export function artifactSourceGroupKey(artifact: TurnArtifact): string {
+  const source = artifact.source || artifact.tool || "artifact";
+  return `${artifact.tool ?? ""}\u0000${source}`;
+}
+
 export function artifactReviewSummary(artifacts: readonly TurnArtifact[]): string {
   if (artifacts.length === 0) return "No artifacts";
   const stats = artifactReviewStats(artifacts);
@@ -155,6 +211,23 @@ export function artifactReviewDetail(artifacts: readonly TurnArtifact[]): string
 
 export function artifactReviewFocus(artifacts: readonly TurnArtifact[]): TurnArtifact | undefined {
   return [...artifacts].reverse().find((artifact) => artifactKind(artifact) === "full_output") ?? artifacts.at(-1);
+}
+
+function artifactSourceLabel(tool: string | undefined, source: string): string {
+  if (!tool) return source;
+  if (source === tool) return tool;
+  return `${tool}: ${source}`;
+}
+
+function latestTurnNumber(artifact: TurnArtifact): number {
+  return artifact.turnNumber ?? 0;
+}
+
+function turnRangeLabel(artifacts: readonly TurnArtifact[]): string {
+  const turns = [...new Set(artifacts.map((artifact) => artifact.turnNumber).filter((turn): turn is number => typeof turn === "number"))].sort((a, b) => a - b);
+  if (turns.length === 0) return "no turn";
+  if (turns.length === 1) return `turn ${turns[0]}`;
+  return `turns ${turns[0]}-${turns[turns.length - 1]}`;
 }
 
 function compactWhitespace(value: string): string {

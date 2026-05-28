@@ -8,6 +8,7 @@ import {
   artifactReviewDetail,
   artifactReviewFacts,
   artifactReviewSummary,
+  artifactSourceGroups,
   buildSessionArtifacts,
   buildWorkbenchArtifacts,
   sessionArtifactLabel,
@@ -95,6 +96,15 @@ describe("sessionArtifacts", () => {
     expect(artifactReviewFacts(artifacts)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Latest turn", value: "1", detail: "1 source" }),
     ]));
+    expect(artifactSourceGroups(artifacts)).toEqual([
+      expect.objectContaining({
+        label: "web_fetch",
+        count: 1,
+        kindLabel: "Full output",
+        turns: "turn 1",
+        sizeLabel: "8 KiB",
+      }),
+    ]);
     expect(artifactEvidenceText(artifacts[0])).toBe(
       [
         "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
@@ -149,5 +159,9 @@ describe("sessionArtifacts", () => {
       ".affent/artifacts/tool-results/000002-c2.txt",
     ]);
     expect(buildWorkbenchArtifacts(session).map(artifactKind)).toEqual(["deliverable", "full_output"]);
+    expect(artifactSourceGroups(buildWorkbenchArtifacts(session)).map((group) => [group.label, group.count, group.kindLabel])).toEqual([
+      ["read_file: report.md", 1, "Full output"],
+      ["write_file", 1, "Deliverable"],
+    ]);
   });
 });

@@ -11,6 +11,8 @@ import {
   artifactReviewFacts,
   artifactReviewStats,
   artifactReviewSummary,
+  artifactSourceGroupKey,
+  artifactSourceGroups,
   artifactSummaryPreview,
   type SessionArtifactKind,
 } from "../view/sessionArtifacts";
@@ -34,12 +36,18 @@ export function SessionArtifactsPanel({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ArtifactFilter>("all");
+  const [sourceKey, setSourceKey] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const stats = artifactReviewStats(artifacts);
-  const filteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
-  const visibleArtifacts = trimmedQuery ? filteredArtifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : filteredArtifacts;
+  const kindFilteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
   const focus = artifactReviewFocus(artifacts);
   const reviewFacts = artifactReviewFacts(artifacts);
+  const sourceGroups = artifactSourceGroups(artifacts);
+  const activeSource = sourceGroups.find((group) => group.key === sourceKey);
+  const sourceFilteredArtifacts = sourceKey
+    ? kindFilteredArtifacts.filter((artifact) => artifactSourceGroupKey(artifact) === sourceKey)
+    : kindFilteredArtifacts;
+  const visibleArtifacts = trimmedQuery ? sourceFilteredArtifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : sourceFilteredArtifacts;
   const focusDownloadUrl = focus ? downloadHref?.(focus.path) : undefined;
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
@@ -97,6 +105,32 @@ export function SessionArtifactsPanel({
                 </span>
               ))}
             </div>
+            {sourceGroups.length > 1 ? (
+              <div className="session-artifacts-source-index" aria-label="Artifact source index">
+                <span>
+                  Sources
+                  {activeSource ? (
+                    <button type="button" onClick={() => setSourceKey(undefined)}>
+                      Clear source
+                    </button>
+                  ) : null}
+                </span>
+                {sourceGroups.slice(0, 5).map((group) => (
+                  <button
+                    key={group.key}
+                    type="button"
+                    data-active={sourceKey === group.key ? "true" : "false"}
+                    onClick={() => {
+                      setFilter("all");
+                      setSourceKey((current) => current === group.key ? undefined : group.key);
+                    }}
+                  >
+                    <strong title={group.label}>{group.label}</strong>
+                    <small>{group.count} {group.count === 1 ? "file" : "files"} · {group.kindLabel} · {group.turns}{group.sizeLabel ? ` · ${group.sizeLabel}` : ""}</small>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="session-artifacts-filterbar" role="group" aria-label="Artifact filters">
               <ArtifactFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
               <ArtifactFilterButton label="Deliverables" value={stats.deliverables} active={filter === "deliverable"} onClick={() => setFilter("deliverable")} />
@@ -154,11 +188,11 @@ export function SessionArtifactsPanel({
             })}
           </ol>
         ) : artifacts.length > 0 ? (
-          <div className="session-skills-empty">No {filter === "all" ? "artifacts" : artifactFilterLabel(filter).toLowerCase()} matching "{trimmedQuery}".</div>
+          <div className="session-skills-empty">No {artifactEmptyLabel(filter, activeSource?.label, trimmedQuery)}.</div>
         ) : (
           <div className="session-artifacts-empty">
             <strong>No artifacts yet</strong>
-            <span>When a tool stores a full output or the agent creates a deliverable, it will appear here with open, download, and reference actions.</span>
+            <span>No generated files or stored full outputs in this chat.</span>
           </div>
         )}
       </div>
@@ -214,4 +248,13 @@ function artifactFilterLabel(filter: ArtifactFilter): string {
   if (filter === "full_output") return "Full output";
   if (filter === "deliverable") return "Deliverables";
   return "Artifacts";
+}
+
+function artifactEmptyLabel(filter: ArtifactFilter, source: string | undefined, query: string): string {
+  const parts = [
+    filter === "all" ? "artifacts" : artifactFilterLabel(filter).toLowerCase(),
+    source ? `from ${source}` : undefined,
+    query ? `matching "${query}"` : undefined,
+  ].filter(Boolean);
+  return parts.join(" ");
 }
