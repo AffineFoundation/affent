@@ -211,6 +211,7 @@ export function App() {
   const nextGuidanceReceiptId = useRef(0);
   const planFetchKeyRef = useRef("");
   const planFetchInFlightKeyRef = useRef("");
+  const memoryFetchKeyRef = useRef("");
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
   const topbarRef = useRef<HTMLDivElement | null>(null);
   const workspaceShellRef = useRef<HTMLDivElement | null>(null);
@@ -422,10 +423,11 @@ export function App() {
   }, [client, demoActive, workbenchOpen]);
 
   useEffect(() => {
-    if (demoActive || !workbenchOpen) {
+    if (demoActive) {
       setAccountSettingsState({ state: "idle" });
       return;
     }
+    if (!workbenchOpen || workbenchTab !== "config" || accountSettingsState.state !== "idle") return;
     const ac = new AbortController();
     setAccountSettingsState({ state: "loading" });
     getAccountSettings(client, ac.signal)
@@ -437,13 +439,14 @@ export function App() {
         setAccountSettingsState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, workbenchOpen]);
+  }, [accountSettingsState.state, client, demoActive, workbenchOpen, workbenchTab]);
 
   useEffect(() => {
-    if (demoActive || !workbenchOpen) {
+    if (demoActive) {
       setSkillsState({ state: "idle" });
       return;
     }
+    if (!workbenchOpen || workbenchTab !== "skills" || skillsState.state !== "idle") return;
     const ac = new AbortController();
     setSkillsState({ state: "loading" });
     listSkills(client, ac.signal)
@@ -459,10 +462,16 @@ export function App() {
         setSkillsState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, workbenchOpen]);
+  }, [client, demoActive, skillsState.state, workbenchOpen, workbenchTab]);
 
   useEffect(() => {
-    if (demoActive || !workbenchOpen) {
+    memoryFetchKeyRef.current = "";
+    setMemoryState(selectedSessionId ? { state: "idle" } : { state: "empty" });
+  }, [selectedSessionId]);
+
+  useEffect(() => {
+    if (demoActive) {
+      memoryFetchKeyRef.current = "";
       setMemoryState({ state: "idle" });
       return;
     }
@@ -470,6 +479,10 @@ export function App() {
       setMemoryState({ state: "empty" });
       return;
     }
+    if (!workbenchOpen || workbenchTab !== "memory" || memoryState.state === "loading") return;
+    const fetchKey = `${selectedSessionId}:${memoryUpdateCount}`;
+    if (memoryFetchKeyRef.current === fetchKey && memoryState.state !== "idle") return;
+    memoryFetchKeyRef.current = fetchKey;
     const ac = new AbortController();
     setMemoryState({ state: "loading" });
     getSessionMemory(client, selectedSessionId, ac.signal)
@@ -481,7 +494,7 @@ export function App() {
         setMemoryState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, memoryUpdateCount, selectedSessionId, workbenchOpen]);
+  }, [client, demoActive, memoryState.state, memoryUpdateCount, selectedSessionId, workbenchOpen, workbenchTab]);
 
   useEffect(() => {
     if (!selectedSessionId || memoryUpdateCount <= 0) return;
@@ -1741,7 +1754,6 @@ export function App() {
           events={session.events}
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
-          onUseAsDraft={handleUseAsDraft}
         />
         {renderRuntimeStatsPanel(sessionTrace.eventCount === 0)}
       </>

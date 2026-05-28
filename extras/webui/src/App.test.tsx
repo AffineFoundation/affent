@@ -1127,8 +1127,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Schedule or frequency:");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toBe("Every day at UTC+8 09:00,");
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.anything());
   });
 
@@ -1212,8 +1211,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("What Affent should do:");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toBe("Every day at UTC+8 09:00,");
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.anything());
   });
 
@@ -1860,11 +1858,18 @@ describe("App", () => {
     expect(screen.queryByTestId("account-settings-panel")).toBeNull();
     expect(screen.queryByTestId("session-memory-panel")).toBeNull();
     expect(screen.queryByTestId("session-skills-panel")).toBeNull();
+    const requestedUrls = () => fetchImpl.mock.calls.map(([input]) => String(input));
+    expect(requestedUrls()).not.toContain("/v1/settings");
+    expect(requestedUrls()).not.toContain("/v1/skills");
+    expect(requestedUrls()).not.toContain("/v1/sessions/s1/memory");
 
     await selectWorkbenchTab(user, "Config");
     expect(await screen.findByTestId("account-settings-panel")).toHaveTextContent("No config");
+    expect(requestedUrls()).toContain("/v1/settings");
+    expect(requestedUrls()).not.toContain("/v1/skills");
     await selectWorkbenchTab(user, "Skills");
     expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("No reusable workflows");
+    expect(requestedUrls()).toContain("/v1/skills");
   });
 
   it("auto-hides chats for Workbench and lets them reopen without closing Workbench", async () => {

@@ -8764,13 +8764,6 @@ pre.code {
   white-space: nowrap;
 }
 
-.session-trace-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
 .session-trace-filter-group {
   display: flex;
   flex-wrap: nowrap;
@@ -8799,13 +8792,13 @@ pre.code {
 }
 
 .session-trace-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 7px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 12px;
   min-width: 0;
+  padding: 2px 0;
 }
 
-.session-trace-metrics span,
 .session-trace-latest {
   min-width: 0;
   border: 1px solid rgba(217, 224, 232, 0.78);
@@ -8815,21 +8808,19 @@ pre.code {
 }
 
 .session-trace-metrics span {
-  display: grid;
-  gap: 2px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
   color: var(--text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .session-trace-metrics span[data-tone="warning"] {
-  border-color: rgba(194, 120, 3, 0.28);
-  background: rgba(255, 247, 237, 0.76);
+  color: #a16207;
 }
 
 .session-trace-metrics span[data-tone="error"] {
-  border-color: rgba(248, 113, 113, 0.34);
-  background: rgba(254, 242, 242, 0.78);
   color: var(--c-error);
 }
 
@@ -8877,6 +8868,7 @@ pre.code {
 .session-trace-latest {
   display: grid;
   gap: 3px;
+  border-left: 2px solid rgba(20, 184, 166, 0.28);
 }
 
 .session-trace-latest span {
@@ -8884,12 +8876,6 @@ pre.code {
   color: var(--text-muted);
   font-size: 12px;
   line-height: 1.35;
-}
-
-@media (max-width: 640px) {
-  .session-trace-actions {
-    justify-content: flex-start;
-  }
 }
 
 .event-chip {

@@ -1,16 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
 import { buildSessionTrace } from "../view/sessionTrace";
 import { SessionTracePanel } from "./SessionTracePanel";
 
 describe("SessionTracePanel", () => {
-  it("renders trace summary, evidence actions, and normalized event rows", async () => {
+  it("renders trace summary, filters, and normalized event rows", async () => {
     const user = userEvent.setup();
-    const onUseAsDraft = vi.fn();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const session = reduceRawEvents([
       { id: 0, type: "trace.meta", data: { schema_version: 1 } },
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -19,7 +16,7 @@ describe("SessionTracePanel", () => {
       { id: 4, type: "tool.result", data: { call_id: "shell", exit_code: 1, result_summary: "failed", result: "failed" } },
     ]);
 
-    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen onUseAsDraft={onUseAsDraft} />);
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
 
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("5 trace entries");
     expect(screen.getByLabelText("Search trace")).toBeInTheDocument();
@@ -30,11 +27,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
 
-    await user.click(screen.getByRole("button", { name: "Copy trace evidence" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Session trace evidence"));
-
-    await user.click(screen.getByRole("button", { name: "Use trace as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Inspect this session trace"), "trace");
+    expect(screen.queryByRole("button", { name: "Use trace as draft" })).toBeNull();
 
     await user.type(screen.getByLabelText("Search trace"), "npm test");
     expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Matching1");

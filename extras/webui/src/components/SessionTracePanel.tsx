@@ -3,12 +3,8 @@ import { EventType, type ToolResultPayload } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import { filterEventTraceEvents } from "../view/eventTrace";
 import {
-  sessionTraceDraft,
-  sessionTraceEvidenceText,
   type SessionTraceView,
 } from "../view/sessionTrace";
-import type { DraftSource } from "../view/draftSource";
-import { CopyButton } from "./CopyButton";
 import { EventTrace } from "./EventTrace";
 
 export function SessionTracePanel({
@@ -16,13 +12,11 @@ export function SessionTracePanel({
   events,
   defaultOpen = false,
   onOpenArtifact,
-  onUseAsDraft,
 }: {
   trace: SessionTraceView;
   events: readonly NormalizedEvent[];
   defaultOpen?: boolean;
   onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: (draft: string, source: DraftSource) => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TraceFilter>("all");
@@ -47,14 +41,6 @@ export function SessionTracePanel({
       <div className="session-skills-body session-trace-body">
         {trace.eventCount > 0 ? (
           <>
-            <div className="session-trace-actions">
-              <CopyButton label="Copy trace evidence" value={sessionTraceEvidenceText(trace)} className="node-action" />
-              {onUseAsDraft ? (
-                <button type="button" className="node-action" onClick={() => onUseAsDraft(sessionTraceDraft(trace), "trace")}>
-                  Use trace as draft
-                </button>
-              ) : null}
-            </div>
             {events.length > 1 ? (
               <div className="session-skills-controls session-trace-controls">
                 <label className="session-skills-search">
