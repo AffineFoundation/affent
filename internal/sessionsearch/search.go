@@ -963,18 +963,35 @@ func appendLoopEventSearchContent(b *strings.Builder, path string) {
 	b.WriteString("recent_loop_events:")
 	for _, ev := range events {
 		b.WriteString("\n- ")
-		appendLoopStateLine(b, "event",
-			"type="+stateSearchValue(ev.Type),
-			"summary="+stateSearchValue(ev.Summary),
-			"reason="+stateSearchValue(ev.Reason),
-			"mode="+stateSearchValue(ev.Mode),
-			"feed="+stateSearchInt(ev.FeedNumber),
-			"decision="+stateSearchValue(ev.Decision),
-			"action="+stateSearchValue(ev.RequiredAction),
-			"calibration="+stateSearchValue(ev.Calibration),
-		)
+		appendLoopStateLine(b, "event", loopEventSearchFields(ev)...)
 	}
 	b.WriteByte('\n')
+}
+
+func loopEventSearchFields(ev loopstate.Event) []string {
+	return []string{
+		"type=" + stateSearchValue(ev.Type),
+		"mode=" + stateSearchValue(ev.Mode),
+		"feed=" + stateSearchInt(ev.FeedNumber),
+		"plan_label=" + stateSearchValue(ev.PlanLabel),
+		"plan_step_index=" + stateSearchInt(ev.PlanStepIndex),
+		"plan_step_status=" + stateSearchValue(ev.PlanStepStatus),
+		"plan_step=" + stateSearchValue(ev.PlanStep),
+		"turn_end=" + stateSearchValue(ev.TurnEndReason),
+		"tools=" + stateSearchInt(ev.ToolRequests),
+		"tool_errors=" + stateSearchInt(ev.ToolErrors),
+		"loop_guards=" + stateSearchInt(ev.LoopGuards),
+		"forced_no_tools=" + stateSearchInt(ev.ForcedNoTools),
+		"memory_updates=" + stateSearchInt(ev.MemoryUpdates),
+		"memory_searches=" + stateSearchInt(ev.MemorySearches),
+		"memory_misses=" + stateSearchInt(ev.MemoryMisses),
+		"session_search=" + stateSearchInt(ev.SessionSearch),
+		"decision=" + stateSearchValue(ev.Decision),
+		"action=" + stateSearchValue(ev.RequiredAction),
+		"calibration=" + stateSearchValue(ev.Calibration),
+		"summary=" + stateSearchValue(ev.Summary),
+		"reason=" + stateSearchValue(ev.Reason),
+	}
 }
 
 func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {

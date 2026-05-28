@@ -238,16 +238,24 @@ func TestSearchFindsRecentLoopSidecarEvents(t *testing.T) {
 
 Keep browser evidence recoverable.`)
 	if _, err := loopstate.AppendEvent(loopstate.EventsPath(filepath.Join(dir, sessionID), sessionID), loopstate.Event{
-		Type:       "loop.protocol_feed",
-		Summary:    "Fed LOOP.md digest before browser evidence recovery",
-		Reason:     "loop protocol feed policy",
-		Mode:       "digest",
-		FeedNumber: 4,
+		Type:           "loop.protocol_feed",
+		Summary:        "Fed LOOP.md digest before browser evidence recovery",
+		Reason:         "loop protocol feed policy",
+		Mode:           "digest",
+		FeedNumber:     4,
+		PlanLabel:      "plan:1/3:active",
+		PlanStepIndex:  2,
+		PlanStepStatus: "in_progress",
+		PlanStep:       "recover browser network evidence after max_turns",
+		TurnEndReason:  "max_turns",
+		LoopGuards:     2,
+		MemoryMisses:   1,
+		SessionSearch:  1,
 	}); err != nil {
 		t.Fatalf("AppendEvent: %v", err)
 	}
 
-	hits, err := Search(context.Background(), dir, "", "digest browser evidence", 5, 3)
+	hits, err := Search(context.Background(), dir, "", "browser network max_turns session search", 5, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,12 +266,12 @@ Keep browser evidence recoverable.`)
 	if hit.SessionID != sessionID || hit.Role != "loop" {
 		t.Fatalf("expected loop hit from sidecar event, got %+v", hit)
 	}
-	for _, want := range []string{"recent_loop_events", "loop.protocol_feed", "digest", "browser evidence"} {
+	for _, want := range []string{"recent_loop_events", "loop.protocol_feed", "digest", "browser network evidence", "max_turns", "loop_guards=2", "session_search=1"} {
 		if !strings.Contains(hit.Snippet, want) {
 			t.Fatalf("loop event hit snippet missing %q:\n%+v", want, hit)
 		}
 	}
-	requireMatchedTerms(t, hit.MatchedTerms, "digest", "browser", "evidence")
+	requireMatchedTerms(t, hit.MatchedTerms, "browser", "network", "max", "turns", "session", "search")
 }
 
 func TestSearchFindsRecoveryEventAnchors(t *testing.T) {

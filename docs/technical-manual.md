@@ -473,6 +473,11 @@ terms, context flag, and compact snippet preview. Search also indexes compact
 persisted `plan.json` state as `role=plan` and per-session `LOOP.md` protocol
 state as `role=loop`, so a long-run task can be recovered from its current step
 or current situation even when that state no longer appears in the transcript.
+Loop search content also includes recent loop sidecar events with bounded
+protocol-feed checkpoints: feed mode/number, plan label/current step, last turn
+end reason, loop guard count, memory search/update counts, and session-search
+counts. This makes a no-hit recovery anchor useful for deciding where to resume
+instead of merely proving that a loop existed.
 A user-request hit can carry the adjacent assistant answer so resume/debug runs
 show the prior outcome, not just the old question, which lets poor
 resume/recovery runs be debugged without opening the full transcript. When
