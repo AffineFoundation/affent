@@ -174,6 +174,7 @@ type BatchScenario struct {
 	RequiredLoopDecisionResults                    map[string]int
 	RequiredLoopDecisionMatches                    []LoopDecisionRequirement
 	RequiredMessageRejected                        map[string]int
+	RequiredCompletionGuards                       []string
 	RequiredLoopProtocolFeeds                      int
 	RequiredLoopProtocolCalibrationRequests        int
 	RequiredLoopProtocolCalibrations               int
@@ -417,6 +418,7 @@ type DebugScenarioExpectations struct {
 	RequiredLoopDecisionResults                    map[string]int                        `json:"required_loop_decision_results,omitempty"`
 	RequiredLoopDecisionMatches                    []DebugLoopDecisionRequirement        `json:"required_loop_decision_matches,omitempty"`
 	RequiredMessageRejected                        map[string]int                        `json:"required_message_rejected,omitempty"`
+	RequiredCompletionGuards                       []string                              `json:"required_completion_guards,omitempty"`
 	RequiredLoopProtocolFeeds                      int                                   `json:"required_loop_protocol_feeds,omitempty"`
 	RequiredLoopProtocolCalibrationRequests        int                                   `json:"required_loop_protocol_calibration_requests,omitempty"`
 	RequiredLoopProtocolCalibrations               int                                   `json:"required_loop_protocol_calibrations,omitempty"`
@@ -559,6 +561,17 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 			case strings.Contains(trigger, "loop_protocol"):
 				caps["loop_protocol"] = true
 			case strings.Contains(trigger, "plan"):
+				caps["plan"] = true
+			}
+		}
+	}
+	if len(exp.RequiredCompletionGuards) > 0 {
+		caps["trace"] = true
+		for _, guard := range exp.RequiredCompletionGuards {
+			switch {
+			case strings.Contains(guard, "loop_protocol"):
+				caps["loop_protocol"] = true
+			case strings.Contains(guard, "plan"):
 				caps["plan"] = true
 			}
 		}
@@ -2035,6 +2048,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopDecisionResults:             cloneStringIntMap(s.RequiredLoopDecisionResults),
 		RequiredLoopDecisionMatches:             loopReqs,
 		RequiredMessageRejected:                 cloneStringIntMap(s.RequiredMessageRejected),
+		RequiredCompletionGuards:                append([]string(nil), s.RequiredCompletionGuards...),
 		RequiredLoopProtocolFeeds:               s.RequiredLoopProtocolFeeds,
 		RequiredLoopProtocolCalibrationRequests: s.RequiredLoopProtocolCalibrationRequests,
 		RequiredLoopProtocolCalibrations:        s.RequiredLoopProtocolCalibrations,
@@ -2161,6 +2175,7 @@ func cloneRuntimeSurface(surface *sse.RuntimeSurfacePayload) *sse.RuntimeSurface
 	out := *surface
 	out.Tools = append([]sse.RuntimeSurfaceTool(nil), surface.Tools...)
 	out.ToolCallCaps = append([]sse.RuntimeToolCallCap(nil), surface.ToolCallCaps...)
+	out.CompletionGuards = append([]string(nil), surface.CompletionGuards...)
 	return &out
 }
 
@@ -3203,6 +3218,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, trigger := range sortedStringMapKeys(scenario.RequiredMessageRejected) {
 		checks = append(checks, MessageRejectedAtLeast(trigger, scenario.RequiredMessageRejected[trigger]))
+	}
+	for _, guard := range scenario.RequiredCompletionGuards {
+		checks = append(checks, RuntimeSurfaceCompletionGuard(guard))
 	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())

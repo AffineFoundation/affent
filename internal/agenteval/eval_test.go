@@ -580,7 +580,8 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		trace.RuntimeSurfaces[0].MaxTurnSteps != 12 ||
 		len(trace.RuntimeSurfaces[0].ToolCallCaps) != 2 ||
 		trace.RuntimeSurfaces[0].ToolCallCaps[0].Tool != "web_fetch" ||
-		trace.RuntimeSurfaces[0].ToolCallCaps[0].Max != 8 {
+		trace.RuntimeSurfaces[0].ToolCallCaps[0].Max != 8 ||
+		!reflect.DeepEqual(trace.RuntimeSurfaces[0].CompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
 		t.Fatalf("RuntimeSurfaces = %+v", trace.RuntimeSurfaces)
 	}
 	contextInjections := trace.ContextInjectionStats(1)
@@ -1402,6 +1403,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
+		RequiredCompletionGuards:                []string{"active_plan_unfinished"},
 		RequiredLoopProtocolFeeds:               1,
 		RequiredLoopProtocolCalibrationRequests: 1,
 		RequiredLoopProtocolCalibrations:        1,
@@ -1496,6 +1498,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"subagent_source_evidence_at_least:review:1",
+		"runtime_surface_completion_guard:active_plan_unfinished",
 		"no_delegation_errors",
 		"no_plan_errors",
 		"max_successful_tool_calls:read_file:1",
@@ -1530,6 +1533,24 @@ func TestBatchScenarioChecks_SourceAccessRequirementDefaultsToOne(t *testing.T) 
 	}
 	if !strings.HasPrefix(checks[1].Name, "source_access_match_at_least:network:*:taostats.io:*:*:1") {
 		t.Fatalf("default source access check name = %q", checks[1].Name)
+	}
+}
+
+func TestDebugScenarioExpectationsCopiesCompletionGuards(t *testing.T) {
+	scenario := BatchScenario{RequiredCompletionGuards: []string{"active_plan_unfinished", "loop_protocol_running"}}
+	exp := debugScenarioExpectations(scenario)
+	if !reflect.DeepEqual(exp.RequiredCompletionGuards, scenario.RequiredCompletionGuards) {
+		t.Fatalf("RequiredCompletionGuards = %#v", exp.RequiredCompletionGuards)
+	}
+	if !stringSliceContains(exp.CheckNames, "runtime_surface_completion_guard:active_plan_unfinished") ||
+		!stringSliceContains(exp.CheckNames, "runtime_surface_completion_guard:loop_protocol_running") {
+		t.Fatalf("CheckNames = %#v, want runtime surface completion guard checks", exp.CheckNames)
+	}
+	caps := ExpectationCapabilityNames(exp)
+	for _, want := range []string{"plan", "loop_protocol", "trace"} {
+		if !stringSliceContains(caps, want) {
+			t.Fatalf("caps = %#v, want %q", caps, want)
+		}
 	}
 }
 
@@ -2348,8 +2369,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !scratchProject.RequireNoPlanErrors || !scratchProject.RequireFinalPlanCompleted {
 		t.Fatalf("scratch project plan closure flags = no_errors:%v final_completed:%v, want both true", scratchProject.RequireNoPlanErrors, scratchProject.RequireFinalPlanCompleted)
 	}
+	if !reflect.DeepEqual(scratchProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("scratch project RequiredCompletionGuards = %#v", scratchProject.RequiredCompletionGuards)
+	}
 	checkNames := checkNamesFor(BatchScenarioChecks(scratchProject))
-	for _, want := range []string{"no_plan_errors", "final_plan_completed"} {
+	for _, want := range []string{"no_plan_errors", "final_plan_completed", "runtime_surface_completion_guard:active_plan_unfinished", "runtime_surface_completion_guard:loop_protocol_running"} {
 		if !stringSliceContains(checkNames, want) {
 			t.Fatalf("scratch project checks = %#v, want %q", checkNames, want)
 		}
@@ -2398,8 +2422,12 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if closureGuard.RequiredLoopProtocolFinalStatus != "completed" {
 		t.Fatalf("closure guard RequiredLoopProtocolFinalStatus = %q, want completed", closureGuard.RequiredLoopProtocolFinalStatus)
 	}
+	if !reflect.DeepEqual(closureGuard.RequiredCompletionGuards, []string{"loop_protocol_running"}) {
+		t.Fatalf("closure guard RequiredCompletionGuards = %#v", closureGuard.RequiredCompletionGuards)
+	}
 	closureGuardChecks := checkNamesFor(BatchScenarioChecks(closureGuard))
-	if !stringSliceContains(closureGuardChecks, "message_rejected_at_least:loop_protocol_running:1") {
+	if !stringSliceContains(closureGuardChecks, "message_rejected_at_least:loop_protocol_running:1") ||
+		!stringSliceContains(closureGuardChecks, "runtime_surface_completion_guard:loop_protocol_running") {
 		t.Fatalf("closure guard checks = %#v, want loop protocol message rejected check", closureGuardChecks)
 	}
 	closureGuardCaps := ScenarioExpectationCapabilityNames(closureGuard)
@@ -2435,8 +2463,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !activePlanGuard.RequireNoPlanErrors || !activePlanGuard.RequireFinalPlanCompleted {
 		t.Fatalf("active plan guard plan closure flags = no_errors:%v final_completed:%v, want both true", activePlanGuard.RequireNoPlanErrors, activePlanGuard.RequireFinalPlanCompleted)
 	}
+	if !reflect.DeepEqual(activePlanGuard.RequiredCompletionGuards, []string{"active_plan_unfinished"}) {
+		t.Fatalf("active plan guard RequiredCompletionGuards = %#v", activePlanGuard.RequiredCompletionGuards)
+	}
 	activePlanGuardChecks := checkNamesFor(BatchScenarioChecks(activePlanGuard))
-	for _, want := range []string{"message_rejected_at_least:active_plan_unfinished:1", "no_plan_errors", "final_plan_completed"} {
+	for _, want := range []string{"message_rejected_at_least:active_plan_unfinished:1", "runtime_surface_completion_guard:active_plan_unfinished", "no_plan_errors", "final_plan_completed"} {
 		if !stringSliceContains(activePlanGuardChecks, want) {
 			t.Fatalf("active plan guard checks = %#v, want %q", activePlanGuardChecks, want)
 		}
@@ -2460,6 +2491,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if len(iterativeProject.Prompts) != 2 || iterativeProject.Prompt != "" {
 		t.Fatalf("iterative scratch project prompts = prompt:%q prompts:%d", iterativeProject.Prompt, len(iterativeProject.Prompts))
+	}
+	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("iterative scratch project RequiredCompletionGuards = %#v", iterativeProject.RequiredCompletionGuards)
 	}
 	for _, prompt := range iterativeProject.Prompts {
 		if strings.Contains(prompt, "请") {
@@ -2526,6 +2560,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if integrated.SessionID != "integrated-memory-recovery" || !integrated.EnableMemory || !integrated.EnableLoopProtocol {
 		t.Fatalf("integrated memory recovery fields = session:%q memory:%v loop:%v", integrated.SessionID, integrated.EnableMemory, integrated.EnableLoopProtocol)
+	}
+	if !reflect.DeepEqual(integrated.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("integrated memory recovery RequiredCompletionGuards = %#v", integrated.RequiredCompletionGuards)
 	}
 	if len(integrated.Prompts) != 2 || integrated.Prompt != "" {
 		t.Fatalf("integrated memory recovery prompts = prompt:%q prompts:%d", integrated.Prompt, len(integrated.Prompts))

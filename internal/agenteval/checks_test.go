@@ -917,6 +917,25 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 	}
 }
 
+func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
+	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
+		{CompletionGuards: []string{"active_plan_unfinished"}},
+		{CompletionGuards: []string{"loop_protocol_running"}},
+	}}
+	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
+	}
+	res := RuntimeSurfaceCompletionGuard("missing_guard").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing runtime surface completion guard to fail")
+	}
+	for _, want := range []string{"missing_guard", "active_plan_unfinished", "loop_protocol_running"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
+		}
+	}
+}
+
 func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
 		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnToolErrors: 1, LastTurnForcedNoTools: 1, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1, LastDecisionKind: "evidence_quality", LastDecisionTrigger: "source_access_dynamic_partial", LastDecision: "defer", LastDecisionConfidence: "high", LastDecisionReason: "dynamic widgets were empty", LastDecisionAction: "read browser_network_read ref n7"},

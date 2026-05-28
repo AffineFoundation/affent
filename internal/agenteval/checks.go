@@ -796,6 +796,35 @@ func MessageRejectedAtLeast(trigger string, min int) Check {
 	}
 }
 
+func RuntimeSurfaceCompletionGuard(name string) Check {
+	name = strings.TrimSpace(name)
+	return Check{
+		Name: fmt.Sprintf("runtime_surface_completion_guard:%s", previewSubstr(name, 48)),
+		Eval: func(t Trace) CheckResult {
+			if name == "" {
+				return CheckResult{Pass: true}
+			}
+			observed := map[string]bool{}
+			for _, surface := range t.RuntimeSurfaces {
+				for _, guard := range surface.CompletionGuards {
+					guard = strings.TrimSpace(guard)
+					if guard == "" {
+						continue
+					}
+					observed[guard] = true
+					if guard == name {
+						return CheckResult{Pass: true, Detail: fmt.Sprintf("completion_guard=%s", name)}
+					}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("completion_guard %q not observed in runtime.surface; observed=%v", name, sortedStringMapKeys(observed)),
+			}
+		},
+	}
+}
+
 func LoopProtocolFeedsAtLeast(min int) Check {
 	return Check{
 		Name: fmt.Sprintf("loop_protocol_feeds_at_least:%d", min),

@@ -3369,6 +3369,10 @@ This repository starts almost empty. The agent must create the project, tests, d
 		RequiredLoopProtocolFinalStatus: "completed",
 		RequireNoPlanErrors:             true,
 		RequireFinalPlanCompleted:       true,
+		RequiredCompletionGuards: []string{
+			"active_plan_unfinished",
+			"loop_protocol_running",
+		},
 		RequiredTraceEventCounts: map[string]int{
 			"loop.turn_checkpoint": 1,
 		},
@@ -3459,6 +3463,9 @@ Evidence is the loop_protocol close event and final LOOP.md status.
 		RequiredMessageRejected: map[string]int{
 			"loop_protocol_running": 1,
 		},
+		RequiredCompletionGuards: []string{
+			"loop_protocol_running",
+		},
 		RequiredTraceEventCounts: map[string]int{
 			"message.rejected": 1,
 		},
@@ -3511,6 +3518,9 @@ func longRunActivePlanFinalClosureGuardScenario() BatchScenario {
 		},
 		RequiredMessageRejected: map[string]int{
 			"active_plan_unfinished": 1,
+		},
+		RequiredCompletionGuards: []string{
+			"active_plan_unfinished",
 		},
 		RequiredTraceEventCounts: map[string]int{
 			"message.rejected": 1,
@@ -3627,6 +3637,10 @@ This repository starts almost empty. The agent must create the project over two 
 			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredLoopProtocolFeeds: 2,
+		RequiredCompletionGuards: []string{
+			"active_plan_unfinished",
+			"loop_protocol_running",
+		},
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full":   1,
 			"digest": 1,
@@ -3896,6 +3910,10 @@ if __name__ == "__main__":
 			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredLoopProtocolFeeds: 2,
+		RequiredCompletionGuards: []string{
+			"active_plan_unfinished",
+			"loop_protocol_running",
+		},
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full":   1,
 			"digest": 1,

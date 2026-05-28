@@ -494,6 +494,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineCountsLine(b, "required_conversation_repair_kinds", exp.RequiredConversationRepairKinds)
 	writeTimelineCountsLine(b, "required_loop_decision_kinds", exp.RequiredLoopDecisionKinds)
 	writeTimelineCountsLine(b, "required_loop_decision_results", exp.RequiredLoopDecisionResults)
+	writeTimelineStringList(b, "required_completion_guards", exp.RequiredCompletionGuards)
 	if exp.RequiredLoopProtocolFeeds > 0 {
 		fmt.Fprintf(b, "- required_loop_protocol_feeds: `%d`\n", exp.RequiredLoopProtocolFeeds)
 	}
@@ -792,6 +793,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredLoopDecisionKinds) > 0 ||
 		len(exp.RequiredLoopDecisionResults) > 0 ||
 		len(exp.RequiredLoopDecisionMatches) > 0 ||
+		len(exp.RequiredCompletionGuards) > 0 ||
 		exp.RequiredLoopProtocolFeeds > 0 ||
 		exp.RequiredLoopProtocolCalibrationRequests > 0 ||
 		exp.RequiredLoopProtocolCalibrations > 0 ||
