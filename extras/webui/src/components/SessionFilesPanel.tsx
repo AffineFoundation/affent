@@ -5,6 +5,8 @@ import {
   fileContentText,
   fileEvidenceDraft,
   fileEvidenceText,
+  filesEvidenceDraft,
+  filesEvidenceText,
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
@@ -52,10 +54,20 @@ export function SessionFilesPanel({
           <div className="session-files-filterbar" role="group" aria-label="File filters">
             <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
             <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
-            <FileFilterButton label="Read" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
+            <FileFilterButton label="Snapshot" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
             <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
             <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
           </div>
+          {files.items.length > 0 ? (
+            <div className="session-files-overview-actions">
+              <CopyButton label="Copy all evidence" value={filesEvidenceText(files)} className="ghost-action" />
+              {onUseAsDraft ? (
+                <button type="button" className="ghost-action" onClick={() => onUseAsDraft(filesEvidenceDraft(files), "file_evidence")}>
+                  Use all as draft
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         {focus ? (
           <div className="session-files-focus" data-tone={focus.tone}>
@@ -279,8 +291,20 @@ function statusLabel(status: SessionFileEvidence["status"]): string {
 function displayPath(path: string): string {
   const normalized = path.replace(/\\/g, "/");
   const parts = normalized.split("/").filter(Boolean);
+  if (path.length <= 48) return path;
+  if (parts.length >= 2) {
+    const file = parts.at(-1) ?? path;
+    const parent = shortenPathSegment(parts.at(-2) ?? "");
+    return parent ? `.../${parent}/${file}` : `.../${file}`;
+  }
   if (parts.length <= 3) return path;
   return parts.slice(-3).join("/");
+}
+
+function shortenPathSegment(segment: string): string {
+  if (segment.length <= 22) return segment;
+  if (segment.startsWith("sess_")) return `${segment.slice(0, 13)}...${segment.slice(-6)}`;
+  return `${segment.slice(0, 10)}...${segment.slice(-6)}`;
 }
 
 function artifactLabel(path: string): string {

@@ -81,6 +81,29 @@ export function fileEvidenceText(item: SessionFileEvidence): string {
   return lines.join("\n");
 }
 
+export function filesEvidenceText(files: SessionFilesView): string {
+  const lines = [
+    "Session file evidence",
+    `Summary: ${files.summary}`,
+    `Detail: ${files.detail}`,
+  ];
+  if (files.items.length === 0) {
+    lines.push("No file evidence recorded.");
+    return lines.join("\n");
+  }
+  lines.push("");
+  lines.push(...files.items.map(fileEvidenceText).join("\n\n").split("\n"));
+  return lines.join("\n");
+}
+
+export function filesEvidenceDraft(files: SessionFilesView): string {
+  return [
+    "Use this file evidence to decide what to inspect, fix, or review next:",
+    "",
+    filesEvidenceText(files),
+  ].join("\n");
+}
+
 export function fileEvidenceDraft(item: SessionFileEvidence): string {
   const lead = item.status === "failed"
     ? "Recover this file path before continuing"

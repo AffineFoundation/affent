@@ -19,6 +19,7 @@ describe("SessionFilesPanel", () => {
     expect(panel).toHaveTextContent("2 file references");
     expect(within(dashboard).getByText("All").closest("button")).toHaveTextContent("2");
     expect(within(dashboard).getByText("Changed").closest("button")).toHaveTextContent("1");
+    expect(within(dashboard).getByText("Snapshot").closest("button")).toHaveTextContent("1");
     expect(screen.getByText("Changed file")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Review change" }).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Search files")).toBeInTheDocument();
@@ -37,6 +38,10 @@ describe("SessionFilesPanel", () => {
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
+    await user.click(screen.getByRole("button", { name: "Copy all evidence" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Session file evidence"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"));
+
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy evidence" })[0]);
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"));
@@ -49,10 +54,12 @@ describe("SessionFilesPanel", () => {
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
 
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Review change" })[0]);
+    await user.click(screen.getByRole("button", { name: "Use all as draft" }));
     await user.click(screen.getByRole("button", { name: "Use text as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"), "file_evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Session file evidence"), "file_evidence");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("export function checkout"), "file_snapshot");
 
     await user.clear(screen.getByLabelText("Search file snapshot"));

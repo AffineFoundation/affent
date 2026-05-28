@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText } from "./sessionFiles";
+import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText, filesEvidenceDraft, filesEvidenceText } from "./sessionFiles";
 
 describe("buildSessionFiles", () => {
   it("summarizes read, list, and changed file evidence from reducer state", () => {
@@ -113,6 +113,9 @@ describe("buildSessionFiles", () => {
     expect(fileEvidenceText(item)).toContain("Loaded snapshot: read_file output");
     expect(fileEvidenceDraft(item)).toContain("Use this file evidence in the next step");
     expect(fileEvidenceDraft(item)).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    expect(filesEvidenceText(buildSessionFiles(session))).toContain("Session file evidence");
+    expect(filesEvidenceText(buildSessionFiles(session))).toContain("File evidence for src/payments.ts");
+    expect(filesEvidenceDraft(buildSessionFiles(session))).toContain("decide what to inspect, fix, or review next");
     expect(fileContentText(item)).toContain("File snapshot for src/payments.ts");
     expect(fileContentText(item)).toContain("checkout route handler");
     expect(fileContentDraft(item)).toContain("Use this loaded file snapshot in the next step");

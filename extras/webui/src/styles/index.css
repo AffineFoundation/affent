@@ -1502,6 +1502,15 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-files-overview-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
 .session-files-filter {
   display: grid;
   grid-template-columns: auto auto;
