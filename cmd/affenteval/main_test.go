@@ -225,7 +225,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 			t.Fatalf("--help missing env hint %q:\n%s", want, help)
 		}
 	}
-	for _, want := range []string{"-runtime-web", "-runtime-browser", "-trace-deltas"} {
+	for _, want := range []string{"-runtime-web", "-runtime-browser", "-trace-deltas", "-trace-workspace"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("--help missing runtime eval flag %q:\n%s", want, help)
 		}
@@ -361,6 +361,56 @@ func TestRunTraceFileAppliesQualityGates(t *testing.T) {
 		if !testStringSliceContains(manifest.QualityGateFailures, want) {
 			t.Fatalf("manifest quality_gate_failures = %#v, want %q", manifest.QualityGateFailures, want)
 		}
+	}
+}
+
+func TestRunTraceFileAppliesSelectedScenarioWithWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	tracePath := filepath.Join(dir, "events.jsonl")
+	workspace := "/workspace/sessions/sess_manual_cli"
+	alias := strings.TrimPrefix(filepath.ToSlash(filepath.Join(workspace, "data", "value.txt")), "/")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"tool.request","data":{"turn_id":"turn-1","call_id":"c1","tool":"shell","args":{"command":"pwd; cat ` + alias + `"}}}`,
+		`{"type":"tool.result","data":{"turn_id":"turn-1","call_id":"c1","exit_code":0,"result":"marker=RELATIVE-WORKSPACE-OK"}}`,
+		`{"type":"message.done","data":{"turn_id":"turn-1","text":"RELATIVE-WORKSPACE-OK","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":1,"tool_errors":0}}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outDir := filepath.Join(dir, "debug")
+	out, code := captureStdout(t, func() int {
+		return run([]string{
+			"--trace-file", tracePath,
+			"--trace-output-dir", outDir,
+			"--trace-workspace", workspace,
+			"--scenario", "small-tools-workspace-relative-shell",
+		})
+	})
+	if code != 1 {
+		t.Fatalf("run --trace-file scenario exit = %d\n%s", code, out)
+	}
+	for _, want := range []string{
+		"FAIL small-tools-workspace-relative-shell",
+		"used workspace absolute path",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--trace-file scenario output missing %q:\n%s", want, out)
+		}
+	}
+	var manifest agenteval.DebugManifest
+	raw, err := os.ReadFile(filepath.Join(outDir, "affenteval-debug.json"))
+	if err != nil {
+		t.Fatalf("read debug manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
+	}
+	if manifest.Scenario != "small-tools-workspace-relative-shell" ||
+		!manifest.Expectations.ForbidWorkspaceAbsolutePaths ||
+		!testStringSliceContains(manifest.Expectations.CheckNames, "shell_command_lacks_workspace_absolute_path") {
+		t.Fatalf("trace-file scenario manifest expectations = %+v", manifest.Expectations)
 	}
 }
 

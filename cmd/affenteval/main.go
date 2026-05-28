@@ -239,6 +239,7 @@ func run(args []string) int {
 		adHocVerify                               = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
 		traceFile                                 = fs.String("trace-file", "", "parse an existing trace/events JSONL file and write debug artifacts without running a model")
 		traceOutputDir                            = fs.String("trace-output-dir", "", "directory for --trace-file debug artifacts; default is TRACE_DIR/affenteval-debug")
+		traceWorkspace                            = fs.String("trace-workspace", "", "workspace root for --trace-file scenario checks; default is the trace debug output dir")
 		sessionStateRoot                          = fs.String("session-state-root", "", "parent directory for --session-id trace debug artifacts; default AFFENTSERVE_MEMORY_ROOT or repo-local .tmp/runtime-workspace/session-state")
 		repoRoot                                  = fs.String("repo-root", ".", "Affent repository root")
 		workRoot                                  = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
@@ -424,10 +425,29 @@ success and trace-level process quality.`)
 		}
 	}
 	if tracePath != "" {
+		var scenarioForTrace *agenteval.BatchScenario
+		if strings.TrimSpace(*suite) != "" || strings.TrimSpace(*scenarioCSV) != "" {
+			scenarios, err := selectedEvalScenarios(*suite, *scenarioCSV, "", "", "", "", 1, "")
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
+				return 64
+			}
+			if len(scenarios) != 1 {
+				fmt.Fprintf(os.Stderr, "trace-file: --suite/--scenario must select exactly one scenario when applying expectations to an existing trace; selected %d\n", len(scenarios))
+				return 64
+			}
+			scenario := scenarios[0]
+			scenarioForTrace = &scenario
+			if !flagWasSet(fs, "name") || traceName == "" || traceName == "adhoc" {
+				traceName = scenario.Name
+			}
+		}
 		res, err := agenteval.WriteTraceDebugArtifacts(agenteval.TraceDebugOptions{
-			TracePath: tracePath,
-			OutputDir: strings.TrimSpace(*traceOutputDir),
-			Name:      traceName,
+			TracePath:    tracePath,
+			OutputDir:    strings.TrimSpace(*traceOutputDir),
+			Name:         traceName,
+			Scenario:     scenarioForTrace,
+			WorkspaceDir: strings.TrimSpace(*traceWorkspace),
 		})
 		if err != nil && strings.TrimSpace(res.BatchScenario) == "" {
 			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)

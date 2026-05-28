@@ -2691,12 +2691,14 @@ func ParseTraceFile(path string) (Trace, error) {
 }
 
 type TraceDebugOptions struct {
-	TracePath string
-	OutputDir string
-	Name      string
-	Prompt    string
-	Stdout    string
-	Stderr    string
+	TracePath    string
+	OutputDir    string
+	Name         string
+	Prompt       string
+	Stdout       string
+	Stderr       string
+	Scenario     *BatchScenario
+	WorkspaceDir string
 }
 
 // WriteTraceDebugArtifacts parses an existing affent trace/events JSONL file
@@ -2727,9 +2729,25 @@ func WriteTraceDebugArtifacts(opts TraceDebugOptions) (BatchResult, error) {
 		Name:   name,
 		Prompt: opts.Prompt,
 	}
-	trace.WorkspaceDir = outputDir
+	if opts.Scenario != nil {
+		scenario = *opts.Scenario
+		if strings.TrimSpace(name) != "" && name != "trace-debug" {
+			scenario.Name = name
+		}
+		if strings.TrimSpace(opts.Prompt) != "" {
+			scenario.Prompt = opts.Prompt
+		}
+		if strings.TrimSpace(scenario.Name) == "" {
+			scenario.Name = name
+		}
+	}
+	checkWorkspace := strings.TrimSpace(opts.WorkspaceDir)
+	if checkWorkspace == "" {
+		checkWorkspace = outputDir
+	}
+	trace.WorkspaceDir = checkWorkspace
 	res := BatchResult{
-		BatchScenario: name,
+		BatchScenario: scenario.Name,
 		Workspace:     outputDir,
 		TracePath:     tracePath,
 		FinalText:     strings.TrimSpace(trace.FinalText),
