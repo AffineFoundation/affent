@@ -1,14 +1,19 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { WorkbenchContextPanel } from "./WorkbenchContextPanel";
 import type { SessionOverview } from "../view/sessionOverview";
 
 describe("WorkbenchContextPanel", () => {
-  it("opens on current chat context without promoting low-signal token counts", () => {
+  it("opens on current chat context without promoting low-signal token counts", async () => {
+    const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+
     render(
       <WorkbenchContextPanel
         defaultOpen
         hasSelectedSession
+        onSelectSection={onSelectSection}
         overview={overview({
           headline: "Fix failing checkout tests",
           detail: "Tests failed after the payment route changed.",
@@ -74,13 +79,20 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("3 file references");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Run");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("1 failed command");
+
+    await user.click(screen.getByRole("button", { name: "Open Run" }));
+    expect(onSelectSection).toHaveBeenCalledWith("run");
   });
 
-  it("links automation only when the current session has automation attention", () => {
+  it("links automation only when the current session has automation attention", async () => {
+    const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+
     render(
       <WorkbenchContextPanel
         defaultOpen
         hasSelectedSession
+        onSelectSection={onSelectSection}
         overview={overview({ headline: "Runtime monitor", detail: "Loop waits for calibration." })}
         automationTitle="Loop waiting · 1 timer pending"
         automationDetail="Answer setup question before LOOP.md can run."
@@ -89,6 +101,9 @@ describe("WorkbenchContextPanel", () => {
 
     expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Loop waiting · 1 timer pending");
     expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Answer setup question before LOOP.md can run.");
+
+    await user.click(screen.getByTestId("workbench-context-automation"));
+    expect(onSelectSection).toHaveBeenCalledWith("automation");
   });
 
   it("uses the context attention detail as the status evidence", () => {

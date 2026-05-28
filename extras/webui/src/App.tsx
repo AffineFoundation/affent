@@ -1419,6 +1419,7 @@ export function App() {
           run={sessionRun}
           automationTitle={automationContext?.title}
           automationDetail={automationContext?.detail}
+          onSelectSection={setWorkbenchTab}
           defaultOpen
         />
       );

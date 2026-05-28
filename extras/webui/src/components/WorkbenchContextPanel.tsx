@@ -4,6 +4,7 @@ import type { SessionFilesView } from "../view/sessionFiles";
 import type { SessionRunView } from "../view/sessionRun";
 import type { SessionWorkspaceView } from "../view/sessionWorkspace";
 import type { WorkbenchAttention } from "../view/workbenchAttention";
+import type { WorkbenchTab } from "../view/workbenchNav";
 import { RunDetails } from "./RunDetails";
 
 export function WorkbenchContextPanel({
@@ -16,6 +17,7 @@ export function WorkbenchContextPanel({
   run,
   automationTitle,
   automationDetail,
+  onSelectSection,
   defaultOpen = false,
 }: {
   overview: SessionOverview;
@@ -27,6 +29,7 @@ export function WorkbenchContextPanel({
   run?: SessionRunView;
   automationTitle?: string;
   automationDetail?: string;
+  onSelectSection?: (tab: WorkbenchTab) => void;
   defaultOpen?: boolean;
 }) {
   const metrics = displaySessionOverviewMetrics(overview.metrics);
@@ -63,20 +66,32 @@ export function WorkbenchContextPanel({
         {evidence.length > 0 ? (
           <div className="workbench-context-evidence" data-testid="workbench-context-evidence">
             {evidence.map((item) => (
-              <div key={item.label} className="workbench-context-evidence-item" data-tone={item.tone}>
+              <button
+                key={item.target}
+                type="button"
+                className="workbench-context-evidence-item"
+                data-tone={item.tone}
+                onClick={() => onSelectSection?.(item.target)}
+                aria-label={`Open ${item.label}`}
+              >
                 <strong>{item.label}</strong>
                 <span>{item.summary}</span>
                 <small>{item.detail}</small>
-              </div>
+              </button>
             ))}
           </div>
         ) : null}
         {automationTitle ? (
-          <div className="workbench-context-link" data-testid="workbench-context-automation">
+          <button
+            type="button"
+            className="workbench-context-link"
+            data-testid="workbench-context-automation"
+            onClick={() => onSelectSection?.("automation")}
+          >
             <strong>Automation</strong>
             <span>{automationTitle}</span>
             {automationDetail ? <small>{automationDetail}</small> : null}
-          </div>
+          </button>
         ) : null}
         {!hasSelectedSession && metrics.length === 0 ? <div className="session-skills-empty">Start a task or open a saved chat before inspecting session evidence.</div> : null}
       </div>
@@ -93,6 +108,7 @@ function contextSummary(overview: SessionOverview, hasSelectedSession: boolean):
 }
 
 interface ContextEvidenceItem {
+  target: WorkbenchTab;
   label: string;
   summary: string;
   detail: string;
@@ -113,6 +129,7 @@ function contextEvidence({
   const items: ContextEvidenceItem[] = [];
   if (workspace?.hasData) {
     items.push({
+      target: "workspace",
       label: "Workspace",
       summary: workspace.summary,
       detail: workspace.detail,
@@ -121,6 +138,7 @@ function contextEvidence({
   }
   if (changes && changes.files.length > 0) {
     items.push({
+      target: "changes",
       label: "Changes",
       summary: changes.summary,
       detail: changes.detail,
@@ -129,6 +147,7 @@ function contextEvidence({
   }
   if (files && files.items.length > 0) {
     items.push({
+      target: "files",
       label: "Files",
       summary: files.summary,
       detail: files.detail,
@@ -137,6 +156,7 @@ function contextEvidence({
   }
   if (run && run.commands.length > 0) {
     items.push({
+      target: "run",
       label: "Run",
       summary: run.summary,
       detail: run.detail,
