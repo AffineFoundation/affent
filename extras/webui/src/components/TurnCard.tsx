@@ -386,15 +386,17 @@ function turnSegmentState(
   isLast: boolean,
 ): TurnState {
   const assistantText = text ?? "";
+  const segmentStatus = isLast ? turn.status : "completed";
   return {
     ...turn,
     id: `${turn.id}:response:${index}`,
+    status: segmentStatus,
     thinkingText: "",
     thinkingStreaming: false,
     assistantMessages: assistantText && !streaming ? [assistantText] : [],
-    assistantTextDraft: assistantText && streaming ? assistantText : "",
+    assistantTextDraft: assistantText && streaming && isLast ? assistantText : "",
     assistantText,
-    messageStreaming: !!streaming,
+    messageStreaming: !!streaming && isLast,
     runtimeSurface: undefined,
     toolCalls,
     loopProtocolFeeds: [],

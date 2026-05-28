@@ -5730,48 +5730,6 @@ mark {
   height: 1px;
 }
 
-.jump-live {
-  position: sticky;
-  top: 10px;
-  z-index: 8;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  justify-self: center;
-  width: fit-content;
-  margin: 0 auto 10px;
-  border: 1px solid rgba(20, 184, 166, 0.42);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(14px);
-  color: var(--text);
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 650;
-  padding: 8px 14px;
-  box-shadow: var(--shadow-pop);
-  cursor: pointer;
-  animation: rise-in 220ms ease;
-}
-
-.jump-live::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: rgba(20, 184, 166, 0.62);
-  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1);
-}
-
-.jump-live[data-new="true"]::before {
-  background: var(--c-success);
-  animation: live-dot 1300ms var(--ease-snap) infinite;
-}
-
-.jump-live:hover {
-  border-color: rgba(20, 184, 166, 0.72);
-}
-
 .flow-turn {
   position: relative;
   border-top: 0;
@@ -10661,8 +10619,7 @@ html[data-theme="dark"] .guidance-receipt-note {
 }
 
 html[data-theme="dark"] .pending-turn[data-kind="guidance"] .pending-response,
-html[data-theme="dark"] .pending-response,
-html[data-theme="dark"] .jump-live {
+html[data-theme="dark"] .pending-response {
   border-color: rgba(58, 68, 81, 0.86);
   background: rgba(17, 20, 24, 0.9);
   color: var(--text-muted);

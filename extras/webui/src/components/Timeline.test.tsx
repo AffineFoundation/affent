@@ -600,6 +600,51 @@ describe("Timeline", () => {
     expect(activities[1]).not.toHaveTextContent("README.md package.json");
   });
 
+  it("auto-folds earlier live activity when a newer work segment appears", async () => {
+    const user = userEvent.setup();
+    const firstSegment: RawEvent[] = [
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 1, type: "user.message", data: { turn_id: "t1", text: "run staged checks" } },
+      { id: 2, type: "message.done", data: { turn_id: "t1", text: "I will inspect the repo first." } },
+      { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "list_files", args: { path: "." } } },
+      { id: 4, type: "tool.result", data: { call_id: "c1", exit_code: 0, result_summary: "README.md package.json" } },
+    ];
+    const secondSegment: RawEvent[] = [
+      ...firstSegment,
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "Now I will run the tests." } },
+      { id: 6, type: "tool.request", data: { turn_id: "t1", call_id: "c2", tool: "shell", args: { command: "npm test" } } },
+    ];
+
+    const { rerender } = render(<Timeline session={reduceRawEvents(firstSegment)} />);
+    expect(screen.getByTestId("agent-activity")).toHaveAttribute("data-open", "true");
+
+    rerender(<Timeline session={reduceRawEvents(secondSegment)} />);
+    let activities = screen.getAllByTestId("agent-activity");
+    expect(activities).toHaveLength(2);
+    expect(activities[0]).toHaveAttribute("data-open", "false");
+    expect(within(activities[0]).getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
+    expect(activities[1]).toHaveAttribute("data-open", "true");
+
+    await user.click(within(activities[0]).getByRole("button", { name: /What Affent did/ }));
+    activities = screen.getAllByTestId("agent-activity");
+    expect(activities[0]).toHaveAttribute("data-open", "true");
+
+    rerender(
+      <Timeline
+        session={reduceRawEvents([
+          ...secondSegment,
+          { id: 7, type: "tool.result", data: { call_id: "c2", exit_code: 0, result_summary: "tests passed" } },
+          { id: 8, type: "message.done", data: { turn_id: "t1", text: "Tests passed. I will inspect the report next." } },
+          { id: 9, type: "tool.request", data: { turn_id: "t1", call_id: "c3", tool: "read_file", args: { path: "report.md" } } },
+        ])}
+      />,
+    );
+    activities = screen.getAllByTestId("agent-activity");
+    expect(activities[0]).toHaveAttribute("data-open", "true");
+    expect(activities[1]).toHaveAttribute("data-open", "false");
+    expect(activities[2]).toHaveAttribute("data-open", "true");
+  });
+
   it("surfaces streaming assistant text as a live writing state", () => {
     renderTimeline(completedTurn.filter((event) => event.id <= 8));
 
@@ -1178,7 +1223,7 @@ describe("Timeline", () => {
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText(/WebUI must render trace details/).length).toBeGreaterThan(0);
   });
 
-  it("shows an in-panel jump control when live activity arrives while browsing history", () => {
+  it("does not show jump chrome when live activity arrives while browsing history", () => {
     const { rerender } = render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
     Object.defineProperties(scrollRoot, {
@@ -1191,10 +1236,10 @@ describe("Timeline", () => {
     fireEvent.scroll(scrollRoot);
     rerender(<ScrollHarness events={[...completedTurn, ...messageOnlyTurn]} />);
 
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
-  it("shows the jump control when a local guidance receipt arrives while browsing history", () => {
+  it("keeps local guidance receipts quiet while browsing history", () => {
     const { rerender } = render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
     Object.defineProperties(scrollRoot, {
@@ -1207,12 +1252,12 @@ describe("Timeline", () => {
     fireEvent.scroll(scrollRoot);
     rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
 
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
 
     Object.defineProperty(scrollRoot, "scrollTop", { configurable: true, value: 900 });
     fireEvent.scroll(scrollRoot);
 
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
   it("follows local guidance receipts when already at the latest message", () => {
@@ -1258,7 +1303,7 @@ describe("Timeline", () => {
     rerender(<ScrollHarness events={runningSubagent} />);
 
     expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
   it("follows running updates to the newest content instead of pinning the turn header", () => {
@@ -1286,7 +1331,7 @@ describe("Timeline", () => {
     expect(screen.queryByRole("button", { name: "Jump to latest" })).toBeNull();
   });
 
-  it("keeps saved history reading stable but surfaces later activity", () => {
+  it("keeps saved history reading stable without jump chrome for later activity", () => {
     const { rerender } = render(<ScrollHarness events={[]} initialHistoryFocus="answer" />);
     const scrollRoot = screen.getByTestId("scroll-root");
     Object.defineProperties(scrollRoot, {
@@ -1306,7 +1351,7 @@ describe("Timeline", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
   it("does not change scroll position while the user is selecting text", () => {
@@ -1327,7 +1372,7 @@ describe("Timeline", () => {
 
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(scrollRoot.scrollTop).toBe(260);
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
   it("does not force live follow during a mobile long press before selection appears", () => {
@@ -1345,7 +1390,7 @@ describe("Timeline", () => {
     rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
 
     expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
   it("does not synthesize edge scrolling while selecting text", () => {
@@ -1402,7 +1447,7 @@ describe("Timeline", () => {
 
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(scrollRoot.scrollTop).toBe(480);
-    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /jump to latest/i })).toBeNull();
   });
 
   it("hides return-to-latest while browsing older messages until new activity arrives", () => {

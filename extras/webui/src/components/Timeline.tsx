@@ -46,7 +46,6 @@ export function Timeline({
   const selectionPauseUntil = useRef(0);
   const touchStartY = useRef<number | undefined>(undefined);
   const [following, setFollowing] = useState(true);
-  const [newActivity, setNewActivity] = useState(false);
   const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingDisplayText(pendingMessage) : undefined;
 
   useEffect(() => {
@@ -60,7 +59,6 @@ export function Timeline({
     selectionPauseUntil.current = 0;
     latestAnswerRef.current = null;
     setFollowing(true);
-    setNewActivity(false);
   }, [activityCount, initialHistoryFocus, sessionId]);
 
   useEffect(() => {
@@ -150,7 +148,6 @@ export function Timeline({
     if (selectingText) {
       userBrowsedHistory.current = true;
       autoFollowPaused.current = true;
-      setNewActivity(true);
       return;
     }
     const answerTarget = latestAnswerRef.current;
@@ -175,21 +172,8 @@ export function Timeline({
     focusAnswerOnNextHistory.current = false;
     if (following && !autoFollowPaused.current) {
       endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
-    } else {
-      setNewActivity(true);
     }
   }, [activityCount, following, pendingMessage, scrollRootRef, session.status]);
-
-  function jumpToLive() {
-    userBrowsedHistory.current = false;
-    autoFollowPaused.current = false;
-    pointerSelecting.current = false;
-    selectionPauseUntil.current = 0;
-    touchStartY.current = undefined;
-    setFollowing(true);
-    setNewActivity(false);
-    endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
-  }
 
   if (session.turns.length === 0 && !pendingMessage && sessionId) {
     return (
@@ -261,48 +245,40 @@ export function Timeline({
       </div>
     );
   }
-  const showJumpToLatest = newActivity;
   return (
-    <>
-      {showJumpToLatest ? (
-        <button type="button" className="jump-live" data-new={newActivity} onClick={jumpToLive}>
-          Jump to latest
-        </button>
-      ) : null}
-      <div className="timeline" data-testid="timeline">
-        {session.turns.map((turn) => {
-          const turnIndex = session.turns.indexOf(turn);
-          const isLatestTurn = turn === session.turns.at(-1);
-          return (
-            <div
-              key={turn.id}
-              ref={(node) => {
-                if (isLatestTurn) latestAnswerRef.current = turn.assistantText.trim() ? node : null;
-              }}
-              className="timeline-turn-anchor"
-            >
-              <TurnCard
-                turn={turn}
-                turnNumber={turnIndex + 1}
-                anchorId={`turn-${turnIndex + 1}`}
-                events={session.events}
-                sessionId={sessionId}
-                isLatest={isLatestTurn}
-                showHeader={false}
-                showBoundary={false}
-                onOpenArtifact={onOpenArtifact}
-                onUseAsDraft={onUseAsDraft}
-              />
-            </div>
-          );
-        })}
-        {guidanceReceipts.map((receipt) => (
-          <GuidanceReceipt key={receipt.id} receipt={receipt} onUseAsDraft={onUseAsDraft} />
-        ))}
-        {pendingMessage ? <PendingTurn message={pendingMessage} followUp={Boolean(pendingFollowUp)} /> : null}
-        <div ref={endRef} className="timeline-end" aria-hidden="true" />
-      </div>
-    </>
+    <div className="timeline" data-testid="timeline">
+      {session.turns.map((turn) => {
+        const turnIndex = session.turns.indexOf(turn);
+        const isLatestTurn = turn === session.turns.at(-1);
+        return (
+          <div
+            key={turn.id}
+            ref={(node) => {
+              if (isLatestTurn) latestAnswerRef.current = turn.assistantText.trim() ? node : null;
+            }}
+            className="timeline-turn-anchor"
+          >
+            <TurnCard
+              turn={turn}
+              turnNumber={turnIndex + 1}
+              anchorId={`turn-${turnIndex + 1}`}
+              events={session.events}
+              sessionId={sessionId}
+              isLatest={isLatestTurn}
+              showHeader={false}
+              showBoundary={false}
+              onOpenArtifact={onOpenArtifact}
+              onUseAsDraft={onUseAsDraft}
+            />
+          </div>
+        );
+      })}
+      {guidanceReceipts.map((receipt) => (
+        <GuidanceReceipt key={receipt.id} receipt={receipt} onUseAsDraft={onUseAsDraft} />
+      ))}
+      {pendingMessage ? <PendingTurn message={pendingMessage} followUp={Boolean(pendingFollowUp)} /> : null}
+      <div ref={endRef} className="timeline-end" aria-hidden="true" />
+    </div>
   );
 }
 
