@@ -1513,6 +1513,7 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 	if err != nil || !found || state.Status != "draft" {
 		return
 	}
+	var event loopstate.Event
 	if state.CalibrationQuestions > 0 {
 		if state.CalibrationAnswers >= state.CalibrationQuestions {
 			return
@@ -1520,10 +1521,28 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 	} else if state.CalibrationAnswers > 0 {
 		return
 	}
-	if !conversationHasLoopCalibrationQuestion(s.conv.Snapshot()) {
+	question, hasQuestion := latestLoopCalibrationQuestion(s.conv.Snapshot())
+	if !hasQuestion {
 		return
 	}
-	state, event, err := loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
+	if state.CalibrationQuestions == 0 {
+		state, event, err = loopstate.RecordProtocolCalibrationQuestion(s.loopProtocolPath, question)
+		if err != nil {
+			s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration question")
+			return
+		}
+		s.publishSessionEvent(sse.TypeLoopCalibrationRequest, sse.LoopProtocolCalibrationPayload{
+			LoopID:                  state.LoopID,
+			Status:                  state.Status,
+			CalibrationQuestions:    state.CalibrationQuestions,
+			LastCalibrationQuestion: state.LastCalibrationQuestion,
+			CalibrationAnswers:      state.CalibrationAnswers,
+			LastCalibrationAnswer:   state.LastCalibrationAnswer,
+			ProtocolPath:            loopstate.ProtocolRelPath(s.ID),
+			EventSeq:                event.Seq,
+		})
+	}
+	state, event, err = loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
 	if err != nil {
 		s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration")
 		return
@@ -1540,14 +1559,20 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 	})
 }
 
-func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
+func latestLoopCalibrationQuestion(messages []agent.ChatMessage) (string, bool) {
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
-			return looksLikeLoopCalibrationQuestion(msg.Content)
+			text := strings.TrimSpace(msg.Content)
+			return text, looksLikeLoopCalibrationQuestion(text)
 		}
 	}
-	return false
+	return "", false
+}
+
+func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
+	_, ok := latestLoopCalibrationQuestion(messages)
+	return ok
 }
 
 func (s *Session) publishSessionEvent(eventType string, payload any) {

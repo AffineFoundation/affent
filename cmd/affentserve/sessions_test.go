@@ -2037,7 +2037,7 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if err != nil || !found {
 		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
 	}
-	if state.CalibrationAnswers != 1 || state.LastEventType != "loop.protocol_calibration" || !strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
+	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 || state.LastEventType != "loop.protocol_calibration" || !strings.Contains(state.LastCalibrationQuestion, "stop condition") || !strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
 		t.Fatalf("calibration state = %+v", state)
 	}
 	tracePath := filepath.Join(pool.sessionDirPath("loop-calibration"), "events.jsonl")
@@ -2047,13 +2047,22 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 		t.Fatalf("read history: %v", err)
 	}
 	var sawCalibration bool
+	var sawCalibrationRequest bool
 	for _, ev := range history.Events {
-		if ev.Type != sse.TypeLoopCalibration {
+		if ev.Type != sse.TypeLoopCalibration && ev.Type != sse.TypeLoopCalibrationRequest {
 			continue
 		}
 		var payload sse.LoopProtocolCalibrationPayload
 		if err := json.Unmarshal(ev.Data, &payload); err != nil {
 			t.Fatalf("decode calibration payload: %v", err)
+		}
+		if ev.Type == sse.TypeLoopCalibrationRequest &&
+			payload.CalibrationQuestions == 1 &&
+			payload.EventSeq == state.EventCount-1 &&
+			payload.ProtocolPath == loopstate.ProtocolRelPath("loop-calibration") &&
+			strings.Contains(payload.LastCalibrationQuestion, "stop condition") {
+			sawCalibrationRequest = true
+			continue
 		}
 		if payload.CalibrationAnswers == 1 &&
 			payload.EventSeq == state.EventCount &&
@@ -2061,6 +2070,9 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 			strings.Contains(payload.LastCalibrationAnswer, "Pause if source quality") {
 			sawCalibration = true
 		}
+	}
+	if !sawCalibrationRequest {
+		t.Fatalf("history missing synthesized loop calibration request event: %+v", history.Events)
 	}
 	if !sawCalibration {
 		t.Fatalf("history missing loop calibration mirror event: %+v", history.Events)
@@ -2097,7 +2109,7 @@ func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing
 	if err != nil || !found {
 		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
 	}
-	if state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationAnswer, "网页证据不足") {
+	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationQuestion, "暂停") || !strings.Contains(state.LastCalibrationAnswer, "网页证据不足") {
 		t.Fatalf("calibration state = %+v", state)
 	}
 }

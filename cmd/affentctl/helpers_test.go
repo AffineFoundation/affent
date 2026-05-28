@@ -522,9 +522,6 @@ func TestChatLoopRecordsCalibrationAnswerBeforeNextTurn(t *testing.T) {
 		t.Fatalf("EnsureProtocolTemplate: %v", err)
 	}
 	question := "For this loop, what stop condition should pause work?"
-	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, question); err != nil {
-		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
-	}
 	conv, err := agent.OpenConversationAt(filepath.Join(workspace, "chat.jsonl"))
 	if err != nil {
 		t.Fatalf("OpenConversationAt: %v", err)
@@ -545,7 +542,7 @@ func TestChatLoopRecordsCalibrationAnswerBeforeNextTurn(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
-	if state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationAnswer, "Pause if tests") {
+	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationQuestion, "stop condition") || !strings.Contains(state.LastCalibrationAnswer, "Pause if tests") {
 		t.Fatalf("calibration answer state = %+v", state)
 	}
 	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {

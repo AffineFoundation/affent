@@ -595,22 +595,36 @@ func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string
 	} else if state.CalibrationAnswers > 0 {
 		return
 	}
-	if !conversationHasCurrentSessionLoopCalibrationQuestion(b.loop.Conv.Snapshot()) {
+	question, hasQuestion := latestCurrentSessionLoopCalibrationQuestion(b.loop.Conv.Snapshot())
+	if !hasQuestion {
 		return
+	}
+	if state.CalibrationQuestions == 0 {
+		state, _, err = loopstate.RecordProtocolCalibrationQuestion(path, question)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "[loop] calibration question record failed: %v\n", err)
+			return
+		}
 	}
 	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, text); err != nil {
 		fmt.Fprintf(os.Stderr, "[loop] calibration record failed: %v\n", err)
 	}
 }
 
-func conversationHasCurrentSessionLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
+func latestCurrentSessionLoopCalibrationQuestion(messages []agent.ChatMessage) (string, bool) {
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
 		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
-			return looksLikeCurrentSessionLoopCalibrationQuestion(msg.Content)
+			text := strings.TrimSpace(msg.Content)
+			return text, looksLikeCurrentSessionLoopCalibrationQuestion(text)
 		}
 	}
-	return false
+	return "", false
+}
+
+func conversationHasCurrentSessionLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
+	_, ok := latestCurrentSessionLoopCalibrationQuestion(messages)
+	return ok
 }
 
 func looksLikeCurrentSessionLoopCalibrationQuestion(text string) bool {
