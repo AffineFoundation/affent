@@ -71,9 +71,9 @@ describe("Composer", () => {
 
     expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Check in 1h" })).toBeNull();
-    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Loop every 30m" })).toBeNull();
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up loop" }));
+    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Schedule 1h check-in" })).toBeNull();
+    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Schedule 30m loop tick" })).toBeNull();
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up long-running loop" }));
     expect(onStartLoop).toHaveBeenCalledWith("long running market monitor");
 
     rerender(
@@ -105,8 +105,8 @@ describe("Composer", () => {
 
     expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Set up loop" })).toBeNull();
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Check in 1h" }));
+    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Set up long-running loop" })).toBeNull();
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Schedule 1h check-in" }));
     expect(onScheduleCheckIn).toHaveBeenCalled();
   });
 
@@ -128,8 +128,8 @@ describe("Composer", () => {
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
 
     const automation = screen.getByTestId("composer-automation");
-    expect(within(automation).getByRole("button", { name: "Set up loop" })).toBeVisible();
-    expect(within(automation).queryByRole("button", { name: "Loop every 30m" })).toBeNull();
+    expect(within(automation).getByRole("button", { name: "Set up long-running loop" })).toBeVisible();
+    expect(within(automation).queryByRole("button", { name: "Schedule 30m loop tick" })).toBeNull();
   });
 
   it("labels saved history follow-ups as resuming the chat", async () => {

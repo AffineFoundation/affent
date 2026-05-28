@@ -557,7 +557,7 @@ describe("App", () => {
     const input = await screen.findByPlaceholderText("Message Affent...");
     await user.type(input, "analyze market data for several days");
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up loop" }));
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up long-running loop" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.objectContaining({ method: "POST" })));
     const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-1/loop-protocol");
@@ -626,7 +626,7 @@ describe("App", () => {
     expect(screen.queryByTestId("session-loop-panel")).toBeNull();
     await user.type(screen.getByPlaceholderText("Message Affent..."), "long running subnet analysis");
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up loop" }));
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up long-running loop" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-panel/loop-protocol", expect.objectContaining({ method: "POST" })));
     const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/loop-protocol");
@@ -1003,7 +1003,7 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("long running subnet analysis"));
     expect(screen.queryByTestId("session-schedule-panel")).toBeNull();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Check in 1h" }));
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Schedule 1h check-in" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/schedules");
@@ -1133,7 +1133,7 @@ describe("App", () => {
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     expect(screen.queryByTestId("session-schedule-panel")).toBeNull();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
-    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Loop every 30m" }));
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Schedule 30m loop tick" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/schedules");

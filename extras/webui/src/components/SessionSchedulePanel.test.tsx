@@ -140,9 +140,9 @@ describe("SessionSchedulePanel", () => {
     const panel = screen.getByTestId("session-schedule-panel");
     expect(panel).toHaveTextContent("Off");
     expect(panel).toHaveTextContent("No scheduled follow-ups for this chat.");
-    expect(screen.getByRole("button", { name: "Check in 1h" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Loop every 30m" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Daily check-in" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Schedule 1h check-in" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Schedule 30m loop tick" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Schedule daily check-in" })).toBeInTheDocument();
   });
 
   it("keeps timer controls fully folded by default", () => {

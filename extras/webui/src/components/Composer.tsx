@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { buildComposerTaskHint } from "../view/composerTaskHint";
+import { automationActionLabel } from "../view/automationActions";
 import { draftMergeMode, draftSourceLabel, type DraftSource } from "../view/draftSource";
 import type { RuntimeCapabilityView } from "../view/runtimeCapabilities";
 
@@ -291,22 +292,22 @@ export function Composer({
             <div className="composer-automation-menu">
               {hasLoopAutomation ? (
                 <button type="button" className="ghost-action" disabled={!hasContent || cancelling || !!automationBusy} onClick={() => void startLoop()}>
-                  Set up loop
+                  {automationActionLabel("loop_setup")}
                 </button>
               ) : null}
               {canShowScheduleAutomation && onScheduleCheckIn ? (
                 <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleCheckIn)}>
-                  {automationBusy === "checkin" ? "Scheduling" : "Check in 1h"}
+                  {automationActionLabel("checkin", automationBusy === "checkin")}
                 </button>
               ) : null}
               {hasScheduleLoopTick ? (
                 <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleLoopTick)}>
-                  {automationBusy === "loop" ? "Scheduling" : "Loop every 30m"}
+                  {automationActionLabel("loop_tick", automationBusy === "loop")}
                 </button>
               ) : null}
               {canShowScheduleAutomation && onScheduleDaily ? (
                 <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleDaily)}>
-                  {automationBusy === "daily" ? "Scheduling" : "Daily check-in"}
+                  {automationActionLabel("daily", automationBusy === "daily")}
                 </button>
               ) : null}
             </div>

@@ -1,4 +1,5 @@
 import type { SessionSchedule, SessionSchedulesSummary } from "../api/sessions";
+import { automationActionLabel } from "../view/automationActions";
 import { SessionPanelFrame } from "./SessionPanelFrame";
 
 export function SessionSchedulePanel({
@@ -129,7 +130,7 @@ export function SessionSchedulePanel({
               disabled={disabled || !!busy}
               onClick={() => void onScheduleCheckIn()}
             >
-              {busy === "checkin" ? "Scheduling" : "Check in 1h"}
+              {automationActionLabel("checkin", busy === "checkin")}
             </button>
           ) : null}
           {onScheduleLoopTick ? (
@@ -139,7 +140,7 @@ export function SessionSchedulePanel({
               disabled={disabled || !!busy}
               onClick={() => void onScheduleLoopTick()}
             >
-              {busy === "loop" ? "Scheduling" : "Loop every 30m"}
+              {automationActionLabel("loop_tick", busy === "loop")}
             </button>
           ) : null}
           {onScheduleDaily ? (
@@ -149,7 +150,7 @@ export function SessionSchedulePanel({
               disabled={disabled || !!busy}
               onClick={() => void onScheduleDaily()}
             >
-              {busy === "daily" ? "Scheduling" : "Daily check-in"}
+              {automationActionLabel("daily", busy === "daily")}
             </button>
           ) : null}
         </div>
