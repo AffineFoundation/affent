@@ -2651,16 +2651,16 @@ func evalPath(repoRoot string) string {
 		"/snap/bin",
 	}
 	if path := os.Getenv("PATH"); path != "" {
-		parts = append([]string{path}, parts...)
+		parts = append(parts, path)
 	}
 	return strings.Join(dedupeNonEmpty(parts), string(os.PathListSeparator))
 }
 
 func findGo(repoRoot string) string {
 	for _, candidate := range []string{
-		"/usr/local/go/bin/go",
 		filepath.Join(repoRoot, ".tmp", "toolchains", "go", "bin", "go"),
 		filepath.Join(os.Getenv("HOME"), ".local", "go-toolchain", "go", "bin", "go"),
+		"/usr/local/go/bin/go",
 		"go",
 	} {
 		if path, err := exec.LookPath(candidate); err == nil {

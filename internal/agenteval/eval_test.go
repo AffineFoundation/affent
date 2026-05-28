@@ -1652,7 +1652,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!strings.Contains(commitPush.SetupCommands[0], "git push -u origin main") {
 		t.Fatalf("commit/push SetupCommands = %#v, want local bare remote initialization", commitPush.SetupCommands)
 	}
-	for _, want := range []string{"git diff --quiet", "git diff --cached --quiet", "git log -1", "git ls-remote --heads origin main"} {
+	for _, want := range []string{"git status --porcelain", "git log -1", "git ls-remote --heads origin main"} {
 		if !strings.Contains(commitPush.VerifyCommand, want) {
 			t.Fatalf("commit/push VerifyCommand = %q, want %q", commitPush.VerifyCommand, want)
 		}
@@ -1709,7 +1709,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("scratch project RequiredToolArgContains = %#v, want %#v", scratchProject.RequiredToolArgContains, want)
 		}
 	}
-	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git ls-remote --heads origin main"} {
+	for _, want := range []string{"todo_core/store.py", "tests/test_store.py", "SCRATCH-LOOP-31", "git status --porcelain", "git ls-remote --heads origin main"} {
 		if !strings.Contains(scratchProject.VerifyCommand, want) {
 			t.Fatalf("scratch project VerifyCommand = %q, want %q", scratchProject.VerifyCommand, want)
 		}
@@ -4029,6 +4029,54 @@ func TestBatchRunnerAffentctlRunArgsCanKeepTraceDeltas(t *testing.T) {
 	}
 	if strings.Contains(joined, "--trace-skip-deltas") {
 		t.Fatalf("TraceDeltas should not pass --trace-skip-deltas:\n%q", args)
+	}
+}
+
+func TestEvalPathPrefersEvalToolchainsBeforeAmbientPath(t *testing.T) {
+	home := t.TempDir()
+	repoRoot := t.TempDir()
+	ambient := filepath.Join(t.TempDir(), "ambient-bin")
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", ambient)
+
+	parts := strings.Split(evalPath(repoRoot), string(os.PathListSeparator))
+	wantPrefix := []string{
+		filepath.Join(repoRoot, ".tmp", "toolchains", "go", "bin"),
+		filepath.Join(home, ".local", "go-toolchain", "go", "bin"),
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, "go", "bin"),
+	}
+	if len(parts) < len(wantPrefix)+1 {
+		t.Fatalf("evalPath parts = %#v", parts)
+	}
+	for i, want := range wantPrefix {
+		if parts[i] != want {
+			t.Fatalf("evalPath[%d] = %q, want %q in %#v", i, parts[i], want, parts)
+		}
+	}
+	if parts[len(parts)-1] != ambient {
+		t.Fatalf("ambient PATH should come last, got %#v", parts)
+	}
+}
+
+func TestFindGoPrefersUserLocalToolchainOutsidePath(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module example.test/eval\n\ngo 1.24.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", filepath.Join(t.TempDir(), "empty-path"))
+	goBin := filepath.Join(home, ".local", "go-toolchain", "go", "bin", "go")
+	if err := os.MkdirAll(filepath.Dir(goBin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nif [ \"$1\" = list ] && [ \"$2\" = -m ] && [ \"${GOTOOLCHAIN:-}\" = local ]; then exit 0; fi\nexit 1\n"
+	if err := os.WriteFile(goBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := findGo(repoRoot); got != goBin {
+		t.Fatalf("findGo() = %q, want %q", got, goBin)
 	}
 }
 

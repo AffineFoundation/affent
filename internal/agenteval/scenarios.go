@@ -2643,7 +2643,7 @@ func longRunCodeCommitPushScenario() BatchScenario {
 		Name:    "longrun-code-commit-push-local-remote",
 		Suites:  []string{longRunSuite},
 		Domains: []string{codePRDomain},
-		Prompt:  "This Go project has a failing test. First run the tests to reproduce the failure, then fix only the Remove behavior in set/set.go. Do not modify tests. After the fix, run go test ./... again to confirm. When it passes, create a git commit related to the fix and push it to origin main. The final answer must include a change summary, the test command, the commit hash, and the push result.",
+		Prompt:  "This Go project has a failing test. First run the tests to reproduce the failure, then fix only the Remove behavior in set/set.go. Do not modify tests. After the fix, run go test ./... again to confirm. When it passes, create a git commit related to the fix, push it to origin main, and leave git status clean. The final answer must include a change summary, the test command, the commit hash, and the push result.",
 		Files: map[string]string{
 			"go.mod": `module example.com/stringset
 
@@ -2717,7 +2717,7 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		SetupCommands: []string{
 			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
 		},
-		VerifyCommand:    "go test ./... && git diff --quiet && git diff --cached --quiet && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		VerifyCommand:    "go test ./... && test -z \"$(git status --porcelain)\" && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
 		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{`go test`, `git commit`, `git push`},
 		RequiredCommandCounts: map[string]int{
@@ -2753,7 +2753,7 @@ func longRunScratchProjectLoopPushScenario() BatchScenario {
 		Domains:            []string{codePRDomain, longRunRecoveryDomain},
 		SessionID:          "scratch-project-loop",
 		EnableLoopProtocol: true,
-		Prompt:            "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project and push it to origin main. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
+		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, and leave git status clean. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
 		Files: map[string]string{
 			".affent/loops/scratch-project-loop/LOOP.md": `# Loop Protocol: scratch-project-loop
 
@@ -2795,7 +2795,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 		SetupCommands: []string{
 			"git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main",
 		},
-		VerifyCommand: "python3 -m unittest discover -s tests && test -f todo_core/store.py && test -f todo_core/__init__.py && test -f tests/test_store.py && grep -R \"class TodoStore\" todo_core/store.py && grep -R \"mark_done\" tests/test_store.py && grep -R \"SCRATCH-LOOP-31\" README.md && git diff --quiet && git diff --cached --quiet && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
+		VerifyCommand: "python3 -m unittest discover -s tests && test -f todo_core/store.py && test -f todo_core/__init__.py && test -f tests/test_store.py && grep -R \"class TodoStore\" todo_core/store.py && grep -R \"mark_done\" tests/test_store.py && grep -R \"SCRATCH-LOOP-31\" README.md && test -z \"$(git status --porcelain)\" && test \"$(git log -1 --format=%s)\" != \"initial\" && git ls-remote --heads origin main | grep -q \"$(git rev-parse HEAD)\"",
 		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
 		RequiredCommands: []string{
 			`python3 -m unittest discover -s tests`,
