@@ -3210,7 +3210,7 @@ func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
 			t.Fatal("focused-task-project-facts should require clean delegation")
 		}
 		if !scenario.ForbidWorkspaceAbsolutePaths {
-			t.Fatal("focused-task-project-facts should forbid workspace absolute paths in parent and child shell calls")
+			t.Fatal("focused-task-project-facts should forbid workspace absolute paths in parent and child workspace tool args")
 		}
 		return
 	}
@@ -3232,7 +3232,7 @@ func TestSubagentScenarioRequiresExploreMode(t *testing.T) {
 			t.Fatal("subagent-project-facts should require clean delegation")
 		}
 		if !scenario.ForbidWorkspaceAbsolutePaths {
-			t.Fatal("subagent-project-facts should forbid workspace absolute paths in parent and child shell calls")
+			t.Fatal("subagent-project-facts should forbid workspace absolute paths in parent and child workspace tool args")
 		}
 		return
 	}
@@ -3260,7 +3260,7 @@ func TestDelegatedScenariosForbidWorkspaceAbsolutePaths(t *testing.T) {
 			t.Fatalf("builtin scenarios missing %s", name)
 		}
 		if !scenario.ForbidWorkspaceAbsolutePaths {
-			t.Fatalf("%s should forbid workspace absolute paths so child transcript shell calls are checked", name)
+			t.Fatalf("%s should forbid workspace absolute paths so child transcript workspace tool args are checked", name)
 		}
 		checkNames := checkNamesFor(BatchScenarioChecks(scenario))
 		if !stringSliceContains(checkNames, "shell_command_lacks_workspace_absolute_path") {

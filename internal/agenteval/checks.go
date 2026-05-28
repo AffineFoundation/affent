@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -2317,7 +2318,7 @@ func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string) Che
 }
 
 func workspaceAbsoluteArgTexts(tool string, args map[string]any) map[string]string {
-	names := workspacePathArgNames(tool)
+	names := agent.WorkspacePathArgNames(tool)
 	if len(names) == 0 {
 		return nil
 	}
@@ -2328,19 +2329,6 @@ func workspaceAbsoluteArgTexts(tool string, args map[string]any) map[string]stri
 		}
 	}
 	return out
-}
-
-func workspacePathArgNames(tool string) []string {
-	switch tool {
-	case "shell":
-		return []string{"command", "cwd"}
-	case "read_file", "write_file", "edit_file", "list_files", "file_context", "repo_search", "symbol_context":
-		return []string{"path"}
-	case "browser_screenshot":
-		return []string{"save_path"}
-	default:
-		return nil
-	}
 }
 
 func resolveChildTranscriptPath(workspace, relPath string) (string, bool) {
@@ -2380,7 +2368,7 @@ func childTranscriptWorkspaceToolCalls(line string) []childTranscriptWorkspaceTo
 	}
 	var out []childTranscriptWorkspaceToolCall
 	for _, call := range msg.ToolCalls {
-		if len(workspacePathArgNames(call.Function.Name)) == 0 {
+		if len(agent.WorkspacePathArgNames(call.Function.Name)) == 0 {
 			continue
 		}
 		args := map[string]any{}

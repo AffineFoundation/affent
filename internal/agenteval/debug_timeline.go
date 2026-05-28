@@ -460,7 +460,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineStringList(b, "required_commands", exp.RequiredCommands)
 	writeTimelineStringList(b, "forbidden_commands", exp.ForbiddenCommands)
 	if exp.ForbidWorkspaceAbsolutePaths {
-		fmt.Fprintf(b, "- forbid_workspace_absolute_paths: `true`\n")
+		fmt.Fprintf(b, "- forbid_workspace_absolute_paths: `true` (workspace tool args, including child transcripts)\n")
 	}
 	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
 	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
