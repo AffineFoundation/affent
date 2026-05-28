@@ -707,6 +707,10 @@ Summary records aggregate all scenario records from the same process:
   `--max-expectation-domain-avg-runtime-errors DOMAIN=COUNT`,
   `--max-expectation-domain-tool-error-rate DOMAIN=RATE`, and
   `--max-expectation-domain-loop-guard-intervention-rate DOMAIN=RATE`.
+  The built-in `web-evidence` profile enables these gates for the
+  `web_evidence` domain so mixed live-web batches cannot hide weak current-web
+  evidence, tool errors, loop-guard churn, runtime errors, or runaway cost
+  behind unrelated passing domains.
   `--require-expectation-domain` gates declared workload-domain coverage
   independently from capability coverage, so CI can require at least one
   realistic market, Bittensor, code/PR, web-evidence, or long-run recovery

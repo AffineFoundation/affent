@@ -1140,6 +1140,10 @@ source-quality rates are interpreted, and it requires the `web_evidence`
 task-domain label so source-quality gates are tied to at least one current-web
 workload. It also gates domain-level expectation pass rate, so a web-evidence
 batch cannot hide failed current-web workloads behind unrelated passing cases.
+The profile additionally scopes the same source-quality, runtime-error,
+tool-error, loop-guard, tool-call, and token-cost limits to the `web_evidence`
+workload domain, so mixed live-web batches cannot hide a weak current-web
+evidence chain behind unrelated passing domains.
 Explicit `--max-debug-brief-tag-rate tag=rate` flags merge with profile
 defaults and can disable one profile tag with `tag=-1`. Other explicit gate
 flags override the profile defaults. Use

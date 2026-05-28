@@ -54,7 +54,13 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-source-access-verified-rate=0.900",
 		"min-expectation-domain-pass-rate=0.800",
 		"min-each-expectation-domain-pass-rate=0.500",
+		"min-expectation-domain-source-access-verified-rate=web_evidence=0.900",
 		"max-source-dynamic-partial-rate=0.200",
+		"max-expectation-domain-avg-total-tokens=web_evidence=120000.000",
+		"max-expectation-domain-avg-tool-calls=web_evidence=18.000",
+		"max-expectation-domain-avg-runtime-errors=web_evidence=0.200",
+		"max-expectation-domain-tool-error-rate=web_evidence=0.100",
+		"max-expectation-domain-loop-guard-intervention-rate=web_evidence=0.250",
 		"max-debug-brief-tag-rate=browser_network:unread_refs=0.000",
 		"max-debug-brief-tag-rate=browser_scroll:stuck_without_network=0.000",
 		"max-debug-brief-tag-rate=empty_recall:no_recent_sessions=0.000",
@@ -964,6 +970,12 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxAvgToolCalls == nil || *webGates.MaxAvgToolCalls != 18 ||
 		webGates.MaxAvgDurationMS == nil || *webGates.MaxAvgDurationMS != 240000 ||
 		(webGates.MaxMemorySearchMissRate != nil && *webGates.MaxMemorySearchMissRate >= 0) ||
+		!reflect.DeepEqual(webGates.MinExpectationDomainSourceAccessVerifiedRates, map[string]float64{"web_evidence": 0.90}) ||
+		!reflect.DeepEqual(webGates.MaxExpectationDomainAvgTotalTokens, map[string]float64{"web_evidence": 120000}) ||
+		!reflect.DeepEqual(webGates.MaxExpectationDomainAvgToolCalls, map[string]float64{"web_evidence": 18}) ||
+		!reflect.DeepEqual(webGates.MaxExpectationDomainAvgRuntimeErrors, map[string]float64{"web_evidence": 0.20}) ||
+		!reflect.DeepEqual(webGates.MaxExpectationDomainToolErrorRates, map[string]float64{"web_evidence": 0.10}) ||
+		!reflect.DeepEqual(webGates.MaxExpectationDomainLoopGuardInterventionRates, map[string]float64{"web_evidence": 0.25}) ||
 		webGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
 		webGates.MaxDebugBriefTagRates["browser_scroll:stuck_without_network"] != 0 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
@@ -988,11 +1000,15 @@ func TestApplyQualityGateProfile(t *testing.T) {
 			"source_dynamic_without_network": -1,
 			"recall:no_context":              0.25,
 		},
-		RequiredExpectationCapabilities: []string{"delegated_source_evidence", "web"},
-		RequiredExpectationDomains:      []string{"bittensor"},
+		MinExpectationDomainSourceAccessVerifiedRates: map[string]float64{"web_evidence": 0.75},
+		RequiredExpectationCapabilities:               []string{"delegated_source_evidence", "web"},
+		RequiredExpectationDomains:                    []string{"bittensor"},
 	}
 	if err := applyQualityGateProfile(&overrideGates, "web-evidence", func(name string) bool {
-		return name == "max-debug-brief-tag-rate" || name == "require-expectation-capability" || name == "require-expectation-domain"
+		return name == "max-debug-brief-tag-rate" ||
+			name == "min-expectation-domain-source-access-verified-rate" ||
+			name == "require-expectation-capability" ||
+			name == "require-expectation-domain"
 	}); err != nil {
 		t.Fatalf("apply web-evidence profile with debug tag overrides: %v", err)
 	}
@@ -1008,6 +1024,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	}
 	if !reflect.DeepEqual(overrideGates.RequiredExpectationDomains, []string{"bittensor", "web_evidence"}) {
 		t.Fatalf("required expectation domains not merged: %#v", overrideGates.RequiredExpectationDomains)
+	}
+	if !reflect.DeepEqual(overrideGates.MinExpectationDomainSourceAccessVerifiedRates, map[string]float64{"web_evidence": 0.75}) {
+		t.Fatalf("domain source access gates not overridden: %#v", overrideGates.MinExpectationDomainSourceAccessVerifiedRates)
 	}
 	if err := validateQualityGateConfig(overrideGates); err != nil {
 		t.Fatalf("validate debug brief tag gate override: %v", err)

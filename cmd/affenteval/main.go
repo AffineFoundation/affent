@@ -644,6 +644,24 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgTotalTokens:                     float64Ptr(120000),
 				RequiredExpectationCapabilities:       []string{"browser", "source_access", "web"},
 				RequiredExpectationDomains:            []string{"web_evidence"},
+				MinExpectationDomainSourceAccessVerifiedRates: map[string]float64{
+					"web_evidence": 0.90,
+				},
+				MaxExpectationDomainAvgTotalTokens: map[string]float64{
+					"web_evidence": 120000,
+				},
+				MaxExpectationDomainAvgToolCalls: map[string]float64{
+					"web_evidence": 18,
+				},
+				MaxExpectationDomainAvgRuntimeErrors: map[string]float64{
+					"web_evidence": 0.20,
+				},
+				MaxExpectationDomainToolErrorRates: map[string]float64{
+					"web_evidence": 0.10,
+				},
+				MaxExpectationDomainLoopGuardInterventionRates: map[string]float64{
+					"web_evidence": 0.25,
+				},
 				MaxDebugBriefTagRates: map[string]float64{
 					"browser_network:unread_refs":                 0,
 					"browser_scroll:stuck_without_network":        0,
