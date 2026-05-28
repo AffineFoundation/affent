@@ -1,17 +1,23 @@
 import { useState, type FormEvent } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
+import { manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runCommandRequest, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
+
+export type RunCommandAction = (content: string) => Promise<void> | void;
 
 export function SessionRunPanel({
   run,
   defaultOpen = false,
   onOpenArtifact,
+  onRunCommand,
+  runCommandBusy = false,
   onUseAsDraft,
 }: {
   run: SessionRunView;
   defaultOpen?: boolean;
   onOpenArtifact?: (path: string) => void;
+  onRunCommand?: RunCommandAction;
+  runCommandBusy?: boolean;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [manualCommand, setManualCommand] = useState("");
@@ -21,11 +27,17 @@ export function SessionRunPanel({
   const visibleCommands = trimmedQuery ? run.commands.filter((command) => runMatchesQuery(command, trimmedQuery)) : run.commands;
   const focusCommand = visibleCommands.find((command) => command.status === "failed") ?? visibleCommands.find((command) => command.status === "running");
 
-  function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const command = manualCommand.trim();
-    if (!command || !onUseAsDraft) return;
-    onUseAsDraft(manualRunDraft(command, manualCwd), "run_command");
+    if (!command) return;
+    const request = manualRunDraft(command, manualCwd);
+    if (onRunCommand) {
+      await onRunCommand(request);
+      setManualCommand("");
+      return;
+    }
+    onUseAsDraft?.(request, "run_command");
   }
 
   return (
@@ -40,6 +52,8 @@ export function SessionRunPanel({
           <RunFocus
             command={focusCommand}
             onOpenArtifact={onOpenArtifact}
+            onRunCommand={onRunCommand}
+            runCommandBusy={runCommandBusy}
             onUseAsDraft={onUseAsDraft}
           />
         ) : null}
@@ -76,6 +90,11 @@ export function SessionRunPanel({
                       Open command output
                     </button>
                   ) : null}
+                  {onRunCommand ? (
+                    <button type="button" className="ghost-action primary-run-action" disabled={runCommandBusy} onClick={() => onRunCommand(runCommandRequest(command))}>
+                      Rerun now
+                    </button>
+                  ) : null}
                   {onUseAsDraft ? (
                     <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runCommandDraft(command), "run_command")}>
                       Rerun as draft
@@ -90,7 +109,7 @@ export function SessionRunPanel({
         ) : (
           <div className="session-skills-empty">No shell commands in this chat.</div>
         )}
-        {onUseAsDraft ? (
+        {onUseAsDraft || onRunCommand ? (
           <form className="session-run-manual" data-testid="session-run-manual" onSubmit={handleManualSubmit}>
             <div className="session-run-manual-head">
               <strong>Run command</strong>
@@ -112,9 +131,16 @@ export function SessionRunPanel({
                 placeholder="session workspace"
               />
             </label>
-            <button type="submit" className="ghost-action" disabled={!manualCommand.trim()}>
-              Use command as draft
-            </button>
+            <div className="session-run-manual-actions">
+              <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
+                {onRunCommand ? "Ask Affent to run" : "Use command as draft"}
+              </button>
+              {onRunCommand && onUseAsDraft ? (
+                <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>
+                  Use command as draft
+                </button>
+              ) : null}
+            </div>
           </form>
         ) : null}
       </div>
@@ -138,10 +164,14 @@ function runMatchesQuery(command: SessionRunCommand, query: string): boolean {
 function RunFocus({
   command,
   onOpenArtifact,
+  onRunCommand,
+  runCommandBusy,
   onUseAsDraft,
 }: {
   command: SessionRunCommand;
   onOpenArtifact?: (path: string) => void;
+  onRunCommand?: RunCommandAction;
+  runCommandBusy?: boolean;
   onUseAsDraft?: UseAsDraft;
 }) {
   return (
@@ -160,6 +190,11 @@ function RunFocus({
         {command.artifactPath && onOpenArtifact ? (
           <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
             Open command output
+          </button>
+        ) : null}
+        {onRunCommand ? (
+          <button type="button" className="ghost-action primary-run-action" disabled={runCommandBusy} onClick={() => onRunCommand(runCommandRequest(command))}>
+            Rerun now
           </button>
         ) : null}
         {onUseAsDraft ? (

@@ -1265,6 +1265,12 @@ export function App() {
     }
   }
 
+  async function handleRunCommandRequest(content: string) {
+    setWorkbenchOpen(false);
+    setWorkbenchInspectorOpen(false);
+    await handleSend(content);
+  }
+
   async function handleOpenArtifact(path: string) {
     if (!selectedSessionId) return;
     setArtifact({ state: "loading", path });
@@ -1493,6 +1499,8 @@ export function App() {
           run={sessionRun}
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onRunCommand={handleRunCommandRequest}
+          runCommandBusy={actionBusy}
           onUseAsDraft={handleUseAsDraft}
         />
       );

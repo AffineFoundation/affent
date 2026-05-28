@@ -2175,7 +2175,7 @@ describe("App", () => {
 
   it("surfaces command failures inside Workbench without adding default Chat noise", async () => {
     const user = userEvent.setup();
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === "/v1/sessions?limit=100") {
         return jsonResponse({
@@ -2223,6 +2223,9 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/run-1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/run-1/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "run-1", turn_id: "rerun-1" });
+      }
       if (url === "/v1/sessions/run-1/artifacts/.affent/artifacts/tool-results/test.txt?offset=0&limit=65536") {
         return new Response("checkout spec failed\nexpected payment route", {
           status: 200,
@@ -2264,6 +2267,15 @@ describe("App", () => {
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using command");
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Run evidence for npm test -- checkout.spec.ts");
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Next: update payment route then rerun");
+
+    await user.click(screen.getByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Run");
+    await user.click(within(await screen.findByTestId("session-run-focus")).getByRole("button", { name: "Rerun now" }));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/run-1/messages", expect.objectContaining({ method: "POST" })));
+    const rerunCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/run-1/messages" && (init as RequestInit | undefined)?.method === "POST");
+    expect((rerunCall?.[1] as RequestInit).body).toEqual(expect.stringContaining("Rerun this command in the session workspace now"));
+    expect((rerunCall?.[1] as RequestInit).body).toEqual(expect.stringContaining("npm test -- checkout.spec.ts"));
+    expect(screen.queryByTestId("workbench-panel")).toBeNull();
   });
 
   it("keeps the top bar compact when stats polling would fail", async () => {

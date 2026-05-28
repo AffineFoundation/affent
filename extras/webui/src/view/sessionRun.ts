@@ -85,6 +85,16 @@ export function runCommandDraft(command: SessionRunCommand): string {
   return lines.join("\n");
 }
 
+export function runCommandRequest(command: SessionRunCommand): string {
+  const lines = [
+    "Rerun this command in the session workspace now, then report the exit code, working directory, and relevant output:",
+    command.command,
+    "",
+    runCommandEvidenceText(command),
+  ];
+  return lines.join("\n");
+}
+
 export function manualRunDraft(command: string, cwd?: string): string {
   const lines = [
     "Run this command in the session workspace, then report the exit code, working directory, and relevant output:",

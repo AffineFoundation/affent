@@ -1250,6 +1250,26 @@ button.workbench-context-runtime-item:focus-visible {
   white-space: nowrap;
 }
 
+.session-run-manual-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.primary-run-action {
+  border-color: rgba(20, 184, 166, 0.28);
+  background: rgba(20, 184, 166, 0.1);
+  color: #0f766e;
+}
+
+.primary-run-action:hover,
+.primary-run-action:focus-visible {
+  border-color: rgba(20, 184, 166, 0.48);
+  background: rgba(20, 184, 166, 0.16);
+  color: #0f766e;
+}
+
 .session-change-diff {
   grid-column: 1 / -1;
   display: grid;
@@ -8691,6 +8711,19 @@ html[data-theme="dark"] .session-run-manual input {
   border-color: rgba(71, 85, 105, 0.88);
   background: rgba(15, 23, 42, 0.72);
   color: #e5e7eb;
+}
+
+html[data-theme="dark"] .primary-run-action {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(45, 212, 191, 0.12);
+  color: #5eead4;
+}
+
+html[data-theme="dark"] .primary-run-action:hover,
+html[data-theme="dark"] .primary-run-action:focus-visible {
+  border-color: rgba(45, 212, 191, 0.44);
+  background: rgba(45, 212, 191, 0.18);
+  color: #99f6e4;
 }
 
 html[data-theme="dark"] .timeline-surface {
