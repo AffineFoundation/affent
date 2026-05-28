@@ -49,7 +49,13 @@ export function SessionSkillsPanel({
     );
   }, [allSkills, query]);
   const runtimeCount = allSkills.filter((skill) => skill.runtime).length;
-  const summary = loading ? "Loading skills" : error ? "Skills unavailable" : `${allSkills.length} ${allSkills.length === 1 ? "skill" : "skills"}`;
+  const summary = loading
+    ? "Loading skills"
+    : error
+      ? "Skills unavailable"
+      : allSkills.length === 0
+        ? "No skills"
+        : `${allSkills.length} ${allSkills.length === 1 ? "skill" : "skills"}`;
   const summaryDetail = loading
     ? "Fetching reusable workflows."
     : error
