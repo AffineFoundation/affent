@@ -4446,6 +4446,51 @@ button.workbench-context-runtime-item:focus-visible {
   gap: 6px;
 }
 
+.session-skills-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.session-skills-stat {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.64);
+  padding: 8px 9px;
+}
+
+.session-skills-stat span,
+.session-skills-stat small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+}
+
+.session-skills-stat span {
+  white-space: nowrap;
+}
+
+.session-skills-stat small {
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.session-skills-stat strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-skill-item {
   border: 1px solid rgba(217, 224, 232, 0.78);
   border-radius: var(--radius-sm);
@@ -4455,7 +4500,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-skill-item > summary {
   display: grid;
-  grid-template-columns: minmax(138px, 0.38fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(170px, 0.48fr) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 38px;
@@ -4478,6 +4523,14 @@ button.workbench-context-runtime-item:focus-visible {
 .session-skill-desc {
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.session-skill-title strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.session-skill-desc {
   white-space: nowrap;
 }
 
@@ -10533,6 +10586,7 @@ html[data-theme="dark"] .account-ssh-storage,
 html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
+html[data-theme="dark"] .session-skills-stat,
 html[data-theme="dark"] .session-skill-item,
 html[data-theme="dark"] .session-search input,
 html[data-theme="dark"] .session-skills-search input,

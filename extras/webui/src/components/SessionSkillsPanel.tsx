@@ -247,6 +247,7 @@ export function SessionSkillsPanel({
         ) : null}
         {!loading && !error ? (
           <>
+            <SkillsDashboard skills={allSkills} installEnabled={installEnabled} />
             {hasSearch || canInstall || onRefresh ? (
               <div className="session-skills-controls">
                 {hasSearch ? (
@@ -394,6 +395,38 @@ export function SessionSkillsPanel({
         ) : null}
       </div>
     </details>
+  );
+}
+
+function SkillsDashboard({ skills, installEnabled }: { skills: readonly SessionSkillInfo[]; installEnabled: boolean }) {
+  const runtime = skills.filter((skill) => skill.runtime).length;
+  const builtIn = skills.length - runtime;
+  const triggerable = skills.filter((skill) => (skill.triggers?.length ?? skill.auto_activation?.any?.length ?? 0) > 0).length;
+  const toolBound = skills.filter((skill) => (skill.required_tools?.length ?? 0) > 0).length;
+  const tools = new Set(skills.flatMap((skill) => skill.required_tools ?? []));
+  return (
+    <div className="session-skills-dashboard" data-testid="session-skills-dashboard">
+      <div className="session-skills-stat">
+        <span>Available</span>
+        <strong>{skills.length}</strong>
+        <small>{builtIn} built in · {runtime} custom</small>
+      </div>
+      <div className="session-skills-stat">
+        <span>Activation</span>
+        <strong>{triggerable}</strong>
+        <small>{triggerable === 1 ? "triggerable skill" : "triggerable skills"}</small>
+      </div>
+      <div className="session-skills-stat">
+        <span>Tool-bound</span>
+        <strong>{toolBound}</strong>
+        <small>{tools.size} {tools.size === 1 ? "unique tool" : "unique tools"}</small>
+      </div>
+      <div className="session-skills-stat">
+        <span>Install</span>
+        <strong>{installEnabled ? "Enabled" : "Read only"}</strong>
+        <small>{installEnabled ? "custom skills allowed" : "runtime install disabled"}</small>
+      </div>
+    </div>
   );
 }
 

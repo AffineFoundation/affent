@@ -28,7 +28,7 @@ describe("sessionSkills view helpers", () => {
     expect(skillKindLabel(skill)).toBe("Built in");
     expect(skillSizeLabel(skill)).toBe("96 B");
     expect(activationSummary(skill)).toBe("Triggers: fix, repair");
-    expect(skillSummaryTags(skill)).toEqual(["Built in", "2 triggers", "1 tool"]);
+    expect(skillSummaryTags(skill)).toEqual(["2 triggers", "1 tool"]);
     expect(skillMatchesQuery(skill, "workspace")).toBe(true);
     expect(skillSearchMatches(skill, "repair")).toEqual([
       "Name: coding_repair_workflow",

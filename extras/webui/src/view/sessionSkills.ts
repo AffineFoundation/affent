@@ -29,7 +29,7 @@ export function activationCoverage(skills: readonly SessionSkillInfo[]): string 
 }
 
 export function skillSummaryTags(skill: SessionSkillInfo): string[] {
-  const tags = [skillKindLabel(skill)];
+  const tags: string[] = [];
   const triggers = skillTriggers(skill);
   if (triggers.length > 0) tags.push(`${triggers.length} trigger${triggers.length === 1 ? "" : "s"}`);
   const requiredTools = skill.required_tools?.length ?? 0;
