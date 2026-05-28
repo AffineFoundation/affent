@@ -1038,6 +1038,33 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 }
 
+func TestLoopTurnTokenCeilingChecks(t *testing.T) {
+	trace := Trace{LoopTurnCheckpoints: []LoopTurnCheckpoint{
+		{TurnID: "t1", InputTokens: 120000, OutputTokens: 1500},
+		{TurnID: "t2", InputTokens: 260000, OutputTokens: 2000},
+	}}
+	if res := MaxLoopTurnInputTokens(300000).Eval(trace); !res.Pass {
+		t.Fatalf("expected max input token check to pass: %+v", res)
+	}
+	if res := MaxLoopTurnTotalTokens(300000).Eval(trace); !res.Pass {
+		t.Fatalf("expected max total token check to pass: %+v", res)
+	}
+	res := MaxLoopTurnInputTokens(200000).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected max input token check to fail")
+	}
+	if !strings.Contains(res.Detail, "max_input_tokens=260000") || !strings.Contains(res.Detail, "want <= 200000") {
+		t.Fatalf("failure detail should include observed max and threshold: %s", res.Detail)
+	}
+	res = MaxLoopTurnTotalTokens(200000).Eval(Trace{})
+	if res.Pass {
+		t.Fatal("expected missing checkpoint token check to fail")
+	}
+	if !strings.Contains(res.Detail, "got none") {
+		t.Fatalf("missing checkpoint failure detail = %q", res.Detail)
+	}
+}
+
 func TestContextCompactionStatsClassifiesSummaryQuality(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
 		{TurnID: "unknown", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "legacy"},

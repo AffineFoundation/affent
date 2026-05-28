@@ -413,7 +413,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if len(exp.Domains) > 0 {
 		fmt.Fprintf(b, "- domains: `%s`\n", strings.Join(exp.Domains, "`, `"))
 	}
-	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
+	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.MaxLoopTurnInputTokens > 0 || exp.MaxLoopTurnTotalTokens > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
 		var parts []string
 		if exp.SessionID != "" {
 			parts = append(parts, fmt.Sprintf("session_id=%s", exp.SessionID))
@@ -429,6 +429,12 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if exp.MaxTurns > 0 {
 			parts = append(parts, fmt.Sprintf("max_turns=%d", exp.MaxTurns))
+		}
+		if exp.MaxLoopTurnInputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("max_loop_turn_input_tokens=%d", exp.MaxLoopTurnInputTokens))
+		}
+		if exp.MaxLoopTurnTotalTokens > 0 {
+			parts = append(parts, fmt.Sprintf("max_loop_turn_total_tokens=%d", exp.MaxLoopTurnTotalTokens))
 		}
 		if exp.CompactTrigger > 0 {
 			parts = append(parts, fmt.Sprintf("compact_trigger=%d", exp.CompactTrigger))
@@ -803,6 +809,8 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.ForbiddenFileSubstrings) > 0 ||
 		exp.MaxParentToolCalls > 0 ||
 		len(exp.MaxSuccessfulToolCallsByTool) > 0 ||
+		exp.MaxLoopTurnInputTokens > 0 ||
+		exp.MaxLoopTurnTotalTokens > 0 ||
 		exp.MaxTurns > 0 ||
 		exp.CompactTrigger > 0 ||
 		exp.CompactKeepLast > 0

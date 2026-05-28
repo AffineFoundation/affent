@@ -2018,6 +2018,50 @@ func MaxSuccessfulToolCallsForTool(toolName string, n int) Check {
 	}
 }
 
+func MaxLoopTurnInputTokens(n int) Check {
+	return Check{
+		Name: fmt.Sprintf("max_loop_turn_input_tokens:%d", n),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopTurnCheckpointStats(0)
+			if stats.Count == 0 {
+				return CheckResult{
+					Pass:   false,
+					Detail: "expected loop.turn_checkpoint events to measure loop input tokens, got none",
+				}
+			}
+			if stats.MaxInputTokens <= n {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("max_input_tokens=%d", stats.MaxInputTokens)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("max_input_tokens=%d, want <= %d across %d loop checkpoint(s)", stats.MaxInputTokens, n, stats.Count),
+			}
+		},
+	}
+}
+
+func MaxLoopTurnTotalTokens(n int) Check {
+	return Check{
+		Name: fmt.Sprintf("max_loop_turn_total_tokens:%d", n),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopTurnCheckpointStats(0)
+			if stats.Count == 0 {
+				return CheckResult{
+					Pass:   false,
+					Detail: "expected loop.turn_checkpoint events to measure loop total tokens, got none",
+				}
+			}
+			if stats.MaxTotalTokens <= n {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("max_total_tokens=%d", stats.MaxTotalTokens)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("max_total_tokens=%d, want <= %d across %d loop checkpoint(s)", stats.MaxTotalTokens, n, stats.Count),
+			}
+		},
+	}
+}
+
 // ShellCommandMatching passes when at least one shell tool call's
 // `command` argument matches the given pattern. Pattern is a Go
 // regexp; on regex compile failure it falls back to plain substring

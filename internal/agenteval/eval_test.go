@@ -2601,6 +2601,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if compactionRetention.RequiredToolCounts["read_file"] != 5 || compactionRetention.MaxSuccessfulToolCallsByTool["read_file"] != 5 {
 		t.Fatalf("compaction retention read constraints = counts:%#v max:%#v", compactionRetention.RequiredToolCounts, compactionRetention.MaxSuccessfulToolCallsByTool)
 	}
+	if compactionRetention.MaxLoopTurnInputTokens != 300000 || compactionRetention.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("compaction retention token ceilings = input:%d total:%d, want 300000/320000", compactionRetention.MaxLoopTurnInputTokens, compactionRetention.MaxLoopTurnTotalTokens)
+	}
 	for _, want := range []string{"COMPRESS-HRO-31", "COMPRESS-SN120-42", "COMPRESS-PR-77"} {
 		if !stringSliceContains(compactionRetention.RequiredContextSummaryText, want) {
 			t.Fatalf("compaction retention RequiredContextSummaryText = %#v, want %q", compactionRetention.RequiredContextSummaryText, want)
@@ -3887,8 +3890,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		ForbiddenFileSubstrings: map[string][]string{
 			"notes.md": {"uncited taostats metric"},
 		},
-		CompactTrigger:  6,
-		CompactKeepLast: 3,
+		MaxLoopTurnInputTokens: 300000,
+		MaxLoopTurnTotalTokens: 320000,
+		CompactTrigger:         6,
+		CompactKeepLast:        3,
 	}
 	err := writeScenarioDebugArtifacts(&res, scenario, "partial answer\n", "runtime log\n", &trace)
 	if err != nil {
@@ -3955,10 +3960,14 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		)
 	}
 	if manifest.Expectations.MaxTurns != 12 ||
+		manifest.Expectations.MaxLoopTurnInputTokens != 300000 ||
+		manifest.Expectations.MaxLoopTurnTotalTokens != 320000 ||
 		manifest.Expectations.CompactTrigger != 6 ||
 		manifest.Expectations.CompactKeepLast != 3 ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "turn_ended_cleanly") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "tool_called:web_fetch") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_input_tokens:300000") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_total_tokens:320000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
@@ -4286,7 +4295,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"expectation_capabilities: `browser`, `context_compaction`, `context_injection`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `source_repo`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"domains: `market`, `web_evidence`",
-		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
+		"runtime: `max_turns=12 max_loop_turn_input_tokens=300000 max_loop_turn_total_tokens=320000 compact_trigger=6 compact_keep_last=3`",
 		"source_repo: `url=remote.git ref=main dir=app`",
 		"checks: `turn_ended_cleanly`",
 		"required_tools: `web_fetch`, `browser_network_read`",

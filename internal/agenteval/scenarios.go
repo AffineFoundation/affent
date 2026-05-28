@@ -2089,9 +2089,11 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 5,
 		},
-		MaxTurns:        12,
-		CompactTrigger:  6,
-		CompactKeepLast: 3,
+		MaxLoopTurnInputTokens: 300000,
+		MaxLoopTurnTotalTokens: 320000,
+		MaxTurns:               12,
+		CompactTrigger:         6,
+		CompactKeepLast:        3,
 	}
 }
 

@@ -215,6 +215,8 @@ type BatchScenario struct {
 	ForbiddenFileSubstrings                        map[string][]string
 	MaxParentToolCalls                             int
 	MaxSuccessfulToolCallsByTool                   map[string]int
+	MaxLoopTurnInputTokens                         int
+	MaxLoopTurnTotalTokens                         int
 	MaxTurns                                       int
 	CompactTrigger                                 int
 	CompactKeepLast                                int
@@ -442,6 +444,8 @@ type DebugScenarioExpectations struct {
 	ForbiddenFileSubstrings                        map[string][]string                   `json:"forbidden_file_substrings,omitempty"`
 	MaxParentToolCalls                             int                                   `json:"max_parent_tool_calls,omitempty"`
 	MaxSuccessfulToolCallsByTool                   map[string]int                        `json:"max_successful_tool_calls_by_tool,omitempty"`
+	MaxLoopTurnInputTokens                         int                                   `json:"max_loop_turn_input_tokens,omitempty"`
+	MaxLoopTurnTotalTokens                         int                                   `json:"max_loop_turn_total_tokens,omitempty"`
 	MaxTurns                                       int                                   `json:"max_turns,omitempty"`
 	CompactTrigger                                 int                                   `json:"compact_trigger,omitempty"`
 	CompactKeepLast                                int                                   `json:"compact_keep_last,omitempty"`
@@ -1984,6 +1988,8 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ForbiddenFileSubstrings:                        cloneStringSliceMap(s.ForbiddenFileSubstrings),
 		MaxParentToolCalls:                             s.MaxParentToolCalls,
 		MaxSuccessfulToolCallsByTool:                   cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
+		MaxLoopTurnInputTokens:                         s.MaxLoopTurnInputTokens,
+		MaxLoopTurnTotalTokens:                         s.MaxLoopTurnTotalTokens,
 		MaxTurns:                                       s.MaxTurns,
 		CompactTrigger:                                 s.CompactTrigger,
 		CompactKeepLast:                                s.CompactKeepLast,
@@ -2948,6 +2954,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, tool := range sortedStringMapKeys(scenario.MaxSuccessfulToolCallsByTool) {
 		checks = append(checks, MaxSuccessfulToolCallsForTool(tool, scenario.MaxSuccessfulToolCallsByTool[tool]))
+	}
+	if scenario.MaxLoopTurnInputTokens > 0 {
+		checks = append(checks, MaxLoopTurnInputTokens(scenario.MaxLoopTurnInputTokens))
+	}
+	if scenario.MaxLoopTurnTotalTokens > 0 {
+		checks = append(checks, MaxLoopTurnTotalTokens(scenario.MaxLoopTurnTotalTokens))
 	}
 	for _, want := range scenario.RequiredCommands {
 		checks = append(checks, ShellCommandMatching(want))
