@@ -68,6 +68,7 @@ describe("SessionRunPanel", () => {
       "run_command",
     );
 
+    await user.click(screen.getByText("Run command"));
     await user.type(screen.getByLabelText("Command"), "npm run build");
     await user.type(screen.getByLabelText("Working directory"), "extras/webui");
     await user.click(screen.getByRole("button", { name: "Use command as draft" }));
@@ -118,6 +119,7 @@ describe("SessionRunPanel", () => {
     await user.click(within(focus).getByRole("button", { name: "Rerun now" }));
     expect(onRunCommand).toHaveBeenCalledWith({ command: "npm test -- checkout.spec.ts", cwd: "extras/webui" });
 
+    await user.click(screen.getByText("Run command"));
     await user.type(screen.getByLabelText("Command"), "npm test -- checkout.spec.ts");
     await user.type(screen.getByLabelText("Working directory"), "extras/webui");
     await user.click(screen.getByRole("button", { name: "Run now" }));

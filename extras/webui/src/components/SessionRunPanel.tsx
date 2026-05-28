@@ -74,38 +74,40 @@ export function SessionRunPanel({
           />
         ) : null}
         {onUseAsDraft || onRunCommand ? (
-          <form className="session-run-manual" data-testid="session-run-manual" onSubmit={handleManualSubmit}>
-            <div className="session-run-manual-head">
-              <strong>Run command</strong>
-              <span>{run.latestCommandCwd ? `Latest cwd: ${displayPath(run.latestCommandCwd)}` : "Session workspace"}</span>
-            </div>
-            <label>
-              <span>Command</span>
-              <input
-                value={manualCommand}
-                onChange={(event) => setManualCommand(event.target.value)}
-                placeholder="npm test"
-              />
-            </label>
-            <label>
-              <span>Working directory</span>
-              <input
-                value={manualCwd}
-                onChange={(event) => setManualCwd(event.target.value)}
-                placeholder={run.latestCommandCwd || "session workspace"}
-              />
-            </label>
-            <div className="session-run-manual-actions">
-              <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
-                {onRunCommand ? "Run now" : "Use command as draft"}
-              </button>
-              {onRunCommand && onUseAsDraft ? (
-                <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>
-                  Use command as draft
+          <details className="session-run-manual-disclosure" open={run.commands.length === 0}>
+            <summary>
+              <span>Run command</span>
+              <small>{run.latestCommandCwd ? `Latest cwd: ${displayPath(run.latestCommandCwd)}` : "Session workspace"}</small>
+            </summary>
+            <form className="session-run-manual" data-testid="session-run-manual" onSubmit={handleManualSubmit}>
+              <label>
+                <span>Command</span>
+                <input
+                  value={manualCommand}
+                  onChange={(event) => setManualCommand(event.target.value)}
+                  placeholder="npm test"
+                />
+              </label>
+              <label>
+                <span>Working directory</span>
+                <input
+                  value={manualCwd}
+                  onChange={(event) => setManualCwd(event.target.value)}
+                  placeholder={run.latestCommandCwd || "session workspace"}
+                />
+              </label>
+              <div className="session-run-manual-actions">
+                <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
+                  {onRunCommand ? "Run now" : "Use command as draft"}
                 </button>
-              ) : null}
-            </div>
-          </form>
+                {onRunCommand && onUseAsDraft ? (
+                  <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>
+                    Use command as draft
+                  </button>
+                ) : null}
+              </div>
+            </form>
+          </details>
         ) : null}
         {run.commands.length > 1 ? (
           <div className="session-skills-controls">

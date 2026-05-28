@@ -767,7 +767,6 @@ body[data-resizing="true"] {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.workbench-tab-surface .session-run-manual-head,
 .workbench-tab-surface .session-run-manual-actions {
   grid-column: 1;
 }
@@ -2283,36 +2282,71 @@ button.workbench-context-runtime-item:focus-visible {
   margin: 0;
 }
 
+.session-run-manual-disclosure {
+  min-width: 0;
+  border: 1px solid rgba(189, 199, 211, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.66);
+  overflow: hidden;
+}
+
+.session-run-manual-disclosure > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 760;
+  padding: 0 9px;
+}
+
+.session-run-manual-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-run-manual-disclosure > summary::before {
+  content: "";
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid currentColor;
+  opacity: 0.58;
+  transition: transform 140ms ease;
+}
+
+.session-run-manual-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.session-run-manual-disclosure > summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.session-run-manual-disclosure > summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .session-run-manual {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(180px, 0.8fr) auto;
   gap: 8px;
   align-items: end;
   min-width: 0;
-  margin-top: 8px;
-  border: 1px solid rgba(189, 199, 211, 0.72);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.78);
+  border-top: 1px solid rgba(217, 224, 232, 0.78);
   padding: 8px;
-}
-
-.session-run-manual-head {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-}
-
-.session-run-manual-head strong {
-  color: var(--text);
-  font-size: 12.5px;
-}
-
-.session-run-manual-head span {
-  color: var(--text-muted);
-  font-size: 11.5px;
 }
 
 .session-run-manual label {
@@ -10911,6 +10945,7 @@ html[data-theme="dark"] .session-changes-overview,
 html[data-theme="dark"] .session-changes-item,
 html[data-theme="dark"] .session-run-item,
 html[data-theme="dark"] .session-run-overview,
+html[data-theme="dark"] .session-run-manual-disclosure,
 html[data-theme="dark"] .session-run-manual,
 html[data-theme="dark"] .session-artifacts-item,
 html[data-theme="dark"] .session-workspace-card,
