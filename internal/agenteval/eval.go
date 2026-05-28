@@ -320,6 +320,8 @@ type DebugManifest struct {
 	ExpectationCapabilityPassedNames       []string                          `json:"expectation_capability_passed_names,omitempty"`
 	ExpectationCapabilityFailedNames       []string                          `json:"expectation_capability_failed_names,omitempty"`
 	Failures                               []string                          `json:"failures,omitempty"`
+	QualityGatesPassed                     *bool                             `json:"quality_gates_passed,omitempty"`
+	QualityGateFailures                    []string                          `json:"quality_gate_failures,omitempty"`
 	Verifier                               *DebugVerifierResult              `json:"verifier,omitempty"`
 	DebugBrief                             *DebugBrief                       `json:"debug_brief,omitempty"`
 	RecoveryGuide                          *DebugRecoveryGuide               `json:"recovery_guide,omitempty"`
@@ -2558,6 +2560,40 @@ func WriteTraceDebugArtifacts(opts TraceDebugOptions) (BatchResult, error) {
 		return res, err
 	}
 	return res, nil
+}
+
+func UpdateDebugManifestQualityGates(path string, passed *bool, failures []string) error {
+	path = strings.TrimSpace(path)
+	if path == "" || (passed == nil && len(failures) == 0) {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read debug manifest: %w", err)
+	}
+	var manifest DebugManifest
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return fmt.Errorf("decode debug manifest: %w", err)
+	}
+	manifest.QualityGatesPassed = cloneBoolPtr(passed)
+	manifest.QualityGateFailures = append([]string(nil), failures...)
+	updated, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode debug manifest: %w", err)
+	}
+	updated = append(updated, '\n')
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
+		return fmt.Errorf("write debug manifest: %w", err)
+	}
+	return nil
+}
+
+func cloneBoolPtr(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 // BatchScenarioChecks returns the Check slice derived from the

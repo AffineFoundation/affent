@@ -235,10 +235,11 @@ func TestRunTraceFileAppliesQualityGates(t *testing.T) {
 	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	outDir := filepath.Join(dir, "debug")
 	out, code := captureStdout(t, func() int {
 		return run([]string{
 			"--trace-file", tracePath,
-			"--trace-output-dir", filepath.Join(dir, "debug"),
+			"--trace-output-dir", outDir,
 			"--name", "manual-plan-drift",
 			"--max-tool-error-rate", "0",
 			"--max-plan-error-rate", "0",
@@ -257,6 +258,26 @@ func TestRunTraceFileAppliesQualityGates(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--trace-file quality gate output missing %q:\n%s", want, out)
+		}
+	}
+	var manifest agenteval.DebugManifest
+	raw, err := os.ReadFile(filepath.Join(outDir, "affenteval-debug.json"))
+	if err != nil {
+		t.Fatalf("read debug manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
+	}
+	if manifest.QualityGatesPassed == nil || *manifest.QualityGatesPassed {
+		t.Fatalf("manifest quality_gates_passed = %#v", manifest.QualityGatesPassed)
+	}
+	for _, want := range []string{
+		"tool_error_rate 1.000 > max 0.000",
+		"plan_error_rate 1.000 > max 0.000",
+		"debug_brief_tag_rate[tool_failure:invalid_args] 1.000 > max 0.000",
+	} {
+		if !testStringSliceContains(manifest.QualityGateFailures, want) {
+			t.Fatalf("manifest quality_gate_failures = %#v, want %q", manifest.QualityGateFailures, want)
 		}
 	}
 }

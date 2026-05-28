@@ -410,6 +410,11 @@ success and trace-level process quality.`)
 		meta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, traceGates)
 		summary := summarizeBatchResults([]agenteval.BatchResult{res})
 		gateFailures := qualityGateFailures(summary, traceGates)
+		gatesPassed := qualityGatesPassedForJSONL(meta, gateFailures)
+		if err := agenteval.UpdateDebugManifestQualityGates(res.DebugManifestPath, gatesPassed, gateFailures); err != nil {
+			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
+			return 64
+		}
 		if *jsonl {
 			printBatchResultJSONL(os.Stdout, meta, res)
 			printBatchSummaryJSONL(os.Stdout, meta, summary, gateFailures)
