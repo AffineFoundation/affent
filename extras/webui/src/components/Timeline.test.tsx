@@ -568,6 +568,32 @@ describe("Timeline", () => {
     expect(replies[2]).toHaveTextContent("Next, I will verify the update cadence.");
   });
 
+  it("keeps tool activity scoped to the assistant reply that triggered it", () => {
+    renderTimeline([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 1, type: "user.message", data: { turn_id: "t1", text: "run a loop checkpoint" } },
+      { id: 2, type: "message.done", data: { turn_id: "t1", text: "I will inspect the repo first." } },
+      { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "list_files", args: { path: "." } } },
+      { id: 4, type: "tool.result", data: { call_id: "c1", exit_code: 0, result_summary: "README.md package.json" } },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "Now I will run the tests." } },
+      { id: 6, type: "tool.request", data: { turn_id: "t1", call_id: "c2", tool: "shell", args: { command: "npm test" } } },
+      { id: 7, type: "tool.result", data: { call_id: "c2", exit_code: 0, result_summary: "tests passed" } },
+      { id: 8, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    const replies = screen.getAllByTestId("msg-assistant");
+    expect(replies).toHaveLength(2);
+    expect(replies[0]).toHaveTextContent("I will inspect the repo first.");
+    expect(replies[1]).toHaveTextContent("Now I will run the tests.");
+
+    const activities = screen.getAllByTestId("agent-activity");
+    expect(activities).toHaveLength(2);
+    expect(activities[0]).toHaveTextContent("README.md package.json");
+    expect(activities[0]).not.toHaveTextContent("tests passed");
+    expect(activities[1]).toHaveTextContent("tests passed");
+    expect(activities[1]).not.toHaveTextContent("README.md package.json");
+  });
+
   it("surfaces streaming assistant text as a live writing state", () => {
     renderTimeline(completedTurn.filter((event) => event.id <= 8));
 

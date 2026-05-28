@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { EventType } from "../api/events";
+import { EventType, type MessageDonePayload, type ToolRequestPayload, type ToolResultPayload } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnError, TurnState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
@@ -55,10 +55,9 @@ export function TurnCard({
   const continuedIntoTurnNumber = continuedAfterLimit ? turnNumber + 1 : undefined;
   const workSummary = buildTurnWorkSummaryWithOptions(turn, { continuedAfterLimit });
   const artifacts = buildTurnArtifacts(turn);
-  const memoryUpdates = memoryUpdatesForTurn(turn);
   const activity = buildTurnActivity(turn, { continuedAfterLimit, continuedIntoTurnNumber });
   const fallbackAnswer = buildFallbackAnswer(turn, { continuedAfterLimit });
-  const assistantMessageSteps = turnAssistantMessageSteps(turn);
+  const assistantResponseSegments = turnAssistantResponseSegments(turn, relatedEvents);
   const boundary = buildTurnBoundaryView({
     turn,
     turnNumber,
@@ -128,39 +127,33 @@ export function TurnCard({
         ) : null}
         <div className="assistant-cluster">
           <div className="assistant-name">Affent</div>
-          {assistantMessageSteps.map((message, index) => (
-            <MessageStep
-              key={`${index}-${message.text.slice(0, 24)}`}
-              label={message.label}
-              text={message.text}
-              variant="assistant"
-              streaming={message.streaming}
+          {assistantResponseSegments.length > 0 ? assistantResponseSegments.map((segment, index) => (
+            <AssistantResponseSegment
+              key={segment.key}
+              segment={segment}
+              isLatest={isLatest && index === assistantResponseSegments.length - 1}
+              continuedAfterLimit={continuedAfterLimit}
+              continuedIntoTurnNumber={continuedIntoTurnNumber}
               searchQuery={searchQuery}
-              onContinue={onUseAsDraft}
-              onRetry={onUseAsDraft}
-            />
-          ))}
-          {turn.status === "running" && !turn.assistantText ? (
-            <RunningAnswerBubble turn={turn} summary={workSummary} />
-          ) : null}
-          {activity ? <AgentActivity activity={activity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
-          {memoryUpdates.length > 0 ? <MemoryUpdateStrip updates={memoryUpdates} searchQuery={searchQuery} /> : null}
-          {fallbackAnswer ? (
-            <FallbackAnswerBubble answer={fallbackAnswer} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} />
-          ) : null}
-          {artifacts.length > 0 ? (
-            <ArtifactStrip
-              artifacts={artifacts}
               sessionId={sessionId}
               onOpenArtifact={onOpenArtifact}
               onUseAsDraft={onUseAsDraft}
-              searchQuery={searchQuery}
+              forceWorkDetails={forceWorkDetails}
             />
+          )) : null}
+          {turn.status === "running" && !turn.assistantText ? (
+            <RunningAnswerBubble turn={turn} summary={workSummary} />
           ) : null}
+          {assistantResponseSegments.length === 0 && activity ? <AgentActivity activity={activity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
+          {assistantResponseSegments.length === 0 ? <TurnMemoryUpdates turn={turn} searchQuery={searchQuery} /> : null}
+          {fallbackAnswer ? (
+            <FallbackAnswerBubble answer={fallbackAnswer} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} />
+          ) : null}
+          {assistantResponseSegments.length === 0 ? <TurnArtifacts turn={turn} sessionId={sessionId} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} searchQuery={searchQuery} /> : null}
           {showReasoningDisclosure ? (
             <ReasoningDisclosure turn={turn} searchQuery={searchQuery} />
           ) : null}
-          {showWorkDetails ? (
+          {assistantResponseSegments.length === 0 && showWorkDetails ? (
             <WorkDetails
               turn={turn}
               summary={workSummary}
@@ -182,6 +175,122 @@ export function TurnCard({
   );
 }
 
+interface AssistantResponseSegmentView {
+  key: string;
+  turn: TurnState;
+  events: readonly NormalizedEvent[];
+  text?: string;
+  streaming?: boolean;
+}
+
+interface AssistantResponseSegmentDraft {
+  text?: string;
+  streaming?: boolean;
+  callIds: Set<string>;
+  eventIds: Set<number>;
+}
+
+function AssistantResponseSegment({
+  segment,
+  isLatest,
+  continuedAfterLimit,
+  continuedIntoTurnNumber,
+  searchQuery,
+  sessionId,
+  onOpenArtifact,
+  onUseAsDraft,
+  forceWorkDetails,
+}: {
+  segment: AssistantResponseSegmentView;
+  isLatest: boolean;
+  continuedAfterLimit?: boolean;
+  continuedIntoTurnNumber?: number;
+  searchQuery?: string;
+  sessionId?: string;
+  onOpenArtifact?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+  forceWorkDetails?: boolean;
+}) {
+  const segmentActivity = buildTurnActivity(segment.turn, { continuedAfterLimit, continuedIntoTurnNumber });
+  const segmentWorkSummary = buildTurnWorkSummaryWithOptions(segment.turn, { continuedAfterLimit });
+  const segmentWorkSearchMatch = workSearchMatches(segment.turn, segment.events, searchQuery);
+  const showSegmentWorkDetails = shouldShowWorkDetails(segment.turn, {
+    isLatest,
+    continuedAfterLimit,
+    searchMatch: segmentWorkSearchMatch,
+    force: forceWorkDetails,
+  });
+
+  return (
+    <div className="assistant-response-segment" data-testid="assistant-response-segment">
+      {segment.text ? (
+        <MessageStep
+          label="Affent"
+          text={segment.text}
+          variant="assistant"
+          streaming={segment.streaming}
+          searchQuery={searchQuery}
+          onContinue={onUseAsDraft}
+          onRetry={onUseAsDraft}
+        />
+      ) : null}
+      {segmentActivity ? <AgentActivity activity={segmentActivity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
+      <TurnMemoryUpdates turn={segment.turn} searchQuery={searchQuery} />
+      <TurnArtifacts
+        turn={segment.turn}
+        sessionId={sessionId}
+        onOpenArtifact={onOpenArtifact}
+        onUseAsDraft={onUseAsDraft}
+        searchQuery={searchQuery}
+      />
+      {showSegmentWorkDetails ? (
+        <WorkDetails
+          turn={segment.turn}
+          summary={segmentWorkSummary}
+          events={segment.events}
+          searchQuery={searchQuery}
+          searchMatch={segmentWorkSearchMatch}
+          sessionId={sessionId}
+          onOpenArtifact={onOpenArtifact}
+          onUseAsDraft={onUseAsDraft}
+          continuedAfterLimit={continuedAfterLimit}
+          continuedIntoTurnNumber={continuedIntoTurnNumber}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TurnMemoryUpdates({ turn, searchQuery }: { turn: TurnState; searchQuery?: string }) {
+  const memoryUpdates = memoryUpdatesForTurn(turn);
+  return memoryUpdates.length > 0 ? <MemoryUpdateStrip updates={memoryUpdates} searchQuery={searchQuery} /> : null;
+}
+
+function TurnArtifacts({
+  turn,
+  sessionId,
+  onOpenArtifact,
+  onUseAsDraft,
+  searchQuery,
+}: {
+  turn: TurnState;
+  sessionId?: string;
+  onOpenArtifact?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+  searchQuery?: string;
+}) {
+  const artifacts = buildTurnArtifacts(turn);
+  return artifacts.length > 0 ? (
+    <ArtifactStrip
+      artifacts={artifacts}
+      sessionId={sessionId}
+      onOpenArtifact={onOpenArtifact}
+      onUseAsDraft={onUseAsDraft}
+      searchQuery={searchQuery}
+    />
+  ) : null;
+}
+
 function turnAssistantMessageSteps(turn: TurnState): Array<{ text: string; streaming?: boolean; label: string }> {
   const completed = (turn.assistantMessages ?? []).filter((message) => message.trim().length > 0);
   const draft = turn.assistantTextDraft?.trim() ? turn.assistantTextDraft : "";
@@ -193,6 +302,115 @@ function turnAssistantMessageSteps(turn: TurnState): Array<{ text: string; strea
   }
   const text = turn.assistantText.trim() ? turn.assistantText : "";
   return text ? [{ text, label: "Affent", streaming: turn.messageStreaming }] : [];
+}
+
+function turnAssistantResponseSegments(turn: TurnState, events: readonly NormalizedEvent[]): AssistantResponseSegmentView[] {
+  const toolByCallId = new Map(turn.toolCalls.map((call) => [call.callId, call]));
+  const orderedEvents = [...events].sort((a, b) => a.id - b.id);
+  const segmentDrafts: Array<{ text?: string; streaming?: boolean; callIds: Set<string>; eventIds: Set<number> }> = [];
+  let current = emptyAssistantSegmentDraft();
+
+  const pushCurrent = () => {
+    if (!current.text && current.callIds.size === 0) return;
+    segmentDrafts.push(current);
+    current = emptyAssistantSegmentDraft();
+  };
+
+  for (const event of orderedEvents) {
+    if (event.type === EventType.MessageDone) {
+      const payload = event.data as MessageDonePayload;
+      const text = payload.text?.trim() ? payload.text : "";
+      if (!text) continue;
+      if (current.text) pushCurrent();
+      current.text = text;
+      current.eventIds.add(event.id);
+      continue;
+    }
+    if (event.type === EventType.ToolRequest) {
+      const payload = event.data as ToolRequestPayload;
+      if (!toolByCallId.has(payload.call_id)) continue;
+      current.callIds.add(payload.call_id);
+      current.eventIds.add(event.id);
+      continue;
+    }
+    if (event.type === EventType.ToolResult) {
+      const payload = event.data as ToolResultPayload;
+      if (!toolByCallId.has(payload.call_id)) continue;
+      current.callIds.add(payload.call_id);
+      current.eventIds.add(event.id);
+    }
+  }
+
+  const steps = turnAssistantMessageSteps(turn);
+  const draft = steps.find((step) => step.streaming);
+  if (draft && current.text !== draft.text) {
+    if (current.text) pushCurrent();
+    current.text = draft.text;
+    current.streaming = draft.streaming;
+  }
+  pushCurrent();
+
+  if (segmentDrafts.length === 0 && steps.length > 0) {
+    return steps.map((step, index) => {
+      const segmentTurn = turnSegmentState(turn, [], step.text, step.streaming, index, index === steps.length - 1);
+      return { key: `${turn.id}:message:${index}`, turn: segmentTurn, events: [], text: step.text, streaming: step.streaming };
+    });
+  }
+
+  return segmentDrafts.map((segment, index) => {
+    const callIds = segment.callIds;
+    const eventIds = segment.eventIds;
+    const toolCalls = turn.toolCalls.filter((call) => callIds.has(call.callId));
+    const segmentEvents = orderedEvents.filter((event) => eventIds.has(event.id) || eventReferencesAnyTool(event, callIds));
+    const isLast = index === segmentDrafts.length - 1;
+    return {
+      key: `${turn.id}:response:${index}:${segment.text?.slice(0, 16) ?? "tools"}`,
+      turn: turnSegmentState(turn, toolCalls, segment.text, segment.streaming, index, isLast),
+      events: segmentEvents,
+      text: segment.text,
+      streaming: segment.streaming,
+    };
+  });
+}
+
+function emptyAssistantSegmentDraft(): AssistantResponseSegmentDraft {
+  return { callIds: new Set<string>(), eventIds: new Set<number>() };
+}
+
+function turnSegmentState(
+  turn: TurnState,
+  toolCalls: ToolCallState[],
+  text: string | undefined,
+  streaming: boolean | undefined,
+  index: number,
+  isLast: boolean,
+): TurnState {
+  const assistantText = text ?? "";
+  return {
+    ...turn,
+    id: `${turn.id}:response:${index}`,
+    thinkingText: "",
+    thinkingStreaming: false,
+    assistantMessages: assistantText && !streaming ? [assistantText] : [],
+    assistantTextDraft: assistantText && streaming ? assistantText : "",
+    assistantText,
+    messageStreaming: !!streaming,
+    runtimeSurface: undefined,
+    toolCalls,
+    loopProtocolFeeds: [],
+    loopDecisions: [],
+    contextCompactions: [],
+    contextInjections: [],
+    usage: undefined,
+    toolStats: undefined,
+    error: isLast ? turn.error : undefined,
+  };
+}
+
+function eventReferencesAnyTool(event: NormalizedEvent, callIds: ReadonlySet<string>): boolean {
+  if (!event.data || typeof event.data !== "object") return false;
+  const callId = (event.data as { call_id?: unknown }).call_id;
+  return typeof callId === "string" && callIds.has(callId);
 }
 
 function MemoryUpdateStrip({ updates, searchQuery }: { updates: readonly MemoryUpdateSummary[]; searchQuery?: string }) {
