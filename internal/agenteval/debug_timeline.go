@@ -1311,6 +1311,9 @@ func renderTimelineDecisions(b *strings.Builder, trace *Trace) {
 		if d.TokenBudget > 0 {
 			fmt.Fprintf(b, "   token_budget: `%d`\n", d.TokenBudget)
 		}
+		if d.BudgetBytes > 0 {
+			fmt.Fprintf(b, "   budget_bytes: `%d`\n", d.BudgetBytes)
+		}
 		if d.Reason != "" {
 			fmt.Fprintf(b, "   reason: %s\n", timelineInline(d.Reason, 600))
 		}

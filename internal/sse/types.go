@@ -377,6 +377,7 @@ type LoopDecisionPayload struct {
 	Reason         string `json:"reason,omitempty"`
 	RequiredAction string `json:"required_action,omitempty"`
 	TokenBudget    int    `json:"token_budget,omitempty"`
+	BudgetBytes    int    `json:"budget_bytes,omitempty"`
 	// VisibleInUI is nil by default, which consumers should treat as visible.
 	// Use a pointer so an explicit false still survives JSON omitempty.
 	VisibleInUI *bool `json:"visible_in_ui,omitempty"`

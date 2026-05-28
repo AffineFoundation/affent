@@ -1076,6 +1076,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	budgetExhaustedOmissions := 0
 	processFinalRecovered := false
 	inputBudgetDecisionPublished := false
+	toolContextBudgetDecisionPublished := false
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
 	runBudgetFinal := func(prompt, skippedReason string) (bool, string, error) {
@@ -1121,6 +1122,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			return
 		}
 		budgetExhaustedOmissions++
+		l.publishToolContextBudgetLoopDecision(turnID, omitted, l.toolResultContextBudgetBytes(), &toolContextBudgetDecisionPublished)
 		if !forceNoToolsNext {
 			toolStats.ForcedNoTools++
 		}
@@ -1623,6 +1625,31 @@ func (l *Loop) publishInputBudgetLoopDecision(turnID, trigger string, observed, 
 		Reason:         reason,
 		RequiredAction: "Stop taking more tool actions in this turn; produce a compact final answer from collected evidence, then continue in a new turn if more work is needed.",
 		TokenBudget:    budget,
+		VisibleInUI:    &visible,
+	})
+	if published != nil {
+		*published = true
+	}
+}
+
+func (l *Loop) publishToolContextBudgetLoopDecision(turnID string, omitted, budgetBytes int, published *bool) {
+	if published != nil && *published {
+		return
+	}
+	if budgetBytes <= 0 {
+		return
+	}
+	visible := true
+	l.publishLoopDecision(sse.LoopDecisionPayload{
+		TurnID:         turnID,
+		DecisionID:     "tool-context-budget-exhausted",
+		Kind:           "tool_context_budget",
+		Trigger:        "tool_result_context_budget_exhausted",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         fmt.Sprintf("Tool results omitted %d byte(s) after exhausting the %d-byte per-turn model-context budget.", omitted, budgetBytes),
+		RequiredAction: "Stop taking more tool actions in this turn; produce a compact final answer from the tool evidence already preserved in model context and artifacts.",
+		BudgetBytes:    budgetBytes,
 		VisibleInUI:    &visible,
 	})
 	if published != nil {

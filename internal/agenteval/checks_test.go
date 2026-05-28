@@ -881,7 +881,7 @@ func TestLoopDecisionChecks(t *testing.T) {
 
 func TestLoopDecisionMatchAtLeast(t *testing.T) {
 	trace := Trace{LoopDecisions: []LoopDecision{
-		{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
+		{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", BudgetBytes: 32768},
 		{Kind: "evidence_quality", Decision: "continue", Trigger: "memory_review"},
 		{Kind: "loop_stop", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 	}}
@@ -892,7 +892,7 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 	if res.Pass {
 		t.Fatal("expected exact loop decision match to fail when trigger is split across other decisions")
 	}
-	for _, want := range []string{"matched=0", `kind="evidence_quality"`, `decision="defer"`, `trigger="network_source_missing"`} {
+	for _, want := range []string{"matched=0", `kind="evidence_quality"`, `decision="defer"`, `trigger="network_source_missing"`, "budget_bytes=32768"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail %q missing %q", res.Detail, want)
 		}

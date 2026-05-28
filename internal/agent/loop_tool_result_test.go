@@ -2105,6 +2105,7 @@ func TestRunTurn_ForceNoToolsStillSummarizesWhenModelRequestsTool(t *testing.T) 
 
 	deadline := time.After(10 * time.Second)
 	var finalText string
+	var sawDecision bool
 	for {
 		select {
 		case ev, ok := <-events:
@@ -2118,6 +2119,20 @@ func TestRunTurn_ForceNoToolsStillSummarizesWhenModelRequestsTool(t *testing.T) 
 					t.Fatalf("decode message.done: %v", err)
 				}
 				finalText = p.Text
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				if p.Kind == "tool_context_budget" {
+					sawDecision = true
+					if p.Trigger != "tool_result_context_budget_exhausted" || p.Decision != "defer" || p.BudgetBytes != 1 {
+						t.Fatalf("unexpected tool-context budget decision: %+v", p)
+					}
+					if p.VisibleInUI == nil || !*p.VisibleInUI || !strings.Contains(p.RequiredAction, "Stop taking more tool actions") {
+						t.Fatalf("tool-context budget decision should be visible and actionable: %+v", p)
+					}
+				}
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -2137,6 +2152,9 @@ func TestRunTurn_ForceNoToolsStillSummarizesWhenModelRequestsTool(t *testing.T) 
 				}
 				if !recoveryRequestHadPrompt.Load() {
 					t.Fatal("forced no-tool recovery request should explain that tools are disabled")
+				}
+				if !sawDecision {
+					t.Fatal("expected visible tool-context budget loop decision")
 				}
 				if p.ToolStats == nil || p.ToolStats.ForcedNoTools == 0 || p.ToolStats.ToolContextTruncated == 0 {
 					t.Fatalf("turn.end should report forced no-tools and context truncation: %+v", p.ToolStats)

@@ -568,6 +568,7 @@ type LoopDecision struct {
 	Reason         string `json:"reason,omitempty"`
 	RequiredAction string `json:"required_action,omitempty"`
 	TokenBudget    int    `json:"token_budget,omitempty"`
+	BudgetBytes    int    `json:"budget_bytes,omitempty"`
 	TurnID         string `json:"turn_id,omitempty"`
 	DecisionID     string `json:"decision_id,omitempty"`
 }
@@ -1660,6 +1661,7 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 			Reason:         compactOneLine(decision.Reason, 260),
 			RequiredAction: compactOneLine(decision.RequiredAction, 260),
 			TokenBudget:    decision.TokenBudget,
+			BudgetBytes:    decision.BudgetBytes,
 			TurnID:         decision.TurnID,
 			DecisionID:     decision.DecisionID,
 		})
