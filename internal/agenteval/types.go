@@ -760,20 +760,26 @@ func (t Trace) ToolRepairExamples(maxExamples int) []ToolRepairExample {
 }
 
 func (t Trace) ToolFailureKindCounts() map[string]int {
-	if len(t.ToolStats.ToolFailureByKind) > 0 {
-		return cloneStringIntMap(t.ToolStats.ToolFailureByKind)
-	}
-	var out map[string]int
+	out := cloneStringIntMap(t.ToolStats.ToolFailureByKind)
+	var derived map[string]int
 	for _, c := range t.Tools {
 		kinds := toolFailureKindsForCall(c)
 		if len(kinds) == 0 {
 			continue
 		}
+		if derived == nil {
+			derived = map[string]int{}
+		}
+		for _, kind := range kinds {
+			derived[kind]++
+		}
+	}
+	for kind, count := range derived {
 		if out == nil {
 			out = map[string]int{}
 		}
-		for _, kind := range kinds {
-			out[kind]++
+		if count > out[kind] {
+			out[kind] = count
 		}
 	}
 	return out

@@ -1101,40 +1101,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	} else {
 		parsedTrace = &trace
 		trace.WorkspaceDir = workspace
-		res.TraceSchemaVersion = trace.SchemaVersion
-		res.TraceEventTypes = cloneStringIntMap(trace.RawTypes)
-		res.TraceEvents = sumStringIntMap(trace.RawTypes)
-		res.TurnEndReason = trace.TurnEndReason
-		res.ToolCalls = len(trace.Tools)
-		res.ToolStats = trace.ToolStats
-		res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
-		res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
-		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
-		res.ConversationRepairs = append([]sse.ConversationRepairedPayload(nil), trace.ConversationRepairs...)
-		res.LoopDecisionStats = trace.LoopDecisionStats(2)
-		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
-		res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
-		res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
-		res.LoopTurnCheckpoints = trace.LoopTurnCheckpointStats(2)
-		res.ContextInjections = trace.ContextInjectionStats(2)
-		res.ContextCompactions = trace.ContextCompactionStats(2)
-		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
-		res.ToolFailureExamples = trace.ToolFailureExamples(2)
-		res.LoopGuardExamples = trace.LoopGuardExamples(maxDebugLoopGuardExamples)
-		res.SourceAccessExamples = sourceAccessExamplesForDebug(trace)
-		res.BrowserScrollExamples = browserScrollExamplesForDebug(trace)
-		res.BrowserNetworkExamples = browserNetworkExamplesForDebug(trace)
-		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
-		res.MemorySearchMissExamples = memorySearchMissExamplesForDebug(trace)
-		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
-		res.PlanExamples = trace.PlanExamples(maxDebugPlanExamples)
-		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
-		res.ToolTruncation = SummarizeToolTruncation(trace)
-		res.Usage = trace.Usage
-		res.Delegation = trace.DelegationStats()
-		res.Plan = trace.PlanStats()
-		res.Repair = trace.RepairStats()
-		res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
+		populateBatchResultFromTrace(&res, trace)
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
 	if scenario.ExpectedSkill != "" {
@@ -1336,6 +1303,49 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		return err
 	}
 	return nil
+}
+
+func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
+	if res == nil {
+		return
+	}
+	if strings.TrimSpace(res.FinalText) == "" {
+		res.FinalText = strings.TrimSpace(trace.FinalText)
+	}
+	res.TraceSchemaVersion = trace.SchemaVersion
+	res.TraceEventTypes = cloneStringIntMap(trace.RawTypes)
+	res.TraceEvents = sumStringIntMap(trace.RawTypes)
+	res.TurnEndReason = trace.TurnEndReason
+	res.ToolCalls = len(trace.Tools)
+	res.ToolStats = trace.ToolStats
+	res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
+	res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
+	res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
+	res.ConversationRepairs = append([]sse.ConversationRepairedPayload(nil), trace.ConversationRepairs...)
+	res.LoopDecisionStats = trace.LoopDecisionStats(2)
+	res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
+	res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
+	res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
+	res.LoopTurnCheckpoints = trace.LoopTurnCheckpointStats(2)
+	res.ContextInjections = trace.ContextInjectionStats(2)
+	res.ContextCompactions = trace.ContextCompactionStats(2)
+	res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
+	res.ToolFailureExamples = trace.ToolFailureExamples(2)
+	res.LoopGuardExamples = trace.LoopGuardExamples(maxDebugLoopGuardExamples)
+	res.SourceAccessExamples = sourceAccessExamplesForDebug(trace)
+	res.BrowserScrollExamples = browserScrollExamplesForDebug(trace)
+	res.BrowserNetworkExamples = browserNetworkExamplesForDebug(trace)
+	res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
+	res.MemorySearchMissExamples = memorySearchMissExamplesForDebug(trace)
+	res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
+	res.PlanExamples = trace.PlanExamples(maxDebugPlanExamples)
+	res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
+	res.ToolTruncation = SummarizeToolTruncation(trace)
+	res.Usage = trace.Usage
+	res.Delegation = trace.DelegationStats()
+	res.Plan = trace.PlanStats()
+	res.Repair = trace.RepairStats()
+	res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
 }
 
 func sourceAccessExamplesForDebug(trace Trace) []SourceAccessExample {
@@ -2414,6 +2424,62 @@ func ParseTraceFile(path string) (Trace, error) {
 		appendTraceEventRef(&trace, ev.Type, ev.Data, "")
 	}
 	return trace, nil
+}
+
+type TraceDebugOptions struct {
+	TracePath string
+	OutputDir string
+	Name      string
+	Prompt    string
+	Stdout    string
+	Stderr    string
+}
+
+// WriteTraceDebugArtifacts parses an existing affent trace/events JSONL file
+// and writes the same debug manifest, timeline, and final-text artifacts that
+// normal eval runs produce. This lets real long-run sessions feed the eval and
+// Workbench diagnostics without rerunning the model.
+func WriteTraceDebugArtifacts(opts TraceDebugOptions) (BatchResult, error) {
+	tracePath := strings.TrimSpace(opts.TracePath)
+	if tracePath == "" {
+		return BatchResult{}, fmt.Errorf("trace path is required")
+	}
+	trace, err := ParseTraceFile(tracePath)
+	if err != nil {
+		return BatchResult{}, err
+	}
+	outputDir := strings.TrimSpace(opts.OutputDir)
+	if outputDir == "" {
+		outputDir = filepath.Join(filepath.Dir(tracePath), "affenteval-debug")
+	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return BatchResult{}, fmt.Errorf("create debug output dir: %w", err)
+	}
+	name := strings.TrimSpace(opts.Name)
+	if name == "" {
+		name = "trace-debug"
+	}
+	scenario := BatchScenario{
+		Name:   name,
+		Prompt: opts.Prompt,
+	}
+	trace.WorkspaceDir = outputDir
+	res := BatchResult{
+		BatchScenario: name,
+		Workspace:     outputDir,
+		TracePath:     tracePath,
+		FinalText:     strings.TrimSpace(trace.FinalText),
+		RunExitCode:   0,
+	}
+	populateBatchResultFromTrace(&res, trace)
+	res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
+	res.OK = len(res.Failures) == 0
+	if err := writeScenarioDebugArtifacts(&res, scenario, opts.Stdout, opts.Stderr, &trace); err != nil {
+		res.Failures = append(res.Failures, fmt.Sprintf("write debug manifest: %v", err))
+		res.OK = false
+		return res, err
+	}
+	return res, nil
 }
 
 // BatchScenarioChecks returns the Check slice derived from the

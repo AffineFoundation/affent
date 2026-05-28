@@ -236,6 +236,8 @@ func run(args []string) int {
 		adHocSessionID                            = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
 		adHocMaxTurns                             = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
 		adHocVerify                               = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
+		traceFile                                 = fs.String("trace-file", "", "parse an existing trace/events JSONL file and write debug artifacts without running a model")
+		traceOutputDir                            = fs.String("trace-output-dir", "", "directory for --trace-file debug artifacts; default is TRACE_DIR/affenteval-debug")
 		repoRoot                                  = fs.String("repo-root", ".", "Affent repository root")
 		workRoot                                  = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
 		baseURL                                   = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
@@ -389,6 +391,31 @@ success and trace-level process quality.`)
 			for _, scenario := range scenarios {
 				fmt.Println(scenario.Name)
 			}
+		}
+		return 0
+	}
+	if strings.TrimSpace(*traceFile) != "" {
+		res, err := agenteval.WriteTraceDebugArtifacts(agenteval.TraceDebugOptions{
+			TracePath: strings.TrimSpace(*traceFile),
+			OutputDir: strings.TrimSpace(*traceOutputDir),
+			Name:      strings.TrimSpace(*adHocName),
+		})
+		if err != nil && strings.TrimSpace(res.BatchScenario) == "" {
+			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
+			return 64
+		}
+		if *jsonl {
+			meta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, gates)
+			printBatchResultJSONL(os.Stdout, meta, res)
+		} else {
+			printBatchResult(os.Stdout, res)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "trace-file: %v\n", err)
+			return 64
+		}
+		if !res.OK {
+			return 1
 		}
 		return 0
 	}

@@ -1059,6 +1059,34 @@ func TestApplyTraceEventReadsToolResultFailureKinds(t *testing.T) {
 	}
 }
 
+func TestToolFailureKindCountsMergesTurnStatsWithDerivedTimeline(t *testing.T) {
+	trace := Trace{
+		ToolStats: ToolRuntimeStats{
+			ToolFailureByKind: map[string]int{"invalid_args": 1},
+		},
+		Tools: []ToolCall{
+			{
+				Tool:         "web_fetch",
+				CallID:       "skipped",
+				Result:       "(max_turns reached before this tool ran)",
+				FailureKinds: []string{"loop_guard_no_budget"},
+				ExitCode:     1,
+			},
+			{
+				Tool:         "plan",
+				CallID:       "invalid",
+				Result:       "Error\nFailure: kind=invalid_args",
+				FailureKinds: []string{"invalid_args"},
+				ExitCode:     1,
+			},
+		},
+	}
+	got := trace.ToolFailureKindCounts()
+	if got["invalid_args"] != 1 || got["loop_guard_no_budget"] != 1 {
+		t.Fatalf("ToolFailureKindCounts = %+v, want merged turn stats plus derived timeline", got)
+	}
+}
+
 func TestTraceToolFailureExamples(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{

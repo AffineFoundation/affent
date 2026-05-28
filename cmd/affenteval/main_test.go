@@ -139,6 +139,70 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	}
 }
 
+func TestRunTraceFileWritesDebugArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	tracePath := filepath.Join(dir, "events.jsonl")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"tool.request","data":{"turn_id":"turn-1","call_id":"c1","tool":"web_fetch","args":{"url":"https://example.test"}}}`,
+		`{"type":"tool.result","data":{"turn_id":"turn-1","call_id":"c1","exit_code":1,"result":"(max_turns reached before this tool ran)"}}`,
+		`{"type":"message.done","data":{"turn_id":"turn-1","text":"Partial answer with evidence gaps.","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":1,"tool_errors":1}}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outDir := filepath.Join(dir, "debug")
+	out, code := captureStdout(t, func() int {
+		return run([]string{"--trace-file", tracePath, "--trace-output-dir", outDir, "--name", "manual-session"})
+	})
+	if code != 0 {
+		t.Fatalf("run --trace-file exit = %d\n%s", code, out)
+	}
+	for _, want := range []string{
+		"PASS manual-session",
+		"tool_failure_kinds=loop_guard_no_budget:1",
+		filepath.Join(outDir, "affenteval-debug.json"),
+		filepath.Join(outDir, "affenteval-timeline.md"),
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--trace-file output missing %q:\n%s", want, out)
+		}
+	}
+
+	var manifest agenteval.DebugManifest
+	raw, err := os.ReadFile(filepath.Join(outDir, "affenteval-debug.json"))
+	if err != nil {
+		t.Fatalf("read debug manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode debug manifest: %v\n%s", err, raw)
+	}
+	if manifest.Scenario != "manual-session" ||
+		manifest.TracePath != tracePath ||
+		manifest.Metrics.ToolFailureByKind["loop_guard_no_budget"] != 1 ||
+		manifest.DebugBrief == nil {
+		t.Fatalf("manifest did not preserve trace diagnostics: %+v", manifest)
+	}
+	hasFailureTag := false
+	for _, tag := range manifest.DebugBrief.Tags {
+		if tag == "tool_failure:loop_guard_no_budget" {
+			hasFailureTag = true
+			break
+		}
+	}
+	if !hasFailureTag {
+		t.Fatalf("debug brief tags = %#v, want loop_guard_no_budget tag", manifest.DebugBrief.Tags)
+	}
+	timeline, err := os.ReadFile(filepath.Join(outDir, "affenteval-timeline.md"))
+	if err != nil {
+		t.Fatalf("read timeline: %v", err)
+	}
+	if !strings.Contains(string(timeline), "loop_guard_no_budget") {
+		t.Fatalf("timeline missing no-budget failure:\n%s", timeline)
+	}
+}
+
 func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 	cases := []struct {
 		name string
