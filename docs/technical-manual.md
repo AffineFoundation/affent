@@ -548,7 +548,10 @@ transport exit code is zero. `verify` may use `ok:false` for a valid
 "claim falsified" result. Eval JSONL/text summaries also expose
 `focused_task_incomplete`, `subagent_incomplete`, and
 `delegation_incomplete=...` so operators can distinguish child reports that
-finished with unresolved gaps from transport/runtime failures.
+finished with unresolved gaps from transport/runtime failures. The same
+summaries include `focused_task_sources` and `subagent_sources` rollups so
+batch triage can see whether delegated work returned source-backed evidence,
+not only how many child calls ran.
 Subagent evals can also require source-bearing report lines through
 `required_subagent_source_counts`, which counts conservative Evidence, Files
 inspected, Commands run, and Sources entries in successful structured

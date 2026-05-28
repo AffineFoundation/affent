@@ -1158,12 +1158,14 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			OutputCapBytes:     1024,
 		},
 		Delegation: agenteval.DelegationStats{
-			FocusedTaskCalls:  2,
-			FocusedTaskByType: map[string]int{"explore": 1, "verify": 1},
-			FocusedTaskErrors: 1,
-			SubagentCalls:     1,
-			SubagentByMode:    map[string]int{"review": 1},
-			SubagentErrors:    1,
+			FocusedTaskCalls:                2,
+			FocusedTaskByType:               map[string]int{"explore": 1, "verify": 1},
+			FocusedTaskSourceFindingsByType: map[string]int{"explore": 2},
+			FocusedTaskErrors:               1,
+			SubagentCalls:                   1,
+			SubagentByMode:                  map[string]int{"review": 1},
+			SubagentSourceEvidenceByMode:    map[string]int{"review": 3},
+			SubagentErrors:                  1,
 		},
 		Plan: agenteval.PlanStats{
 			Calls:    3,
@@ -1191,7 +1193,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -3107,10 +3109,11 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "completed",
 		Delegation: agenteval.DelegationStats{
-			FocusedTaskCalls:      2,
-			FocusedTaskByType:     map[string]int{"recall": 2},
-			FocusedTaskErrors:     1,
-			FocusedTaskIncomplete: 1,
+			FocusedTaskCalls:                2,
+			FocusedTaskByType:               map[string]int{"recall": 2},
+			FocusedTaskSourceFindingsByType: map[string]int{"recall": 1},
+			FocusedTaskErrors:               1,
+			FocusedTaskIncomplete:           1,
 		},
 	})
 	summary.add(agenteval.BatchResult{
@@ -3119,12 +3122,14 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "completed",
 		Delegation: agenteval.DelegationStats{
-			FocusedTaskCalls:   2,
-			FocusedTaskByType:  map[string]int{"recall": 1, "explore": 1},
-			SubagentCalls:      1,
-			SubagentByMode:     map[string]int{"review": 1},
-			SubagentErrors:     1,
-			SubagentIncomplete: 1,
+			FocusedTaskCalls:                2,
+			FocusedTaskByType:               map[string]int{"recall": 1, "explore": 1},
+			FocusedTaskSourceFindingsByType: map[string]int{"recall": 2, "explore": 1},
+			SubagentCalls:                   1,
+			SubagentByMode:                  map[string]int{"review": 1},
+			SubagentSourceEvidenceByMode:    map[string]int{"review": 3},
+			SubagentErrors:                  1,
+			SubagentIncomplete:              1,
 		},
 	})
 
@@ -3134,8 +3139,14 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	if summary.FocusedTaskByType["recall"] != 3 || summary.FocusedTaskByType["explore"] != 1 {
 		t.Errorf("merged FocusedTaskByType = %#v", summary.FocusedTaskByType)
 	}
+	if summary.FocusedTaskSources["recall"] != 3 || summary.FocusedTaskSources["explore"] != 1 {
+		t.Errorf("merged FocusedTaskSources = %#v", summary.FocusedTaskSources)
+	}
 	if summary.SubagentCalls != 1 || summary.SubagentByMode["review"] != 1 {
 		t.Errorf("subagent aggregates = %d, %#v", summary.SubagentCalls, summary.SubagentByMode)
+	}
+	if summary.SubagentSources["review"] != 3 {
+		t.Errorf("merged SubagentSources = %#v", summary.SubagentSources)
 	}
 	if summary.FocusedTaskErrors != 1 || summary.SubagentErrors != 1 {
 		t.Errorf("delegation error aggregates = focused:%d subagent:%d, want 1/1", summary.FocusedTaskErrors, summary.SubagentErrors)
@@ -3170,6 +3181,14 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	if !ok || byType["recall"] != float64(3) || byType["explore"] != float64(1) {
 		t.Errorf("summary.focused_task_by_type = %#v", byType)
 	}
+	sources, ok := got["focused_task_sources"].(map[string]any)
+	if !ok || sources["recall"] != float64(3) || sources["explore"] != float64(1) {
+		t.Errorf("summary.focused_task_sources = %#v", sources)
+	}
+	subSources, ok := got["subagent_sources"].(map[string]any)
+	if !ok || subSources["review"] != float64(3) {
+		t.Errorf("summary.subagent_sources = %#v", subSources)
+	}
 
 	var textOut bytes.Buffer
 	printBatchSummary(&textOut, summary)
@@ -3179,7 +3198,9 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 		"delegation_incomplete=focused_tasks:1,subagents:1",
 		"focused_task_error:25.0%,subagent_error:100.0%",
 		"focused_task_by_type=explore:1,recall:3",
+		"focused_task_sources=explore:1,recall:3",
 		"subagent_by_mode=review:1",
+		"subagent_sources=review:3",
 	} {
 		if !strings.Contains(textOut.String(), want) {
 			t.Fatalf("summary text missing %q:\n%s", want, textOut.String())
@@ -3201,11 +3222,13 @@ func TestPrintBatchResultJSONL_IncludesDelegation(t *testing.T) {
 		TurnEndReason:      "completed",
 		ToolCalls:          4,
 		Delegation: agenteval.DelegationStats{
-			FocusedTaskCalls:  3,
-			FocusedTaskByType: map[string]int{"recall": 2, "explore": 1},
-			FocusedTaskErrors: 1,
-			SubagentCalls:     1,
-			SubagentByMode:    map[string]int{"test": 1},
+			FocusedTaskCalls:                3,
+			FocusedTaskByType:               map[string]int{"recall": 2, "explore": 1},
+			FocusedTaskSourceFindingsByType: map[string]int{"recall": 2},
+			FocusedTaskErrors:               1,
+			SubagentCalls:                   1,
+			SubagentByMode:                  map[string]int{"test": 1},
+			SubagentSourceEvidenceByMode:    map[string]int{"test": 2},
 		},
 	})
 
@@ -3226,12 +3249,20 @@ func TestPrintBatchResultJSONL_IncludesDelegation(t *testing.T) {
 	if byType["recall"] != float64(2) || byType["explore"] != float64(1) {
 		t.Errorf("focused_task_by_type = %#v", byType)
 	}
+	sources, ok := got["focused_task_sources"].(map[string]any)
+	if !ok || sources["recall"] != float64(2) {
+		t.Errorf("focused_task_sources = %#v", sources)
+	}
 	if got["subagent_calls"] != float64(1) {
 		t.Errorf("subagent_calls = %#v, want 1", got["subagent_calls"])
 	}
 	byMode, ok := got["subagent_by_mode"].(map[string]any)
 	if !ok || byMode["test"] != float64(1) {
 		t.Errorf("subagent_by_mode = %#v", byMode)
+	}
+	subSources, ok := got["subagent_sources"].(map[string]any)
+	if !ok || subSources["test"] != float64(2) {
+		t.Errorf("subagent_sources = %#v", subSources)
 	}
 }
 
@@ -3256,9 +3287,11 @@ func TestPrintBatchResultJSONL_OmitsDelegationForNonDelegating(t *testing.T) {
 	for _, field := range []string{
 		`"focused_task_calls"`,
 		`"focused_task_by_type"`,
+		`"focused_task_sources"`,
 		`"focused_task_errors"`,
 		`"subagent_calls"`,
 		`"subagent_by_mode"`,
+		`"subagent_sources"`,
 		`"subagent_errors"`,
 	} {
 		if bytes.Contains([]byte(got), []byte(field)) {

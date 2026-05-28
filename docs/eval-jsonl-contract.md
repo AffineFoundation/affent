@@ -449,10 +449,14 @@ Scenario records describe one eval case:
 - `focused_task_calls`: optional number of delegated `run_task` calls.
 - `focused_task_by_type`: optional map of focused task `task_type` to call
   count.
+- `focused_task_sources`: optional map of focused task `task_type` to sourced
+  finding count from structured `run_task` results.
 - `focused_task_errors`: optional count of focused task calls whose runtime
   tool exit code was non-zero.
 - `subagent_calls`: optional number of delegated `subagent_run` calls.
 - `subagent_by_mode`: optional map of subagent `mode` to call count.
+- `subagent_sources`: optional map of subagent `mode` to source-bearing report
+  line count from structured `subagent_run` results.
 - `subagent_errors`: optional count of subagent calls whose runtime tool exit
   code was non-zero.
 - `plan_calls`: optional number of persisted-plan tool calls.
@@ -553,9 +557,10 @@ Summary records aggregate all scenario records from the same process:
   `tool_context_artifacts`, `tool_context_missing_artifacts`, plus
   `tool_truncation_examples`, the first bounded samples across the batch.
 - Delegation totals: `focused_task_calls`, `focused_task_by_type`,
-  `focused_task_errors`, `focused_task_error_rate`, `subagent_calls`,
-  `subagent_by_mode`, `subagent_errors`, and `subagent_error_rate`. These
-  fields are omitted when no delegated tool calls were observed.
+  `focused_task_sources`, `focused_task_errors`, `focused_task_error_rate`,
+  `subagent_calls`, `subagent_by_mode`, `subagent_sources`,
+  `subagent_errors`, and `subagent_error_rate`. These fields are omitted when
+  no delegated tool calls were observed.
 - Plan totals: `plan_calls`, `plan_by_action`, `plan_errors`,
   `plan_examples`, and `plan_error_rate`. These fields are omitted when no plan
   tool calls were observed.
