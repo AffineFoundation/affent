@@ -899,6 +899,24 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 	}
 }
 
+func TestMessageRejectedAtLeast(t *testing.T) {
+	trace := Trace{MessageRejections: []MessageRejected{
+		{Trigger: "active_plan_unfinished", Reason: "plan:0/1:active", Text: "All done."},
+	}}
+	if res := MessageRejectedAtLeast("active_plan_unfinished", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected message rejected check to pass: %+v", res)
+	}
+	res := MessageRejectedAtLeast("loop_protocol_unclosed", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected mismatched trigger to fail")
+	}
+	for _, want := range []string{"message_rejected=0", "active_plan_unfinished", "All done."} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
+		}
+	}
+}
+
 func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
 		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnToolErrors: 1, LastTurnForcedNoTools: 1, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1, LastDecisionKind: "evidence_quality", LastDecisionTrigger: "source_access_dynamic_partial", LastDecision: "defer", LastDecisionConfidence: "high", LastDecisionReason: "dynamic widgets were empty", LastDecisionAction: "read browser_network_read ref n7"},

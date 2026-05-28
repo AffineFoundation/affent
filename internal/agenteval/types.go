@@ -165,6 +165,11 @@ type Trace struct {
 	// evidence_quality defer events. These are separate from assistant text so
 	// evals can measure when guardrails fired and whether they were actionable.
 	LoopDecisions []LoopDecision
+	// MessageRejections records assistant completion candidates that the
+	// runtime rejected before committing message.done. These are useful for
+	// proving a completion guard prevented a premature final answer from
+	// becoming the authoritative final text.
+	MessageRejections []MessageRejected
 	// LoopProtocolFeeds records LOOP.md injections into model context. These
 	// events let long-run evals measure protocol feed cadence and full/digest
 	// context pressure without reading sidecar loop files.
@@ -579,6 +584,21 @@ type LoopDecisionStats struct {
 	ByDecision map[string]int
 	ByMatch    map[string]int
 	Examples   []LoopDecision
+}
+
+type MessageRejected struct {
+	Scenario       string `json:"scenario,omitempty"`
+	TurnID         string `json:"turn_id,omitempty"`
+	Text           string `json:"text,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	Trigger        string `json:"trigger,omitempty"`
+	RequiredAction string `json:"required_action,omitempty"`
+}
+
+type MessageRejectedStats struct {
+	Count     int
+	ByTrigger map[string]int
+	Examples  []MessageRejected
 }
 
 type LoopProtocolFeed struct {
@@ -1664,6 +1684,31 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 			BudgetBytes:    decision.BudgetBytes,
 			TurnID:         decision.TurnID,
 			DecisionID:     decision.DecisionID,
+		})
+	}
+	return stats
+}
+
+func (t Trace) MessageRejectedStats(maxExamples int) MessageRejectedStats {
+	stats := MessageRejectedStats{}
+	for _, rejected := range t.MessageRejections {
+		stats.Count++
+		if rejected.Trigger != "" {
+			if stats.ByTrigger == nil {
+				stats.ByTrigger = map[string]int{}
+			}
+			stats.ByTrigger[rejected.Trigger]++
+		}
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, MessageRejected{
+			Scenario:       rejected.Scenario,
+			TurnID:         rejected.TurnID,
+			Text:           compactOneLine(rejected.Text, 260),
+			Reason:         compactOneLine(rejected.Reason, 260),
+			Trigger:        rejected.Trigger,
+			RequiredAction: compactOneLine(rejected.RequiredAction, 260),
 		})
 	}
 	return stats

@@ -278,6 +278,7 @@ type BatchResult struct {
 	RuntimeErrorExamples            map[string][]RuntimeErrorExample
 	ConversationRepairs             []sse.ConversationRepairedPayload
 	LoopDecisionStats               LoopDecisionStats
+	MessageRejectedStats            MessageRejectedStats
 	LoopProtocolFeeds               LoopProtocolFeedStats
 	LoopProtocolCalibrationRequests LoopProtocolCalibrationStats
 	LoopProtocolCalibrations        LoopProtocolCalibrationStats
@@ -350,6 +351,7 @@ type DebugManifest struct {
 	RecoveryGuide                          *DebugRecoveryGuide               `json:"recovery_guide,omitempty"`
 	ToolRepairExamples                     []ToolRepairExample               `json:"tool_repair_examples,omitempty"`
 	ConversationRepairExamples             []sse.ConversationRepairedPayload `json:"conversation_repair_examples,omitempty"`
+	MessageRejectedExamples                []MessageRejected                 `json:"message_rejected_examples,omitempty"`
 	LoopGuardExamples                      []LoopGuardExample                `json:"loop_guard_examples,omitempty"`
 	LoopTurnCheckpointExamples             []LoopTurnCheckpoint              `json:"loop_turn_checkpoint_examples,omitempty"`
 	LoopProtocolFeedExamples               []LoopProtocolFeed                `json:"loop_protocol_feed_examples,omitempty"`
@@ -930,6 +932,8 @@ type DebugMetrics struct {
 	PlanCalls                       int            `json:"plan_calls,omitempty"`
 	PlanByAction                    map[string]int `json:"plan_by_action,omitempty"`
 	PlanErrors                      int            `json:"plan_errors,omitempty"`
+	MessageRejected                 int            `json:"message_rejected,omitempty"`
+	MessageRejectedByTrigger        map[string]int `json:"message_rejected_by_trigger,omitempty"`
 	LoopGuardInterventions          int            `json:"loop_guard_interventions"`
 	ForcedNoTools                   int            `json:"forced_no_tools"`
 	LoopTurnCheckpoints             int            `json:"loop_turn_checkpoints,omitempty"`
@@ -1373,6 +1377,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		RecoveryGuide:                          BuildDebugRecoveryGuide(*res),
 		ToolRepairExamples:                     append([]ToolRepairExample(nil), res.ToolRepairExamples...),
 		ConversationRepairExamples:             append([]sse.ConversationRepairedPayload(nil), res.ConversationRepairs...),
+		MessageRejectedExamples:                append([]MessageRejected(nil), res.MessageRejectedStats.Examples...),
 		LoopGuardExamples:                      append([]LoopGuardExample(nil), res.LoopGuardExamples...),
 		LoopTurnCheckpointExamples:             append([]LoopTurnCheckpoint(nil), res.LoopTurnCheckpoints.Examples...),
 		LoopProtocolFeedExamples:               append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
@@ -1415,6 +1420,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			PlanCalls:                       res.Plan.Calls,
 			PlanByAction:                    cloneStringIntMap(res.Plan.ByAction),
 			PlanErrors:                      res.Plan.Errors,
+			MessageRejected:                 res.MessageRejectedStats.Count,
+			MessageRejectedByTrigger:        cloneStringIntMap(res.MessageRejectedStats.ByTrigger),
 			LoopGuardInterventions:          res.ToolStats.LoopGuardInterventions,
 			ForcedNoTools:                   res.ToolStats.ForcedNoTools,
 			LoopTurnCheckpoints:             res.LoopTurnCheckpoints.Count,
@@ -1516,6 +1523,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 	res.ConversationRepairs = append([]sse.ConversationRepairedPayload(nil), trace.ConversationRepairs...)
 	res.LoopDecisionStats = trace.LoopDecisionStats(2)
+	res.MessageRejectedStats = trace.MessageRejectedStats(2)
 	res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
 	res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
 	res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)

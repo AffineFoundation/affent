@@ -763,6 +763,39 @@ func LoopDecisionMatchAtLeast(kind, decision, trigger string, min int) Check {
 	}
 }
 
+func MessageRejectedAtLeast(trigger string, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	name := fmt.Sprintf("message_rejected_at_least:%d", min)
+	if strings.TrimSpace(trigger) != "" {
+		name = fmt.Sprintf("message_rejected_at_least:%s:%d", trigger, min)
+	}
+	return Check{
+		Name: name,
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var examples []string
+			for _, rejected := range t.MessageRejections {
+				if trigger != "" && rejected.Trigger != trigger {
+					continue
+				}
+				count++
+				if len(examples) < 3 {
+					examples = append(examples, formatMessageRejectedExample(rejected))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("message_rejected=%d examples=%v", count, examples)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("message_rejected=%d, want >= %d for trigger=%q; observed=%v", count, min, trigger, messageRejectedExamples(t.MessageRejections, 5)),
+			}
+		},
+	}
+}
+
 func LoopProtocolFeedsAtLeast(min int) Check {
 	return Check{
 		Name: fmt.Sprintf("loop_protocol_feeds_at_least:%d", min),
@@ -1535,6 +1568,31 @@ func formatLoopDecisionExample(d LoopDecision) string {
 	}
 	if d.BudgetBytes > 0 {
 		parts = append(parts, fmt.Sprintf("budget_bytes=%d", d.BudgetBytes))
+	}
+	return strings.Join(parts, " ")
+}
+
+func messageRejectedExamples(rejections []MessageRejected, max int) []string {
+	if max <= 0 || len(rejections) == 0 {
+		return nil
+	}
+	examples := make([]string, 0, min(max, len(rejections)))
+	for i, rejected := range rejections {
+		if i >= max {
+			break
+		}
+		examples = append(examples, formatMessageRejectedExample(rejected))
+	}
+	return examples
+}
+
+func formatMessageRejectedExample(rejected MessageRejected) string {
+	parts := []string{"trigger=" + rejected.Trigger}
+	if rejected.Reason != "" {
+		parts = append(parts, "reason="+previewSubstr(rejected.Reason, 120))
+	}
+	if rejected.Text != "" {
+		parts = append(parts, "text="+previewSubstr(rejected.Text, 120))
 	}
 	return strings.Join(parts, " ")
 }

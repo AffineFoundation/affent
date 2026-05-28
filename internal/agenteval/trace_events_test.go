@@ -98,6 +98,30 @@ func TestApplyTraceEventCapturesContextInjectionMetadata(t *testing.T) {
 	}
 }
 
+func TestApplyTraceEventRecordsMessageRejected(t *testing.T) {
+	trace := Trace{}
+	pending := map[string]int{}
+
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeMessageRejected, json.RawMessage(`{"turn_id":"turn-1","text":"All done.","trigger":"active_plan_unfinished","reason":"plan:0/1:active","required_action":"update plan"}`), "turn-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeMessageRejected, json.RawMessage(`{"turn_id":"turn-2","text":"wrong turn","trigger":"other"}`), "turn-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(trace.MessageRejections) != 1 {
+		t.Fatalf("MessageRejections = %+v, want one current-turn event", trace.MessageRejections)
+	}
+	got := trace.MessageRejections[0]
+	if got.TurnID != "turn-1" ||
+		got.Text != "All done." ||
+		got.Trigger != "active_plan_unfinished" ||
+		got.Reason != "plan:0/1:active" ||
+		got.RequiredAction != "update plan" {
+		t.Fatalf("MessageRejected = %+v", got)
+	}
+}
+
 func TestApplyTraceEventTracksContextCompactionSummaryPresenceKnown(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

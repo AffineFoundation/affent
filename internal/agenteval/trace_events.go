@@ -80,6 +80,21 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.FinalText = p.Text
 			t.FinishReason = p.FinishReason
 		}
+	case sse.TypeMessageRejected:
+		var p sse.MessageRejectedPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.MessageRejections = append(t.MessageRejections, MessageRejected{
+			TurnID:         p.TurnID,
+			Text:           p.Text,
+			Reason:         p.Reason,
+			Trigger:        p.Trigger,
+			RequiredAction: p.RequiredAction,
+		})
 	case sse.TypeToolRequest:
 		var p sse.ToolRequestPayload
 		if err := json.Unmarshal(data, &p); err != nil {
