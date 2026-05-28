@@ -357,6 +357,25 @@ func TestBatchRunnerRejectsLoopProtocolExpectationWithoutProtocolFile(t *testing
 	}
 }
 
+func TestBatchRunnerRejectsLoopProtocolExpectationWithDraftProtocol(t *testing.T) {
+	res := (BatchRunner{WorkRoot: t.TempDir()}).Run(context.Background(), BatchScenario{
+		Name:                      "loop-draft",
+		SessionID:                 "loop-draft",
+		RequiredLoopProtocolFeeds: 1,
+		Files: map[string]string{
+			".affent/loops/loop-draft/LOOP.md": "# Loop Protocol\n\n## 0. Metadata\n\n- status: draft\n",
+		},
+	})
+	if res.OK || len(res.Failures) == 0 {
+		t.Fatalf("loop protocol expectation with draft file should fail early: %+v", res)
+	}
+	for _, want := range []string{"requires loop protocol feeds", ".affent/loops/loop-draft/LOOP.md", `status "draft"`, "want running"} {
+		if !strings.Contains(res.Failures[0], want) {
+			t.Fatalf("failure missing %q: %+v", want, res.Failures)
+		}
+	}
+}
+
 func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")

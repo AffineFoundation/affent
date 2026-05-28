@@ -2128,7 +2128,66 @@ func verifyScenarioLoopProtocolState(root string, scenario BatchScenario) error 
 	if info.IsDir() {
 		return fmt.Errorf("scenario %q requires loop protocol feeds but active protocol path %s is a directory", scenario.Name, name)
 	}
+	if status := evalLoopProtocolStatusFromFile(path); status != "" && status != "running" {
+		return fmt.Errorf("scenario %q requires loop protocol feeds but active protocol file %s has status %q, want running", scenario.Name, name, status)
+	}
+	stateStatus, found, err := evalLoopProtocolStateStatus(filepath.Join(filepath.Dir(path), "state.json"))
+	if err != nil {
+		return fmt.Errorf("read loop protocol state for %s: %w", name, err)
+	}
+	if found {
+		if stateStatus != "" && stateStatus != "running" {
+			return fmt.Errorf("scenario %q requires loop protocol feeds but state for %s has status %q, want running", scenario.Name, name, stateStatus)
+		}
+	}
 	return nil
+}
+
+func evalLoopProtocolStatusFromFile(path string) string {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return evalLoopProtocolStatus(string(raw))
+}
+
+func evalLoopProtocolStatus(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
+		key, value, ok := strings.Cut(line, ":")
+		if !ok || strings.ToLower(strings.TrimSpace(key)) != "status" {
+			continue
+		}
+		return evalLoopProtocolKnownStatus(value)
+	}
+	return ""
+}
+
+func evalLoopProtocolStateStatus(path string) (string, bool, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	var state struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return "", true, err
+	}
+	return evalLoopProtocolKnownStatus(state.Status), true, nil
+}
+
+func evalLoopProtocolKnownStatus(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch s {
+	case "draft", "running", "paused", "stopping", "completed", "blocked", "disabled":
+		return s
+	default:
+		return ""
+	}
 }
 
 func scenarioRequiresActiveLoopProtocol(scenario BatchScenario) bool {

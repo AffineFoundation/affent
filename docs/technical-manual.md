@@ -1283,8 +1283,9 @@ delegation checks, including recent-session recovery-anchor checks and
 command-before/after-tool ordering checks, against the selected runtime surface.
 When a scenario declares loop protocol feed/calibration requirements,
 `affenteval` also fails before model execution if the current session's active
-`.affent/loops/<session_id>/LOOP.md` fixture is missing, so long-run protocol
-regressions do not get confused with a misauthored eval fixture.
+`.affent/loops/<session_id>/LOOP.md` fixture is missing or explicitly marked
+with a non-running status such as `draft`, so long-run protocol regressions do
+not get confused with a misauthored eval fixture.
 Built-in scenarios may run bounded setup commands after fixture files are
 written and before protected-file snapshots are taken. Each setup command has a
 short 30-second timeout. This is used for realistic repository tasks, such as
