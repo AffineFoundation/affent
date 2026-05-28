@@ -528,6 +528,21 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using error diagnostic");
   });
 
+  it("labels imported final-answer requests as draft context", () => {
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        draft={{ id: 1, content: "Do not call more tools. Produce the final answer.", source: "continuation" }}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Do not call more tools. Produce the final answer.");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using final answer request");
+  });
+
   it("removes imported draft context with the draft", async () => {
     const user = userEvent.setup();
     const props = {

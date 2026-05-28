@@ -393,7 +393,7 @@ function nextBrief(
     return {
       value: "Ask for a final answer from the evidence already gathered.",
       action: {
-        label: "Final answer",
+        label: "Use final answer request as draft",
         draft: "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
         source: "continuation",
       },

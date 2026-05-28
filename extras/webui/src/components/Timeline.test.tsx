@@ -1562,7 +1562,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("continuation-card")).toHaveTextContent("Final answer not produced");
     expect(screen.getByTestId("continuation-card")).toHaveTextContent("Affent gathered evidence");
     expect(screen.queryByTestId("turn-navigator")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Ask for final answer" }));
+    await user.click(screen.getByRole("button", { name: "Use final answer request as draft" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
       "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",

@@ -1324,7 +1324,7 @@ function ContinuationPrompt({ turn, onUseAsDraft }: { turn: TurnState; onUseAsDr
       </div>
       {onUseAsDraft ? (
         <button type="button" className="node-action" onClick={() => onUseAsDraft(draft, "continuation")}>
-          Ask for final answer
+          Use final answer request as draft
         </button>
       ) : null}
     </div>

@@ -26,7 +26,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   artifact: "Artifact added to message",
   artifact_text: "Using file text",
   changed_file: "Using changed file",
-  continuation: "Requesting final answer",
+  continuation: "Using final answer request",
   evidence: "Using evidence",
   error: "Using error diagnostic",
   file_evidence: "Using file evidence",

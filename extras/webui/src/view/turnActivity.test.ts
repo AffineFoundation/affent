@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { completedTurn } from "../fixtures/completedTurn";
-import { completedSubagentTree, resultTruncated, runningSubagent, toolError, turnError } from "../fixtures/scenarios";
+import { completedSubagentTree, maxTurns, resultTruncated, runningSubagent, toolError, turnError } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
 import type { TurnState } from "../store/sessionState";
 import { buildTurnActivity } from "./turnActivity";
@@ -912,6 +912,22 @@ describe("buildTurnActivity", () => {
 
     expect(activity?.digest.meta).toContain("1 file (8 KiB, 1 MiB omitted)");
     expect(activity?.items.map((item) => item.label)).not.toContain("Artifact");
+  });
+
+  it("labels max-turn continuation as a draft request", () => {
+    const turn = reduceRawEvents(maxTurns).turns[0];
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.brief.rows).toContainEqual(
+      expect.objectContaining({
+        id: "next",
+        action: {
+          label: "Use final answer request as draft",
+          draft: "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
+          source: "continuation",
+        },
+      }),
+    );
   });
 
   it("softens a historical max-turn attempt after the chat continues", () => {

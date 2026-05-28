@@ -2702,12 +2702,12 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Ask for final answer" }));
+    await user.click(await screen.findByRole("button", { name: "Use final answer request as draft" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
     );
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Requesting final answer");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using final answer request");
   });
 
   it("moves a chat artifact into the composer draft", async () => {
