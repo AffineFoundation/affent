@@ -175,6 +175,7 @@ type BatchScenario struct {
 	RequiredTools                           []string
 	ForbiddenTools                          []string
 	RequiredFocusedTaskCounts               map[string]int
+	RequiredFocusedTaskSourceCounts         map[string]int
 	RequiredSubagentModeCounts              map[string]int
 	RequireNoDelegationErrors               bool
 	RequireNoPlanErrors                     bool
@@ -379,6 +380,7 @@ type DebugScenarioExpectations struct {
 	RequiredCommandAfterTool                []DebugCommandToolOrderRequirement    `json:"required_command_after_tool,omitempty"`
 	RequiredToolOrder                       []DebugToolOrderRequirement           `json:"required_tool_order,omitempty"`
 	RequiredFocusedTaskCounts               map[string]int                        `json:"required_focused_task_counts,omitempty"`
+	RequiredFocusedTaskSourceCounts         map[string]int                        `json:"required_focused_task_source_counts,omitempty"`
 	RequiredSubagentModeCounts              map[string]int                        `json:"required_subagent_mode_counts,omitempty"`
 	RequireNoDelegationErrors               bool                                  `json:"require_no_delegation_errors,omitempty"`
 	RequireNoPlanErrors                     bool                                  `json:"require_no_plan_errors,omitempty"`
@@ -458,6 +460,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["research_checkpoint"] = true
 	}
 	if len(exp.RequiredFocusedTaskCounts) > 0 ||
+		len(exp.RequiredFocusedTaskSourceCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
 		exp.RequireNoDelegationErrors {
 		caps["delegation"] = true
@@ -585,7 +588,7 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 		len(exp.RequiredCommandAfterTool) > 0 {
 		add("shell")
 	}
-	if len(exp.RequiredFocusedTaskCounts) > 0 {
+	if len(exp.RequiredFocusedTaskCounts) > 0 || len(exp.RequiredFocusedTaskSourceCounts) > 0 {
 		add(agent.FocusedTaskToolName)
 	}
 	if len(exp.RequiredSubagentModeCounts) > 0 {
@@ -1699,6 +1702,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredCommandAfterTool:                commandAfterTool,
 		RequiredToolOrder:                       toolOrders,
 		RequiredFocusedTaskCounts:               cloneStringIntMap(s.RequiredFocusedTaskCounts),
+		RequiredFocusedTaskSourceCounts:         cloneStringIntMap(s.RequiredFocusedTaskSourceCounts),
 		RequiredSubagentModeCounts:              cloneStringIntMap(s.RequiredSubagentModeCounts),
 		RequireNoDelegationErrors:               s.RequireNoDelegationErrors,
 		RequireNoPlanErrors:                     s.RequireNoPlanErrors,
@@ -2463,6 +2467,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
 		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))
+	}
+	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskSourceCounts) {
+		checks = append(checks, FocusedTaskSourceFindingsAtLeast(taskType, scenario.RequiredFocusedTaskSourceCounts[taskType]))
 	}
 	for _, mode := range sortedStringMapKeys(scenario.RequiredSubagentModeCounts) {
 		checks = append(checks, SubagentCalledAtLeast(mode, scenario.RequiredSubagentModeCounts[mode]))

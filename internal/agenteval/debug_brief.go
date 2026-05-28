@@ -163,7 +163,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		tags := []string{"research_checkpoint", "loop_decision:research_checkpoint"}
 		if !researchCheckpointHasExternalEvidence(res) {
 			severity = "warn"
-			message = "research checkpoint triggered without external evidence or delegated research; inspect whether the turn stayed internally calibrated"
+			message = "research checkpoint triggered without source-backed external evidence or delegated research; inspect whether the turn stayed internally calibrated"
 			tags = append(tags, "research_checkpoint:no_external_evidence")
 		}
 		add("research_checkpoint", severity, message, []string{"loop_decision_examples", "source_evidence", "child_transcripts", "timeline", "plan"}, map[string]int{
@@ -175,6 +175,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"source_access_discovery_only":  res.ToolStats.SourceAccessDiscoveryOnly,
 			"focused_task_calls":            res.Delegation.FocusedTaskCalls,
 			"focused_task_research":         researchCheckpointFocusedTaskEvidenceCount(res.Delegation),
+			"focused_task_source_findings":  researchCheckpointFocusedTaskSourceFindingCount(res.Delegation),
 			"subagent_calls":                res.Delegation.SubagentCalls,
 			"subagent_research":             res.Delegation.SubagentByMode["research"],
 		}, tags...)
@@ -569,7 +570,7 @@ func researchCheckpointHasExternalEvidence(res BatchResult) bool {
 	if res.ToolStats.SourceAccessVerified > 0 || res.ToolStats.SourceAccessNetwork > 0 {
 		return true
 	}
-	if researchCheckpointFocusedTaskEvidenceCount(res.Delegation) > 0 {
+	if researchCheckpointFocusedTaskSourceFindingCount(res.Delegation) > 0 {
 		return true
 	}
 	if res.Delegation.SubagentByMode["research"] > 0 {
@@ -580,6 +581,10 @@ func researchCheckpointHasExternalEvidence(res BatchResult) bool {
 
 func researchCheckpointFocusedTaskEvidenceCount(stats DelegationStats) int {
 	return stats.FocusedTaskByType["research"] + stats.FocusedTaskByType["web_extract"]
+}
+
+func researchCheckpointFocusedTaskSourceFindingCount(stats DelegationStats) int {
+	return stats.FocusedTaskSourceFindingsByType["research"] + stats.FocusedTaskSourceFindingsByType["web_extract"]
 }
 
 func browserNetworkRefsHaveSourceEvidence(res BatchResult) bool {

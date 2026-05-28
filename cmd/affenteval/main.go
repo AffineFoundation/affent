@@ -1210,7 +1210,7 @@ func expectationRequiredToolNames(exp agenteval.DebugScenarioExpectations) []str
 	if len(exp.RequiredSessionSearch) > 0 || len(exp.RequiredRecentSessionSearch) > 0 {
 		add(agent.SessionSearchToolName)
 	}
-	if len(exp.RequiredFocusedTaskCounts) > 0 {
+	if len(exp.RequiredFocusedTaskCounts) > 0 || len(exp.RequiredFocusedTaskSourceCounts) > 0 {
 		add(agent.FocusedTaskToolName)
 	}
 	if len(exp.RequiredSubagentModeCounts) > 0 {
@@ -4800,7 +4800,7 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 	if len(scenario.RequiredSessionSearch) > 0 || len(scenario.RequiredRecentSessionSearch) > 0 {
 		add(agent.SessionSearchToolName)
 	}
-	if len(scenario.RequiredFocusedTaskCounts) > 0 {
+	if len(scenario.RequiredFocusedTaskCounts) > 0 || len(scenario.RequiredFocusedTaskSourceCounts) > 0 {
 		add(agent.FocusedTaskToolName)
 	}
 	if len(scenario.RequiredSubagentModeCounts) > 0 {

@@ -2077,6 +2077,9 @@ func liveWebResearchCheckpointDelegatedEvidenceScenario() BatchScenario {
 		RequiredFocusedTaskCounts: map[string]int{
 			"research": 1,
 		},
+		RequiredFocusedTaskSourceCounts: map[string]int{
+			"research": 2,
+		},
 		RequireNoDelegationErrors: true,
 		RequiredLoopDecisionKinds: map[string]int{
 			"research_checkpoint": 1,

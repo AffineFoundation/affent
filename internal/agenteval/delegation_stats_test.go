@@ -15,7 +15,7 @@ import (
 func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 	tr := Trace{
 		Tools: []ToolCall{
-			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"}},
+			{Tool: "run_task", Result: `{"task_type":"recall","ok":true,"findings":[{"claim":"pref","source":"memory:prefs"}]}`, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"}},
 			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"}},
 			{Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}, ExitCode: 1, IsErr: true},
 			{Tool: "run_task", Result: `{"task_type":"explore","ok":false,"warnings":["no_valid_evidence_backed_findings"]}`, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
@@ -38,6 +38,9 @@ func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.FocusedTaskByType, map[string]int{"recall": 2, "explore": 2, "verify": 1}) {
 		t.Errorf("FocusedTaskByType = %+v", got.FocusedTaskByType)
+	}
+	if !reflect.DeepEqual(got.FocusedTaskSourceFindingsByType, map[string]int{"recall": 1}) {
+		t.Errorf("FocusedTaskSourceFindingsByType = %+v", got.FocusedTaskSourceFindingsByType)
 	}
 	if got.SubagentCalls != 2 {
 		t.Errorf("SubagentCalls = %d, want 2", got.SubagentCalls)
@@ -64,7 +67,7 @@ func TestTrace_DelegationStats_EmptyTraceProducesZeroValueAndHasAnyFalse(t *test
 	if got.HasAny() {
 		t.Error("HasAny() must be false when no delegation calls observed")
 	}
-	if got.FocusedTaskByType != nil || got.SubagentByMode != nil {
+	if got.FocusedTaskByType != nil || got.FocusedTaskSourceFindingsByType != nil || got.SubagentByMode != nil {
 		t.Error("sub-maps must stay nil when no delegation calls observed (keeps JSONL clean)")
 	}
 }
@@ -92,7 +95,7 @@ func TestParseTraceFile_RecoversDelegationEndToEnd(t *testing.T) {
 		{sse.TypeToolResult, sse.ToolResultPayload{
 			CallID:     "c1",
 			ExitCode:   0,
-			Result:     `{"task_type":"recall","ok":true,"summary":"found 1"}`,
+			Result:     `{"task_type":"recall","ok":true,"summary":"found 1","findings":[{"claim":"pref","source":"session:abc"}]}`,
 			Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"},
 		}},
 		{sse.TypeToolRequest, sse.ToolRequestPayload{
@@ -176,6 +179,9 @@ func TestParseTraceFile_RecoversDelegationEndToEnd(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.FocusedTaskByType, map[string]int{"recall": 1, "explore": 1}) {
 		t.Errorf("FocusedTaskByType after replay = %+v", got.FocusedTaskByType)
+	}
+	if !reflect.DeepEqual(got.FocusedTaskSourceFindingsByType, map[string]int{"recall": 1}) {
+		t.Errorf("FocusedTaskSourceFindingsByType after replay = %+v", got.FocusedTaskSourceFindingsByType)
 	}
 }
 

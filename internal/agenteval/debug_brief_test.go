@@ -303,7 +303,7 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	item := debugBriefItemByKind(brief, "research_checkpoint")
 	if item == nil ||
 		item.Severity != "warn" ||
-		item.Message != "research checkpoint triggered without external evidence or delegated research; inspect whether the turn stayed internally calibrated" ||
+		item.Message != "research checkpoint triggered without source-backed external evidence or delegated research; inspect whether the turn stayed internally calibrated" ||
 		item.Counts["decisions"] != 1 ||
 		!stringSliceContains(item.Inspect, "loop_decision_examples") ||
 		!stringSliceContains(item.Inspect, "source_evidence") ||
@@ -399,10 +399,31 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	})
 	item = debugBriefItemByKind(brief, "research_checkpoint")
 	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["focused_task_research"] != 1 ||
+		item.Counts["focused_task_source_findings"] != 0 ||
+		!stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("unsourced web_extract task should not satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Delegation: DelegationStats{
+			FocusedTaskCalls:                1,
+			FocusedTaskByType:               map[string]int{"web_extract": 1},
+			FocusedTaskSourceFindingsByType: map[string]int{"web_extract": 2},
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
 		item.Severity != "info" ||
 		item.Counts["focused_task_research"] != 1 ||
+		item.Counts["focused_task_source_findings"] != 2 ||
 		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
-		t.Fatalf("web_extract task should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
+		t.Fatalf("sourced web_extract task should satisfy research checkpoint evidence, item=%+v tags=%+v", item, brief.Tags)
 	}
 
 	brief = BuildDebugBrief(BatchResult{

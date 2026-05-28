@@ -465,6 +465,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		fmt.Fprintf(b, "- required_loop_protocol_full_after_compaction: `true`\n")
 	}
 	writeTimelineCountsLine(b, "required_focused_task_counts", exp.RequiredFocusedTaskCounts)
+	writeTimelineCountsLine(b, "required_focused_task_source_counts", exp.RequiredFocusedTaskSourceCounts)
 	writeTimelineCountsLine(b, "required_subagent_mode_counts", exp.RequiredSubagentModeCounts)
 	if exp.RequireNoDelegationErrors || exp.RequireNoPlanErrors {
 		var parts []string
@@ -721,6 +722,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
 		exp.RequireLoopProtocolFullAfterCompact ||
 		len(exp.RequiredFocusedTaskCounts) > 0 ||
+		len(exp.RequiredFocusedTaskSourceCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
 		exp.RequireNoDelegationErrors ||
 		exp.RequireNoPlanErrors ||

@@ -1921,6 +1921,11 @@ type DelegationStats struct {
 	// (recall / explore / web_extract / research / verify / review).
 	// Keys with zero counts are not included.
 	FocusedTaskByType map[string]int
+	// FocusedTaskSourceFindingsByType counts findings with non-empty source
+	// fields in successful structured run_task results, grouped by task_type.
+	// It lets evals distinguish "delegated to research" from "delegated
+	// research returned cited evidence".
+	FocusedTaskSourceFindingsByType map[string]int
 	// FocusedTaskErrors counts run_task calls that failed at runtime or
 	// returned ok:false for non-verify task types. Verify tasks may use
 	// ok:false to mean "claim falsified", which is a valid outcome.
@@ -1975,6 +1980,12 @@ func (t Trace) DelegationStats() DelegationStats {
 					s.FocusedTaskByType = map[string]int{}
 				}
 				s.FocusedTaskByType[tt]++
+				if sourced := focusedTaskSourceFindingCount(c, tt); sourced > 0 {
+					if s.FocusedTaskSourceFindingsByType == nil {
+						s.FocusedTaskSourceFindingsByType = map[string]int{}
+					}
+					s.FocusedTaskSourceFindingsByType[tt] += sourced
+				}
 			}
 		case agent.DelegationKindSubagent:
 			s.SubagentCalls++
@@ -1994,6 +2005,39 @@ func (t Trace) DelegationStats() DelegationStats {
 		}
 	}
 	return s
+}
+
+func focusedTaskSourceFindingCount(c ToolCall, fallbackTaskType string) int {
+	if c.Tool != agent.FocusedTaskToolName || strings.TrimSpace(c.Result) == "" {
+		return 0
+	}
+	var payload struct {
+		OK       *bool  `json:"ok"`
+		TaskType string `json:"task_type"`
+		Findings []struct {
+			Source string `json:"source"`
+		} `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(c.Result), &payload); err != nil {
+		return 0
+	}
+	if payload.OK != nil && !*payload.OK {
+		return 0
+	}
+	taskType := strings.TrimSpace(payload.TaskType)
+	if taskType == "" {
+		taskType = strings.TrimSpace(fallbackTaskType)
+	}
+	if taskType == "" {
+		return 0
+	}
+	var count int
+	for _, finding := range payload.Findings {
+		if strings.TrimSpace(finding.Source) != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func focusedTaskResultCountsAsError(c ToolCall) bool {

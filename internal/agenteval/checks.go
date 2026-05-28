@@ -1460,6 +1460,23 @@ func FocusedTaskCalledAtLeast(taskType string, min int) Check {
 	}
 }
 
+func FocusedTaskSourceFindingsAtLeast(taskType string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("focused_task_source_findings_at_least:%s:%d", taskType, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.DelegationStats()
+			got := stats.FocusedTaskSourceFindingsByType[taskType]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s_source_findings=%d", taskType, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s_source_findings=%d, want >= %d; source_findings=%v", taskType, got, min, stats.FocusedTaskSourceFindingsByType),
+			}
+		},
+	}
+}
+
 func SubagentCalledAtLeast(mode string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("subagent_called_at_least:%s:%d", mode, min),

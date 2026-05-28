@@ -209,6 +209,34 @@ func TestToolResultContains(t *testing.T) {
 	}
 }
 
+func TestFocusedTaskSourceFindingsAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			Tool: "run_task",
+			Result: `{"task_type":"research","ok":true,"findings":[` +
+				`{"claim":"Claude Code supports subagents","source":"https://code.claude.com/docs/en/subagents"},` +
+				`{"claim":"Hermes documents a learning loop","source":"https://hermes-agent.ai/features/learning-loop"},` +
+				`{"claim":"unsupported"}]}`,
+			Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "research"},
+		},
+		{
+			Tool:       "run_task",
+			Result:     `{"task_type":"research","ok":false,"findings":[{"claim":"partial","source":"https://example.test"}]}`,
+			Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "research"},
+		},
+	}}
+	if res := FocusedTaskSourceFindingsAtLeast("research", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected two sourced research findings to pass: %+v", res)
+	}
+	res := FocusedTaskSourceFindingsAtLeast("research", 3).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected source finding count check to fail")
+	}
+	if !strings.Contains(res.Detail, "research_source_findings=2") || !strings.Contains(res.Detail, "want >= 3") {
+		t.Fatalf("failure detail should explain source finding count: %s", res.Detail)
+	}
+}
+
 func TestToolResultTruncated(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "shell", ResultTruncated: true, ResultOmittedBytes: 4096, ResultCapBytes: 262144},

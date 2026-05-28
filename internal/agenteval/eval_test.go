@@ -2035,8 +2035,9 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if !stringSliceContains(delegatedResearch.RequiredTools, "run_task") ||
 		delegatedResearch.RequiredToolCounts["run_task"] != 1 ||
 		delegatedResearch.RequiredFocusedTaskCounts["research"] != 1 ||
+		delegatedResearch.RequiredFocusedTaskSourceCounts["research"] != 2 ||
 		!delegatedResearch.RequireNoDelegationErrors {
-		t.Fatalf("delegated research requirements = tools:%#v counts:%#v focused:%#v no_errors:%v", delegatedResearch.RequiredTools, delegatedResearch.RequiredToolCounts, delegatedResearch.RequiredFocusedTaskCounts, delegatedResearch.RequireNoDelegationErrors)
+		t.Fatalf("delegated research requirements = tools:%#v counts:%#v focused:%#v sources:%#v no_errors:%v", delegatedResearch.RequiredTools, delegatedResearch.RequiredToolCounts, delegatedResearch.RequiredFocusedTaskCounts, delegatedResearch.RequiredFocusedTaskSourceCounts, delegatedResearch.RequireNoDelegationErrors)
 	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "run_task", Arg: "task_type", Substring: "research"},
@@ -2801,6 +2802,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredFocusedTaskCounts: map[string]int{
 			"research": 1,
 		},
+		RequiredFocusedTaskSourceCounts: map[string]int{
+			"research": 2,
+		},
 		RequiredSubagentModeCounts: map[string]int{
 			"review": 1,
 		},
@@ -2935,6 +2939,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		len(manifest.Expectations.RequiredCommandAfterTool) != 1 ||
 		manifest.Expectations.RequiredCommandAfterTool[0] != (DebugCommandToolOrderRequirement{Command: "go test", Tool: "edit_file"}) ||
 		manifest.Expectations.RequiredFocusedTaskCounts["research"] != 1 ||
+		manifest.Expectations.RequiredFocusedTaskSourceCounts["research"] != 2 ||
 		manifest.Expectations.RequiredSubagentModeCounts["review"] != 1 ||
 		!manifest.Expectations.RequireNoDelegationErrors ||
 		!manifest.Expectations.RequireNoPlanErrors ||

@@ -1259,10 +1259,12 @@ research emit `research_checkpoint:no_external_evidence`; the recovery prompt
 routes the next operator to loop decisions, source evidence, and child
 transcripts before treating a loop-route conclusion as externally calibrated.
 Only verified or network-backed SourceAccess counts as checkpoint evidence;
-discovery-only and dynamic-partial page evidence remain weak leads.
-Only focused `research`/`web_extract` tasks and `research` subagents count as
-delegated research evidence; local explore/review children remain internal
-review signals.
+discovery-only and dynamic-partial page evidence remain weak leads. Focused
+`research`/`web_extract` tasks count as delegated evidence only when their
+structured result includes sourced findings, and live-web delegated checkpoint
+evals assert `required_focused_task_source_counts`; local explore/review
+children remain internal review signals. Research subagents still count as
+delegated research evidence through their explicit mode.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities
