@@ -16,12 +16,23 @@ describe("SessionRunPanel", () => {
     const panel = screen.getByTestId("session-run-panel");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("1 failed command");
+    const focus = screen.getByTestId("session-run-focus");
+    expect(focus).toHaveTextContent("Recovery needed");
+    expect(focus).toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(focus).toHaveTextContent("failed · exit 1 · 1.48s · turn 2");
+    expect(focus).toHaveTextContent("Cwd: extras/webui");
+    expect(focus).toHaveTextContent("Next: update payment route then rerun");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("failed · exit 1 · 1.48s · turn 2");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Cwd: extras/webui");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("checkout spec failed");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Output artifact: .affent/artifacts/tool-results/test.txt");
+
+    await user.click(within(focus).getByRole("button", { name: "Copy run evidence" }));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Run evidence for npm test -- checkout.spec.ts"));
+    await user.click(within(focus).getByRole("button", { name: "Open command output" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/test.txt");
 
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Copy command" }));
     expect(writeText).toHaveBeenCalledWith("npm test -- checkout.spec.ts");
