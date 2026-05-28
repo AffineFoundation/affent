@@ -2051,7 +2051,7 @@ func longRunCodePRScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "longrun-code-implementation-pr-summary",
 		Suites: []string{longRunSuite},
-		Prompt: "这个 Go 项目需要实现一个小功能并准备 PR 摘要。请先运行测试复现失败，然后实现 Queue.Push 的优先级排序：priority 越大越靠前，相同 priority 保持插入顺序。不要修改测试。最后再次运行测试确认，并在最终答复里包含 PR Summary 和 Tests 两节。",
+		Prompt: "这个 Go 项目需要实现一个小功能并准备 PR 摘要。请先运行测试复现失败，然后实现 Queue.Push 的优先级排序：priority 越大越靠前，相同 priority 保持插入顺序。不要修改测试。最后再次运行测试确认，并运行 git diff -- queue/queue.go 检查 PR diff；最终答复必须包含 PR Summary 和 Tests 两节，并说明 diff 只涉及 queue/queue.go。",
 		Files: map[string]string{
 			"go.mod": `module example.com/priorityqueue
 
@@ -2130,9 +2130,12 @@ func TestItemsReturnsCopy(t *testing.T) {
 }
 `,
 		},
-		VerifyCommand:    "go test ./...",
+		SetupCommands: []string{
+			"git init && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial",
+		},
+		VerifyCommand:    "go test ./... && git diff --name-only -- queue/queue.go | grep -q '^queue/queue.go$'",
 		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands: []string{`go test`},
+		RequiredCommands: []string{`go test`, `git diff( --)? queue/queue.go`},
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
@@ -2146,11 +2149,12 @@ func TestItemsReturnsCopy(t *testing.T) {
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git diff( --)? queue/queue.go`, Tool: "edit_file"},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},
-		RequiredFinalText: []string{"PR Summary", "Tests", "go test ./...", "queue/queue.go"},
+		RequiredFinalText: []string{"PR Summary", "Tests", "go test ./...", "queue/queue.go", "diff"},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"queue/queue_test.go"},
 		MaxTurns:          12,

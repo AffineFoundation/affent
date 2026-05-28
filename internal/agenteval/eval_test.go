@@ -801,6 +801,56 @@ func TestRunVerifierRecordsSuccess(t *testing.T) {
 	}
 }
 
+func TestBatchRunnerRunsSetupBeforeProtectedSnapshot(t *testing.T) {
+	runner := BatchRunner{
+		RepoRoot: t.TempDir(),
+		WorkRoot: t.TempDir(),
+		BaseURL:  "",
+		APIKey:   "test",
+		Model:    "fake",
+	}
+	res := runner.Run(context.Background(), BatchScenario{
+		Name:           "setup-before-protected",
+		Files:          map[string]string{"protected.txt": "before\n"},
+		SetupCommands:  []string{"printf 'after\\n' > protected.txt"},
+		ProtectedFiles: []string{"protected.txt"},
+	})
+	if res.OK {
+		t.Fatal("scenario should fail because affentctl base URL is intentionally empty")
+	}
+	for _, failure := range res.Failures {
+		if strings.Contains(failure, "protected file changed") {
+			t.Fatalf("protected snapshot ran before setup command: failures=%v", res.Failures)
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join(res.Workspace, "protected.txt"))
+	if err != nil {
+		t.Fatalf("read setup output: %v", err)
+	}
+	if string(raw) != "after\n" {
+		t.Fatalf("setup output = %q, want after", string(raw))
+	}
+}
+
+func TestBatchRunnerReportsSetupCommandFailure(t *testing.T) {
+	runner := BatchRunner{
+		RepoRoot: t.TempDir(),
+		WorkRoot: t.TempDir(),
+	}
+	res := runner.Run(context.Background(), BatchScenario{
+		Name:          "setup-failure",
+		SetupCommands: []string{"printf setup-boom; exit 7"},
+	})
+	if res.OK || len(res.Failures) != 1 {
+		t.Fatalf("setup failure result = ok:%v failures:%v", res.OK, res.Failures)
+	}
+	if !strings.Contains(res.Failures[0], "setup command failed") ||
+		!strings.Contains(res.Failures[0], "setup-boom") ||
+		!strings.Contains(res.Failures[0], "exit status 7") {
+		t.Fatalf("setup failure = %q", res.Failures[0])
+	}
+}
+
 func TestCheckBatchTraceRequiresCleanTurnEnd(t *testing.T) {
 	failures := CheckBatchTrace(Trace{TurnEndReason: "max_turns"}, BatchScenario{})
 	if len(failures) != 1 || !strings.Contains(failures[0], "turn ended with reason") {
@@ -1367,8 +1417,20 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if pr.RequiredCommandCounts[`go test`] != 2 {
 		t.Fatalf("code PR scenario RequiredCommandCounts = %#v, want go test=2", pr.RequiredCommandCounts)
 	}
-	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") || !stringSliceContains(pr.RequiredFinalText, "queue/queue.go") {
-		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary, Tests, and changed file", pr.RequiredFinalText)
+	if len(pr.SetupCommands) != 1 || !strings.Contains(pr.SetupCommands[0], "git init") {
+		t.Fatalf("code PR scenario SetupCommands = %#v, want git repo initialization", pr.SetupCommands)
+	}
+	if !stringSliceContains(pr.RequiredCommands, `git diff( --)? queue/queue.go`) {
+		t.Fatalf("code PR scenario RequiredCommands = %#v, want git diff check", pr.RequiredCommands)
+	}
+	if !commandToolOrderContains(pr.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git diff( --)? queue/queue.go`, Tool: "edit_file"}) {
+		t.Fatalf("code PR scenario RequiredCommandAfterTool = %#v, want git diff after edit_file", pr.RequiredCommandAfterTool)
+	}
+	if !strings.Contains(pr.VerifyCommand, "git diff --name-only") {
+		t.Fatalf("code PR scenario VerifyCommand = %q, want git diff verification", pr.VerifyCommand)
+	}
+	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") || !stringSliceContains(pr.RequiredFinalText, "queue/queue.go") || !stringSliceContains(pr.RequiredFinalText, "diff") {
+		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary, Tests, changed file, and diff", pr.RequiredFinalText)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]
@@ -2353,9 +2415,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		FinishReason: "stop",
 	}
 	scenario := BatchScenario{
-		Prompt:   "research with evidence",
-		Suites:   []string{longRunSuite, liveWebSuite},
-		MaxTurns: 12,
+		Prompt:        "research with evidence",
+		Suites:        []string{longRunSuite, liveWebSuite},
+		MaxTurns:      12,
+		SetupCommands: []string{"git init"},
 		RequiredTools: []string{
 			"web_fetch",
 			"browser_network_read",
@@ -2506,6 +2569,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
+		!reflect.DeepEqual(manifest.Expectations.SetupCommands, []string{"git init"}) ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredTools, []string{"web_fetch", "browser_network_read"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenTools, []string{"shell"}) ||
 		manifest.Expectations.RequiredToolCounts["browser_network_read"] != 1 ||

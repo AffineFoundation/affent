@@ -26,6 +26,7 @@ import (
 const (
 	DefaultBatchTimeout              = 5 * time.Minute
 	DefaultBatchMaxTurnSteps         = 10
+	DefaultSetupCommandTimeout       = 30 * time.Second
 	DefaultVerifierOutputCapBytes    = 1 * 1024 * 1024
 	maxDebugToolRepairExamples       = 5
 	maxDebugLoopGuardExamples        = 5
@@ -139,6 +140,7 @@ type BatchScenario struct {
 	ExecutePlan                             bool
 	EnableMemory                            bool
 	Files                                   map[string]string
+	SetupCommands                           []string
 	VerifyCommand                           string
 	VerifierTimeout                         time.Duration
 	ExpectedSkill                           string
@@ -345,6 +347,7 @@ type DebugScenarioExpectations struct {
 	ExecutePlan                             bool                                  `json:"execute_plan,omitempty"`
 	EnableMemory                            bool                                  `json:"enable_memory,omitempty"`
 	VerifyCommand                           string                                `json:"verify_command,omitempty"`
+	SetupCommands                           []string                              `json:"setup_commands,omitempty"`
 	ExpectedSkill                           string                                `json:"expected_skill,omitempty"`
 	RequiredTools                           []string                              `json:"required_tools,omitempty"`
 	ForbiddenTools                          []string                              `json:"forbidden_tools,omitempty"`
@@ -944,6 +947,18 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	res.Workspace = workspace
 	if err := writeScenarioFiles(workspace, scenario.Files); err != nil {
 		return res.fail("write scenario files: %v", err)
+	}
+	for _, command := range scenario.SetupCommands {
+		command = strings.TrimSpace(command)
+		if command == "" {
+			continue
+		}
+		setupCtx, setupCancel := context.WithTimeout(ctx, DefaultSetupCommandTimeout)
+		setup := r.runVerifier(setupCtx, workspace, repoRoot, command)
+		setupCancel()
+		if setup.Err != nil {
+			return res.fail("setup command failed: %s: %v\n%s", command, setup.Err, trimOneLine(setup.Output, 1200))
+		}
 	}
 	protected, err := readProtectedFiles(workspace, scenario.ProtectedFiles)
 	if err != nil {
@@ -1563,6 +1578,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ExecutePlan:                             s.ExecutePlan,
 		EnableMemory:                            s.EnableMemory,
 		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
+		SetupCommands:                           compactNonEmptyStrings(s.SetupCommands),
 		ExpectedSkill:                           strings.TrimSpace(s.ExpectedSkill),
 		RequiredTools:                           append([]string(nil), s.RequiredTools...),
 		ForbiddenTools:                          append([]string(nil), s.ForbiddenTools...),
@@ -2310,6 +2326,19 @@ func sortedStringMapKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func compactNonEmptyStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func SummarizeToolTruncation(trace Trace) ToolTruncationStats {

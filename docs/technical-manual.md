@@ -1256,6 +1256,11 @@ also validates scenario-declared tool dependencies from required tool counts,
 orders, argument checks, source-access checks, session recall checks, and
 delegation checks, including recent-session recovery-anchor checks and
 command-before/after-tool ordering checks, against the selected runtime surface.
+Built-in scenarios may run bounded setup commands after fixture files are
+written and before protected-file snapshots are taken. Each setup command has a
+short 30-second timeout. This is used for realistic repository tasks, such as
+initializing a git history so a code/PR scenario can require an agent-run
+`git diff` without counting setup work as agent tool use.
 The eval container does not forward host
 `AFFENTCTL_EVAL_MODE`,
 `AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,

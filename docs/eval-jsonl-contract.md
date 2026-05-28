@@ -114,7 +114,8 @@ Scenario records describe one eval case:
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
-  plan/delegation constraints, protected files, and related
+  plan/delegation constraints, protected files, optional `setup_commands`
+  that prepared the workspace before the agent ran, and related
   max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
