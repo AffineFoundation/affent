@@ -561,6 +561,8 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 		InputTokens:        123,
 		OutputTokens:       45,
 		ToolRequests:       2,
+		ToolErrors:         1,
+		ForcedNoTools:      1,
 		MemoryUpdates:      1,
 		MemorySearchCalls:  3,
 		MemorySearchMisses: 2,
@@ -574,9 +576,9 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 	for _, want := range []string{
 		"calibration_answers=1",
 		"last_calibration: answer=Pause if the requested market source cannot be verified.",
-		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 memory_updates=1 memory_searches=3 memory_misses=2 session_search=1 loop_guards=1",
+		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 tool_errors=1 forced_no_tools=1 memory_updates=1 memory_searches=3 memory_misses=2 session_search=1 loop_guards=1",
 		"last_memory_update: action=replace location=memory:markets preview=old dashboard rule -> prefer browser network evidence",
-		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer action=read browser network responses",
+		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer confidence=high reason=dynamic widgets lacked text action=read browser network responses",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("loop protocol feed missing runtime checkpoint %q:\n%s", want, got)
@@ -622,6 +624,37 @@ func TestWithLoopProtocolSkillProviderIncludesPlanCheckpoint(t *testing.T) {
 	}
 	if events[0].PlanLabel != "plan:1/2:active" || events[0].PlanStepIndex != 2 || events[0].PlanStepStatus != "in_progress" || events[0].PlanStep != "continue loop runtime implementation" {
 		t.Fatalf("event plan checkpoint = %+v", events[0])
+	}
+}
+
+func TestWithLoopProtocolSkillProviderIncludesDurablePlanCheckpointFallback(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nRecover the current step after restart."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := loopstate.WriteState(filepath.Join(dir, loopstate.StateFileName), loopstate.State{
+		Version:            1,
+		LoopID:             filepath.Base(dir),
+		Status:             "running",
+		ProtocolPath:       loopstate.ProtocolRelPath(filepath.Base(dir)),
+		LastPlanLabel:      "plan:2/5:active",
+		LastPlanStepIndex:  3,
+		LastPlanStepStatus: "in_progress",
+		LastPlanStep:       "read durable loop state before changing the browser recovery path",
+	}); err != nil {
+		t.Fatalf("WriteState: %v", err)
+	}
+
+	got := WithLoopProtocolSkillProvider(path, nil)("continue")
+	for _, want := range []string{
+		"last_plan_checkpoint:",
+		"plan_label=plan:2/5:active plan_step_index=3 plan_step_status=in_progress",
+		"plan_current_step: read durable loop state before changing the browser recovery path",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("loop protocol feed missing durable plan checkpoint %q:\n%s", want, got)
+		}
 	}
 }
 

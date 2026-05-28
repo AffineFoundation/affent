@@ -81,7 +81,7 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 		feedNumber = ev.FeedNumber
 		mode = ev.Mode
 	}
-	stateLine := loopProtocolStateLine(protocolPath)
+	stateLine := loopProtocolStateLine(protocolPath, planCheckpoint)
 	situationLine := loopProtocolCurrentSituationLine(content)
 	planLine := loopProtocolPlanStateLine(planCheckpoint)
 	body := textutil.Preview(content, maxActiveLoopProtocolFullBytes)
@@ -109,7 +109,7 @@ func loopProtocolActive(protocolPath string) bool {
 	return status == "" || status == "running"
 }
 
-func loopProtocolStateLine(protocolPath string) string {
+func loopProtocolStateLine(protocolPath string, livePlanCheckpoint loopstate.PlanCheckpoint) string {
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 	if err != nil || !found {
 		return ""
@@ -167,6 +167,12 @@ func loopProtocolStateLine(protocolPath string) string {
 		if state.LastTurnToolRequests > 0 {
 			turn = append(turn, fmt.Sprintf("tools=%d", state.LastTurnToolRequests))
 		}
+		if state.LastTurnToolErrors > 0 {
+			turn = append(turn, fmt.Sprintf("tool_errors=%d", state.LastTurnToolErrors))
+		}
+		if state.LastTurnForcedNoTools > 0 {
+			turn = append(turn, fmt.Sprintf("forced_no_tools=%d", state.LastTurnForcedNoTools))
+		}
 		if state.LastTurnMemoryUpdates > 0 {
 			turn = append(turn, fmt.Sprintf("memory_updates=%d", state.LastTurnMemoryUpdates))
 		}
@@ -181,6 +187,18 @@ func loopProtocolStateLine(protocolPath string) string {
 		}
 		if len(turn) > 0 {
 			lines = append(lines, "last_turn: "+strings.Join(turn, " "))
+		}
+	}
+	if !livePlanCheckpoint.Valid && (state.LastPlanLabel != "" || state.LastPlanStep != "") {
+		planCheckpoint := loopstate.PlanCheckpoint{
+			Valid:      true,
+			Label:      state.LastPlanLabel,
+			StepIndex:  state.LastPlanStepIndex,
+			StepStatus: state.LastPlanStepStatus,
+			Step:       state.LastPlanStep,
+		}
+		if line := strings.TrimSpace(loopProtocolPlanStateLine(planCheckpoint)); line != "" {
+			lines = append(lines, "last_plan_checkpoint:\n"+line)
 		}
 	}
 	if state.LastCalibrationAnswer != "" {
@@ -200,6 +218,8 @@ func loopProtocolStateLine(protocolPath string) string {
 			"kind=" + state.LastDecisionKind,
 			"trigger=" + state.LastDecisionTrigger,
 			"decision=" + state.LastDecision,
+			"confidence=" + state.LastDecisionConfidence,
+			"reason=" + state.LastDecisionReason,
 			"action=" + state.LastDecisionAction,
 		}))
 	}

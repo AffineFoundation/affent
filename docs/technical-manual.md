@@ -849,7 +849,8 @@ Affent stores durable state as inspectable files:
   even if the normal cadence would have used a digest.
   Feed metadata also includes compact runtime checkpoints from `state.json`,
   including the latest calibration answer, turn end, memory update, and loop
-  decision, so the model can recover recent durable changes without replaying
+  decision, plus the persisted plan step when no live plan checkpoint is
+  available, so the model can recover recent durable changes without replaying
   the full trace.
   When an active loop turn asks for high-impact runtime, protocol, memory,
   browser, eval, or agent-design changes and the request also asks for
@@ -885,9 +886,11 @@ Affent stores durable state as inspectable files:
   active-plan checkpoint observed during a feed, and the latest turn checkpoint:
   turn id, end reason, token usage, tool/error counts, loop-guard interventions,
   forced no-tool recoveries, memory updates, memory-search calls/misses, and
-  session-search calls. Confirmed memory mutations are also mirrored as a
-  latest memory-update checkpoint with action, target, topic, location,
-  previous/next previews, and a compact display preview. It also records
+  session-search calls. Protocol feeds mirror those fields, including
+  tool-error and forced-no-tool counts, and include the last persisted plan step
+  when the runtime has no fresh plan provider. Confirmed memory mutations are
+  also mirrored as a latest memory-update checkpoint with action, target, topic,
+  location, previous/next previews, and a compact display preview. It also records
   loop-decision count and the latest gate decision, including kind, trigger,
   decision, confidence, reason, and required action. The latest loop event is
   mirrored so restart/resume code and WebUI do not have to parse Markdown or
