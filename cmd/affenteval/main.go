@@ -3995,6 +3995,7 @@ type batchSummaryRecord struct {
 type runtimeSurfaceSummary struct {
 	ToolCount                    int                      `json:"tool_count"`
 	Tools                        []string                 `json:"tools,omitempty"`
+	WorkspacePathArgs            map[string][]string      `json:"workspace_path_args,omitempty"`
 	ToolCallCaps                 map[string]int           `json:"tool_call_caps,omitempty"`
 	Capabilities                 *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
 	MaxTurnSteps                 int                      `json:"max_turn_steps,omitempty"`
@@ -4157,6 +4158,7 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 	return &runtimeSurfaceSummary{
 		ToolCount:                    surface.ToolCount,
 		Tools:                        tools,
+		WorkspacePathArgs:            runtimeSurfaceWorkspacePathArgs(surface),
 		ToolCallCaps:                 runtimeSurfaceToolCallCaps(surface),
 		Capabilities:                 &caps,
 		MaxTurnSteps:                 surface.MaxTurnSteps,
@@ -4185,6 +4187,26 @@ func runtimeSurfaceToolNames(surface *sse.RuntimeSurfacePayload) []string {
 	}
 	sort.Strings(tools)
 	return tools
+}
+
+func runtimeSurfaceWorkspacePathArgs(surface *sse.RuntimeSurfacePayload) map[string][]string {
+	if surface == nil || len(surface.Tools) == 0 {
+		return nil
+	}
+	out := map[string][]string{}
+	for _, tool := range surface.Tools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" || tool.ArgPolicy == nil || len(tool.ArgPolicy.WorkspacePathArgs) == 0 {
+			continue
+		}
+		names := append([]string(nil), tool.ArgPolicy.WorkspacePathArgs...)
+		sort.Strings(names)
+		out[name] = names
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func runtimeSurfaceToolCallCaps(surface *sse.RuntimeSurfacePayload) map[string]int {

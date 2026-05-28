@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/sourceaccess"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -1069,6 +1070,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if len(names) > 0 {
 		fmt.Fprintf(b, "- tools: `%s`\n", strings.Join(names, "`, `"))
 	}
+	if pathArgs := runtimeSurfaceWorkspacePathArgs(surface); len(pathArgs) > 0 {
+		fmt.Fprintf(b, "- workspace_path_args: `%s`\n", strings.Join(pathArgs, "`, `"))
+	}
 	var caps []string
 	if surface.Capabilities.Builtins {
 		caps = append(caps, "workspace_tools")
@@ -1108,6 +1112,20 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if len(caps) > 0 {
 		fmt.Fprintf(b, "- capabilities: `%s`\n", strings.Join(caps, "`, `"))
 	}
+}
+
+func runtimeSurfaceWorkspacePathArgs(surface sse.RuntimeSurfacePayload) []string {
+	var out []string
+	for _, tool := range surface.Tools {
+		if tool.Name == "" || tool.ArgPolicy == nil || len(tool.ArgPolicy.WorkspacePathArgs) == 0 {
+			continue
+		}
+		args := append([]string(nil), tool.ArgPolicy.WorkspacePathArgs...)
+		sort.Strings(args)
+		out = append(out, fmt.Sprintf("%s:%s", tool.Name, strings.Join(args, ",")))
+	}
+	sort.Strings(out)
+	return out
 }
 
 func renderTimelineContextInjections(b *strings.Builder, trace *Trace) {

@@ -191,9 +191,10 @@ Scenario records describe one eval case:
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and
   `subagent`, partial `workspace_tools` when only some workspace tools are
-  enabled, per-tool loop-guard call caps for capped registered tools, plus key
-  tool-result limits. Retained debug manifests include the fuller
-  `runtime_surface` block with per-tool group/source metadata.
+  enabled, per-tool workspace path argument policies, per-tool loop-guard call
+  caps for capped registered tools, plus key tool-result limits. Retained debug
+  manifests include the fuller `runtime_surface` block with per-tool
+  group/source metadata.
 - `run_exit_code`: `affentctl run` exit code for the scenario.
 - `turn_end_reason`: runtime turn end reason, when available. Scenarios default
   to expecting `completed`; set `required_turn_end_reason` when a scenario is

@@ -106,8 +106,10 @@ window and Affent repaired it before continuing the session.
 
 - `turn_id`: runtime turn id.
 - `tool_count`: count of tools registered for the turn.
-- `tools`: optional effective tool list with `name`, `raw_name`, `group`, and
-  `source` metadata.
+- `tools`: optional effective tool list with `name`, `raw_name`, `group`,
+  `source`, and `arg_policy` metadata. `arg_policy.workspace_path_args` names
+  arguments whose values are interpreted as workspace paths by runtime and eval
+  policy checks.
 - `tool_call_caps`: optional per-turn loop-guard caps for registered tools,
   listed as `{tool, max}` entries. Tools omitted from this list may still be
   limited by the global turn-step/tool-call settings or by failure/repeat

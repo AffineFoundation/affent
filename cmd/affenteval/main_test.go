@@ -3442,10 +3442,11 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
 		RunExitCode:       2,
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
-			ToolCount: 3,
+			ToolCount: 4,
 			Tools: []sse.RuntimeSurfaceTool{
 				{Name: "web_fetch"},
 				{Name: "browser_find"},
+				{Name: "read_file", ArgPolicy: &sse.RuntimeToolArgPolicy{WorkspacePathArgs: []string{"path"}}},
 				{Name: "web_fetch"},
 			},
 			Capabilities:                 sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file", "repo_search"}, WebFetch: true, Browser: true},
@@ -3485,7 +3486,7 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	if !ok {
 		t.Fatalf("runtime_surface missing or wrong type: %#v\njson=%s", got["runtime_surface"], out.String())
 	}
-	if surface["tool_count"] != float64(3) ||
+	if surface["tool_count"] != float64(4) ||
 		surface["max_turn_steps"] != float64(12) ||
 		surface["max_tool_calls"] != float64(40) ||
 		surface["tool_result_event_cap_bytes"] != float64(8192) ||
@@ -3493,8 +3494,16 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		t.Fatalf("runtime_surface limits = %#v\njson=%s", surface, out.String())
 	}
 	tools, ok := surface["tools"].([]any)
-	if !ok || len(tools) != 2 || tools[0] != "browser_find" || tools[1] != "web_fetch" {
+	if !ok || len(tools) != 3 || tools[0] != "browser_find" || tools[1] != "read_file" || tools[2] != "web_fetch" {
 		t.Fatalf("runtime_surface tools = %#v\njson=%s", surface["tools"], out.String())
+	}
+	workspacePathArgs, ok := surface["workspace_path_args"].(map[string]any)
+	if !ok {
+		t.Fatalf("runtime_surface workspace_path_args missing: %#v\njson=%s", surface["workspace_path_args"], out.String())
+	}
+	readFileArgs, ok := workspacePathArgs["read_file"].([]any)
+	if !ok || len(readFileArgs) != 1 || readFileArgs[0] != "path" {
+		t.Fatalf("runtime_surface workspace_path_args = %#v\njson=%s", workspacePathArgs, out.String())
 	}
 	toolCallCaps, ok := surface["tool_call_caps"].(map[string]any)
 	if !ok || toolCallCaps["web_fetch"] != float64(8) || toolCallCaps["browser_find"] != float64(8) {
