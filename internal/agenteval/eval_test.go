@@ -1388,6 +1388,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredContextInjectionSources: map[string]int{
 			"final_evidence_digest": 1,
 		},
+		RequiredContextInjectionText: map[string][]string{
+			"final_evidence_digest": {"verified source"},
+		},
 		RequiredLoopDecisionKinds: map[string]int{
 			"evidence_quality": 1,
 		},
@@ -1483,6 +1486,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
 		"recent_session_search_anchor_at_least:missing marker:market-alpha:*:*:source review:loop.protocol_feed:max_turns:*:1",
 		"context_injection_source_at_least:final_evidence_digest:1",
+		"context_injection_text_at_least:final_evidence_digest:verified source:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -1679,9 +1683,12 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			if !stringSliceContains(caps, "skill_install") || !stringSliceContains(caps, "skill") {
 				t.Fatalf("skill-reviewed-install-activation capabilities = %#v, want skill and skill_install", caps)
 			}
-			if scenario.RequiredContextInjectionSources["skill_provider"] != 1 ||
+			if scenario.RequiredContextInjectionSources["skill"] != 1 ||
 				scenario.RequiredTraceEventCounts["context.injected"] != 1 {
 				t.Fatalf("skill-reviewed-install-activation context requirements = sources:%#v trace:%#v", scenario.RequiredContextInjectionSources, scenario.RequiredTraceEventCounts)
+			}
+			if !stringSliceContains(scenario.RequiredContextInjectionText["skill"], "reviewed_eval") {
+				t.Fatalf("skill-reviewed-install-activation context text requirements = %#v, want reviewed_eval", scenario.RequiredContextInjectionText)
 			}
 		}
 		if scenario.Name == "plan-coding-repair" {
@@ -3090,9 +3097,12 @@ func TestSelectLiveWebSuite(t *testing.T) {
 			t.Fatalf("skill URL tool result requirements = %#v, want %q", skillURL.RequiredToolResultText["skill"], want)
 		}
 	}
-	if skillURL.RequiredContextInjectionSources["skill_provider"] != 1 ||
+	if skillURL.RequiredContextInjectionSources["skill"] != 1 ||
 		skillURL.RequiredTraceEventCounts["context.injected"] != 1 {
 		t.Fatalf("skill URL context requirements = sources:%#v trace:%#v", skillURL.RequiredContextInjectionSources, skillURL.RequiredTraceEventCounts)
+	}
+	if !stringSliceContains(skillURL.RequiredContextInjectionText["skill"], "playwright") {
+		t.Fatalf("skill URL context text requirements = %#v, want playwright", skillURL.RequiredContextInjectionText)
 	}
 	for _, want := range []string{"Playwright CLI Skill", "command -v npx"} {
 		if !stringSliceContains(skillURL.RequiredFinalText, want) {
@@ -3457,8 +3467,11 @@ func TestBuiltinSkillInstallScenariosRequireSameSessionActivationEvidence(t *tes
 		if scenario.RequiredToolCounts["skill"] < 2 || scenario.MaxParentToolCalls > scenario.RequiredToolCounts["skill"] {
 			t.Fatalf("%s skill install should bound parent skill calls to install-only turns; required=%#v max_parent=%d", scenario.Name, scenario.RequiredToolCounts, scenario.MaxParentToolCalls)
 		}
-		if scenario.RequiredContextInjectionSources["skill_provider"] < 1 || scenario.RequiredTraceEventCounts["context.injected"] < 1 {
-			t.Fatalf("%s confirms a skill install but lacks skill_provider context injection evidence; sources=%#v trace=%#v", scenario.Name, scenario.RequiredContextInjectionSources, scenario.RequiredTraceEventCounts)
+		if scenario.RequiredContextInjectionSources["skill"] < 1 || scenario.RequiredTraceEventCounts["context.injected"] < 1 {
+			t.Fatalf("%s confirms a skill install but lacks skill context injection evidence; sources=%#v trace=%#v", scenario.Name, scenario.RequiredContextInjectionSources, scenario.RequiredTraceEventCounts)
+		}
+		if len(scenario.RequiredContextInjectionText["skill"]) == 0 {
+			t.Fatalf("%s confirms a skill install but lacks concrete skill context text evidence: %#v", scenario.Name, scenario.RequiredContextInjectionText)
 		}
 		if !stringSliceContains(scenario.RequiredToolResultText["skill"], "active_now=true") {
 			t.Fatalf("%s confirms a skill install but does not require active_now=true in skill result: %#v", scenario.Name, scenario.RequiredToolResultText["skill"])

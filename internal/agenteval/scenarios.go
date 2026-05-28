@@ -1050,7 +1050,10 @@ func skillReviewedInstallActivationScenario() BatchScenario {
 			},
 		},
 		RequiredContextInjectionSources: map[string]int{
-			"skill_provider": 1,
+			"skill": 1,
+		},
+		RequiredContextInjectionText: map[string][]string{
+			"skill": {"reviewed_eval"},
 		},
 		RequiredTraceEventCounts: map[string]int{
 			"context.injected": 1,
@@ -1103,7 +1106,10 @@ func liveWebSkillURLInstallActivationScenario() BatchScenario {
 			},
 		},
 		RequiredContextInjectionSources: map[string]int{
-			"skill_provider": 1,
+			"skill": 1,
+		},
+		RequiredContextInjectionText: map[string][]string{
+			"skill": {"playwright"},
 		},
 		RequiredFinalText: []string{
 			"Playwright CLI Skill",

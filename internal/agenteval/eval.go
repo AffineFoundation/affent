@@ -185,6 +185,7 @@ type BatchScenario struct {
 	RequiredSessionSearch                          []SessionSearchRequirement
 	RequiredRecentSessionSearch                    []RecentSessionSearchRequirement
 	RequiredContextInjectionSources                map[string]int
+	RequiredContextInjectionText                   map[string][]string
 	RequiredContextCompactions                     int
 	RequiredReactiveCompactions                    int
 	RequiredCompactionRemovedMsgs                  int
@@ -425,6 +426,7 @@ type DebugScenarioExpectations struct {
 	RequiredSessionSearch                          []DebugSessionSearchRequirement       `json:"required_session_search,omitempty"`
 	RequiredRecentSessionSearch                    []DebugRecentSessionSearchRequirement `json:"required_recent_session_search,omitempty"`
 	RequiredContextInjectionSources                map[string]int                        `json:"required_context_injection_sources,omitempty"`
+	RequiredContextInjectionText                   map[string][]string                   `json:"required_context_injection_text,omitempty"`
 	RequiredCommandBeforeTool                      []DebugCommandToolOrderRequirement    `json:"required_command_before_tool,omitempty"`
 	RequiredCommandAfterTool                       []DebugCommandToolOrderRequirement    `json:"required_command_after_tool,omitempty"`
 	RequiredToolOrder                              []DebugToolOrderRequirement           `json:"required_tool_order,omitempty"`
@@ -502,6 +504,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["session_search"] = true
 	}
 	if len(exp.RequiredContextInjectionSources) > 0 {
+		caps["context_injection"] = true
+	}
+	if len(exp.RequiredContextInjectionText) > 0 {
 		caps["context_injection"] = true
 	}
 	for _, req := range exp.RequiredSourceAccess {
@@ -2009,6 +2014,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredSessionSearch:                          sessionSearchReqs,
 		RequiredRecentSessionSearch:                    recentSessionSearchReqs,
 		RequiredContextInjectionSources:                cloneStringIntMap(s.RequiredContextInjectionSources),
+		RequiredContextInjectionText:                   cloneStringSliceMap(s.RequiredContextInjectionText),
 		RequiredCommandBeforeTool:                      commandBeforeTool,
 		RequiredCommandAfterTool:                       commandAfterTool,
 		RequiredCommandOrder:                           commandOrders,
@@ -3001,6 +3007,11 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, source := range sortedStringMapKeys(scenario.RequiredContextInjectionSources) {
 		checks = append(checks, ContextInjectionSourceAtLeast(source, scenario.RequiredContextInjectionSources[source]))
+	}
+	for _, source := range sortedStringMapKeys(scenario.RequiredContextInjectionText) {
+		for _, substr := range scenario.RequiredContextInjectionText[source] {
+			checks = append(checks, ContextInjectionTextAtLeast(source, substr, 1))
+		}
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))

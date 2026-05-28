@@ -652,6 +652,27 @@ func TestTraceEventCountAtLeast(t *testing.T) {
 	}
 }
 
+func TestContextInjectionTextAtLeast(t *testing.T) {
+	trace := Trace{ContextInjections: []ContextInjection{{
+		Source:  "skill",
+		Title:   "Active skill injected",
+		Summary: "Activated skill: reviewed_eval.",
+		Preview: "AFFENT ACTIVE SKILL: reviewed_eval",
+	}, {
+		Source:  "active_plan",
+		Summary: "Current step: install skill",
+	}}}
+	if res := ContextInjectionTextAtLeast("skill", "reviewed_eval", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected skill context text check to pass: %+v", res)
+	}
+	if res := ContextInjectionTextAtLeast("skill", "playwright", 1).Eval(trace); res.Pass {
+		t.Fatalf("expected missing skill context text to fail: %+v", res)
+	}
+	if res := ContextInjectionTextAtLeast("skill_provider", "reviewed_eval", 1).Eval(trace); res.Pass {
+		t.Fatalf("expected wrong context source to fail: %+v", res)
+	}
+}
+
 func TestUserMessageModeAtLeast(t *testing.T) {
 	trace := Trace{UserMessages: []UserMessage{
 		{TurnID: "t1", Mode: "normal"},

@@ -141,6 +141,38 @@ func ContextInjectionSourceAtLeast(source string, min int) Check {
 	}
 }
 
+func ContextInjectionTextAtLeast(source, substr string, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_injection_text_at_least:%s:%s:%d", source, previewSubstr(substr, 32), min),
+		Eval: func(t Trace) CheckResult {
+			got := 0
+			var observed []string
+			for _, injection := range t.ContextInjections {
+				if source != "" && injection.Source != source {
+					continue
+				}
+				text := strings.Join([]string{injection.Title, injection.Summary, injection.Preview}, "\n")
+				if len(observed) < 6 {
+					observed = append(observed, fmt.Sprintf("%s:%s", injection.Source, previewSubstr(text, 120)))
+				}
+				if strings.Contains(text, substr) {
+					got++
+				}
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s contains %q in %d injection(s)", source, substr, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d context injection(s) from source %q containing %q, got %d; observed=%v", min, source, substr, got, observed),
+			}
+		},
+	}
+}
+
 func ConversationRepairStatsAtLeast(field string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("conversation_repair_stats_at_least:%s:%d", field, min),

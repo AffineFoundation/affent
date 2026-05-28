@@ -601,6 +601,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 	}
 	writeTimelineStringSliceMap(b, "required_tool_result_text", exp.RequiredToolResultText)
+	writeTimelineStringSliceMap(b, "required_context_injection_text", exp.RequiredContextInjectionText)
 	if len(exp.RequiredSourceAccess) > 0 {
 		for _, req := range exp.RequiredSourceAccess {
 			min := req.Min
@@ -776,6 +777,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredTraceEventCounts) > 0 ||
 		len(exp.RequiredUserMessageModes) > 0 ||
 		len(exp.RequiredContextInjectionSources) > 0 ||
+		len(exp.RequiredContextInjectionText) > 0 ||
 		len(exp.RequiredConversationRepairStatsAtLeast) > 0 ||
 		len(exp.RequiredConversationRepairKinds) > 0 ||
 		len(exp.RequiredLoopDecisionKinds) > 0 ||
