@@ -5,6 +5,8 @@ import {
   accountConfigSummary,
   accountEnvMatchesQuery,
   sshAccessDescription,
+  sshPathDisplay,
+  sshPathState,
   sshStorageDescription,
 } from "./accountConfig";
 
@@ -23,8 +25,8 @@ describe("accountConfig view helpers", () => {
     };
 
     expect(accountConfigSummary(settings)).toBe("2 envs · SSH key");
-    expect(accountConfigDetail(settings)).toBe("SSH public key ready");
-    expect(sshAccessDescription(settings.ssh)).toContain("Existing keys are shown");
+    expect(accountConfigDetail(settings)).toBe("SSH ready · 2 envs");
+    expect(sshAccessDescription(settings.ssh)).toContain("Existing keys are never overwritten");
     expect(accountConfigEvidenceText(settings)).toBe([
       "Runtime config evidence",
       "Environment variables: 2",
@@ -35,6 +37,8 @@ describe("accountConfig view helpers", () => {
     ].join("\n"));
     expect(accountConfigEvidenceText(settings)).not.toContain("ssh-ed25519 AAAA affent");
     expect(sshStorageDescription(settings.ssh)).toBe("/state/.affentserve/ssh/id_ed25519.pub");
+    expect(sshPathDisplay("/workspace/.home/.ssh/id_ed25519.pub")).toBe("~/.ssh/id_ed25519.pub");
+    expect(sshPathState("/workspace/.home/.ssh/id_ed25519.pub", true)).toBe("standard ~/.ssh");
     expect(accountEnvMatchesQuery(settings.env[0], "github")).toBe(true);
     expect(accountEnvMatchesQuery(settings.env[0], "configured")).toBe(true);
     expect(accountEnvMatchesQuery(settings.env[1], "empty")).toBe(true);

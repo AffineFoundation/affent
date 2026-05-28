@@ -2,10 +2,11 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
 import {
   accountConfigDetail,
-  accountConfigEvidenceText,
   accountConfigSummary,
   accountEnvMatchesQuery,
   sshAccessDescription,
+  sshPathDisplay,
+  sshPathState,
   sshStorageDescription,
 } from "../view/accountConfig";
 import { CopyButton } from "./CopyButton";
@@ -130,7 +131,6 @@ export function AccountSettingsPanel({
               <>
                 <ConfigDashboard settings={settings} />
                 <div className="account-settings-actions">
-                  <CopyButton label="Copy config evidence" value={accountConfigEvidenceText(settings)} className="node-action" />
                   {onRefresh ? (
                     <button type="button" className="node-action" disabled={!!busy} onClick={() => void onRefresh()}>
                       Refresh
@@ -140,24 +140,23 @@ export function AccountSettingsPanel({
               </>
             ) : null}
             <div className="account-settings-section">
-              <div>
-                <strong>SSH key</strong>
+              <div className="account-settings-section-heading">
+                <strong>Private repo access</strong>
                 <span>{sshDescription}</span>
               </div>
               {sshStorage ? (
                 <div className="account-ssh-storage" data-testid="account-ssh-storage">
-                  <span>Storage</span>
-                  <code>{sshStorage}</code>
+                  <span>Key path</span>
+                  <code title={sshStorage}>{sshPathDisplay(ssh?.public_key_path) || sshStorage}</code>
                   {ssh?.public_key_path ? <CopyButton label="Copy path" value={ssh.public_key_path} className="ghost-action" /> : null}
                 </div>
               ) : null}
               {ssh?.public_key ? (
-                <>
-                  <pre className="session-loop-protocol account-public-key" data-testid="account-public-key">{ssh.public_key}</pre>
-                  <div className="session-loop-actions">
-                    <CopyButton label="Copy public key" value={ssh.public_key} className="ghost-action" />
-                  </div>
-                </>
+                <div className="account-public-key-row">
+                  <span>Public key</span>
+                  <code className="account-public-key" data-testid="account-public-key" title={ssh.public_key}>{ssh.public_key}</code>
+                  <CopyButton label="Copy public key" value={ssh.public_key} className="ghost-action" />
+                </div>
               ) : ssh?.exists ? (
                 <>
                   <div className="session-skills-empty error" role="alert">
@@ -198,7 +197,7 @@ export function AccountSettingsPanel({
                 <button type="submit" className="secondary-action" disabled={!canSubmit}>
                   {busy === "env" ? "Saving" : "Save env"}
                 </button>
-                <p className="session-loop-setup-note">Values are injected into shell commands but are not shown back in the UI.</p>
+                <p className="session-loop-setup-note">Saved values are never echoed.</p>
               </form>
             </details>
             {mutationStatus ? (
@@ -268,18 +267,19 @@ function ConfigDashboard({ settings }: { settings: AccountSettingsResponse }) {
     .at(-1);
   const ssh = settings.ssh;
   const keyPath = ssh.public_key_path ?? (ssh.exists ? "Path not reported" : "No key");
-  const sshState = ssh.public_key ? "Ready" : ssh.exists ? "Issue" : "Missing";
-  const pathState = ssh.public_key_path?.includes("/.ssh/") ? "standard .ssh" : ssh.exists ? "unknown path" : "not configured";
+  const keyPathDisplay = sshPathDisplay(ssh.public_key_path) || keyPath;
+  const sshState = ssh.public_key ? "Ready" : ssh.exists ? "Attention" : "Missing";
+  const pathState = sshPathState(ssh.public_key_path, ssh.exists);
   return (
     <div className="account-config-dashboard" data-testid="account-config-dashboard">
-      <div className="account-config-card">
+      <div className="account-config-card" data-state={ssh.public_key ? "ready" : ssh.exists ? "attention" : "missing"}>
         <span>SSH</span>
         <strong>{sshState}</strong>
-        <small>{ssh.public_key ? "public key available" : ssh.exists ? "public key unavailable" : "no key"}</small>
+        <small>{ssh.public_key ? "private Git ready" : ssh.exists ? "public key unavailable" : "no key"}</small>
       </div>
       <div className="account-config-card">
         <span>Key path</span>
-        <strong title={keyPath}>{keyPath}</strong>
+        <strong title={keyPath}>{keyPathDisplay}</strong>
         <small>{pathState}</small>
       </div>
       <div className="account-config-card">

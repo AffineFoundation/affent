@@ -3493,7 +3493,7 @@ button.workbench-context-runtime-item:focus-visible {
 .account-settings-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: flex-end;
   gap: 6px;
   min-width: 0;
 }
@@ -3512,6 +3512,16 @@ button.workbench-context-runtime-item:focus-visible {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.64);
   padding: 8px 9px;
+}
+
+.account-config-card[data-state="ready"] {
+  border-color: rgba(20, 184, 166, 0.24);
+  background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.64));
+}
+
+.account-config-card[data-state="attention"] {
+  border-color: rgba(185, 28, 28, 0.22);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.72), rgba(255, 255, 255, 0.64));
 }
 
 .account-config-card span,
@@ -3535,17 +3545,17 @@ button.workbench-context-runtime-item:focus-visible {
   white-space: nowrap;
 }
 
-.account-settings-section > div:first-child {
+.account-settings-section-heading {
   display: grid;
   gap: 3px;
 }
 
-.account-settings-section > div:first-child strong {
+.account-settings-section-heading strong {
   color: var(--text);
   font-size: 12.5px;
 }
 
-.account-settings-section > div:first-child span {
+.account-settings-section-heading span {
   color: var(--text-muted);
   font-size: 11.5px;
   line-height: 1.35;
@@ -3581,8 +3591,35 @@ button.workbench-context-runtime-item:focus-visible {
   white-space: nowrap;
 }
 
+.account-public-key-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.54);
+  padding: 7px 8px;
+}
+
+.account-public-key-row > span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .account-public-key {
-  max-height: 120px;
+  display: block;
+  min-width: 0;
+  overflow: auto hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  scrollbar-width: thin;
+  white-space: nowrap;
 }
 
 .account-settings-status,
@@ -10756,6 +10793,7 @@ html[data-theme="dark"] .session-loop-field,
 html[data-theme="dark"] .account-config-card,
 html[data-theme="dark"] .account-env-write,
 html[data-theme="dark"] .account-ssh-storage,
+html[data-theme="dark"] .account-public-key-row,
 html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,

@@ -12,7 +12,7 @@ describe("AccountSettingsPanel", () => {
       <AccountSettingsPanel
         settings={{
           env: [{ name: "GITHUB_TOKEN", configured: true, updated_at: "2026-05-27T10:00:00Z" }],
-          ssh: { exists: true, public_key: "ssh-ed25519 AAAA affent", public_key_path: "/state/.affentserve/ssh/id_ed25519.pub" },
+          ssh: { exists: true, public_key: "ssh-ed25519 AAAA affent", public_key_path: "/workspace/.home/.ssh/id_ed25519.pub" },
         }}
         defaultOpen
       />,
@@ -21,21 +21,19 @@ describe("AccountSettingsPanel", () => {
     const panel = screen.getByTestId("account-settings-panel");
     expect(panel).toHaveTextContent("Config");
     expect(panel).toHaveTextContent("1 env · SSH key");
-    expect(panel).toHaveTextContent("SSH public key ready");
-    expect(panel).toHaveTextContent("Existing keys are shown, never overwritten");
-    expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("/state/.affentserve/ssh/id_ed25519.pub");
+    expect(panel).toHaveTextContent("SSH ready · 1 env");
+    expect(panel).toHaveTextContent("Existing keys are never overwritten");
+    expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use config as draft" })).toBeNull();
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("GITHUB_TOKEN");
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("configured");
 
-    await user.click(screen.getByRole("button", { name: "Copy config evidence" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Runtime config evidence"));
-    expect(writeText).toHaveBeenCalledWith(expect.not.stringContaining("ssh-ed25519 AAAA affent"));
-
     await user.click(screen.getByRole("button", { name: "Copy path" }));
-    expect(writeText).toHaveBeenCalledWith("/state/.affentserve/ssh/id_ed25519.pub");
+    expect(writeText).toHaveBeenCalledWith("/workspace/.home/.ssh/id_ed25519.pub");
+    await user.click(screen.getByRole("button", { name: "Copy public key" }));
+    expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
   });
 
   it("saves and confirms deletion for environment variables without displaying the value", async () => {
@@ -97,7 +95,7 @@ describe("AccountSettingsPanel", () => {
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No config");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No env vars or SSH key configured");
-    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate an SSH key only when this session needs private Git access");
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate a key when this runtime needs private Git access");
     await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
 
     expect(onEnsureSSHKey).toHaveBeenCalled();

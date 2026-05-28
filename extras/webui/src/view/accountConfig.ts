@@ -13,22 +13,37 @@ export function accountConfigDetail(settings?: AccountSettingsResponse): string 
   if (!settings) return "No env vars or SSH key configured";
   const envCount = settings.env.length;
   const ssh = settings.ssh;
-  if (ssh.public_key) return "SSH public key ready";
+  if (ssh.public_key) return envCount > 0 ? `SSH ready · ${envCount} env${envCount === 1 ? "" : "s"}` : "SSH ready";
   if (ssh.exists) return "SSH key found; public key unavailable";
   if (envCount > 0) return "No SSH key configured";
   return "No env vars or SSH key configured";
 }
 
 export function sshAccessDescription(ssh?: AccountSettingsResponse["ssh"]): string {
-  if (ssh?.public_key) return "Use this public key for GitHub or GitLab deploy access. Existing keys are shown, never overwritten.";
+  if (ssh?.public_key) return "Public key is ready for private Git remotes. Existing keys are never overwritten.";
   if (ssh?.exists) return "A private key exists, but its public key is unavailable.";
-  return "Generate an SSH key only when this session needs private Git access.";
+  return "Generate a key when this runtime needs private Git access.";
 }
 
 export function sshStorageDescription(ssh?: AccountSettingsResponse["ssh"]): string | undefined {
   if (ssh?.public_key_path) return ssh.public_key_path;
   if (ssh?.public_key || ssh?.exists) return "Storage path not reported by this server build.";
   return undefined;
+}
+
+export function sshPathDisplay(path?: string): string {
+  if (!path) return "";
+  const marker = "/.ssh/";
+  const index = path.lastIndexOf(marker);
+  if (index >= 0) return `~${path.slice(index)}`;
+  if (path.startsWith(".ssh/")) return `~/${path}`;
+  return path;
+}
+
+export function sshPathState(path?: string, exists = false): string {
+  if (path?.includes("/.ssh/") || path?.startsWith(".ssh/")) return "standard ~/.ssh";
+  if (exists) return "path not reported";
+  return "not configured";
 }
 
 export function accountConfigEvidenceText(settings: AccountSettingsResponse): string {
