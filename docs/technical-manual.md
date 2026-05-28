@@ -1185,7 +1185,13 @@ reason/action, so long-run evals can assert that recovery evidence survived
 context compaction or restart. Browser-network refs that were discovered but
 not read add a concrete recovery action to inspect `browser_network_examples`
 and `source_evidence`, then call `browser_network_read` on a listed ref before
-citing dynamic values. Failed tool-repair hints add a concrete
+citing dynamic values. Context-compaction summary gaps add a bounded action to
+recover from persisted `LOOP.md`, plan state, session search, memory, or
+authoritative files before trusting compressed context. Empty or degraded
+session recall routes the next agent to `session_search_examples` and narrower
+recent-session, plan, or loop anchors; memory misses without topic anchors
+route to `memory_search_miss_examples` and target/topic discovery. Failed
+tool-repair hints add a concrete
 continuation action to inspect `tool_repair_examples` and decide whether the
 durable fix belongs in tool aliasing, argument repair, or model guidance before
 rerunning. The debug manifest, timeline, and JSONL scenario

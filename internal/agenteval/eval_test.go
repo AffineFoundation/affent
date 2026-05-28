@@ -3023,6 +3023,88 @@ func TestBuildDebugRecoveryGuideAddsUnreadBrowserNetworkAction(t *testing.T) {
 	}
 }
 
+func TestBuildDebugRecoveryGuideAddsLongRunRecallRecoveryActions(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/longrun-recall",
+		TimelinePath:      "/tmp/affent-eval/longrun-recall/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/longrun-recall/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/longrun-recall/trace.jsonl",
+		Failures:          []string{"long-run recovery lost durable context"},
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:       1,
+			SessionSearchResults:     1,
+			SessionSearchContextHits: 0,
+			MemorySearchCalls:        1,
+			MemorySearchMisses:       1,
+		},
+		ContextCompactions: ContextCompactionStats{
+			Count:          1,
+			SummaryMissing: 1,
+		},
+		MemorySearchMissExamples: []MemorySearchMissExample{{
+			ToolIndex: 3,
+			CallID:    "mem-miss",
+			Target:    "memory",
+			Query:     "Northstar recovery marker",
+		}},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"context_compaction:summary_missing",
+		"recall:no_context",
+		"recall:memory_no_topic_anchors",
+		"recover from persisted LOOP.md, plan state, session_search, memory, or authoritative files",
+		"rerun with narrower identifiers, adjacent context, plan anchors, or loop anchors",
+		"retry with target/topic discovery or confirm the memory bucket is empty",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	for _, want := range []string{
+		"context_compaction_examples",
+		"context_compactions",
+		"session_search_examples",
+		"session_search_results",
+		"memory_search_miss_examples",
+		"tool_timeline",
+	} {
+		if !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsRecentSessionRecoveryAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/recent-session",
+		TimelinePath:      "/tmp/affent-eval/recent-session/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/recent-session/affenteval-debug.json",
+		TracePath:         "/tmp/affent-eval/recent-session/trace.jsonl",
+		Failures:          []string{"direct recall missed but recent sessions were available"},
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:  1,
+			SessionSearchRecent: 1,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"empty_recall:recent_sessions",
+		"inspect session_search_examples",
+		"retry from recent_sessions plan, loop, or recovery anchors",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+}
+
 func TestRedactedCommandArgvHidesAPIKey(t *testing.T) {
 	got := redactedCommandArgv("go", []string{
 		"run", "./cmd/affentctl", "run",

@@ -1361,14 +1361,37 @@ func debugRecoveryFailurePreview(failures []string) string {
 }
 
 func debugRecoveryPriorityAction(tags []string) string {
-	switch {
-	case containsString(tags, "tool_repair:failed"):
-		return "For tool_repair:failed, inspect tool_repair_examples and the tool timeline before rerunning; decide whether the fix belongs in tool aliasing, argument repair, or model guidance."
-	case containsString(tags, "browser_network:unread_refs"):
-		return "For browser_network:unread_refs, inspect browser_network_examples and source_evidence, then call browser_network_read on the listed ref before citing hidden dynamic values; browser_network refs/checks are not citable SourceAccess evidence."
-	default:
-		return ""
+	var actions []string
+	add := func(action string) {
+		if action != "" && len(actions) < 3 {
+			actions = append(actions, action)
+		}
 	}
+	if containsString(tags, "tool_repair:failed") {
+		add("For tool_repair:failed, inspect tool_repair_examples and the tool timeline before rerunning; decide whether the fix belongs in tool aliasing, argument repair, or model guidance.")
+	}
+	if containsString(tags, "loop_guard:forced_no_tools") {
+		add("For loop_guard:forced_no_tools, inspect loop_guard_examples and the previous successful evidence before retrying tools; change the tool sequence or finish with a marked gap instead of repeating the blocked call.")
+	}
+	if containsString(tags, "browser_network:unread_refs") {
+		add("For browser_network:unread_refs, inspect browser_network_examples and source_evidence, then call browser_network_read on the listed ref before citing hidden dynamic values; browser_network refs/checks are not citable SourceAccess evidence.")
+	}
+	if containsString(tags, "context_compaction:summary_missing") || containsString(tags, "context_compaction:summary_empty") {
+		add("For context_compaction summary gaps, inspect context_compaction_examples and recover from persisted LOOP.md, plan state, session_search, memory, or authoritative files before trusting compressed context.")
+	}
+	if containsString(tags, "empty_recall:recent_sessions") {
+		add("For empty_recall:recent_sessions, inspect session_search_examples and retry from recent_sessions plan, loop, or recovery anchors before saying prior history is missing.")
+	}
+	if containsString(tags, "recall:no_context") ||
+		containsString(tags, "recall:no_matched_terms") ||
+		containsString(tags, "recall:weak_context") ||
+		containsString(tags, "recall:weak_matched_terms") {
+		add("For degraded session recall, inspect session_search_examples and rerun with narrower identifiers, adjacent context, plan anchors, or loop anchors before trusting stale transcript hits.")
+	}
+	if containsString(tags, "recall:memory_no_topic_anchors") {
+		add("For recall:memory_no_topic_anchors, inspect memory_search_miss_examples; retry with target/topic discovery or confirm the memory bucket is empty before treating durable recall as absent.")
+	}
+	return strings.Join(actions, " ")
 }
 
 func debugRecoveryPriorityTags(brief *DebugBrief) []string {

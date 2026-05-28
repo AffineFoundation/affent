@@ -237,6 +237,12 @@ Scenario records describe one eval case:
   explicitly routes the next agent to `browser_network_examples`,
   `source_evidence`, and `browser_network_read`, because refs/checks from
   `browser_network` are leads rather than citable `SourceAccess:` evidence.
+  Long-run recall and context-pressure tags add bounded next actions too:
+  summary-missing/empty context compactions route recovery through persisted
+  `LOOP.md`, plan state, session search, memory, or authoritative files;
+  recent-session and weak-recall tags route retry through
+  `session_search_examples`; memory misses without topic anchors route retry
+  through `memory_search_miss_examples` and explicit target/topic discovery.
   JSONL scenario records expose the manifest location through
   `debug_manifest_path`; they do not inline this block.
 - `loop_guard_interventions`: runtime loop guard intervention count.
