@@ -31,6 +31,40 @@ describe("buildSessionTrace", () => {
     expect(sessionTraceDraft(trace)).toContain("Inspect this session trace");
   });
 
+  it("builds trace-backed tool issue summaries with next-step detail", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "Run tests" } },
+      { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "shell", tool: "shell", args: { command: "npm test" } } },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "shell",
+          exit_code: 1,
+          failure_kind: "invalid_args",
+          result_summary: "failed\nNext: rerun npm test after fixing checkout\nFailure: kind=invalid_args",
+          result: "failed\nNext: rerun npm test after fixing checkout\nFailure: kind=invalid_args",
+        },
+      },
+    ]);
+
+    const trace = buildSessionTrace(session);
+
+    expect(trace.toolIssueCount).toBe(1);
+    expect(trace.toolIssues).toEqual([
+      {
+        id: "shell",
+        query: "call:shell",
+        title: "Request 1 · shell",
+        detail: "invalid_args · Next: rerun npm test after fixing checkout",
+        badges: ["exit 1", "invalid_args"],
+      },
+    ]);
+    expect(sessionTraceEvidenceText(trace)).toContain("Tool issue: Request 1 · shell · invalid_args · Next: rerun npm test after fixing checkout");
+  });
+
   it("returns an empty state for sessions without trace", () => {
     const trace = buildSessionTrace(reduceRawEvents([]));
 

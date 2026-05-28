@@ -83,6 +83,32 @@ export function SessionTracePanel({
               {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
               {trace.unknownCount > 0 ? <span data-tone="warning"><strong>Unclassified</strong>{trace.unknownCount}</span> : null}
             </div>
+            {trace.toolIssues.length > 0 ? (
+              <div className="session-trace-issues" data-testid="session-trace-issues">
+                <strong>Tool issues</strong>
+                <div>
+                  {trace.toolIssues.map((issue) => (
+                    <button
+                      key={`${issue.id}:${issue.title}`}
+                      type="button"
+                      className="session-trace-issue"
+                      onClick={() => {
+                        setFilter("issues");
+                        setQuery(issue.query);
+                      }}
+                    >
+                      <span>{issue.title}</span>
+                      <small>{issue.detail}</small>
+                      {issue.badges.length > 0 ? (
+                        <span className="session-trace-issue-badges" aria-hidden="true">
+                          {issue.badges.slice(0, 3).map((badge) => <b key={badge}>{badge}</b>)}
+                        </span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {!trimmedQuery && trace.latest ? (
               <div className="session-trace-latest" data-testid="session-trace-latest">
                 <strong>{trace.latest.label}</strong>
@@ -105,7 +131,7 @@ export function SessionTracePanel({
   );
 }
 
-type TraceFilter = "all" | "issues" | "actions" | "commands" | "files" | "memory" | "context" | "loop";
+type TraceFilter = "all" | "issues" | "actions" | "commands" | "files" | "memory" | "context" | "loop" | "sources" | "artifacts" | "unclassified";
 
 interface TraceFilterItem {
   key: TraceFilter;
@@ -123,6 +149,9 @@ function traceFilters(events: readonly NormalizedEvent[], toolIssueCount: number
     { key: "memory", label: "Memory", count: countFilter(events, "memory") },
     { key: "context", label: "Context", count: countFilter(events, "context") },
     { key: "loop", label: "Loop", count: countFilter(events, "loop") },
+    { key: "sources", label: "Sources", count: countFilter(events, "sources") },
+    { key: "artifacts", label: "Artifacts", count: countFilter(events, "artifacts") },
+    { key: "unclassified", label: "Unclassified", count: countFilter(events, "unclassified") },
   ]);
 }
 
@@ -149,6 +178,9 @@ function filterLabel(filter: TraceFilter): string {
   if (filter === "memory") return "Memory";
   if (filter === "context") return "Context";
   if (filter === "loop") return "Loop";
+  if (filter === "sources") return "Sources";
+  if (filter === "artifacts") return "Artifacts";
+  if (filter === "unclassified") return "Unclassified";
   return "All";
 }
 
@@ -162,12 +194,33 @@ function eventMatchesFilter(event: NormalizedEvent, filter: TraceFilter, callToo
   if (filter === "actions") return event.type === EventType.ToolRequest || event.type === EventType.ToolResult;
   if (filter === "context") return event.type === EventType.ContextInjected || event.type === EventType.ContextCompacted || event.type === EventType.Usage;
   if (filter === "loop") return event.type.startsWith("loop.");
+  if (filter === "unclassified") return !event.known;
+  if (filter === "artifacts") return eventHasArtifact(event);
+  if (filter === "sources") return eventHasSourceEvidence(event, callTools);
   if (event.type !== EventType.ToolRequest && event.type !== EventType.ToolResult) return false;
   const tool = toolName(event, callTools);
   if (filter === "commands") return tool === "shell";
   if (filter === "files") return tool === "read_file" || tool === "write_file" || tool === "edit_file" || tool === "list_files";
   if (filter === "memory") return tool === "memory" || tool === "session_search";
   return false;
+}
+
+function eventHasArtifact(event: NormalizedEvent): boolean {
+  if (!event.data || typeof event.data !== "object") return false;
+  const artifactPath = (event.data as { result_artifact_path?: unknown }).result_artifact_path;
+  return typeof artifactPath === "string" && artifactPath.trim().length > 0;
+}
+
+function eventHasSourceEvidence(event: NormalizedEvent, callTools: Map<string, string>): boolean {
+  if (event.type !== EventType.ToolRequest && event.type !== EventType.ToolResult) return false;
+  const tool = toolName(event, callTools) ?? "";
+  if (/^(web_|browser_)/.test(tool)) return true;
+  if (!event.data || typeof event.data !== "object") return false;
+  const text = [
+    (event.data as { result_summary?: unknown }).result_summary,
+    (event.data as { result?: unknown }).result,
+  ].filter((value): value is string => typeof value === "string").join("\n");
+  return /SourceAccess:|BROWSER_NETWORK|browser_network_|web_fetch/i.test(text);
 }
 
 function filterToolIssueEvents(events: readonly NormalizedEvent[]): NormalizedEvent[] {
