@@ -1980,7 +1980,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file" })[0]);
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use file as draft" })[0]);
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file evidence");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file path in the next step: src/payments.ts");
   });

@@ -41,7 +41,7 @@ export function SessionFilesPanel({
                   ) : null}
                   {onUseAsDraft ? (
                     <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileDraft(item), "file_evidence")}>
-                      Use file
+                      Use file as draft
                     </button>
                   ) : null}
                 </span>
