@@ -113,6 +113,9 @@ func TestApplyTraceEventTracksContextCompactionSummaryPresenceKnown(t *testing.T
 	if stats.Count != 2 || stats.SummaryMissing != 1 || stats.SummaryEmpty != 0 {
 		t.Fatalf("ContextCompactionStats = %+v", stats)
 	}
+	if stats.ByReason["legacy_trace"] != 1 || stats.ByReason["context_overflow"] != 1 {
+		t.Fatalf("ContextCompactionStats reasons = %+v", stats.ByReason)
+	}
 	if len(stats.Examples) != 2 ||
 		stats.Examples[0].SummaryPresentKnown ||
 		!stats.Examples[1].SummaryPresentKnown {

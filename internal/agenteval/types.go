@@ -722,6 +722,7 @@ type ContextCompactionStats struct {
 	SummaryBytes    int
 	SummaryMissing  int
 	SummaryEmpty    int
+	ByReason        map[string]int
 	Examples        []ContextCompaction
 }
 
@@ -1838,6 +1839,14 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 	stats := ContextCompactionStats{}
 	for _, compaction := range t.ContextCompactions {
 		stats.Count++
+		if stats.ByReason == nil {
+			stats.ByReason = map[string]int{}
+		}
+		reason := strings.TrimSpace(compaction.Reason)
+		if reason == "" {
+			reason = "unknown"
+		}
+		stats.ByReason[reason]++
 		if compaction.Reactive {
 			stats.Reactive++
 		} else {

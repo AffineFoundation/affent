@@ -418,6 +418,58 @@ func TestBuildDebugBriefClassifiesToolBudgetRunaway(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesInputBudgetRunaway(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:          5,
+			MaxInputTokens: 479974,
+			MaxTotalTokens: 480802,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			MaxTurnInputTokens: 300000,
+			MaxTurnSteps:       10,
+		},
+		ContextCompactions: ContextCompactionStats{
+			Count: 1,
+			ByReason: map[string]int{
+				"input_budget_pressure": 1,
+			},
+		},
+		ToolStats: ToolRuntimeStats{
+			ForcedNoTools:           1,
+			ToolContextTruncated:    2,
+			ToolContextOmittedBytes: 2 * 1024 * 1024,
+		},
+	})
+	item := debugBriefItemByKind(brief, "input_budget")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "a turn exceeded the runtime-advertised input-token budget; inspect checkpoints, compaction, and repeated context before trusting long-run efficiency" ||
+		item.Counts["max_input_tokens"] != 479974 ||
+		item.Counts["max_turn_input_tokens"] != 300000 ||
+		item.Counts["context_compactions"] != 1 ||
+		item.Counts["forced_no_tools"] != 1 ||
+		item.Counts["tool_context_omitted_mb"] != 2 ||
+		!stringSliceContains(item.Inspect, "context_compaction_examples") ||
+		!stringSliceContains(brief.Tags, "input_budget:turn_overrun") {
+		t.Fatalf("input budget item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:          1,
+			MaxInputTokens: 299999,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			MaxTurnInputTokens: 300000,
+		},
+	}); clean != nil {
+		t.Fatalf("within input budget run should not emit debug brief: %+v", clean)
+	}
+}
+
 func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,
@@ -1100,6 +1152,9 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 			Reactive:        1,
 			RemovedMessages: 42,
 			SummaryMissing:  1,
+			ByReason: map[string]int{
+				"input_budget_pressure": 1,
+			},
 		},
 	})
 	item := debugBriefItemByKind(brief, "context_compaction")
@@ -1108,6 +1163,7 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 		item.Message != "context was compacted without a persisted summary; inspect examples before continuing" ||
 		item.Counts["summary_missing"] != 1 ||
 		!stringSliceContains(item.Inspect, "context_compaction_examples") ||
+		!stringSliceContains(brief.Tags, "context_compaction:input_budget_pressure") ||
 		!stringSliceContains(brief.Tags, "context_compaction:summary_missing") {
 		t.Fatalf("missing-summary compaction item = %+v tags=%+v", item, brief.Tags)
 	}

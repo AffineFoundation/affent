@@ -169,6 +169,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if counts, ok := toolBudgetRunawayCounts(res); ok {
 		add("tool_budget", "warn", "a turn exceeded the runtime-advertised tool-call budget; inspect checkpoints and tool timeline before trusting token efficiency", []string{"loop_turn_checkpoint_examples", "runtime_surface", "tool_timeline", "timeline"}, counts, "tool_budget", "tool_budget:turn_overrun")
 	}
+	if counts, ok := inputBudgetRunawayCounts(res); ok {
+		add("input_budget", "warn", "a turn exceeded the runtime-advertised input-token budget; inspect checkpoints, compaction, and repeated context before trusting long-run efficiency", []string{"loop_turn_checkpoint_examples", "runtime_surface", "context_compaction_examples", "tool_timeline", "timeline"}, counts, "input_budget", "input_budget:turn_overrun")
+	}
 	if researchCheckpoints := loopDecisionCountByKind(res.LoopDecisionStats, "research_checkpoint"); researchCheckpoints > 0 {
 		severity := "info"
 		message := "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction"
@@ -509,6 +512,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		if res.ContextCompactions.Reactive > 0 {
 			tags = append(tags, "context_compaction:reactive")
 		}
+		for _, reason := range sortedStringMapKeys(res.ContextCompactions.ByReason) {
+			tags = append(tags, "context_compaction:"+reason)
+		}
 		if res.ContextCompactions.SummaryMissing > 0 {
 			tags = append(tags, "context_compaction:summary_missing")
 			message = "context was compacted without a persisted summary; inspect examples before continuing"
@@ -602,6 +608,29 @@ func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
 	}
 	if res.LoopTurnCheckpoints.MaxInputTokens > 0 {
 		counts["max_input_tokens"] = res.LoopTurnCheckpoints.MaxInputTokens
+	}
+	if res.LoopTurnCheckpoints.MaxTotalTokens > 0 {
+		counts["max_total_tokens"] = res.LoopTurnCheckpoints.MaxTotalTokens
+	}
+	return counts, true
+}
+
+func inputBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
+	if res.RuntimeSurface == nil || res.RuntimeSurface.MaxTurnInputTokens <= 0 {
+		return nil, false
+	}
+	budget := res.RuntimeSurface.MaxTurnInputTokens
+	if res.LoopTurnCheckpoints.MaxInputTokens <= budget {
+		return nil, false
+	}
+	counts := map[string]int{
+		"max_input_tokens":        res.LoopTurnCheckpoints.MaxInputTokens,
+		"max_turn_input_tokens":   budget,
+		"checkpoints":             res.LoopTurnCheckpoints.Count,
+		"context_compactions":     res.ContextCompactions.Count,
+		"forced_no_tools":         res.ToolStats.ForcedNoTools,
+		"tool_context_truncated":  res.ToolStats.ToolContextTruncated,
+		"tool_context_omitted_mb": res.ToolStats.ToolContextOmittedBytes / (1024 * 1024),
 	}
 	if res.LoopTurnCheckpoints.MaxTotalTokens > 0 {
 		counts["max_total_tokens"] = res.LoopTurnCheckpoints.MaxTotalTokens
