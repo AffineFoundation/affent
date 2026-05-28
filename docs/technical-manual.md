@@ -1573,6 +1573,12 @@ make test-container
 Use `TEST_PACKAGES=./...` only when the workspace is known not to contain
 unrelated Go packages.
 
+Keep external reference repositories and ad-hoc binaries out of the repository
+root. Use ignored scratch paths such as `.tmp/external-repos/<name>` for cloned
+mainstream agent projects and `.tmp/local-binaries/` for local executables. This
+keeps `go test ./...`, editor indexing, and eval workspace scans focused on
+Affent-owned packages.
+
 Run nested module tests separately:
 
 ```bash
