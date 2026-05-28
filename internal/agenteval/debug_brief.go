@@ -158,9 +158,20 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}, tags...)
 	}
 	if researchCheckpoints := loopDecisionCountByKind(res.LoopDecisionStats, "research_checkpoint"); researchCheckpoints > 0 {
-		add("research_checkpoint", "info", "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction", []string{"loop_decision_examples", "timeline", "plan"}, map[string]int{
-			"decisions": researchCheckpoints,
-		}, "research_checkpoint", "loop_decision:research_checkpoint")
+		severity := "info"
+		message := "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction"
+		tags := []string{"research_checkpoint", "loop_decision:research_checkpoint"}
+		if !researchCheckpointHasExternalEvidence(res) {
+			severity = "warn"
+			message = "research checkpoint triggered without external evidence or delegated research; inspect whether the turn stayed internally calibrated"
+			tags = append(tags, "research_checkpoint:no_external_evidence")
+		}
+		add("research_checkpoint", severity, message, []string{"loop_decision_examples", "source_evidence", "child_transcripts", "timeline", "plan"}, map[string]int{
+			"decisions":             researchCheckpoints,
+			"source_access_results": res.ToolStats.SourceAccessResults,
+			"focused_task_calls":    res.Delegation.FocusedTaskCalls,
+			"subagent_calls":        res.Delegation.SubagentCalls,
+		}, tags...)
 	}
 	if res.Delegation.HasAny() {
 		severity := "info"
@@ -546,6 +557,16 @@ func loopProtocolFixtureFailureCount(failures []string) int {
 		}
 	}
 	return count
+}
+
+func researchCheckpointHasExternalEvidence(res BatchResult) bool {
+	if res.ToolStats.SourceAccessResults > 0 {
+		return true
+	}
+	if res.Delegation.FocusedTaskCalls > 0 || res.Delegation.SubagentCalls > 0 {
+		return true
+	}
+	return false
 }
 
 func browserNetworkRefsHaveSourceEvidence(res BatchResult) bool {

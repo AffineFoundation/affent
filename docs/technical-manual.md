@@ -1246,6 +1246,10 @@ representative trace/timeline/debug-manifest paths. Tool result truncation and
 model-context trimming are split by tags such as `truncation:missing_artifact` and
 `truncation:tool_context`, so long-run regressions can separate lost raw output
 from output that existed but was shortened before re-entering the model.
+Research checkpoints that trigger without SourceAccess evidence or delegated
+research emit `research_checkpoint:no_external_evidence`; the recovery prompt
+routes the next operator to loop decisions, source evidence, and child
+transcripts before treating a loop-route conclusion as externally calibrated.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

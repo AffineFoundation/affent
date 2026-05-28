@@ -219,6 +219,7 @@ Scenario records describe one eval case:
   `memory_update:replace`, `empty_recall`,
   `empty_recall:no_recent_sessions`,
   `empty_recall:recent_sessions`,
+  `research_checkpoint:no_external_evidence`,
   `loop_guard:forced_no_tools`,
   `recall:no_context`, `recall:no_matched_terms`,
   `recall:weak_context`, `recall:weak_matched_terms`,
@@ -254,6 +255,9 @@ Scenario records describe one eval case:
   through `memory_search_miss_examples` and explicit target/topic discovery;
   loop protocol fixture tags route operators to repair the per-session
   `LOOP.md` or `state.json` lifecycle state before rerunning model evals.
+  Research checkpoint evidence-gap tags route operators to
+  `loop_decision_examples`, `source_evidence`, and `child_transcripts` before
+  treating a route change as externally calibrated.
   JSONL scenario records expose the manifest location through
   `debug_manifest_path`; they do not inline this block.
 - `loop_guard_interventions`: runtime loop guard intervention count.

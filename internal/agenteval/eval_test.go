@@ -181,6 +181,24 @@ func TestDebugRecoveryPriorityTagsIncludesLoopProtocolFixture(t *testing.T) {
 	}
 }
 
+func TestDebugRecoveryPriorityTagsIncludesResearchCheckpointEvidenceGap(t *testing.T) {
+	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"research_checkpoint:no_external_evidence",
+		"loop_guard:forced_no_tools",
+		"outcome:failed",
+		"misc:later",
+	}})
+	want := []string{
+		"outcome:failed",
+		"research_checkpoint:no_external_evidence",
+		"loop_guard:forced_no_tools",
+		"misc:later",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",
@@ -3355,6 +3373,42 @@ func TestBuildDebugRecoveryGuideAddsLoopProtocolFixtureAction(t *testing.T) {
 		}
 	}
 	for _, want := range []string{"failures", "expectations", "debug_manifest"} {
+		if !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsResearchCheckpointEvidenceGapAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/research-checkpoint",
+		TimelinePath:      "/tmp/affent-eval/research-checkpoint/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/research-checkpoint/affenteval-debug.json",
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+			Examples: []LoopDecision{{
+				Kind:           "research_checkpoint",
+				Decision:       "trigger",
+				Trigger:        "external_calibration_requested",
+				RequiredAction: "Use a narrow web/browser pass before changing durable direction.",
+			}},
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"research_checkpoint:no_external_evidence",
+		"inspect loop_decision_examples",
+		"source_evidence or child_transcripts",
+		"internal review rather than externally calibrated route changes",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	for _, want := range []string{"loop_decision_examples", "source_evidence", "child_transcripts"} {
 		if !stringSliceContains(guide.Inspect, want) {
 			t.Fatalf("recovery guide inspect = %#v, want %q", guide.Inspect, want)
 		}

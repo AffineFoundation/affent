@@ -302,13 +302,33 @@ func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
 	})
 	item := debugBriefItemByKind(brief, "research_checkpoint")
 	if item == nil ||
-		item.Severity != "info" ||
-		item.Message != "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction" ||
+		item.Severity != "warn" ||
+		item.Message != "research checkpoint triggered without external evidence or delegated research; inspect whether the turn stayed internally calibrated" ||
 		item.Counts["decisions"] != 1 ||
 		!stringSliceContains(item.Inspect, "loop_decision_examples") ||
+		!stringSliceContains(item.Inspect, "source_evidence") ||
+		!stringSliceContains(item.Inspect, "child_transcripts") ||
 		!stringSliceContains(brief.Tags, "research_checkpoint") ||
-		!stringSliceContains(brief.Tags, "loop_decision:research_checkpoint") {
+		!stringSliceContains(brief.Tags, "loop_decision:research_checkpoint") ||
+		!stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
 		t.Fatalf("research checkpoint debug item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults: 1,
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+		},
+	})
+	item = debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Message != "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction" ||
+		stringSliceContains(brief.Tags, "research_checkpoint:no_external_evidence") {
+		t.Fatalf("evidence-backed research checkpoint debug item = %+v tags=%+v", item, brief.Tags)
 	}
 }
 

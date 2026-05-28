@@ -1449,6 +1449,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "loop_protocol:fixture") {
 		add("For loop_protocol:fixture, fix the per-session .affent/loops/<session_id>/LOOP.md fixture and state.json lifecycle status before rerunning; this is scenario setup, not model behavior.")
 	}
+	if containsString(tags, "research_checkpoint:no_external_evidence") {
+		add("For research_checkpoint:no_external_evidence, inspect loop_decision_examples and verify whether source_evidence or child_transcripts are available; if not, treat conclusions as internal review rather than externally calibrated route changes.")
+	}
 	if containsString(tags, "loop_guard:forced_no_tools") {
 		add("For loop_guard:forced_no_tools, inspect loop_guard_examples and the previous successful evidence before retrying tools; change the tool sequence or finish with a marked gap instead of repeating the blocked call.")
 	}
@@ -1489,6 +1492,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"verifier:abnormal",
 		"verifier:output_truncated",
 		"loop_protocol:fixture",
+		"research_checkpoint:no_external_evidence",
 		"loop_guard:forced_no_tools",
 		"source_dynamic_without_network",
 		"source_dynamic_without_decision",
