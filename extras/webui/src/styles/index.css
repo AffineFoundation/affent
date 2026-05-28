@@ -5939,7 +5939,7 @@ mark {
 }
 
 .message-side-actions[data-side="assistant"] {
-  order: 0;
+  order: 2;
 }
 
 .flow-step-user .message-actions {
