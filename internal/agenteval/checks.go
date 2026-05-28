@@ -2510,6 +2510,9 @@ func workspaceAbsolutePathNeedles(workspace string) []string {
 	if slash := filepath.ToSlash(clean); slash != clean {
 		needles = append(needles, slash)
 	}
+	if slash := filepath.ToSlash(clean); strings.HasPrefix(slash, "/") {
+		needles = append(needles, strings.TrimPrefix(slash, "/"))
+	}
 	return needles
 }
 

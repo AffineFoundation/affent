@@ -2021,6 +2021,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(clonePush.Domains, codePRDomain) {
 		t.Fatalf("clone/push Domains = %#v, want code_pr", clonePush.Domains)
 	}
+	if !clonePush.ForbidWorkspaceAbsolutePaths || clonePush.MaxLoopTurnInputTokens != 300000 || clonePush.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("clone/push path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", clonePush.ForbidWorkspaceAbsolutePaths, clonePush.MaxLoopTurnInputTokens, clonePush.MaxLoopTurnTotalTokens)
+	}
 
 	sourceRepo, ok := seen["longrun-code-source-repo-modify-push-local-remote"]
 	if !ok {
@@ -2081,6 +2084,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(sourceRepo.Domains, codePRDomain) {
 		t.Fatalf("source repo Domains = %#v, want code_pr", sourceRepo.Domains)
+	}
+	if !sourceRepo.ForbidWorkspaceAbsolutePaths || sourceRepo.MaxLoopTurnInputTokens != 300000 || sourceRepo.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("source repo path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", sourceRepo.ForbidWorkspaceAbsolutePaths, sourceRepo.MaxLoopTurnInputTokens, sourceRepo.MaxLoopTurnTotalTokens)
 	}
 
 	scratchProject, ok := seen["longrun-scratch-project-loop-push"]
@@ -2145,6 +2151,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(scratchProject.Domains, codePRDomain) || !stringSliceContains(scratchProject.Domains, longRunRecoveryDomain) {
 		t.Fatalf("scratch project Domains = %#v, want code_pr and longrun_recovery", scratchProject.Domains)
 	}
+	if !scratchProject.ForbidWorkspaceAbsolutePaths || scratchProject.MaxLoopTurnInputTokens != 300000 || scratchProject.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("scratch project path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", scratchProject.ForbidWorkspaceAbsolutePaths, scratchProject.MaxLoopTurnInputTokens, scratchProject.MaxLoopTurnTotalTokens)
+	}
 
 	iterativeProject, ok := seen["longrun-scratch-project-iterative-loop-push"]
 	if !ok {
@@ -2184,7 +2193,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 		}
 	}
 	if iterativeProject.RequiredLoopProtocolFeeds != 2 ||
-		iterativeProject.RequiredLoopProtocolFeedModes["full"] != 2 ||
+		iterativeProject.RequiredLoopProtocolFeedModes["full"] != 1 ||
+		iterativeProject.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(iterativeProject.RequiredLoopProtocolFeedMatches) != 1 ||
 		!strings.Contains(iterativeProject.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "no source package or tests exist yet") ||
 		!strings.Contains(iterativeProject.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "finish iteration 1") {
@@ -2209,6 +2219,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(iterativeProject.Domains, codePRDomain) || !stringSliceContains(iterativeProject.Domains, longRunRecoveryDomain) {
 		t.Fatalf("iterative scratch project Domains = %#v, want code_pr and longrun_recovery", iterativeProject.Domains)
+	}
+	if !iterativeProject.ForbidWorkspaceAbsolutePaths || iterativeProject.MaxLoopTurnInputTokens != 300000 || iterativeProject.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("iterative scratch project path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", iterativeProject.ForbidWorkspaceAbsolutePaths, iterativeProject.MaxLoopTurnInputTokens, iterativeProject.MaxLoopTurnTotalTokens)
 	}
 
 	integrated, ok := seen["longrun-integrated-memory-recovery"]
@@ -2292,7 +2305,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 		}
 	}
 	if integrated.RequiredLoopProtocolFeeds != 2 ||
-		integrated.RequiredLoopProtocolFeedModes["full"] != 2 ||
+		integrated.RequiredLoopProtocolFeedModes["full"] != 1 ||
+		integrated.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(integrated.RequiredLoopProtocolFeedMatches) != 1 ||
 		!strings.Contains(integrated.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "tiny Python CLI with a failing JSON contract test") ||
 		!strings.Contains(integrated.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "fix JSON mode") {
@@ -2314,6 +2328,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(integrated.Domains, memoryDomain) || !stringSliceContains(integrated.Domains, sessionRecoveryDomain) || !stringSliceContains(integrated.Domains, longRunRecoveryDomain) {
 		t.Fatalf("integrated memory recovery Domains = %#v, want memory/session/longrun", integrated.Domains)
+	}
+	if !integrated.ForbidWorkspaceAbsolutePaths || integrated.MaxLoopTurnInputTokens != 300000 || integrated.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("integrated memory recovery path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", integrated.ForbidWorkspaceAbsolutePaths, integrated.MaxLoopTurnInputTokens, integrated.MaxLoopTurnTotalTokens)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]

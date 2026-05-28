@@ -3118,6 +3118,9 @@ func TestClampAboveRange(t *testing.T) {
 				"return max",
 			},
 		},
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
 		RequiredFinalText: []string{
 			"git clone",
 			"go test ./...",
@@ -3231,9 +3234,12 @@ func TestMessageUsesName(t *testing.T) {
 			"commit",
 			"push",
 		},
-		ForbiddenCommands: defaultForbiddenCommands,
-		ProtectedFiles:    []string{"app/greet/greet_test.go"},
-		MaxTurns:          18,
+		ForbiddenCommands:            defaultForbiddenCommands,
+		ProtectedFiles:               []string{"app/greet/greet_test.go"},
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     18,
 	}
 }
 
@@ -3363,7 +3369,10 @@ This repository starts almost empty. The agent must create the project, tests, d
 		ProtectedFiles: []string{
 			".affent/loops/scratch-project-loop/LOOP.md",
 		},
-		MaxTurns: 20,
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     20,
 	}
 }
 
@@ -3464,7 +3473,8 @@ This repository starts almost empty. The agent must create the project over two 
 		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
-			"full": 2,
+			"full":   1,
+			"digest": 1,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{
@@ -3511,7 +3521,10 @@ This repository starts almost empty. The agent must create the project over two 
 		ProtectedFiles: []string{
 			".affent/loops/scratch-project-iterative-loop/LOOP.md",
 		},
-		MaxTurns: 28,
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     28,
 	}
 }
 
@@ -3729,7 +3742,8 @@ if __name__ == "__main__":
 		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
-			"full": 2,
+			"full":   1,
+			"digest": 1,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
 			{
@@ -3766,7 +3780,10 @@ if __name__ == "__main__":
 			".affent/loops/integrated-memory-recovery/LOOP.md",
 			"docs/conventions.md",
 		},
-		MaxTurns: 34,
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     34,
 	}
 }
 

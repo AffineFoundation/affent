@@ -1906,6 +1906,21 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 		}
 	})
 
+	t.Run("fails for workspace path alias without leading slash", func(t *testing.T) {
+		alias := strings.TrimPrefix(filepath.ToSlash(filepath.Join(workspace, "data/value.txt")), "/")
+		trace := Trace{
+			WorkspaceDir: workspace,
+			Tools: []ToolCall{{
+				CallID: "c1",
+				Tool:   "read_file",
+				Args:   map[string]any{"path": alias},
+			}},
+		}
+		if res := check.Eval(trace); res.Pass {
+			t.Fatalf("workspace path alias in read_file should fail: %+v", res)
+		}
+	})
+
 	t.Run("fails for runtime surface workspace path policy", func(t *testing.T) {
 		trace := Trace{
 			WorkspaceDir: workspace,
