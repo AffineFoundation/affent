@@ -24,8 +24,11 @@ export function SessionWorkspacePanel({
           <div className="session-workspace-main">
             {workspace.issue ? <strong className="session-workspace-issue">{workspace.issue}</strong> : null}
             {workspace.label ? <span>Label: {workspace.label}</span> : null}
-            {workspace.path ? <span title={workspace.path}>Path: {workspace.path}</span> : null}
+            {workspace.path ? <span title={workspace.path}>Session workspace: {workspace.path}</span> : null}
             {workspace.lastAgentCwd ? <span title={workspace.lastAgentCwd}>Last agent cwd: {workspace.lastAgentCwd}</span> : null}
+            {workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
+              <span title={workspace.latestCommandCwd}>Latest command cwd: {workspace.latestCommandCwd}</span>
+            ) : null}
             {workspace.branch ? <span>Branch: {workspace.branch}</span> : null}
             {workspace.dirtyState ? <span>State: {workspace.dirtyState}</span> : null}
           </div>

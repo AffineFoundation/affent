@@ -960,8 +960,6 @@ describe("App", () => {
     await user.click(within(panel).getByRole("button", { name: "Update via chat" }));
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Review and update LOOP.md");
 
-    await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
     panel = await screen.findByTestId("session-loop-panel");
     await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
 
@@ -1846,13 +1844,15 @@ describe("App", () => {
     expect(screen.getByTestId("workbench-panel")).toBeVisible();
     expect(screen.queryByTestId("workbench-inspector")).toBeNull();
     expect(screen.getByTestId("conversation-scroll")).toBeVisible();
+    expect(screen.getByTestId("composer")).toBeVisible();
     expect(screen.queryByLabelText("Settings")).toBeNull();
     expect(screen.queryByTestId("runtime-stats-panel")).toBeNull();
     expect(screen.queryByTestId("account-settings-panel")).toBeNull();
     expect(screen.queryByTestId("session-skills-panel")).toBeNull();
     await selectWorkbenchTab(user, "Trace");
-    expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Trace");
-    expect(screen.queryByTestId("composer")).toBeNull();
+    expect(await screen.findByTestId("workbench-tab-surface")).toHaveTextContent("Trace");
+    expect(screen.getByTestId("conversation-scroll")).toBeVisible();
+    expect(screen.getByTestId("composer")).toBeVisible();
     const runtime = await screen.findByTestId("runtime-stats-panel");
     expect(runtime).toHaveTextContent("Diagnostics");
     expect(runtime).toHaveTextContent("qwen-small");
@@ -1861,8 +1861,6 @@ describe("App", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs");
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
-    await user.click(screen.getByRole("button", { name: "Back to chat" }));
-    expect(screen.getByTestId("composer")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Close Workbench" }));
     expect(screen.queryByTestId("workbench-panel")).toBeNull();
     expect(await screen.findByTestId("conversation-scroll")).toBeVisible();
@@ -1993,8 +1991,7 @@ describe("App", () => {
     expect(screen.queryByTestId("session-list")).toBeNull();
     expect(screen.queryByTestId("workbench-inspector")).toBeNull();
     await selectWorkbenchTab(user, "Changes");
-    expect(await screen.findByTestId("workbench-inspector")).toHaveTextContent("Changes");
-    expect(screen.queryByTestId("workbench-tab-surface")).toBeNull();
+    expect(await screen.findByTestId("workbench-tab-surface")).toHaveTextContent("Changes");
     const changes = await screen.findByTestId("session-changes-panel");
     expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
@@ -2172,7 +2169,7 @@ describe("App", () => {
     expect(workspace).toHaveTextContent("Workspace mismatch");
     expect(workspace).toHaveTextContent("Latest command cwd is outside the session workspace.");
     expect(workspace).toHaveTextContent("Label: affent");
-    expect(workspace).toHaveTextContent("Path: /repo/affent");
+    expect(workspace).toHaveTextContent("Session workspace: /repo/affent");
     expect(workspace).toHaveTextContent("Last agent cwd: /tmp/outside");
     expect(workspace).toHaveTextContent("Branch: main");
     expect(workspace).toHaveTextContent("State: dirty");
@@ -2273,14 +2270,13 @@ describe("App", () => {
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Run evidence for npm test -- checkout.spec.ts");
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Next: update payment route then rerun");
 
-    await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Run");
     await user.click(within(await screen.findByTestId("session-run-focus")).getByRole("button", { name: "Rerun now" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/run-1/messages", expect.objectContaining({ method: "POST" })));
     const rerunCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/run-1/messages" && (init as RequestInit | undefined)?.method === "POST");
     expect((rerunCall?.[1] as RequestInit).body).toEqual(expect.stringContaining("Rerun this command in the session workspace now"));
     expect((rerunCall?.[1] as RequestInit).body).toEqual(expect.stringContaining("npm test -- checkout.spec.ts"));
-    expect(screen.queryByTestId("workbench-panel")).toBeNull();
+    expect(screen.getByTestId("workbench-panel")).toBeVisible();
+    expect(screen.getByTestId("conversation-scroll")).toBeVisible();
   });
 
   it("keeps the top bar compact when stats polling would fail", async () => {

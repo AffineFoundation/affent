@@ -17,6 +17,7 @@ export interface SessionRunCommand {
 
 export interface SessionRunView {
   commands: SessionRunCommand[];
+  latestCommandCwd?: string;
   summary: string;
   detail: string;
   tone?: "warning" | "error";
@@ -28,12 +29,16 @@ interface SessionRunCommandInternal extends SessionRunCommand {
 
 export function buildSessionRun(session: SessionState): SessionRunView {
   const commands: SessionRunCommandInternal[] = [];
+  let latestCommandCwd: string | undefined;
   let sequence = 0;
   session.turns.forEach((turn, turnIndex) => {
     for (const call of turn.toolCalls) {
       sequence += 1;
       const command = commandFromCall(call, turnIndex + 1, sequence);
-      if (command) commands.push(command);
+      if (command) {
+        commands.push(command);
+        if (command.cwd) latestCommandCwd = command.cwd;
+      }
     }
   });
   const sorted = commands
@@ -44,6 +49,7 @@ export function buildSessionRun(session: SessionState): SessionRunView {
   const passed = sorted.filter((command) => command.status === "passed").length;
   return {
     commands: sorted,
+    latestCommandCwd,
     summary: runSummary(sorted.length, { failed, running, passed }),
     detail: runDetail(sorted.length, { failed, running, passed }),
     tone: failed > 0 ? "error" : running > 0 ? "warning" : undefined,

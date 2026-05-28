@@ -17,8 +17,9 @@ describe("SessionWorkspacePanel", () => {
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("Workspace mismatch");
     expect(panel).toHaveTextContent("Latest command cwd is outside the session workspace.");
-    expect(panel).toHaveTextContent("Path: /repo/affent");
+    expect(panel).toHaveTextContent("Session workspace: /repo/affent");
     expect(panel).toHaveTextContent("Last agent cwd: /tmp");
+    expect(panel).toHaveTextContent("Latest command cwd: /tmp/extras/webui");
     expect(panel).toHaveTextContent("Branch: main");
     expect(panel).toHaveTextContent("State: dirty");
 
@@ -47,5 +48,6 @@ const workspace: SessionWorkspaceView = {
   branch: "main",
   dirtyState: "dirty",
   lastAgentCwd: "/tmp",
+  latestCommandCwd: "/tmp/extras/webui",
   issue: "Latest command cwd is outside the session workspace.",
 };

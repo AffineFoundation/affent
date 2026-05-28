@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionSummary } from "../api/sessions";
+import { reduceRawEvents } from "../store/reduce";
+import { buildSessionRun } from "./sessionRun";
 import type { SessionRunView } from "./sessionRun";
 import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText } from "./sessionWorkspace";
 
@@ -47,6 +49,29 @@ describe("buildSessionWorkspace", () => {
       "Last agent cwd: /tmp",
     ].join("\n"));
     expect(workspaceDraft(workspace)).toContain("Verify this workspace mismatch before making more file changes or running commands");
+  });
+
+  it("uses the chronologically latest command cwd instead of the prioritized Run list", () => {
+    const run = buildSessionRun(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "old-failed", tool: "shell", args: { command: "npm test", cwd: "/tmp" } } },
+      { id: 3, type: "tool.result", data: { call_id: "old-failed", exit_code: 1, result_summary: "failed" } },
+      { id: 4, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 5, type: "tool.request", data: { turn_id: "t2", call_id: "latest-passed", tool: "shell", args: { command: "npm run build", cwd: "/repo/affent/extras/webui" } } },
+      { id: 6, type: "tool.result", data: { call_id: "latest-passed", exit_code: 0, result_summary: "built" } },
+    ]));
+
+    expect(run.commands[0]).toMatchObject({ command: "npm test", cwd: "/tmp", status: "failed" });
+    expect(run.latestCommandCwd).toBe("/repo/affent/extras/webui");
+    expect(buildSessionWorkspace(
+      session({ workspace_path: "/repo/affent", workspace_label: "affent" }),
+      run,
+    )).toMatchObject({
+      summary: "affent",
+      lastAgentCwd: "/repo/affent/extras/webui",
+      latestCommandCwd: "/repo/affent/extras/webui",
+      issue: undefined,
+    });
   });
 
   it("stays absent when no workspace evidence exists", () => {

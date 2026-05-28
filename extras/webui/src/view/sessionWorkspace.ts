@@ -24,8 +24,8 @@ export function buildSessionWorkspace(
   const label = clean(session?.workspace_label) ?? workspaceLabel(path);
   const branch = clean(session?.default_branch);
   const dirtyState = clean(session?.dirty_state);
-  const latestCommandCwd = clean(run.commands.find((command) => command.cwd)?.cwd);
-  const lastAgentCwd = clean(session?.last_agent_cwd) ?? latestCommandCwd;
+  const latestCommandCwd = clean(run.latestCommandCwd) ?? clean(run.commands.find((command) => command.cwd)?.cwd);
+  const lastAgentCwd = latestCommandCwd ?? clean(session?.last_agent_cwd);
   const issue = workspaceIssue(path, lastAgentCwd);
   const hasData = !!(path || label || branch || dirtyState || lastAgentCwd || latestCommandCwd);
 

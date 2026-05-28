@@ -24,6 +24,7 @@ describe("buildSessionRun", () => {
     const run = buildSessionRun(session);
 
     expect(run).toMatchObject({ summary: "1 failed command", detail: "1 failed", tone: "error" });
+    expect(run.latestCommandCwd).toBe("extras/webui");
     expect(run.commands[0]).toMatchObject({
       command: "npm test -- checkout.spec.ts",
       cwd: "extras/webui",
