@@ -1536,8 +1536,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 20 {
-		t.Fatalf("long-run suite size = %d, want 20", len(scenarios))
+	if len(scenarios) != 21 {
+		t.Fatalf("long-run suite size = %d, want 21", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1796,6 +1796,89 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(iterativeProject.Domains, codePRDomain) || !stringSliceContains(iterativeProject.Domains, longRunRecoveryDomain) {
 		t.Fatalf("iterative scratch project Domains = %#v, want code_pr and longrun_recovery", iterativeProject.Domains)
+	}
+
+	integrated, ok := seen["longrun-integrated-memory-recovery"]
+	if !ok {
+		t.Fatalf("long-run suite missing integrated memory recovery scenario")
+	}
+	if integrated.SessionID != "integrated-memory-recovery" || !integrated.EnableMemory || !integrated.EnableLoopProtocol {
+		t.Fatalf("integrated memory recovery fields = session:%q memory:%v loop:%v", integrated.SessionID, integrated.EnableMemory, integrated.EnableLoopProtocol)
+	}
+	if len(integrated.Prompts) != 2 || integrated.Prompt != "" {
+		t.Fatalf("integrated memory recovery prompts = prompt:%q prompts:%d", integrated.Prompt, len(integrated.Prompts))
+	}
+	for _, prompt := range integrated.Prompts {
+		if strings.Contains(prompt, "请") {
+			t.Fatalf("integrated memory recovery prompt should be English: %q", prompt)
+		}
+	}
+	for _, want := range []string{"plan", "memory", "session_search", "read_file", "edit_file"} {
+		if !stringSliceContains(integrated.RequiredTools, want) {
+			t.Fatalf("integrated memory recovery RequiredTools = %#v, want %q", integrated.RequiredTools, want)
+		}
+	}
+	for _, want := range []string{"python3 -m unittest discover -s tests", "git commit", "git push"} {
+		if !stringSliceContains(integrated.RequiredCommands, want) {
+			t.Fatalf("integrated memory recovery RequiredCommands = %#v, want %q", integrated.RequiredCommands, want)
+		}
+	}
+	if integrated.RequiredCommandCounts[`python3 -m unittest`] != 4 ||
+		integrated.RequiredCommandCounts[`git commit`] != 2 ||
+		integrated.RequiredCommandCounts[`git push`] != 2 {
+		t.Fatalf("integrated memory recovery RequiredCommandCounts = %#v, want unittest=4 commit=2 push=2", integrated.RequiredCommandCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "memory", Arg: "action", Substring: "add"},
+		{Tool: "memory", Arg: "action", Substring: "search"},
+		{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
+		{Tool: "session_search", Arg: "query", Substring: "INTEGRATED-HANDOFF-26"},
+		{Tool: "read_file", Arg: "path", Substring: "docs/conventions.md"},
+	} {
+		if !toolArgRequirementContains(integrated.RequiredToolArgContains, want) {
+			t.Fatalf("integrated memory recovery RequiredToolArgContains = %#v, want %#v", integrated.RequiredToolArgContains, want)
+		}
+	}
+	for _, field := range []string{"memory_updates", "memory_update_add", "memory_search_calls", "session_search_calls", "session_search_results"} {
+		if integrated.RequiredToolStatsAtLeast[field] != 1 {
+			t.Fatalf("integrated memory recovery RequiredToolStatsAtLeast = %#v, want %s=1", integrated.RequiredToolStatsAtLeast, field)
+		}
+	}
+	if len(integrated.RequiredSessionSearch) != 1 ||
+		integrated.RequiredSessionSearch[0].SessionID != "integrated-prior" ||
+		integrated.RequiredSessionSearch[0].QueryContains != "INTEGRATED-HANDOFF-26" ||
+		integrated.RequiredSessionSearch[0].SnippetContains != "AUTO-MEM-64" ||
+		!integrated.RequiredSessionSearch[0].ContextIncluded {
+		t.Fatalf("integrated memory recovery RequiredSessionSearch = %#v", integrated.RequiredSessionSearch)
+	}
+	for _, want := range []string{"AUTO-MEM-64", "JSON", "--summary", "git rev-list --count HEAD", "git status --porcelain", "git ls-remote --heads origin main"} {
+		if !strings.Contains(integrated.VerifyCommand, want) {
+			t.Fatalf("integrated memory recovery VerifyCommand = %q, want %q", integrated.VerifyCommand, want)
+		}
+	}
+	if integrated.RequiredLoopProtocolFeeds != 2 ||
+		integrated.RequiredLoopProtocolFeedModes["full"] != 2 ||
+		len(integrated.RequiredLoopProtocolFeedMatches) != 1 ||
+		!strings.Contains(integrated.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "tiny Python CLI with a failing JSON contract test") ||
+		!strings.Contains(integrated.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "fix JSON mode") {
+		t.Fatalf("integrated memory recovery loop protocol constraints = feeds:%d modes:%#v matches:%#v", integrated.RequiredLoopProtocolFeeds, integrated.RequiredLoopProtocolFeedModes, integrated.RequiredLoopProtocolFeedMatches)
+	}
+	if integrated.RequiredTraceEventCounts["loop.turn_checkpoint"] != 2 {
+		t.Fatalf("integrated memory recovery trace event requirements = %#v, want loop.turn_checkpoint=2", integrated.RequiredTraceEventCounts)
+	}
+	for _, want := range []string{".affent/loops/integrated-memory-recovery/LOOP.md", "docs/conventions.md"} {
+		if !stringSliceContains(integrated.ProtectedFiles, want) {
+			t.Fatalf("integrated memory recovery ProtectedFiles = %#v, want %q", integrated.ProtectedFiles, want)
+		}
+	}
+	integratedCaps := ExpectationCapabilityNames(debugScenarioExpectations(integrated))
+	for _, want := range []string{"loop_protocol", "memory", "session_search", "plan", "trace", "workspace", "verifier", "session"} {
+		if !stringSliceContains(integratedCaps, want) {
+			t.Fatalf("integrated memory recovery expectation capabilities = %#v, want %q", integratedCaps, want)
+		}
+	}
+	if !stringSliceContains(integrated.Domains, memoryDomain) || !stringSliceContains(integrated.Domains, sessionRecoveryDomain) || !stringSliceContains(integrated.Domains, longRunRecoveryDomain) {
+		t.Fatalf("integrated memory recovery Domains = %#v, want memory/session/longrun", integrated.Domains)
 	}
 
 	planResume, ok := seen["plan-resume-current-step"]

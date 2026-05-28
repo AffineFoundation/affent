@@ -3044,6 +3044,241 @@ This repository starts almost empty. The agent must create the project over two 
 	}
 }
 
+func longRunIntegratedMemoryRecoveryScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-integrated-memory-recovery",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{codePRDomain, memoryDomain, sessionRecoveryDomain, longRunRecoveryDomain},
+		SessionID:          "integrated-memory-recovery",
+		EnableMemory:       true,
+		EnableLoopProtocol: true,
+		Prompts: []string{
+			"Iteration 1: continue the integrated CLI task using the active loop protocol and the project docs. The Python tests currently fail because the CLI JSON mode does not honor the documented durable output contract. Use the plan tool for this non-trivial change, run " + pythonUnittestDiscoverCommand + " to reproduce the failure, fix only the implementation, run the tests again, commit the fix, push it to origin main, and leave git status clean. Preserve stable project conventions for future sessions when they are verified and durable. Do not edit tests, docs/conventions.md, or LOOP.md in this iteration. The final answer must include AUTO-MEM-64, the test command, the commit hash, and the push result.",
+			"Iteration 2: continue the same long-run session instead of restarting. Recover the previous handoff from session history and recover the durable CLI JSON convention from memory before changing code. Add a --summary flag that still preserves the existing JSON marker contract, update or add stdlib unittest coverage for summary mode, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include AUTO-MEM-64, INTEGRATED-HANDOFF-26, integrated-prior, --summary, the second commit hash, the push result, and clean status.",
+		},
+		Files: map[string]string{
+			".affent/loops/integrated-memory-recovery/LOOP.md": `# Loop Protocol: integrated-memory-recovery
+
+## 0. Metadata
+
+- loop_id: integrated-memory-recovery
+- owner_session: integrated-memory-recovery
+- status: running
+
+## 1. North Star
+
+Complete a realistic multi-iteration coding task while preserving durable conventions, session recovery anchors, verification evidence, commits, and pushes.
+
+## 2. Current Situation
+
+- The repo is a tiny Python CLI with a failing JSON contract test.
+- The active work should prove the agent can combine loop state, plan state, memory, session history, test evidence, code edits, commit, and push without drifting.
+- Durable conventions should be kept compact and reusable; transient commit progress should stay out of memory.
+
+## 3. Rules
+
+- Use Python stdlib only.
+- Keep implementation changes focused in reporter/cli.py unless a later iteration explicitly requires tests.
+- Do not modify this LOOP.md.
+- Each iteration must leave git status clean after push.
+
+## 4. Plan/Step Pointer
+
+Current step: fix JSON mode, preserve durable convention state, then continue with summary mode in the next iteration.
+
+## 5. Evidence And Recovery Index
+
+Evidence is the unittest command, memory update/search events, session_search recovery, two non-initial commits, origin/main push state, and final project files.
+`,
+			".affentctl/integrated-prior/conversation.jsonl": `{"role":"user","content":"Integrated CLI follow-up handoff"}
+{"role":"assistant","content":"Prior handoff marker INTEGRATED-HANDOFF-26: when adding follow-up summary output, preserve the CLI JSON marker AUTO-MEM-64 and cite session integrated-prior as the recovery source."}
+`,
+			"docs/conventions.md": `# Project Conventions
+
+- Durable CLI contract: every machine-readable JSON output must include marker AUTO-MEM-64.
+- This convention applies across future sessions and follow-up iterations.
+- Transient facts such as individual commit hashes, one-off failing test output, and push results are not durable conventions.
+`,
+			"README.md": `# Reporter CLI
+
+Tiny CLI used by the integrated long-run eval.
+`,
+			"reporter/__init__.py": "",
+			"reporter/cli.py": `import argparse
+import json
+
+
+def build_report(name):
+    return {
+        "marker": "AUTO-MEM-64",
+        "name": name,
+        "items": ["alpha", "beta"],
+    }
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(prog="reporter")
+    parser.add_argument("--name", default="demo")
+    parser.add_argument("--json", action="store_true")
+    args = parser.parse_args(argv)
+
+    report = build_report(args.name)
+    if args.json:
+        print(f"{report['name']}:{len(report['items'])}")
+        return
+    print(f"{report['name']} has {len(report['items'])} items")
+
+
+if __name__ == "__main__":
+    main()
+`,
+			"tests/test_cli.py": `import json
+import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+
+from reporter.cli import main
+
+
+def run_cli(*args):
+    buf = StringIO()
+    with redirect_stdout(buf):
+        main(list(args))
+    return buf.getvalue().strip()
+
+
+class ReporterCLITests(unittest.TestCase):
+    def test_json_output_preserves_contract_marker(self):
+        payload = json.loads(run_cli("--json", "--name", "ops"))
+        self.assertEqual(payload["marker"], "AUTO-MEM-64")
+        self.assertEqual(payload["name"], "ops")
+        self.assertEqual(payload["items"], ["alpha", "beta"])
+
+    def test_text_output_remains_human_readable(self):
+        self.assertEqual(run_cli("--name", "ops"), "ops has 2 items")
+
+
+if __name__ == "__main__":
+    unittest.main()
+`,
+		},
+		SetupCommands: []string{
+			localBareRemoteSetupCommand,
+		},
+		VerifyCommand: cleanPushedMinCommitsVerifyCommand("3",
+			pythonUnittestDiscoverCommand,
+			`test -d .affent/memory/topics`,
+			`grep -R "AUTO-MEM-64" .affent/memory/topics`,
+			`grep -R "JSON" .affent/memory/topics`,
+			`! grep -R -E "iteration [12]|commit hash|push result" .affent/memory/topics`,
+			`grep -R "summary" tests/test_cli.py`,
+			`grep -R -- "--summary" reporter/cli.py`,
+			`grep -R "AUTO-MEM-64" reporter/cli.py tests/test_cli.py`,
+		),
+		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{
+			pythonUnittestDiscoverCommand,
+			`git commit`,
+			`git push`,
+		},
+		RequiredCommandCounts: map[string]int{
+			`python3 -m unittest`: 4,
+			`git commit`:          2,
+			`git push`:            2,
+		},
+		RequiredTools: []string{"plan", "read_file", "edit_file", "memory", "session_search"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "docs/conventions.md"},
+			{Tool: "edit_file", Arg: "path", Substring: "reporter/cli.py"},
+			{Tool: "memory", Arg: "action", Substring: "add"},
+			{Tool: "memory", Arg: "action", Substring: "search"},
+			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
+			{Tool: "memory", Arg: "content", Substring: "JSON"},
+			{Tool: "session_search", Arg: "query", Substring: "INTEGRATED-HANDOFF-26"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"memory": {
+				"AUTO-MEM-64",
+			},
+			"session_search": {
+				"INTEGRATED-HANDOFF-26",
+				"AUTO-MEM-64",
+				"integrated-prior",
+				`"context_included":true`,
+			},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"memory_updates":               1,
+			"memory_update_add":            1,
+			"memory_search_calls":          1,
+			"session_search_calls":         1,
+			"session_search_results":       1,
+			"session_search_context_hits":  1,
+			"session_search_matched_terms": 1,
+		},
+		RequiredSessionSearch: []SessionSearchRequirement{
+			{
+				QueryContains:   "INTEGRATED-HANDOFF-26",
+				SessionID:       "integrated-prior",
+				SnippetContains: "AUTO-MEM-64",
+				MatchedTerms:    []string{"integrated"},
+				ContextIncluded: true,
+			},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "memory"},
+		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `python3 -m unittest`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `python3 -m unittest`, Tool: "edit_file"},
+			{Command: `git commit`, Tool: "edit_file"},
+			{Command: `git push`, Tool: "edit_file"},
+		},
+		RequiredLoopProtocolFeeds: 2,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 2,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{
+				CurrentSituation: "tiny Python CLI with a failing JSON contract test",
+				PlanCurrentStep:  "fix JSON mode",
+			},
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 2,
+		},
+		RequiredFinalText: []string{
+			"AUTO-MEM-64",
+			"INTEGRATED-HANDOFF-26",
+			"integrated-prior",
+			"--summary",
+			pythonUnittestDiscoverCommand,
+			"commit",
+			"push",
+			"clean",
+		},
+		RequiredFileSubstrings: map[string][]string{
+			"reporter/cli.py": {
+				"json.dumps",
+				"--summary",
+				"AUTO-MEM-64",
+			},
+			"tests/test_cli.py": {
+				"summary",
+				"AUTO-MEM-64",
+			},
+		},
+		ForbiddenCommands: defaultForbiddenCommands,
+		ProtectedFiles: []string{
+			".affent/loops/integrated-memory-recovery/LOOP.md",
+			"docs/conventions.md",
+		},
+		MaxTurns: 34,
+	}
+}
+
 func longRunFocusedTaskRecoveryScenario() BatchScenario {
 	return BatchScenario{
 		Name:    "longrun-focused-task-recovery-synthesis",
