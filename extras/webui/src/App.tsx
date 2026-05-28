@@ -82,6 +82,7 @@ import { buildSessionTrace } from "./view/sessionTrace";
 import { buildWorkbenchAttachment, buildWorkbenchContextUsage } from "./view/workbenchContext";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
+import { buildSessionPlanFromToolResults } from "./view/sessionPlan";
 import {
   buildAutomationContext,
   shouldShowLoopContext,
@@ -292,10 +293,14 @@ export function App() {
     ),
     [session.turns],
   );
-  const planSummary = livePlanSummary ?? selectedSession?.plan_summary;
+  const derivedPlan = useMemo(() => buildSessionPlanFromToolResults(session), [session]);
+  const planSummary = livePlanSummary ?? selectedSession?.plan_summary ?? derivedPlan?.summary;
   const planPanelSummary = planState.state === "ready" || planState.state === "error"
     ? planState.summary ?? planSummary
     : planSummary;
+  const planPanelPlan = planState.state === "ready" ? planState.plan : derivedPlan?.plan;
+  const planPanelLoading = planState.state === "loading" && !derivedPlan;
+  const planPanelError = planState.state === "error" && !derivedPlan ? planState.error : undefined;
   const capabilityView = useMemo(
     () => buildRuntimeCapabilityView(selectedSession?.capabilities, { selectedSessionId }),
     [selectedSession?.capabilities, selectedSessionId],
@@ -1719,9 +1724,9 @@ export function App() {
                 {showChatContext ? <ChatContextBar overview={overview} /> : null}
                 <SessionPlanPanel
                   summary={planPanelSummary}
-                  plan={planState.state === "ready" ? planState.plan : undefined}
-                  loading={planState.state === "loading"}
-                  error={planState.state === "error" ? planState.error : undefined}
+                  plan={planPanelPlan}
+                  loading={planPanelLoading}
+                  error={planPanelError}
                 />
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>

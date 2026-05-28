@@ -579,6 +579,75 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
 
+  it("renders plan tool state when the durable plan endpoint has no snapshot yet", async () => {
+    const planResult = JSON.stringify({
+      version: 1,
+      updated_at: "2026-05-28T10:42:23Z",
+      steps: [
+        { text: "查询北京天气", status: "completed" },
+        { text: "分析 Bittensor 趋势", status: "in_progress" },
+        { text: "研究 Affine 子网现状", status: "pending" },
+      ],
+    });
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{
+            id: "plan-tool-only",
+            active: true,
+            durable: true,
+            topic_user_message: "multi-step research",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+            has_plan: false,
+          }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/plan-tool-only/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "plan-tool-only",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "multi-step research" } },
+            {
+              id: 3,
+              type: "tool.request",
+              data: { turn_id: "t1", call_id: "plan-1", tool: "plan", args: { action: "set" }, args_truncated: false },
+            },
+            {
+              id: 4,
+              type: "tool.result",
+              data: { turn_id: "t1", call_id: "plan-1", exit_code: 0, result_summary: planResult, result: planResult, result_truncated: false },
+            },
+            { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+          ],
+          next_after: 5,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/plan-tool-only/plan") return jsonResponse({ error: { message: "no plan" } }, 404);
+      if (url === "/v1/sessions/plan-tool-only/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-plan-panel");
+    expect(panel).toHaveTextContent("1/3 complete");
+    expect(panel).toHaveTextContent("Step 2 active");
+    expect(panel).toHaveTextContent("查询北京天气");
+    expect(panel).toHaveTextContent("分析 Bittensor 趋势");
+    expect(panel).toHaveTextContent("研究 Affine 子网现状");
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/plan-tool-only/plan", expect.anything()));
+  });
+
   it("starts loop activation as a draft before sending the refinement turn", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
