@@ -23,6 +23,7 @@ import {
   readSkill,
   removeSessionMemory,
   replaceSessionMemory,
+  runSessionCommand,
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
@@ -37,6 +38,7 @@ import {
   type SessionMemoryReplaceRequest,
   type SessionPlanSummary,
   type SessionContextSummary,
+  type SessionCommandRequest,
   type SessionSkillInfo,
   type SessionSkillInstallRequest,
   type SessionSummary,
@@ -79,7 +81,7 @@ import { buildSessionRows, formatLoadingChatTitle, isGenericChatTitle, summarize
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
-import { buildSessionRun } from "./view/sessionRun";
+import { buildSessionRun, manualRunDraft } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
 import { buildSessionTrace } from "./view/sessionTrace";
@@ -187,6 +189,7 @@ export function App() {
   const [liveConnectTick, setLiveConnectTick] = useState(0);
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
+  const [runCommandBusy, setRunCommandBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [loopProtocolBusy, setLoopProtocolBusy] = useState(false);
   const [scheduleBusy, setScheduleBusy] = useState<"loop" | "checkin" | "daily" | undefined>();
@@ -1493,8 +1496,26 @@ export function App() {
     setComposerDraft((current) => ({ id: (current?.id ?? 0) + 1, content, source }));
   }
 
-  async function handleRunCommandRequest(content: string) {
-    await handleSend(content);
+  async function handleRunCommandRequest(request: SessionCommandRequest) {
+    if (!selectedSessionId) {
+      handleUseAsDraft(manualRunDraft(request.command, request.cwd), "run_command");
+      return;
+    }
+    setRunCommandBusy(true);
+    setStatus({ state: "loading", label: "Running command", detail: request.command });
+    try {
+      const resp = await runSessionCommand(client, selectedSessionId, request);
+      await loadHistory(selectedSessionId);
+      setStatus({
+        state: resp.exit_code === 0 ? "connected" : "error",
+        label: resp.exit_code === 0 ? "Command finished" : "Command failed",
+        detail: `exit ${resp.exit_code}`,
+      });
+    } catch (err) {
+      setStatus({ state: "error", label: "Command failed", detail: formatError(err) });
+    } finally {
+      setRunCommandBusy(false);
+    }
   }
 
   async function handleExecutePlanStep(opts: { runRemaining?: boolean } = {}) {
@@ -1815,7 +1836,7 @@ export function App() {
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onRunCommand={handleRunCommandRequest}
-          runCommandBusy={actionBusy}
+          runCommandBusy={runCommandBusy}
           onUseAsDraft={handleUseAsDraft}
         />
       );

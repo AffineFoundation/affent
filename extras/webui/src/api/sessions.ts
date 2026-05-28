@@ -371,6 +371,23 @@ export interface SessionSkillInstallRequest {
   required_tools?: string[];
 }
 
+export interface SessionCommandRequest {
+  command: string;
+  cwd?: string;
+  timeout_sec?: number;
+}
+
+export interface SessionCommandResponse {
+  session_id: string;
+  turn_id: string;
+  call_id: string;
+  exit_code: number;
+  result: string;
+  duration_ms?: number;
+  workspace?: string;
+  completed_at: string;
+}
+
 export interface SessionCapabilities {
   eval_mode: boolean;
   eval_tools?: string;
@@ -757,6 +774,19 @@ export function sendSessionMessage(
   signal?: AbortSignal,
 ): Promise<SessionMessageResponse> {
   return client.json<SessionMessageResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export function runSessionCommand(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionCommandRequest,
+  signal?: AbortSignal,
+): Promise<SessionCommandResponse> {
+  return client.json<SessionCommandResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/commands`, {
     method: "POST",
     body,
     signal,

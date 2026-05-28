@@ -161,6 +161,7 @@ func TestNewRouter_RegistersExpectedRoutes(t *testing.T) {
 		{http.MethodGet, "/v1/sessions/abc/tools"},
 		{http.MethodGet, "/v1/sessions/abc/transcripts"},
 		{http.MethodPost, "/v1/sessions/abc/messages"},
+		{http.MethodPost, "/v1/sessions/abc/commands"},
 		{http.MethodPost, "/v1/sessions/abc/cancel"},
 		{http.MethodDelete, "/v1/sessions/abc"},
 		{http.MethodGet, "/v1/stats"},

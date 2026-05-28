@@ -1565,6 +1565,14 @@ func TestSessionPool_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *te
 	if !strings.Contains(msgs[0].Content, s.workspace) {
 		t.Fatalf("eval-mode workspace prompt should mention actual workspace when workspace tools are registered:\n%s", msgs[0].Content)
 	}
+	if strings.Contains(msgs[0].Content, "Use this exact path") {
+		t.Fatalf("workspace prompt should not steer agents toward absolute paths:\n%s", msgs[0].Content)
+	}
+	for _, want := range []string{"Commands and workspace tools start there by default", "prefer relative paths", "omit cwd"} {
+		if !strings.Contains(msgs[0].Content, want) {
+			t.Fatalf("workspace prompt missing %q:\n%s", want, msgs[0].Content)
+		}
+	}
 	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode prompt should not include unregistered %q guidance:\n%s", forbidden, msgs[0].Content)

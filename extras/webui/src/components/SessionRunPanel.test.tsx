@@ -99,7 +99,7 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-panel")).not.toHaveAttribute("open");
   });
 
-  it("can ask Affent to rerun or run a command immediately", async () => {
+  it("can run a command immediately or keep it as a draft", async () => {
     const user = userEvent.setup();
     const onRunCommand = vi.fn().mockResolvedValue(undefined);
     const onUseAsDraft = vi.fn();
@@ -107,20 +107,13 @@ describe("SessionRunPanel", () => {
 
     const focus = screen.getByTestId("session-run-focus");
     await user.click(within(focus).getByRole("button", { name: "Rerun now" }));
-    expect(onRunCommand).toHaveBeenCalledWith(expect.stringContaining("Rerun this command in the session workspace now"));
-    expect(onRunCommand).toHaveBeenCalledWith(expect.stringContaining("Run evidence for npm test -- checkout.spec.ts"));
+    expect(onRunCommand).toHaveBeenCalledWith({ command: "npm test -- checkout.spec.ts", cwd: "extras/webui" });
 
     await user.type(screen.getByLabelText("Command"), "npm test -- checkout.spec.ts");
     await user.type(screen.getByLabelText("Working directory"), "extras/webui");
-    await user.click(screen.getByRole("button", { name: "Ask Affent to run" }));
+    await user.click(screen.getByRole("button", { name: "Run now" }));
 
-    expect(onRunCommand).toHaveBeenCalledWith(
-      [
-        "Run this command in the session workspace, then report the exit code, working directory, and relevant output:",
-        "npm test -- checkout.spec.ts",
-        "Working directory: extras/webui",
-      ].join("\n"),
-    );
+    expect(onRunCommand).toHaveBeenCalledWith({ command: "npm test -- checkout.spec.ts", cwd: "extras/webui" });
     expect(screen.getByLabelText("Command")).toHaveValue("");
 
     await user.type(screen.getByLabelText("Command"), "npm run build");

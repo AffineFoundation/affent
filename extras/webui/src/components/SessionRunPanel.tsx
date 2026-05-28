@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import type { UseAsDraft } from "../view/draftSource";
-import { manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runCommandRequest, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
+import { manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta, runCommandRequest, type RunCommandExecutionRequest, type SessionRunCommand, type SessionRunView } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 
-export type RunCommandAction = (content: string) => Promise<void> | void;
+export type RunCommandAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
 
 export function SessionRunPanel({
   run,
@@ -31,13 +31,12 @@ export function SessionRunPanel({
     event.preventDefault();
     const command = manualCommand.trim();
     if (!command) return;
-    const request = manualRunDraft(command, manualCwd);
     if (onRunCommand) {
-      await onRunCommand(request);
+      await onRunCommand({ command, cwd: manualCwd.trim() || undefined });
       setManualCommand("");
       return;
     }
-    onUseAsDraft?.(request, "run_command");
+    onUseAsDraft?.(manualRunDraft(command, manualCwd), "run_command");
   }
 
   return (
@@ -113,7 +112,7 @@ export function SessionRunPanel({
           <form className="session-run-manual" data-testid="session-run-manual" onSubmit={handleManualSubmit}>
             <div className="session-run-manual-head">
               <strong>Run command</strong>
-              <span>Ask Affent</span>
+              <span>Session workspace</span>
             </div>
             <label>
               <span>Command</span>
@@ -133,7 +132,7 @@ export function SessionRunPanel({
             </label>
             <div className="session-run-manual-actions">
               <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
-                {onRunCommand ? "Ask Affent to run" : "Use command as draft"}
+                {onRunCommand ? "Run now" : "Use command as draft"}
               </button>
               {onRunCommand && onUseAsDraft ? (
                 <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>

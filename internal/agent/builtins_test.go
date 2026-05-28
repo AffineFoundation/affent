@@ -985,10 +985,11 @@ func TestShellToolSchemaPublishesInputCaps(t *testing.T) {
 	tool := shellTool(BuiltinDeps{Executor: &recordingExec{}})
 	var schema struct {
 		Properties map[string]struct {
-			MinLength int `json:"minLength"`
-			MaxLength int `json:"maxLength"`
-			Maximum   int `json:"maximum"`
-			Default   int `json:"default"`
+			MinLength   int    `json:"minLength"`
+			MaxLength   int    `json:"maxLength"`
+			Maximum     int    `json:"maximum"`
+			Default     int    `json:"default"`
+			Description string `json:"description"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
@@ -1002,6 +1003,13 @@ func TestShellToolSchemaPublishesInputCaps(t *testing.T) {
 	}
 	if schema.Properties["cwd"].MaxLength != maxShellCwdBytes {
 		t.Fatalf("cwd maxLength = %d, want %d", schema.Properties["cwd"].MaxLength, maxShellCwdBytes)
+	}
+	if !strings.Contains(schema.Properties["cwd"].Description, "defaults to the session workspace") ||
+		!strings.Contains(schema.Properties["cwd"].Description, "Prefer relative paths") {
+		t.Fatalf("cwd description should explain workspace-relative defaults: %q", schema.Properties["cwd"].Description)
+	}
+	if !strings.Contains(tool.Description, "from the session workspace by default") {
+		t.Fatalf("shell description should explain default cwd: %q", tool.Description)
 	}
 	if schema.Properties["timeout_sec"].Maximum != maxShellTimeoutSec {
 		t.Fatalf("timeout maximum = %d, want %d", schema.Properties["timeout_sec"].Maximum, maxShellTimeoutSec)

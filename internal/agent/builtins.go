@@ -498,7 +498,7 @@ func shellTool(deps BuiltinDeps) *Tool {
         "required": ["command"],
         "properties": {
             "command": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Command to run."},
-            "cwd": {"type": "string", "maxLength": %d, "description": "Working directory."},
+            "cwd": {"type": "string", "maxLength": %d, "description": "Working directory. Optional; defaults to the session workspace. Prefer relative paths inside the workspace; omit cwd for workspace-root commands."},
             "timeout_sec": {"type": "integer", "minimum": 1, "maximum": %d, "default": %d, "description": "Timeout seconds; default %d, max %d."}
         }
     }`, maxShellCommandBytes, maxShellCwdBytes, maxShellTimeoutSec, defaultShellTimeoutSec, defaultShellTimeoutSec, maxShellTimeoutSec))
@@ -512,7 +512,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 	verifyIndicators = append(verifyIndicators, deps.ExtraVerificationIndicators...)
 	return &Tool{
 		Name:        "shell",
-		Description: "Run one Linux shell command for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Large stdout/stderr streams are capped; redirect huge logs to files and inspect chunks. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
+		Description: "Run one Linux shell command from the session workspace by default for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Large stdout/stderr streams are capped; redirect huge logs to files and inspect chunks. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, err := decodeBuiltinToolArgs[struct {

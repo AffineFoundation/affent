@@ -15,6 +15,11 @@ export interface SessionRunCommand {
   artifactPath?: string;
 }
 
+export interface RunCommandExecutionRequest {
+  command: string;
+  cwd?: string;
+}
+
 export interface SessionRunView {
   commands: SessionRunCommand[];
   latestCommandCwd?: string;
@@ -91,14 +96,11 @@ export function runCommandDraft(command: SessionRunCommand): string {
   return lines.join("\n");
 }
 
-export function runCommandRequest(command: SessionRunCommand): string {
-  const lines = [
-    "Rerun this command in the session workspace now, then report the exit code, working directory, and relevant output:",
-    command.command,
-    "",
-    runCommandEvidenceText(command),
-  ];
-  return lines.join("\n");
+export function runCommandRequest(command: SessionRunCommand): RunCommandExecutionRequest {
+  return {
+    command: command.command,
+    cwd: command.cwd,
+  };
 }
 
 export function manualRunDraft(command: string, cwd?: string): string {

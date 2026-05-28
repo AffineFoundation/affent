@@ -785,8 +785,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// shape as affentctl. Gated on the actual registry because without
 		// workspace tools the anchor is irrelevant — the model has
 		// nothing that consumes a workspace path.
-		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
-			"\". Use this exact path (or a relative path inside it) with registered workspace tools."
+		systemPrompt += "\n\nWorkspace: \"" + workspace +
+			"\". Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed. Use the absolute workspace path only when a tool explicitly requires it or when reporting the workspace binding."
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)

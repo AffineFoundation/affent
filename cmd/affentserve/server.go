@@ -43,6 +43,7 @@ import (
 //	GET    /v1/sessions/{id}/artifacts
 //	GET    /v1/sessions/{id}/artifacts/{path...}
 //	POST   /v1/sessions/{id}/messages
+//	POST   /v1/sessions/{id}/commands
 //	POST   /v1/sessions/{id}/cancel
 //	DELETE /v1/sessions/{id}
 //
@@ -93,6 +94,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
 //	POST   /v1/sessions/{id}/messages → start async user turn
+//	POST   /v1/sessions/{id}/commands → run a workspace command from Workbench
 //	POST   /v1/sessions/{id}/cancel  → cancel active turn
 //	DELETE /v1/sessions/{id}         → close + remove
 func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
@@ -143,6 +145,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionArtifacts(pool, sessionID, strings.TrimPrefix(sub, "artifacts"), w, r)
 		case sub == "messages" && r.Method == http.MethodPost:
 			handleSessionMessage(pool, sessionID, w, r)
+		case sub == "commands" && r.Method == http.MethodPost:
+			handleSessionCommand(pool, sessionID, w, r)
 		case sub == "cancel" && r.Method == http.MethodPost:
 			handleSessionCancel(pool, sessionID, w, r)
 		case sub == "" && r.Method == http.MethodDelete:

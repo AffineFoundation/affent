@@ -17,6 +17,7 @@ import {
   readSkill,
   removeSessionMemory,
   replaceSessionMemory,
+  runSessionCommand,
   sendSessionMessage,
   sessionArtifactPath,
   streamSessionEvents,
@@ -57,6 +58,7 @@ describe("session API helpers", () => {
 
     await createSession(client, { session_id: "s1" });
     await sendSessionMessage(client, "s1", { content: "hello" });
+    await runSessionCommand(client, "s1", { command: "npm test", cwd: "extras/webui" });
     await cancelSessionTurn(client, "s1");
     await deleteSession(client, "s/1");
     await updateSessionLoopProtocol(client, "s/1", { protocol: "# Loop" });
@@ -74,42 +76,45 @@ describe("session API helpers", () => {
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).body).toBe(JSON.stringify({ content: "hello" }));
+    expect(fetchImpl.mock.calls[2][0]).toBe("/v1/sessions/s1/commands");
     expect((fetchImpl.mock.calls[2][1] as RequestInit).method).toBe("POST");
-    expect(fetchImpl.mock.calls[3][0]).toBe("/v1/sessions/s%2F1");
-    expect((fetchImpl.mock.calls[3][1] as RequestInit).method).toBe("DELETE");
-    expect(fetchImpl.mock.calls[4][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
-    expect((fetchImpl.mock.calls[4][1] as RequestInit).method).toBe("POST");
-    expect((fetchImpl.mock.calls[4][1] as RequestInit).body).toBe(JSON.stringify({ protocol: "# Loop" }));
+    expect((fetchImpl.mock.calls[2][1] as RequestInit).body).toBe(JSON.stringify({ command: "npm test", cwd: "extras/webui" }));
+    expect((fetchImpl.mock.calls[3][1] as RequestInit).method).toBe("POST");
+    expect(fetchImpl.mock.calls[4][0]).toBe("/v1/sessions/s%2F1");
+    expect((fetchImpl.mock.calls[4][1] as RequestInit).method).toBe("DELETE");
     expect(fetchImpl.mock.calls[5][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
     expect((fetchImpl.mock.calls[5][1] as RequestInit).method).toBe("POST");
-    expect((fetchImpl.mock.calls[5][1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long run" }));
+    expect((fetchImpl.mock.calls[5][1] as RequestInit).body).toBe(JSON.stringify({ protocol: "# Loop" }));
     expect(fetchImpl.mock.calls[6][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
-    expect((fetchImpl.mock.calls[6][1] as RequestInit).method).toBe("DELETE");
-    expect(fetchImpl.mock.calls[7][0]).toBe("/v1/sessions/s%2F1/schedules/sched%2F1");
-    expect((fetchImpl.mock.calls[7][1] as RequestInit).method).toBe("PATCH");
-    expect((fetchImpl.mock.calls[7][1] as RequestInit).body).toBe(JSON.stringify({ enabled: false }));
-    expect(fetchImpl.mock.calls[8][0]).toBe("/v1/sessions/s%2F1/memory");
-    expect((fetchImpl.mock.calls[8][1] as RequestInit).method).toBe("POST");
-    expect((fetchImpl.mock.calls[8][1] as RequestInit).body).toBe(JSON.stringify({ target: "memory", topic: "research", content: "remember this" }));
+    expect((fetchImpl.mock.calls[6][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[6][1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long run" }));
+    expect(fetchImpl.mock.calls[7][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
+    expect((fetchImpl.mock.calls[7][1] as RequestInit).method).toBe("DELETE");
+    expect(fetchImpl.mock.calls[8][0]).toBe("/v1/sessions/s%2F1/schedules/sched%2F1");
+    expect((fetchImpl.mock.calls[8][1] as RequestInit).method).toBe("PATCH");
+    expect((fetchImpl.mock.calls[8][1] as RequestInit).body).toBe(JSON.stringify({ enabled: false }));
     expect(fetchImpl.mock.calls[9][0]).toBe("/v1/sessions/s%2F1/memory");
     expect((fetchImpl.mock.calls[9][1] as RequestInit).method).toBe("POST");
-    expect((fetchImpl.mock.calls[9][1] as RequestInit).body).toBe(JSON.stringify({ action: "remove", target: "memory", topic: "research", old_text: "remember this" }));
+    expect((fetchImpl.mock.calls[9][1] as RequestInit).body).toBe(JSON.stringify({ target: "memory", topic: "research", content: "remember this" }));
     expect(fetchImpl.mock.calls[10][0]).toBe("/v1/sessions/s%2F1/memory");
     expect((fetchImpl.mock.calls[10][1] as RequestInit).method).toBe("POST");
-    expect((fetchImpl.mock.calls[10][1] as RequestInit).body).toBe(JSON.stringify({
+    expect((fetchImpl.mock.calls[10][1] as RequestInit).body).toBe(JSON.stringify({ action: "remove", target: "memory", topic: "research", old_text: "remember this" }));
+    expect(fetchImpl.mock.calls[11][0]).toBe("/v1/sessions/s%2F1/memory");
+    expect((fetchImpl.mock.calls[11][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[11][1] as RequestInit).body).toBe(JSON.stringify({
       action: "replace",
       target: "memory",
       topic: "research",
       old_text: "remember this",
       new_content: "remember this updated",
     }));
-    expect(fetchImpl.mock.calls[11][0]).toBe("/v1/skills");
-    expect(fetchImpl.mock.calls[12][0]).toBe("/v1/skills/skill%2F1");
-    expect(fetchImpl.mock.calls[13][0]).toBe("/v1/skills");
-    expect((fetchImpl.mock.calls[13][1] as RequestInit).method).toBe("POST");
-    expect((fetchImpl.mock.calls[13][1] as RequestInit).body).toBe(JSON.stringify({ name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" }));
-    expect(fetchImpl.mock.calls[14][0]).toBe("/v1/skills/skill%2F1");
-    expect((fetchImpl.mock.calls[14][1] as RequestInit).method).toBe("DELETE");
+    expect(fetchImpl.mock.calls[12][0]).toBe("/v1/skills");
+    expect(fetchImpl.mock.calls[13][0]).toBe("/v1/skills/skill%2F1");
+    expect(fetchImpl.mock.calls[14][0]).toBe("/v1/skills");
+    expect((fetchImpl.mock.calls[14][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[14][1] as RequestInit).body).toBe(JSON.stringify({ name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" }));
+    expect(fetchImpl.mock.calls[15][0]).toBe("/v1/skills/skill%2F1");
+    expect((fetchImpl.mock.calls[15][1] as RequestInit).method).toBe("DELETE");
   });
 
   it("streams native affent session events", async () => {
