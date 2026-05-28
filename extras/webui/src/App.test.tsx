@@ -17,6 +17,7 @@ describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     window.localStorage.clear();
+    window.history.replaceState(null, "", "/");
     document.documentElement.removeAttribute("data-theme");
   });
 
@@ -142,6 +143,7 @@ describe("App", () => {
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
 
     await user.click(screen.getByRole("button", { name: /Open latest chat/ }));
+    expect(window.location.search).toBe("?sessionId=s1");
 
     const context = await screen.findByTestId("chat-context-bar");
     expect(context).toHaveTextContent("Result ready");
@@ -164,6 +166,66 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
     expect(screen.queryByTestId("session-strip")).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
+  });
+
+  it("opens a saved session directly from the sessionId URL parameter", async () => {
+    window.history.replaceState(null, "", "/?sessionId=saved-2");
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "s1",
+              active: true,
+              durable: true,
+              topic_user_message: "active work",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+            {
+              id: "saved-2",
+              active: false,
+              durable: true,
+              topic_user_message: "linked browser session",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/saved-2/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "saved-2",
+          events: completedTurn,
+          next_after: 11,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "s1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-2/history?after=-1&limit=500", expect.anything()));
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/history?after=-1&limit=500", expect.anything());
+    expect(await screen.findByText("There are two files.")).toBeVisible();
+    const sessionList = screen.getByTestId("session-list");
+    expect(sessionList).toHaveTextContent("list the files");
+    expect(within(sessionList).getByRole("button", { name: /list the files/i })).toHaveAttribute("aria-current", "true");
+    expect(window.location.search).toBe("?sessionId=saved-2");
   });
 
   it("keeps internal session ids out of the latest-chat shortcut", async () => {

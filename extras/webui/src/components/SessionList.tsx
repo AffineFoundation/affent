@@ -215,6 +215,7 @@ export function SessionList({
                     className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
                     data-tone={row.tone}
                     data-preview={shouldPinRowPreview(row.tone, isSelected) ? "pinned" : "hover"}
+                    aria-current={isSelected ? "true" : undefined}
                     aria-describedby={previewId}
                     onClick={() => onSelect(row.id)}
                   >

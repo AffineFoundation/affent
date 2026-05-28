@@ -146,6 +146,8 @@ const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
 const themeStorageKey = "affent.theme";
+const sessionUrlParam = "sessionId";
+const legacySessionUrlParam = "session";
 
 // The shell stays deliberately thin: transport helpers own HTTP details,
 // the reducer owns event interpretation, and UI components receive stable
@@ -159,7 +161,8 @@ export function App() {
     label: "Connecting",
   });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
+  const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>(() => sessionIdFromCurrentUrl());
+  const [sessionIndexReady, setSessionIndexReady] = useState(false);
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -188,6 +191,7 @@ export function App() {
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const [artifact, setArtifact] = useState<ArtifactViewerState>({ state: "idle" });
   const sendInFlightRef = useRef(false);
+  const initialUrlSessionIdRef = useRef(selectedSessionId);
   const sendFailedRef = useRef(false);
   const streamClosedRef = useRef(false);
   const streamSessionIdRef = useRef<string | undefined>(undefined);
@@ -200,6 +204,10 @@ export function App() {
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+
+  useEffect(() => {
+    syncSessionIdToUrl(selectedSessionId);
+  }, [selectedSessionId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -657,16 +665,16 @@ export function App() {
         const resp = await listSessions(client, { limit: 100, signal: ac.signal });
         if (ac.signal.aborted) return;
         setSessions(resp.sessions);
-        const next = resp.sessions.find((s) => s.active)?.id;
-        const nextSelected = (current: string | undefined) =>
-          current && resp.sessions.some((s) => s.id === current) ? current : next;
-        setSelectedSessionId(nextSelected);
-        setSession(initialSessionState());
-        if (next) {
+        const requestedSessionId = initialUrlSessionIdRef.current;
+        const activeSessionId = resp.sessions.find((s) => s.active)?.id;
+        const nextSelected = requestedSessionId ?? activeSessionId;
+        setSelectedSessionId((current) => current ?? nextSelected);
+        if (!requestedSessionId) setSession(initialSessionState());
+        if (nextSelected) {
           setStatus({
             state: "loading",
             label: "Loading chat",
-            detail: loadingSessionDetail(next, resp.sessions),
+            detail: loadingSessionDetail(nextSelected, resp.sessions),
           });
         } else {
           setStatus({
@@ -675,11 +683,13 @@ export function App() {
             detail: sessionListDetail(resp.sessions),
           });
         }
+        setSessionIndexReady(true);
       } catch (err) {
         if (isAbortError(err)) return;
         setSessions([]);
         setSelectedSessionId(undefined);
         setSession(initialSessionState());
+        setSessionIndexReady(true);
         setStatus({
           state: "demo",
           label: "Preview",
@@ -738,6 +748,7 @@ export function App() {
 
   useEffect(() => {
     if (!selectedSessionId || demoActive) return;
+    if (!sessionIndexReady) return;
     const liveSessionId = selectedSessionId;
     const ac = new AbortController();
     async function connectLive() {
@@ -784,7 +795,7 @@ export function App() {
       ac.abort();
       if (streamSessionIdRef.current === liveSessionId) streamSessionIdRef.current = undefined;
     };
-  }, [client, demoActive, loadHistory, selectedSessionActive, selectedSessionId]);
+  }, [client, demoActive, loadHistory, selectedSessionActive, selectedSessionId, sessionIndexReady]);
 
   function resetSessionSurface(nextSessionId: string, opts?: { preserveSession?: boolean }) {
     if (nextSessionId === selectedSessionId) return;
@@ -1774,6 +1785,37 @@ function initialTheme(): ThemeMode {
     return "light";
   }
   return "light";
+}
+
+function sessionIdFromCurrentUrl(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get(sessionUrlParam)?.trim() || params.get(legacySessionUrlParam)?.trim();
+    return sessionId || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function syncSessionIdToUrl(sessionId?: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    const current = url.searchParams.get(sessionUrlParam) || url.searchParams.get(legacySessionUrlParam) || undefined;
+    if (sessionId) {
+      if (current === sessionId && !url.searchParams.has(legacySessionUrlParam)) return;
+      url.searchParams.set(sessionUrlParam, sessionId);
+      url.searchParams.delete(legacySessionUrlParam);
+    } else {
+      if (!current && !url.searchParams.has(sessionUrlParam) && !url.searchParams.has(legacySessionUrlParam)) return;
+      url.searchParams.delete(sessionUrlParam);
+      url.searchParams.delete(legacySessionUrlParam);
+    }
+    window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // URL sync is convenience only; loading and sending should keep working.
+  }
 }
 
 function latestChatMeta(updated: string): string | undefined {
