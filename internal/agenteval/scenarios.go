@@ -2935,6 +2935,106 @@ func TestClampAboveRange(t *testing.T) {
 	}
 }
 
+func longRunCodeSourceRepoCommitPushScenario() BatchScenario {
+	return BatchScenario{
+		Name:          "longrun-code-source-repo-modify-push-local-remote",
+		Suites:        []string{longRunSuite},
+		Domains:       []string{codePRDomain},
+		Prompt:        "The eval runner has already checked out the source repository in app from a fixed local remote. Enter app, run go test ./... to reproduce the failure, fix only greet/greet.go, and do not modify tests. After the fix, run go test ./... again, create a git commit, push it to origin main, and leave app with a clean git status. The final answer must include the source checkout directory, the test command, the changed file, the commit hash, and the push result.",
+		SourceRepoURL: "remote.git",
+		SourceRepoRef: "main",
+		SourceRepoDir: "app",
+		Files: map[string]string{
+			"README.md": `# Source Repo Eval
+
+The source repository is prepared by affenteval before the agent turn starts.
+`,
+			"seed/go.mod": `module example.com/greet
+
+go 1.22
+`,
+			"seed/greet/greet.go": `package greet
+
+func Message(name string) string {
+	if name == "" {
+		return "hello, "
+	}
+	return "hello, " + name
+}
+`,
+			"seed/greet/greet_test.go": `package greet
+
+import "testing"
+
+func TestMessageUsesGuestFallback(t *testing.T) {
+	if got := Message(""); got != "hello, guest" {
+		t.Fatalf("Message empty = %q, want guest fallback", got)
+	}
+}
+
+func TestMessageUsesName(t *testing.T) {
+	if got := Message("Affent"); got != "hello, Affent" {
+		t.Fatalf("Message name = %q", got)
+	}
+}
+`,
+		},
+		SetupCommands: []string{
+			"(cd seed && git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial) && git clone --bare seed remote.git && rm -rf seed",
+		},
+		VerifyCommand: shellAnd(
+			`test -d app/.git`,
+			`test ! -d seed`,
+			`cd app`,
+			`go test ./...`,
+			`test -z "$(git status --porcelain)"`,
+			`test "$(git log -1 --format=%s)" != "initial"`,
+			`test "$(git diff --name-only HEAD~1..HEAD)" = "greet/greet.go"`,
+			`git ls-remote --heads origin main | grep -q "$(git rev-parse HEAD)"`,
+		),
+		ExpectedSkill: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{
+			`go test`,
+			`git commit`,
+			`git push`,
+		},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
+		RequiredTools: []string{"read_file", "edit_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "app/greet/greet.go"},
+			{Tool: "edit_file", Arg: "path", Substring: "app/greet/greet.go"},
+		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git commit`, Tool: "edit_file"},
+			{Command: `git push`, Tool: "edit_file"},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "edit_file"},
+		},
+		RequiredFileSubstrings: map[string][]string{
+			"app/greet/greet.go": {
+				"hello, guest",
+			},
+		},
+		RequiredFinalText: []string{
+			"app",
+			"go test ./...",
+			"greet/greet.go",
+			"commit",
+			"push",
+		},
+		ForbiddenCommands: defaultForbiddenCommands,
+		ProtectedFiles:    []string{"app/greet/greet_test.go"},
+		MaxTurns:          18,
+	}
+}
+
 func longRunScratchProjectLoopPushScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-scratch-project-loop-push",

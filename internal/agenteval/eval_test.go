@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -1024,6 +1025,63 @@ func TestBatchRunnerRunsSetupBeforeProtectedSnapshot(t *testing.T) {
 	}
 }
 
+func TestBatchRunnerPreparesSourceRepoAfterSetup(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skipf("git not available: %v", err)
+	}
+	workspace := t.TempDir()
+	runner := BatchRunner{RepoRoot: t.TempDir()}
+	if err := writeScenarioFiles(workspace, map[string]string{
+		"seed/go.mod": "module example.com/source\n\ngo 1.22\n",
+		"seed/source/source.go": `package source
+
+func Marker() string { return "seed" }
+`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	setup := runner.runVerifier(context.Background(), workspace, runner.RepoRoot, "(cd seed && git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial) && git clone --bare seed remote.git && rm -rf seed")
+	if setup.Err != nil {
+		t.Fatalf("setup source repo: %v\n%s", setup.Err, setup.Output)
+	}
+	if err := runner.prepareScenarioSourceRepo(context.Background(), workspace, runner.RepoRoot, BatchScenario{
+		SourceRepoURL: "remote.git",
+		SourceRepoRef: "main",
+		SourceRepoDir: "app",
+	}); err != nil {
+		t.Fatalf("prepare source repo: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "app", ".git")); err != nil {
+		t.Fatalf("cloned app git dir missing: %v", err)
+	}
+	raw, err := os.ReadFile(filepath.Join(workspace, "app", "source", "source.go"))
+	if err != nil {
+		t.Fatalf("read cloned source: %v", err)
+	}
+	if !strings.Contains(string(raw), `return "seed"`) {
+		t.Fatalf("cloned source = %q", string(raw))
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "seed")); !os.IsNotExist(err) {
+		t.Fatalf("seed checkout should have been removed before source clone, stat err=%v", err)
+	}
+}
+
+func TestBatchRunnerRejectsUnsafeSourceRepoDir(t *testing.T) {
+	for _, dir := range []string{".", "..", "../app", "/tmp/app"} {
+		if got, err := cleanScenarioSourceRepoDir(dir); err == nil {
+			t.Fatalf("cleanScenarioSourceRepoDir(%q) = %q, want error", dir, got)
+		}
+	}
+	got, err := cleanScenarioSourceRepoDir("")
+	if err != nil || got != "repo" {
+		t.Fatalf("empty source repo dir = %q err=%v, want repo", got, err)
+	}
+	got, err = cleanScenarioSourceRepoDir("nested/app")
+	if err != nil || got != "nested/app" {
+		t.Fatalf("nested source repo dir = %q err=%v, want nested/app", got, err)
+	}
+}
+
 func TestBatchRunnerReportsSetupCommandFailure(t *testing.T) {
 	runner := BatchRunner{
 		RepoRoot: t.TempDir(),
@@ -1618,8 +1676,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 23 {
-		t.Fatalf("long-run suite size = %d, want 23", len(scenarios))
+	if len(scenarios) != 24 {
+		t.Fatalf("long-run suite size = %d, want 24", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -1848,6 +1906,58 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(clonePush.Domains, codePRDomain) {
 		t.Fatalf("clone/push Domains = %#v, want code_pr", clonePush.Domains)
+	}
+
+	sourceRepo, ok := seen["longrun-code-source-repo-modify-push-local-remote"]
+	if !ok {
+		t.Fatalf("long-run suite missing source repo checkout scenario")
+	}
+	if sourceRepo.SourceRepoURL != "remote.git" || sourceRepo.SourceRepoRef != "main" || sourceRepo.SourceRepoDir != "app" {
+		t.Fatalf("source repo fields = url:%q ref:%q dir:%q", sourceRepo.SourceRepoURL, sourceRepo.SourceRepoRef, sourceRepo.SourceRepoDir)
+	}
+	if len(sourceRepo.SetupCommands) != 1 ||
+		!strings.Contains(sourceRepo.SetupCommands[0], "git clone --bare seed remote.git") ||
+		!strings.Contains(sourceRepo.SetupCommands[0], "rm -rf seed") {
+		t.Fatalf("source repo SetupCommands = %#v, want seeded local bare remote", sourceRepo.SetupCommands)
+	}
+	for _, want := range []string{"test -d app/.git", "test ! -d seed", "go test ./...", `git diff --name-only HEAD~1..HEAD`, "git ls-remote --heads origin main"} {
+		if !strings.Contains(sourceRepo.VerifyCommand, want) {
+			t.Fatalf("source repo VerifyCommand = %q, want %q", sourceRepo.VerifyCommand, want)
+		}
+	}
+	for _, want := range []string{`go test`, `git commit`, `git push`} {
+		if !stringSliceContains(sourceRepo.RequiredCommands, want) {
+			t.Fatalf("source repo RequiredCommands = %#v, want %q", sourceRepo.RequiredCommands, want)
+		}
+	}
+	if stringSliceContains(sourceRepo.RequiredCommands, `git clone`) {
+		t.Fatalf("source repo scenario should have runner clone before the agent turn, not require agent git clone: %#v", sourceRepo.RequiredCommands)
+	}
+	if sourceRepo.RequiredCommandCounts[`go test`] != 2 {
+		t.Fatalf("source repo RequiredCommandCounts = %#v, want go test=2", sourceRepo.RequiredCommandCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "read_file", Arg: "path", Substring: "app/greet/greet.go"},
+		{Tool: "edit_file", Arg: "path", Substring: "app/greet/greet.go"},
+	} {
+		if !toolArgRequirementContains(sourceRepo.RequiredToolArgContains, want) {
+			t.Fatalf("source repo RequiredToolArgContains = %#v, want %#v", sourceRepo.RequiredToolArgContains, want)
+		}
+	}
+	if got := sourceRepo.RequiredFileSubstrings["app/greet/greet.go"]; !stringSliceContains(got, "hello, guest") {
+		t.Fatalf("source repo RequiredFileSubstrings = %#v, want fixed greeting", sourceRepo.RequiredFileSubstrings)
+	}
+	if !stringSliceContains(sourceRepo.ProtectedFiles, "app/greet/greet_test.go") {
+		t.Fatalf("source repo ProtectedFiles = %#v, want cloned test protection", sourceRepo.ProtectedFiles)
+	}
+	sourceRepoCaps := ScenarioExpectationCapabilityNames(sourceRepo)
+	for _, want := range []string{"source_repo", "workspace", "verifier", "skill"} {
+		if !stringSliceContains(sourceRepoCaps, want) {
+			t.Fatalf("source repo expectation capabilities = %#v, want %q", sourceRepoCaps, want)
+		}
+	}
+	if !stringSliceContains(sourceRepo.Domains, codePRDomain) {
+		t.Fatalf("source repo Domains = %#v, want code_pr", sourceRepo.Domains)
 	}
 
 	scratchProject, ok := seen["longrun-scratch-project-loop-push"]

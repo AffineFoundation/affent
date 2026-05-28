@@ -146,6 +146,9 @@ type BatchScenario struct {
 	EnableLoopProtocol                      bool
 	Files                                   map[string]string
 	SetupCommands                           []string
+	SourceRepoURL                           string
+	SourceRepoRef                           string
+	SourceRepoDir                           string
 	VerifyCommand                           string
 	VerifierTimeout                         time.Duration
 	ExpectedSkill                           string
@@ -366,6 +369,9 @@ type DebugScenarioExpectations struct {
 	EnableLoopProtocol                      bool                                  `json:"enable_loop_protocol,omitempty"`
 	VerifyCommand                           string                                `json:"verify_command,omitempty"`
 	SetupCommands                           []string                              `json:"setup_commands,omitempty"`
+	SourceRepoURL                           string                                `json:"source_repo_url,omitempty"`
+	SourceRepoRef                           string                                `json:"source_repo_ref,omitempty"`
+	SourceRepoDir                           string                                `json:"source_repo_dir,omitempty"`
 	ExpectedSkill                           string                                `json:"expected_skill,omitempty"`
 	RequiredTools                           []string                              `json:"required_tools,omitempty"`
 	ForbiddenTools                          []string                              `json:"forbidden_tools,omitempty"`
@@ -441,6 +447,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if strings.TrimSpace(exp.ExpectedSkill) != "" {
 		caps["skill"] = true
+	}
+	if strings.TrimSpace(exp.SourceRepoURL) != "" {
+		caps["source_repo"] = true
+		caps["workspace"] = true
 	}
 	if exp.VerifyCommand != "" {
 		caps["verifier"] = true
@@ -961,6 +971,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCodePRScenario(),
 		longRunCodeCommitPushScenario(),
 		longRunCodeCloneCommitPushScenario(),
+		longRunCodeSourceRepoCommitPushScenario(),
 		longRunScratchProjectLoopPushScenario(),
 		longRunScratchProjectIterativeLoopPushScenario(),
 		longRunIntegratedMemoryRecoveryScenario(),
@@ -1102,6 +1113,9 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		if setup.Err != nil {
 			return res.fail("setup command failed: %s: %v\n%s", command, setup.Err, trimOneLine(setup.Output, 1200))
 		}
+	}
+	if err := r.prepareScenarioSourceRepo(ctx, workspace, repoRoot, scenario); err != nil {
+		return res.fail("%v", err)
 	}
 	protected, err := readProtectedFiles(workspace, scenario.ProtectedFiles)
 	if err != nil {
@@ -1834,6 +1848,9 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		EnableLoopProtocol:                      s.EnableLoopProtocol,
 		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
 		SetupCommands:                           compactNonEmptyStrings(s.SetupCommands),
+		SourceRepoURL:                           strings.TrimSpace(s.SourceRepoURL),
+		SourceRepoRef:                           strings.TrimSpace(s.SourceRepoRef),
+		SourceRepoDir:                           strings.TrimSpace(s.SourceRepoDir),
 		ExpectedSkill:                           strings.TrimSpace(s.ExpectedSkill),
 		RequiredTools:                           append([]string(nil), s.RequiredTools...),
 		ForbiddenTools:                          append([]string(nil), s.ForbiddenTools...),
@@ -2187,6 +2204,85 @@ func (r BatchRunner) runVerifier(ctx context.Context, workspace, repoRoot, comma
 	err := runEvalCommand(ctx, cmd)
 	output := out.String()
 	stats := out.Stats()
+	result := VerifierResult{
+		Command:            command,
+		Ran:                true,
+		OK:                 err == nil,
+		ExitCode:           exitCodeFromError(err),
+		Duration:           time.Since(start),
+		OutputBytes:        stats.Bytes,
+		OutputTruncated:    stats.Truncated,
+		OutputOmittedBytes: stats.OmittedBytes,
+		OutputCapBytes:     stats.CapBytes,
+	}
+	return verifierRun{Result: result, Output: output, Err: err}
+}
+
+func (r BatchRunner) prepareScenarioSourceRepo(ctx context.Context, workspace, repoRoot string, scenario BatchScenario) error {
+	url := strings.TrimSpace(scenario.SourceRepoURL)
+	if url == "" {
+		return nil
+	}
+	targetRel, err := cleanScenarioSourceRepoDir(scenario.SourceRepoDir)
+	if err != nil {
+		return err
+	}
+	targetPath := filepath.Join(workspace, filepath.FromSlash(targetRel))
+	if _, err := os.Stat(targetPath); err == nil {
+		return fmt.Errorf("source repo target %s already exists", targetRel)
+	} else if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("stat source repo target %s: %w", targetRel, err)
+	}
+	cloneCtx, cloneCancel := context.WithTimeout(ctx, DefaultSetupCommandTimeout)
+	clone := r.runGit(cloneCtx, workspace, repoRoot, "clone", "--", url, targetRel)
+	cloneCancel()
+	if clone.Err != nil {
+		return fmt.Errorf("source repo clone failed: git clone %s %s: %v\n%s", url, targetRel, clone.Err, trimOneLine(clone.Output, 1200))
+	}
+	if ref := strings.TrimSpace(scenario.SourceRepoRef); ref != "" {
+		checkoutCtx, checkoutCancel := context.WithTimeout(ctx, DefaultSetupCommandTimeout)
+		checkout := r.runGit(checkoutCtx, targetPath, repoRoot, "checkout", ref)
+		checkoutCancel()
+		if checkout.Err != nil {
+			return fmt.Errorf("source repo checkout failed: git -C %s checkout %s: %v\n%s", targetRel, ref, checkout.Err, trimOneLine(checkout.Output, 1200))
+		}
+	}
+	return nil
+}
+
+func cleanScenarioSourceRepoDir(dir string) (string, error) {
+	dir = strings.TrimSpace(filepath.ToSlash(dir))
+	if dir == "" {
+		dir = "repo"
+	}
+	if strings.ContainsRune(dir, 0) {
+		return "", errors.New("source repo dir contains NUL")
+	}
+	if strings.HasPrefix(dir, "/") {
+		return "", fmt.Errorf("source repo dir %q must be relative", dir)
+	}
+	clean := filepath.ToSlash(filepath.Clean(filepath.FromSlash(dir)))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("source repo dir %q must stay inside the scenario workspace", dir)
+	}
+	return clean, nil
+}
+
+func (r BatchRunner) runGit(ctx context.Context, dir, repoRoot string, args ...string) verifierRun {
+	cmd := exec.CommandContext(ctx, "git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
+	out := newVerifierOutputBuffer(r.VerifierOutputCapBytes)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	start := time.Now()
+	err := runEvalCommand(ctx, cmd)
+	output := out.String()
+	stats := out.Stats()
+	command := "git"
+	if len(args) > 0 {
+		command += " " + strings.Join(args, " ")
+	}
 	result := VerifierResult{
 		Command:            command,
 		Ran:                true,
