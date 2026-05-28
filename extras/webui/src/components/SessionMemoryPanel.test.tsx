@@ -77,8 +77,9 @@ describe("SessionMemoryPanel", () => {
   it("shows an empty selected-chat state", () => {
     render(<SessionMemoryPanel defaultOpen noSession />);
 
-    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("No chat selected");
-    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Select a chat to inspect stored memory buckets.");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Session memory unavailable");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Open a saved chat before inspecting session memory.");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Open a saved chat to inspect stored memory buckets.");
   });
 
   it("keeps empty memory state factual and avoids unusable search", () => {

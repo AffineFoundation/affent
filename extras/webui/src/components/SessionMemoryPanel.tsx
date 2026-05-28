@@ -37,7 +37,7 @@ export function SessionMemoryPanel({
   const entryCount = buckets.reduce((sum, bucket) => sum + bucket.entry_count, 0);
   const topicCount = memory?.topics?.length ?? 0;
   const summary = noSession
-    ? "No chat selected"
+    ? "Session memory unavailable"
     : loading
       ? "Loading memory"
       : error
@@ -46,7 +46,7 @@ export function SessionMemoryPanel({
           ? `${entryCount} ${entryCount === 1 ? "entry" : "entries"}`
           : "No durable memory";
   const summaryDetail = noSession
-    ? "Select a chat to inspect its stored memory."
+    ? "Open a saved chat before inspecting session memory."
     : loading
       ? "Reading durable buckets."
       : error
@@ -74,7 +74,7 @@ export function SessionMemoryPanel({
             {error}
           </div>
         ) : null}
-        {!loading && !error && noSession ? <div className="session-skills-empty">Select a chat to inspect stored memory buckets.</div> : null}
+        {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
         {!loading && !error && !noSession ? (
           <>
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
