@@ -98,6 +98,42 @@ func TestHandleSessionMemoryAddsDurableMemory(t *testing.T) {
 	}
 }
 
+func TestHandleSessionMemoryRemovesDurableMemory(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	createDurableSessionDir(t, pool, "memory-remove")
+	store := memory.NewFileMemoryStore("")
+	store.MemoryDir = pool.sessionDirPath("memory-remove")
+	if resp, err := store.Add(memory.TargetMemory, "research", "obsolete browser fallback rule"); err != nil || !resp.OK {
+		t.Fatalf("add topic memory: resp=%+v err=%v", resp, err)
+	}
+	if resp, err := store.Add(memory.TargetMemory, "research", "keep current evidence rule"); err != nil || !resp.OK {
+		t.Fatalf("add topic memory: resp=%+v err=%v", resp, err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-remove/memory", bytes.NewBufferString(`{
+		"action": "remove",
+		"target": "memory",
+		"topic": "research",
+		"old_text": "obsolete browser fallback"
+	}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusCreated {
+		t.Fatalf("status = %d, want 201; body=%s", got, w.Body.String())
+	}
+	var out sessionMemoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, w.Body.String())
+	}
+	if !out.HasMemory || len(out.Topics) != 1 || out.Topics[0].EntryCount != 1 {
+		t.Fatalf("memory response = %+v", out)
+	}
+	gotEntries := strings.Join(out.Topics[0].Entries, "\n")
+	if strings.Contains(gotEntries, "obsolete browser fallback") || !strings.Contains(gotEntries, "keep current evidence rule") {
+		t.Fatalf("topic entries after remove = %q", gotEntries)
+	}
+}
+
 func TestHandleSessionMemoryAddRejectsInvalidContent(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	createDurableSessionDir(t, pool, "memory-add-invalid")
@@ -110,6 +146,21 @@ func TestHandleSessionMemoryAddRejectsInvalidContent(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), "content is required") {
 		t.Fatalf("body = %s, want content validation", w.Body.String())
+	}
+}
+
+func TestHandleSessionMemoryRemoveRejectsMissingOldText(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	createDurableSessionDir(t, pool, "memory-remove-invalid")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/memory-remove-invalid/memory", bytes.NewBufferString(`{"action":"remove","target":"memory","topic":"research"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "old_text is required") {
+		t.Fatalf("body = %s, want old_text validation", w.Body.String())
 	}
 }
 

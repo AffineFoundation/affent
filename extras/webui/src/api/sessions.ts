@@ -104,9 +104,17 @@ export interface SessionMemoryResponse {
 }
 
 export interface SessionMemoryAddRequest {
+  action?: "add";
   target?: string;
   topic?: string;
   content: string;
+}
+
+export interface SessionMemoryRemoveRequest {
+  action: "remove";
+  target?: string;
+  topic?: string;
+  old_text: string;
 }
 
 export interface SessionPlanResponse {
@@ -536,6 +544,19 @@ export function addSessionMemory(
   client: ApiClient,
   sessionId: string,
   body: SessionMemoryAddRequest,
+  signal?: AbortSignal,
+): Promise<SessionMemoryResponse> {
+  return client.json<SessionMemoryResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/memory`, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export function removeSessionMemory(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionMemoryRemoveRequest,
   signal?: AbortSignal,
 ): Promise<SessionMemoryResponse> {
   return client.json<SessionMemoryResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/memory`, {

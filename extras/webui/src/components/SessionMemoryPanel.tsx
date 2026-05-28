@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
-import type { SessionMemoryAddRequest, SessionMemoryResponse } from "../api/sessions";
+import type { SessionMemoryAddRequest, SessionMemoryBucket, SessionMemoryRemoveRequest, SessionMemoryResponse } from "../api/sessions";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   memoryActionLabel,
@@ -30,6 +30,7 @@ export function SessionMemoryPanel({
   defaultOpen = false,
   onRefresh,
   onAddMemory,
+  onRemoveMemory,
   onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
@@ -40,6 +41,7 @@ export function SessionMemoryPanel({
   defaultOpen?: boolean;
   onRefresh?: () => Promise<void> | void;
   onAddMemory?: (request: SessionMemoryAddRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
+  onRemoveMemory?: (request: SessionMemoryRemoveRequest) => Promise<SessionMemoryResponse> | SessionMemoryResponse;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
@@ -48,6 +50,7 @@ export function SessionMemoryPanel({
   const [memoryTopic, setMemoryTopic] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
   const [memorySaveState, setMemorySaveState] = useState<{ state: "idle" | "saving" | "saved" | "error"; message?: string }>({ state: "idle" });
+  const [confirmRemoveKey, setConfirmRemoveKey] = useState<string | undefined>();
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const trimmedQuery = query.trim();
   const filtered = useMemo(() => {
@@ -98,6 +101,18 @@ export function SessionMemoryPanel({
     if (!onUseAsDraft) return;
     onUseAsDraft(manualMemoryDraft({ content, target: memoryTarget, topic: memoryTopic }), "memory");
     setMemorySaveState({ state: "saved", message: "Memory draft prepared." });
+  }
+
+  async function handleRemoveMemory(bucket: SessionMemoryBucket, entry: string) {
+    if (!onRemoveMemory) return;
+    setMemorySaveState({ state: "saving" });
+    try {
+      await onRemoveMemory({ action: "remove", target: bucket.target, topic: bucket.topic, old_text: entry });
+      setConfirmRemoveKey(undefined);
+      setMemorySaveState({ state: "saved", message: "Memory removed." });
+    } catch (err) {
+      setMemorySaveState({ state: "error", message: formatPanelError(err) });
+    }
   }
 
   return (
@@ -206,17 +221,48 @@ export function SessionMemoryPanel({
                           <>
                             <div className="session-memory-actions">
                               <CopyButton label="Copy entries" value={bucket.entries.join("\n\n")} className="node-action" />
-                              <CopyButton label="Copy evidence" value={memoryBucketEvidenceText(bucket)} className="node-action" />
+                              <CopyButton label="Copy details" value={memoryBucketEvidenceText(bucket)} className="node-action" />
                               {onUseAsDraft ? (
                                 <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
-                                  Use memory as draft
+                                  Start from memory
                                 </button>
                               ) : null}
                             </div>
                             <ul className="session-memory-entries" data-filtered={matchingEntries.length > 0 ? "true" : "false"}>
-                              {(entriesToShow ?? []).map((entry, index) => (
-                                <li key={`${index}:${entry}`}>{entry}</li>
-                              ))}
+                              {(entriesToShow ?? []).map((entry, index) => {
+                                const entryKey = memoryEntryKey(bucket.target, bucket.topic, entry);
+                                return (
+                                  <li key={`${index}:${entry}`} className="session-memory-entry-row">
+                                    <span>{entry}</span>
+                                    {onRemoveMemory ? (
+                                      confirmRemoveKey === entryKey ? (
+                                        <span className="session-memory-entry-actions" role="group" aria-label={`Confirm remove memory ${index + 1}`}>
+                                          <button type="button" className="ghost-action" disabled={memorySaveState.state === "saving"} onClick={() => setConfirmRemoveKey(undefined)}>
+                                            Cancel
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="ghost-action danger-action"
+                                            disabled={memorySaveState.state === "saving"}
+                                            onClick={() => void handleRemoveMemory(bucket, entry)}
+                                          >
+                                            Confirm remove
+                                          </button>
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="ghost-action danger-action"
+                                          disabled={memorySaveState.state === "saving"}
+                                          onClick={() => setConfirmRemoveKey(entryKey)}
+                                        >
+                                          Remove
+                                        </button>
+                                      )
+                                    ) : null}
+                                  </li>
+                                );
+                              })}
                             </ul>
                           </>
                         ) : (
@@ -230,6 +276,9 @@ export function SessionMemoryPanel({
                 <div className="session-skills-empty">{buckets.length > 0 ? "No matching memory." : "No memory buckets."}</div>
               )}
             </div>
+            {memorySaveState.message && !(onAddMemory || onUseAsDraft) ? (
+              <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
+            ) : null}
             {onAddMemory || onUseAsDraft ? (
               <MemoryDraftForm
                 memoryTarget={memoryTarget}
@@ -313,7 +362,7 @@ function LatestMemoryUpdate({ update, onUseAsDraft }: { update: MemoryUpdateMeta
         <CopyButton label="Copy update evidence" value={memoryUpdateEvidenceText(update)} className="node-action" />
         {onUseAsDraft ? (
           <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryUpdateDraft(update), "memory")}>
-            Use update as draft
+            Review update
           </button>
         ) : null}
       </div>
@@ -325,6 +374,10 @@ function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function memoryEntryKey(target: string, topic: string | undefined, entry: string): string {
+  return `${target}:${topic ?? ""}:${entry}`;
 }
 
 function formatPanelError(err: unknown): string {

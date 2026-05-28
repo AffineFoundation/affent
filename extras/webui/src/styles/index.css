@@ -3542,6 +3542,24 @@ button.workbench-context-runtime-item:focus-visible {
   color: var(--c-error);
 }
 
+.session-memory-entry-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.session-memory-entry-row > span:first-child {
+  min-width: 0;
+}
+
+.session-memory-entry-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
 .session-skills-add-toggle,
 .session-skills-add-submit {
   min-height: 32px;

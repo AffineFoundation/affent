@@ -14,7 +14,7 @@ import (
 )
 
 const sessionMemoryBucketPreviewChars = 180
-const maxSessionMemoryAddBodyBytes = 32 * 1024
+const maxSessionMemoryMutationBodyBytes = 32 * 1024
 
 type sessionMemoryResponse struct {
 	SessionID        string                `json:"session_id"`
@@ -37,10 +37,13 @@ type sessionMemoryBucket struct {
 	Preview    string   `json:"preview,omitempty"`
 }
 
-type sessionMemoryAddRequest struct {
-	Target  string `json:"target"`
-	Topic   string `json:"topic,omitempty"`
-	Content string `json:"content"`
+type sessionMemoryMutationRequest struct {
+	Action     string `json:"action,omitempty"`
+	Target     string `json:"target"`
+	Topic      string `json:"topic,omitempty"`
+	Content    string `json:"content,omitempty"`
+	OldText    string `json:"old_text,omitempty"`
+	NewContent string `json:"new_content,omitempty"`
 }
 
 func handleSessionMemory(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
@@ -53,7 +56,7 @@ func handleSessionMemory(pool *SessionPool, sessionID string, w http.ResponseWri
 		return
 	}
 	if r.Method == http.MethodPost {
-		handleSessionMemoryAdd(pool, sessionID, w, r)
+		handleSessionMemoryMutation(pool, sessionID, w, r)
 		return
 	}
 	resp, found, err := readSessionMemory(pool, sessionID)
@@ -78,8 +81,8 @@ func readSessionMemory(pool *SessionPool, sessionID string) (sessionMemoryRespon
 	return resp, true, err
 }
 
-func handleSessionMemoryAdd(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
-	req, err := decodeSessionMemoryAddRequest(w, r)
+func handleSessionMemoryMutation(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
+	req, err := decodeSessionMemoryMutationRequest(w, r)
 	if err != nil {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid memory request", err, "bad_request")
 		return
@@ -97,9 +100,9 @@ func handleSessionMemoryAdd(pool *SessionPool, sessionID string, w http.Response
 	if target == "" {
 		target = memory.TargetMemory
 	}
-	result, err := store.Add(target, req.Topic, req.Content)
+	result, err := applySessionMemoryMutation(store, target, req)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "add memory", err)
+		writeJSONError(w, http.StatusInternalServerError, "update memory", err)
 		return
 	}
 	if !result.OK {
@@ -114,6 +117,19 @@ func handleSessionMemoryAdd(pool *SessionPool, sessionID string, w http.Response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func applySessionMemoryMutation(store *memory.FileMemoryStore, target memory.MemoryTarget, req sessionMemoryMutationRequest) (memory.MemoryResponse, error) {
+	switch req.Action {
+	case "", "add":
+		return store.Add(target, req.Topic, req.Content)
+	case "remove":
+		return store.Remove(target, req.Topic, req.OldText)
+	case "replace":
+		return store.Replace(target, req.Topic, req.OldText, req.NewContent)
+	default:
+		return memory.MemoryResponse{Target: target, Topic: req.Topic, Message: "unsupported memory action"}, nil
+	}
 }
 
 func sessionMemoryStore(pool *SessionPool, sessionID string) (*memory.FileMemoryStore, bool, error) {
@@ -174,13 +190,13 @@ func inspectSessionMemory(pool *SessionPool, sessionID string, store *memory.Fil
 	return resp, nil
 }
 
-func decodeSessionMemoryAddRequest(w http.ResponseWriter, r *http.Request) (sessionMemoryAddRequest, error) {
-	var req sessionMemoryAddRequest
+func decodeSessionMemoryMutationRequest(w http.ResponseWriter, r *http.Request) (sessionMemoryMutationRequest, error) {
+	var req sessionMemoryMutationRequest
 	if r.Body == nil || r.Body == http.NoBody {
 		return req, errors.New("request body is required")
 	}
 	defer r.Body.Close()
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSessionMemoryAddBodyBytes))
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSessionMemoryMutationBodyBytes))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&req); err != nil {
 		return req, err
@@ -191,8 +207,31 @@ func decodeSessionMemoryAddRequest(w http.ResponseWriter, r *http.Request) (sess
 	}
 	req.Target = strings.TrimSpace(req.Target)
 	req.Topic = strings.TrimSpace(req.Topic)
+	req.Action = strings.TrimSpace(req.Action)
 	req.Content = strings.TrimSpace(req.Content)
-	if req.Content == "" {
+	req.OldText = strings.TrimSpace(req.OldText)
+	req.NewContent = strings.TrimSpace(req.NewContent)
+	switch req.Action {
+	case "", "add":
+		req.Action = "add"
+		if req.Content == "" {
+			return req, errors.New("content is required")
+		}
+	case "remove":
+		if req.OldText == "" {
+			return req, errors.New("old_text is required")
+		}
+	case "replace":
+		if req.OldText == "" {
+			return req, errors.New("old_text is required")
+		}
+		if req.NewContent == "" {
+			return req, errors.New("new_content is required")
+		}
+	default:
+		return req, errors.New("unsupported memory action")
+	}
+	if req.Content == "" && req.Action == "add" {
 		return req, errors.New("content is required")
 	}
 	return req, nil

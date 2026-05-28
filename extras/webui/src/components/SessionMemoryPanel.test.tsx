@@ -66,7 +66,7 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("taostats pages require browser network evidence");
     await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Copy update evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory update evidence"));
-    await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Use update as draft" }));
+    await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Review update" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review this memory update"), "memory");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
@@ -82,9 +82,9 @@ describe("SessionMemoryPanel", () => {
     expect(list).toHaveTextContent("taostats pages are dynamic");
     expect(list).not.toHaveTextContent("CoinGecko has API fallback");
 
-    await user.click(within(list).getByRole("button", { name: "Copy evidence" }));
+    await user.click(within(list).getByRole("button", { name: "Copy details" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory bucket evidence for research"));
-    await user.click(within(list).getByRole("button", { name: "Use memory as draft" }));
+    await user.click(within(list).getByRole("button", { name: "Start from memory" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this memory evidence"), "memory");
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
@@ -135,6 +135,59 @@ describe("SessionMemoryPanel", () => {
     });
     expect(await screen.findByText("Memory saved.")).toBeInTheDocument();
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("");
+  });
+
+  it("removes memory entries with confirmation when the runtime supports edits", async () => {
+    const user = userEvent.setup();
+    const onRemoveMemory = vi.fn(async () => ({
+      session_id: "s1",
+      has_memory: true,
+      topics: [
+        {
+          target: "memory",
+          topic: "research",
+          entries: ["keep current evidence rule"],
+          entry_count: 1,
+          chars_used: 26,
+          chars_limit: 4400,
+          percent: 1,
+        },
+      ],
+    }));
+    render(
+      <SessionMemoryPanel
+        defaultOpen
+        onRemoveMemory={onRemoveMemory}
+        memory={{
+          session_id: "s1",
+          has_memory: true,
+          topics: [
+            {
+              target: "memory",
+              topic: "research",
+              entries: ["obsolete browser fallback rule", "keep current evidence rule"],
+              entry_count: 2,
+              chars_used: 58,
+              chars_limit: 4400,
+              percent: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByText("research"));
+    await user.click(within(screen.getByText("obsolete browser fallback rule").closest("li")!).getByRole("button", { name: "Remove" }));
+    expect(onRemoveMemory).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Confirm remove" }));
+
+    expect(onRemoveMemory).toHaveBeenCalledWith({
+      action: "remove",
+      target: "memory",
+      topic: "research",
+      old_text: "obsolete browser fallback rule",
+    });
+    expect(await screen.findByText("Memory removed.")).toBeInTheDocument();
   });
 
   it("shows an empty selected-chat state", () => {
