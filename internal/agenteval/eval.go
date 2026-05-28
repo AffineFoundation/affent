@@ -108,6 +108,20 @@ type SessionSearchRequirement struct {
 	Min int
 }
 
+type RecentSessionSearchRequirement struct {
+	QueryContains     string
+	SessionID         string
+	UserContains      string
+	AssistantContains string
+	PlanContains      string
+	LoopContains      string
+	RecoveryContains  string
+	MessageContains   string
+	// Min is the required number of matching recent-session anchors. Values
+	// <=0 default to one so scenarios can spell the common case tersely.
+	Min int
+}
+
 type BatchScenario struct {
 	Name                                    string
 	Suites                                  []string
@@ -140,6 +154,7 @@ type BatchScenario struct {
 	RequireLoopProtocolFullAfterCompact     bool
 	RequiredSourceAccess                    []SourceAccessRequirement
 	RequiredSessionSearch                   []SessionSearchRequirement
+	RequiredRecentSessionSearch             []RecentSessionSearchRequirement
 	RequiredContextCompactions              int
 	RequiredReactiveCompactions             int
 	RequiredCompactionRemovedMsgs           int
@@ -316,61 +331,62 @@ type DebugRecoveryGuide struct {
 }
 
 type DebugScenarioExpectations struct {
-	CheckNames                              []string                           `json:"check_names,omitempty"`
-	Suites                                  []string                           `json:"suites,omitempty"`
-	SessionID                               string                             `json:"session_id,omitempty"`
-	ExecutePlan                             bool                               `json:"execute_plan,omitempty"`
-	EnableMemory                            bool                               `json:"enable_memory,omitempty"`
-	VerifyCommand                           string                             `json:"verify_command,omitempty"`
-	ExpectedSkill                           string                             `json:"expected_skill,omitempty"`
-	RequiredTools                           []string                           `json:"required_tools,omitempty"`
-	ForbiddenTools                          []string                           `json:"forbidden_tools,omitempty"`
-	RequiredCommands                        []string                           `json:"required_commands,omitempty"`
-	ForbiddenCommands                       []string                           `json:"forbidden_commands,omitempty"`
-	RequiredCommandCounts                   map[string]int                     `json:"required_command_counts,omitempty"`
-	RequiredToolCounts                      map[string]int                     `json:"required_tool_counts,omitempty"`
-	RequiredToolFailureKindCounts           map[string]int                     `json:"required_tool_failure_kind_counts,omitempty"`
-	RequiredToolStatsAtLeast                map[string]int                     `json:"required_tool_stats_at_least,omitempty"`
-	RequiredTraceEventCounts                map[string]int                     `json:"required_trace_event_counts,omitempty"`
-	RequiredConversationRepairStatsAtLeast  map[string]int                     `json:"required_conversation_repair_stats_at_least,omitempty"`
-	RequiredConversationRepairKinds         map[string]int                     `json:"required_conversation_repair_kinds,omitempty"`
-	RequiredLoopDecisionKinds               map[string]int                     `json:"required_loop_decision_kinds,omitempty"`
-	RequiredLoopDecisionResults             map[string]int                     `json:"required_loop_decision_results,omitempty"`
-	RequiredLoopDecisionMatches             []DebugLoopDecisionRequirement     `json:"required_loop_decision_matches,omitempty"`
-	RequiredLoopProtocolFeeds               int                                `json:"required_loop_protocol_feeds,omitempty"`
-	RequiredLoopProtocolCalibrationRequests int                                `json:"required_loop_protocol_calibration_requests,omitempty"`
-	RequiredLoopProtocolCalibrations        int                                `json:"required_loop_protocol_calibrations,omitempty"`
-	RequiredLoopProtocolFeedModes           map[string]int                     `json:"required_loop_protocol_feed_modes,omitempty"`
-	RequiredLoopProtocolFeedMatches         []DebugLoopProtocolFeedRequirement `json:"required_loop_protocol_feed_matches,omitempty"`
-	RequireLoopProtocolFullAfterCompact     bool                               `json:"require_loop_protocol_full_after_compaction,omitempty"`
-	RequiredToolResultText                  map[string][]string                `json:"required_tool_result_text,omitempty"`
-	RequiredToolArgContains                 []DebugToolArgContainsRequirement  `json:"required_tool_arg_contains,omitempty"`
-	RequiredSourceAccess                    []DebugSourceAccessRequirement     `json:"required_source_access,omitempty"`
-	RequiredSessionSearch                   []DebugSessionSearchRequirement    `json:"required_session_search,omitempty"`
-	RequiredCommandBeforeTool               []DebugCommandToolOrderRequirement `json:"required_command_before_tool,omitempty"`
-	RequiredCommandAfterTool                []DebugCommandToolOrderRequirement `json:"required_command_after_tool,omitempty"`
-	RequiredToolOrder                       []DebugToolOrderRequirement        `json:"required_tool_order,omitempty"`
-	RequiredFocusedTaskCounts               map[string]int                     `json:"required_focused_task_counts,omitempty"`
-	RequiredSubagentModeCounts              map[string]int                     `json:"required_subagent_mode_counts,omitempty"`
-	RequireNoDelegationErrors               bool                               `json:"require_no_delegation_errors,omitempty"`
-	RequireNoPlanErrors                     bool                               `json:"require_no_plan_errors,omitempty"`
-	RequiredFinalText                       []string                           `json:"required_final_text,omitempty"`
-	ForbiddenFinalText                      []string                           `json:"forbidden_final_text,omitempty"`
-	RequiredTruncatedResults                []string                           `json:"required_truncated_results,omitempty"`
-	RequiredResultArtifacts                 []string                           `json:"required_result_artifacts,omitempty"`
-	RequiredContextCompactions              int                                `json:"required_context_compactions,omitempty"`
-	RequiredReactiveCompactions             int                                `json:"required_reactive_context_compactions,omitempty"`
-	RequiredCompactionRemovedMsgs           int                                `json:"required_compaction_removed_messages,omitempty"`
-	RequiredContextSummaryText              []string                           `json:"required_context_summary_text,omitempty"`
-	RequiredContextLoopProtocolAnchorText   []string                           `json:"required_context_loop_protocol_anchor_text,omitempty"`
-	ProtectedFiles                          []string                           `json:"protected_files,omitempty"`
-	RequiredFileSubstrings                  map[string][]string                `json:"required_file_substrings,omitempty"`
-	ForbiddenFileSubstrings                 map[string][]string                `json:"forbidden_file_substrings,omitempty"`
-	MaxParentToolCalls                      int                                `json:"max_parent_tool_calls,omitempty"`
-	MaxSuccessfulToolCallsByTool            map[string]int                     `json:"max_successful_tool_calls_by_tool,omitempty"`
-	MaxTurns                                int                                `json:"max_turns,omitempty"`
-	CompactTrigger                          int                                `json:"compact_trigger,omitempty"`
-	CompactKeepLast                         int                                `json:"compact_keep_last,omitempty"`
+	CheckNames                              []string                              `json:"check_names,omitempty"`
+	Suites                                  []string                              `json:"suites,omitempty"`
+	SessionID                               string                                `json:"session_id,omitempty"`
+	ExecutePlan                             bool                                  `json:"execute_plan,omitempty"`
+	EnableMemory                            bool                                  `json:"enable_memory,omitempty"`
+	VerifyCommand                           string                                `json:"verify_command,omitempty"`
+	ExpectedSkill                           string                                `json:"expected_skill,omitempty"`
+	RequiredTools                           []string                              `json:"required_tools,omitempty"`
+	ForbiddenTools                          []string                              `json:"forbidden_tools,omitempty"`
+	RequiredCommands                        []string                              `json:"required_commands,omitempty"`
+	ForbiddenCommands                       []string                              `json:"forbidden_commands,omitempty"`
+	RequiredCommandCounts                   map[string]int                        `json:"required_command_counts,omitempty"`
+	RequiredToolCounts                      map[string]int                        `json:"required_tool_counts,omitempty"`
+	RequiredToolFailureKindCounts           map[string]int                        `json:"required_tool_failure_kind_counts,omitempty"`
+	RequiredToolStatsAtLeast                map[string]int                        `json:"required_tool_stats_at_least,omitempty"`
+	RequiredTraceEventCounts                map[string]int                        `json:"required_trace_event_counts,omitempty"`
+	RequiredConversationRepairStatsAtLeast  map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
+	RequiredConversationRepairKinds         map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
+	RequiredLoopDecisionKinds               map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
+	RequiredLoopDecisionResults             map[string]int                        `json:"required_loop_decision_results,omitempty"`
+	RequiredLoopDecisionMatches             []DebugLoopDecisionRequirement        `json:"required_loop_decision_matches,omitempty"`
+	RequiredLoopProtocolFeeds               int                                   `json:"required_loop_protocol_feeds,omitempty"`
+	RequiredLoopProtocolCalibrationRequests int                                   `json:"required_loop_protocol_calibration_requests,omitempty"`
+	RequiredLoopProtocolCalibrations        int                                   `json:"required_loop_protocol_calibrations,omitempty"`
+	RequiredLoopProtocolFeedModes           map[string]int                        `json:"required_loop_protocol_feed_modes,omitempty"`
+	RequiredLoopProtocolFeedMatches         []DebugLoopProtocolFeedRequirement    `json:"required_loop_protocol_feed_matches,omitempty"`
+	RequireLoopProtocolFullAfterCompact     bool                                  `json:"require_loop_protocol_full_after_compaction,omitempty"`
+	RequiredToolResultText                  map[string][]string                   `json:"required_tool_result_text,omitempty"`
+	RequiredToolArgContains                 []DebugToolArgContainsRequirement     `json:"required_tool_arg_contains,omitempty"`
+	RequiredSourceAccess                    []DebugSourceAccessRequirement        `json:"required_source_access,omitempty"`
+	RequiredSessionSearch                   []DebugSessionSearchRequirement       `json:"required_session_search,omitempty"`
+	RequiredRecentSessionSearch             []DebugRecentSessionSearchRequirement `json:"required_recent_session_search,omitempty"`
+	RequiredCommandBeforeTool               []DebugCommandToolOrderRequirement    `json:"required_command_before_tool,omitempty"`
+	RequiredCommandAfterTool                []DebugCommandToolOrderRequirement    `json:"required_command_after_tool,omitempty"`
+	RequiredToolOrder                       []DebugToolOrderRequirement           `json:"required_tool_order,omitempty"`
+	RequiredFocusedTaskCounts               map[string]int                        `json:"required_focused_task_counts,omitempty"`
+	RequiredSubagentModeCounts              map[string]int                        `json:"required_subagent_mode_counts,omitempty"`
+	RequireNoDelegationErrors               bool                                  `json:"require_no_delegation_errors,omitempty"`
+	RequireNoPlanErrors                     bool                                  `json:"require_no_plan_errors,omitempty"`
+	RequiredFinalText                       []string                              `json:"required_final_text,omitempty"`
+	ForbiddenFinalText                      []string                              `json:"forbidden_final_text,omitempty"`
+	RequiredTruncatedResults                []string                              `json:"required_truncated_results,omitempty"`
+	RequiredResultArtifacts                 []string                              `json:"required_result_artifacts,omitempty"`
+	RequiredContextCompactions              int                                   `json:"required_context_compactions,omitempty"`
+	RequiredReactiveCompactions             int                                   `json:"required_reactive_context_compactions,omitempty"`
+	RequiredCompactionRemovedMsgs           int                                   `json:"required_compaction_removed_messages,omitempty"`
+	RequiredContextSummaryText              []string                              `json:"required_context_summary_text,omitempty"`
+	RequiredContextLoopProtocolAnchorText   []string                              `json:"required_context_loop_protocol_anchor_text,omitempty"`
+	ProtectedFiles                          []string                              `json:"protected_files,omitempty"`
+	RequiredFileSubstrings                  map[string][]string                   `json:"required_file_substrings,omitempty"`
+	ForbiddenFileSubstrings                 map[string][]string                   `json:"forbidden_file_substrings,omitempty"`
+	MaxParentToolCalls                      int                                   `json:"max_parent_tool_calls,omitempty"`
+	MaxSuccessfulToolCallsByTool            map[string]int                        `json:"max_successful_tool_calls_by_tool,omitempty"`
+	MaxTurns                                int                                   `json:"max_turns,omitempty"`
+	CompactTrigger                          int                                   `json:"compact_trigger,omitempty"`
+	CompactKeepLast                         int                                   `json:"compact_keep_last,omitempty"`
 }
 
 // ExpectationCapabilityNames derives broad capability families from a
@@ -394,7 +410,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if len(exp.RequiredSourceAccess) > 0 {
 		caps["source_access"] = true
 	}
-	if len(exp.RequiredSessionSearch) > 0 {
+	if len(exp.RequiredSessionSearch) > 0 || len(exp.RequiredRecentSessionSearch) > 0 {
 		caps["session_search"] = true
 	}
 	for _, req := range exp.RequiredSourceAccess {
@@ -506,7 +522,7 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 	for _, req := range exp.RequiredSourceAccess {
 		add(req.Tool)
 	}
-	if len(exp.RequiredSessionSearch) > 0 {
+	if len(exp.RequiredSessionSearch) > 0 || len(exp.RequiredRecentSessionSearch) > 0 {
 		add(agent.SessionSearchToolName)
 	}
 	for _, req := range exp.RequiredToolArgContains {
@@ -664,6 +680,18 @@ type DebugSessionSearchRequirement struct {
 	ContextIncluded bool     `json:"context_included,omitempty"`
 	TurnIdx         int      `json:"turn_idx,omitempty"`
 	Min             int      `json:"min,omitempty"`
+}
+
+type DebugRecentSessionSearchRequirement struct {
+	QueryContains     string `json:"query_contains,omitempty"`
+	SessionID         string `json:"session_id,omitempty"`
+	UserContains      string `json:"user_contains,omitempty"`
+	AssistantContains string `json:"assistant_contains,omitempty"`
+	PlanContains      string `json:"plan_contains,omitempty"`
+	LoopContains      string `json:"loop_contains,omitempty"`
+	RecoveryContains  string `json:"recovery_contains,omitempty"`
+	MessageContains   string `json:"message_contains,omitempty"`
+	Min               int    `json:"min,omitempty"`
 }
 
 type DebugTranscriptRef struct {
@@ -1396,6 +1424,20 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Min:             req.Min,
 		})
 	}
+	recentSessionSearchReqs := make([]DebugRecentSessionSearchRequirement, 0, len(s.RequiredRecentSessionSearch))
+	for _, req := range s.RequiredRecentSessionSearch {
+		recentSessionSearchReqs = append(recentSessionSearchReqs, DebugRecentSessionSearchRequirement{
+			QueryContains:     req.QueryContains,
+			SessionID:         req.SessionID,
+			UserContains:      req.UserContains,
+			AssistantContains: req.AssistantContains,
+			PlanContains:      req.PlanContains,
+			LoopContains:      req.LoopContains,
+			RecoveryContains:  req.RecoveryContains,
+			MessageContains:   req.MessageContains,
+			Min:               req.Min,
+		})
+	}
 	loopReqs := make([]DebugLoopDecisionRequirement, 0, len(s.RequiredLoopDecisionMatches))
 	for _, req := range s.RequiredLoopDecisionMatches {
 		loopReqs = append(loopReqs, DebugLoopDecisionRequirement{
@@ -1483,6 +1525,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredToolArgContains:                 reqArgs,
 		RequiredSourceAccess:                    sourceReqs,
 		RequiredSessionSearch:                   sessionSearchReqs,
+		RequiredRecentSessionSearch:             recentSessionSearchReqs,
 		RequiredCommandBeforeTool:               commandBeforeTool,
 		RequiredCommandAfterTool:                commandAfterTool,
 		RequiredToolOrder:                       toolOrders,
@@ -2135,6 +2178,13 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 			min = 1
 		}
 		checks = append(checks, SessionSearchMatchAtLeast(req.QueryContains, req.SessionID, req.SnippetContains, req.MatchedTerms, req.ContextIncluded, req.TurnIdx, min))
+	}
+	for _, req := range scenario.RequiredRecentSessionSearch {
+		min := req.Min
+		if min <= 0 {
+			min = 1
+		}
+		checks = append(checks, RecentSessionSearchAnchorAtLeast(req.QueryContains, req.SessionID, req.UserContains, req.AssistantContains, req.PlanContains, req.LoopContains, req.RecoveryContains, req.MessageContains, min))
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))

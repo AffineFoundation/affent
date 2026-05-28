@@ -1171,7 +1171,7 @@ func expectationRequiredToolNames(exp agenteval.DebugScenarioExpectations) []str
 		len(exp.RequiredCommandAfterTool) > 0 {
 		add("shell")
 	}
-	if len(exp.RequiredSessionSearch) > 0 {
+	if len(exp.RequiredSessionSearch) > 0 || len(exp.RequiredRecentSessionSearch) > 0 {
 		add(agent.SessionSearchToolName)
 	}
 	if len(exp.RequiredFocusedTaskCounts) > 0 {
@@ -4670,7 +4670,7 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 	for _, req := range scenario.RequiredSourceAccess {
 		add(req.Tool)
 	}
-	if len(scenario.RequiredSessionSearch) > 0 {
+	if len(scenario.RequiredSessionSearch) > 0 || len(scenario.RequiredRecentSessionSearch) > 0 {
 		add(agent.SessionSearchToolName)
 	}
 	if len(scenario.RequiredFocusedTaskCounts) > 0 {

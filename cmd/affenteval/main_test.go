@@ -440,6 +440,15 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 			wantErr: "history missing session_search",
 		},
 		{
+			name:   "recent session search requirements imply recall tool",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:                        "history-recent",
+				RequiredRecentSessionSearch: []agenteval.RecentSessionSearchRequirement{{SessionID: "market-alpha"}},
+			},
+			wantErr: "history-recent missing session_search",
+		},
+		{
 			name:   "command tool order requirements imply ordered tool",
 			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "shell"},
 			scenario: agenteval.BatchScenario{
@@ -497,6 +506,9 @@ func TestExpectationRequiredToolNamesIncludesImplicitTools(t *testing.T) {
 			Tool:    "edit_file",
 		}},
 		RequiredSessionSearch: []agenteval.DebugSessionSearchRequirement{{
+			SessionID: "market-alpha",
+		}},
+		RequiredRecentSessionSearch: []agenteval.DebugRecentSessionSearchRequirement{{
 			SessionID: "market-alpha",
 		}},
 		RequiredFocusedTaskCounts: map[string]int{"explore": 1},

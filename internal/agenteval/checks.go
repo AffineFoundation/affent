@@ -1098,6 +1098,76 @@ func sessionSearchRequirementMatches(ex SessionSearchExample, queryContains, ses
 	return true
 }
 
+func RecentSessionSearchAnchorAtLeast(queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains string, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	nameParts := []string{"recent_session_search_anchor_at_least"}
+	for _, part := range []string{queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains, fmt.Sprint(min)} {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			part = "*"
+		}
+		nameParts = append(nameParts, previewSubstr(part, 24))
+	}
+	return Check{
+		Name: strings.Join(nameParts, ":"),
+		Eval: func(t Trace) CheckResult {
+			examples := t.SessionSearchExamples(len(t.Tools))
+			count := 0
+			var matched []string
+			var observed []string
+			for _, ex := range examples {
+				if recentSessionSearchAnchorMatches(ex, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains) {
+					count++
+					if len(matched) < 5 {
+						matched = append(matched, sessionSearchExampleSummary(ex))
+					}
+					continue
+				}
+				if ex.RecentSessionID != "" && len(observed) < 5 {
+					observed = append(observed, sessionSearchExampleSummary(ex))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched %d recent session_search anchor(s): %v", count, matched)}
+			}
+			return CheckResult{
+				Pass: false,
+				Detail: fmt.Sprintf(
+					"expected at least %d recent session_search anchor(s) matching query_contains=%q session_id=%q user_contains=%q assistant_contains=%q plan_contains=%q loop_contains=%q recovery_contains=%q message_contains=%q, got %d; observed=%v",
+					min, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains, count, observed,
+				),
+			}
+		},
+	}
+}
+
+func recentSessionSearchAnchorMatches(ex SessionSearchExample, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains string) bool {
+	if ex.RecentSessionID == "" {
+		return false
+	}
+	for _, req := range []struct {
+		need string
+		got  string
+	}{
+		{queryContains, ex.Query},
+		{sessionID, ex.RecentSessionID},
+		{userContains, ex.RecentUserPreview},
+		{assistantContains, ex.RecentAssistantPreview},
+		{planContains, ex.RecentPlanPreview},
+		{loopContains, ex.RecentLoopPreview},
+		{recoveryContains, ex.RecentRecoveryPreview},
+		{messageContains, ex.Message},
+	} {
+		need := strings.TrimSpace(req.need)
+		if need != "" && !strings.Contains(req.got, need) {
+			return false
+		}
+	}
+	return true
+}
+
 func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	parts := []string{
 		fmt.Sprintf("tool#%d", ex.ToolIndex),

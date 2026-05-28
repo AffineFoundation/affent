@@ -1022,6 +1022,10 @@ Current built-in suites:
   as missing, duplicate, and unexpected tool-result repairs. Eval debug
   manifests and timelines surface conversation repair examples with the
   repaired count, failure kind, and next-step guidance.
+  Session-recall scenarios can require either direct `session_search` hits or
+  no-hit `recent_sessions` recovery anchors, including plan, loop, and
+  recovery previews. This lets long-run tests fail when cross-session recovery
+  only exposes generic chat text instead of actionable continuation state.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
@@ -1206,8 +1210,9 @@ mode. Use `--eval-all-tools` / `--runtime-all-tools` only for smoke/debug runs
 that intentionally exercise the full surface. Before running, `affenteval`
 also validates scenario-declared tool dependencies from required tool counts,
 orders, argument checks, source-access checks, session recall checks, and
-delegation checks, including command-before/after-tool ordering checks, against
-the selected runtime surface. The eval container does not forward host
+delegation checks, including recent-session recovery-anchor checks and
+command-before/after-tool ordering checks, against the selected runtime surface.
+The eval container does not forward host
 `AFFENTCTL_EVAL_MODE`,
 `AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the

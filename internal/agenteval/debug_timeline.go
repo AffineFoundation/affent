@@ -562,6 +562,41 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- required_session_search: `%s`\n", strings.Join(parts, " "))
 		}
 	}
+	if len(exp.RequiredRecentSessionSearch) > 0 {
+		for _, req := range exp.RequiredRecentSessionSearch {
+			min := req.Min
+			if min <= 0 {
+				min = 1
+			}
+			var parts []string
+			if req.QueryContains != "" {
+				parts = append(parts, fmt.Sprintf("query_contains=%s", timelineInline(req.QueryContains, 160)))
+			}
+			if req.SessionID != "" {
+				parts = append(parts, fmt.Sprintf("recent_session=%s", req.SessionID))
+			}
+			if req.UserContains != "" {
+				parts = append(parts, fmt.Sprintf("user_contains=%s", timelineInline(req.UserContains, 160)))
+			}
+			if req.AssistantContains != "" {
+				parts = append(parts, fmt.Sprintf("assistant_contains=%s", timelineInline(req.AssistantContains, 160)))
+			}
+			if req.PlanContains != "" {
+				parts = append(parts, fmt.Sprintf("plan_contains=%s", timelineInline(req.PlanContains, 160)))
+			}
+			if req.LoopContains != "" {
+				parts = append(parts, fmt.Sprintf("loop_contains=%s", timelineInline(req.LoopContains, 160)))
+			}
+			if req.RecoveryContains != "" {
+				parts = append(parts, fmt.Sprintf("recovery_contains=%s", timelineInline(req.RecoveryContains, 160)))
+			}
+			if req.MessageContains != "" {
+				parts = append(parts, fmt.Sprintf("message_contains=%s", timelineInline(req.MessageContains, 160)))
+			}
+			parts = append(parts, fmt.Sprintf("min=%d", min))
+			fmt.Fprintf(b, "- required_recent_session_search: `%s`\n", strings.Join(parts, " "))
+		}
+	}
 	writeTimelineStringList(b, "required_final_text", exp.RequiredFinalText)
 	writeTimelineStringList(b, "forbidden_final_text", exp.ForbiddenFinalText)
 	writeTimelineStringList(b, "required_truncated_results", exp.RequiredTruncatedResults)
@@ -639,6 +674,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredToolResultText) > 0 ||
 		len(exp.RequiredToolArgContains) > 0 ||
 		len(exp.RequiredSourceAccess) > 0 ||
+		len(exp.RequiredRecentSessionSearch) > 0 ||
 		len(exp.RequiredFinalText) > 0 ||
 		len(exp.ForbiddenFinalText) > 0 ||
 		len(exp.RequiredTruncatedResults) > 0 ||

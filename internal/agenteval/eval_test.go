@@ -864,6 +864,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredSessionSearch: []SessionSearchRequirement{
 			{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "HIST-STOCK-44", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true},
 		},
+		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
+			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "source review", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"},
+		},
 		RequiredContextCompactions:    1,
 		RequiredReactiveCompactions:   1,
 		RequiredCompactionRemovedMsgs: 20,
@@ -919,6 +922,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_protocol_full_feed_after_compaction",
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
+		"recent_session_search_anchor_at_least:missing marker:market-alpha:*:*:source review:loop.protocol_feed:max_turns:*:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -2380,6 +2384,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredSessionSearch: []SessionSearchRequirement{
 			{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "history marker", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true, TurnIdx: 4},
 		},
+		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
+			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "browser network evidence", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"},
+		},
 		RequiredFinalText:             []string{"0.06342 T"},
 		ForbiddenFinalText:            []string{"subnet price $277.32"},
 		RequiredTruncatedResults:      []string{"web_fetch"},
@@ -2496,6 +2503,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredSourceAccess[0] != (DebugSourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"}) ||
 		len(manifest.Expectations.RequiredSessionSearch) != 1 ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredSessionSearch[0], DebugSessionSearchRequirement{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "history marker", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true, TurnIdx: 4}) ||
+		len(manifest.Expectations.RequiredRecentSessionSearch) != 1 ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredRecentSessionSearch[0], DebugRecentSessionSearchRequirement{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "browser network evidence", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"}) ||
 		!stringSliceContains(manifest.Expectations.RequiredFinalText, "0.06342 T") ||
 		!stringSliceContains(manifest.Expectations.ForbiddenFinalText, "subnet price $277.32") ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredTruncatedResults, []string{"web_fetch"}) ||
@@ -2767,6 +2776,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `requested_url=`, `source_method=network_xhr_fetch`",
 		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api requested_url_contains=taostats.io/subnets/120 source_method=network_xhr_fetch json_path=$.price min=1`",
 		"required_session_search: `query_contains=Alpha Coast session=market-alpha snippet_contains=history marker terms=alpha,coast context=true turn=4 min=1`",
+		"required_recent_session_search: `query_contains=missing marker recent_session=market-alpha plan_contains=browser network evidence loop_contains=loop.protocol_feed recovery_contains=max_turns min=1`",
 		"required_final_text: `0.06342 T`",
 		"forbidden_final_text: `subnet price $277.32`",
 		"required_truncated_results: `web_fetch`",
