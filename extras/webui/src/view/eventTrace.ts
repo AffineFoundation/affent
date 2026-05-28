@@ -464,11 +464,13 @@ function runtimeSurfaceMeta(event: NormalizedEvent, turn: string | undefined): s
   const toolCount = readNumber(event.data, "tool_count");
   const maxSteps = readNumber(event.data, "max_turn_steps");
   const maxCalls = readNumber(event.data, "max_tool_calls");
+  const maxInputTokens = readNumber(event.data, "max_turn_input_tokens");
   return compact([
     turn,
     typeof toolCount === "number" ? `${toolCount} tools` : undefined,
     typeof maxSteps === "number" ? `${maxSteps} turns` : undefined,
     typeof maxCalls === "number" && maxCalls > 0 ? `${maxCalls} tool cap` : undefined,
+    typeof maxInputTokens === "number" && maxInputTokens > 0 ? `${maxInputTokens.toLocaleString()} input cap` : undefined,
   ]);
 }
 

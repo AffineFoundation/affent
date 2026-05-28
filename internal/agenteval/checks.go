@@ -898,6 +898,30 @@ func RuntimeSurfaceCompletionGuard(name string) Check {
 	}
 }
 
+func RuntimeSurfaceMaxTurnInputTokens(expected int) Check {
+	return Check{
+		Name: fmt.Sprintf("runtime_surface_max_turn_input_tokens:%d", expected),
+		Eval: func(t Trace) CheckResult {
+			if expected <= 0 {
+				return CheckResult{Pass: true}
+			}
+			var observed []int
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.MaxTurnInputTokens > 0 {
+					observed = append(observed, surface.MaxTurnInputTokens)
+				}
+				if surface.MaxTurnInputTokens == expected {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("max_turn_input_tokens=%d", expected)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface max_turn_input_tokens=%d; observed=%v", expected, observed),
+			}
+		},
+	}
+}
+
 func LoopProtocolFeedsAtLeast(min int) Check {
 	return Check{
 		Name: fmt.Sprintf("loop_protocol_feeds_at_least:%d", min),

@@ -3005,6 +3005,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		inputBudget.RequiredTraceEventCounts["runtime.surface"] != 1 {
 		t.Fatalf("input budget trace requirements = %#v", inputBudget.RequiredTraceEventCounts)
 	}
+	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(inputBudget)), "runtime_surface_max_turn_input_tokens:1") {
+		t.Fatalf("input budget checks missing runtime surface budget assertion: %#v", checkNamesFor(BatchScenarioChecks(inputBudget)))
+	}
 	if _, ok := inputBudget.Files[".affent/loops/longrun-input-budget-pressure/LOOP.md"]; !ok {
 		t.Fatalf("input budget scenario missing seeded LOOP.md")
 	}

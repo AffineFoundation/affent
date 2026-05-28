@@ -3265,6 +3265,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	for _, guard := range scenario.RequiredCompletionGuards {
 		checks = append(checks, RuntimeSurfaceCompletionGuard(guard))
 	}
+	if scenario.RuntimeMaxTurnInputTokens > 0 {
+		checks = append(checks, RuntimeSurfaceMaxTurnInputTokens(scenario.RuntimeMaxTurnInputTokens))
+	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())
 	}
