@@ -10,6 +10,7 @@ export function SessionChangesPanel({
   defaultOpen = false,
   onOpenWorkspacePath,
   onOpenWorkspacePanel,
+  onOpenFilesPanel,
   onOpenArtifact,
   onUseAsDraft,
 }: {
@@ -17,6 +18,7 @@ export function SessionChangesPanel({
   defaultOpen?: boolean;
   onOpenWorkspacePath?: (path: string) => void;
   onOpenWorkspacePanel?: () => void;
+  onOpenFilesPanel?: () => void;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
@@ -90,7 +92,13 @@ export function SessionChangesPanel({
                 <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(focusFile.path)}>
                   Open current
                 </button>
-              ) : onOpenWorkspacePanel && !focusFile.diffPreview?.length ? (
+              ) : null}
+              {onOpenFilesPanel && !hasDiffPreview(focusFile) ? (
+                <button type="button" className="ghost-action" onClick={onOpenFilesPanel}>
+                  Open Files
+                </button>
+              ) : null}
+              {onOpenWorkspacePanel && !focusFile.diffPreview?.length ? (
                 <button type="button" className="ghost-action" onClick={onOpenWorkspacePanel}>
                   Open Workspace
                 </button>
@@ -145,6 +153,11 @@ export function SessionChangesPanel({
                   {onOpenWorkspacePath ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(file.path)}>
                       Open current
+                    </button>
+                  ) : null}
+                  {onOpenFilesPanel && !hasDiffPreview(file) ? (
+                    <button type="button" className="ghost-action" onClick={onOpenFilesPanel}>
+                      Open Files
                     </button>
                   ) : null}
                   <CopyButton label="Copy path" value={file.path} className="ghost-action" />
@@ -235,6 +248,10 @@ function changeEvidenceState(file: SessionChangedFile): { state: "diff" | "artif
   if (file.diffPreview && file.diffPreview.length > 0) return { state: "diff", label: "Diff preview captured" };
   if (file.artifactPath) return { state: "artifact", label: "Evidence artifact captured" };
   return { state: "missing", label: "No diff preview captured" };
+}
+
+function hasDiffPreview(file: SessionChangedFile): boolean {
+  return Boolean(file.diffPreview && file.diffPreview.length > 0);
 }
 
 function changeDraftActionLabel(file: SessionChangedFile): string {

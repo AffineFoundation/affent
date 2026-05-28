@@ -77,11 +77,13 @@ describe("SessionChangesPanel", () => {
   it("makes no-diff changes explicit and offers file review", async () => {
     const user = userEvent.setup();
     const onOpenWorkspacePath = vi.fn();
+    const onOpenFilesPanel = vi.fn();
     const onUseAsDraft = vi.fn();
     render(
       <SessionChangesPanel
         defaultOpen
         onOpenWorkspacePath={onOpenWorkspacePath}
+        onOpenFilesPanel={onOpenFilesPanel}
         changes={{
           summary: "1 changed file",
           detail: "1 changed",
@@ -108,6 +110,8 @@ describe("SessionChangesPanel", () => {
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Issues/ })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Open current" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("game2048.py");
+    await user.click(screen.getByRole("button", { name: "Open Files" }));
+    expect(onOpenFilesPanel).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Review file" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("No diff preview was captured"), "changed_file");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: game2048.py"), "changed_file");
@@ -116,10 +120,12 @@ describe("SessionChangesPanel", () => {
   it("routes no-diff review gaps to workspace setup when the current file cannot be opened", async () => {
     const user = userEvent.setup();
     const onOpenWorkspacePanel = vi.fn();
+    const onOpenFilesPanel = vi.fn();
     render(
       <SessionChangesPanel
         defaultOpen
         onOpenWorkspacePanel={onOpenWorkspacePanel}
+        onOpenFilesPanel={onOpenFilesPanel}
         changes={{
           summary: "1 changed file",
           detail: "1 changed",
@@ -136,6 +142,8 @@ describe("SessionChangesPanel", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Open current" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Open Files" }));
+    expect(onOpenFilesPanel).toHaveBeenCalledTimes(1);
     await user.click(screen.getByRole("button", { name: "Open Workspace" }));
     expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(1);
   });

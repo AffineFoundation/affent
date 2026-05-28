@@ -1930,6 +1930,7 @@ export function App() {
             void handleOpenWorkspacePath(path);
           } : undefined}
           onOpenWorkspacePanel={() => setWorkbenchTab("workspace")}
+          onOpenFilesPanel={() => setWorkbenchTab("files")}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
         />
