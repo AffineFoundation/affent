@@ -479,6 +479,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"source_dynamic_without_decision":             0,
 					"source_dynamic_without_network":              0,
 					"source_network:missing_response_diagnostics": 0,
+					"source_network:partial_read":                 0,
 					"source_unverified_all":                       0,
 					"truncation:missing_artifact":                 0,
 				},

@@ -862,6 +862,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_network:missing_response_diagnostics"] != 0 ||
+		webGates.MaxDebugBriefTagRates["source_network:partial_read"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
