@@ -5,6 +5,7 @@ import {
   buildWorkbenchAttachment,
   buildWorkbenchContextEvidence,
   buildWorkbenchContextUsage,
+  latestWorkbenchRequestMode,
   workbenchContextUsageSummary,
   workbenchContextEvidenceDraft,
   workbenchContextEvidenceText,
@@ -98,6 +99,33 @@ describe("workbenchContext", () => {
       { label: "4 turns", value: 2500, valueLabel: "0.0025M tokens", detail: "from session index" },
     ]);
     expect(usage.totalTokens).toBe(2500);
+  });
+
+  it("surfaces the latest non-normal request mode from session events", () => {
+    const setupSession = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "market monitor", display_text: "Set up loop: market monitor", mode: "loop_setup" } },
+    ]);
+    const requestMode = latestWorkbenchRequestMode(setupSession);
+
+    expect(requestMode).toEqual({
+      raw: "loop_setup",
+      label: "Loop setup",
+      detail: "latest request · t1",
+      turnId: "t1",
+      source: undefined,
+    });
+    expect(workbenchContextEvidenceText({
+      overview: sessionOverview({ headline: "Set up market monitor" }),
+      hasSelectedSession: true,
+      requestMode,
+    })).toContain("Request mode: Loop setup · latest request · t1");
+
+    const normalSession = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue", mode: "normal" } },
+    ]);
+    expect(latestWorkbenchRequestMode(normalSession)).toBeUndefined();
   });
 
   it("builds the attached chat summary from session truth", () => {

@@ -38,6 +38,14 @@ export interface WorkbenchContextUsageView {
   totalTokens: number;
 }
 
+export interface WorkbenchRequestModeView {
+  raw: string;
+  label: string;
+  detail?: string;
+  turnId?: string;
+  source?: string;
+}
+
 export interface WorkbenchConversationContextView extends SessionContextSummary {
   estimated?: boolean;
 }
@@ -68,6 +76,7 @@ export interface WorkbenchContextEvidenceInput {
   files?: SessionFilesView;
   run?: SessionRunView;
   usage?: WorkbenchContextUsageView;
+  requestMode?: WorkbenchRequestModeView;
   automationTitle?: string;
   automationDetail?: string;
 }
@@ -208,6 +217,21 @@ export function buildConversationContextView(session: SessionState, summary?: Se
   };
 }
 
+export function latestWorkbenchRequestMode(session?: SessionState): WorkbenchRequestModeView | undefined {
+  const event = [...(session?.events ?? [])].reverse().find((candidate) => candidate.type === EventType.UserMessage);
+  const raw = normalizeRequestMode(readString(event?.data, "mode"));
+  if (!raw || raw === "normal") return undefined;
+  const turnId = readString(event?.data, "turn_id") ?? event?.turnId;
+  const source = readString(event?.data, "source");
+  return {
+    raw,
+    label: requestModeLabel(raw),
+    detail: compact([source === "schedule" ? "scheduled" : "latest request", turnId]).join(" · "),
+    turnId,
+    source,
+  };
+}
+
 export function workbenchContextUsageSummary(usage?: WorkbenchContextUsageView): string | undefined {
   const sessionTokens = usage?.items.find((item) => item.label === "Session tokens");
   if (!sessionTokens) return undefined;
@@ -258,6 +282,7 @@ export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInpu
   for (const item of input.usage?.items ?? []) {
     lines.push(`${item.label}: ${item.value}${item.detail ? ` · ${item.detail}` : ""}`);
   }
+  if (input.requestMode) lines.push(`Request mode: ${input.requestMode.label}${input.requestMode.detail ? ` · ${input.requestMode.detail}` : ""}`);
   for (const item of buildWorkbenchContextEvidence(input)) lines.push(`${item.label}: ${item.summary} · ${item.detail}`);
   return lines.filter((line) => line.trim()).join("\n");
 }
@@ -316,6 +341,23 @@ function readNumber(data: unknown, key: string): number | undefined {
   if (!data || typeof data !== "object") return undefined;
   const value = (data as Record<string, unknown>)[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readString(data: unknown, key: string): string | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const value = (data as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeRequestMode(mode: string | undefined): string | undefined {
+  return mode?.trim().toLowerCase();
+}
+
+function requestModeLabel(mode: string): string {
+  if (mode === "loop_setup") return "Loop setup";
+  if (mode === "plan_only") return "Plan only";
+  if (mode === "execute_plan") return "Execute plan";
+  return mode.replace(/_/g, " ");
 }
 
 function isLowSignalStatusDetail(value: string | undefined): boolean {
@@ -417,4 +459,8 @@ function formatTokenCountMillions(value: number): string {
 
 function compactTokenValue(value: string): string {
   return value.replace(/\s*\(.+\)\s*$/, "");
+}
+
+function compact<T>(items: readonly (T | undefined | null | false)[]): T[] {
+  return items.filter(Boolean) as T[];
 }

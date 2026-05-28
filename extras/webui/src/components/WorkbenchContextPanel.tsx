@@ -7,7 +7,9 @@ import type { SessionWorkspaceView } from "../view/sessionWorkspace";
 import type { TurnArtifact } from "../view/turnArtifacts";
 import {
   buildWorkbenchContextEvidence,
+  latestWorkbenchRequestMode,
   workbenchContextUsageSummary,
+  type WorkbenchRequestModeView,
   type WorkbenchContextUsageView,
   workbenchContextStatusDetail,
 } from "../view/workbenchContext";
@@ -48,8 +50,12 @@ export function WorkbenchContextPanel({
   onSelectSection?: (tab: WorkbenchTab) => void;
   defaultOpen?: boolean;
 }) {
-  const actionMetrics = contextStatusCards(displaySessionOverviewMetrics(overview.metrics), run, session);
-  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, automationTitle, automationDetail };
+  const requestMode = latestWorkbenchRequestMode(session);
+  const actionMetrics = [
+    ...(requestMode ? [requestModeStatusCard(requestMode)] : []),
+    ...contextStatusCards(displaySessionOverviewMetrics(overview.metrics), run, session),
+  ];
+  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, requestMode, automationTitle, automationDetail };
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
   const hasEvidence = evidence.length > 0;
@@ -150,6 +156,16 @@ function contextStatusCards(metrics: ReturnType<typeof displaySessionOverviewMet
     }
     return [{ label: metric.label, value: metric.value, tone: metric.tone }];
   });
+}
+
+function requestModeStatusCard(mode: WorkbenchRequestModeView): ContextStatusCard {
+  return {
+    label: "Request mode",
+    value: mode.label,
+    detail: mode.detail,
+    tone: mode.raw === "loop_setup" || mode.raw === "execute_plan" ? "warning" : "ready",
+    target: "trace",
+  };
 }
 
 function toolIssueDetail(run?: SessionRunView, session?: SessionState): string | undefined {

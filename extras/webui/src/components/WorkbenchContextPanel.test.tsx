@@ -242,6 +242,33 @@ describe("WorkbenchContextPanel", () => {
     expect(statusCards).not.toHaveTextContent("Open trace to inspect");
   });
 
+  it("shows the active request mode as trace-backed context", async () => {
+    const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "market monitor", display_text: "Set up loop: market monitor", mode: "loop_setup" } },
+    ]);
+
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        session={session}
+        onSelectSection={onSelectSection}
+        overview={overview({ headline: "Set up market monitor", detail: "Loop setup is running." })}
+      />,
+    );
+
+    const statusCards = screen.getByTestId("workbench-context-actions-list");
+    expect(statusCards).toHaveTextContent("Request mode");
+    expect(statusCards).toHaveTextContent("Loop setup");
+    expect(statusCards).toHaveTextContent("latest request · t1");
+
+    await user.click(within(statusCards).getByRole("button", { name: /Request mode/ }));
+    expect(onSelectSection).toHaveBeenCalledWith("trace");
+  });
+
   it("keeps automation out of the context evidence cards", () => {
     const onSelectSection = vi.fn();
 
