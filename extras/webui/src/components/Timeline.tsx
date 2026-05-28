@@ -191,6 +191,26 @@ export function Timeline({
     endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
   }
 
+  if (session.turns.length === 0 && !pendingMessage && sessionId) {
+    return (
+      <section className="flow-turn intro-turn" data-testid="timeline-empty-session">
+        <div className="conversation-turn">
+          <div className="assistant-cluster">
+            <div className="assistant-name">Affent</div>
+            <div className="flow-step flow-step-assistant">
+              <div className="flow-text intro-copy">
+                <div className="intro-heading">
+                  <strong>No messages loaded</strong>
+                  <span>This chat exists, but no persisted conversation events are available yet.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (session.turns.length === 0 && !pendingMessage) {
     const hasSavedChats = savedChatCount > 0;
     return (

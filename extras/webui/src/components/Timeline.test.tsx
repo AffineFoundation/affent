@@ -284,6 +284,15 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-empty")).not.toHaveTextContent("Message");
   });
 
+  it("keeps an empty selected chat distinct from the fresh homepage", () => {
+    renderTimeline([], "empty-create-failure");
+
+    expect(screen.queryByTestId("timeline-empty")).toBeNull();
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No messages loaded");
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("no persisted conversation events");
+    expect(screen.queryByText("What should we work on?")).toBeNull();
+  });
+
   it("offers a direct way back to the latest saved chat without auto-opening it", async () => {
     const user = userEvent.setup();
     const onOpenLatestChat = vi.fn();

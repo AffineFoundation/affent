@@ -227,6 +227,48 @@ describe("App", () => {
     expect(window.location.search).toBe("?sessionId=saved-2");
   });
 
+  it("filters empty durable session directories from the chat list", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "empty-create-failure",
+              active: false,
+              durable: true,
+              has_conversation: false,
+              has_events: false,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+            {
+              id: "saved-1",
+              active: false,
+              durable: true,
+              topic_user_message: "saved research task",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Connected"));
+    expect(screen.getByTestId("session-list")).toHaveTextContent("saved research task");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("empty-create-failure");
+  });
+
   it("keeps internal session ids out of the latest-chat shortcut", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -304,7 +346,7 @@ describe("App", () => {
 
     await waitFor(() => expect(screen.queryByTestId("session-list")).toBeNull());
     expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/delete-me", expect.objectContaining({ method: "DELETE" }));
-    expect(screen.getByText("What should we work on?")).toBeVisible();
+    expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
   });
 
   it("loads every history page before rendering a saved chat", async () => {
@@ -628,6 +670,61 @@ describe("App", () => {
 
     messageResponse.resolve(jsonResponse({ session_id: "new-1", turn_id: "t1" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/new-1/messages", expect.objectContaining({ method: "POST" })));
+  });
+
+  it("does not reset a submitted chat when the initial index returns after history loads", async () => {
+    const user = userEvent.setup();
+    const sessionIndex = deferred<Response>();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") return sessionIndex.promise;
+      if (url === "/v1/sessions" && init?.method === "POST") {
+        return jsonResponse({
+          session: {
+            id: "new-1",
+            active: false,
+            durable: true,
+            has_conversation: false,
+            has_events: false,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        });
+      }
+      if (url === "/v1/sessions/new-1/messages" && init?.method === "POST") return jsonResponse({ session_id: "new-1", turn_id: "t1" });
+      if (url === "/v1/sessions/new-1/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "new-1",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "summarize the repo" } },
+            { id: 3, type: "message.delta", data: { turn_id: "t1", delta: "Repo summary ready." } },
+            { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+          ],
+          next_after: 4,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/new-1/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText("Message Affent...");
+    await user.type(input, "summarize the repo");
+    await user.keyboard("{Enter}");
+    expect((await screen.findAllByText("Repo summary ready.")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("What should we work on?")).toBeNull();
+
+    sessionIndex.resolve(jsonResponse({ sessions: [], has_more: false }));
+    await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("repo"));
+
+    expect(screen.getAllByText("Repo summary ready.").length).toBeGreaterThan(0);
+    expect(screen.queryByText("What should we work on?")).toBeNull();
   });
 
   it("renders plan tool state when the durable plan endpoint has no snapshot yet", async () => {
@@ -1698,7 +1795,7 @@ describe("App", () => {
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s2/history?after=-1&limit=500", expect.anything()));
     await waitFor(() => expect(screen.queryByText("There are two files.")).toBeNull());
     expect(screen.queryByTestId("timeline-loading")).toBeNull();
-    expect(screen.getByText("What should we work on?")).toBeVisible();
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No messages loaded");
   });
 
   it("keeps technical server details out of the top status strip", async () => {

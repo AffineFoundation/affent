@@ -100,7 +100,7 @@ import {
   type AutomationLoopPanelState,
   type AutomationSchedulePanelState,
 } from "./view/automationContext";
-import { isContinuationPrompt } from "./view/continuationPrompt";
+import { conversationTopicFromTurns, isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
 
 type SurfaceState = "connecting" | "connected" | "live" | "loading" | "demo" | "disconnected" | "error";
@@ -183,6 +183,7 @@ export function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>(() => sessionIdFromCurrentUrl());
   const [sessionIndexReady, setSessionIndexReady] = useState(false);
+  const [liveConnectTick, setLiveConnectTick] = useState(0);
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
@@ -218,6 +219,8 @@ export function App() {
   const sendFailedRef = useRef(false);
   const streamClosedRef = useRef(false);
   const streamSessionIdRef = useRef<string | undefined>(undefined);
+  const selectedSessionIdRef = useRef(selectedSessionId);
+  const pendingMessageRef = useRef(pendingMessage);
   const nextGuidanceReceiptId = useRef(0);
   const planFetchKeyRef = useRef("");
   const planFetchInFlightKeyRef = useRef("");
@@ -231,7 +234,12 @@ export function App() {
 
   useEffect(() => {
     syncSessionIdToUrl(selectedSessionId);
+    selectedSessionIdRef.current = selectedSessionId;
   }, [selectedSessionId]);
+
+  useEffect(() => {
+    pendingMessageRef.current = pendingMessage;
+  }, [pendingMessage]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -835,9 +843,13 @@ export function App() {
         setSessions(mergedSessions);
         const requestedSessionId = initialUrlSessionIdRef.current;
         const activeSessionId = mergedSessions.find((s) => s.active)?.id;
-        const nextSelected = requestedSessionId ?? activeSessionId;
-        setSelectedSessionId((current) => current ?? nextSelected);
-        if (!requestedSessionId) setSession(initialSessionState());
+        const nextSelected = selectedSessionIdRef.current ?? requestedSessionId ?? activeSessionId;
+        setSelectedSessionId((current) => {
+          const resolved = current ?? nextSelected;
+          selectedSessionIdRef.current = resolved;
+          return resolved;
+        });
+        if (!nextSelected) setSession(initialSessionState());
         if (nextSelected) {
           setStatus({
             state: "loading",
@@ -855,6 +867,7 @@ export function App() {
       } catch (err) {
         if (isAbortError(err)) return;
         setSessions([]);
+        selectedSessionIdRef.current = undefined;
         setSelectedSessionId(undefined);
         setSession(initialSessionState());
         setSessionIndexReady(true);
@@ -924,6 +937,11 @@ export function App() {
         if (sendFailedRef.current || sendInFlightRef.current) return;
         const history = await loadHistory(liveSessionId, ac.signal);
         if (ac.signal.aborted) return;
+        releaseAcceptedPendingTurn(history.session);
+        if (history.session.status !== "running") {
+          setActionBusy(false);
+          setCancelBusy(false);
+        }
         if (!selectedSessionActive) return;
         streamClosedRef.current = false;
         streamSessionIdRef.current = liveSessionId;
@@ -963,7 +981,7 @@ export function App() {
       ac.abort();
       if (streamSessionIdRef.current === liveSessionId) streamSessionIdRef.current = undefined;
     };
-  }, [client, demoActive, loadHistory, selectedSessionActive, selectedSessionId, sessionIndexReady]);
+  }, [client, demoActive, liveConnectTick, loadHistory, selectedSessionActive, selectedSessionId, sessionIndexReady]);
 
   function resetSessionSurface(nextSessionId: string, opts?: { preserveSession?: boolean }) {
     if (nextSessionId === selectedSessionId) return;
@@ -971,6 +989,7 @@ export function App() {
     streamSessionIdRef.current = undefined;
     sendInFlightRef.current = false;
     sendFailedRef.current = false;
+    selectedSessionIdRef.current = nextSessionId;
     setSelectedSessionId(nextSessionId);
     if (!opts?.preserveSession) setSession(initialSessionState());
     setPendingMessage(undefined);
@@ -992,6 +1011,7 @@ export function App() {
     streamSessionIdRef.current = undefined;
     sendInFlightRef.current = false;
     sendFailedRef.current = false;
+    selectedSessionIdRef.current = undefined;
     setSelectedSessionId(undefined);
     setSession(initialSessionState());
     setPendingMessage(undefined);
@@ -1021,6 +1041,7 @@ export function App() {
         streamSessionIdRef.current = undefined;
         sendInFlightRef.current = false;
         sendFailedRef.current = false;
+        selectedSessionIdRef.current = undefined;
         setSelectedSessionId(undefined);
         setSession(initialSessionState());
         setPendingMessage(undefined);
@@ -1102,6 +1123,7 @@ export function App() {
       if (!targetSessionId) {
         const created = await createSession(client);
         targetSessionId = created.session.id;
+        selectedSessionIdRef.current = targetSessionId;
         setSelectedSessionId(targetSessionId);
         setSession(initialSessionState());
         markSessionLive(targetSessionId, content, created.session);
@@ -1121,9 +1143,14 @@ export function App() {
       if (pendingKind === "task") markSessionLive(targetSessionId, content);
       const hasOpenStream = streamSessionIdRef.current === targetSessionId && !streamClosedRef.current;
       if (!hasOpenStream) {
-        const reconciled = await loadHistory(targetSessionId);
-        if (pendingKind === "task") releaseSettledTurn(reconciled.session, content);
-        setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
+        if (pendingKind === "task" && targetSessionId === selectedSessionIdRef.current && sessionIndexReady) {
+          setLiveConnectTick((current) => current + 1);
+          setStatus((current) => ({ ...current, state: "live", label: "Running" }));
+        } else {
+          const reconciled = await loadHistory(targetSessionId);
+          if (pendingKind === "task") releaseSettledTurn(reconciled.session, content);
+          setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
+        }
       } else {
         setStatus((current) => ({ ...current, state: "live", label: "Running" }));
       }
@@ -1151,6 +1178,7 @@ export function App() {
       if (!targetSessionId) {
         const created = await createSession(client);
         targetSessionId = created.session.id;
+        selectedSessionIdRef.current = targetSessionId;
         setSelectedSessionId(targetSessionId);
         setSession(initialSessionState());
         markSessionLive(targetSessionId, displayText, created.session);
@@ -1302,14 +1330,26 @@ export function App() {
     setActionBusy(false);
   }
 
+  function releaseAcceptedPendingTurn(nextSession: SessionState) {
+    const pending = pendingMessageRef.current;
+    if (!pending) return;
+    const accepted = nextSession.turns.some((turn) => pendingMessageMatchesTurn(pending, turn.userText));
+    if (!accepted) return;
+    setPendingMessage(undefined);
+    setGuidanceReceipts([]);
+  }
+
   function markSessionLive(sessionId: string, latestUserMessage: string, baseSession?: SessionSummary) {
+    const loadedTopic = conversationTopicFromTurns(session.turns);
     setSessions((current) => {
       let found = false;
       const next = current.map((item) => {
         if (item.id !== sessionId) return item;
         found = true;
         const existingLatest = item.latest_user_message?.trim();
+        const stableLoadedTopic = loadedTopic && !isContinuationPrompt(loadedTopic) ? loadedTopic : undefined;
         const topicUserMessage = item.topic_user_message ||
+          stableLoadedTopic ||
           (existingLatest && !isContinuationPrompt(existingLatest) ? existingLatest : latestUserMessage);
         return {
           ...item,
@@ -2414,10 +2454,21 @@ function mergeSessionIndex(serverSessions: readonly SessionSummary[], currentSes
 }
 
 function shouldPreserveOptimisticSession(session: SessionSummary): boolean {
+  return sessionHasVisibleState(session);
+}
+
+function sessionHasVisibleState(session: SessionSummary): boolean {
   return Boolean(
     session.active ||
     session.has_conversation ||
     session.has_events ||
+    session.has_plan ||
+    session.has_loop_protocol ||
+    session.has_loop_state ||
+    session.has_schedules ||
+    session.has_artifacts ||
+    session.has_memory ||
+    session.has_runtime_skills ||
     session.latest_user_message?.trim() ||
     session.topic_user_message?.trim(),
   );

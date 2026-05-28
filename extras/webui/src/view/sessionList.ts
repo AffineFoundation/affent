@@ -196,7 +196,9 @@ function summarizeLatestPendingTask(text: string, title: string): string {
 function currentSessionDetail(session: SessionState, title: string): string | undefined {
   const topic = conversationTopicFromTurns(session.turns);
   const latest = [...session.turns].reverse().find((turn) => Boolean(turn.userText?.trim()))?.userText;
-  if (!topic || !latest || latest === topic) return undefined;
+  if (!topic || !latest) return undefined;
+  const topicDetail = summarizeLatestRequestDetail(topic, title);
+  if (latest === topic) return topicDetail;
   return summarizeLatestRequestDetail(latest, title);
 }
 

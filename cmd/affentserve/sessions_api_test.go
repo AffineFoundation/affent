@@ -3064,6 +3064,29 @@ func TestSummarizeDurableSessionIgnoresSymlinkSessionDir(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionIgnoresEmptySessionDir(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	if err := os.MkdirAll(pool.sessionDirPath("empty-create-failure"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "empty-create-failure")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if found || summary.ID != "" {
+		t.Fatalf("empty session dir should not be a durable chat: found=%v summary=%+v", found, summary)
+	}
+	summaries, _, err := listSessionSummaries(pool, sessionListOptions{Limit: 100})
+	if err != nil {
+		t.Fatalf("listSessionSummaries: %v", err)
+	}
+	if ids := sessionIDs(summaries); len(ids) != 0 {
+		t.Fatalf("empty session dir leaked into list: %v", ids)
+	}
+}
+
 func TestSummarizeDurableSessionIgnoresSymlinkDurableStateMarkers(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

@@ -829,6 +829,9 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	summary.HasMemory = durableMemoryExists(dir, userMemoryPath)
 	summary.Memory = summarizeSessionMemory(pool.cfg.SharedUserMemory, dir, userMemoryPath)
 	summary.HasMemory = summary.HasMemory || summary.Memory != nil
+	if !sessionSummaryHasDurableState(summary) {
+		return sessionSummary{}, false, nil
+	}
 	if summary.HasArtifacts {
 		_, _ = mergeStat(artifactRoot)
 		if parsed, err := time.Parse(time.RFC3339, summary.Artifacts.LatestModTime); err == nil && parsed.After(newest) {
@@ -853,6 +856,18 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	summary.LastUsedAt = formatTime(newest)
 	populateSessionSummaryTitle(&summary)
 	return summary, true, nil
+}
+
+func sessionSummaryHasDurableState(summary sessionSummary) bool {
+	return summary.HasConversation ||
+		summary.HasEvents ||
+		summary.HasPlan ||
+		summary.HasLoopProtocol ||
+		summary.HasLoopState ||
+		summary.HasSchedules ||
+		summary.HasArtifacts ||
+		summary.HasMemory ||
+		summary.HasRuntimeSkills
 }
 
 func summarizeSessionArtifactsDir(root string) *sessionArtifactsSummary {
