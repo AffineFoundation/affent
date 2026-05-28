@@ -2231,19 +2231,27 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 		EnableLoopProtocol: true,
 		Prompts: []string{
 			"Start long-running loop setup for this session. Ask exactly one short calibration question about stop conditions or pause conditions, include marker LOOP-ACTIVATE-Q23, and do not activate LOOP.md yet.",
-			"Calibration answer: Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. Now supplement the saved draft protocol compactly and call loop_protocol action=complete_activation. Do not call update_draft with status running. The final answer must include LOOP-ACTIVATED-23, status running, and the activated loop protocol result.",
+			"Calibration answer: Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. Now supplement the saved draft protocol using loop_protocol action=patch_draft with compact section patches, then call loop_protocol action=complete_activation without a protocol body. Do not call update_draft with status running or send the full LOOP.md markdown in tool args. The final answer must include LOOP-ACTIVATED-23, status running, and the activated loop protocol result.",
 		},
 		RequiredUserMessageModes: map[string]int{
 			agent.UserModeLoopSetup: 1,
 		},
 		RequiredToolCounts: map[string]int{
-			"loop_protocol": 1,
+			"loop_protocol": 2,
 		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "loop_protocol", Arg: "action", Substring: "patch_draft"},
 			{Tool: "loop_protocol", Arg: "action", Substring: "complete_activation"},
 		},
+		ForbiddenToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "loop_protocol", Arg: "action", Substring: "update_draft"},
+			{Tool: "loop_protocol", Arg: "protocol", Substring: "# Loop Protocol"},
+		},
 		RequiredToolResultText: map[string][]string{
-			"loop_protocol": {"activated LOOP.md status=running"},
+			"loop_protocol": {
+				"patched LOOP.md draft status=draft",
+				"activated LOOP.md status=running",
+			},
 		},
 		MaxToolFailureKindCounts: map[string]int{
 			"loop_protocol_activation_status":  0,
@@ -2273,6 +2281,10 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			"web_fetch", "web_search", "browser_navigate", "browser_snapshot",
 			"browser_find", "browser_network", "browser_network_read",
 			"run_task", "subagent_run",
+		},
+		MaxParentToolCalls: 2,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"loop_protocol": 2,
 		},
 		MaxTurns: 8,
 	}

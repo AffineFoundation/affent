@@ -2689,14 +2689,29 @@ func TestSelectLongRunSuite(t *testing.T) {
 		loopActivation.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
 		t.Fatalf("loop activation expectations = prompts:%d modes:%#v requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopActivation.Prompts), loopActivation.RequiredUserMessageModes, loopActivation.RequiredLoopProtocolCalibrationRequests, loopActivation.RequiredLoopProtocolCalibrations, loopActivation.RequiredLoopProtocolCalibrationRequestStatuses, loopActivation.RequiredLoopProtocolCalibrationStatuses, loopActivation.RequiredTraceEventCounts)
 	}
-	if loopActivation.RequiredToolCounts["loop_protocol"] != 1 {
-		t.Fatalf("loop activation RequiredToolCounts = %#v, want loop_protocol=1", loopActivation.RequiredToolCounts)
+	if loopActivation.RequiredToolCounts["loop_protocol"] != 2 ||
+		loopActivation.MaxParentToolCalls != 2 ||
+		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 2 {
+		t.Fatalf("loop activation tool counts = required:%#v max_parent:%d max_by_tool:%#v, want exactly two loop_protocol calls", loopActivation.RequiredToolCounts, loopActivation.MaxParentToolCalls, loopActivation.MaxSuccessfulToolCallsByTool)
+	}
+	if !toolArgRequirementContains(loopActivation.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "patch_draft"}) {
+		t.Fatalf("loop activation RequiredToolArgContains = %#v, want patch_draft action", loopActivation.RequiredToolArgContains)
 	}
 	if !toolArgRequirementContains(loopActivation.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "complete_activation"}) {
 		t.Fatalf("loop activation RequiredToolArgContains = %#v, want complete_activation action", loopActivation.RequiredToolArgContains)
 	}
-	if !stringSliceContains(loopActivation.RequiredToolResultText["loop_protocol"], "activated LOOP.md status=running") {
-		t.Fatalf("loop activation RequiredToolResultText = %#v, want activated running result", loopActivation.RequiredToolResultText)
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "loop_protocol", Arg: "action", Substring: "update_draft"},
+		{Tool: "loop_protocol", Arg: "protocol", Substring: "# Loop Protocol"},
+	} {
+		if !toolArgRequirementContains(loopActivation.ForbiddenToolArgContains, want) {
+			t.Fatalf("loop activation ForbiddenToolArgContains = %#v, want %#v", loopActivation.ForbiddenToolArgContains, want)
+		}
+	}
+	for _, want := range []string{"patched LOOP.md draft status=draft", "activated LOOP.md status=running"} {
+		if !stringSliceContains(loopActivation.RequiredToolResultText["loop_protocol"], want) {
+			t.Fatalf("loop activation RequiredToolResultText = %#v, want %q", loopActivation.RequiredToolResultText, want)
+		}
 	}
 	for _, kind := range []string{"loop_protocol_activation_status", "loop_protocol_activation_unready", "loop_protocol_activation_invalid"} {
 		if max, ok := loopActivation.MaxToolFailureKindCounts[kind]; !ok || max != 0 {
