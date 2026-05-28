@@ -16,6 +16,8 @@ describe("SessionRunPanel", () => {
     const panel = screen.getByTestId("session-run-panel");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("2 commands");
+    expect(screen.getByLabelText("Run summary")).toHaveTextContent("Failed");
+    expect(screen.getByLabelText("Run summary")).toHaveTextContent("Passed");
     expect(screen.getByLabelText("Search commands")).toBeInTheDocument();
     const focus = screen.getByTestId("session-run-focus");
     expect(focus).toHaveTextContent("Recovery needed");
@@ -29,7 +31,7 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Cwd: extras/webui");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("checkout spec failed");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
-    expect(screen.getByTestId("session-run-list")).toHaveTextContent("Output artifact: .affent/artifacts/tool-results/test.txt");
+    expect(screen.getByTestId("session-run-list")).toHaveTextContent("Output: test.txt");
     const failedCommand = within(screen.getByTestId("session-run-list")).getAllByRole("listitem")[0];
 
     await user.click(within(focus).getByRole("button", { name: "Copy run evidence" }));
@@ -86,6 +88,13 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Recovery needed");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
+
+    await user.click(within(screen.getByLabelText("Run filters")).getByRole("button", { name: /Passed/ }));
+    expect(screen.queryByTestId("session-run-focus")).toBeNull();
+    expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
+    expect(screen.getByTestId("session-run-list")).not.toHaveTextContent("npm test -- checkout.spec.ts");
+    await user.click(within(screen.getByLabelText("Run filters")).getByRole("button", { name: /All/ }));
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Recovery needed");
 
     await user.type(screen.getByLabelText("Search commands"), "missing command");
     expect(screen.queryByTestId("session-run-focus")).toBeNull();

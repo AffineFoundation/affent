@@ -66,6 +66,29 @@ describe("buildSessionRun", () => {
     });
   });
 
+  it("keeps internal budget notices out of command summaries", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "test", tool: "shell", args: { command: "python3 -m pytest" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "test",
+          exit_code: 1,
+          result_summary: "(tool result context budget exhausted; final no-tool answer requested)",
+          result: "(tool result context budget exhausted; final no-tool answer requested)",
+        },
+      },
+    ]);
+
+    expect(buildSessionRun(session).commands[0]).toMatchObject({
+      command: "python3 -m pytest",
+      status: "failed",
+      detail: undefined,
+    });
+  });
+
   it("builds a structured manual command draft", () => {
     expect(manualRunDraft(" npm run build ", " extras/webui ")).toBe(
       [

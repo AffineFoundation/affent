@@ -157,7 +157,8 @@ function commandStatus(call: ToolCallState): SessionRunStatus {
 function commandDetail(call: ToolCallState): string | undefined {
   const source = call.resultSummary || call.result || call.failureKind;
   if (!source) return undefined;
-  return summarizePreview(stripRecoveryLines(source), 120);
+  const cleaned = stripRecoveryLines(source);
+  return cleaned ? summarizePreview(cleaned, 120) : undefined;
 }
 
 function nextHint(summary?: string, result?: string): string | undefined {
@@ -171,6 +172,7 @@ function stripRecoveryLines(text: string): string {
   return text
     .split(/\r?\n/)
     .filter((line) => !/^\s*(Next|Failure):/i.test(line))
+    .filter((line) => !/tool result context budget exhausted/i.test(line))
     .join("\n");
 }
 

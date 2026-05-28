@@ -4,6 +4,7 @@ import { manualRunDraft, runCommandDraft, runCommandEvidenceText, runCommandMeta
 import { CopyButton } from "./CopyButton";
 
 export type RunCommandAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
+type RunFilter = "all" | "failed" | "running" | "passed";
 
 export function SessionRunPanel({
   run,
@@ -23,8 +24,11 @@ export function SessionRunPanel({
   const [manualCommand, setManualCommand] = useState("");
   const [manualCwd, setManualCwd] = useState("");
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<RunFilter>("all");
   const trimmedQuery = query.trim();
-  const visibleCommands = trimmedQuery ? run.commands.filter((command) => runMatchesQuery(command, trimmedQuery)) : run.commands;
+  const stats = runStats(run.commands);
+  const filteredCommands = filter === "all" ? run.commands : run.commands.filter((command) => command.status === filter);
+  const visibleCommands = trimmedQuery ? filteredCommands.filter((command) => runMatchesQuery(command, trimmedQuery)) : filteredCommands;
   const focusCommand = visibleCommands.find((command) => command.status === "failed") ?? visibleCommands.find((command) => command.status === "running");
 
   async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
@@ -47,6 +51,19 @@ export function SessionRunPanel({
         <span>{run.detail}</span>
       </summary>
       <div className="session-skills-body">
+        <div className="session-run-overview" aria-label="Run summary">
+          <div className="session-run-overview-main">
+            <span>Commands</span>
+            <strong>{run.summary}</strong>
+            <small>{run.detail || "No shell commands recorded."}</small>
+          </div>
+          <div className="session-run-filterbar" role="group" aria-label="Run filters">
+            <RunFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
+            <RunFilterButton label="Failed" value={stats.failed} active={filter === "failed"} onClick={() => setFilter("failed")} />
+            <RunFilterButton label="Running" value={stats.running} active={filter === "running"} onClick={() => setFilter("running")} />
+            <RunFilterButton label="Passed" value={stats.passed} active={filter === "passed"} onClick={() => setFilter("passed")} />
+          </div>
+        </div>
         {focusCommand ? (
           <RunFocus
             command={focusCommand}
@@ -55,6 +72,40 @@ export function SessionRunPanel({
             runCommandBusy={runCommandBusy}
             onUseAsDraft={onUseAsDraft}
           />
+        ) : null}
+        {onUseAsDraft || onRunCommand ? (
+          <form className="session-run-manual" data-testid="session-run-manual" onSubmit={handleManualSubmit}>
+            <div className="session-run-manual-head">
+              <strong>Run command</strong>
+              <span>{run.latestCommandCwd ? `Latest cwd: ${displayPath(run.latestCommandCwd)}` : "Session workspace"}</span>
+            </div>
+            <label>
+              <span>Command</span>
+              <input
+                value={manualCommand}
+                onChange={(event) => setManualCommand(event.target.value)}
+                placeholder="npm test"
+              />
+            </label>
+            <label>
+              <span>Working directory</span>
+              <input
+                value={manualCwd}
+                onChange={(event) => setManualCwd(event.target.value)}
+                placeholder={run.latestCommandCwd || "session workspace"}
+              />
+            </label>
+            <div className="session-run-manual-actions">
+              <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
+                {onRunCommand ? "Run now" : "Use command as draft"}
+              </button>
+              {onRunCommand && onUseAsDraft ? (
+                <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>
+                  Use command as draft
+                </button>
+              ) : null}
+            </div>
+          </form>
         ) : null}
         {run.commands.length > 1 ? (
           <div className="session-skills-controls">
@@ -74,12 +125,12 @@ export function SessionRunPanel({
             {visibleCommands.map((command, index) => (
               <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
                 <div className="session-run-main">
-                  <strong title={command.command}>{command.command}</strong>
+                  <strong title={command.command}>{commandLabel(command.command)}</strong>
                   <span>{runCommandMeta(command)}</span>
-                  {command.cwd ? <small title={command.cwd}>Cwd: {command.cwd}</small> : null}
+                  {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
                   {command.detail ? <small>{command.detail}</small> : null}
                   {command.next ? <small>Next: {command.next}</small> : null}
-                  {command.artifactPath ? <small>Output artifact: {command.artifactPath}</small> : null}
+                  {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
                 </div>
                 <span className="session-evidence-actions">
                   <CopyButton label="Copy command" value={command.command} className="ghost-action" />
@@ -108,43 +159,37 @@ export function SessionRunPanel({
         ) : (
           <div className="session-skills-empty">No shell commands in this chat.</div>
         )}
-        {onUseAsDraft || onRunCommand ? (
-          <form className="session-run-manual" data-testid="session-run-manual" onSubmit={handleManualSubmit}>
-            <div className="session-run-manual-head">
-              <strong>Run command</strong>
-              <span>Session workspace</span>
-            </div>
-            <label>
-              <span>Command</span>
-              <input
-                value={manualCommand}
-                onChange={(event) => setManualCommand(event.target.value)}
-                placeholder="npm test"
-              />
-            </label>
-            <label>
-              <span>Working directory</span>
-              <input
-                value={manualCwd}
-                onChange={(event) => setManualCwd(event.target.value)}
-                placeholder="session workspace"
-              />
-            </label>
-            <div className="session-run-manual-actions">
-              <button type="submit" className="ghost-action primary-run-action" disabled={!manualCommand.trim() || runCommandBusy}>
-                {onRunCommand ? "Run now" : "Use command as draft"}
-              </button>
-              {onRunCommand && onUseAsDraft ? (
-                <button type="button" className="ghost-action" disabled={!manualCommand.trim()} onClick={() => onUseAsDraft(manualRunDraft(manualCommand, manualCwd), "run_command")}>
-                  Use command as draft
-                </button>
-              ) : null}
-            </div>
-          </form>
-        ) : null}
       </div>
     </details>
   );
+}
+
+function RunFilterButton({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="session-run-filter" data-active={active ? "true" : "false"} onClick={onClick}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </button>
+  );
+}
+
+function runStats(commands: readonly SessionRunCommand[]) {
+  return {
+    total: commands.length,
+    failed: commands.filter((command) => command.status === "failed").length,
+    running: commands.filter((command) => command.status === "running").length,
+    passed: commands.filter((command) => command.status === "passed").length,
+  };
 }
 
 function runMatchesQuery(command: SessionRunCommand, query: string): boolean {
@@ -177,12 +222,12 @@ function RunFocus({
     <section className="session-run-focus" data-status={command.status} data-testid="session-run-focus" aria-label="Run focus">
       <div className="session-run-focus-main">
         <span>{command.status === "failed" ? "Recovery needed" : "Running now"}</span>
-        <strong title={command.command}>{command.command}</strong>
+        <strong title={command.command}>{commandLabel(command.command)}</strong>
         <small>{runCommandMeta(command)}</small>
-        {command.cwd ? <small>Cwd: {command.cwd}</small> : null}
+        {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
         {command.detail ? <p>{command.detail}</p> : null}
         {command.next ? <p>Next: {command.next}</p> : null}
-        {command.artifactPath ? <small>Output artifact: {command.artifactPath}</small> : null}
+        {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
       </div>
       <div className="session-evidence-actions">
         <CopyButton label="Copy run evidence" value={runCommandEvidenceText(command)} className="ghost-action" />
@@ -204,4 +249,23 @@ function RunFocus({
       </div>
     </section>
   );
+}
+
+function commandLabel(command: string): string {
+  const compacted = command.replace(/\s+/g, " ").trim();
+  if (compacted.length <= 180) return compacted;
+  return `${compacted.slice(0, 177)}...`;
+}
+
+function displayPath(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  const parts = normalized.split("/").filter(Boolean);
+  if (path.length > 64 && parts.length >= 2) return `.../${parts.slice(-2).join("/")}`;
+  if (parts.length <= 3) return path;
+  return parts.slice(-3).join("/");
+}
+
+function artifactLabel(path: string): string {
+  const normalized = path.replace(/\\/g, "/");
+  return normalized.split("/").filter(Boolean).at(-1) ?? path;
 }
