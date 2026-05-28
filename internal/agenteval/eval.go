@@ -1335,6 +1335,9 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"truncation:missing_artifact",
 		"recall:no_context",
 		"recall:no_matched_terms",
+		"recall:weak_context",
+		"recall:weak_matched_terms",
+		"recall:memory_no_topic_anchors",
 	}
 	seen := map[string]bool{}
 	out := make([]string, 0, 6)

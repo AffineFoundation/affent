@@ -117,6 +117,29 @@ func TestDebugMemorySearchMissExamplesUseFullTraceForRecallSignals(t *testing.T)
 	}
 }
 
+func TestDebugRecoveryPriorityTagsIncludesRecallDegradation(t *testing.T) {
+	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"recall:memory_topic_anchors",
+		"recall:memory_no_topic_anchors",
+		"recall:weak_matched_terms",
+		"recall:weak_context",
+		"source_network:partial_read",
+		"outcome:failed",
+		"misc:later",
+	}})
+	want := []string{
+		"outcome:failed",
+		"source_network:partial_read",
+		"recall:weak_context",
+		"recall:weak_matched_terms",
+		"recall:memory_no_topic_anchors",
+		"recall:memory_topic_anchors",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",
