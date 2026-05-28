@@ -2725,6 +2725,10 @@ func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
 		Failures:          []string{"missing browser network evidence"},
 		AffentctlCommand:  []string{"go", "run", "./cmd/affentctl", "run", "--trace-skip-deltas", "--prompt", "<prompt>"},
 		TraceDeltas:       false,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:        1,
+			SourceAccessDynamicPartial: 1,
+		},
 	}
 	guide := BuildDebugRecoveryGuide(res)
 	if guide == nil {
@@ -2733,8 +2737,16 @@ func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
 	if strings.Join(guide.FullTraceRerunCommand, "\x00") != "go\x00run\x00./cmd/affentctl\x00run\x00--prompt\x00<prompt>" {
 		t.Fatalf("full trace rerun command = %#v", guide.FullTraceRerunCommand)
 	}
-	if !strings.Contains(guide.ContinuePrompt, "missing browser network evidence") && !strings.Contains(guide.ContinuePrompt, "explicit expectation failed") {
-		t.Fatalf("continue prompt = %q, want failure-oriented guidance", guide.ContinuePrompt)
+	for _, want := range []string{
+		"First failure: missing browser network evidence.",
+		"explicit expectation failed",
+		"Priority debug tags:",
+		"outcome:failed",
+		"source_dynamic_without_network",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
 	}
 }
 

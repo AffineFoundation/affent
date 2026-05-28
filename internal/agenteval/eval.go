@@ -1195,7 +1195,7 @@ func BuildDebugRecoveryGuide(res BatchResult) *DebugRecoveryGuide {
 		Inspect:               debugRecoveryInspect(res, brief),
 		ExactRerunCommand:     append([]string(nil), res.AffentctlCommand...),
 		FullTraceRerunCommand: debugRecoveryFullTraceCommand(res),
-		ContinuePrompt:        debugRecoveryContinuePrompt(res),
+		ContinuePrompt:        debugRecoveryContinuePrompt(res, brief),
 	}
 	if guide.Summary == "" && len(guide.Inspect) == 0 && len(guide.ExactRerunCommand) == 0 && len(guide.FullTraceRerunCommand) == 0 && guide.ContinuePrompt == "" {
 		return nil
@@ -1264,7 +1264,7 @@ func debugRecoveryFullTraceCommand(res BatchResult) []string {
 	return out
 }
 
-func debugRecoveryContinuePrompt(res BatchResult) string {
+func debugRecoveryContinuePrompt(res BatchResult, brief *DebugBrief) string {
 	var parts []string
 	if res.OK {
 		parts = append(parts, "Use this passing eval as baseline evidence.")
@@ -1278,9 +1278,71 @@ func debugRecoveryContinuePrompt(res BatchResult) string {
 		parts = append(parts, "Use "+res.DebugManifestPath+" for structured failures, debug tags, examples, and rerun commands.")
 	}
 	if len(res.Failures) > 0 {
+		if preview := debugRecoveryFailurePreview(res.Failures); preview != "" {
+			parts = append(parts, "First failure: "+preview+".")
+		}
 		parts = append(parts, "Explain which explicit expectation failed and make the smallest runtime change that improves the real long-run scenario.")
 	}
+	if tags := debugRecoveryPriorityTags(brief); len(tags) > 0 {
+		parts = append(parts, "Priority debug tags: "+strings.Join(tags, ", ")+".")
+	}
 	return strings.Join(parts, " ")
+}
+
+func debugRecoveryFailurePreview(failures []string) string {
+	for _, failure := range failures {
+		failure = textutil.CompactWhitespace(strings.TrimSpace(failure))
+		if failure != "" {
+			return textutil.Preview(failure, 240)
+		}
+	}
+	return ""
+}
+
+func debugRecoveryPriorityTags(brief *DebugBrief) []string {
+	if brief == nil || len(brief.Tags) == 0 {
+		return nil
+	}
+	priority := []string{
+		"outcome:failed",
+		"turn_end:max_turns",
+		"turn_end:error",
+		"runtime_error",
+		"conversation_repair",
+		"tool_repair:failed",
+		"loop_guard:forced_no_tools",
+		"source_dynamic_without_network",
+		"source_dynamic_without_decision",
+		"browser_network:unread_refs",
+		"browser_scroll:stuck_without_network",
+		"source_network:missing_response_diagnostics",
+		"context_compaction:summary_missing",
+		"context_compaction:summary_empty",
+		"truncation:missing_artifact",
+		"recall:no_context",
+		"recall:no_matched_terms",
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, 6)
+	for _, tag := range priority {
+		if containsString(brief.Tags, tag) {
+			out = append(out, tag)
+			seen[tag] = true
+			if len(out) >= 6 {
+				return out
+			}
+		}
+	}
+	for _, tag := range brief.Tags {
+		if tag == "" || seen[tag] {
+			continue
+		}
+		out = append(out, tag)
+		if len(out) >= 6 {
+			return out
+		}
+	}
+	return out
 }
 
 func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
