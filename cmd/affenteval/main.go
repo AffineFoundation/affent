@@ -36,6 +36,16 @@ type expectationCapabilityFailureExample struct {
 	DebugManifestPath string         `json:"debug_manifest_path,omitempty"`
 }
 
+type expectationDomainFailureExample struct {
+	Domain            string         `json:"domain"`
+	Scenario          string         `json:"scenario"`
+	FailureKinds      map[string]int `json:"failure_kinds,omitempty"`
+	DebugBriefTags    []string       `json:"debug_brief_tags,omitempty"`
+	TracePath         string         `json:"trace_path,omitempty"`
+	TimelinePath      string         `json:"timeline_path,omitempty"`
+	DebugManifestPath string         `json:"debug_manifest_path,omitempty"`
+}
+
 type batchFailureExample struct {
 	Scenario          string `json:"scenario"`
 	Failure           string `json:"failure"`
@@ -207,6 +217,8 @@ func run(args []string) int {
 			MinSourceAccessVerifiedRate:           fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MinExpectationCapabilityPassRate:      fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
 			MinEachExpectationCapabilityPassRate:  fs.Float64("min-each-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation capability family, 0..1"),
+			MinExpectationDomainPassRate:          fs.Float64("min-expectation-domain-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation domain instances, 0..1"),
+			MinEachExpectationDomainPassRate:      fs.Float64("min-each-expectation-domain-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation domain, 0..1"),
 			MinSessionSearchContextHitRate:        fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
 			MinSessionSearchMatchedTermsPerCall:   fs.Float64("min-session-search-matched-terms-per-call", -1, "optional quality gate: minimum average unique matched session_search terms per call"),
 			MinToolRepairSuccessRate:              fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
@@ -417,6 +429,8 @@ type qualityGateConfig struct {
 	MinSourceAccessVerifiedRate           *float64
 	MinExpectationCapabilityPassRate      *float64
 	MinEachExpectationCapabilityPassRate  *float64
+	MinExpectationDomainPassRate          *float64
+	MinEachExpectationDomainPassRate      *float64
 	MinSessionSearchContextHitRate        *float64
 	MinSessionSearchMatchedTermsPerCall   *float64
 	MinToolRepairSuccessRate              *float64
@@ -468,6 +482,8 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinLoopProtocolFeedRate:               float64Ptr(0.05),
 				MinExpectationCapabilityPassRate:      float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate:  float64Ptr(0.50),
+				MinExpectationDomainPassRate:          float64Ptr(0.80),
+				MinEachExpectationDomainPassRate:      float64Ptr(0.50),
 				MinSessionSearchContextHitRate:        float64Ptr(0.75),
 				MinSessionSearchMatchedTermsPerCall:   float64Ptr(1.0),
 				MinRuntimeSurfaceRate:                 float64Ptr(0.90),
@@ -519,6 +535,8 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinCompletionRate:                     float64Ptr(0.90),
 				MinExpectationCapabilityPassRate:      float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate:  float64Ptr(0.50),
+				MinExpectationDomainPassRate:          float64Ptr(0.80),
+				MinEachExpectationDomainPassRate:      float64Ptr(0.50),
 				MinRuntimeSurfaceRate:                 float64Ptr(0.90),
 				MinTraceEventRate:                     float64Ptr(0.90),
 				MinSourceNetworkRate:                  float64Ptr(0.50),
@@ -586,6 +604,8 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-source-access-verified-rate", g.MinSourceAccessVerifiedRate)
 	add("min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate)
 	add("min-each-expectation-capability-pass-rate", g.MinEachExpectationCapabilityPassRate)
+	add("min-expectation-domain-pass-rate", g.MinExpectationDomainPassRate)
+	add("min-each-expectation-domain-pass-rate", g.MinEachExpectationDomainPassRate)
 	add("min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate)
 	add("min-session-search-matched-terms-per-call", g.MinSessionSearchMatchedTermsPerCall)
 	add("min-tool-repair-success-rate", g.MinToolRepairSuccessRate)
@@ -658,6 +678,8 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-source-access-verified-rate", &g.MinSourceAccessVerifiedRate, profileConfig.MinSourceAccessVerifiedRate)
 	apply("min-expectation-capability-pass-rate", &g.MinExpectationCapabilityPassRate, profileConfig.MinExpectationCapabilityPassRate)
 	apply("min-each-expectation-capability-pass-rate", &g.MinEachExpectationCapabilityPassRate, profileConfig.MinEachExpectationCapabilityPassRate)
+	apply("min-expectation-domain-pass-rate", &g.MinExpectationDomainPassRate, profileConfig.MinExpectationDomainPassRate)
+	apply("min-each-expectation-domain-pass-rate", &g.MinEachExpectationDomainPassRate, profileConfig.MinEachExpectationDomainPassRate)
 	apply("min-session-search-context-hit-rate", &g.MinSessionSearchContextHitRate, profileConfig.MinSessionSearchContextHitRate)
 	apply("min-session-search-matched-terms-per-call", &g.MinSessionSearchMatchedTermsPerCall, profileConfig.MinSessionSearchMatchedTermsPerCall)
 	apply("min-tool-repair-success-rate", &g.MinToolRepairSuccessRate, profileConfig.MinToolRepairSuccessRate)
@@ -853,6 +875,9 @@ type batchSummary struct {
 	ExpectationScenarios                 int
 	ExpectationSuites                    map[string]int
 	ExpectationDomains                   map[string]int
+	ExpectationDomainPass                map[string]int
+	ExpectationDomainFail                map[string]int
+	ExpectationDomainFailureExamples     map[string][]expectationDomainFailureExample
 	ExpectationCapabilities              map[string]int
 	ExpectationCapabilityPass            map[string]int
 	ExpectationCapabilityFail            map[string]int
@@ -1213,6 +1238,12 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 	s.ExpectationScenarios++
 	addCountMapValues(&s.ExpectationSuites, exp.Suites)
 	addCountMapValues(&s.ExpectationDomains, exp.Domains)
+	if res.OK {
+		addCountMapValues(&s.ExpectationDomainPass, exp.Domains)
+	} else {
+		addCountMapValues(&s.ExpectationDomainFail, exp.Domains)
+		s.addExpectationDomainFailureExamples(exp.Domains, res)
+	}
 	addCountMapValues(&s.ExpectationRequiredTools, expectationRequiredToolNames(exp))
 	for _, req := range exp.RequiredSourceAccess {
 		status := strings.TrimSpace(req.Status)
@@ -1228,6 +1259,40 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 	} else {
 		addCountMapValues(&s.ExpectationCapabilityFail, keys)
 		s.addExpectationCapabilityFailureExamples(keys, res)
+	}
+}
+
+func (s *batchSummary) addExpectationDomainFailureExamples(domains []string, res agenteval.BatchResult) {
+	if len(domains) == 0 {
+		return
+	}
+	brief := agenteval.BuildDebugBrief(res)
+	var tags []string
+	if brief != nil {
+		tags = append([]string(nil), brief.Tags...)
+		sort.Strings(tags)
+	}
+	failureKinds := failureKindsForResult(res.Failures)
+	for _, domain := range domains {
+		domain = strings.TrimSpace(domain)
+		if domain == "" {
+			continue
+		}
+		if s.ExpectationDomainFailureExamples == nil {
+			s.ExpectationDomainFailureExamples = map[string][]expectationDomainFailureExample{}
+		}
+		if len(s.ExpectationDomainFailureExamples[domain]) >= batchSummaryExamplesPerKind {
+			continue
+		}
+		s.ExpectationDomainFailureExamples[domain] = append(s.ExpectationDomainFailureExamples[domain], expectationDomainFailureExample{
+			Domain:            domain,
+			Scenario:          res.BatchScenario,
+			FailureKinds:      cloneStringIntMap(failureKinds),
+			DebugBriefTags:    tags,
+			TracePath:         res.TracePath,
+			TimelinePath:      retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
+			DebugManifestPath: retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
+		})
 	}
 }
 
@@ -1570,7 +1635,10 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " expectation_suites=%s", formatStringIntCounts(s.ExpectationSuites))
 		}
 		if len(s.ExpectationDomains) > 0 {
+			expectationDomainPassed, expectationDomainTotal := expectationDomainPassTotals(s)
 			fmt.Fprintf(w, " expectation_domains=%s", formatStringIntCounts(s.ExpectationDomains))
+			fmt.Fprintf(w, " expectation_domain_pass=%s", formatPassTotalCounts(s.ExpectationDomainPass, s.ExpectationDomains))
+			fmt.Fprintf(w, " expectation_domain_pass_rate=%s", formatOptionalPercent(batchOptionalRatio(expectationDomainPassed, expectationDomainTotal)))
 		}
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskSources, s.FocusedTaskErrors, s.FocusedTaskIncomplete, s.SubagentCalls, s.SubagentByMode, s.SubagentSources, s.SubagentErrors, s.SubagentIncomplete)
@@ -1598,6 +1666,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printPlanExampleLines(w, s.PlanExamples, "")
 	printToolTruncationExampleLines(w, s.ToolTruncationExamples, "")
+	printExpectationDomainFailureExampleLines(w, s.ExpectationDomainFailureExamples, "")
 	printExpectationCapabilityFailureExampleLines(w, s.ExpectationCapabilityFailureExamples, "")
 }
 
@@ -1884,6 +1953,8 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate, true},
 		{"--min-each-expectation-capability-pass-rate", g.MinEachExpectationCapabilityPassRate, true},
+		{"--min-expectation-domain-pass-rate", g.MinExpectationDomainPassRate, true},
+		{"--min-each-expectation-domain-pass-rate", g.MinEachExpectationDomainPassRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
 		{"--min-session-search-matched-terms-per-call", g.MinSessionSearchMatchedTermsPerCall, false},
 		{"--min-tool-repair-success-rate", g.MinToolRepairSuccessRate, true},
@@ -1995,6 +2066,9 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	expectationCapabilityPassed, expectationCapabilityTotal := expectationCapabilityPassTotals(s)
 	checkMin("expectation_capability_pass_rate", batchRatio(expectationCapabilityPassed, expectationCapabilityTotal), g.MinExpectationCapabilityPassRate, expectationCapabilityTotal > 0)
 	failures = append(failures, expectationCapabilityFamilyGateFailures(s, g.MinEachExpectationCapabilityPassRate)...)
+	expectationDomainPassed, expectationDomainTotal := expectationDomainPassTotals(s)
+	checkMin("expectation_domain_pass_rate", batchRatio(expectationDomainPassed, expectationDomainTotal), g.MinExpectationDomainPassRate, expectationDomainTotal > 0)
+	failures = append(failures, expectationDomainFamilyGateFailures(s, g.MinEachExpectationDomainPassRate)...)
 	for _, cap := range g.RequiredExpectationCapabilities {
 		if s.ExpectationCapabilities[cap] == 0 {
 			failures = append(failures, fmt.Sprintf("expectation_capability[%s] unavailable, want >= 1 scenario", cap))
@@ -2728,6 +2802,38 @@ func printExpectationCapabilityFailureExampleLines(w io.Writer, examples map[str
 	}
 }
 
+func printExpectationDomainFailureExampleLines(w io.Writer, examples map[string][]expectationDomainFailureExample, indent string) {
+	if len(examples) == 0 {
+		return
+	}
+	domains := make([]string, 0, len(examples))
+	for domain := range examples {
+		domains = append(domains, domain)
+	}
+	sort.Strings(domains)
+	for _, domain := range domains {
+		for _, ex := range examples[domain] {
+			fmt.Fprintf(w, "%sexpectation_domain_failure[%s]: scenario=%s", indent, domain, ex.Scenario)
+			if len(ex.FailureKinds) > 0 {
+				fmt.Fprintf(w, " failure_kinds=%s", formatStringIntCounts(ex.FailureKinds))
+			}
+			if len(ex.DebugBriefTags) > 0 {
+				fmt.Fprintf(w, " debug_brief=%s", formatDebugBriefTags(ex.DebugBriefTags))
+			}
+			if ex.TracePath != "" {
+				fmt.Fprintf(w, " trace=%s", ex.TracePath)
+			}
+			if ex.TimelinePath != "" {
+				fmt.Fprintf(w, " timeline=%s", ex.TimelinePath)
+			}
+			if ex.DebugManifestPath != "" {
+				fmt.Fprintf(w, " debug_manifest=%s", ex.DebugManifestPath)
+			}
+			fmt.Fprintln(w)
+		}
+	}
+}
+
 func failureHintsForKinds(counts map[string]int) failureHintMap {
 	if len(counts) == 0 {
 		return nil
@@ -2919,6 +3025,8 @@ type evalJSONLMetadata struct {
 	MinSourceAccessVerifiedRate           *float64           `json:"min_source_access_verified_rate,omitempty"`
 	MinExpectationCapabilityPassRate      *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
 	MinEachExpectationCapabilityPassRate  *float64           `json:"min_each_expectation_capability_pass_rate,omitempty"`
+	MinExpectationDomainPassRate          *float64           `json:"min_expectation_domain_pass_rate,omitempty"`
+	MinEachExpectationDomainPassRate      *float64           `json:"min_each_expectation_domain_pass_rate,omitempty"`
 	MinSessionSearchContextHitRate        *float64           `json:"min_session_search_context_hit_rate,omitempty"`
 	MinSessionSearchMatchedTermsPerCall   *float64           `json:"min_session_search_matched_terms_per_call,omitempty"`
 	MinToolRepairSuccessRate              *float64           `json:"min_tool_repair_success_rate,omitempty"`
@@ -2991,6 +3099,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinSourceAccessVerifiedRate:           enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MinExpectationCapabilityPassRate:      enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
 		MinEachExpectationCapabilityPassRate:  enabledQualityGateValue(gates.MinEachExpectationCapabilityPassRate),
+		MinExpectationDomainPassRate:          enabledQualityGateValue(gates.MinExpectationDomainPassRate),
+		MinEachExpectationDomainPassRate:      enabledQualityGateValue(gates.MinEachExpectationDomainPassRate),
 		MinSessionSearchContextHitRate:        enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
 		MinSessionSearchMatchedTermsPerCall:   enabledQualityGateValue(gates.MinSessionSearchMatchedTermsPerCall),
 		MinToolRepairSuccessRate:              enabledQualityGateValue(gates.MinToolRepairSuccessRate),
@@ -3346,6 +3456,14 @@ type batchSummaryRecord struct {
 	ExpectationScenarios                 int                                              `json:"expectation_scenarios,omitempty"`
 	ExpectationSuites                    map[string]int                                   `json:"expectation_suites,omitempty"`
 	ExpectationDomains                   map[string]int                                   `json:"expectation_domains,omitempty"`
+	ExpectationDomainPassed              map[string]int                                   `json:"expectation_domain_passed,omitempty"`
+	ExpectationDomainFailed              map[string]int                                   `json:"expectation_domain_failed,omitempty"`
+	ExpectationDomainRate                map[string]float64                               `json:"expectation_domain_pass_rate,omitempty"`
+	ExpectationDomainTotal               *int                                             `json:"expectation_domain_total,omitempty"`
+	ExpectationDomainPassedTotal         *int                                             `json:"expectation_domain_passed_total,omitempty"`
+	ExpectationDomainFailedTotal         *int                                             `json:"expectation_domain_failed_total,omitempty"`
+	ExpectationDomainPassRateTotal       *float64                                         `json:"expectation_domain_pass_rate_total,omitempty"`
+	ExpectationDomainFailureExamples     map[string][]expectationDomainFailureExample     `json:"expectation_domain_failure_examples,omitempty"`
 	ExpectationCapabilities              map[string]int                                   `json:"expectation_capabilities,omitempty"`
 	ExpectationCapabilityPassed          map[string]int                                   `json:"expectation_capability_passed,omitempty"`
 	ExpectationCapabilityFailed          map[string]int                                   `json:"expectation_capability_failed,omitempty"`
@@ -3612,6 +3730,7 @@ func runtimeSurfaceCapabilityNames(c sse.RuntimeCapabilities) []string {
 
 func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary, gateFailures []string) {
 	expectationCapabilityPassed, expectationCapabilityTotal := expectationCapabilityPassTotals(s)
+	expectationDomainPassed, expectationDomainTotal := expectationDomainPassTotals(s)
 	writeJSONLine(w, batchSummaryRecord{
 		evalJSONLMetadata:                    meta,
 		Type:                                 "summary",
@@ -3763,6 +3882,14 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ExpectationScenarios:                 s.ExpectationScenarios,
 		ExpectationSuites:                    cloneStringIntMap(s.ExpectationSuites),
 		ExpectationDomains:                   cloneStringIntMap(s.ExpectationDomains),
+		ExpectationDomainPassed:              cloneStringIntMap(s.ExpectationDomainPass),
+		ExpectationDomainFailed:              cloneStringIntMap(s.ExpectationDomainFail),
+		ExpectationDomainRate:                expectationDomainPassRates(s.ExpectationDomains, s.ExpectationDomainPass),
+		ExpectationDomainTotal:               optionalInt(expectationDomainTotal, expectationDomainTotal > 0),
+		ExpectationDomainPassedTotal:         optionalInt(expectationDomainPassed, expectationDomainTotal > 0),
+		ExpectationDomainFailedTotal:         optionalInt(expectationDomainTotal-expectationDomainPassed, expectationDomainTotal > 0),
+		ExpectationDomainPassRateTotal:       batchOptionalRatio(expectationDomainPassed, expectationDomainTotal),
+		ExpectationDomainFailureExamples:     cloneExpectationDomainFailureExamples(s.ExpectationDomainFailureExamples),
 		ExpectationCapabilities:              cloneStringIntMap(s.ExpectationCapabilities),
 		ExpectationCapabilityPassed:          cloneStringIntMap(s.ExpectationCapabilityPass),
 		ExpectationCapabilityFailed:          cloneStringIntMap(s.ExpectationCapabilityFail),
@@ -3814,6 +3941,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MinExpectationCapabilityPassRate != nil ||
 		meta.MinEachExpectationCapabilityPassRate != nil ||
+		meta.MinExpectationDomainPassRate != nil ||
+		meta.MinEachExpectationDomainPassRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||
 		meta.MinSessionSearchMatchedTermsPerCall != nil ||
 		meta.MinToolRepairSuccessRate != nil ||
@@ -3887,6 +4016,52 @@ func expectationCapabilityFamilyGateFailures(s batchSummary, threshold *float64)
 	for cap, rate := range rates {
 		if rate < *threshold {
 			failures = append(failures, fmt.Sprintf("expectation_capability_pass_rate[%s] %s < min %s", cap, formatGateFloat(rate), formatGateFloat(*threshold)))
+		}
+	}
+	sort.Strings(failures)
+	return failures
+}
+
+func expectationDomainPassRates(total, passed map[string]int) map[string]float64 {
+	if len(total) == 0 {
+		return nil
+	}
+	out := map[string]float64{}
+	for domain, count := range total {
+		if count <= 0 {
+			continue
+		}
+		out[domain] = float64(passed[domain]) / float64(count)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func expectationDomainPassTotals(s batchSummary) (passed int, total int) {
+	for domain, count := range s.ExpectationDomains {
+		if count <= 0 {
+			continue
+		}
+		total += count
+		passed += s.ExpectationDomainPass[domain]
+	}
+	return passed, total
+}
+
+func expectationDomainFamilyGateFailures(s batchSummary, threshold *float64) []string {
+	if threshold == nil || *threshold < 0 {
+		return nil
+	}
+	rates := expectationDomainPassRates(s.ExpectationDomains, s.ExpectationDomainPass)
+	if len(rates) == 0 {
+		return []string{fmt.Sprintf("expectation_domain_family_pass_rate unavailable, want >= %s", formatGateFloat(*threshold))}
+	}
+	var failures []string
+	for domain, rate := range rates {
+		if rate < *threshold {
+			failures = append(failures, fmt.Sprintf("expectation_domain_pass_rate[%s] %s < min %s", domain, formatGateFloat(rate), formatGateFloat(*threshold)))
 		}
 	}
 	sort.Strings(failures)
@@ -4014,6 +4189,30 @@ func cloneExpectationCapabilityFailureExamples(in map[string][]expectationCapabi
 				ex.DebugBriefTags = append([]string(nil), ex.DebugBriefTags...)
 			}
 			out[cap] = append(out[cap], ex)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func cloneExpectationDomainFailureExamples(in map[string][]expectationDomainFailureExample) map[string][]expectationDomainFailureExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]expectationDomainFailureExample, len(in))
+	for domain, examples := range in {
+		if len(examples) == 0 {
+			continue
+		}
+		out[domain] = make([]expectationDomainFailureExample, 0, len(examples))
+		for _, ex := range examples {
+			ex.FailureKinds = cloneStringIntMap(ex.FailureKinds)
+			if len(ex.DebugBriefTags) > 0 {
+				ex.DebugBriefTags = append([]string(nil), ex.DebugBriefTags...)
+			}
+			out[domain] = append(out[domain], ex)
 		}
 	}
 	if len(out) == 0 {

@@ -52,6 +52,8 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-avg-context-injection-estimated-tokens=6000.000",
 		"min-trace-event-rate=0.900",
 		"min-source-access-verified-rate=0.900",
+		"min-expectation-domain-pass-rate=0.800",
+		"min-each-expectation-domain-pass-rate=0.500",
 		"max-source-dynamic-partial-rate=0.200",
 		"max-debug-brief-tag-rate=browser_network:unread_refs=0.000",
 		"max-debug-brief-tag-rate=browser_scroll:stuck_without_network=0.000",
@@ -118,7 +120,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
-	for _, want := range []string{"-require-expectation-capability", "-require-expectation-domain"} {
+	for _, want := range []string{"-require-expectation-capability", "-require-expectation-domain", "-min-expectation-domain-pass-rate", "-min-each-expectation-domain-pass-rate"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("--help missing expectation coverage gate %q:\n%s", want, help)
 		}
@@ -590,7 +592,8 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextInjectionEstimatedTokens: 2250,
 		ExpectationCapabilities:         map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:       map[string]int{"browser": 1, "memory": 1},
-		ExpectationDomains:              map[string]int{"market": 1},
+		ExpectationDomains:              map[string]int{"bittensor": 1, "market": 2},
+		ExpectationDomainPass:           map[string]int{"market": 1},
 		DebugBriefByTag:                 map[string]int{"browser_scroll:stuck_without_network": 1, "source_dynamic_without_network": 1, "verifier:not_run": 1},
 	}
 	failures := qualityGateFailures(summary, qualityGateConfig{
@@ -598,6 +601,8 @@ func TestQualityGateFailures(t *testing.T) {
 		MinCompletionRate:                     ptr(0.75),
 		MinExpectationCapabilityPassRate:      ptr(0.75),
 		MinEachExpectationCapabilityPassRate:  ptr(0.75),
+		MinExpectationDomainPassRate:          ptr(0.75),
+		MinEachExpectationDomainPassRate:      ptr(0.75),
 		MinMemoryUpdateRate:                   ptr(0.75),
 		MinLoopProtocolFeedRate:               ptr(0.75),
 		MinRuntimeSurfaceRate:                 ptr(0.75),
@@ -634,7 +639,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgTotalTokens:                     ptr(40),
 		MaxDebugBriefTagRates:                 map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0, "verifier:not_run": 0},
 		RequiredExpectationCapabilities:       []string{"browser", "delegated_source_evidence"},
-		RequiredExpectationDomains:            []string{"bittensor", "market"},
+		RequiredExpectationDomains:            []string{"code_pr", "market"},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -659,7 +664,10 @@ func TestQualityGateFailures(t *testing.T) {
 		"expectation_capability_pass_rate[web] 0.000 < min 0.750",
 		"expectation_capability_pass_rate 0.500 < min 0.750",
 		"expectation_capability[delegated_source_evidence] unavailable, want >= 1 scenario",
-		"expectation_domain[bittensor] unavailable, want >= 1 scenario",
+		"expectation_domain_pass_rate[bittensor] 0.000 < min 0.750",
+		"expectation_domain_pass_rate[market] 0.500 < min 0.750",
+		"expectation_domain_pass_rate 0.333 < min 0.750",
+		"expectation_domain[code_pr] unavailable, want >= 1 scenario",
 		"focused_task_error_rate 0.500 > max 0.250",
 		"forced_no_tools_rate 0.200 > max 0.100",
 		"loop_guard_intervention_rate 0.400 > max 0.300",
@@ -855,6 +863,12 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinEachExpectationCapabilityPassRate == nil || *gates.MinEachExpectationCapabilityPassRate != 0.50 {
 		t.Fatalf("longrun min each expectation capability pass rate = %#v, want 0.50", gates.MinEachExpectationCapabilityPassRate)
 	}
+	if gates.MinExpectationDomainPassRate == nil || *gates.MinExpectationDomainPassRate != 0.80 {
+		t.Fatalf("longrun min expectation domain pass rate = %#v, want 0.80", gates.MinExpectationDomainPassRate)
+	}
+	if gates.MinEachExpectationDomainPassRate == nil || *gates.MinEachExpectationDomainPassRate != 0.50 {
+		t.Fatalf("longrun min each expectation domain pass rate = %#v, want 0.50", gates.MinEachExpectationDomainPassRate)
+	}
 	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"longrun_recovery", "loop_protocol", "session_search"}) {
 		t.Fatalf("longrun required expectation capabilities = %#v", gates.RequiredExpectationCapabilities)
 	}
@@ -892,6 +906,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MinTraceEventRate == nil || *webGates.MinTraceEventRate != 0.90 ||
 		webGates.MinExpectationCapabilityPassRate == nil || *webGates.MinExpectationCapabilityPassRate != 0.80 ||
 		webGates.MinEachExpectationCapabilityPassRate == nil || *webGates.MinEachExpectationCapabilityPassRate != 0.50 ||
+		webGates.MinExpectationDomainPassRate == nil || *webGates.MinExpectationDomainPassRate != 0.80 ||
+		webGates.MinEachExpectationDomainPassRate == nil || *webGates.MinEachExpectationDomainPassRate != 0.50 ||
 		webGates.MaxAvgContextRemovedMessages == nil || *webGates.MaxAvgContextRemovedMessages != 80 ||
 		webGates.MaxAvgContextSummaryBytes == nil || *webGates.MaxAvgContextSummaryBytes != 20000 ||
 		webGates.MaxAvgContextSummaryMissing == nil || *webGates.MaxAvgContextSummaryMissing != 0 ||
@@ -1800,8 +1816,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		!strings.Contains(out.String(), "debug_manifest=/tmp/affenteval/taostats-rendered/affenteval-debug.json") {
 		t.Fatalf("summary output missing debug brief tag example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1 expectation_domains=longrun_recovery:1,market:1,web_evidence:1") {
+	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1 expectation_domains=longrun_recovery:1,market:1,web_evidence:1 expectation_domain_pass=longrun_recovery:0/1,market:1/1,web_evidence:0/1 expectation_domain_pass_rate=33.3%") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "expectation_domain_failure[web_evidence]: scenario=taostats-rendered failure_kinds=missing_command:1,turn_end:1") {
+		t.Fatalf("summary output missing expectation domain failure example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "expectation_capability_failure[browser]: scenario=taostats-rendered failure_kinds=missing_command:1,turn_end:1") ||
 		!strings.Contains(out.String(), "trace=/tmp/affenteval/taostats-rendered/trace.jsonl") ||
@@ -2039,6 +2058,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.ExpectationDomains, map[string]int{"longrun_recovery": 1, "market": 1, "web_evidence": 1}) {
 		t.Fatalf("ExpectationDomains = %#v", summary.ExpectationDomains)
+	}
+	if !reflect.DeepEqual(summary.ExpectationDomainPass, map[string]int{"market": 1}) {
+		t.Fatalf("ExpectationDomainPass = %#v", summary.ExpectationDomainPass)
+	}
+	if !reflect.DeepEqual(summary.ExpectationDomainFail, map[string]int{"longrun_recovery": 1, "web_evidence": 1}) {
+		t.Fatalf("ExpectationDomainFail = %#v", summary.ExpectationDomainFail)
 	}
 	if !reflect.DeepEqual(summary.ExpectationSourceAccess, map[string]int{"network": 2}) {
 		t.Fatalf("ExpectationSourceAccess = %#v", summary.ExpectationSourceAccess)
@@ -3606,9 +3631,21 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				DebugManifestPath: "/tmp/affenteval/taostats-rendered/affenteval-debug.json",
 			}},
 		},
-		ExpectationScenarios:      2,
-		ExpectationSuites:         map[string]int{"long-run": 1, "live-web": 1},
-		ExpectationDomains:        map[string]int{"bittensor": 1, "web_evidence": 1},
+		ExpectationScenarios:  2,
+		ExpectationSuites:     map[string]int{"long-run": 1, "live-web": 1},
+		ExpectationDomains:    map[string]int{"bittensor": 1, "web_evidence": 1},
+		ExpectationDomainPass: map[string]int{"bittensor": 1},
+		ExpectationDomainFail: map[string]int{"web_evidence": 1},
+		ExpectationDomainFailureExamples: map[string][]expectationDomainFailureExample{
+			"web_evidence": {{
+				Domain:         "web_evidence",
+				Scenario:       "taostats-rendered",
+				FailureKinds:   map[string]int{"turn_end": 1},
+				DebugBriefTags: []string{"outcome:failed", "turn_end:max_turns"},
+				TracePath:      "/tmp/affenteval/taostats-rendered/trace.jsonl",
+				TimelinePath:   "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
+			}},
+		},
 		ExpectationCapabilities:   map[string]int{"browser": 2, "source_access": 2, "web": 1},
 		ExpectationCapabilityPass: map[string]int{"browser": 1, "source_access": 1},
 		ExpectationCapabilityFail: map[string]int{"browser": 1, "source_access": 1, "web": 1},
@@ -4069,6 +4106,47 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	if !ok || expectationDomains["bittensor"] != float64(1) || expectationDomains["web_evidence"] != float64(1) {
 		t.Fatalf("expectation_domains = %#v\njson=%s", got["expectation_domains"], out.String())
 	}
+	expectationDomainPassed, ok := got["expectation_domain_passed"].(map[string]any)
+	if !ok || expectationDomainPassed["bittensor"] != float64(1) {
+		t.Fatalf("expectation_domain_passed = %#v\njson=%s", got["expectation_domain_passed"], out.String())
+	}
+	expectationDomainFailed, ok := got["expectation_domain_failed"].(map[string]any)
+	if !ok || expectationDomainFailed["web_evidence"] != float64(1) {
+		t.Fatalf("expectation_domain_failed = %#v\njson=%s", got["expectation_domain_failed"], out.String())
+	}
+	expectationDomainRate, ok := got["expectation_domain_pass_rate"].(map[string]any)
+	if !ok ||
+		expectationDomainRate["bittensor"] != float64(1) ||
+		expectationDomainRate["web_evidence"] != float64(0) {
+		t.Fatalf("expectation_domain_pass_rate = %#v\njson=%s", got["expectation_domain_pass_rate"], out.String())
+	}
+	if got["expectation_domain_total"] != float64(2) ||
+		got["expectation_domain_passed_total"] != float64(1) ||
+		got["expectation_domain_failed_total"] != float64(1) ||
+		got["expectation_domain_pass_rate_total"] != float64(0.5) {
+		t.Fatalf("expectation domain totals not preserved: total=%#v passed=%#v failed=%#v rate=%#v\njson=%s",
+			got["expectation_domain_total"],
+			got["expectation_domain_passed_total"],
+			got["expectation_domain_failed_total"],
+			got["expectation_domain_pass_rate_total"],
+			out.String(),
+		)
+	}
+	expectationDomainFailureExamples, ok := got["expectation_domain_failure_examples"].(map[string]any)
+	if !ok {
+		t.Fatalf("expectation_domain_failure_examples = %#v\njson=%s", got["expectation_domain_failure_examples"], out.String())
+	}
+	webEvidenceExamples, ok := expectationDomainFailureExamples["web_evidence"].([]any)
+	if !ok || len(webEvidenceExamples) != 1 {
+		t.Fatalf("web_evidence expectation failure examples = %#v\njson=%s", expectationDomainFailureExamples["web_evidence"], out.String())
+	}
+	webEvidenceExample, ok := webEvidenceExamples[0].(map[string]any)
+	if !ok ||
+		webEvidenceExample["scenario"] != "taostats-rendered" ||
+		webEvidenceExample["trace_path"] != "/tmp/affenteval/taostats-rendered/trace.jsonl" ||
+		webEvidenceExample["timeline_path"] != "/tmp/affenteval/taostats-rendered/affenteval-timeline.md" {
+		t.Fatalf("web_evidence expectation failure example = %#v\njson=%s", webEvidenceExamples[0], out.String())
+	}
 	runtimeSurfaceTools, ok := got["runtime_surface_tools"].(map[string]any)
 	if !ok || runtimeSurfaceTools["web_fetch"] != float64(2) || runtimeSurfaceTools["browser_find"] != float64(1) {
 		t.Fatalf("runtime_surface_tools = %#v\njson=%s", got["runtime_surface_tools"], out.String())
@@ -4235,6 +4313,8 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	minSourceRate := 0.9
 	minExpectationCapabilityPassRate := 0.7
 	minEachExpectationCapabilityPassRate := 0.6
+	minExpectationDomainPassRate := 0.65
+	minEachExpectationDomainPassRate := 0.55
 	minSessionSearchContextHitRate := 0.75
 	minSessionSearchMatchedTermsPerCall := 1.25
 	minToolRepairSuccessRate := 0.85
@@ -4275,6 +4355,8 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MinSourceAccessVerifiedRate:           &minSourceRate,
 		MinExpectationCapabilityPassRate:      &minExpectationCapabilityPassRate,
 		MinEachExpectationCapabilityPassRate:  &minEachExpectationCapabilityPassRate,
+		MinExpectationDomainPassRate:          &minExpectationDomainPassRate,
+		MinEachExpectationDomainPassRate:      &minEachExpectationDomainPassRate,
 		MinSessionSearchContextHitRate:        &minSessionSearchContextHitRate,
 		MinSessionSearchMatchedTermsPerCall:   &minSessionSearchMatchedTermsPerCall,
 		MinToolRepairSuccessRate:              &minToolRepairSuccessRate,
@@ -4309,7 +4391,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinLoopProtocolFeedRate == nil || *meta.MinLoopProtocolFeedRate != 0.3 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinTraceEventRate == nil || *meta.MinTraceEventRate != 0.95 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinSessionSearchMatchedTermsPerCall == nil || *meta.MinSessionSearchMatchedTermsPerCall != 1.25 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxMemorySearchMissRate == nil || *meta.MaxMemorySearchMissRate != 0.35 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgContextSummaryBytes == nil || *meta.MaxAvgContextSummaryBytes != 16000 || meta.MaxAvgContextSummaryMissing == nil || *meta.MaxAvgContextSummaryMissing != 0 || meta.MaxAvgContextSummaryEmpty == nil || *meta.MaxAvgContextSummaryEmpty != 0 || meta.MaxAvgContextInjections == nil || *meta.MaxAvgContextInjections != 4 || meta.MaxAvgContextInjectionBytes == nil || *meta.MaxAvgContextInjectionBytes != 12000 || meta.MaxAvgContextInjectionEstimatedTokens == nil || *meta.MaxAvgContextInjectionEstimatedTokens != 3000 || meta.MaxAvgToolCalls == nil || *meta.MaxAvgToolCalls != 12 || meta.MaxAvgDurationMS == nil || *meta.MaxAvgDurationMS != 90000 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinLoopProtocolFeedRate == nil || *meta.MinLoopProtocolFeedRate != 0.3 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinTraceEventRate == nil || *meta.MinTraceEventRate != 0.95 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinExpectationDomainPassRate == nil || *meta.MinExpectationDomainPassRate != 0.65 || meta.MinEachExpectationDomainPassRate == nil || *meta.MinEachExpectationDomainPassRate != 0.55 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinSessionSearchMatchedTermsPerCall == nil || *meta.MinSessionSearchMatchedTermsPerCall != 1.25 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxMemorySearchMissRate == nil || *meta.MaxMemorySearchMissRate != 0.35 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgContextSummaryBytes == nil || *meta.MaxAvgContextSummaryBytes != 16000 || meta.MaxAvgContextSummaryMissing == nil || *meta.MaxAvgContextSummaryMissing != 0 || meta.MaxAvgContextSummaryEmpty == nil || *meta.MaxAvgContextSummaryEmpty != 0 || meta.MaxAvgContextInjections == nil || *meta.MaxAvgContextInjections != 4 || meta.MaxAvgContextInjectionBytes == nil || *meta.MaxAvgContextInjectionBytes != 12000 || meta.MaxAvgContextInjectionEstimatedTokens == nil || *meta.MaxAvgContextInjectionEstimatedTokens != 3000 || meta.MaxAvgToolCalls == nil || *meta.MaxAvgToolCalls != 12 || meta.MaxAvgDurationMS == nil || *meta.MaxAvgDurationMS != 90000 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if !reflect.DeepEqual(meta.MaxDebugBriefTagRates, maxDebugBriefTagRates) {

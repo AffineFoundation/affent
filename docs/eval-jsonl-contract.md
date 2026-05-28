@@ -48,6 +48,8 @@ Shared metadata fields:
   `min_source_access_verified_rate`,
   `min_expectation_capability_pass_rate`,
   `min_each_expectation_capability_pass_rate`,
+  `min_expectation_domain_pass_rate`,
+  `min_each_expectation_domain_pass_rate`,
   `min_session_search_context_hit_rate`,
   `min_session_search_matched_terms_per_call`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
@@ -667,6 +669,17 @@ Summary records aggregate all scenario records from the same process:
   `min_each_expectation_capability_pass_rate` gates each family in
   `expectation_capability_pass_rate` independently, so a memory or browser
   regression cannot be hidden by unrelated passing capabilities.
+  `expectation_domain_passed`, `expectation_domain_failed`, and
+  `expectation_domain_pass_rate` split declared workload-domain markers by
+  scenario outcome. `expectation_domain_total`,
+  `expectation_domain_passed_total`, `expectation_domain_failed_total`, and
+  `expectation_domain_pass_rate_total` aggregate those domain instances across
+  the batch. `expectation_domain_failure_examples` is the domain-level triage
+  index for failed market, Bittensor, code/PR, web-evidence, and long-run
+  recovery workloads. Use `min_expectation_domain_pass_rate` and
+  `min_each_expectation_domain_pass_rate` when a profile must prove not only
+  that realistic domains were present, but that each domain stayed above a
+  minimum outcome bar.
   `--require-expectation-domain` gates declared workload-domain coverage
   independently from capability coverage, so CI can require at least one
   realistic market, Bittensor, code/PR, web-evidence, or long-run recovery

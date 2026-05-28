@@ -1119,7 +1119,9 @@ expectation capabilities, so a filtered run cannot pass the profile without
 exercising durable recovery. The profile also requires `market`, `bittensor`,
 `code_pr`, and `longrun_recovery` task-domain coverage so broad pass rates do
 not hide that realistic stock analysis, Bittensor subnet research, code/PR
-execution, or long-running recovery workloads were skipped. No-hit session recall is
+execution, or long-running recovery workloads were skipped. It also gates both
+aggregate and per-domain expectation pass rate, so a failing Bittensor or
+code/PR scenario remains visible even if easier domains pass. No-hit session recall is
 allowed only when `recent_sessions` exposes recovery anchors; no-hit recall
 without recent anchors trips the `empty_recall:no_recent_sessions` debug tag
 gate. Memory search misses are not gated merely for missing once, but misses
@@ -1136,7 +1138,8 @@ defer decision. The profile requires `browser`, `source_access`, and `web`
 expectation capability coverage so accidental non-web batches fail before their
 source-quality rates are interpreted, and it requires the `web_evidence`
 task-domain label so source-quality gates are tied to at least one current-web
-workload.
+workload. It also gates domain-level expectation pass rate, so a web-evidence
+batch cannot hide failed current-web workloads behind unrelated passing cases.
 Explicit `--max-debug-brief-tag-rate tag=rate` flags merge with profile
 defaults and can disable one profile tag with `tag=-1`. Other explicit gate
 flags override the profile defaults. Use
@@ -1156,7 +1159,8 @@ coverage, loop-protocol feed coverage, runtime-surface coverage, tool errors,
 focused-task/subagent errors, plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
 context compactions, reactive context compactions, aggregate and per-family
-expected-capability pass rates, messages removed by compaction, compaction
+expected-capability pass rates, aggregate and per-domain workload pass rates,
+messages removed by compaction, compaction
 summary size, missing/empty compaction summaries, session-search matched terms
 per call, average tool calls, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
@@ -1166,6 +1170,8 @@ Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-source-access-verified-rate`,
 `--min-expectation-capability-pass-rate`,
 `--min-each-expectation-capability-pass-rate`,
+`--min-expectation-domain-pass-rate`,
+`--min-each-expectation-domain-pass-rate`,
 `--min-session-search-context-hit-rate`,
 `--min-session-search-matched-terms-per-call`,
 `--min-tool-repair-success-rate`,
