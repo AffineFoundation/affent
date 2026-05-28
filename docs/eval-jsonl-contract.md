@@ -71,7 +71,9 @@ Shared metadata fields:
   scenario rate. This lets profiles fail specific triage patterns, such as
   weak session recall context or dynamic web evidence without network-backed
   reads, without adding a bespoke top-level metric for every future diagnostic
-  tag. CLI overrides use
+  tag. The built-in `longrun` profile also gates failed, not-run, and abnormal
+  verifier tags so code/PR verification regressions remain visible even when
+  aggregate pass-rate gates are broad. CLI overrides use
   `--max-debug-brief-tag-rate tag=rate`; `tag=-1` disables a profile default
   for that tag.
 

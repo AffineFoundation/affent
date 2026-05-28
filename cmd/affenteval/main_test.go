@@ -575,7 +575,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextInjectionEstimatedTokens: 2250,
 		ExpectationCapabilities:         map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:       map[string]int{"browser": 1, "memory": 1},
-		DebugBriefByTag:                 map[string]int{"browser_scroll:stuck_without_network": 1, "source_dynamic_without_network": 1},
+		DebugBriefByTag:                 map[string]int{"browser_scroll:stuck_without_network": 1, "source_dynamic_without_network": 1, "verifier:not_run": 1},
 	}
 	failures := qualityGateFailures(summary, qualityGateConfig{
 		MinPassRate:                           ptr(0.75),
@@ -616,7 +616,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgToolCalls:                       ptr(2),
 		MaxAvgDurationMS:                      ptr(1000),
 		MaxAvgTotalTokens:                     ptr(40),
-		MaxDebugBriefTagRates:                 map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0},
+		MaxDebugBriefTagRates:                 map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0, "verifier:not_run": 0},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -636,6 +636,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"completion_rate 0.500 < min 0.750",
 		"debug_brief_tag_rate[browser_scroll:stuck_without_network] 0.500 > max 0.000",
 		"debug_brief_tag_rate[source_dynamic_without_network] 0.500 > max 0.000",
+		"debug_brief_tag_rate[verifier:not_run] 0.500 > max 0.000",
 		"expectation_capability_pass_rate[browser] 0.500 < min 0.750",
 		"expectation_capability_pass_rate[web] 0.000 < min 0.750",
 		"expectation_capability_pass_rate 0.500 < min 0.750",
@@ -847,8 +848,11 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		gates.MaxDebugBriefTagRates["recall:no_matched_terms"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_context"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_matched_terms"] != 0 ||
-		gates.MaxDebugBriefTagRates["tool_repair:failed"] != 0 {
-		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, repair, and truncation artifact gates", gates.MaxDebugBriefTagRates)
+		gates.MaxDebugBriefTagRates["tool_repair:failed"] != 0 ||
+		gates.MaxDebugBriefTagRates["verifier:failed"] != 0 ||
+		gates.MaxDebugBriefTagRates["verifier:not_run"] != 0 ||
+		gates.MaxDebugBriefTagRates["verifier:abnormal"] != 0 {
+		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, repair, verifier, and truncation artifact gates", gates.MaxDebugBriefTagRates)
 	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}
@@ -3028,11 +3032,22 @@ func TestBatchSummaryAggregatesDebugBriefTags(t *testing.T) {
 			SessionSearchResults: 0,
 		},
 	})
+	summary.add(agenteval.BatchResult{
+		OK: false,
+		Verifier: agenteval.VerifierResult{
+			Command:  "go test ./...",
+			Ran:      true,
+			OK:       false,
+			ExitCode: -1,
+		},
+	})
 
-	if summary.DebugBriefByTag["outcome:failed"] != 1 ||
+	if summary.DebugBriefByTag["outcome:failed"] != 2 ||
 		summary.DebugBriefByTag["turn_end:max_turns"] != 1 ||
 		summary.DebugBriefByTag["runtime_error:llm_timeout"] != 1 ||
-		summary.DebugBriefByTag["empty_recall"] != 1 {
+		summary.DebugBriefByTag["empty_recall"] != 1 ||
+		summary.DebugBriefByTag["verifier:failed"] != 1 ||
+		summary.DebugBriefByTag["verifier:abnormal"] != 1 {
 		t.Fatalf("DebugBriefByTag = %#v", summary.DebugBriefByTag)
 	}
 }
