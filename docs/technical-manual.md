@@ -27,6 +27,22 @@ Tool capabilities are opt-in. Shell, file, memory, session search, MCP, web,
 browser, subagent, focused-task, and skill tools are registered by configuration
 instead of assumed globally.
 
+Choose the surface based on the job:
+
+- Use `affentserve` when you want the Workbench, durable browser reconnects,
+  session APIs, schedules, artifacts, account settings, or OpenAI-compatible
+  integration with a long-running process.
+- Use `affentctl` when you want a local one-shot run, an interactive terminal
+  session, a trace file, a controlled sandbox executor, or a simple eval-style
+  invocation.
+- Use `affenteval` when you want repeatable scenarios, JSONL batch output,
+  quality gates, retained debug artifacts, and trace-derived regression data.
+
+The runtime expects an OpenAI-compatible chat-completions endpoint. Sampling
+knobs such as `temperature`, `top_p`, `max_tokens`, and `seed` are passed
+through when configured; per-turn tool behavior is controlled by Affent's
+registered tool surface rather than by provider-specific APIs.
+
 ## Build And Check
 
 Build the CLI through Docker:
@@ -223,7 +239,8 @@ runtime image with durable session state under `/workspace/session-state`. They
 enable direct web fetch, the real browser toolset, and a persistent browser
 cache at `/workspace/browser-cache` by default, while keeping `web_search`
 disabled unless a search backend is explicitly configured. Those paths live
-inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long as `IMAGE_WORKSPACE` is the same host path, and it preserves browser cache data
+inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long
+as `IMAGE_WORKSPACE` is the same host path, and it preserves browser cache data
 under the same workspace. Account-level state, including WebUI-generated SSH
 keys, is mounted separately at `/account` from `SERVE_ACCOUNT_DIR` and wired via
 `AFFENTSERVE_ACCOUNT_ROOT`/`--account-root`, so runtime credentials survive
@@ -280,18 +297,18 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
 
 ## Web Retrieval Diagnostics
 
-`web_fetch` starts as a direct HTTP reader, and `web_search` depends on the
-configured search backend. `AFFENT_WEB_SEARCH_PROVIDER` accepts `auto`,
+`web_fetch` starts as a direct HTTP reader. `web_search` uses the configured
+search backend selected by `AFFENT_WEB_SEARCH_PROVIDER`, which accepts `auto`,
 `tavily`, or `google`. `auto` preserves the historical Tavily default when
 `TAVILY_API_KEY` is present, otherwise uses Google when an API key
 (`GOOGLE_CSE_API_KEY` or `GOOGLE_API_KEY`) and a search engine ID
-(`GOOGLE_CSE_ID` or `GOOGLE_SEARCH_ENGINE_ID`) are configured. The Google backend
-uses the official Programmable Search JSON API instead of scraping
+(`GOOGLE_CSE_ID` or `GOOGLE_SEARCH_ENGINE_ID`) are configured, and otherwise
+falls back to the built-in public HTML search provider. The Google backend uses
+the official Programmable Search JSON API instead of scraping
 `google.com/search`, because automated browser sessions from datacenter IPs
-often receive anti-abuse challenge pages. When `web_search` is explicitly
-enabled without a configured backend, `affentserve` fails at startup instead of silently degrading to fetch-only
-mode. When a runtime also enables
-`extras/browser`,
+often receive anti-abuse challenge pages. Explicit `tavily` or `google`
+selection still requires that provider's credentials and fails at startup when
+they are missing or invalid. When a runtime also enables `extras/browser`,
 `affentserve` wires the session Chromium instance into `web_fetch` as a rendered
 fallback: direct-reader trap hosts, anti-bot/challenge responses, and
 client-rendered app shells are retried through the browser and returned as
@@ -672,6 +689,7 @@ Session endpoints:
 - `GET /v1/sessions/{id}/artifacts`
 - `GET /v1/sessions/{id}/artifacts/{path}`
 - `POST /v1/sessions/{id}/messages`
+- `POST /v1/sessions/{id}/commands`
 - `POST /v1/sessions/{id}/cancel`
 
 Use `GET /v1/sessions/{id}/events` for live SSE. Reconnect with

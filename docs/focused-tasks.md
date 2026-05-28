@@ -338,7 +338,8 @@ different product roles.
 Implemented:
 
 - `run_task` tool.
-- Task types: `recall`, `explore`, `research`, `verify`, and `review`.
+- Task types: `recall`, `explore`, `web_extract`, `research`, `verify`, and
+  `review`.
 - Per-profile prompts, default turn budgets, and tool whitelists.
 - Schema filtering when a deployment lacks required tools.
 - Structured result envelope with fallback handling.
@@ -363,6 +364,8 @@ Focused Tasks should be evaluated through trace-visible behavior:
   presence, and confidence accuracy.
 - `explore`: relevant file discovery, unnecessary file reads, and bounded tool
   calls.
+- `web_extract`: page-level source quality, exact value extraction, explicit
+  partial/blocked gaps, and bounded parent-context output.
 - `research`: citation presence, unsupported claim count, and source freshness.
 - `verify`: pass/fail accuracy, command or evidence presence, and residual risk
   reporting.

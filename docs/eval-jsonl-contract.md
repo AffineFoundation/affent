@@ -4,6 +4,18 @@
 `schema_version`; consumers should reject future versions they do not
 understand.
 
+The JSONL stream is intended for automation, dashboards, and model/runtime
+comparisons. It is derived from the same runtime traces described in
+[`event-trace-contract.md`](event-trace-contract.md), but it is not a raw event
+log. Scenario records summarize one executed case; summary records aggregate a
+batch, including quality gates, capability/domain coverage, retained artifact
+paths, and bounded examples that point operators to the first traces worth
+opening.
+
+The contract is append-friendly. New optional metrics may appear without a
+schema bump. Consumers should ignore fields they do not use and rely on
+`schema_version` only for incompatible changes.
+
 ## Schema Version 1
 
 Shared metadata fields:

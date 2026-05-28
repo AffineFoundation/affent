@@ -7,6 +7,19 @@ Affent emits runtime events as JSON payloads over SSE and writes the same
 {"id":1,"type":"tool.request","data":{...}}
 ```
 
+This is the primary observability contract for Affent. The Workbench, CLI
+traces, server reconnects, eval tooling, session summaries, and debug artifacts
+should depend on this contract rather than on internal Go structs. Runtime
+implementations may evolve, but event names, payload meanings, cursor semantics,
+and compatibility rules are treated as product-facing behavior.
+
+The contract has two transport modes:
+
+- `affentctl` writes JSONL trace records, usually for local debugging or eval.
+- `affentserve` writes the same records to a durable session event log and
+  serves them through `GET /v1/sessions/{id}/history` and
+  `GET /v1/sessions/{id}/events`.
+
 ## Trace Schema
 
 New trace files start with a metadata record:

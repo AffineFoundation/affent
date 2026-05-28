@@ -1,11 +1,26 @@
 # Browser Access Architecture
 
-This document defines the target design for Affent web access. The goal is not
-to add per-site fallbacks, but to make rendered web access a first-class runtime
-subsystem that can inspect pages the way a careful human would: wait for useful
-content, read visible information, notice missing or gated content, inspect
-network-backed data when appropriate, interact with controls, and return compact
-evidence instead of raw HTML.
+This document defines Affent's browser and web-evidence architecture. It covers
+both the implemented direction and the target model for future work. The goal is
+not to add per-site fallbacks, but to make rendered web access a first-class
+runtime subsystem that can inspect pages the way a careful human would: wait for
+useful content, read visible information, notice missing or gated content,
+inspect network-backed data when appropriate, interact with controls, and return
+compact evidence instead of raw HTML.
+
+## Current Runtime Surface
+
+The current runtime exposes direct web retrieval through `extras/web` and
+rendered browser automation through `extras/browser` when the deployment opts
+in. `affentserve` can wire a session Chromium instance into `web_fetch` as a
+rendered fallback, so direct-reader traps and JavaScript app shells can be
+retried through the browser without changing the model-facing tool name.
+
+The implemented browser tool family includes navigation, snapshots, find,
+network search/read, click, type, scroll, wait, back, and optional screenshots.
+Tool results carry SourceAccess-style diagnostics and structured failure kinds
+so the agent, Workbench, and evals can distinguish verified page evidence from
+partial, blocked, dynamic, discovery-only, or no-evidence states.
 
 ## Problem
 

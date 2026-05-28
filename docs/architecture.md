@@ -15,6 +15,35 @@ The supported external surfaces are:
 entry points. It is not a stable integration contract for downstream Go
 programs.
 
+## System View
+
+Affent has one runtime core and three product drivers:
+
+- `affentctl` runs a single local session for one-shot prompts, interactive
+  chat, traces, plans, memory, MCP, and executor selection.
+- `affentserve` manages a pool of durable sessions behind HTTP APIs and the
+  embedded Workbench.
+- `affenteval` runs scenario suites against the same runtime surfaces and
+  scores the resulting traces.
+
+The common path is:
+
+1. A user, API client, schedule, or eval sends a turn to a session.
+2. The session appends the user message to durable conversation state.
+3. `internal/agent.Loop` streams an OpenAI-compatible chat completion.
+4. Model tool calls are validated, repaired when possible, governed by runtime
+   policies, dispatched through the configured registry, and appended back to
+   the conversation with bounded context.
+5. The loop publishes structured events for every important boundary:
+   user message, runtime surface, assistant output, tool request/result, usage,
+   compaction, loop protocol feed, decision, error, and turn end.
+6. CLI traces, server SSE streams, the Workbench, evals, and session summaries
+   consume the same event shape.
+
+This is the central architectural rule: session state and event records are the
+source of truth. UI views, OpenAI-compatible responses, summaries, and eval
+metrics are derived projections.
+
 ## Runtime Boundary
 
 The agent runtime lives in `internal/agent`. It owns the session execution
@@ -119,18 +148,24 @@ default sandbox lifecycle.
 
 `cmd/affentserve` is the HTTP runtime. It exposes OpenAI-compatible chat
 completions plus native session lifecycle, event, history, tool, artifact,
-transcript, schedule, loop-protocol, skill, memory, account-settings, health,
-model, and stats endpoints.
+transcript, schedule, loop-protocol, skill, memory, Workbench command,
+account-settings, health, model, and stats endpoints.
 
 `cmd/affenteval` is the scenario runner. It executes bounded agent tasks,
 collects runtime traces, and emits text or JSONL summaries for comparison.
+
+The HTTP server intentionally lives in its own command module
+(`cmd/affentserve/go.mod`) while path-replacing the root module during in-tree
+development. That keeps server-only dependencies and embed behavior separate
+from the root CLI/runtime build without making `internal/agent` a public SDK.
 
 ## State Model
 
 Affent treats state as inspectable operational data, not as hidden process
 memory. Durable state is stored as ordinary files:
 
-- Conversations and events use JSONL.
+- Conversations and events use JSONL. In `affentserve`, `events.jsonl` line
+  numbers are also the durable SSE reconnect cursors.
 - Plans use JSON (`.affentctl/<session>.plan.json` for CLI; durable session
   trees for server).
 - Memory uses bounded topic files under target directories.
@@ -149,6 +184,13 @@ memory. Durable state is stored as ordinary files:
 
 This keeps local debugging simple and lets the HTTP server survive container
 restart when the state root is backed by a host volume.
+
+In server mode, each session also has an ephemeral workspace path and a stable
+session directory. The workspace is where shell and file tools operate. The
+session directory is where durable identity lives: conversation log, event log,
+memory, plan, loop protocol state, runtime skills, child transcripts, and
+artifacts. LRU eviction may drop an in-memory session, but the stable session
+directory lets the same session id be reopened.
 
 ## Event Model
 
