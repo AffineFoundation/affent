@@ -52,6 +52,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"failures": count,
 		}, "source_repo", "source_repo:setup")
 	}
+	if count := workspaceAbsolutePathFailureCount(res.Failures); count > 0 {
+		add("workspace_path", "fail", "agent used the workspace absolute path where the runtime expected workspace-relative commands or file args; inspect tool arguments and prompt/context path guidance before comparing task quality", []string{"failures", "tool_timeline", "runtime_surface", "timeline"}, map[string]int{
+			"failures": count,
+		}, "workspace_path", "workspace_path:absolute")
+	}
 	expectedTurnEndReason := expectedTurnEndReasonFromExpectations(res.Expectations)
 	if res.TurnEndReason != "" && res.TurnEndReason != expectedTurnEndReason {
 		add("turn_end", "fail", fmt.Sprintf("turn ended with reason %q; expected %q", res.TurnEndReason, expectedTurnEndReason), []string{"final_text", "tool_timeline"}, map[string]int{res.TurnEndReason: 1}, "turn_end:"+res.TurnEndReason)
@@ -590,6 +595,17 @@ func sourceRepoSetupFailureCount(failures []string) int {
 	for _, failure := range failures {
 		lower := strings.ToLower(strings.TrimSpace(failure))
 		if strings.HasPrefix(lower, "source repo ") {
+			count++
+		}
+	}
+	return count
+}
+
+func workspaceAbsolutePathFailureCount(failures []string) int {
+	count := 0
+	for _, failure := range failures {
+		lower := strings.ToLower(strings.TrimSpace(failure))
+		if strings.Contains(lower, "workspace absolute path") {
 			count++
 		}
 	}

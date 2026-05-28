@@ -149,6 +149,26 @@ func TestBuildDebugBriefClassifiesSourceRepoSetupFailures(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesWorkspaceAbsolutePathFailures(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: false,
+		Failures: []string{
+			`shell call_id=call-1 used workspace absolute path in command: "ls -la /workspace/sessions/sess_123"`,
+			`read_file call_id=call-2 returned workspace absolute path in result: "/workspace/sessions/sess_123/app.go"`,
+		},
+	})
+	item := debugBriefItemByKind(brief, "workspace_path")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["failures"] != 2 ||
+		!stringSliceContains(item.Inspect, "tool_timeline") ||
+		!stringSliceContains(item.Inspect, "runtime_surface") ||
+		!stringSliceContains(brief.Tags, "workspace_path") ||
+		!stringSliceContains(brief.Tags, "workspace_path:absolute") {
+		t.Fatalf("workspace path debug brief item=%+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefHonorsExpectedTurnEndReason(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK:            true,
