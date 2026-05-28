@@ -98,6 +98,17 @@ type Session struct {
 	toolRepairMu                      sync.Mutex
 	toolRepairByKind                  map[string]int64
 	toolFailureByKind                 map[string]int64
+	toolGovernanceMu                  sync.Mutex
+	toolGovernanceCallsByID           map[string]sessionToolGovernanceClass
+	planByAction                      map[string]int64
+	focusedTaskByType                 map[string]int64
+	subagentByMode                    map[string]int64
+	planCalls                         atomic.Int64
+	planErrors                        atomic.Int64
+	focusedTaskCalls                  atomic.Int64
+	focusedTaskErrors                 atomic.Int64
+	subagentCalls                     atomic.Int64
+	subagentErrors                    atomic.Int64
 	runtimeErrors                     atomic.Int64
 	contextCompactions                atomic.Int64
 	contextCompactionReact            atomic.Int64
@@ -1755,6 +1766,15 @@ type ToolStatsSnapshot struct {
 	SessionSearchRecent    int64            `json:"session_search_recent_sessions"`
 	ToolContextTruncated   int64            `json:"tool_context_truncated"`
 	ToolContextOmitted     int64            `json:"tool_context_omitted_bytes"`
+	PlanCalls              int64            `json:"plan_calls,omitempty"`
+	PlanByAction           map[string]int64 `json:"plan_by_action,omitempty"`
+	PlanErrors             int64            `json:"plan_errors,omitempty"`
+	FocusedTaskCalls       int64            `json:"focused_task_calls,omitempty"`
+	FocusedTaskByType      map[string]int64 `json:"focused_task_by_type,omitempty"`
+	FocusedTaskErrors      int64            `json:"focused_task_errors,omitempty"`
+	SubagentCalls          int64            `json:"subagent_calls,omitempty"`
+	SubagentByMode         map[string]int64 `json:"subagent_by_mode,omitempty"`
+	SubagentErrors         int64            `json:"subagent_errors,omitempty"`
 }
 
 func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
@@ -1765,6 +1785,11 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 	repairByKind := cloneStringInt64Map(s.toolRepairByKind)
 	failureByKind := cloneStringInt64Map(s.toolFailureByKind)
 	s.toolRepairMu.Unlock()
+	s.toolGovernanceMu.Lock()
+	planByAction := cloneStringInt64Map(s.planByAction)
+	focusedTaskByType := cloneStringInt64Map(s.focusedTaskByType)
+	subagentByMode := cloneStringInt64Map(s.subagentByMode)
+	s.toolGovernanceMu.Unlock()
 	return ToolStatsSnapshot{
 		ToolRequests:           s.toolRequests.Load(),
 		ToolNameCanonicalized:  s.toolNameCanonicalized.Load(),
@@ -1797,6 +1822,15 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		SessionSearchRecent:    s.sessionSearchRecent.Load(),
 		ToolContextTruncated:   s.toolContextTruncated.Load(),
 		ToolContextOmitted:     s.toolContextOmitted.Load(),
+		PlanCalls:              s.planCalls.Load(),
+		PlanByAction:           planByAction,
+		PlanErrors:             s.planErrors.Load(),
+		FocusedTaskCalls:       s.focusedTaskCalls.Load(),
+		FocusedTaskByType:      focusedTaskByType,
+		FocusedTaskErrors:      s.focusedTaskErrors.Load(),
+		SubagentCalls:          s.subagentCalls.Load(),
+		SubagentByMode:         subagentByMode,
+		SubagentErrors:         s.subagentErrors.Load(),
 	}
 }
 
@@ -1879,6 +1913,20 @@ func (s *Session) observeForStats(ev sse.Event) {
 			return
 		}
 		s.addToolStats(*p.ToolStats)
+	case sse.TypeToolRequest:
+		var p sse.ToolRequestPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
+		if class, ok := classifySessionToolGovernanceRequest(p); ok {
+			s.addToolGovernanceRequest(p.CallID, class)
+		}
+	case sse.TypeToolResult:
+		var p sse.ToolResultPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
+		s.addToolGovernanceResult(p)
 	case sse.TypeError:
 		var p sse.ErrorPayload
 		if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -2073,9 +2121,14 @@ func (s *Session) addToolStatsSnapshot(stats ToolStatsSnapshot) {
 	s.sessionSearchRecent.Add(positiveInt64(stats.SessionSearchRecent))
 	s.toolContextTruncated.Add(positiveInt64(stats.ToolContextTruncated))
 	s.toolContextOmitted.Add(positiveInt64(stats.ToolContextOmitted))
+	s.planCalls.Add(positiveInt64(stats.PlanCalls))
+	s.planErrors.Add(positiveInt64(stats.PlanErrors))
+	s.focusedTaskCalls.Add(positiveInt64(stats.FocusedTaskCalls))
+	s.focusedTaskErrors.Add(positiveInt64(stats.FocusedTaskErrors))
+	s.subagentCalls.Add(positiveInt64(stats.SubagentCalls))
+	s.subagentErrors.Add(positiveInt64(stats.SubagentErrors))
 
 	s.toolRepairMu.Lock()
-	defer s.toolRepairMu.Unlock()
 	if len(stats.ToolRepairByKind) > 0 {
 		if s.toolRepairByKind == nil {
 			s.toolRepairByKind = make(map[string]int64, len(stats.ToolRepairByKind))
@@ -2087,6 +2140,100 @@ func (s *Session) addToolStatsSnapshot(stats ToolStatsSnapshot) {
 			s.toolFailureByKind = make(map[string]int64, len(stats.ToolFailureByKind))
 		}
 		addStringInt64Counts(s.toolFailureByKind, stats.ToolFailureByKind)
+	}
+	s.toolRepairMu.Unlock()
+
+	s.toolGovernanceMu.Lock()
+	defer s.toolGovernanceMu.Unlock()
+	if len(stats.PlanByAction) > 0 {
+		if s.planByAction == nil {
+			s.planByAction = make(map[string]int64, len(stats.PlanByAction))
+		}
+		addStringInt64Counts(s.planByAction, stats.PlanByAction)
+	}
+	if len(stats.FocusedTaskByType) > 0 {
+		if s.focusedTaskByType == nil {
+			s.focusedTaskByType = make(map[string]int64, len(stats.FocusedTaskByType))
+		}
+		addStringInt64Counts(s.focusedTaskByType, stats.FocusedTaskByType)
+	}
+	if len(stats.SubagentByMode) > 0 {
+		if s.subagentByMode == nil {
+			s.subagentByMode = make(map[string]int64, len(stats.SubagentByMode))
+		}
+		addStringInt64Counts(s.subagentByMode, stats.SubagentByMode)
+	}
+}
+
+func (s *Session) addToolGovernanceRequest(callID string, class sessionToolGovernanceClass) {
+	if class.Kind == "" {
+		return
+	}
+	switch class.Kind {
+	case sessionToolGovernancePlan:
+		s.planCalls.Add(1)
+	case sessionToolGovernanceFocusedTask:
+		s.focusedTaskCalls.Add(1)
+	case sessionToolGovernanceSubagent:
+		s.subagentCalls.Add(1)
+	default:
+		return
+	}
+
+	s.toolGovernanceMu.Lock()
+	defer s.toolGovernanceMu.Unlock()
+	if callID != "" {
+		if s.toolGovernanceCallsByID == nil {
+			s.toolGovernanceCallsByID = map[string]sessionToolGovernanceClass{}
+		}
+		s.toolGovernanceCallsByID[callID] = class
+	}
+	s.addToolGovernanceBucketLocked(class)
+}
+
+func (s *Session) addToolGovernanceResult(p sse.ToolResultPayload) {
+	class, ok := classifySessionToolGovernanceResult(p)
+	if p.CallID != "" {
+		s.toolGovernanceMu.Lock()
+		storedClass, storedOK := s.toolGovernanceCallsByID[p.CallID]
+		if storedOK {
+			delete(s.toolGovernanceCallsByID, p.CallID)
+		}
+		s.toolGovernanceMu.Unlock()
+		if !ok && storedOK {
+			class, ok = storedClass, true
+		}
+	}
+	if !ok || p.ExitCode == 0 {
+		return
+	}
+	switch class.Kind {
+	case sessionToolGovernancePlan:
+		s.planErrors.Add(1)
+	case sessionToolGovernanceFocusedTask:
+		s.focusedTaskErrors.Add(1)
+	case sessionToolGovernanceSubagent:
+		s.subagentErrors.Add(1)
+	}
+}
+
+func (s *Session) addToolGovernanceBucketLocked(class sessionToolGovernanceClass) {
+	switch class.Kind {
+	case sessionToolGovernancePlan:
+		if s.planByAction == nil {
+			s.planByAction = map[string]int64{}
+		}
+		s.planByAction[class.Bucket]++
+	case sessionToolGovernanceFocusedTask:
+		if s.focusedTaskByType == nil {
+			s.focusedTaskByType = map[string]int64{}
+		}
+		s.focusedTaskByType[class.Bucket]++
+	case sessionToolGovernanceSubagent:
+		if s.subagentByMode == nil {
+			s.subagentByMode = map[string]int64{}
+		}
+		s.subagentByMode[class.Bucket]++
 	}
 }
 

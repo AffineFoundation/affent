@@ -1402,6 +1402,52 @@ func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 		CallID:   "skipped-fetch",
 		ExitCode: 1,
 		Result:   "(max_turns reached before this tool ran)",
+	}) + sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t0",
+		CallID: "bad-plan",
+		Tool:   "plan",
+		Args:   map[string]any{"action": "update"},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:   "t0",
+		CallID:   "bad-plan",
+		ExitCode: 1,
+		Result:   "invalid args",
+	}) + sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t0",
+		CallID: "focused-review",
+		Tool:   "run_task",
+		Args:   map[string]any{"task_type": "review"},
+		Delegation: &sse.DelegationMeta{
+			Kind:     "focused_task",
+			TaskType: "review",
+		},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:   "t0",
+		CallID:   "focused-review",
+		ExitCode: 0,
+		Result:   "ok",
+		Delegation: &sse.DelegationMeta{
+			Kind:     "focused_task",
+			TaskType: "review",
+		},
+	}) + sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t0",
+		CallID: "subagent-research",
+		Tool:   "subagent_run",
+		Args:   map[string]any{"mode": "research"},
+		Delegation: &sse.DelegationMeta{
+			Kind: "subagent",
+			Mode: "research",
+		},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:   "t0",
+		CallID:   "subagent-research",
+		ExitCode: 1,
+		Result:   "max_turns reached",
+		Delegation: &sse.DelegationMeta{
+			Kind: "subagent",
+			Mode: "research",
+		},
 	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
 		TurnID: "t1",
 		Reason: sse.TurnEndCompleted,
@@ -1458,6 +1504,17 @@ func TestSummarizeDurableSessionRestoresToolStatsFromEvents(t *testing.T) {
 		summary.Tools.ToolFailureByKind["no_matches"] != 2 ||
 		summary.Tools.ToolFailureByKind["loop_guard_no_budget"] != 1 {
 		t.Fatalf("tool_failure_by_kind = %+v, want aggregated failure kinds", summary.Tools.ToolFailureByKind)
+	}
+	if summary.Tools.PlanCalls != 1 ||
+		summary.Tools.PlanByAction["update"] != 1 ||
+		summary.Tools.PlanErrors != 1 ||
+		summary.Tools.FocusedTaskCalls != 1 ||
+		summary.Tools.FocusedTaskByType["review"] != 1 ||
+		summary.Tools.FocusedTaskErrors != 0 ||
+		summary.Tools.SubagentCalls != 1 ||
+		summary.Tools.SubagentByMode["research"] != 1 ||
+		summary.Tools.SubagentErrors != 1 {
+		t.Fatalf("tool governance stats = %+v, want plan/delegation request and error counts", summary.Tools)
 	}
 	if !strings.Contains(summary.LatestRecoveryHint, "top tool failure kind=no_matches (2)") {
 		t.Fatalf("latest_recovery_hint = %q, want top tool failure kind", summary.LatestRecoveryHint)

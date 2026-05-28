@@ -1198,11 +1198,26 @@ func toolStatsSnapshotEvidence(s *ToolStatsSnapshot) int64 {
 		positiveInt64(s.SessionSearchTerms) +
 		positiveInt64(s.SessionSearchRecent) +
 		positiveInt64(s.ToolContextTruncated) +
-		positiveInt64(s.ToolContextOmitted)
+		positiveInt64(s.ToolContextOmitted) +
+		positiveInt64(s.PlanCalls) +
+		positiveInt64(s.PlanErrors) +
+		positiveInt64(s.FocusedTaskCalls) +
+		positiveInt64(s.FocusedTaskErrors) +
+		positiveInt64(s.SubagentCalls) +
+		positiveInt64(s.SubagentErrors)
 	for _, count := range s.ToolRepairByKind {
 		total += positiveInt64(count)
 	}
 	for _, count := range s.ToolFailureByKind {
+		total += positiveInt64(count)
+	}
+	for _, count := range s.PlanByAction {
+		total += positiveInt64(count)
+	}
+	for _, count := range s.FocusedTaskByType {
+		total += positiveInt64(count)
+	}
+	for _, count := range s.SubagentByMode {
 		total += positiveInt64(count)
 	}
 	return total
@@ -1758,6 +1773,7 @@ func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCom
 func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {
 	var summary ToolStatsSnapshot
 	toolsByCallID := map[string]string{}
+	governanceByCallID := map[string]sessionToolGovernanceClass{}
 	derivedFailureByKind := map[string]int64{}
 	seen := false
 	for {
@@ -1783,6 +1799,11 @@ func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {
 				continue
 			}
 			toolsByCallID[p.CallID] = p.Tool
+			if class, ok := classifySessionToolGovernanceRequest(p); ok {
+				addSessionToolGovernanceRequest(&summary, class)
+				governanceByCallID[p.CallID] = class
+				seen = true
+			}
 		case sse.TypeToolResult:
 			var p sse.ToolResultPayload
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -1791,6 +1812,15 @@ func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {
 			tool := toolsByCallID[p.CallID]
 			for _, kind := range toolResultFailureKindsForSessionSummary(tool, p) {
 				derivedFailureByKind[kind]++
+				seen = true
+			}
+			if class, ok := classifySessionToolGovernanceResult(p); ok {
+				addSessionToolGovernanceResult(&summary, class, p.ExitCode)
+				delete(governanceByCallID, p.CallID)
+				seen = true
+			} else if class, ok := governanceByCallID[p.CallID]; ok {
+				addSessionToolGovernanceResult(&summary, class, p.ExitCode)
+				delete(governanceByCallID, p.CallID)
 				seen = true
 			}
 		case sse.TypeTurnEnd:
@@ -1820,6 +1850,135 @@ func toolResultFailureKindsForSessionSummary(tool string, p sse.ToolResultPayloa
 		}
 	}
 	return kinds
+}
+
+const (
+	sessionToolGovernancePlan        = "plan"
+	sessionToolGovernanceFocusedTask = "focused_task"
+	sessionToolGovernanceSubagent    = "subagent"
+)
+
+type sessionToolGovernanceClass struct {
+	Kind   string
+	Bucket string
+}
+
+func classifySessionToolGovernanceRequest(p sse.ToolRequestPayload) (sessionToolGovernanceClass, bool) {
+	tool := strings.TrimSpace(p.Tool)
+	if p.Delegation != nil {
+		return classifySessionDelegation(*p.Delegation, p.Args)
+	}
+	switch tool {
+	case "plan":
+		return sessionToolGovernanceClass{
+			Kind:   sessionToolGovernancePlan,
+			Bucket: sessionGovernanceBucket(argString(p.Args, "action")),
+		}, true
+	case "run_task":
+		return sessionToolGovernanceClass{
+			Kind:   sessionToolGovernanceFocusedTask,
+			Bucket: sessionGovernanceBucket(argString(p.Args, "task_type")),
+		}, true
+	case "subagent_run":
+		return sessionToolGovernanceClass{
+			Kind:   sessionToolGovernanceSubagent,
+			Bucket: sessionGovernanceBucket(argString(p.Args, "mode")),
+		}, true
+	default:
+		return sessionToolGovernanceClass{}, false
+	}
+}
+
+func classifySessionToolGovernanceResult(p sse.ToolResultPayload) (sessionToolGovernanceClass, bool) {
+	if p.Delegation == nil {
+		return sessionToolGovernanceClass{}, false
+	}
+	return classifySessionDelegation(*p.Delegation, nil)
+}
+
+func classifySessionDelegation(meta sse.DelegationMeta, args map[string]any) (sessionToolGovernanceClass, bool) {
+	switch strings.TrimSpace(meta.Kind) {
+	case sessionToolGovernanceFocusedTask:
+		bucket := meta.TaskType
+		if bucket == "" {
+			bucket = argString(args, "task_type")
+		}
+		return sessionToolGovernanceClass{
+			Kind:   sessionToolGovernanceFocusedTask,
+			Bucket: sessionGovernanceBucket(bucket),
+		}, true
+	case sessionToolGovernanceSubagent:
+		bucket := meta.Mode
+		if bucket == "" {
+			bucket = argString(args, "mode")
+		}
+		return sessionToolGovernanceClass{
+			Kind:   sessionToolGovernanceSubagent,
+			Bucket: sessionGovernanceBucket(bucket),
+		}, true
+	default:
+		return sessionToolGovernanceClass{}, false
+	}
+}
+
+func addSessionToolGovernanceRequest(summary *ToolStatsSnapshot, class sessionToolGovernanceClass) {
+	switch class.Kind {
+	case sessionToolGovernancePlan:
+		summary.PlanCalls++
+		addSessionGovernanceBucket(&summary.PlanByAction, class.Bucket)
+	case sessionToolGovernanceFocusedTask:
+		summary.FocusedTaskCalls++
+		addSessionGovernanceBucket(&summary.FocusedTaskByType, class.Bucket)
+	case sessionToolGovernanceSubagent:
+		summary.SubagentCalls++
+		addSessionGovernanceBucket(&summary.SubagentByMode, class.Bucket)
+	}
+}
+
+func addSessionToolGovernanceResult(summary *ToolStatsSnapshot, class sessionToolGovernanceClass, exitCode int) {
+	if exitCode == 0 {
+		return
+	}
+	switch class.Kind {
+	case sessionToolGovernancePlan:
+		summary.PlanErrors++
+	case sessionToolGovernanceFocusedTask:
+		summary.FocusedTaskErrors++
+	case sessionToolGovernanceSubagent:
+		summary.SubagentErrors++
+	}
+}
+
+func addSessionGovernanceBucket(dst *map[string]int64, bucket string) {
+	bucket = sessionGovernanceBucket(bucket)
+	if *dst == nil {
+		*dst = map[string]int64{}
+	}
+	(*dst)[bucket]++
+}
+
+func sessionGovernanceBucket(raw string) string {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return "unknown"
+	}
+	return raw
+}
+
+func argString(args map[string]any, key string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	value, ok := args[key]
+	if !ok || value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return v
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 func mergeMaxToolFailureKinds(summary *ToolStatsSnapshot, derived map[string]int64) {

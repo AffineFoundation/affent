@@ -297,6 +297,36 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.SessionSearchRecent += src.SessionSearchRecent
 	dst.ToolContextTruncated += src.ToolContextTruncated
 	dst.ToolContextOmitted += src.ToolContextOmitted
+	dst.PlanCalls += src.PlanCalls
+	dst.PlanErrors += src.PlanErrors
+	if len(src.PlanByAction) > 0 {
+		if dst.PlanByAction == nil {
+			dst.PlanByAction = make(map[string]int64, len(src.PlanByAction))
+		}
+		for action, count := range src.PlanByAction {
+			dst.PlanByAction[action] += count
+		}
+	}
+	dst.FocusedTaskCalls += src.FocusedTaskCalls
+	dst.FocusedTaskErrors += src.FocusedTaskErrors
+	if len(src.FocusedTaskByType) > 0 {
+		if dst.FocusedTaskByType == nil {
+			dst.FocusedTaskByType = make(map[string]int64, len(src.FocusedTaskByType))
+		}
+		for taskType, count := range src.FocusedTaskByType {
+			dst.FocusedTaskByType[taskType] += count
+		}
+	}
+	dst.SubagentCalls += src.SubagentCalls
+	dst.SubagentErrors += src.SubagentErrors
+	if len(src.SubagentByMode) > 0 {
+		if dst.SubagentByMode == nil {
+			dst.SubagentByMode = make(map[string]int64, len(src.SubagentByMode))
+		}
+		for mode, count := range src.SubagentByMode {
+			dst.SubagentByMode[mode] += count
+		}
+	}
 }
 
 func addRuntimeStatsSnapshot(dst *RuntimeStatsSnapshot, src RuntimeStatsSnapshot) {

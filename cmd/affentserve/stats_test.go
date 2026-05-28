@@ -704,6 +704,114 @@ func TestSession_ToolStatsSnapshot_CountsNoEvidenceWebResults(t *testing.T) {
 	}
 }
 
+func TestSession_ToolStatsSnapshot_CountsPlanAndDelegationEvents(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("tool-governance-events")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	for _, ev := range []sse.Event{
+		mustSSEEvent(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "plan-1",
+			Tool:   "plan",
+			Args:   map[string]any{"action": "update"},
+		}),
+		mustSSEEvent(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   "plan-1",
+			ExitCode: 1,
+			Result:   "invalid args",
+		}),
+		mustSSEEvent(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "focused-1",
+			Tool:   "run_task",
+			Args:   map[string]any{"task_type": "verify"},
+			Delegation: &sse.DelegationMeta{
+				Kind:     "focused_task",
+				TaskType: "verify",
+			},
+		}),
+		mustSSEEvent(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   "focused-1",
+			ExitCode: 0,
+			Result:   "ok",
+			Delegation: &sse.DelegationMeta{
+				Kind:     "focused_task",
+				TaskType: "verify",
+			},
+		}),
+		mustSSEEvent(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "subagent-1",
+			Tool:   "subagent_run",
+			Args:   map[string]any{"mode": "research"},
+			Delegation: &sse.DelegationMeta{
+				Kind: "subagent",
+				Mode: "research",
+			},
+		}),
+		mustSSEEvent(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   "subagent-1",
+			ExitCode: 1,
+			Result:   "max_turns reached",
+			Delegation: &sse.DelegationMeta{
+				Kind: "subagent",
+				Mode: "research",
+			},
+		}),
+	} {
+		s.events <- ev
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := s.ToolStatsSnapshot()
+		if got.PlanCalls == 1 &&
+			got.PlanByAction["update"] == 1 &&
+			got.PlanErrors == 1 &&
+			got.FocusedTaskCalls == 1 &&
+			got.FocusedTaskByType["verify"] == 1 &&
+			got.FocusedTaskErrors == 0 &&
+			got.SubagentCalls == 1 &&
+			got.SubagentByMode["research"] == 1 &&
+			got.SubagentErrors == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("ToolStatsSnapshot never counted governance events: %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode stats: %v body=%s", err, w.Body.String())
+	}
+	if resp.Aggregate.Tools.PlanErrors != 1 ||
+		resp.Aggregate.Tools.FocusedTaskByType["verify"] != 1 ||
+		resp.Aggregate.Tools.SubagentErrors != 1 {
+		t.Fatalf("aggregate governance stats = %+v", resp.Aggregate.Tools)
+	}
+}
+
+func mustSSEEvent(t *testing.T, typ string, payload any) sse.Event {
+	t.Helper()
+	ev, err := sse.NewEvent(typ, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ev
+}
+
 func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	s, err := pool.GetOrCreate("runtime-stats-test")
