@@ -75,6 +75,8 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Recovery rerun checkout spec");
     expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Artifact 1 file");
     expect(screen.getByTestId("workbench-context-details")).not.toHaveTextContent("Tokens 12k");
+    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Workspace path");
+    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("/work/affent");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("affent");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Changes");
@@ -93,6 +95,52 @@ describe("WorkbenchContextPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Open Run" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
+  });
+
+  it("shows session, turn, and delegated token evidence in Workbench context", async () => {
+    const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+    const onUseAsDraft = vi.fn();
+
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        onSelectSection={onSelectSection}
+        onUseAsDraft={onUseAsDraft}
+        overview={overview({ headline: "Inspect runtime evidence", detail: "Context has loaded." })}
+        workspace={{
+          hasData: true,
+          summary: "affent",
+          shortStatus: "affent · main",
+          detail: "/home/claudeuser/work/affent · branch main",
+          label: "affent",
+          path: "/home/claudeuser/work/affent",
+          branch: "main",
+        }}
+        usage={{
+          items: [
+            { label: "Session tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "1 turn from loaded trace" },
+            { label: "Latest turn tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "t1" },
+            { label: "Subagent tokens", value: "392 tokens (310 in / 82 out)", detail: "Find WebUI requirements · merged ~186 tokens" },
+          ],
+        }}
+      />,
+    );
+
+    const runtime = screen.getByTestId("workbench-context-runtime");
+    expect(runtime).toHaveTextContent("Workspace path");
+    expect(runtime).toHaveTextContent("/home/claudeuser/work/affent");
+    expect(runtime).toHaveTextContent("Session tokens");
+    expect(runtime).toHaveTextContent("1,540 tokens (1,200 in / 340 out)");
+    expect(runtime).toHaveTextContent("Latest turn tokens");
+    expect(runtime).toHaveTextContent("Subagent tokens");
+
+    await user.click(screen.getByRole("button", { name: "Open workspace" }));
+    expect(onSelectSection).toHaveBeenCalledWith("workspace");
+    await user.click(screen.getByRole("button", { name: "Use context as draft" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Workspace path: /home/claudeuser/work/affent"), "evidence");
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Subagent tokens: 392 tokens (310 in / 82 out)"), "evidence");
   });
 
   it("links automation only when the current session has automation attention", async () => {

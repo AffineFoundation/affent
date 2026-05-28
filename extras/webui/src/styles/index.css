@@ -800,6 +800,67 @@ body {
   min-width: 0;
 }
 
+.workbench-context-runtime {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.workbench-context-runtime-item {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.78);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+button.workbench-context-runtime-item {
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+button.workbench-context-runtime-item:hover,
+button.workbench-context-runtime-item:focus-visible {
+  border-color: rgba(20, 184, 166, 0.42);
+  background: rgba(240, 253, 250, 0.86);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+button.workbench-context-runtime-item:focus-visible {
+  outline: 2px solid rgba(20, 184, 166, 0.32);
+  outline-offset: 2px;
+}
+
+.workbench-context-runtime-item strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.workbench-context-runtime-item span {
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.workbench-context-runtime-item small {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .workbench-context-evidence {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -8522,6 +8583,18 @@ html[data-theme="dark"] .workbench-nav-item[data-tone="error"] .workbench-nav-ba
   border-color: rgba(248, 113, 113, 0.32);
   background: rgba(248, 113, 113, 0.14);
   color: var(--c-error);
+}
+
+html[data-theme="dark"] .workbench-context-runtime-item {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(17, 20, 24, 0.68);
+}
+
+html[data-theme="dark"] button.workbench-context-runtime-item:hover,
+html[data-theme="dark"] button.workbench-context-runtime-item:focus-visible {
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(45, 212, 191, 0.1);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
 }
 
 html[data-theme="dark"] .workbench-context-evidence-item {

@@ -79,6 +79,7 @@ import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
 import { buildSessionTrace } from "./view/sessionTrace";
+import { buildWorkbenchContextUsage } from "./view/workbenchContext";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
 import {
@@ -303,6 +304,7 @@ export function App() {
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
   const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
+  const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
   const sessionTrace = useMemo(() => buildSessionTrace(session), [session]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const hasSessionNav = !demoActive && sessions.length > 0;
@@ -1453,6 +1455,7 @@ export function App() {
             changes={sessionChanges}
             artifacts={sessionArtifacts}
             run={sessionRun}
+            usage={workbenchContextUsage}
             automationTitle={automationContext?.title}
             automationDetail={automationContext?.detail}
             onSelectSection={handleSelectWorkbenchTab}

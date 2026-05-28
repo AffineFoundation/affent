@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { completedSubagentTree } from "../fixtures/scenarios";
+import { reduceRawEvents } from "../store/reduce";
 import {
   buildWorkbenchContextEvidence,
+  buildWorkbenchContextUsage,
   workbenchContextEvidenceDraft,
   workbenchContextEvidenceText,
   workbenchContextStatusDetail,
@@ -34,6 +37,56 @@ describe("workbenchContext", () => {
     expect(workbenchContextEvidenceText(input)).toContain("Artifacts: 1 artifact · checkout failure log");
     expect(workbenchContextEvidenceText(input)).not.toContain("Tokens: 12k");
     expect(workbenchContextEvidenceDraft(input)).toContain("Use this current chat context in the next step:");
+  });
+
+  it("builds explicit workspace and token evidence for Workbench context", () => {
+    const session = reduceRawEvents([
+      ...completedSubagentTree,
+      { id: 9, type: "usage", data: { turn_id: "t1", input_tokens: 1200, output_tokens: 340 } },
+    ]);
+    const usage = buildWorkbenchContextUsage(session);
+    const input = {
+      overview: sessionOverview({ headline: "Inspect delegated work" }),
+      hasSelectedSession: true,
+      workspace: {
+        hasData: true,
+        summary: "affent",
+        shortStatus: "affent · main",
+        detail: "/home/claudeuser/work/affent · branch main",
+        label: "affent",
+        path: "/home/claudeuser/work/affent",
+        branch: "main",
+      },
+      usage,
+    };
+
+    expect(usage.items).toEqual(expect.arrayContaining([
+      { label: "Session tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "1 turn from loaded trace" },
+      { label: "Latest turn tokens", value: "1,540 tokens (1,200 in / 340 out)", detail: "t1" },
+      expect.objectContaining({ label: "Focused task tokens", value: "278 tokens (220 in / 58 out)" }),
+      expect.objectContaining({ label: "Subagent tokens", value: "392 tokens (310 in / 82 out)" }),
+    ]));
+    expect(workbenchContextEvidenceText(input)).toContain("Workspace path: /home/claudeuser/work/affent");
+    expect(workbenchContextEvidenceText(input)).toContain("Session tokens: 1,540 tokens (1,200 in / 340 out)");
+    expect(workbenchContextEvidenceText(input)).toContain("Subagent tokens: 392 tokens (310 in / 82 out)");
+  });
+
+  it("uses session index usage when the trace has not loaded token events yet", () => {
+    const usage = buildWorkbenchContextUsage(reduceRawEvents([]), {
+      id: "s1",
+      active: false,
+      durable: true,
+      has_conversation: true,
+      has_events: true,
+      has_artifacts: false,
+      has_memory: false,
+      has_runtime_skills: false,
+      usage: { input_tokens: 2000, output_tokens: 500, turns: 4 },
+    });
+
+    expect(usage.items).toEqual([
+      { label: "Session tokens", value: "2,500 tokens (2,000 in / 500 out)", detail: "4 turns from session index" },
+    ]);
   });
 
   it("uses context attention detail as the status detail", () => {

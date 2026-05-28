@@ -7,6 +7,7 @@ import type { SessionWorkspaceView } from "../view/sessionWorkspace";
 import type { TurnArtifact } from "../view/turnArtifacts";
 import {
   buildWorkbenchContextEvidence,
+  type WorkbenchContextUsageView,
   workbenchContextEvidenceDraft,
   workbenchContextEvidenceText,
   workbenchContextStatusDetail,
@@ -26,6 +27,7 @@ export function WorkbenchContextPanel({
   changes,
   artifacts,
   run,
+  usage,
   automationTitle,
   automationDetail,
   onSelectSection,
@@ -40,6 +42,7 @@ export function WorkbenchContextPanel({
   changes?: SessionChangesView;
   artifacts?: readonly TurnArtifact[];
   run?: SessionRunView;
+  usage?: WorkbenchContextUsageView;
   automationTitle?: string;
   automationDetail?: string;
   onSelectSection?: (tab: WorkbenchTab) => void;
@@ -49,9 +52,10 @@ export function WorkbenchContextPanel({
   const metrics = displaySessionOverviewMetrics(overview.metrics);
   const summary = workbenchContextSummary(overview, hasSelectedSession);
   const detail = hasSelectedSession ? overview.headline : "Start or open a chat";
-  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, automationTitle, automationDetail };
+  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, automationTitle, automationDetail };
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
+  const runtimeItems = usage?.items ?? [];
 
   return (
     <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
@@ -78,6 +82,29 @@ export function WorkbenchContextPanel({
           summaryLabel="Context metrics"
           inlineLimit={2}
         />
+        {workspace?.hasData || runtimeItems.length > 0 ? (
+          <div className="workbench-context-runtime" data-testid="workbench-context-runtime">
+            {workspace?.hasData ? (
+              <button
+                type="button"
+                className="workbench-context-runtime-item"
+                onClick={() => onSelectSection?.("workspace")}
+                aria-label="Open workspace"
+              >
+                <strong>Workspace path</strong>
+                <span>{workspace.path || workspace.summary}</span>
+                <small>{workspace.issue ?? workspace.detail}</small>
+              </button>
+            ) : null}
+            {runtimeItems.map((item) => (
+              <div key={`${item.label}:${item.value}:${item.detail ?? ""}`} className="workbench-context-runtime-item">
+                <strong>{item.label}</strong>
+                <span>{item.value}</span>
+                {item.detail ? <small>{item.detail}</small> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
         {hasSelectedSession ? (
           <span className="workbench-context-actions">
             <CopyButton label="Copy context" value={workbenchContextEvidenceText(contextInput)} className="ghost-action" />
