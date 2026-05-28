@@ -2,7 +2,11 @@ package main
 
 import (
 	"bytes"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,8 +17,15 @@ import (
 	"testing"
 )
 
+func newPoolWithAccountHome(t *testing.T) (*SessionPool, string) {
+	t.Helper()
+	home := filepath.Join(t.TempDir(), "home")
+	t.Setenv("HOME", home)
+	return newPoolWithMemoryRoot(t, t.TempDir()), home
+}
+
 func TestAccountSettingsEnvSetListDeleteWithoutValueLeak(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	r := httptest.NewRequest(http.MethodPost, "/v1/settings/env", bytes.NewBufferString(`{"name":"GITHUB_TOKEN","value":"ghp_secret"}`))
 	w := httptest.NewRecorder()
 	handleAccountSettingsRoutes(pool).ServeHTTP(w, r)
@@ -60,7 +71,7 @@ func TestAccountSettingsEnvSetListDeleteWithoutValueLeak(t *testing.T) {
 }
 
 func TestAccountSettingsRejectsInvalidEnvName(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	r := httptest.NewRequest(http.MethodPost, "/v1/settings/env", bytes.NewBufferString(`{"name":"BAD NAME","value":"x"}`))
 	w := httptest.NewRecorder()
 	handleAccountSettingsRoutes(pool).ServeHTTP(w, r)
@@ -71,7 +82,7 @@ func TestAccountSettingsRejectsInvalidEnvName(t *testing.T) {
 
 func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	t.Setenv("GIT_SSH_COMMAND", "")
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, home := newPoolWithAccountHome(t)
 	r := httptest.NewRequest(http.MethodPost, "/v1/settings/ssh-key", nil)
 	w := httptest.NewRecorder()
 	handleAccountSettingsRoutes(pool).ServeHTTP(w, r)
@@ -86,6 +97,9 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 		t.Fatalf("first ssh = %+v, want generated public key", first.SSH)
 	}
 	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if privatePath != filepath.Join(home, ".ssh", accountSSHKeyName) {
+		t.Fatalf("private key path = %q, want standard ~/.ssh path under %q", privatePath, home)
+	}
 	if strings.Contains(w.Body.String(), "private_key_path") || strings.Contains(w.Body.String(), strconv.Quote(privatePath)) {
 		t.Fatalf("generate ssh response leaked private key path: %s", w.Body.String())
 	}
@@ -95,6 +109,13 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	}
 	if privateInfo.Mode().Perm() != 0o600 {
 		t.Fatalf("private key perm = %v, want 0600", privateInfo.Mode().Perm())
+	}
+	privateRaw, err := os.ReadFile(privatePath)
+	if err != nil {
+		t.Fatalf("read private key: %v", err)
+	}
+	if !bytes.Contains(privateRaw, []byte("BEGIN OPENSSH PRIVATE KEY")) {
+		t.Fatalf("private key should be OpenSSH format, got header %q", firstLine(privateRaw))
 	}
 	if _, err := os.Stat(publicPath); err != nil {
 		t.Fatalf("stat public key: %v", err)
@@ -153,9 +174,9 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	}
 }
 
-func TestAccountSettingsSSHKeyUsesConfiguredAccountRoot(t *testing.T) {
+func TestAccountSettingsSSHKeyUsesStandardHomeSSHDir(t *testing.T) {
 	accountRoot := filepath.Join(t.TempDir(), "isolated-account")
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, home := newPoolWithAccountHome(t)
 	pool.cfg.AccountRoot = accountRoot
 
 	info, err := ensureAccountSSHKey(pool)
@@ -166,8 +187,11 @@ func TestAccountSettingsSSHKeyUsesConfiguredAccountRoot(t *testing.T) {
 		t.Fatalf("ssh info = %+v, want created key", info)
 	}
 	privatePath, publicPath := accountSSHKeyPaths(pool)
-	if !strings.HasPrefix(privatePath, accountRoot+string(os.PathSeparator)) {
-		t.Fatalf("private key path = %q, want under account root %q", privatePath, accountRoot)
+	if privatePath != filepath.Join(home, ".ssh", accountSSHKeyName) {
+		t.Fatalf("private key path = %q, want standard ~/.ssh path under %q", privatePath, home)
+	}
+	if strings.HasPrefix(privatePath, accountRoot+string(os.PathSeparator)) {
+		t.Fatalf("private key path = %q, must not be under account root %q", privatePath, accountRoot)
 	}
 	if _, err := os.Stat(privatePath); err != nil {
 		t.Fatalf("stat private key: %v", err)
@@ -177,9 +201,74 @@ func TestAccountSettingsSSHKeyUsesConfiguredAccountRoot(t *testing.T) {
 	}
 }
 
+func TestAccountSettingsSSHKeyMigratesLegacyAccountRootKeyToHomeSSH(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "")
+	pool, home := newPoolWithAccountHome(t)
+	pool.cfg.AccountRoot = filepath.Join(t.TempDir(), "isolated-account")
+	legacyPrivatePath, legacyPublicPath := legacyAccountSSHKeyPaths(pool)
+	if err := os.MkdirAll(filepath.Dir(legacyPrivatePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyPrivate := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
+	legacyPublic := marshalOpenSSHEd25519PublicKey(publicKey, "affentserve")
+	if err := os.WriteFile(legacyPrivatePath, legacyPrivate, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyPublicPath, []byte(legacyPublic+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/settings", nil)
+	w := httptest.NewRecorder()
+	handleAccountSettings(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("get settings status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp accountSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode settings: %v", err)
+	}
+	standardPrivatePath, standardPublicPath := accountSSHKeyPaths(pool)
+	if standardPrivatePath != filepath.Join(home, ".ssh", accountSSHKeyName) {
+		t.Fatalf("standard private path = %q, want under home %q", standardPrivatePath, home)
+	}
+	if resp.SSH.PublicKeyPath != standardPublicPath || resp.SSH.PublicKey != legacyPublic {
+		t.Fatalf("ssh response = %+v, want migrated public key at %q", resp.SSH, standardPublicPath)
+	}
+	privateRaw, err := os.ReadFile(standardPrivatePath)
+	if err != nil {
+		t.Fatalf("read standard private key: %v", err)
+	}
+	if !bytes.Contains(privateRaw, []byte("BEGIN OPENSSH PRIVATE KEY")) {
+		t.Fatalf("standard private key should be converted to OpenSSH format, got header %q", firstLine(privateRaw))
+	}
+	if got := findEnvPairValue(pool.accountEnvPairs(), "GIT_SSH_COMMAND"); !strings.Contains(got, standardPrivatePath) {
+		t.Fatalf("GIT_SSH_COMMAND = %q, want standard private key path %q", got, standardPrivatePath)
+	}
+	if _, err := os.Stat(legacyPrivatePath); !os.IsNotExist(err) {
+		t.Fatalf("legacy private key should be removed after migration, stat err=%v", err)
+	}
+	if _, err := os.Stat(legacyPublicPath); !os.IsNotExist(err) {
+		t.Fatalf("legacy public key should be removed after migration, stat err=%v", err)
+	}
+}
+
+func firstLine(raw []byte) string {
+	line, _, _ := bytes.Cut(raw, []byte("\n"))
+	return string(line)
+}
+
 func TestAccountSettingsEnvOverridesGeneratedGitSSHCommand(t *testing.T) {
 	t.Setenv("GIT_SSH_COMMAND", "")
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	if _, err := ensureAccountSSHKey(pool); err != nil {
 		t.Fatalf("ensure ssh key: %v", err)
 	}
@@ -193,7 +282,7 @@ func TestAccountSettingsEnvOverridesGeneratedGitSSHCommand(t *testing.T) {
 }
 
 func TestAccountAccessSkillProviderListsNamesWithoutValues(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	provider := pool.withAccountAccessSkillProvider(func(string) string {
 		return "NEXT BLOCK"
 	})
@@ -215,15 +304,24 @@ func TestAccountAccessSkillProviderListsNamesWithoutValues(t *testing.T) {
 }
 
 func TestAccountSettingsSSHKeyDoesNotOverwriteExistingKey(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	privatePath, publicPath := accountSSHKeyPaths(pool)
 	if err := os.MkdirAll(filepath.Dir(privatePath), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(privatePath, []byte("existing-private\n"), 0o600); err != nil {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(publicPath, []byte("ssh-ed25519 existing affent\n"), 0o644); err != nil {
+	existingPrivate, err := marshalOpenSSHEd25519PrivateKey(privateKey, publicKey, "affentserve")
+	if err != nil {
+		t.Fatal(err)
+	}
+	existingPublic := marshalOpenSSHEd25519PublicKey(publicKey, "affentserve")
+	if err := os.WriteFile(privatePath, existingPrivate, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(publicPath, []byte(existingPublic+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -237,20 +335,20 @@ func TestAccountSettingsSSHKeyDoesNotOverwriteExistingKey(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp.SSH.Created || resp.SSH.PublicKey != "ssh-ed25519 existing affent" {
+	if resp.SSH.Created || resp.SSH.PublicKey != existingPublic {
 		t.Fatalf("ssh = %+v, want existing public key without overwrite", resp.SSH)
 	}
 	privateRaw, err := os.ReadFile(privatePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(privateRaw) != "existing-private\n" {
+	if !bytes.Equal(privateRaw, existingPrivate) {
 		t.Fatalf("private key was overwritten: %q", string(privateRaw))
 	}
 }
 
 func TestAccountSettingsSSHKeyConcurrentEnsureReusesSingleKey(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	const workers = 8
 	results := make([]accountSSHKeyInfo, workers)
 	errs := make([]error, workers)
@@ -289,7 +387,7 @@ func TestAccountSettingsSSHKeyConcurrentEnsureReusesSingleKey(t *testing.T) {
 }
 
 func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromExistingPrivate(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	first, err := ensureAccountSSHKey(pool)
 	if err != nil {
 		t.Fatalf("ensure first ssh key: %v", err)
@@ -339,7 +437,7 @@ func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromExistingPrivate(t *test
 }
 
 func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromOpenSSHPrivate(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	privatePath, publicPath := accountSSHKeyPaths(pool)
 	if err := os.MkdirAll(filepath.Dir(privatePath), 0o700); err != nil {
 		t.Fatal(err)
@@ -399,7 +497,7 @@ func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromOpenSSHPrivate(t *testi
 }
 
 func TestAccountSettingsSSHKeyRefusesPrivateOnlyOverwrite(t *testing.T) {
-	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	pool, _ := newPoolWithAccountHome(t)
 	privatePath, _ := accountSSHKeyPaths(pool)
 	if err := os.MkdirAll(filepath.Dir(privatePath), 0o700); err != nil {
 		t.Fatal(err)

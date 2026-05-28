@@ -482,6 +482,12 @@ func normalizeAccountSettings(settings accountSettingsFile) accountSettingsFile 
 
 func readAccountSSHKeyInfo(pool *SessionPool) (accountSSHKeyInfo, error) {
 	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if err := migrateLegacyAccountSSHKeyIfNeeded(pool, privatePath, publicPath); err != nil {
+		return accountSSHKeyInfo{}, err
+	}
+	if err := convertAccountPrivateKeyToOpenSSHIfNeeded(privatePath); err != nil {
+		return accountSSHKeyInfo{}, err
+	}
 	pub, err := readAccountPublicKey(publicPath)
 	if err != nil {
 		return accountSSHKeyInfo{}, err
@@ -515,9 +521,15 @@ func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
 	pool.settingsMu.Lock()
 	defer pool.settingsMu.Unlock()
 	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if err := migrateLegacyAccountSSHKeyIfNeeded(pool, privatePath, publicPath); err != nil {
+		return accountSSHKeyInfo{}, err
+	}
 	if pub, err := readAccountPublicKey(publicPath); err != nil {
 		return accountSSHKeyInfo{}, err
 	} else if pub != "" {
+		if err := convertAccountPrivateKeyToOpenSSHIfNeeded(privatePath); err != nil {
+			return accountSSHKeyInfo{}, err
+		}
 		return accountSSHKeyInfo{Exists: true, PublicKey: pub, PublicKeyPath: publicPath, PrivateKeyPath: privatePath}, nil
 	}
 	if _, err := os.Lstat(privatePath); err == nil {
@@ -526,6 +538,9 @@ func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
 			return accountSSHKeyInfo{}, fmt.Errorf("private SSH key already exists but public key is missing and could not be derived: %w; refusing to overwrite", deriveErr)
 		}
 		if err := writeNewFile(publicPath, []byte(pub+"\n"), 0o644); err != nil {
+			return accountSSHKeyInfo{}, err
+		}
+		if err := convertAccountPrivateKeyToOpenSSHIfNeeded(privatePath); err != nil {
 			return accountSSHKeyInfo{}, err
 		}
 		syncAccountDir(filepath.Dir(privatePath))
@@ -540,11 +555,10 @@ func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
 	if err != nil {
 		return accountSSHKeyInfo{}, err
 	}
-	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	privatePEM, err := marshalOpenSSHEd25519PrivateKey(privateKey, publicKey, "affentserve")
 	if err != nil {
 		return accountSSHKeyInfo{}, err
 	}
-	privatePEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 	if err := writeNewFile(privatePath, privatePEM, 0o600); err != nil {
 		return accountSSHKeyInfo{}, err
 	}
@@ -559,6 +573,8 @@ func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
 
 func accountGitSSHCommand(pool *SessionPool) (string, bool) {
 	privatePath, _ := accountSSHKeyPaths(pool)
+	_ = migrateLegacyAccountSSHKeyIfNeeded(pool, privatePath, privatePath+".pub")
+	_ = convertAccountPrivateKeyToOpenSSHIfNeeded(privatePath)
 	info, err := os.Lstat(privatePath)
 	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return "", false
@@ -649,6 +665,44 @@ func deriveAccountPublicKeyFromPrivate(path string) (string, error) {
 	return marshalOpenSSHEd25519PublicKey(publicKey, "affentserve"), nil
 }
 
+func convertAccountPrivateKeyToOpenSSHIfNeeded(path string) error {
+	exists, err := accountPrivateKeyExists(path)
+	if err != nil || !exists {
+		return err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	block, _ := pem.Decode(bytes.TrimSpace(raw))
+	if block == nil {
+		return errors.New("ssh private key is not PEM encoded")
+	}
+	if block.Type == "OPENSSH PRIVATE KEY" {
+		return nil
+	}
+	if block.Type != "PRIVATE KEY" {
+		return fmt.Errorf("unsupported private key PEM type %q", block.Type)
+	}
+	key, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return err
+	}
+	privateKey, ok := key.(ed25519.PrivateKey)
+	if !ok {
+		return fmt.Errorf("unsupported private key type %T", key)
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return errors.New("private key did not expose an Ed25519 public key")
+	}
+	openSSH, err := marshalOpenSSHEd25519PrivateKey(privateKey, publicKey, "affentserve")
+	if err != nil {
+		return err
+	}
+	return replaceFile(path, openSSH, 0o600)
+}
+
 func deriveAccountPublicKeyFromOpenSSHPrivate(raw []byte) (string, error) {
 	const magic = "openssh-key-v1\x00"
 	if !bytes.HasPrefix(raw, []byte(magic)) {
@@ -709,6 +763,45 @@ func marshalOpenSSHEd25519PublicKey(pub ed25519.PublicKey, comment string) strin
 	return out
 }
 
+func marshalOpenSSHEd25519PrivateKey(privateKey ed25519.PrivateKey, publicKey ed25519.PublicKey, comment string) ([]byte, error) {
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, fmt.Errorf("ed25519 private key length = %d, want %d", len(privateKey), ed25519.PrivateKeySize)
+	}
+	if len(publicKey) != ed25519.PublicKeySize {
+		return nil, fmt.Errorf("ed25519 public key length = %d, want %d", len(publicKey), ed25519.PublicKeySize)
+	}
+	const keyType = "ssh-ed25519"
+	var publicBlob bytes.Buffer
+	writeSSHString(&publicBlob, []byte(keyType))
+	writeSSHString(&publicBlob, []byte(publicKey))
+
+	var privateBlob bytes.Buffer
+	check := make([]byte, 4)
+	if _, err := rand.Read(check); err != nil {
+		return nil, err
+	}
+	privateBlob.Write(check)
+	privateBlob.Write(check)
+	writeSSHString(&privateBlob, []byte(keyType))
+	writeSSHString(&privateBlob, []byte(publicKey))
+	writeSSHString(&privateBlob, []byte(privateKey))
+	writeSSHString(&privateBlob, []byte(strings.TrimSpace(comment)))
+	for pad := byte(1); privateBlob.Len()%8 != 0; pad++ {
+		privateBlob.WriteByte(pad)
+	}
+
+	var payload bytes.Buffer
+	payload.WriteString("openssh-key-v1")
+	payload.WriteByte(0)
+	writeSSHString(&payload, []byte("none"))
+	writeSSHString(&payload, []byte("none"))
+	writeSSHString(&payload, nil)
+	_ = binary.Write(&payload, binary.BigEndian, uint32(1))
+	writeSSHString(&payload, publicBlob.Bytes())
+	writeSSHString(&payload, privateBlob.Bytes())
+	return pem.EncodeToMemory(&pem.Block{Type: "OPENSSH PRIVATE KEY", Bytes: payload.Bytes()}), nil
+}
+
 func readSSHString(raw []byte) ([]byte, []byte, error) {
 	if len(raw) < 4 {
 		return nil, nil, errors.New("short SSH string length")
@@ -750,6 +843,40 @@ func writeNewFile(path string, content []byte, perm os.FileMode) error {
 	return nil
 }
 
+func replaceFile(path string, content []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(path)+"-")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if err := tmp.Chmod(perm); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if _, err := tmp.Write(content); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		_ = os.Remove(tmpName)
+		return err
+	}
+	syncAccountDir(dir)
+	return nil
+}
+
 func shellQuote(value string) string {
 	if value == "" {
 		return "''"
@@ -776,6 +903,69 @@ func accountSettingsPath(pool *SessionPool) string {
 }
 
 func accountSSHKeyPaths(pool *SessionPool) (string, string) {
+	privatePath := filepath.Join(accountSSHHomeDir(), ".ssh", accountSSHKeyName)
+	return privatePath, privatePath + ".pub"
+}
+
+func accountSSHHomeDir() string {
+	if home := strings.TrimSpace(os.Getenv("HOME")); home != "" {
+		return home
+	}
+	if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+		return home
+	}
+	return "."
+}
+
+func legacyAccountSSHKeyPaths(pool *SessionPool) (string, string) {
 	privatePath := filepath.Join(accountSettingsDir(pool), "ssh", accountSSHKeyName)
 	return privatePath, privatePath + ".pub"
+}
+
+func migrateLegacyAccountSSHKeyIfNeeded(pool *SessionPool, privatePath, publicPath string) error {
+	legacyPrivatePath, legacyPublicPath := legacyAccountSSHKeyPaths(pool)
+	if legacyPrivatePath == privatePath {
+		return nil
+	}
+	if exists, err := accountPrivateKeyExists(privatePath); err != nil {
+		return err
+	} else if exists {
+		return nil
+	}
+	if exists, err := accountPrivateKeyExists(legacyPrivatePath); err != nil {
+		return err
+	} else if !exists {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(privatePath), 0o700); err != nil {
+		return err
+	}
+	if err := copyFileIfMissing(legacyPrivatePath, privatePath, 0o600); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(legacyPublicPath); err == nil {
+		if err := copyFileIfMissing(legacyPublicPath, publicPath, 0o644); err != nil {
+			return err
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	syncAccountDir(filepath.Dir(privatePath))
+	_ = os.Remove(legacyPublicPath)
+	_ = os.Remove(legacyPrivatePath)
+	_ = os.Remove(filepath.Dir(legacyPrivatePath))
+	return nil
+}
+
+func copyFileIfMissing(src, dst string, perm os.FileMode) error {
+	if _, err := os.Lstat(dst); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	raw, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return writeNewFile(dst, raw, perm)
 }

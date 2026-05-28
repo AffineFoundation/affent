@@ -52,9 +52,10 @@ type Config struct {
 	MemoryRoot string `json:"memory_root"`
 
 	// AccountRoot is durable account-level state shared by all sessions:
-	// account env settings, SSH keys, and account-installed skills. Keep it
-	// outside host ~/.ssh and outside per-session state so container restarts
-	// preserve credentials without exposing the operator's host SSH config.
+	// account env settings and account-installed skills. SSH keys use the
+	// runtime user's standard ~/.ssh directory; container deployments should
+	// mount HOME to an isolated persistent directory rather than the host's
+	// real ~/.ssh.
 	// Empty defaults to "<session root>/.affentserve" for compatibility.
 	AccountRoot string `json:"account_root"`
 
