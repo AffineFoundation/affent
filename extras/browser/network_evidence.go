@@ -513,6 +513,13 @@ func NetworkReadTool(s *Session) *agent.Tool {
                 "maxLength": %d,
                 "description": "Optional JSON subtree path to return, using a bounded subset such as $.data.items[0].price, data.items[0], or [0].metrics. Use this to avoid dumping large API responses."
             },
+            "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": %d,
+                "default": 0,
+                "description": "Byte offset into the selected response body. Use the next_offset from a truncated read to continue inspecting a large response."
+            },
             "max_bytes": {
                 "type": "integer",
                 "minimum": 1,
@@ -521,18 +528,19 @@ func NetworkReadTool(s *Session) *agent.Tool {
                 "description": "Maximum response body bytes to return."
             }
         }
-    }`, maxNetworkJSONPathBytes, maxNetworkReadBytes, defaultNetworkReadBytes))
+    }`, maxNetworkJSONPathBytes, maxNetworkEvidenceBodyBytes, maxNetworkReadBytes, defaultNetworkReadBytes))
 	return &agent.Tool{
 		Name:        "browser_network_read",
-		Description: "Read a captured same-site browser XHR/fetch response by ref or exact URL. Returns bounded JSON/text evidence with the source URL; pass json_path to extract one JSON subtree from large responses. Use this instead of guessing values from rendered labels when a dynamic dashboard hides metric text.",
+		Description: "Read a captured same-site browser XHR/fetch response by ref or exact URL. Returns bounded JSON/text evidence with the source URL; pass json_path to extract one JSON subtree from large responses, or offset to continue a truncated read. Use this instead of guessing values from rendered labels when a dynamic dashboard hides metric text.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
 				Ref      string `json:"ref"`
 				JSONPath string `json:"json_path"`
+				Offset   int    `json:"offset"`
 				MaxBytes int    `json:"max_bytes"`
 			}
-			if err := decodeBrowserToolArgs(raw, &args, "retry browser_network_read with only documented fields: ref, json_path, and max_bytes"); err != nil {
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_network_read with only documented fields: ref, json_path, offset, and max_bytes"); err != nil {
 				return "", err
 			}
 			ref := strings.TrimSpace(args.Ref)
@@ -542,6 +550,10 @@ func NetworkReadTool(s *Session) *agent.Tool {
 			jsonPath := strings.TrimSpace(args.JSONPath)
 			if len(jsonPath) > maxNetworkJSONPathBytes {
 				return "", browserInvalidArgs(fmt.Sprintf("json_path is %d bytes; browser_network_read supports paths up to %d bytes", len(jsonPath), maxNetworkJSONPathBytes), "retry with a shorter path such as data.items[0].price")
+			}
+			offset := args.Offset
+			if offset < 0 {
+				return "", browserInvalidArgs("offset must be non-negative", "retry with offset 0 or the next_offset from a previous browser_network_read result")
 			}
 			maxBytes := args.MaxBytes
 			if maxBytes <= 0 {
@@ -557,7 +569,7 @@ func NetworkReadTool(s *Session) *agent.Tool {
 			if !ok {
 				return "", fmt.Errorf("network response %q was not found in the current browser session\nFailure: kind=not_found\nNext: call browser_network with a distinctive query from the current page or navigate/wait until the dashboard has loaded its XHR/fetch responses", ref)
 			}
-			return formatNetworkReadResult(entry, maxBytes, jsonPath)
+			return formatNetworkReadResult(entry, offset, maxBytes, jsonPath)
 		},
 	}
 }
@@ -618,7 +630,10 @@ func networkRecentJSONPathHints(body []byte) []string {
 	return hints
 }
 
-func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int, jsonPath string) (string, error) {
+func formatNetworkReadResult(entry NetworkEvidenceEntry, offset, maxBytes int, jsonPath string) (string, error) {
+	if offset < 0 {
+		offset = 0
+	}
 	if maxBytes <= 0 {
 		maxBytes = defaultNetworkReadBytes
 	}
@@ -631,11 +646,16 @@ func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int, jsonPath 
 		body = selected
 	}
 	bodyBytes := len(body)
-	omitted := 0
-	if len(body) > maxBytes {
-		omitted = len(body) - maxBytes
-		body = body[:maxBytes]
+	if offset > bodyBytes {
+		offset = bodyBytes
 	}
+	end := offset + maxBytes
+	if end > bodyBytes {
+		end = bodyBytes
+	}
+	chunk := body[offset:end]
+	omittedBefore := offset
+	omittedAfter := bodyBytes - end
 	var b strings.Builder
 	b.WriteString(sourceaccess.FormatSourceAccessLine(
 		"browser_network_url",
@@ -650,13 +670,20 @@ func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int, jsonPath 
 		fmt.Fprintf(&b, "JSON_PATH: %s\n", jsonPath)
 	}
 	fmt.Fprintf(&b, "BODY_BYTES: %d", bodyBytes)
-	if omitted > 0 {
-		fmt.Fprintf(&b, " (showing %d, omitted %d)", len(body), omitted)
+	if omittedBefore > 0 || omittedAfter > 0 {
+		fmt.Fprintf(&b, " (offset %d, showing %d", offset, len(chunk))
+		if omittedBefore > 0 {
+			fmt.Fprintf(&b, ", omitted_before %d", omittedBefore)
+		}
+		if omittedAfter > 0 {
+			fmt.Fprintf(&b, ", omitted_after %d, next_offset %d", omittedAfter, end)
+		}
+		b.WriteString(")")
 	}
 	b.WriteString("\n")
-	b.Write(body)
-	if omitted > 0 {
-		fmt.Fprintf(&b, "\n[... %d bytes omitted; retry with a narrower query or max_bytes up to %d ...]\n", omitted, maxNetworkReadBytes)
+	b.Write(chunk)
+	if omittedAfter > 0 {
+		fmt.Fprintf(&b, "\n[... %d bytes omitted after this chunk; retry with offset=%d, a narrower json_path, or max_bytes up to %d ...]\n", omittedAfter, end, maxNetworkReadBytes)
 	}
 	return b.String(), nil
 }

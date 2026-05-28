@@ -161,6 +161,40 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceReadSupportsOffsetContinuation(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120/large", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"prefix":"0123456789","market_cap":"201.04K T","volume_24h":"5.1K T"}`))
+	s := &Session{network: log}
+
+	readOut, err := NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","offset":14,"max_bytes":12}`))
+	if err != nil {
+		t.Fatalf("browser_network_read offset: %v", err)
+	}
+	for _, want := range []string{
+		"BODY_BYTES: 70 (offset 14, showing 12, omitted_before 14, omitted_after 44, next_offset 26)",
+		`3456789","ma`,
+		"retry with offset=26",
+	} {
+		if !strings.Contains(readOut, want) {
+			t.Fatalf("offset read output missing %q:\n%s", want, readOut)
+		}
+	}
+
+	readOut, err = NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","offset":999,"max_bytes":12}`))
+	if err != nil {
+		t.Fatalf("browser_network_read eof offset: %v", err)
+	}
+	if !strings.Contains(readOut, "BODY_BYTES: 70 (offset 70, showing 0, omitted_before 70)") {
+		t.Fatalf("eof offset output missing bounded empty chunk:\n%s", readOut)
+	}
+
+	_, err = NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","offset":-1}`))
+	if err == nil || !strings.Contains(err.Error(), "offset must be non-negative") {
+		t.Fatalf("negative offset err = %v", err)
+	}
+}
+
 func TestNetworkEvidenceReadIncludesPageURLForSiblingAPI(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://app.metrics.example.com/dashboard", proto.NetworkResourceTypeDocument)
