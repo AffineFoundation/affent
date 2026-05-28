@@ -22,6 +22,10 @@ describe("SessionWorkspacePanel", () => {
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/repo/affent");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Latest command cwd");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/tmp");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Binding");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Recorded");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Agent cwd");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Outside");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Command cwd");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp/extras/webui");
     expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Branch");
@@ -61,10 +65,14 @@ describe("SessionWorkspacePanel", () => {
 
     const panel = screen.getByTestId("session-workspace-panel");
     expect(panel).toHaveTextContent("Binding missing");
+    expect(screen.getByTestId("session-workspace-card")).toHaveAttribute("data-tone", "warning");
     expect(panel).not.toHaveTextContent("Boundary verified");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Session workspace");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Not recorded");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/workspace/sessions/sess_123");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Binding");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Missing");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("historical cwd");
     expect(panel).toHaveTextContent("Use cwd in chat");
     await user.click(within(panel).getByRole("button", { name: "Draft verification" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(

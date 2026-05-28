@@ -3,7 +3,7 @@ import type { SessionSummary } from "../api/sessions";
 import { reduceRawEvents } from "../store/reduce";
 import { buildSessionRun } from "./sessionRun";
 import type { SessionRunView } from "./sessionRun";
-import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
+import { buildSessionWorkspace, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
 
 describe("buildSessionWorkspace", () => {
   it("summarizes a recorded workspace binding with the latest command cwd", () => {
@@ -26,6 +26,10 @@ describe("buildSessionWorkspace", () => {
       path: "/repo/affent",
       lastAgentCwd: "extras/webui",
     });
+    expect(workspaceReviewFacts(workspace)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Binding", value: "Recorded", tone: "ok" }),
+      expect.objectContaining({ label: "Agent cwd", value: "Inside", detail: "inside session", tone: "ok" }),
+    ]));
   });
 
   it("flags absolute command cwd outside the session workspace", () => {
@@ -51,6 +55,9 @@ describe("buildSessionWorkspace", () => {
       "Last agent cwd: /tmp",
     ].join("\n"));
     expect(workspaceDraft(workspace)).toContain("Verify this workspace mismatch before making more file changes or running commands");
+    expect(workspaceReviewFacts(workspace)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Agent cwd", value: "Outside", tone: "danger" }),
+    ]));
     expect(workspaceVerifyRequest(workspace)).toEqual({
       command: "pwd; git status --short --branch 2>/dev/null || true",
       cwd: "/repo/affent",
@@ -70,9 +77,14 @@ describe("buildSessionWorkspace", () => {
       shortStatus: "Workspace binding missing",
       detail: "cwd /workspace/sessions/sess_123",
       verification: "missing_binding",
+      tone: "warning",
       lastAgentCwd: "/workspace/sessions/sess_123",
     });
     expect(workspaceEvidenceText(workspace)).toContain("Last agent cwd: /workspace/sessions/sess_123");
+    expect(workspaceReviewFacts(workspace)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Binding", value: "Missing", tone: "attention" }),
+      expect.objectContaining({ label: "Agent cwd", value: "Recorded", detail: "historical cwd", tone: "ok" }),
+    ]));
     expect(workspaceDraft(workspace)).toContain("Use this historical command cwd as workspace evidence");
   });
 

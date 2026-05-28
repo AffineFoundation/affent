@@ -17,6 +17,13 @@ export interface SessionWorkspaceView {
   issue?: string;
 }
 
+export interface SessionWorkspaceFact {
+  label: string;
+  value: string;
+  detail: string;
+  tone?: "ok" | "attention" | "danger" | "neutral";
+}
+
 export function buildSessionWorkspace(
   session: SessionSummary | undefined,
   run: SessionRunView,
@@ -48,7 +55,7 @@ export function buildSessionWorkspace(
     shortStatus: workspaceShortStatus({ summary, label, path, branch, dirtyState }),
     detail: workspaceDetail({ path, branch, dirtyState, lastAgentCwd }),
     verification,
-    tone: issue ? "warning" : undefined,
+    tone: issue || verification === "missing_binding" ? "warning" : undefined,
     label,
     path,
     branch,
@@ -57,6 +64,35 @@ export function buildSessionWorkspace(
     latestCommandCwd,
     issue,
   };
+}
+
+export function workspaceReviewFacts(workspace: SessionWorkspaceView): SessionWorkspaceFact[] {
+  return [
+    {
+      label: "Binding",
+      value: workspace.path ? "Recorded" : "Missing",
+      detail: workspace.path ? "session path" : "no session path",
+      tone: workspace.path ? "ok" : workspace.hasData ? "attention" : "neutral",
+    },
+    {
+      label: "Agent cwd",
+      value: agentCwdValue(workspace),
+      detail: agentCwdDetail(workspace),
+      tone: workspace.verification === "mismatch" ? "danger" : workspace.lastAgentCwd ? "ok" : "neutral",
+    },
+    {
+      label: "Branch",
+      value: workspace.branch ?? "n/a",
+      detail: workspace.branch ? "reported" : "not reported",
+      tone: "neutral",
+    },
+    {
+      label: "State",
+      value: workspace.dirtyState ?? "n/a",
+      detail: workspace.dirtyState ? "git status" : "not reported",
+      tone: workspace.dirtyState && !/^clean$/i.test(workspace.dirtyState) ? "attention" : "neutral",
+    },
+  ];
 }
 
 export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
@@ -72,6 +108,19 @@ export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
     workspace.dirtyState ? `State: ${workspace.dirtyState}` : undefined,
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
+
+function agentCwdValue(workspace: SessionWorkspaceView): string {
+  if (workspace.verification === "mismatch") return "Outside";
+  if (workspace.lastAgentCwd) return workspace.path ? "Inside" : "Recorded";
+  return "Missing";
+}
+
+function agentCwdDetail(workspace: SessionWorkspaceView): string {
+  if (workspace.verification === "mismatch") return "outside session";
+  if (workspace.lastAgentCwd && workspace.path) return "inside session";
+  if (workspace.lastAgentCwd) return "historical cwd";
+  return "no shell cwd";
 }
 
 export function workspaceDraft(workspace: SessionWorkspaceView): string {

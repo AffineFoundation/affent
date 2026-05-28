@@ -1,7 +1,7 @@
 import type { UseAsDraft } from "../view/draftSource";
 import type { RunCommandExecutionRequest } from "../view/sessionRun";
-import type { SessionWorkspaceView } from "../view/sessionWorkspace";
-import { workspaceDraft, workspaceEvidenceText, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
+import type { SessionWorkspaceFact, SessionWorkspaceView } from "../view/sessionWorkspace";
+import { workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
 import { CopyButton } from "./CopyButton";
 
 type WorkspaceVerifyAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -18,6 +18,8 @@ export function SessionWorkspacePanel({
   onUseAsDraft?: UseAsDraft;
 }) {
   const canVerify = workspace.hasData && (onVerifyWorkspace || onUseAsDraft);
+  const reviewFacts = workspaceReviewFacts(workspace);
+  const tone = workspace.tone ?? (workspace.verification === "mismatch" || workspace.verification === "missing_binding" ? "warning" : undefined);
   return (
     <details className="session-skills-panel session-workspace-panel" data-testid="session-workspace-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -26,9 +28,9 @@ export function SessionWorkspacePanel({
         <span>{workspace.detail}</span>
       </summary>
       <div className="session-skills-body">
-        <div className="session-workspace-card" data-tone={workspace.tone} data-testid="session-workspace-card">
+        <div className="session-workspace-card" data-tone={tone} data-testid="session-workspace-card">
           <div className="session-workspace-main">
-            <div className="session-workspace-hero" data-tone={workspace.tone ?? "ok"}>
+            <div className="session-workspace-hero" data-tone={tone ?? "ok"}>
               <span>{verificationLabel(workspace.verification)}</span>
               <strong title={workspace.path ?? workspace.lastAgentCwd ?? workspace.label}>{workspace.label ?? workspaceNameFromPath(workspace.path ?? workspace.lastAgentCwd) ?? "Workspace evidence"}</strong>
               <small>{workspace.issue ?? verificationDetail(workspace.verification)}</small>
@@ -46,6 +48,11 @@ export function SessionWorkspacePanel({
                 fallback={workspace.lastAgentCwd ? undefined : "No shell cwd recorded"}
                 tone={workspace.issue ? "warning" : undefined}
               />
+            </div>
+            <div className="session-workspace-facts" aria-label="Workspace review facts">
+              {reviewFacts.map((fact) => (
+                <WorkspaceFact key={fact.label} fact={fact} />
+              ))}
             </div>
             <div className="session-workspace-fields" aria-label="Workspace fields">
               {workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
@@ -83,6 +90,16 @@ export function SessionWorkspacePanel({
         </div>
       </div>
     </details>
+  );
+}
+
+function WorkspaceFact({ fact }: { fact: SessionWorkspaceFact }) {
+  return (
+    <span data-tone={fact.tone ?? "neutral"}>
+      <small>{fact.label}</small>
+      <strong>{fact.value}</strong>
+      <b>{fact.detail}</b>
+    </span>
   );
 }
 
