@@ -159,6 +159,15 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		add("conversation_repair", "warn", "conversation log was repaired during resume; inspect repaired history before trusting recovered state", []string{"conversation_repair_examples", "conversation_dir", "trace_events"}, counts, tags...)
 	}
+	if res.MessageRejectedStats.Count > 0 {
+		tags := []string{"completion_guard", "message_rejected"}
+		counts := map[string]int{"count": res.MessageRejectedStats.Count}
+		for trigger, count := range res.MessageRejectedStats.ByTrigger {
+			counts["trigger:"+trigger] = count
+			tags = append(tags, "message_rejected:"+trigger)
+		}
+		add("message_rejected", "info", "completion guard rejected a candidate assistant final answer before it became authoritative", []string{"message_rejected_examples", "loop_decision_examples", "timeline"}, counts, tags...)
+	}
 	if res.ToolStats.LoopGuardInterventions > 0 || res.ToolStats.ForcedNoTools > 0 {
 		tags := []string{"loop_guard"}
 		message := "loop guard intervened; inspect repeated tool or evidence patterns"

@@ -375,6 +375,34 @@ func TestBuildDebugBriefClassifiesConversationRepair(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesMessageRejected(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		MessageRejectedStats: MessageRejectedStats{
+			Count:     1,
+			ByTrigger: map[string]int{"active_plan_unfinished": 1},
+			Examples: []MessageRejected{{
+				Trigger: "active_plan_unfinished",
+				Reason:  "plan:0/1:active",
+				Text:    "All done.",
+			}},
+		},
+	})
+	item := debugBriefItemByKind(brief, "message_rejected")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Message != "completion guard rejected a candidate assistant final answer before it became authoritative" ||
+		item.Counts["count"] != 1 ||
+		item.Counts["trigger:active_plan_unfinished"] != 1 ||
+		!stringSliceContains(item.Inspect, "message_rejected_examples") ||
+		!stringSliceContains(item.Inspect, "loop_decision_examples") ||
+		!stringSliceContains(brief.Tags, "completion_guard") ||
+		!stringSliceContains(brief.Tags, "message_rejected") ||
+		!stringSliceContains(brief.Tags, "message_rejected:active_plan_unfinished") {
+		t.Fatalf("message rejected item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesForcedNoTools(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

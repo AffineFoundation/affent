@@ -122,6 +122,28 @@ func TestApplyTraceEventRecordsMessageRejected(t *testing.T) {
 	}
 }
 
+func TestRenderDebugTimelineIncludesMessageRejected(t *testing.T) {
+	trace := Trace{MessageRejections: []MessageRejected{{
+		TurnID:         "turn-1",
+		Trigger:        "active_plan_unfinished",
+		Reason:         "plan:0/1:active",
+		RequiredAction: "update plan",
+		Text:           "All done.",
+	}}}
+	timeline := renderDebugTimeline(BatchResult{BatchScenario: "guarded"}, BatchScenario{Prompt: "finish"}, &trace)
+	for _, want := range []string{
+		"## Rejected Assistant Completions",
+		"trigger=`active_plan_unfinished`",
+		"reason: plan:0/1:active",
+		"required_action: update plan",
+		"All done.",
+	} {
+		if !strings.Contains(timeline, want) {
+			t.Fatalf("timeline missing %q:\n%s", want, timeline)
+		}
+	}
+}
+
 func TestApplyTraceEventTracksContextCompactionSummaryPresenceKnown(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

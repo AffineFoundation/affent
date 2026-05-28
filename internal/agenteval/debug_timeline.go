@@ -98,6 +98,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineLoopGuard(&b, trace)
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
+	renderTimelineMessageRejections(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
 	renderTimelineBrowserScrolls(&b, trace)
 	renderTimelineBrowserNetworkSearches(&b, trace)
@@ -1323,6 +1324,28 @@ func renderTimelineDecisions(b *strings.Builder, trace *Trace) {
 		}
 		if d.RequiredAction != "" {
 			fmt.Fprintf(b, "   required_action: %s\n", timelineInline(d.RequiredAction, 600))
+		}
+	}
+}
+
+func renderTimelineMessageRejections(b *strings.Builder, trace *Trace) {
+	if len(trace.MessageRejections) == 0 {
+		return
+	}
+	b.WriteString("\n## Rejected Assistant Completions\n\n")
+	for i, rejected := range trace.MessageRejections {
+		fmt.Fprintf(b, "%d. turn=`%s` trigger=`%s`\n", i+1, rejected.TurnID, rejected.Trigger)
+		if rejected.Reason != "" {
+			fmt.Fprintf(b, "   reason: %s\n", timelineInline(rejected.Reason, 600))
+		}
+		if rejected.RequiredAction != "" {
+			fmt.Fprintf(b, "   required_action: %s\n", timelineInline(rejected.RequiredAction, 600))
+		}
+		if rejected.Text != "" {
+			b.WriteString("   rejected_text:\n")
+			b.WriteString("   ```text\n")
+			b.WriteString(indentTimelineText(timelineBlock(rejected.Text, timelineResultPreviewBytes), "   "))
+			b.WriteString("\n   ```\n")
 		}
 	}
 }
