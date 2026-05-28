@@ -67,6 +67,56 @@ BODY_BYTES: 200 (offset 0, showing 80, omitted_after 120, next_offset 80)
 	}
 }
 
+func TestDebugMemorySearchMissExamplesUseFullTraceForRecallSignals(t *testing.T) {
+	anchored := ToolCall{
+		Tool:     "memory",
+		ExitCode: 0,
+		Args: map[string]any{
+			"action": "search",
+			"target": "memory",
+			"query":  "deploy",
+		},
+		Result: `{"ok":true,"message":"no entries matched. Next: retry with a topic anchor.","target":"memory","results":[],"topics":[{"topic":"deploy","entries":2}]}`,
+	}
+	trace := Trace{}
+	for i := 0; i < 5; i++ {
+		trace.Tools = append(trace.Tools, anchored)
+	}
+	trace.Tools = append(trace.Tools, ToolCall{
+		Tool:     "memory",
+		CallID:   "late-no-anchor",
+		ExitCode: 0,
+		Args: map[string]any{
+			"action": "search",
+			"target": "user",
+			"query":  "ssh key preference",
+		},
+		Result: `{"ok":true,"message":"no entries matched. Next: retry with fewer keywords.","target":"user","results":[]}`,
+	})
+
+	examples := memorySearchMissExamplesForDebug(trace)
+	if len(examples) != 6 || examples[5].CallID != "late-no-anchor" || examples[5].TopicCount != 0 {
+		t.Fatalf("memorySearchMissExamplesForDebug = %+v, want all trace miss examples including late no-anchor miss", examples)
+	}
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			MemorySearchCalls:  len(examples),
+			MemorySearchMisses: len(examples),
+		},
+		MemorySearchMissExamples: examples,
+	})
+	item := debugBriefItemByKind(brief, "memory_search_miss")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["anchor_examples"] != 5 ||
+		item.Counts["no_anchor_examples"] != 1 ||
+		!stringSliceContains(brief.Tags, "recall:memory_topic_anchors") ||
+		!stringSliceContains(brief.Tags, "recall:memory_no_topic_anchors") {
+		t.Fatalf("debug brief should see late no-anchor memory miss, item=%+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",

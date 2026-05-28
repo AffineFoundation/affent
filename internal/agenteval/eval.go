@@ -969,7 +969,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.BrowserScrollExamples = browserScrollExamplesForDebug(trace)
 		res.BrowserNetworkExamples = browserNetworkExamplesForDebug(trace)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
-		res.MemorySearchMissExamples = trace.MemorySearchMissExamples(maxDebugMemorySearchMissExamples)
+		res.MemorySearchMissExamples = memorySearchMissExamplesForDebug(trace)
 		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
 		res.PlanExamples = trace.PlanExamples(maxDebugPlanExamples)
 		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
@@ -1017,7 +1017,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
 	}
 	if trace != nil && len(res.MemorySearchMissExamples) == 0 {
-		res.MemorySearchMissExamples = trace.MemorySearchMissExamples(maxDebugMemorySearchMissExamples)
+		res.MemorySearchMissExamples = memorySearchMissExamplesForDebug(*trace)
 	}
 	if trace != nil && len(res.SourceAccessExamples) == 0 {
 		res.SourceAccessExamples = sourceAccessExamplesForDebug(*trace)
@@ -1189,6 +1189,10 @@ func browserScrollExamplesForDebug(trace Trace) []BrowserScrollExample {
 
 func browserNetworkExamplesForDebug(trace Trace) []BrowserNetworkSearchExample {
 	return trace.BrowserNetworkSearchExamples(len(trace.Tools))
+}
+
+func memorySearchMissExamplesForDebug(trace Trace) []MemorySearchMissExample {
+	return trace.MemorySearchMissExamples(len(trace.Tools))
 }
 
 func BuildDebugRecoveryGuide(res BatchResult) *DebugRecoveryGuide {
