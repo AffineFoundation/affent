@@ -3012,6 +3012,7 @@ func TestMessageUsesName(t *testing.T) {
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
+			{Command: `git status`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
 			{Command: `git push`, Tool: "edit_file"},
 		},
@@ -3027,6 +3028,7 @@ func TestMessageUsesName(t *testing.T) {
 			"app",
 			"go test ./...",
 			"greet/greet.go",
+			"status",
 			"commit",
 			"push",
 		},

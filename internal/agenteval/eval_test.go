@@ -1936,6 +1936,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if sourceRepo.RequiredCommandCounts[`go test`] != 2 {
 		t.Fatalf("source repo RequiredCommandCounts = %#v, want go test=2", sourceRepo.RequiredCommandCounts)
 	}
+	if !commandToolOrderContains(sourceRepo.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `git status`, Tool: "edit_file"}) {
+		t.Fatalf("source repo RequiredCommandAfterTool = %#v, want git status after edit_file", sourceRepo.RequiredCommandAfterTool)
+	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "read_file", Arg: "path", Substring: "app/greet/greet.go"},
 		{Tool: "edit_file", Arg: "path", Substring: "app/greet/greet.go"},
@@ -1946,6 +1949,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if got := sourceRepo.RequiredFileSubstrings["app/greet/greet.go"]; !stringSliceContains(got, "hello, guest") {
 		t.Fatalf("source repo RequiredFileSubstrings = %#v, want fixed greeting", sourceRepo.RequiredFileSubstrings)
+	}
+	if !stringSliceContains(sourceRepo.RequiredFinalText, "status") {
+		t.Fatalf("source repo RequiredFinalText = %#v, want status", sourceRepo.RequiredFinalText)
 	}
 	if !stringSliceContains(sourceRepo.ProtectedFiles, "app/greet/greet_test.go") {
 		t.Fatalf("source repo ProtectedFiles = %#v, want cloned test protection", sourceRepo.ProtectedFiles)
