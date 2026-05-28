@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { SessionSchedulePanel } from "./SessionSchedulePanel";
 
 describe("SessionSchedulePanel", () => {
@@ -213,5 +214,42 @@ describe("SessionSchedulePanel", () => {
     expect(panel).toHaveTextContent("2 paused");
     expect(panel).toHaveTextContent("2 paused timers; load details before resuming or deleting.");
     expect(panel).not.toHaveTextContent("No scheduled follow-ups for this chat.");
+  });
+
+  it("confirms before deleting a timer", async () => {
+    const user = userEvent.setup();
+    const onDeleteSchedule = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SessionSchedulePanel
+        defaultOpen
+        onDeleteSchedule={onDeleteSchedule}
+        summary={{ count: 1, enabled: 1 }}
+        schedules={[
+          {
+            id: "sched_checkin",
+            kind: "checkin",
+            prompt: "Check runtime health",
+            display_text: "Check in 1h: runtime health",
+            enabled: true,
+            next_run_at: "2026-05-27T14:00:00Z",
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+          },
+        ]}
+      />,
+    );
+
+    const list = screen.getByTestId("session-schedule-list");
+    await user.click(within(list).getByRole("button", { name: "Delete" }));
+    expect(onDeleteSchedule).not.toHaveBeenCalled();
+    const firstConfirm = within(list).getByRole("group", { name: "Confirm delete Check-in timer" });
+    expect(firstConfirm).toHaveTextContent("Delete this timer?");
+    await user.click(within(firstConfirm).getByRole("button", { name: "Cancel" }));
+    expect(within(list).queryByRole("group", { name: "Confirm delete Check-in timer" })).toBeNull();
+
+    await user.click(within(list).getByRole("button", { name: "Delete" }));
+    const confirm = within(list).getByRole("group", { name: "Confirm delete Check-in timer" });
+    await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
+    expect(onDeleteSchedule).toHaveBeenCalledWith("sched_checkin");
   });
 });

@@ -2368,6 +2368,51 @@ body {
   gap: 6px;
 }
 
+.session-schedule-delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.session-schedule-delete-confirm span {
+  color: var(--c-error);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.session-schedule-delete-confirm button {
+  min-height: 28px;
+  border: 1px solid rgba(217, 224, 232, 0.86);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 650;
+  cursor: pointer;
+  padding: 0 8px;
+}
+
+.session-schedule-delete-confirm button.danger {
+  border-color: rgba(185, 28, 28, 0.32);
+  color: var(--c-error);
+}
+
+.session-schedule-delete-confirm button:hover,
+.session-schedule-delete-confirm button:focus-visible {
+  border-color: rgba(20, 184, 166, 0.44);
+  outline: none;
+}
+
+.session-schedule-delete-confirm button.danger:hover,
+.session-schedule-delete-confirm button.danger:focus-visible {
+  border-color: rgba(185, 28, 28, 0.5);
+  background: rgba(254, 226, 226, 0.88);
+}
+
 .danger-action {
   color: var(--c-error);
 }
@@ -8305,6 +8350,7 @@ html[data-theme="dark"] .session-skill-form input,
 html[data-theme="dark"] .session-skill-form textarea,
 html[data-theme="dark"] .session-filter button,
 html[data-theme="dark"] .session-delete-action,
+html[data-theme="dark"] .session-schedule-delete-confirm button,
 html[data-theme="dark"] .session-delete-confirm button,
 html[data-theme="dark"] .artifact-viewer,
 html[data-theme="dark"] .artifact-copy-menu-panel,
@@ -8670,7 +8716,9 @@ html[data-theme="dark"] .session-delete-confirm {
 }
 
 html[data-theme="dark"] .session-delete-confirm button.danger:hover,
-html[data-theme="dark"] .session-delete-confirm button.danger:focus-visible {
+html[data-theme="dark"] .session-delete-confirm button.danger:focus-visible,
+html[data-theme="dark"] .session-schedule-delete-confirm button.danger:hover,
+html[data-theme="dark"] .session-schedule-delete-confirm button.danger:focus-visible {
   background: rgba(127, 29, 29, 0.3);
 }
 

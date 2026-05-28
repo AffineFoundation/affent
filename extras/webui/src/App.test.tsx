@@ -1062,7 +1062,11 @@ describe("App", () => {
     expect((resumeCall[1] as RequestInit).body).toBe(JSON.stringify({ enabled: true }));
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
 
-    await user.click(within(screen.getByTestId("session-schedule-list")).getByRole("button", { name: "Delete" }));
+    const deleteCallsBeforeConfirm = fetchImpl.mock.calls.filter(([url, init]) => String(url) === "/v1/sessions/timer-control/schedules/sched_1" && (init as RequestInit | undefined)?.method === "DELETE").length;
+    const scheduleList = screen.getByTestId("session-schedule-list");
+    await user.click(within(scheduleList).getByRole("button", { name: "Delete" }));
+    expect(fetchImpl.mock.calls.filter(([url, init]) => String(url) === "/v1/sessions/timer-control/schedules/sched_1" && (init as RequestInit | undefined)?.method === "DELETE")).toHaveLength(deleteCallsBeforeConfirm);
+    await user.click(within(within(scheduleList).getByRole("group", { name: "Confirm delete Check-in timer" })).getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules/sched_1", expect.objectContaining({ method: "DELETE" })));
     await waitFor(() => expect(screen.queryByTestId("session-schedule-panel")).toBeNull());
   });

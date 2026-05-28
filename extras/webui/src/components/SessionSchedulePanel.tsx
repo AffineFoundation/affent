@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { SessionSchedule, SessionSchedulesSummary } from "../api/sessions";
 import { automationActionLabel } from "../view/automationActions";
 import { SessionPanelFrame } from "./SessionPanelFrame";
@@ -39,6 +40,7 @@ export function SessionSchedulePanel({
   onScheduleCheckIn?: () => Promise<void> | void;
   onScheduleDaily?: () => Promise<void> | void;
 }) {
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | undefined>();
   const count = summary?.count ?? 0;
   const enabled = summary?.enabled ?? 0;
   const next = summary?.next_run_at ? formatScheduleTime(summary.next_run_at) : undefined;
@@ -48,6 +50,11 @@ export function SessionSchedulePanel({
   const runningLoop = loopProtocolRunning(loopStatus);
   const title = schedulePanelTitle(summary, pendingLoopTimers);
   const detail = schedulePanelDetail(summary, { lastError, pendingLoopTimers, next, preview });
+
+  async function deleteSchedule(scheduleId: string) {
+    await onDeleteSchedule?.(scheduleId);
+    setConfirmDeleteId(undefined);
+  }
 
   return (
     <SessionPanelFrame
@@ -79,37 +86,53 @@ export function SessionSchedulePanel({
         ) : null}
         {schedules && schedules.length > 0 ? (
           <ol className="session-schedule-list" data-testid="session-schedule-list">
-            {schedules.map((schedule) => (
-              <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
-                <div className="session-schedule-item-main">
-                  <strong>{scheduleKindLabel(schedule.kind)} · {scheduleStatusLabel(schedule, loopStatus)} · {formatScheduleTime(schedule.next_run_at)}</strong>
-                  <p>{scheduleDisplayText(schedule)}</p>
-                  <small>{scheduleMeta(schedule, loopStatus)}</small>
-                </div>
-                <div className="session-schedule-actions">
-                  {onUpdateSchedule ? (
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      disabled={scheduleUpdateDisabled(schedule, loopStatus, deletingId, updatingId)}
-                      onClick={() => void onUpdateSchedule(schedule.id, !schedule.enabled)}
-                    >
-                      {scheduleUpdateLabel(schedule, loopStatus, updatingId)}
-                    </button>
-                  ) : null}
-                  {onDeleteSchedule ? (
-                    <button
-                      type="button"
-                      className="ghost-action danger-action"
-                      disabled={!!deletingId || !!updatingId}
-                      onClick={() => void onDeleteSchedule(schedule.id)}
-                    >
-                      {deletingId === schedule.id ? "Deleting" : "Delete"}
-                    </button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
+            {schedules.map((schedule) => {
+              const confirmingDelete = confirmDeleteId === schedule.id;
+              return (
+                <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
+                  <div className="session-schedule-item-main">
+                    <strong>{scheduleKindLabel(schedule.kind)} · {scheduleStatusLabel(schedule, loopStatus)} · {formatScheduleTime(schedule.next_run_at)}</strong>
+                    <p>{scheduleDisplayText(schedule)}</p>
+                    <small>{scheduleMeta(schedule, loopStatus)}</small>
+                  </div>
+                  <div className="session-schedule-actions">
+                    {onUpdateSchedule ? (
+                      <button
+                        type="button"
+                        className="ghost-action"
+                        disabled={scheduleUpdateDisabled(schedule, loopStatus, deletingId, updatingId)}
+                        onClick={() => {
+                          setConfirmDeleteId(undefined);
+                          void onUpdateSchedule(schedule.id, !schedule.enabled);
+                        }}
+                      >
+                        {scheduleUpdateLabel(schedule, loopStatus, updatingId)}
+                      </button>
+                    ) : null}
+                    {onDeleteSchedule ? confirmingDelete ? (
+                      <div className="session-schedule-delete-confirm" role="group" aria-label={`Confirm delete ${scheduleKindLabel(schedule.kind)} timer`}>
+                        <span>Delete this timer?</span>
+                        <button type="button" disabled={!!deletingId || !!updatingId} onClick={() => setConfirmDeleteId(undefined)}>
+                          Cancel
+                        </button>
+                        <button type="button" className="danger" disabled={!!deletingId || !!updatingId} onClick={() => void deleteSchedule(schedule.id)}>
+                          {deletingId === schedule.id ? "Deleting" : "Confirm"}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="ghost-action danger-action"
+                        disabled={!!deletingId || !!updatingId}
+                        onClick={() => setConfirmDeleteId(schedule.id)}
+                      >
+                        {deletingId === schedule.id ? "Deleting" : "Delete"}
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         ) : null}
         <div className="session-loop-actions">
