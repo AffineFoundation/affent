@@ -42,6 +42,13 @@ export function artifactEvidenceText(artifact: TurnArtifact): string {
   return lines.join("\n");
 }
 
+export function artifactSummaryPreview(artifact: TurnArtifact, maxLength = 180): string | undefined {
+  const text = compactWhitespace(artifact.summary ?? "");
+  if (!text) return undefined;
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
 export function artifactEvidenceDraft(artifact: TurnArtifact): string {
   return `Reference this artifact in the next step:\n${artifactEvidenceText(artifact)}`;
 }
@@ -84,4 +91,8 @@ export function artifactReviewDetail(artifacts: readonly TurnArtifact[]): string
 
 export function artifactReviewFocus(artifacts: readonly TurnArtifact[]): TurnArtifact | undefined {
   return [...artifacts].reverse().find((artifact) => artifactKind(artifact) === "full_output") ?? artifacts.at(-1);
+}
+
+function compactWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }

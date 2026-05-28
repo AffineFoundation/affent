@@ -19,7 +19,7 @@ describe("SessionArtifactsPanel", () => {
             path: ".affent/artifacts/tool-results/000001-test.txt",
             name: "000001-test.txt",
             source: "npm test -- checkout.spec.ts",
-            summary: "checkout spec failed",
+            summary: `checkout spec failed ${"log line ".repeat(40)}unreachable tail marker`,
             truncated: true,
             bytes: 8192,
             omittedBytes: 1024,
@@ -47,6 +47,14 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Evidence files");
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Full output");
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("000001-test.txt");
+    const focus = screen.getByTestId("session-artifacts-focus");
+    expect(focus).toHaveTextContent("Open latest");
+    expect(within(focus).getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-test.txt",
+    );
+    await user.click(within(focus).getByRole("button", { name: "Open latest" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
     expect(screen.getByText("Deliverables").closest("button")).toHaveTextContent("1");
     expect(within(screen.getByLabelText("Artifact filters")).getByText("Full output").closest("button")).toHaveTextContent("1");
     expect(screen.getByLabelText("Search artifacts")).toBeInTheDocument();
@@ -54,6 +62,7 @@ describe("SessionArtifactsPanel", () => {
     expect(list).toHaveTextContent("000001-test.txt");
     expect(list).toHaveTextContent("checkout-report.md");
     expect(list).toHaveTextContent("Full output · npm test -- checkout.spec.ts");
+    expect(list).not.toHaveTextContent("unreachable tail marker");
     const firstArtifact = within(list).getAllByRole("listitem")[0];
     expect(within(firstArtifact).getByRole("link", { name: "Download" })).toHaveAttribute(
       "href",

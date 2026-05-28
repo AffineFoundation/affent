@@ -9,6 +9,7 @@ import {
   artifactReviewFocus,
   artifactReviewStats,
   artifactReviewSummary,
+  artifactSummaryPreview,
   type SessionArtifactKind,
 } from "../view/sessionArtifacts";
 import { artifactSizeLabel, type TurnArtifact } from "../view/turnArtifacts";
@@ -36,6 +37,7 @@ export function SessionArtifactsPanel({
   const filteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
   const visibleArtifacts = trimmedQuery ? filteredArtifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : filteredArtifacts;
   const focus = artifactReviewFocus(artifacts);
+  const focusDownloadUrl = focus ? downloadHref?.(focus.path) : undefined;
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -52,11 +54,26 @@ export function SessionArtifactsPanel({
               <small>{artifactReviewDetail(artifacts)}</small>
             </div>
             {focus ? (
-              <span className="session-artifacts-focus">
-                <small>{artifactKindLabel(focus)}</small>
-                <strong title={focus.path}>{focus.name}</strong>
-                <b>{artifactSizeLabel(focus) || "recorded"}</b>
-              </span>
+              <div className="session-artifacts-focus" data-testid="session-artifacts-focus">
+                <div className="session-artifacts-focus-main">
+                  <small>{artifactKindLabel(focus)}</small>
+                  <strong title={focus.path}>{focus.name}</strong>
+                  <b>{artifactSizeLabel(focus) || "recorded"}</b>
+                </div>
+                <div className="session-artifacts-focus-actions">
+                  {onOpenArtifact ? (
+                    <button type="button" className="ghost-action" onClick={() => onOpenArtifact(focus.path)}>
+                      Open latest
+                    </button>
+                  ) : null}
+                  {focusDownloadUrl ? (
+                    <a className="ghost-action" href={focusDownloadUrl} download={focus.name}>
+                      Download
+                    </a>
+                  ) : null}
+                  <CopyButton label="Copy path" value={focus.path} className="ghost-action" />
+                </div>
+              </div>
             ) : null}
             <div className="session-artifacts-filterbar" role="group" aria-label="Artifact filters">
               <ArtifactFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
@@ -82,13 +99,14 @@ export function SessionArtifactsPanel({
           <ol className="session-artifacts-list" data-testid="session-artifacts-list">
             {visibleArtifacts.map((artifact) => {
               const downloadUrl = downloadHref?.(artifact.path);
+              const summaryPreview = artifactSummaryPreview(artifact);
               return (
                 <li key={artifact.path} className="session-artifacts-item">
                   <div className="session-artifacts-main">
                     <strong title={artifact.path}>{artifact.name}</strong>
                     <span>{artifactMeta(artifact)}</span>
-                    {artifact.summary ? <small>{artifact.summary}</small> : null}
-                    <small title={artifact.path}>{artifact.path}</small>
+                    {summaryPreview ? <small className="session-artifacts-summary">{summaryPreview}</small> : null}
+                    <small className="session-artifacts-path" title={artifact.path}>{artifact.path}</small>
                   </div>
                   <span className="session-evidence-actions">
                     {onOpenArtifact ? (
