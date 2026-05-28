@@ -138,6 +138,19 @@ func TestBaseSystemPromptForSurface(t *testing.T) {
 	}
 }
 
+func TestDefaultSystemPromptSteersWorkspaceRelativeCommands(t *testing.T) {
+	for _, want := range []string{"start in", "use relative paths", "omit cwd"} {
+		if !strings.Contains(DefaultSystemPrompt, want) {
+			t.Fatalf("default prompt missing workspace-relative guidance %q:\n%s", want, DefaultSystemPrompt)
+		}
+	}
+	for _, forbidden := range []string{"provide the exact workspace path", "use that path"} {
+		if strings.Contains(DefaultSystemPrompt, forbidden) {
+			t.Fatalf("default prompt should not steer routine commands toward absolute workspace paths:\n%s", DefaultSystemPrompt)
+		}
+	}
+}
+
 func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	once := WithMemorySystemGuidance(base)

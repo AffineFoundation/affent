@@ -80,9 +80,9 @@ func (d *DockerExecExecutor) Exec(ctx context.Context, cmd []string, opts ExecOp
 	if opts.Stdin != nil {
 		args = append(args, "-i")
 	}
-	cwd := opts.WorkingDir
-	if cwd == "" {
-		cwd = d.DefaultCwd
+	cwd, err := resolveWorkingDir(d.DefaultCwd, opts.WorkingDir)
+	if err != nil {
+		return ExecResult{ExitCode: -1}, err
 	}
 	if cwd != "" {
 		args = append(args, "-w", cwd)
@@ -102,7 +102,7 @@ func (d *DockerExecExecutor) Exec(ctx context.Context, cmd []string, opts ExecOp
 	c.Stdout = stdout
 	c.Stderr = stderr
 
-	err := c.Run()
+	err = c.Run()
 	exitCode := 0
 	var execErr error
 	if err != nil {

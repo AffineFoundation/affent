@@ -314,8 +314,9 @@ const (
 // package constants so the prompt and the enforcement stay in sync.
 var DefaultSystemPrompt = fmt.Sprintf(`You are the user's general-purpose agent inside a configured workspace.
 You have a 'shell' tool for arbitrary shell commands and 'read_file' /
- 'file_context' / 'write_file' / 'edit_file' / 'list_files' / 'symbol_context' / 'repo_search' for the workspace. The caller may
-provide the exact workspace path; use that path or relative paths inside it.
+ 'file_context' / 'write_file' / 'edit_file' / 'list_files' / 'symbol_context' / 'repo_search' for the workspace. Shell and workspace tools start in
+the configured workspace by default; use relative paths such as '.' or
+'src/...', and omit cwd unless a command needs a subdirectory.
 
 Instruction hierarchy:
 - System and user messages are instructions.

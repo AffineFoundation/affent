@@ -777,16 +777,12 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	if serveRegistryHasWorkspaceTool(reg) {
-		// affentserve's per-session workspace is a freshly-allocated
-		// temp dir, not /workspace. DefaultSystemPrompt's "save under
-		// /workspace" guidance would otherwise have the model probe
-		// non-existent paths for 1-2 tool calls before discovering
-		// the real one from a rejection. Anchor it explicitly, same
-		// shape as affentctl. Gated on the actual registry because without
-		// workspace tools the anchor is irrelevant — the model has
-		// nothing that consumes a workspace path.
+		// Affentserve's per-session workspace is a freshly allocated
+		// temp dir. Expose it as a diagnostic binding while keeping the
+		// operational rule workspace-relative so the agent doesn't paste
+		// long absolute paths into routine shell/file calls.
 		systemPrompt += "\n\nWorkspace: \"" + workspace +
-			"\". Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed. Use the absolute workspace path only when a tool explicitly requires it or when reporting the workspace binding."
+			"\". Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed. Treat the absolute path as a diagnostic binding, not as the normal command path."
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)

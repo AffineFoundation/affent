@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,6 +37,40 @@ func TestHandleSessionCommandRunsShellAndPersistsTrace(t *testing.T) {
 	waitForFileSubstring(t, tracePath, `"tool":"shell"`)
 	waitForFileSubstring(t, tracePath, `workbench-command`)
 	waitForFileSubstring(t, tracePath, `"reason":"completed"`)
+}
+
+func TestHandleSessionCommandResolvesRelativeCWDInsideWorkspace(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	sess, err := pool.GetOrCreate("workbench-relative-cwd")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	subdir := filepath.Join(sess.workspace, "sub")
+	if err := os.MkdirAll(subdir, 0o755); err != nil {
+		t.Fatalf("mkdir subdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(subdir, "marker.txt"), []byte("relative-cwd-ok"), 0o644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/workbench-relative-cwd/commands", bytes.NewReader([]byte(`{"command":"pwd; cat marker.txt","cwd":"sub","timeout_sec":5}`)))
+	w := httptest.NewRecorder()
+	handleSessionCommand(pool, "workbench-relative-cwd", w, r)
+
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionCommandResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v body=%s", err, w.Body.String())
+	}
+	if resp.ExitCode != 0 || !strings.Contains(resp.Result, "relative-cwd-ok") {
+		t.Fatalf("relative cwd command failed: %+v", resp)
+	}
+	if !strings.Contains(resp.Result, filepath.ToSlash(subdir)) {
+		t.Fatalf("relative cwd should resolve under workspace subdir %q; result=%q", subdir, resp.Result)
+	}
 }
 
 func TestHandleSessionCommandRejectsBusySession(t *testing.T) {

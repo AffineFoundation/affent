@@ -89,10 +89,12 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 	}
 
 	c := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
-	if opts.WorkingDir != "" {
-		c.Dir = opts.WorkingDir
-	} else {
-		c.Dir = h.workspaceDir
+	workingDir, err := resolveWorkingDir(h.workspaceDir, opts.WorkingDir)
+	if err != nil {
+		return ExecResult{ExitCode: -1}, err
+	}
+	if workingDir != "" {
+		c.Dir = workingDir
 	}
 	env := append(c.Environ(), h.ExtraEnv...)
 	if h.EnvProvider != nil {
@@ -108,7 +110,7 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 	c.Stdout = stdout
 	c.Stderr = stderr
 
-	err := c.Run()
+	err = c.Run()
 	exitCode := 0
 	var execErr error
 	if err != nil {
