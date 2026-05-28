@@ -45,7 +45,7 @@ export function RuntimeStatsPanel({
               ))}
             </div>
           ) : (
-            <div className="session-skills-empty" data-testid="runtime-stats-empty">No runtime diagnostics need attention.</div>
+            <div className="session-skills-empty" data-testid="runtime-stats-empty">No runtime issues in latest snapshot.</div>
           )
         ) : null}
       </div>

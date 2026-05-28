@@ -97,7 +97,7 @@ describe("RuntimeStatsPanel", () => {
     expect(panel).toHaveTextContent("No runtime snapshot");
     expect(panel).toHaveTextContent("Runtime diagnostics have not been fetched.");
     expect(screen.getByTestId("runtime-stats-empty")).toHaveTextContent("Runtime snapshot not loaded.");
-    expect(panel).not.toHaveTextContent("No runtime diagnostics need attention.");
+    expect(panel).not.toHaveTextContent("No runtime issues in latest snapshot.");
   });
 
   it("keeps standard idle runtime from inventing ready diagnostics", () => {
@@ -106,7 +106,7 @@ describe("RuntimeStatsPanel", () => {
     const panel = screen.getByTestId("runtime-stats-panel");
     expect(panel).toHaveTextContent("qwen-small");
     expect(panel).toHaveTextContent("No active sessions");
-    expect(panel).toHaveTextContent("No runtime diagnostics need attention.");
+    expect(panel).toHaveTextContent("No runtime issues in latest snapshot.");
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
     expect(panel).not.toHaveTextContent("0 sessions");
     expect(panel).not.toHaveTextContent("Mode");
@@ -139,7 +139,7 @@ describe("RuntimeStatsPanel", () => {
     );
 
     const panel = screen.getByTestId("runtime-stats-panel");
-    expect(panel).toHaveTextContent("No runtime diagnostics need attention.");
+    expect(panel).toHaveTextContent("No runtime issues in latest snapshot.");
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
     expect(panel).not.toHaveTextContent("Tokens");
     expect(panel).not.toHaveTextContent("1.5k");
