@@ -663,11 +663,19 @@ func LoopProtocolFeedRequirementAtLeast(req LoopProtocolFeedRequirement) Check {
 		req.CurrentSituation,
 		req.LastTurnEndReason,
 		positiveCheckNamePart("turn_tools", req.MinLastTurnToolRequests),
+		positiveCheckNamePart("turn_tool_errors", req.MinLastTurnToolErrors),
+		positiveCheckNamePart("turn_forced_no_tools", req.MinLastTurnForcedNoTools),
 		positiveCheckNamePart("turn_mem_updates", req.MinLastTurnMemoryUpdates),
 		positiveCheckNamePart("turn_mem_search", req.MinLastTurnMemorySearchCalls),
 		positiveCheckNamePart("turn_mem_misses", req.MinLastTurnMemorySearchMisses),
 		positiveCheckNamePart("turn_session_search", req.MinLastTurnSessionSearchCalls),
 		positiveCheckNamePart("turn_loop_guards", req.MinLastTurnLoopGuards),
+		req.LastDecisionKind,
+		req.LastDecisionTrigger,
+		req.LastDecision,
+		req.LastDecisionConfidence,
+		req.LastDecisionReason,
+		req.LastDecisionAction,
 	} {
 		if part != "" {
 			nameParts = append(nameParts, checkNamePart(part))
@@ -729,6 +737,12 @@ func loopProtocolFeedMatchesRequirement(feed LoopProtocolFeed, req LoopProtocolF
 	if req.MinLastTurnToolRequests > 0 && feed.LastTurnToolRequests < req.MinLastTurnToolRequests {
 		return false
 	}
+	if req.MinLastTurnToolErrors > 0 && feed.LastTurnToolErrors < req.MinLastTurnToolErrors {
+		return false
+	}
+	if req.MinLastTurnForcedNoTools > 0 && feed.LastTurnForcedNoTools < req.MinLastTurnForcedNoTools {
+		return false
+	}
 	if req.MinLastTurnMemoryUpdates > 0 && feed.LastTurnMemoryUpdates < req.MinLastTurnMemoryUpdates {
 		return false
 	}
@@ -742,6 +756,24 @@ func loopProtocolFeedMatchesRequirement(feed LoopProtocolFeed, req LoopProtocolF
 		return false
 	}
 	if req.MinLastTurnLoopGuards > 0 && feed.LastTurnLoopGuards < req.MinLastTurnLoopGuards {
+		return false
+	}
+	if req.LastDecisionKind != "" && feed.LastDecisionKind != req.LastDecisionKind {
+		return false
+	}
+	if req.LastDecisionTrigger != "" && feed.LastDecisionTrigger != req.LastDecisionTrigger {
+		return false
+	}
+	if req.LastDecision != "" && feed.LastDecision != req.LastDecision {
+		return false
+	}
+	if req.LastDecisionConfidence != "" && feed.LastDecisionConfidence != req.LastDecisionConfidence {
+		return false
+	}
+	if req.LastDecisionReason != "" && !strings.Contains(feed.LastDecisionReason, req.LastDecisionReason) {
+		return false
+	}
+	if req.LastDecisionAction != "" && !strings.Contains(feed.LastDecisionAction, req.LastDecisionAction) {
 		return false
 	}
 	return true
@@ -773,11 +805,31 @@ func loopProtocolFeedRequirementSummary(req LoopProtocolFeedRequirement) string 
 		}
 	}
 	appendMin("last_turn_tool_requests", req.MinLastTurnToolRequests)
+	appendMin("last_turn_tool_errors", req.MinLastTurnToolErrors)
+	appendMin("last_turn_forced_no_tools", req.MinLastTurnForcedNoTools)
 	appendMin("last_turn_memory_updates", req.MinLastTurnMemoryUpdates)
 	appendMin("last_turn_memory_search_calls", req.MinLastTurnMemorySearchCalls)
 	appendMin("last_turn_memory_search_misses", req.MinLastTurnMemorySearchMisses)
 	appendMin("last_turn_session_search_calls", req.MinLastTurnSessionSearchCalls)
 	appendMin("last_turn_loop_guards", req.MinLastTurnLoopGuards)
+	if req.LastDecisionKind != "" {
+		parts = append(parts, fmt.Sprintf("last_decision_kind=%q", req.LastDecisionKind))
+	}
+	if req.LastDecisionTrigger != "" {
+		parts = append(parts, fmt.Sprintf("last_decision_trigger=%q", req.LastDecisionTrigger))
+	}
+	if req.LastDecision != "" {
+		parts = append(parts, fmt.Sprintf("last_decision=%q", req.LastDecision))
+	}
+	if req.LastDecisionConfidence != "" {
+		parts = append(parts, fmt.Sprintf("last_decision_confidence=%q", req.LastDecisionConfidence))
+	}
+	if req.LastDecisionReason != "" {
+		parts = append(parts, fmt.Sprintf("last_decision_reason_contains=%q", req.LastDecisionReason))
+	}
+	if req.LastDecisionAction != "" {
+		parts = append(parts, fmt.Sprintf("last_decision_action_contains=%q", req.LastDecisionAction))
+	}
 	if len(parts) == 0 {
 		return "any loop protocol feed"
 	}
@@ -1268,8 +1320,19 @@ func formatLoopProtocolFeedExample(feed LoopProtocolFeed) string {
 	if feed.CurrentSituation != "" {
 		parts = append(parts, "current_situation="+previewSubstr(feed.CurrentSituation, 120))
 	}
-	if feed.LastTurnID != "" || feed.LastTurnMemorySearchCalls > 0 || feed.LastTurnSessionSearchCalls > 0 {
+	if feed.LastTurnID != "" ||
+		feed.LastTurnToolRequests > 0 ||
+		feed.LastTurnToolErrors > 0 ||
+		feed.LastTurnForcedNoTools > 0 ||
+		feed.LastTurnMemorySearchCalls > 0 ||
+		feed.LastTurnSessionSearchCalls > 0 ||
+		feed.LastTurnLoopGuards > 0 ||
+		feed.LastDecisionKind != "" ||
+		feed.LastDecision != "" {
 		parts = append(parts, "last_turn="+previewSubstr(loopProtocolFeedLastTurnSummary(feed), 140))
+	}
+	if feed.LastDecisionKind != "" || feed.LastDecision != "" || feed.LastDecisionAction != "" {
+		parts = append(parts, "last_decision="+previewSubstr(loopProtocolFeedLastDecisionSummary(feed), 180))
 	}
 	return strings.Join(parts, " ")
 }
@@ -1285,6 +1348,12 @@ func loopProtocolFeedLastTurnSummary(feed LoopProtocolFeed) string {
 	if feed.LastTurnToolRequests > 0 {
 		parts = append(parts, fmt.Sprintf("tools=%d", feed.LastTurnToolRequests))
 	}
+	if feed.LastTurnToolErrors > 0 {
+		parts = append(parts, fmt.Sprintf("tool_errors=%d", feed.LastTurnToolErrors))
+	}
+	if feed.LastTurnForcedNoTools > 0 {
+		parts = append(parts, fmt.Sprintf("forced_no_tools=%d", feed.LastTurnForcedNoTools))
+	}
 	if feed.LastTurnMemoryUpdates > 0 {
 		parts = append(parts, fmt.Sprintf("memory_updates=%d", feed.LastTurnMemoryUpdates))
 	}
@@ -1299,6 +1368,32 @@ func loopProtocolFeedLastTurnSummary(feed LoopProtocolFeed) string {
 	}
 	if feed.LastTurnLoopGuards > 0 {
 		parts = append(parts, fmt.Sprintf("loop_guards=%d", feed.LastTurnLoopGuards))
+	}
+	if feed.LastDecisionKind != "" || feed.LastDecision != "" || feed.LastDecisionAction != "" {
+		parts = append(parts, "decision="+previewSubstr(loopProtocolFeedLastDecisionSummary(feed), 140))
+	}
+	return strings.Join(parts, " ")
+}
+
+func loopProtocolFeedLastDecisionSummary(feed LoopProtocolFeed) string {
+	var parts []string
+	if feed.LastDecisionAction != "" {
+		parts = append(parts, "action="+feed.LastDecisionAction)
+	}
+	if feed.LastDecisionReason != "" {
+		parts = append(parts, "reason="+feed.LastDecisionReason)
+	}
+	if feed.LastDecisionKind != "" {
+		parts = append(parts, "kind="+feed.LastDecisionKind)
+	}
+	if feed.LastDecisionTrigger != "" {
+		parts = append(parts, "trigger="+feed.LastDecisionTrigger)
+	}
+	if feed.LastDecision != "" {
+		parts = append(parts, "decision="+feed.LastDecision)
+	}
+	if feed.LastDecisionConfidence != "" {
+		parts = append(parts, "confidence="+feed.LastDecisionConfidence)
 	}
 	return strings.Join(parts, " ")
 }

@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -531,6 +532,9 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 		if turn, ok := strings.CutPrefix(line, "last_turn:"); ok {
 			applyLoopProtocolLastTurnFields(&payload, turn)
 		}
+		if decision, ok := strings.CutPrefix(line, "last_decision:"); ok {
+			applyLoopProtocolLastDecisionFields(&payload, decision)
+		}
 	}
 	if payload.Mode == "" || payload.FeedNumber <= 0 {
 		return sse.LoopProtocolFeedPayload{}, false
@@ -557,6 +561,10 @@ func applyLoopProtocolLastTurnFields(payload *sse.LoopProtocolFeedPayload, raw s
 			payload.LastTurnEndReason = value
 		case "tools":
 			payload.LastTurnToolRequests = parsePositiveInt(value)
+		case "tool_errors":
+			payload.LastTurnToolErrors = parsePositiveInt(value)
+		case "forced_no_tools":
+			payload.LastTurnForcedNoTools = parsePositiveInt(value)
 		case "memory_updates":
 			payload.LastTurnMemoryUpdates = parsePositiveInt(value)
 		case "memory_searches":
@@ -569,6 +577,58 @@ func applyLoopProtocolLastTurnFields(payload *sse.LoopProtocolFeedPayload, raw s
 			payload.LastTurnLoopGuards = parsePositiveInt(value)
 		}
 	}
+}
+
+func applyLoopProtocolLastDecisionFields(payload *sse.LoopProtocolFeedPayload, raw string) {
+	if payload == nil {
+		return
+	}
+	fields := loopProtocolKeyValueSegments(raw, []string{"kind", "trigger", "decision", "confidence", "reason", "action"})
+	payload.LastDecisionKind = fields["kind"]
+	payload.LastDecisionTrigger = fields["trigger"]
+	payload.LastDecision = fields["decision"]
+	payload.LastDecisionConfidence = fields["confidence"]
+	payload.LastDecisionReason = fields["reason"]
+	payload.LastDecisionAction = fields["action"]
+}
+
+func loopProtocolKeyValueSegments(raw string, keys []string) map[string]string {
+	raw = strings.TrimSpace(raw)
+	out := make(map[string]string)
+	type segment struct {
+		key   string
+		start int
+		end   int
+	}
+	var segments []segment
+	for _, key := range keys {
+		marker := key + "="
+		searchFrom := 0
+		for {
+			idx := strings.Index(raw[searchFrom:], marker)
+			if idx < 0 {
+				break
+			}
+			idx += searchFrom
+			if idx == 0 || raw[idx-1] == ' ' {
+				segments = append(segments, segment{key: key, start: idx, end: idx + len(marker)})
+				break
+			}
+			searchFrom = idx + len(marker)
+		}
+	}
+	sort.Slice(segments, func(i, j int) bool { return segments[i].start < segments[j].start })
+	for i, segment := range segments {
+		next := len(raw)
+		if i+1 < len(segments) {
+			next = segments[i+1].start
+		}
+		value := strings.TrimSpace(raw[segment.end:next])
+		if value != "" {
+			out[segment.key] = textutil.Preview(value, 220)
+		}
+	}
+	return out
 }
 
 func parsePositiveInt(raw string) int {

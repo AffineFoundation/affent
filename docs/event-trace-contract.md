@@ -340,12 +340,18 @@ external-calibration reminder paired with a `loop.decision`.
 - `plan_current_step_status`: optional status for the current plan step.
 - `plan_current_step`: optional compact current plan step text.
 - `last_turn_id`, `last_turn_end_reason`, `last_turn_tool_requests`,
+  `last_turn_tool_errors`, `last_turn_forced_no_tools`,
   `last_turn_memory_updates`, `last_turn_memory_search_calls`,
   `last_turn_memory_search_misses`, `last_turn_session_search_calls`, and
   `last_turn_loop_guards`: optional compact checkpoint from the previous
   completed loop turn, mirrored from `.affent/loops/<id>/state.json` so
-  WebUI/evals can verify that recall and loop-guard state survived into the
-  next protocol feed.
+  WebUI/evals can verify that recall, tool-failure pressure, forced no-tool
+  recovery, and loop-guard state survived into the next protocol feed.
+- `last_decision_kind`, `last_decision_trigger`, `last_decision`,
+  `last_decision_confidence`, `last_decision_reason`, and
+  `last_decision_required_action`: optional latest loop decision checkpoint
+  mirrored into the feed so evals can assert that the model saw the recovery
+  reason and next action after compaction or restart.
 
 This event is emitted by `affentctl` traces and `affentserve` session streams
 when an active `LOOP.md` is injected. It mirrors the sidecar

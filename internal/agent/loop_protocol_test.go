@@ -671,6 +671,8 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 		TurnID:             "turn_previous",
 		EndReason:          sse.TurnEndMaxTurns,
 		ToolRequests:       5,
+		ToolErrors:         2,
+		ForcedNoTools:      1,
 		MemoryUpdates:      1,
 		MemorySearchCalls:  3,
 		MemorySearchMisses: 2,
@@ -678,6 +680,16 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 		LoopGuards:         1,
 	}); err != nil {
 		t.Fatalf("RecordTurnCheckpoint: %v", err)
+	}
+	if _, _, err := loopstate.RecordDecision(path, loopstate.DecisionCheckpoint{
+		Kind:           "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         "dynamic widgets exposed empty values",
+		RequiredAction: "read browser_network_read ref n7 before citing metrics",
+	}); err != nil {
+		t.Fatalf("RecordDecision: %v", err)
 	}
 	checkpoint := func() loopstate.PlanCheckpoint {
 		return loopstate.PlanCheckpoint{Valid: true, Label: "plan:0/1:active", StepIndex: 1, StepStatus: "in_progress", Step: "read trace evidence"}
@@ -717,11 +729,19 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.LastTurnID != "turn_previous" ||
 			payload.LastTurnEndReason != sse.TurnEndMaxTurns ||
 			payload.LastTurnToolRequests != 5 ||
+			payload.LastTurnToolErrors != 2 ||
+			payload.LastTurnForcedNoTools != 1 ||
 			payload.LastTurnMemoryUpdates != 1 ||
 			payload.LastTurnMemorySearchCalls != 3 ||
 			payload.LastTurnMemorySearchMisses != 2 ||
 			payload.LastTurnSessionSearchCalls != 1 ||
 			payload.LastTurnLoopGuards != 1 ||
+			payload.LastDecisionKind != "evidence_quality" ||
+			payload.LastDecisionTrigger != "source_access_dynamic_partial" ||
+			payload.LastDecision != "defer" ||
+			payload.LastDecisionConfidence != "high" ||
+			payload.LastDecisionReason != "dynamic widgets exposed empty values" ||
+			payload.LastDecisionAction != "read browser_network_read ref n7 before citing metrics" ||
 			!strings.Contains(payload.CurrentSituation, "recover the long-run trace") ||
 			!strings.Contains(payload.CurrentSituation, "network evidence is not verified yet") ||
 			payload.ProtocolPath != ".affent/loops/"+filepath.Base(dir)+"/LOOP.md" {

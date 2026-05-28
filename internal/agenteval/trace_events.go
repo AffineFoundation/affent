@@ -248,11 +248,19 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			LastTurnID:                 p.LastTurnID,
 			LastTurnEndReason:          p.LastTurnEndReason,
 			LastTurnToolRequests:       p.LastTurnToolRequests,
+			LastTurnToolErrors:         p.LastTurnToolErrors,
+			LastTurnForcedNoTools:      p.LastTurnForcedNoTools,
 			LastTurnMemoryUpdates:      p.LastTurnMemoryUpdates,
 			LastTurnMemorySearchCalls:  p.LastTurnMemorySearchCalls,
 			LastTurnMemorySearchMisses: p.LastTurnMemorySearchMisses,
 			LastTurnSessionSearchCalls: p.LastTurnSessionSearchCalls,
 			LastTurnLoopGuards:         p.LastTurnLoopGuards,
+			LastDecisionKind:           p.LastDecisionKind,
+			LastDecisionTrigger:        p.LastDecisionTrigger,
+			LastDecision:               p.LastDecision,
+			LastDecisionConfidence:     p.LastDecisionConfidence,
+			LastDecisionReason:         p.LastDecisionReason,
+			LastDecisionAction:         p.LastDecisionAction,
 		})
 	case sse.TypeLoopCalibrationRequest:
 		var p sse.LoopProtocolCalibrationPayload

@@ -307,11 +307,19 @@ type LoopProtocolFeedPayload struct {
 	LastTurnID                 string `json:"last_turn_id,omitempty"`
 	LastTurnEndReason          string `json:"last_turn_end_reason,omitempty"`
 	LastTurnToolRequests       int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnToolErrors         int    `json:"last_turn_tool_errors,omitempty"`
+	LastTurnForcedNoTools      int    `json:"last_turn_forced_no_tools,omitempty"`
 	LastTurnMemoryUpdates      int    `json:"last_turn_memory_updates,omitempty"`
 	LastTurnMemorySearchCalls  int    `json:"last_turn_memory_search_calls,omitempty"`
 	LastTurnMemorySearchMisses int    `json:"last_turn_memory_search_misses,omitempty"`
 	LastTurnSessionSearchCalls int    `json:"last_turn_session_search_calls,omitempty"`
 	LastTurnLoopGuards         int    `json:"last_turn_loop_guards,omitempty"`
+	LastDecisionKind           string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger        string `json:"last_decision_trigger,omitempty"`
+	LastDecision               string `json:"last_decision,omitempty"`
+	LastDecisionConfidence     string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason         string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction         string `json:"last_decision_required_action,omitempty"`
 }
 
 // LoopProtocolCalibrationPayload mirrors draft LOOP.md calibration questions

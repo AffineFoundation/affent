@@ -740,7 +740,7 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 
 func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
-		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1},
+		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnToolErrors: 1, LastTurnForcedNoTools: 1, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1, LastDecisionKind: "evidence_quality", LastDecisionTrigger: "source_access_dynamic_partial", LastDecision: "defer", LastDecisionConfidence: "high", LastDecisionReason: "dynamic widgets were empty", LastDecisionAction: "read browser_network_read ref n7"},
 		{Mode: "full", FeedNumber: 2, PlanLabel: "SN120 research", PlanCurrentStepStatus: "pending", PlanCurrentStep: "write final cited analysis"},
 	}, EventOrder: []TraceEventRef{
 		{Index: 1, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "digest", LoopProtocolPath: ".affent/loops/sn120/LOOP.md"},
@@ -768,9 +768,17 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 		Mode:                          "digest",
 		PlanLabelContains:             "SN120",
 		LastTurnEndReason:             "completed",
+		MinLastTurnToolErrors:         1,
+		MinLastTurnForcedNoTools:      1,
 		MinLastTurnMemorySearchCalls:  2,
 		MinLastTurnMemorySearchMisses: 1,
 		MinLastTurnSessionSearchCalls: 1,
+		LastDecisionKind:              "evidence_quality",
+		LastDecisionTrigger:           "source_access_dynamic_partial",
+		LastDecision:                  "defer",
+		LastDecisionConfidence:        "high",
+		LastDecisionReason:            "widgets were empty",
+		LastDecisionAction:            "browser_network_read ref n7",
 	}).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol last-turn checkpoint match to pass: %+v", res)
 	}
@@ -786,11 +794,11 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 			t.Fatalf("failure detail %q missing %q", res.Detail, want)
 		}
 	}
-	res = LoopProtocolFeedRequirementAtLeast(LoopProtocolFeedRequirement{Mode: "digest", MinLastTurnMemorySearchMisses: 2}).Eval(trace)
+	res = LoopProtocolFeedRequirementAtLeast(LoopProtocolFeedRequirement{Mode: "digest", MinLastTurnMemorySearchMisses: 2, MinLastTurnForcedNoTools: 2, LastDecisionAction: "missing action"}).Eval(trace)
 	if res.Pass {
 		t.Fatal("expected mismatched last-turn memory miss requirement to fail")
 	}
-	for _, want := range []string{"matched=0", "last_turn_memory_search_misses>=2", "memory_misses=1"} {
+	for _, want := range []string{"matched=0", "last_turn_memory_search_misses>=2", "last_turn_forced_no_tools>=2", "last_decision_action_contains", "memory_misses=1", "forced_no_tools=1", "browser_network_read"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail %q missing %q", res.Detail, want)
 		}

@@ -2167,6 +2167,8 @@ func recoveryHintFromLoopProtocolFeed(p sse.LoopProtocolFeedPayload) string {
 	endReason := strings.TrimSpace(p.LastTurnEndReason)
 	hasRecoverySignal := endReason == sse.TurnEndMaxTurns ||
 		endReason == sse.TurnEndError ||
+		p.LastTurnToolErrors > 0 ||
+		p.LastTurnForcedNoTools > 0 ||
 		p.LastTurnLoopGuards > 0 ||
 		p.LastTurnMemorySearchMisses > 0
 	if !hasRecoverySignal {
@@ -2178,6 +2180,12 @@ func recoveryHintFromLoopProtocolFeed(p sse.LoopProtocolFeedPayload) string {
 	}
 	if p.LastTurnLoopGuards > 0 {
 		parts = append(parts, fmt.Sprintf("guards=%d", p.LastTurnLoopGuards))
+	}
+	if p.LastTurnToolErrors > 0 {
+		parts = append(parts, fmt.Sprintf("tool_errors=%d", p.LastTurnToolErrors))
+	}
+	if p.LastTurnForcedNoTools > 0 {
+		parts = append(parts, fmt.Sprintf("forced_no_tools=%d", p.LastTurnForcedNoTools))
 	}
 	if p.LastTurnMemorySearchMisses > 0 {
 		parts = append(parts, fmt.Sprintf("mem_miss=%d", p.LastTurnMemorySearchMisses))
@@ -2200,7 +2208,7 @@ func recoveryHintFromLoopState(state loopstate.State) string {
 		parts = append(parts, hint)
 	}
 	endReason := strings.TrimSpace(state.LastTurnEndReason)
-	if endReason == sse.TurnEndMaxTurns || endReason == sse.TurnEndError || state.LastTurnLoopGuards > 0 || state.LastTurnMemoryMisses > 0 {
+	if endReason == sse.TurnEndMaxTurns || endReason == sse.TurnEndError || state.LastTurnToolErrors > 0 || state.LastTurnForcedNoTools > 0 || state.LastTurnLoopGuards > 0 || state.LastTurnMemoryMisses > 0 {
 		if len(parts) == 0 {
 			parts = append(parts, "loop state recovery")
 		}
@@ -2209,6 +2217,12 @@ func recoveryHintFromLoopState(state loopstate.State) string {
 		}
 		if state.LastTurnLoopGuards > 0 {
 			parts = append(parts, fmt.Sprintf("guards=%d", state.LastTurnLoopGuards))
+		}
+		if state.LastTurnToolErrors > 0 {
+			parts = append(parts, fmt.Sprintf("tool_errors=%d", state.LastTurnToolErrors))
+		}
+		if state.LastTurnForcedNoTools > 0 {
+			parts = append(parts, fmt.Sprintf("forced_no_tools=%d", state.LastTurnForcedNoTools))
 		}
 		if state.LastTurnMemoryMisses > 0 {
 			parts = append(parts, fmt.Sprintf("mem_miss=%d", state.LastTurnMemoryMisses))

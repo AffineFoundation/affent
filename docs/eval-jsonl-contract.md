@@ -263,9 +263,13 @@ Scenario records describe one eval case:
   `plan_current_step_index`, `plan_current_step_status`, and
   `plan_current_step`). Samples may also include the latest turn checkpoint
   fields (`last_turn_id`, `last_turn_end_reason`, `last_turn_tool_requests`,
+  `last_turn_tool_errors`, `last_turn_forced_no_tools`,
   `last_turn_memory_updates`, `last_turn_memory_search_calls`,
   `last_turn_memory_search_misses`, `last_turn_session_search_calls`, and
-  `last_turn_loop_guards`). Summary records include the originating scenario.
+  `last_turn_loop_guards`) plus latest loop decision fields
+  (`last_decision_kind`, `last_decision_trigger`, `last_decision`,
+  `last_decision_confidence`, `last_decision_reason`, and
+  `last_decision_required_action`). Summary records include the originating scenario.
   Use these fields to verify that long-running loop sessions actually refreshed
   `LOOP.md` without overfeeding the model context, and that each feed preserved
   pointers back to authoritative plan and recall state.

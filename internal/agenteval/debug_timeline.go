@@ -494,11 +494,31 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 				}
 			}
 			appendMinRequirement("last_turn_tool_requests", req.MinLastTurnToolRequests)
+			appendMinRequirement("last_turn_tool_errors", req.MinLastTurnToolErrors)
+			appendMinRequirement("last_turn_forced_no_tools", req.MinLastTurnForcedNoTools)
 			appendMinRequirement("last_turn_memory_updates", req.MinLastTurnMemoryUpdates)
 			appendMinRequirement("last_turn_memory_search_calls", req.MinLastTurnMemorySearchCalls)
 			appendMinRequirement("last_turn_memory_search_misses", req.MinLastTurnMemorySearchMisses)
 			appendMinRequirement("last_turn_session_search_calls", req.MinLastTurnSessionSearchCalls)
 			appendMinRequirement("last_turn_loop_guards", req.MinLastTurnLoopGuards)
+			if req.LastDecisionKind != "" {
+				parts = append(parts, fmt.Sprintf("last_decision_kind=%s", req.LastDecisionKind))
+			}
+			if req.LastDecisionTrigger != "" {
+				parts = append(parts, fmt.Sprintf("last_decision_trigger=%s", req.LastDecisionTrigger))
+			}
+			if req.LastDecision != "" {
+				parts = append(parts, fmt.Sprintf("last_decision=%s", req.LastDecision))
+			}
+			if req.LastDecisionConfidence != "" {
+				parts = append(parts, fmt.Sprintf("last_decision_confidence=%s", req.LastDecisionConfidence))
+			}
+			if req.LastDecisionReason != "" {
+				parts = append(parts, fmt.Sprintf("last_decision_reason=%s", timelineInline(req.LastDecisionReason, 160)))
+			}
+			if req.LastDecisionAction != "" {
+				parts = append(parts, fmt.Sprintf("last_decision_action=%s", timelineInline(req.LastDecisionAction, 160)))
+			}
 			parts = append(parts, fmt.Sprintf("min=%d", min))
 			fmt.Fprintf(b, "- required_loop_protocol_feed: `%s`\n", strings.Join(parts, " "))
 		}

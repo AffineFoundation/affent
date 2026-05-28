@@ -74,11 +74,19 @@ type LoopProtocolFeedRequirement struct {
 	CurrentSituation              string
 	LastTurnEndReason             string
 	MinLastTurnToolRequests       int
+	MinLastTurnToolErrors         int
+	MinLastTurnForcedNoTools      int
 	MinLastTurnMemoryUpdates      int
 	MinLastTurnMemorySearchCalls  int
 	MinLastTurnMemorySearchMisses int
 	MinLastTurnSessionSearchCalls int
 	MinLastTurnLoopGuards         int
+	LastDecisionKind              string
+	LastDecisionTrigger           string
+	LastDecision                  string
+	LastDecisionConfidence        string
+	LastDecisionReason            string
+	LastDecisionAction            string
 	// Min is the required number of matching loop.protocol_feed events.
 	// Values <=0 default to one so scenarios can spell the common case tersely.
 	Min int
@@ -654,11 +662,19 @@ type DebugLoopProtocolFeedRequirement struct {
 	CurrentSituation              string `json:"current_situation,omitempty"`
 	LastTurnEndReason             string `json:"last_turn_end_reason,omitempty"`
 	MinLastTurnToolRequests       int    `json:"min_last_turn_tool_requests,omitempty"`
+	MinLastTurnToolErrors         int    `json:"min_last_turn_tool_errors,omitempty"`
+	MinLastTurnForcedNoTools      int    `json:"min_last_turn_forced_no_tools,omitempty"`
 	MinLastTurnMemoryUpdates      int    `json:"min_last_turn_memory_updates,omitempty"`
 	MinLastTurnMemorySearchCalls  int    `json:"min_last_turn_memory_search_calls,omitempty"`
 	MinLastTurnMemorySearchMisses int    `json:"min_last_turn_memory_search_misses,omitempty"`
 	MinLastTurnSessionSearchCalls int    `json:"min_last_turn_session_search_calls,omitempty"`
 	MinLastTurnLoopGuards         int    `json:"min_last_turn_loop_guards,omitempty"`
+	LastDecisionKind              string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger           string `json:"last_decision_trigger,omitempty"`
+	LastDecision                  string `json:"last_decision,omitempty"`
+	LastDecisionConfidence        string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason            string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction            string `json:"last_decision_required_action,omitempty"`
 	Min                           int    `json:"min,omitempty"`
 }
 
@@ -1471,11 +1487,19 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			CurrentSituation:              req.CurrentSituation,
 			LastTurnEndReason:             req.LastTurnEndReason,
 			MinLastTurnToolRequests:       req.MinLastTurnToolRequests,
+			MinLastTurnToolErrors:         req.MinLastTurnToolErrors,
+			MinLastTurnForcedNoTools:      req.MinLastTurnForcedNoTools,
 			MinLastTurnMemoryUpdates:      req.MinLastTurnMemoryUpdates,
 			MinLastTurnMemorySearchCalls:  req.MinLastTurnMemorySearchCalls,
 			MinLastTurnMemorySearchMisses: req.MinLastTurnMemorySearchMisses,
 			MinLastTurnSessionSearchCalls: req.MinLastTurnSessionSearchCalls,
 			MinLastTurnLoopGuards:         req.MinLastTurnLoopGuards,
+			LastDecisionKind:              req.LastDecisionKind,
+			LastDecisionTrigger:           req.LastDecisionTrigger,
+			LastDecision:                  req.LastDecision,
+			LastDecisionConfidence:        req.LastDecisionConfidence,
+			LastDecisionReason:            req.LastDecisionReason,
+			LastDecisionAction:            req.LastDecisionAction,
 			Min:                           req.Min,
 		})
 	}

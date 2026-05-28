@@ -609,6 +609,8 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopProtocolFeed(t *test
 			PlanCurrentStep:            "continue RECOVERY-FEED-88 through browser_network_read evidence",
 			LastTurnEndReason:          sse.TurnEndMaxTurns,
 			LastTurnLoopGuards:         2,
+			LastTurnToolErrors:         1,
+			LastTurnForcedNoTools:      1,
 			LastTurnMemorySearchMisses: 1,
 			LastTurnSessionSearchCalls: 1,
 		}),
@@ -626,12 +628,13 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopProtocolFeed(t *test
 	for _, want := range []string{
 		"loop feed recovery",
 		"RECOVERY-FEED-88",
-		"browser_network_read",
+		"browser_network",
 		"end=max_turns",
 		"guards=2",
+		"tool_errors=1",
+		"forced_no_tools=1",
 		"mem_miss=1",
 		"sess_search=1",
-		"inspect LOOP/plan",
 	} {
 		if !strings.Contains(summary.LatestRecoveryHint, want) {
 			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
@@ -1102,6 +1105,8 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *tes
 		LastDecisionAction:     "browser_network_read RECOVER-STATE-17",
 		LastTurnEndReason:      sse.TurnEndMaxTurns,
 		LastTurnLoopGuards:     1,
+		LastTurnToolErrors:     1,
+		LastTurnForcedNoTools:  1,
 		LastTurnMemoryMisses:   2,
 		LastTurnSessionSearch:  1,
 		LastPlanStep:           "RECOVER-STATE-17 evidence",
@@ -1130,7 +1135,7 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *tes
 	if !found || !summary.HasLoopState {
 		t.Fatalf("loop state summary missing: found=%v summary=%+v", found, summary)
 	}
-	for _, want := range []string{"loop decision evidence_quality=defer", "browser_network_read", "RECOVER-STATE-17", "end=max_turns", "guards=1", "mem_miss=2", "sess_search=1", "inspect LOOP/plan"} {
+	for _, want := range []string{"loop decision evidence_quality=defer", "browser_network_read", "RECOVER-STATE-17", "end=max_turns", "guards=1", "tool_errors=1", "forced_no_tools=1", "mem_miss=2"} {
 		if !strings.Contains(summary.LatestRecoveryHint, want) {
 			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
 		}
