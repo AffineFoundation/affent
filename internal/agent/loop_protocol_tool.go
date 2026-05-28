@@ -28,6 +28,7 @@ const (
 
 type loopProtocolToolArgs struct {
 	Action          string   `json:"action"`
+	Status          string   `json:"status"`
 	Goal            string   `json:"goal"`
 	Protocol        string   `json:"protocol"`
 	Reason          string   `json:"reason"`
@@ -51,7 +52,8 @@ func loopProtocolTool(protocolPath string) *Tool {
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["start_setup", "read", "patch_draft", "update_draft", "complete_activation"], "description": "start_setup initializes a non-active draft LOOP.md for chat-driven activation; read returns the current LOOP.md; patch_draft replaces compact known sections without resending the full file; update_draft writes a full non-active draft; complete_activation usually omits protocol and activates the saved draft after calibration is recorded."},
+            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["start_setup", "read", "patch_draft", "update_draft", "complete_activation", "close"], "description": "start_setup initializes a non-active draft LOOP.md for chat-driven activation; read returns the current LOOP.md; patch_draft replaces compact known sections without resending the full file; update_draft writes a full non-active draft; complete_activation usually omits protocol and activates the saved draft after calibration is recorded; close marks an active loop completed, blocked, or paused."},
+            "status": {"type": "string", "enum": ["completed", "blocked", "paused"], "description": "Status for action=close. Use completed only when the loop objective is done with evidence, blocked only when continuation needs external input/state, and paused for deliberate operator pause."},
             "goal": {"type": "string", "maxLength": %d, "description": "Compact long-run goal for start_setup. Use the user's own intent, not a broad generic goal."},
             "protocol": {"type": "string", "maxLength": %d, "description": "Full LOOP.md markdown for update_draft or unusual complete_activation structural rewrites. Prefer patch_draft plus complete_activation without protocol for normal setup."},
             "reason": {"type": "string", "maxLength": %d, "description": "Short reason for the protocol update or activation."},
@@ -61,7 +63,7 @@ func loopProtocolTool(protocolPath string) *Tool {
     }`, maxLoopProtocolActionBytes, maxLoopProtocolGoalBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes, maxLoopProtocolPatchBodyBytes))
 	return &Tool{
 		Name:         LoopProtocolToolName,
-		Description:  "Start setup, read, patch, update, or complete activation for this session's LOOP.md. Use during loop activation or long-run protocol maintenance. If the user asks in chat to enable loop and LOOP.md is missing, call start_setup, then ask a concise calibration question. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status.",
+		Description:  "Start setup, read, patch, update, complete activation, or close this session's LOOP.md. Use during loop activation or long-run protocol maintenance. If the user asks in chat to enable loop and LOOP.md is missing, call start_setup, then ask a concise calibration question. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status. When the loop objective is complete or cannot continue, use action=close with status completed, blocked, or paused.",
 		Schema:       schema,
 		CatalogGroup: "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
@@ -94,8 +96,10 @@ func loopProtocolTool(protocolPath string) *Tool {
 				return updateLoopProtocolDraft(protocolPath, p)
 			case "complete_activation":
 				return completeLoopProtocolActivation(protocolPath, p)
+			case "close":
+				return closeLoopProtocol(protocolPath, p)
 			default:
-				return "", fmt.Errorf("unsupported action %q (valid: start_setup, read, patch_draft, update_draft, complete_activation)\nNext: retry loop_protocol with one of the supported actions", action)
+				return "", fmt.Errorf("unsupported action %q (valid: start_setup, read, patch_draft, update_draft, complete_activation, close)\nNext: retry loop_protocol with one of the supported actions", action)
 			}
 		},
 	}
@@ -273,6 +277,20 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 	return fmt.Sprintf("activated LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol will be fed on future turns", state.Status, event.Seq, state.ProtocolUpdates), nil
 }
 
+func closeLoopProtocol(protocolPath string, p loopProtocolToolArgs) (string, error) {
+	status := strings.ToLower(strings.TrimSpace(p.Status))
+	switch status {
+	case "completed", "blocked", "paused":
+	default:
+		return "", errors.New("status is required for close and must be completed, blocked, or paused\nNext: retry loop_protocol action=close with the smallest accurate status and a compact reason")
+	}
+	state, event, err := loopstate.RecordProtocolStatus(protocolPath, status, p.Reason)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("closed LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol feed is disabled unless reopened deliberately", state.Status, event.Seq, state.ProtocolUpdates), nil
+}
+
 func loopProtocolFailure(message, kind string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
@@ -318,5 +336,6 @@ func WithLoopProtocolSystemGuidance(prompt string) string {
 - Do not complete activation in the same turn that created or first discovered a draft unless this turn is responding to an earlier explicit calibration answer. The useful behavior is to ask, wait, then supplement and activate.
 - Use loop_protocol action=start_setup/read/patch_draft/update_draft/complete_activation to maintain the session LOOP.md; do not use ordinary workspace file tools for server-managed loop state.
 - Never claim that a loop is running after only draft creation. Only call complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors. Prefer patch_draft for compact section updates, then complete_activation without protocol; use full update_draft only for broad structural edits. Use complete_activation for the draft-to-running transition; do not use update_draft for running status.
+- When the active loop objective is complete, blocked on external input/state, or deliberately paused, call loop_protocol action=close with status completed, blocked, or paused and a compact evidence-based reason.
 - Keep LOOP.md compact. Put detailed task progress in the plan, artifacts, memory, or trace instead of duplicating it in the protocol.`
 }

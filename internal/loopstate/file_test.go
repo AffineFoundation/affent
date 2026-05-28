@@ -212,6 +212,7 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 		"- loop_id: longrun",
 		"- status: draft",
 		"- owner_session: session-a",
+		"- workspace: not recorded",
 		"Analyze a JS-heavy market dashboard with durable evidence.",
 		"plan/step state remains authoritative",
 		"Operational stop conditions:",
@@ -222,6 +223,9 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("template missing %q:\n%s", want, content)
 		}
+	}
+	if strings.Contains(content, "/workspace/affent") {
+		t.Fatalf("template should not persist absolute runtime workspace paths:\n%s", content)
 	}
 	events, found, err := ReadRecentEvents(EventsPath(dir, "longrun"), 5)
 	if err != nil || !found || len(events) != 1 {
@@ -245,6 +249,19 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	}
 	if created || event.Type != "" || state.OwnerSession != "session-a" {
 		t.Fatalf("second ensure should not overwrite existing protocol: created=%v state=%+v event=%+v", created, state, event)
+	}
+}
+
+func TestValidateProtocolMaintenanceRejectsAbsoluteMetadataWorkspace(t *testing.T) {
+	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "session-a",
+		Goal:         "Keep the task recoverable.",
+		Status:       "running",
+	})
+	protocol = strings.Replace(protocol, "- workspace: not recorded", "- workspace: /workspace/sessions/sess_123", 1)
+	if err := ValidateProtocolMaintenance(protocol); err == nil || !strings.Contains(err.Error(), "metadata workspace") {
+		t.Fatalf("ValidateProtocolMaintenance absolute workspace err = %v", err)
 	}
 }
 

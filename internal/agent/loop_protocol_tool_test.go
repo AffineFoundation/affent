@@ -101,6 +101,44 @@ func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolClosesCompletedLoopAndDisablesFeed(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build and push a small CLI game.",
+		Status:       "running",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"close","status":"completed","reason":"implementation committed, tests passed, and code pushed"}`))
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if !strings.Contains(out, "closed LOOP.md status=completed") {
+		t.Fatalf("close output = %q", out)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "completed" {
+		t.Fatalf("protocol status = %q\n%s", loopstate.ProtocolStatus(protocol), protocol)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.Status != "completed" || state.LastEventType != "loop.protocol_status" || state.NeedsFullProtocolFeed {
+		t.Fatalf("state = %+v", state)
+	}
+	if got := activeLoopProtocolSkillBlock(path); got != "" {
+		t.Fatalf("completed protocol should not be fed, got:\n%s", got)
+	}
+}
+
 func TestLoopProtocolToolCompletesActivationFromSavedDraft(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
@@ -536,6 +574,7 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "Do not complete activation in the same turn") ||
 		!strings.Contains(prompt, "Never claim that a loop is running") ||
+		!strings.Contains(prompt, "action=close") ||
 		!strings.Contains(prompt, "draft-to-running transition") ||
 		!strings.Contains(prompt, "do not use update_draft for running status") ||
 		!strings.Contains(prompt, "complete_activation") {

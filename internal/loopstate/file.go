@@ -85,7 +85,7 @@ func DefaultProtocolTemplate(opts ProtocolTemplateOptions) string {
 	if goal == "" {
 		goal = "Make steady, evidence-backed progress on the user's long-running objective without losing recovery context."
 	}
-	workspace := templateLine(opts.Workspace)
+	workspace := protocolWorkspaceLabel(opts.Workspace)
 	if workspace == "" {
 		workspace = "not recorded"
 	}
@@ -223,10 +223,59 @@ func ValidateProtocolActivation(protocol string) error {
 }
 
 func ValidateProtocolMaintenance(protocol string) error {
+	if workspace := protocolMetadataValue(protocol, "workspace"); looksAbsoluteWorkspacePath(workspace) {
+		return fmt.Errorf("LOOP.md metadata workspace must not be an absolute runtime path; use a stable label such as %q", protocolWorkspaceLabel(""))
+	}
 	if n := currentSituationCharCount(protocol); n > MaxCurrentSituationChars {
 		return fmt.Errorf("LOOP.md Current Situation section is %d characters; keep it at or below %d characters", n, MaxCurrentSituationChars)
 	}
 	return nil
+}
+
+func protocolWorkspaceLabel(workspace string) string {
+	workspace = templateLine(workspace)
+	if workspace == "" || looksAbsoluteWorkspacePath(workspace) {
+		return "not recorded"
+	}
+	return workspace
+}
+
+func looksAbsoluteWorkspacePath(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	if filepath.IsAbs(value) || strings.HasPrefix(value, `\\`) {
+		return true
+	}
+	if len(value) >= 3 && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) && value[1] == ':' && (value[2] == '\\' || value[2] == '/') {
+		return true
+	}
+	return false
+}
+
+func protocolMetadataValue(protocol, key string) string {
+	key = strings.ToLower(strings.TrimSpace(key))
+	if key == "" {
+		return ""
+	}
+	inMetadata := false
+	for _, line := range strings.Split(protocol, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			inMetadata = strings.EqualFold(trimmed, "## 0. Metadata")
+			continue
+		}
+		if !inMetadata {
+			continue
+		}
+		field, value, ok := strings.Cut(strings.TrimPrefix(trimmed, "- "), ":")
+		if !ok || strings.ToLower(strings.TrimSpace(field)) != key {
+			continue
+		}
+		return strings.TrimSpace(value)
+	}
+	return ""
 }
 
 func ValidateProtocolActivationReady(protocolPath string) error {
@@ -576,6 +625,65 @@ func RecordProtocolActivation(protocolPath, reason string) (State, Event, error)
 	}
 	state.Status = "running"
 	state.NeedsFullProtocolFeed = true
+	state.LastProtocolUpdateAt = event.Time
+	state.ProtocolUpdates++
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
+func RecordProtocolStatus(protocolPath, status, reason string) (State, Event, error) {
+	status = templateStatus(status)
+	switch status {
+	case "completed", "blocked", "paused", "stopping", "disabled":
+	default:
+		return State{}, Event{}, fmt.Errorf("unsupported loop protocol status %q", status)
+	}
+	protocol, found, err := ReadProtocol(protocolPath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	if !found {
+		return State{}, Event{}, errors.New("LOOP.md is not initialized")
+	}
+	next, ok := ProtocolWithStatus(protocol, status)
+	if !ok {
+		return State{}, Event{}, errors.New("LOOP.md metadata status could not be updated")
+	}
+	if err := WriteProtocol(protocolPath, next); err != nil {
+		return State{}, Event{}, err
+	}
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "loop protocol status changed"
+	}
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:    "loop.protocol_status",
+		Summary: "Updated LOOP.md status to " + status,
+		Reason:  reason,
+		Path:    ProtocolRelPath(loopID),
+		Time:    formatTime(now),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.Status = status
+	state.NeedsFullProtocolFeed = false
 	state.LastProtocolUpdateAt = event.Time
 	state.ProtocolUpdates++
 	state.UpdatedAt = event.Time
