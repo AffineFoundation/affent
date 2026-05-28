@@ -533,6 +533,7 @@ function loopDecisionMeta(event: NormalizedEvent, turn: string | undefined): str
     loopDecisionKindLabel(readString(event.data, "kind")),
     readString(event.data, "decision"),
     loopDecisionBudgetMeta(event),
+    loopDecisionInputBudgetMeta(event),
     streamSummary(readString(event.data, "reason") ?? readString(event.data, "required_action") ?? ""),
   ]);
 }
@@ -656,6 +657,18 @@ function loopDecisionBudgetMeta(event: NormalizedEvent): string | undefined {
   if (tokenBudget && tokenBudget > 0) return `${tokenBudget.toLocaleString()} tokens`;
   const budgetBytes = readNumber(event.data, "budget_bytes");
   if (budgetBytes && budgetBytes > 0) return formatByteCount(budgetBytes);
+  return undefined;
+}
+
+function loopDecisionInputBudgetMeta(event: NormalizedEvent): string | undefined {
+  if (readString(event.data, "kind") !== "input_budget") return undefined;
+  const budget = readNumber(event.data, "token_budget");
+  const observed = readNumber(event.data, "observed_input_tokens");
+  const projected = readNumber(event.data, "projected_input_tokens");
+  if (projected && projected > 0 && budget && budget > 0) return `projected ${projected.toLocaleString()} / ${budget.toLocaleString()} input tokens`;
+  if (observed && observed > 0 && budget && budget > 0) return `observed ${observed.toLocaleString()} / ${budget.toLocaleString()} input tokens`;
+  if (projected && projected > 0) return `projected ${projected.toLocaleString()} input tokens`;
+  if (observed && observed > 0) return `observed ${observed.toLocaleString()} input tokens`;
   return undefined;
 }
 

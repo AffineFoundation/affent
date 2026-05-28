@@ -257,6 +257,50 @@ describe("buildTurnActivity", () => {
     });
   });
 
+  it("surfaces input budget loop decisions with observed token pressure", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long task" } },
+      {
+        id: 3,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "input_budget",
+          trigger: "turn_input_tokens_observed_after_step",
+          decision: "defer",
+          confidence: "high",
+          reason: "Turn input token pressure exceeded this turn budget.",
+          required_action: "Continue in a new turn from compact evidence.",
+          token_budget: 300000,
+          observed_input_tokens: 479974,
+          visible_in_ui: true,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Budget",
+      summary: "Input budget: defer: observed 479,974 / budget 300,000 tokens Turn input token pressure exceeded this turn budget. Next: Continue in a new turn from compact evidence.",
+      meta: ["1 decision"],
+      tone: "warning",
+    });
+    expect(activity?.brief.rows).toContainEqual({
+      id: "decision:3",
+      label: "Budget",
+      value: "defer · observed 479,974 / budget 300,000 tokens · Turn input token pressure exceeded this turn budget. · Next: Continue in a new turn from compact e...",
+      tone: "warning",
+      action: {
+        label: "Continue compact",
+        draft: "Continue: Continue in a new turn from compact evidence.",
+        source: "tool_guidance",
+      },
+    });
+  });
+
   it("surfaces context compactions on the owning turn", () => {
     const turn = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

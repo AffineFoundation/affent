@@ -701,6 +701,16 @@ function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleL
 }
 
 function loopDecisionBudgetMeta(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string | undefined {
+  if (decision.kind === "input_budget") {
+    if (decision.projected_input_tokens && decision.projected_input_tokens > 0 && decision.token_budget && decision.token_budget > 0) {
+      return `projected ${decision.projected_input_tokens.toLocaleString()} / budget ${decision.token_budget.toLocaleString()} tokens`;
+    }
+    if (decision.observed_input_tokens && decision.observed_input_tokens > 0 && decision.token_budget && decision.token_budget > 0) {
+      return `observed ${decision.observed_input_tokens.toLocaleString()} / budget ${decision.token_budget.toLocaleString()} tokens`;
+    }
+    if (decision.projected_input_tokens && decision.projected_input_tokens > 0) return `projected ${decision.projected_input_tokens.toLocaleString()} tokens`;
+    if (decision.observed_input_tokens && decision.observed_input_tokens > 0) return `observed ${decision.observed_input_tokens.toLocaleString()} tokens`;
+  }
   if (decision.token_budget && decision.token_budget > 0) return `budget ${decision.token_budget.toLocaleString()} tokens`;
   if (decision.budget_bytes && decision.budget_bytes > 0) return `budget ${formatByteCount(decision.budget_bytes)}`;
   return undefined;

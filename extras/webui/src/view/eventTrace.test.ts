@@ -314,6 +314,8 @@ describe("eventTrace view model", () => {
           confidence: "high",
           reason: "Projected next request would exceed this turn budget.",
           token_budget: 300000,
+          observed_input_tokens: 120000,
+          projected_input_tokens: 480000,
           visible_in_ui: true,
         },
       },
@@ -336,7 +338,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Loop decision",
-        meta: ["Request 1", "input budget", "defer", "300,000 tokens", "Projected next request would exceed this turn budget."],
+        meta: ["Request 1", "input budget", "defer", "300,000 tokens", "projected 480,000 / 300,000 input tokens", "Projected next request would exceed this turn budget."],
         badges: ["high", "300,000 tokens", "visible"],
       },
     });
