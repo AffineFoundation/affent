@@ -6,6 +6,7 @@ import {
   cancelSessionTurn,
   createSessionSchedule,
   createSession,
+  deleteSkill,
   deleteSessionSchedule,
   deleteSessionLoopProtocol,
   deleteSession,
@@ -641,6 +642,17 @@ export function App() {
         return { ...current, skills: nextSkills, installEnabled: true };
       });
       return resp.skill;
+    },
+    [client],
+  );
+
+  const handleDeleteSkill = useCallback(
+    async (name: string): Promise<void> => {
+      await deleteSkill(client, name);
+      setSkillsState((current) => {
+        if (current.state !== "ready") return current;
+        return { ...current, skills: current.skills.filter((skill) => skill.name !== name) };
+      });
     },
     [client],
   );
@@ -1684,6 +1696,7 @@ export function App() {
         onRefresh={handleRefreshSkills}
         onReadSkill={handleReadSkill}
         onInstallSkill={handleInstallSkill}
+        onDeleteSkill={handleDeleteSkill}
         onUseAsDraft={handleUseAsDraft}
       />
     );

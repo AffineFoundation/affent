@@ -33,6 +33,7 @@ export function SessionSkillsPanel({
   onRefresh,
   onReadSkill,
   onInstallSkill,
+  onDeleteSkill,
   onUseAsDraft,
 }: {
   skills?: readonly SessionSkillInfo[];
@@ -44,6 +45,7 @@ export function SessionSkillsPanel({
   onRefresh?: () => Promise<void> | void;
   onReadSkill?: (name: string) => Promise<SessionSkillInfo>;
   onInstallSkill?: (request: SessionSkillInstallRequest) => Promise<SessionSkillInfo>;
+  onDeleteSkill?: (name: string) => Promise<void> | void;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
@@ -54,6 +56,9 @@ export function SessionSkillsPanel({
   const [installError, setInstallError] = useState<string | undefined>();
   const [skillActionStatus, setSkillActionStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
   const [installing, setInstalling] = useState(false);
+  const [editingSkillName, setEditingSkillName] = useState<string | undefined>();
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string | undefined>();
+  const [deletingSkillName, setDeletingSkillName] = useState<string | undefined>();
   const allSkills = skills ?? [];
   const hasSearch = allSkills.length > 0;
   const canInstall = installEnabled && !!onInstallSkill;
@@ -118,6 +123,7 @@ export function SessionSkillsPanel({
       });
       setBodyByName((current) => ({ ...current, [installed.name]: { body: installed.body ?? form.body } }));
       setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
+      setEditingSkillName(undefined);
       setShowForm(false);
       setSkillActionStatus({ tone: "success", message: `${installed.name} saved.` });
     } catch (err) {
@@ -126,6 +132,61 @@ export function SessionSkillsPanel({
       setSkillActionStatus({ tone: "error", message });
     } finally {
       setInstalling(false);
+    }
+  }
+
+  async function editSkill(skill: SessionSkillInfo) {
+    if (!skill.runtime) return;
+    setInstallError(undefined);
+    setSkillActionStatus(undefined);
+    setDeleteConfirmName(undefined);
+    let body = bodyByName[skill.name]?.body ?? skill.body;
+    if (!body && onReadSkill) {
+      setBodyByName((current) => ({ ...current, [skill.name]: { ...current[skill.name], loading: true, error: undefined } }));
+      try {
+        const loaded = await onReadSkill(skill.name);
+        body = loaded.body ?? "";
+        setBodyByName((current) => ({ ...current, [skill.name]: { body } }));
+      } catch (err) {
+        const message = formatPanelError(err);
+        setBodyByName((current) => ({ ...current, [skill.name]: { error: message } }));
+        setSkillActionStatus({ tone: "error", message });
+        return;
+      }
+    }
+    setForm({
+      name: skill.name,
+      description: skill.description ?? "",
+      triggers: (skill.triggers ?? skill.auto_activation?.any ?? []).join("\n"),
+      requiredTools: (skill.required_tools ?? []).join("\n"),
+      body: body ?? skill.body_preview ?? "",
+    });
+    setEditingSkillName(skill.name);
+    setShowForm(true);
+  }
+
+  async function deleteSkill(name: string) {
+    if (!onDeleteSkill || deletingSkillName) return;
+    setSkillActionStatus(undefined);
+    setDeletingSkillName(name);
+    try {
+      await onDeleteSkill(name);
+      setBodyByName((current) => {
+        const next = { ...current };
+        delete next[name];
+        return next;
+      });
+      setDeleteConfirmName(undefined);
+      if (editingSkillName === name) {
+        setEditingSkillName(undefined);
+        setShowForm(false);
+        setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
+      }
+      setSkillActionStatus({ tone: "success", message: `${name} deleted.` });
+    } catch (err) {
+      setSkillActionStatus({ tone: "error", message: formatPanelError(err) });
+    } finally {
+      setDeletingSkillName(undefined);
     }
   }
 
@@ -217,7 +278,20 @@ export function SessionSkillsPanel({
               </div>
             ) : null}
             {showForm ? (
-              renderSkillForm({ form, setForm, submitSkill, installError, installing, submitLabel: "Save skill" })
+              renderSkillForm({
+                form,
+                setForm,
+                submitSkill,
+                installError,
+                installing,
+                editingSkillName,
+                onCancelEdit: editingSkillName ? () => {
+                  setEditingSkillName(undefined);
+                  setShowForm(false);
+                  setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
+                } : undefined,
+                submitLabel: editingSkillName ? "Update skill" : "Save skill",
+              })
             ) : null}
             <div className="session-skills-list" data-testid="session-skills-list">
               {filteredSkills.length > 0 ? (
@@ -259,6 +333,27 @@ export function SessionSkillsPanel({
                         </div>
                         <div className="session-skill-actions">
                           <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
+                          {canInstall && skill.runtime ? (
+                            <button type="button" className="node-action" onClick={() => void editSkill(skill)}>
+                              Edit
+                            </button>
+                          ) : null}
+                          {onDeleteSkill && skill.runtime ? (
+                            deleteConfirmName === skill.name ? (
+                              <span className="session-skill-delete-confirm" role="group" aria-label={`Confirm delete ${skill.name}`}>
+                                <button type="button" className="node-action" disabled={deletingSkillName === skill.name} onClick={() => setDeleteConfirmName(undefined)}>
+                                  Cancel
+                                </button>
+                                <button type="button" className="node-action danger-action" disabled={!!deletingSkillName} onClick={() => void deleteSkill(skill.name)}>
+                                  {deletingSkillName === skill.name ? "Deleting" : "Confirm delete"}
+                                </button>
+                              </span>
+                            ) : (
+                              <button type="button" className="node-action danger-action" disabled={!!deletingSkillName} onClick={() => setDeleteConfirmName(skill.name)}>
+                                Delete
+                              </button>
+                            )
+                          ) : null}
                           {onUseAsDraft ? (
                             <>
                               <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
@@ -310,6 +405,8 @@ function renderSkillForm({
   submitSkill,
   installError,
   installing,
+  editingSkillName,
+  onCancelEdit,
   submitLabel,
 }: {
   form: SkillFormState;
@@ -317,13 +414,25 @@ function renderSkillForm({
   submitSkill: (event: FormEvent<HTMLFormElement>) => void;
   installError?: string;
   installing: boolean;
+  editingSkillName?: string;
+  onCancelEdit?: () => void;
   submitLabel: string;
 }) {
   return (
     <form className="session-skill-form" onSubmit={submitSkill}>
+      {editingSkillName ? (
+        <div className="session-skill-editing" role="status">
+          Editing {editingSkillName}
+          {onCancelEdit ? (
+            <button type="button" className="ghost-action" onClick={onCancelEdit}>
+              Cancel edit
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <label>
         <span>Name</span>
-        <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="my_skill" required />
+        <input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="my_skill" required disabled={!!editingSkillName} />
       </label>
       <label>
         <span>Summary</span>

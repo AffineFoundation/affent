@@ -200,6 +200,23 @@ func (r *SkillRegistry) Upsert(s Skill) error {
 	return nil
 }
 
+// Remove deletes a skill from the in-memory registry by exact name.
+func (r *SkillRegistry) Remove(name string) bool {
+	if r == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, skill := range r.skills {
+		if skill.Name != name {
+			continue
+		}
+		r.skills = append(r.skills[:i], r.skills[i+1:]...)
+		return true
+	}
+	return false
+}
+
 // Lookup returns a registered skill by exact name.
 func (r *SkillRegistry) Lookup(name string) (Skill, bool) {
 	if r == nil {
@@ -616,6 +633,38 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 		return Skill{}, err
 	}
 	return normalized, nil
+}
+
+func DeleteRuntimeSkill(root, name string) error {
+	root = strings.TrimSpace(root)
+	name = strings.TrimSpace(name)
+	if root == "" {
+		return fmt.Errorf("runtime skill directory is not configured")
+	}
+	if name == "" {
+		return fmt.Errorf("skill name is required")
+	}
+	if len(name) > maxRuntimeSkillNameBytes {
+		return fmt.Errorf("skill name is %d bytes; max %d", len(name), maxRuntimeSkillNameBytes)
+	}
+	if !validRuntimeSkillName(name) {
+		return fmt.Errorf("skill name %q may contain only ASCII letters, digits, '_' or '-'", name)
+	}
+	if err := rejectRuntimeSkillRootSymlink(root); err != nil {
+		return err
+	}
+	dir := filepath.Join(root, name)
+	if err := rejectRuntimeSkillDirSymlinkIfExists(dir); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	if d, err := os.Open(root); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
 }
 
 func resetRuntimeSkillStagingDir(dir string) error {

@@ -1,6 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
+import type { SessionSkillInfo } from "../api/sessions";
 import { SessionSkillsPanel } from "./SessionSkillsPanel";
 
 describe("SessionSkillsPanel", () => {
@@ -93,6 +95,81 @@ describe("SessionSkillsPanel", () => {
     });
     expect(screen.getByRole("status")).toHaveTextContent("manual_demo saved.");
     expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
+  });
+
+  it("edits and deletes runtime skills directly from the panel", async () => {
+    const user = userEvent.setup();
+    const onInstallSkill = vi.fn(async (request) => ({
+      name: request.name,
+      description: request.description,
+      source: "file:///account-skills/runtime_demo/SKILL.md",
+      runtime: true,
+      triggers: request.triggers,
+      required_tools: request.required_tools,
+      body_bytes: request.body.length,
+      body: request.body,
+    }));
+    const onDeleteSkill = vi.fn(async (_name: string) => undefined);
+    function Harness() {
+      const [skills, setSkills] = useState<SessionSkillInfo[]>([{
+        name: "runtime_demo",
+        description: "Original workflow.",
+        source: "file:///account-skills/runtime_demo/SKILL.md",
+        runtime: true,
+        triggers: ["runtime demo"],
+        required_tools: ["workspace"],
+        body_bytes: 58,
+        body: "AFFENT ACTIVE SKILL: runtime_demo\nUse the original workflow.",
+      }]);
+      return (
+        <SessionSkillsPanel
+          defaultOpen
+          skills={skills}
+          installEnabled
+          onReadSkill={async (name) => skills.find((skill) => skill.name === name)!}
+          onInstallSkill={async (request) => {
+            const installed = await onInstallSkill(request);
+            setSkills((current) => [installed, ...current.filter((skill) => skill.name !== installed.name)]);
+            return installed;
+          }}
+          onDeleteSkill={async (name) => {
+            await onDeleteSkill(name);
+            setSkills((current) => current.filter((skill) => skill.name !== name));
+          }}
+        />
+      );
+    }
+    render(<Harness />);
+
+    await user.click(screen.getByText("runtime_demo"));
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Editing runtime_demo");
+    expect(screen.getByLabelText("Name")).toHaveValue("runtime_demo");
+    expect(screen.getByLabelText("Summary")).toHaveValue("Original workflow.");
+    expect(screen.getByLabelText("Triggers")).toHaveValue("runtime demo");
+    expect(screen.getByLabelText("Required tools")).toHaveValue("workspace");
+    await user.clear(screen.getByLabelText("Summary"));
+    await user.type(screen.getByLabelText("Summary"), "Updated workflow.");
+    await user.clear(screen.getByLabelText("Full content"));
+    await user.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: runtime_demo\nUse the updated workflow.");
+    await user.click(screen.getByRole("button", { name: "Update skill" }));
+
+    expect(onInstallSkill).toHaveBeenCalledWith({
+      name: "runtime_demo",
+      description: "Updated workflow.",
+      body: "AFFENT ACTIVE SKILL: runtime_demo\nUse the updated workflow.",
+      triggers: ["runtime demo"],
+      required_tools: ["workspace"],
+    });
+    expect(screen.getByRole("status")).toHaveTextContent("runtime_demo saved.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Updated workflow.");
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Confirm delete" }));
+
+    expect(onDeleteSkill).toHaveBeenCalledWith("runtime_demo");
+    expect(screen.getByRole("status")).toHaveTextContent("runtime_demo deleted.");
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("runtime_demo");
   });
 
   it("keeps the manual skill form populated and reports install failures", async () => {

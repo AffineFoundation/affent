@@ -4,13 +4,17 @@ import {
   addSessionMemory,
   cancelSessionTurn,
   createSession,
+  deleteSkill,
   deleteSessionLoopProtocol,
   deleteSession,
   getSessionHistory,
   getSessionLoopProtocol,
   getSessionPlan,
+  installSkill,
   listSessions,
+  listSkills,
   readSessionArtifact,
+  readSkill,
   removeSessionMemory,
   replaceSessionMemory,
   sendSessionMessage,
@@ -62,6 +66,10 @@ describe("session API helpers", () => {
     await addSessionMemory(client, "s/1", { target: "memory", topic: "research", content: "remember this" });
     await removeSessionMemory(client, "s/1", { action: "remove", target: "memory", topic: "research", old_text: "remember this" });
     await replaceSessionMemory(client, "s/1", { action: "replace", target: "memory", topic: "research", old_text: "remember this", new_content: "remember this updated" });
+    await listSkills(client);
+    await readSkill(client, "skill/1");
+    await installSkill(client, { name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" });
+    await deleteSkill(client, "skill/1");
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
@@ -95,6 +103,13 @@ describe("session API helpers", () => {
       old_text: "remember this",
       new_content: "remember this updated",
     }));
+    expect(fetchImpl.mock.calls[11][0]).toBe("/v1/skills");
+    expect(fetchImpl.mock.calls[12][0]).toBe("/v1/skills/skill%2F1");
+    expect(fetchImpl.mock.calls[13][0]).toBe("/v1/skills");
+    expect((fetchImpl.mock.calls[13][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[13][1] as RequestInit).body).toBe(JSON.stringify({ name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" }));
+    expect(fetchImpl.mock.calls[14][0]).toBe("/v1/skills/skill%2F1");
+    expect((fetchImpl.mock.calls[14][1] as RequestInit).method).toBe("DELETE");
   });
 
   it("streams native affent session events", async () => {

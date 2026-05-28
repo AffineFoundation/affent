@@ -3655,7 +3655,20 @@ button.workbench-context-runtime-item:focus-visible {
   background: rgba(248, 250, 252, 0.72);
 }
 
+.session-skill-editing {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 750;
+}
+
 .session-skill-form-body,
+.session-skill-editing,
 .session-skill-form .session-skills-empty,
 .session-skills-add-submit {
   grid-column: 1 / -1;
@@ -3778,6 +3791,13 @@ button.workbench-context-runtime-item:focus-visible {
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 6px;
+}
+
+.session-skill-delete-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .session-skill-body {

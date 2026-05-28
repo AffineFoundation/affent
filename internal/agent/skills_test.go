@@ -457,6 +457,29 @@ func TestInstallRuntimeSkillReplacesExistingSkill(t *testing.T) {
 	}
 }
 
+func TestDeleteRuntimeSkillRemovesInstalledSkill(t *testing.T) {
+	root := t.TempDir()
+	if _, err := InstallRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteRuntimeSkill(root, "demo"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "demo")); !os.IsNotExist(err) {
+		t.Fatalf("skill directory should be removed, err=%v", err)
+	}
+	skills, err := LoadSkillDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 0 {
+		t.Fatalf("loaded skills after delete = %+v", skills)
+	}
+}
+
 func TestLoadSkillDirIgnoresInterruptedRuntimeSkillInstalls(t *testing.T) {
 	root := t.TempDir()
 	if _, err := InstallRuntimeSkill(root, Skill{

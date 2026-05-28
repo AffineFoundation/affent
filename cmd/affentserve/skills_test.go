@@ -112,4 +112,42 @@ func TestHandleAccountSkills_InstalledSkillActivatesForActiveAndNewSessions(t *t
 	if detail.Skill.Name != "account_demo" || !strings.Contains(detail.Skill.Body, "account workflow") {
 		t.Fatalf("account read response = %+v", detail.Skill)
 	}
+
+	r = httptest.NewRequest(http.MethodDelete, "/v1/skills/account_demo", nil)
+	w = httptest.NewRecorder()
+	handleAccountSkillRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("delete status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var deleted sessionSkillDeleteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &deleted); err != nil {
+		t.Fatalf("decode delete: %v body=%s", err, w.Body.String())
+	}
+	if deleted.SessionID != "account" || deleted.Name != "account_demo" || !deleted.Deleted {
+		t.Fatalf("delete response = %+v", deleted)
+	}
+	if got := active.skillRegistry.Provide("please use account demo"); strings.Contains(got, "account workflow") {
+		t.Fatalf("deleted account skill should be removed from active sessions, got %q", got)
+	}
+	r = httptest.NewRequest(http.MethodGet, "/v1/skills/account_demo", nil)
+	w = httptest.NewRecorder()
+	handleAccountSkillRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusNotFound {
+		t.Fatalf("read deleted status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
+func TestHandleAccountSkills_RejectsDeletingBuiltInSkill(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+
+	r := httptest.NewRequest(http.MethodDelete, "/v1/skills/coding_repair_workflow", nil)
+	w := httptest.NewRecorder()
+	handleAccountSkillRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("delete built-in status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "built-in skills cannot be deleted") {
+		t.Fatalf("delete built-in response = %s", w.Body.String())
+	}
 }

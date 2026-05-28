@@ -27,6 +27,12 @@ type sessionSkillResponse struct {
 	Skill     skillInfo `json:"skill"`
 }
 
+type sessionSkillDeleteResponse struct {
+	SessionID string `json:"session_id"`
+	Name      string `json:"name"`
+	Deleted   bool   `json:"deleted"`
+}
+
 type sessionSkillInstallRequest struct {
 	Name          string   `json:"name"`
 	Description   string   `json:"description,omitempty"`
@@ -64,12 +70,15 @@ func handleAccountSkills(pool *SessionPool) http.HandlerFunc {
 
 func handleAccountSkillRoutes(pool *SessionPool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			writeJSONErrorTyped(w, http.StatusMethodNotAllowed, "method not allowed", nil, "bad_request")
-			return
-		}
 		name := strings.TrimPrefix(r.URL.Path, "/v1/skills/")
-		handleAccountSkillRead(pool, name, w)
+		switch r.Method {
+		case http.MethodGet:
+			handleAccountSkillRead(pool, name, w)
+		case http.MethodDelete:
+			handleAccountSkillDelete(pool, name, w)
+		default:
+			writeJSONErrorTyped(w, http.StatusMethodNotAllowed, "method not allowed", nil, "bad_request")
+		}
 	}
 }
 
@@ -109,6 +118,43 @@ func handleAccountSkillRead(pool *SessionPool, rawName string, w http.ResponseWr
 	_ = json.NewEncoder(w).Encode(sessionSkillResponse{
 		SessionID: "account",
 		Skill:     skillInfoFromSkill(skill, true),
+	})
+}
+
+func handleAccountSkillDelete(pool *SessionPool, rawName string, w http.ResponseWriter) {
+	if pool == nil || !workflowToolsEnabled(pool.cfg) {
+		writeJSONErrorTyped(w, http.StatusConflict, "skill install is not configured", nil, "skill_install_unavailable")
+		return
+	}
+	name, err := url.PathUnescape(rawName)
+	if err != nil || strings.TrimSpace(name) == "" {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid skill name", err, "bad_request")
+		return
+	}
+	reg, err := accountSkillRegistry(pool)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read skills", err)
+		return
+	}
+	skill, ok := reg.Lookup(name)
+	if !ok {
+		writeJSONErrorTyped(w, http.StatusNotFound, "skill not found", nil, "not_found")
+		return
+	}
+	if strings.HasPrefix(skill.Source, "embed:") {
+		writeJSONErrorTyped(w, http.StatusConflict, "built-in skills cannot be deleted", nil, "builtin_skill_readonly")
+		return
+	}
+	if err := agent.DeleteRuntimeSkill(accountSkillDir(pool), name); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "delete skill", err)
+		return
+	}
+	removeAccountSkillFromActiveSessions(pool, name)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sessionSkillDeleteResponse{
+		SessionID: "account",
+		Name:      name,
+		Deleted:   true,
 	})
 }
 
@@ -195,6 +241,32 @@ func upsertAccountSkillIntoActiveSessions(pool *SessionPool, skill agent.Skill) 
 	for _, sess := range active {
 		if sess.skillRegistry != nil {
 			_ = sess.skillRegistry.Upsert(skill)
+		}
+	}
+}
+
+func removeAccountSkillFromActiveSessions(pool *SessionPool, name string) {
+	if pool == nil {
+		return
+	}
+	pool.mu.Lock()
+	active := make([]*Session, 0, len(pool.sessions))
+	for _, sess := range pool.sessions {
+		active = append(active, sess)
+	}
+	pool.mu.Unlock()
+	var fallback agent.Skill
+	hasFallback := false
+	if reg := agent.DefaultSkillRegistry(); reg != nil {
+		fallback, hasFallback = reg.Lookup(name)
+	}
+	for _, sess := range active {
+		if sess.skillRegistry == nil {
+			continue
+		}
+		sess.skillRegistry.Remove(name)
+		if hasFallback {
+			_ = sess.skillRegistry.Upsert(fallback)
 		}
 	}
 }

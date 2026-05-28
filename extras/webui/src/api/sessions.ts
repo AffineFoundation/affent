@@ -356,6 +356,12 @@ export interface SessionSkillResponse {
   skill: SessionSkillInfo;
 }
 
+export interface SessionSkillDeleteResponse {
+  session_id: string;
+  name: string;
+  deleted: boolean;
+}
+
 export interface SessionSkillInstallRequest {
   name: string;
   description?: string;
@@ -699,6 +705,17 @@ export function installSkill(
   return client.json<SessionSkillResponse>("/v1/skills", {
     method: "POST",
     body,
+    signal,
+  });
+}
+
+export function deleteSkill(
+  client: ApiClient,
+  name: string,
+  signal?: AbortSignal,
+): Promise<SessionSkillDeleteResponse> {
+  return client.json<SessionSkillDeleteResponse>(`/v1/skills/${encodeURIComponent(name)}`, {
+    method: "DELETE",
     signal,
   });
 }
