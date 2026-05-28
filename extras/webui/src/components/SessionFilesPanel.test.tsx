@@ -16,6 +16,7 @@ describe("SessionFilesPanel", () => {
     const panel = screen.getByTestId("session-files-panel");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("2 file references");
+    expect(screen.getByLabelText("Search files")).toBeInTheDocument();
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Read + Changed · available · turn 2 · 2 actions");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Updated payment route");
@@ -36,6 +37,17 @@ describe("SessionFilesPanel", () => {
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"), "file_evidence");
+
+    await user.type(screen.getByLabelText("Search files"), "listed");
+    expect(screen.getByTestId("session-files-list")).not.toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("src");
+
+    await user.type(screen.getByLabelText("Search files"), "missing.ts");
+    expect(screen.queryByTestId("session-files-list")).toBeNull();
+    expect(panel).toHaveTextContent('No file evidence matching "missing.ts".');
   });
 
   it("keeps the panel folded by default", () => {
