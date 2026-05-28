@@ -19,7 +19,7 @@ export function WorkbenchContextPanel({
 }) {
   const metrics = displaySessionOverviewMetrics(overview.metrics);
   const summary = contextSummary(overview, hasSelectedSession);
-  const detail = hasSelectedSession ? overview.headline : "No chat selected";
+  const detail = hasSelectedSession ? overview.headline : "Start or open a chat";
   const statusDetail = attention?.target === "context" ? attention.detail : overview.detail;
 
   return (

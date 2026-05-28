@@ -103,8 +103,10 @@ describe("WorkbenchContextPanel", () => {
 
     const panel = screen.getByTestId("workbench-context-panel");
     expect(within(panel).getByText("Fresh task")).toBeVisible();
+    expect(panel).toHaveTextContent("Start or open a chat");
     expect(panel).toHaveTextContent("Start a task or open a saved chat before inspecting session evidence.");
     expect(panel).not.toHaveTextContent("run evidence, changes, memory, and automation");
+    expect(panel).not.toHaveTextContent("No chat selected");
   });
 });
 
