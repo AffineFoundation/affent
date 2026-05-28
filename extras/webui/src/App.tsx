@@ -1521,7 +1521,7 @@ export function App() {
                   <details className="session-skills-panel workbench-more-panel" data-testid="workbench-more-panel">
                     <summary className="session-skills-summary">
                       <span className="session-skills-kicker">On demand</span>
-                      <strong>Diagnostics on demand</strong>
+                      <strong>More Workbench tools</strong>
                       <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(" · ")}</span>
                     </summary>
                     <div className="session-skills-body workbench-more-body">
