@@ -176,6 +176,11 @@ describe("buildSessionRun", () => {
     ]);
 
     const run = buildSessionRun(session);
+    expect(run).toMatchObject({
+      summary: "1 recovered failure",
+      detail: "1 failed · 1 passed",
+      tone: undefined,
+    });
     expect(runFocusCommand(run.commands)).toMatchObject({
       label: "Latest verification",
       tone: "success",

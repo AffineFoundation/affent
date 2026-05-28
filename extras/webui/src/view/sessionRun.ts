@@ -74,12 +74,13 @@ export function buildSessionRun(session: SessionState): SessionRunView {
   const failed = sorted.filter((command) => command.status === "failed").length;
   const running = sorted.filter((command) => command.status === "running").length;
   const passed = sorted.filter((command) => command.status === "passed").length;
+  const hasUnresolvedFailure = !!latestUnrecoveredFailedCommand(sorted);
   return {
     commands: sorted,
     latestCommandCwd,
-    summary: runSummary(sorted.length, { failed, running, passed }),
+    summary: runSummary(sorted.length, { failed, running, passed }, hasUnresolvedFailure),
     detail: runDetail(sorted.length, { failed, running, passed }),
-    tone: failed > 0 ? "error" : running > 0 ? "warning" : undefined,
+    tone: hasUnresolvedFailure ? "error" : running > 0 ? "warning" : undefined,
   };
 }
 
@@ -347,10 +348,11 @@ function stripRecoveryLines(text: string): string {
     .join("\n");
 }
 
-function runSummary(total: number, counts: { failed: number; running: number; passed: number }): string {
+function runSummary(total: number, counts: { failed: number; running: number; passed: number }, hasUnresolvedFailure: boolean): string {
   if (total === 0) return "No commands";
-  if (counts.failed > 0) return `${counts.failed} failed ${plural("command", counts.failed)}`;
+  if (hasUnresolvedFailure) return `${counts.failed} failed ${plural("command", counts.failed)}`;
   if (counts.running > 0) return `${counts.running} running ${plural("command", counts.running)}`;
+  if (counts.failed > 0) return `${counts.failed} recovered ${plural("failure", counts.failed)}`;
   return `${counts.passed} passed ${plural("command", counts.passed)}`;
 }
 
