@@ -610,7 +610,7 @@ Summary records aggregate all scenario records from the same process:
   `expectation_capabilities` counts broad required capability families such as
   `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,
   `delegation`, `plan`, `loop_protocol`, `context_compaction`, `verifier`,
-  `longrun_recovery`, and `mcp`.
+  `research_checkpoint`, `longrun_recovery`, and `mcp`.
   `expectation_capability_passed`, `expectation_capability_failed`, and
   `expectation_capability_pass_rate` split those declared capability families
   by scenario outcome. These are declaration/outcome counters, not observed

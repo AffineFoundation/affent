@@ -1222,8 +1222,8 @@ context-compaction requirements without reimplementing capability inference.
 Text and JSONL summary records aggregate those declarations as expectation
 coverage counters, including suites, required tools, required source-access
 statuses, and broad capabilities such as memory, browser, delegation, plan,
-loop protocol, and context compaction. Scenarios that require loop protocol
-feeds, no-hit recent-session anchors, and a `session_search` to `memory`
+loop protocol, research checkpoint, and context compaction. Scenarios that
+require loop protocol feeds, no-hit recent-session anchors, and a `session_search` to `memory`
 recovery sequence are additionally tagged as `longrun_recovery`, so batch
 triage can separate full durable-recovery failures from single-surface recall
 failures. They also split expected capabilities into passed and failed counts

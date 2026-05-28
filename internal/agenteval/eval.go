@@ -454,6 +454,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		expectationRequiresToolOrder(exp, agent.SessionSearchToolName, agent.MemoryToolName) {
 		caps["longrun_recovery"] = true
 	}
+	if expectationRequiresResearchCheckpoint(exp) {
+		caps["research_checkpoint"] = true
+	}
 	if len(exp.RequiredFocusedTaskCounts) > 0 ||
 		len(exp.RequiredSubagentModeCounts) > 0 ||
 		exp.RequireNoDelegationErrors {
@@ -493,6 +496,18 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func expectationRequiresResearchCheckpoint(exp DebugScenarioExpectations) bool {
+	if exp.RequiredLoopDecisionKinds["research_checkpoint"] > 0 {
+		return true
+	}
+	for _, req := range exp.RequiredLoopDecisionMatches {
+		if req.Kind == "research_checkpoint" {
+			return true
+		}
+	}
+	return false
 }
 
 func expectationRequiresToolOrder(exp DebugScenarioExpectations, earlier, later string) bool {

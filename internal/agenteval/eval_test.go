@@ -26,6 +26,19 @@ func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
 	}
 }
 
+func TestExpectationCapabilityNamesIncludesResearchCheckpoint(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		RequiredLoopDecisionMatches: []DebugLoopDecisionRequirement{{
+			Kind:     "research_checkpoint",
+			Decision: "trigger",
+			Trigger:  "external_calibration_requested",
+		}},
+	})
+	if !reflect.DeepEqual(caps, []string{"research_checkpoint"}) {
+		t.Fatalf("ExpectationCapabilityNames = %#v, want research checkpoint only", caps)
+	}
+}
+
 func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
@@ -1901,6 +1914,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(researchCheckpoint.RequiredFinalText, "RESEARCH-CHECKPOINT-37") {
 		t.Fatalf("research checkpoint RequiredFinalText = %#v, want marker", researchCheckpoint.RequiredFinalText)
+	}
+	researchCheckpointCaps := ExpectationCapabilityNames(debugScenarioExpectations(researchCheckpoint))
+	if !stringSliceContains(researchCheckpointCaps, "research_checkpoint") ||
+		!stringSliceContains(researchCheckpointCaps, "loop_protocol") {
+		t.Fatalf("research checkpoint expectation capabilities = %#v, want research checkpoint and loop protocol", researchCheckpointCaps)
 	}
 	if !stringSliceContains(researchCheckpoint.ForbiddenTools, "run_task") || !stringSliceContains(researchCheckpoint.ForbiddenTools, "web_fetch") {
 		t.Fatalf("research checkpoint ForbiddenTools = %#v, want no research tools in smoke scenario", researchCheckpoint.ForbiddenTools)
