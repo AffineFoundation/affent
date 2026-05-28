@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/agent"
@@ -457,6 +458,13 @@ type SourceAccessExample struct {
 	Ref           string `json:"ref,omitempty"`
 	HTTPStatus    string `json:"http_status,omitempty"`
 	ContentType   string `json:"content_type,omitempty"`
+	BodyBytes     int    `json:"body_bytes,omitempty"`
+	BodyOffset    int    `json:"body_offset,omitempty"`
+	ShowingBytes  int    `json:"showing_bytes,omitempty"`
+	OmittedBefore int    `json:"omitted_before,omitempty"`
+	OmittedAfter  int    `json:"omitted_after,omitempty"`
+	NextOffset    int    `json:"next_offset,omitempty"`
+	HasMore       bool   `json:"has_more,omitempty"`
 	ResultPreview string `json:"result_preview,omitempty"`
 }
 
@@ -850,6 +858,7 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 		case info.IsDiscoveryOnly():
 			status = "discovery_only"
 		}
+		bodyPage := sourceAccessBodyPageInfo(c.Result)
 		out = append(out, SourceAccessExample{
 			ToolIndex:     i + 1,
 			CallID:        c.CallID,
@@ -863,10 +872,88 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 			Ref:           info.Ref,
 			HTTPStatus:    info.HTTPStatus,
 			ContentType:   info.ContentType,
+			BodyBytes:     bodyPage.BodyBytes,
+			BodyOffset:    bodyPage.BodyOffset,
+			ShowingBytes:  bodyPage.ShowingBytes,
+			OmittedBefore: bodyPage.OmittedBefore,
+			OmittedAfter:  bodyPage.OmittedAfter,
+			NextOffset:    bodyPage.NextOffset,
+			HasMore:       bodyPage.HasMore,
 			ResultPreview: sourceAccessResultPreview(c.Result, c.ResultSummary),
 		})
 	}
 	return out
+}
+
+type sourceAccessBodyPage struct {
+	BodyBytes     int
+	BodyOffset    int
+	ShowingBytes  int
+	OmittedBefore int
+	OmittedAfter  int
+	NextOffset    int
+	HasMore       bool
+}
+
+func sourceAccessBodyPageInfo(result string) sourceAccessBodyPage {
+	for _, raw := range strings.Split(result, "\n") {
+		line := strings.TrimSpace(raw)
+		if !strings.HasPrefix(line, "BODY_BYTES:") {
+			continue
+		}
+		return parseSourceAccessBodyBytesLine(line)
+	}
+	return sourceAccessBodyPage{}
+}
+
+func parseSourceAccessBodyBytesLine(line string) sourceAccessBodyPage {
+	rest := strings.TrimSpace(strings.TrimPrefix(line, "BODY_BYTES:"))
+	if rest == "" {
+		return sourceAccessBodyPage{}
+	}
+	head := rest
+	detail := ""
+	if before, after, ok := strings.Cut(rest, "("); ok {
+		head = strings.TrimSpace(before)
+		if inside, _, ok := strings.Cut(after, ")"); ok {
+			detail = inside
+		} else {
+			detail = after
+		}
+	}
+	fields := strings.Fields(head)
+	if len(fields) == 0 {
+		return sourceAccessBodyPage{}
+	}
+	bodyBytes, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return sourceAccessBodyPage{}
+	}
+	page := sourceAccessBodyPage{BodyBytes: bodyBytes}
+	for _, part := range strings.Split(detail, ",") {
+		kv := strings.Fields(strings.TrimSpace(part))
+		if len(kv) < 2 {
+			continue
+		}
+		value, err := strconv.Atoi(kv[1])
+		if err != nil {
+			continue
+		}
+		switch kv[0] {
+		case "offset":
+			page.BodyOffset = value
+		case "showing":
+			page.ShowingBytes = value
+		case "omitted_before":
+			page.OmittedBefore = value
+		case "omitted_after":
+			page.OmittedAfter = value
+		case "next_offset":
+			page.NextOffset = value
+		}
+	}
+	page.HasMore = page.OmittedAfter > 0 || page.NextOffset > 0 && page.NextOffset < page.BodyBytes
+	return page
 }
 
 func sourceAccessResultPreview(result, summary string) string {

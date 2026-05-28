@@ -234,6 +234,12 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "source_network:missing_response_diagnostics")
 			message = "network source evidence lacked response diagnostics; inspect status/content_type before trusting current facts"
 		}
+		partialNetworkReads := sourceNetworkPartialReads(res)
+		if partialNetworkReads > 0 {
+			severity = "warn"
+			tags = append(tags, "source_network:partial_read")
+			message = "network source evidence was only partially read; continue from next_offset or use a narrower json_path before trusting missing fields"
+		}
 		add("source_access", severity, message, []string{"source_evidence"}, map[string]int{
 			"results":                      res.ToolStats.SourceAccessResults,
 			"verified":                     res.ToolStats.SourceAccessVerified,
@@ -241,6 +247,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"dynamic_partial":              res.ToolStats.SourceAccessDynamicPartial,
 			"discovery_only":               res.ToolStats.SourceAccessDiscoveryOnly,
 			"missing_response_diagnostics": missingResponseDiagnostics,
+			"partial_network_reads":        partialNetworkReads,
 		}, tags...)
 	}
 	if len(res.BrowserScrollExamples) > 0 {
@@ -523,6 +530,17 @@ func sourceNetworkMissingResponseDiagnostics(res BatchResult) int {
 		}
 	}
 	return missing
+}
+
+func sourceNetworkPartialReads(res BatchResult) int {
+	partial := 0
+	for _, ex := range res.SourceAccessExamples {
+		isNetwork := ex.Status == "network" || ex.URLField == "browser_network_url" || ex.SourceMethod == "network_xhr_fetch"
+		if isNetwork && ex.HasMore {
+			partial++
+		}
+	}
+	return partial
 }
 
 func hasDebugBriefTruncation(res BatchResult) bool {

@@ -1134,6 +1134,15 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 		if entry.Info.JSONPath != "" {
 			fmt.Fprintf(b, " json_path=`%s`", entry.Info.JSONPath)
 		}
+		if bodyPage := sourceAccessBodyPageInfo(entry.Tool.Result); bodyPage.BodyBytes > 0 {
+			fmt.Fprintf(b, " body_bytes=`%d`", bodyPage.BodyBytes)
+			if bodyPage.BodyOffset > 0 || bodyPage.ShowingBytes > 0 || bodyPage.OmittedAfter > 0 {
+				fmt.Fprintf(b, " body_offset=`%d` showing=`%d`", bodyPage.BodyOffset, bodyPage.ShowingBytes)
+			}
+			if bodyPage.HasMore {
+				fmt.Fprintf(b, " next_offset=`%d`", bodyPage.NextOffset)
+			}
+		}
 		if entry.Tool.CallID != "" {
 			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
 		}

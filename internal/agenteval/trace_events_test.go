@@ -202,6 +202,45 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 	}
 }
 
+func TestTraceSourceAccessExamplesCaptureNetworkReadContinuation(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		CallID: "read1",
+		Tool:   "browser_network_read",
+		Result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\n" +
+			"BODY_BYTES: 70 (offset 14, showing 12, omitted_before 14, omitted_after 44, next_offset 26)\n" +
+			`3456789","ma` + "\n" +
+			"[... 44 bytes omitted after this chunk; retry with offset=26, a narrower json_path, or max_bytes up to 65536 ...]\n",
+		ExitCode: 0,
+	}}}
+
+	examples := trace.SourceAccessExamples(5)
+	if len(examples) != 1 {
+		t.Fatalf("SourceAccessExamples = %+v", examples)
+	}
+	ex := examples[0]
+	if ex.BodyBytes != 70 ||
+		ex.BodyOffset != 14 ||
+		ex.ShowingBytes != 12 ||
+		ex.OmittedBefore != 14 ||
+		ex.OmittedAfter != 44 ||
+		ex.NextOffset != 26 ||
+		!ex.HasMore {
+		t.Fatalf("network read continuation fields = %+v", ex)
+	}
+
+	timeline := renderDebugTimeline(BatchResult{BatchScenario: "network-read"}, BatchScenario{Prompt: "inspect dashboard"}, &trace)
+	for _, want := range []string{
+		"body_bytes=`70`",
+		"body_offset=`14`",
+		"showing=`12`",
+		"next_offset=`26`",
+	} {
+		if !strings.Contains(timeline, want) {
+			t.Fatalf("timeline missing %q:\n%s", want, timeline)
+		}
+	}
+}
+
 func TestTraceBrowserScrollExamplesCaptureBoundaryTelemetry(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		CallID: "scroll1",

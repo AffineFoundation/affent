@@ -447,6 +447,38 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 	if stringSliceContains(brief.Tags, "source_network:missing_response_diagnostics") {
 		t.Fatalf("network source with diagnostics should not be tagged: %+v", brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  1,
+			SourceAccessVerified: 1,
+			SourceAccessNetwork:  1,
+		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			BodyBytes:    70,
+			BodyOffset:   14,
+			ShowingBytes: 12,
+			OmittedAfter: 44,
+			NextOffset:   26,
+			HasMore:      true,
+		}},
+	})
+	item = debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "network source evidence was only partially read; continue from next_offset or use a narrower json_path before trusting missing fields" ||
+		item.Counts["partial_network_reads"] != 1 ||
+		!stringSliceContains(brief.Tags, "source_network:partial_read") {
+		t.Fatalf("partial network read item = %+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesBrowserScrollStuckWithoutNetwork(t *testing.T) {
