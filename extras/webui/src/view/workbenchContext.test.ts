@@ -68,6 +68,10 @@ describe("workbenchContext", () => {
       expect.objectContaining({ label: "Focused task tokens", value: "0.0003M tokens (0.0002M in / 0.0001M out)" }),
       expect.objectContaining({ label: "Subagent tokens", value: "0.0004M tokens (0.0003M in / 0.0001M out)" }),
     ]));
+    expect(usage.trend).toEqual([
+      { label: "Turn 1", value: 1540, valueLabel: "0.0015M tokens", detail: "t1" },
+    ]);
+    expect(usage.totalTokens).toBe(1540);
     expect(workbenchContextUsageSummary(usage)).toBe("0.0015M tokens");
     expect(workbenchContextEvidenceText(input)).toContain("Workspace path: /home/claudeuser/work/affent");
     expect(workbenchContextEvidenceText(input)).toContain("Session tokens: 0.0015M tokens (0.0012M in / 0.0003M out)");
@@ -90,10 +94,18 @@ describe("workbenchContext", () => {
     expect(usage.items).toEqual([
       { label: "Session tokens", value: "0.0025M tokens (0.0020M in / 0.0005M out)", detail: "4 turns from session index" },
     ]);
+    expect(usage.trend).toEqual([
+      { label: "4 turns", value: 2500, valueLabel: "0.0025M tokens", detail: "from session index" },
+    ]);
+    expect(usage.totalTokens).toBe(2500);
   });
 
   it("builds the attached chat summary from session truth", () => {
     const usage = {
+      totalTokens: 2500,
+      trend: [
+        { label: "4 turns", value: 2500, valueLabel: "0.0025M tokens", detail: "from session index" },
+      ],
       items: [
         { label: "Session tokens", value: "0.0025M tokens (0.0020M in / 0.0005M out)", detail: "4 turns from session index" },
       ],
@@ -128,6 +140,24 @@ describe("workbenchContext", () => {
       overview: sessionOverview({ detail: "generic issue" }),
       attention: { label: "Issue · View context", detail: "checkout spec failed", tone: "error", target: "context" },
     })).toBe("checkout spec failed");
+  });
+
+  it("suppresses internal continuation templates from status detail", () => {
+    expect(workbenchContextStatusDetail({
+      overview: sessionOverview({
+        headline: "Inspect weather and market evidence",
+        detail: "continue from the current plan state, execute the next concrete step, or answer the user",
+      }),
+    })).toBe("Inspect weather and market evidence");
+    expect(workbenchContextStatusDetail({
+      overview: sessionOverview({ headline: "Tool budget reached", detail: "Describe the outcome." }),
+      attention: {
+        label: "Context",
+        detail: "tool-step budget for this turn is exhausted. Do not call more tools.",
+        tone: "warning",
+        target: "context",
+      },
+    })).toBe("Tool budget reached");
   });
 });
 

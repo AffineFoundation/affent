@@ -28,6 +28,7 @@ export function SessionSkillsPanel({
   error,
   defaultOpen = false,
   installEnabled = false,
+  onRefresh,
   onReadSkill,
   onInstallSkill,
   onUseAsDraft,
@@ -37,6 +38,7 @@ export function SessionSkillsPanel({
   error?: string;
   defaultOpen?: boolean;
   installEnabled?: boolean;
+  onRefresh?: () => Promise<void> | void;
   onReadSkill?: (name: string) => Promise<SessionSkillInfo>;
   onInstallSkill?: (request: SessionSkillInstallRequest) => Promise<SessionSkillInfo>;
   onUseAsDraft?: UseAsDraft;
@@ -125,11 +127,16 @@ export function SessionSkillsPanel({
         {!loading && error ? (
           <div className="session-skills-empty error" role="alert">
             {error}
+            {onRefresh ? (
+              <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
+                Retry
+              </button>
+            ) : null}
           </div>
         ) : null}
         {!loading && !error ? (
           <>
-            {hasSearch || canInstall ? (
+            {hasSearch || canInstall || onRefresh ? (
               <div className="session-skills-controls">
                 {hasSearch ? (
                   <label className="session-skills-search">
@@ -145,6 +152,11 @@ export function SessionSkillsPanel({
                 {canInstall ? (
                   <button type="button" className="session-skills-add-toggle" onClick={() => setShowForm((open) => !open)}>
                     {showForm ? "Cancel" : "Add skill"}
+                  </button>
+                ) : null}
+                {onRefresh ? (
+                  <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
+                    Refresh
                   </button>
                 ) : null}
                 {trimmedQuery ? (

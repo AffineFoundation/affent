@@ -7,7 +7,7 @@ import type { SessionRunView } from "./sessionRun";
 import type { SessionTraceView } from "./sessionTrace";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
 import type { TurnArtifact } from "./turnArtifacts";
-import type { WorkbenchAttention, WorkbenchAttentionTarget } from "./workbenchAttention";
+import type { WorkbenchAttention, WorkbenchAttentionTarget, WorkbenchAttentionTone } from "./workbenchAttention";
 import { workbenchContextUsageSummary, type WorkbenchContextUsageView } from "./workbenchContext";
 import {
   shouldShowWorkbenchAccessPanel,
@@ -16,8 +16,8 @@ import {
   shouldShowWorkbenchSkillsPanel,
 } from "./workbenchPanels";
 
-export type WorkbenchTab = "context" | "changes" | "run" | "artifacts" | "files" | "workspace" | "automation" | "memory" | "skills" | "config" | "trace";
-export type WorkbenchNavTone = "error" | "warning" | "attention";
+export type WorkbenchTab = "context" | "changes" | "run" | "artifacts" | "files" | "workspace" | "loop" | "automation" | "memory" | "skills" | "config" | "trace";
+export type WorkbenchNavTone = "error" | "attention";
 export type WorkbenchNavScope = "current" | "platform";
 
 export interface WorkbenchNavItem {
@@ -30,7 +30,6 @@ export interface WorkbenchNavItem {
 }
 
 export function buildWorkbenchNavItems({
-  overview,
   changes,
   run,
   artifacts = [],
@@ -72,9 +71,15 @@ export function buildWorkbenchNavItems({
       key: "context",
       label: "Context",
       scope: "current",
-      detail: contextNavDetail(overview, usage),
-      badge: attention?.target === "context" ? attention.label : undefined,
-      tone: attention?.target === "context" ? attention.tone : undefined,
+      detail: contextNavDetail(usage),
+    },
+    {
+      key: "loop",
+      label: "Loop",
+      scope: "current",
+      detail: automation?.title ?? "No loop or timers",
+      badge: automation ? "active" : undefined,
+      tone: toneForAttention(attention?.target === "automation" ? attention.tone : undefined),
     },
   ];
   if (changes.files.length > 0 || attention?.target === "changes") {
@@ -84,7 +89,7 @@ export function buildWorkbenchNavItems({
       scope: "current",
       detail: changes.files.length > 0 ? changes.detail : "Changed file review",
       badge: changes.files.length > 0 ? String(changes.files.length) : undefined,
-      tone: attention?.target === "changes" ? attention.tone : changes.tone,
+      tone: toneForAttention(attention?.target === "changes" ? attention.tone : changes.tone),
     });
   }
   if (run.commands.length > 0 || attention?.target === "run") {
@@ -94,7 +99,7 @@ export function buildWorkbenchNavItems({
       scope: "current",
       detail: run.commands.length > 0 ? run.detail : "Command history",
       badge: run.commands.length > 0 ? String(run.commands.length) : undefined,
-      tone: attention?.target === "run" ? attention.tone : run.tone,
+      tone: toneForAttention(attention?.target === "run" ? attention.tone : run.tone),
     });
   }
   if (artifacts.length > 0) {
@@ -113,7 +118,7 @@ export function buildWorkbenchNavItems({
       scope: "current",
       detail: files.items.length > 0 ? files.detail : "Task file evidence",
       badge: files.items.length > 0 ? String(files.items.length) : undefined,
-      tone: attention?.target === "files" ? attention.tone : files.tone,
+      tone: toneForAttention(attention?.target === "files" ? attention.tone : files.tone),
     });
   }
   if (workspace.hasData || attention?.target === "workspace") {
@@ -123,17 +128,7 @@ export function buildWorkbenchNavItems({
       scope: "current",
       detail: workspace.hasData ? workspace.summary : "No binding evidence",
       badge: workspace.issue ? "!" : undefined,
-      tone: attention?.target === "workspace" ? attention.tone : workspace.tone,
-    });
-  }
-  if (automation || attention?.target === "automation") {
-    currentItems.push({
-      key: "automation",
-      label: "Automation",
-      scope: "current",
-      detail: automation?.title ?? "Loop and timers",
-      badge: automation ? "active" : undefined,
-      tone: attention?.target === "automation" ? attention.tone : undefined,
+      tone: toneForAttention(attention?.target === "workspace" ? attention.tone : workspace.tone),
     });
   }
   if (trace && trace.eventCount > 0) {
@@ -143,7 +138,7 @@ export function buildWorkbenchNavItems({
       scope: "current",
       detail: traceNavDetail(trace),
       badge: traceBadge(trace),
-      tone: trace.unknownCount > 0 ? "warning" : undefined,
+      tone: undefined,
     });
   }
 
@@ -186,10 +181,14 @@ export function buildWorkbenchNavItems({
   ];
 }
 
-function contextNavDetail(overview: SessionOverview, usage?: WorkbenchContextUsageView): string {
+function contextNavDetail(usage?: WorkbenchContextUsageView): string {
   const usageSummary = workbenchContextUsageSummary(usage);
-  if (usageSummary) return `${overview.stateLabel || "Current session"} · ${usageSummary}`;
-  return overview.stateLabel || "Current session";
+  if (usageSummary) return usageSummary;
+  return "Current chat";
+}
+
+function toneForAttention(tone: SessionOverview["tone"] | WorkbenchAttentionTone | undefined): WorkbenchNavTone | undefined {
+  return tone === "error" ? "error" : undefined;
 }
 
 function artifactNavDetail(artifacts: readonly TurnArtifact[]): string {
@@ -208,6 +207,7 @@ function artifactBadge(artifacts: readonly TurnArtifact[]): string | undefined {
 }
 
 export function workbenchTabFromAttention(target: WorkbenchAttentionTarget): WorkbenchTab {
+  if (target === "automation") return "loop";
   return target;
 }
 

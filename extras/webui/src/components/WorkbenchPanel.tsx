@@ -72,7 +72,7 @@ export function WorkbenchPanel({
                   type="button"
                   className="workbench-nav-item"
                   data-active={activeTab === item.key ? "true" : "false"}
-                  data-tone={item.tone}
+                  data-tone={item.tone === "error" ? "error" : undefined}
                   onClick={() => onSelectTab(item.key)}
                 >
                   <span className="workbench-nav-main">

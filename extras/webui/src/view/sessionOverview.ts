@@ -86,8 +86,9 @@ export function buildSessionOverview({
 }): SessionOverview {
   const latestTurn = session.turns.at(-1);
   const latestActivity = latestTurn ? buildTurnActivity(latestTurn) : undefined;
-  const latestTask = latestTurn?.userText ? summarizeSessionTitle(latestTurn.userText) : undefined;
-  const topic = conversationTopicFromTurns(session.turns);
+  const latestTask = latestTurn?.userText && !isInternalRuntimePrompt(latestTurn.userText) ? summarizeSessionTitle(latestTurn.userText) : undefined;
+  const rawTopic = conversationTopicFromTurns(session.turns);
+  const topic = rawTopic && !isInternalRuntimePrompt(rawTopic) ? rawTopic : undefined;
   const task = topic ? summarizeSessionTitle(topic) : latestTask;
   const pending = pendingTask?.trim();
   const guidance = pendingGuidance?.trim();
@@ -241,6 +242,7 @@ function buildMetrics(
 
 function buildSummaryRecoveryMetric(hint?: string): SessionOverviewMetric | undefined {
   const value = hint?.replace(/\s+/g, " ").trim();
+  if (value && isInternalRuntimePrompt(value)) return undefined;
   return value ? { label: "Next step", value: summarize(value, 72), tone: "warning" } : undefined;
 }
 
@@ -258,7 +260,28 @@ function toolNextHint(summary?: string, result?: string): string | undefined {
   const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
   const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
   const next = match?.[1]?.trim();
+  if (next && isInternalRuntimePrompt(next)) return undefined;
+  if (next && isGenericContinuationHint(next)) return undefined;
   return next || undefined;
+}
+
+function isInternalRuntimePrompt(text: string): boolean {
+  const normalized = text.replace(/\s+/g, " ").trim().toLowerCase();
+  return normalized.startsWith("the tool-step budget for this turn is exhausted") ||
+    normalized.startsWith("tool-step budget for this turn is exhausted") ||
+    normalized.startsWith("tools are disabled for the rest of this turn") ||
+    normalized.startsWith("do not call tools.") ||
+    normalized.startsWith("do not call tools again.") ||
+    normalized.startsWith("do not call more tools.") ||
+    normalized.startsWith("do not execute the task yet.") ||
+    normalized.includes("previous assistant step still requested another tool") ||
+    normalized.includes("use only existing tool results");
+}
+
+function isGenericContinuationHint(text: string): boolean {
+  const normalized = text.replace(/\s+/g, " ").trim().toLowerCase();
+  return normalized.startsWith("continue from the current plan state") ||
+    normalized.startsWith("execute the next concrete step");
 }
 
 function buildContextCompactionMetric(session: SessionState): SessionOverviewMetric | undefined {

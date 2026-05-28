@@ -3,21 +3,17 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { WorkbenchContextPanel } from "./WorkbenchContextPanel";
 import type { SessionOverview } from "../view/sessionOverview";
+import { reduceRawEvents } from "../store/reduce";
 
 describe("WorkbenchContextPanel", () => {
   it("opens on current chat context without promoting low-signal token counts", async () => {
     const user = userEvent.setup();
     const onSelectSection = vi.fn();
-    const onUseAsDraft = vi.fn();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-
     render(
       <WorkbenchContextPanel
         defaultOpen
         hasSelectedSession
         onSelectSection={onSelectSection}
-        onUseAsDraft={onUseAsDraft}
         overview={overview({
           headline: "Fix failing checkout tests",
           detail: "Tests failed after the payment route changed.",
@@ -70,17 +66,19 @@ describe("WorkbenchContextPanel", () => {
     const panel = screen.getByTestId("workbench-context-panel");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("Context");
-    expect(panel).toHaveTextContent("Review needed");
-    expect(panel).toHaveTextContent("Fix failing checkout tests");
-    expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Next step rerun checkout spec");
-    expect(screen.getByTestId("workbench-context-details")).toHaveTextContent("Artifact 1 file");
-    expect(screen.getByTestId("workbench-context-details")).not.toHaveTextContent("Tokens 12k");
-    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Workspace path");
-    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("/work/affent");
-    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Token usage");
-    expect(screen.getByTestId("workbench-context-runtime")).toHaveTextContent("Not reported yet");
+    expect(panel).toHaveTextContent("Conversation context");
+    expect(panel).not.toHaveTextContent("Review needed");
+    expect(panel).not.toHaveTextContent("Fix failing checkout tests");
+    expect(screen.getByTestId("workbench-context-actions-list")).toHaveTextContent("Artifact");
+    expect(screen.getByTestId("workbench-context-actions-list")).toHaveTextContent("1 file");
+    expect(screen.getByTestId("workbench-context-actions-list")).not.toHaveTextContent("Next step");
+    expect(screen.getByTestId("workbench-context-actions-list")).not.toHaveTextContent("rerun checkout spec");
+    expect(screen.getByTestId("workbench-context-actions-list")).not.toHaveTextContent("Tokens 12k");
+    expect(screen.getByTestId("workbench-usage-card")).toHaveTextContent("Token usage");
+    expect(screen.getByTestId("workbench-usage-card")).toHaveTextContent("Waiting for usage");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("affent");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("/work/affent");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Changes");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("2 changed files");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Files");
@@ -88,12 +86,8 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Run");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("1 failed command");
 
-    await user.click(screen.getByRole("button", { name: "Copy context" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Workbench context evidence"));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Run: 1 failed command"));
-    await user.click(screen.getByRole("button", { name: "Use context as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this current chat context in the next step:"), "evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next step: rerun checkout spec"), "evidence");
+    expect(screen.queryByRole("button", { name: "Copy context" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use context as draft" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Open Run" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
@@ -102,15 +96,17 @@ describe("WorkbenchContextPanel", () => {
   it("shows session, turn, and delegated token evidence in Workbench context", async () => {
     const user = userEvent.setup();
     const onSelectSection = vi.fn();
-    const onUseAsDraft = vi.fn();
 
     render(
       <WorkbenchContextPanel
         defaultOpen
         hasSelectedSession
         onSelectSection={onSelectSection}
-        onUseAsDraft={onUseAsDraft}
-        overview={overview({ headline: "Inspect runtime evidence", detail: "Context has loaded." })}
+        overview={overview({
+          headline: "Inspect runtime evidence",
+          detail: "Context has loaded.",
+          metrics: [{ label: "Context", value: "96/120 · 80%", tone: "warning" }],
+        })}
         workspace={{
           hasData: true,
           summary: "affent",
@@ -121,34 +117,103 @@ describe("WorkbenchContextPanel", () => {
           branch: "main",
         }}
         usage={{
+          totalTokens: 1540,
+          trend: [
+            { label: "Turn 1", value: 1540, valueLabel: "0.0015M tokens", detail: "t1" },
+          ],
           items: [
             { label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" },
             { label: "Latest turn tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "t1" },
             { label: "Subagent tokens", value: "0.0004M tokens (0.0003M in / 0.0001M out)", detail: "Find WebUI requirements · merged ~0.0002M tokens" },
           ],
         }}
+        contextSummary={{ message_count: 96, compact_trigger: 120, compact_percent: 80, messages_until_compact: 24 }}
       />,
     );
 
-    const runtime = screen.getByTestId("workbench-context-runtime");
-    expect(runtime).toHaveTextContent("Runtime evidence");
-    expect(runtime).toHaveTextContent("Usage reported");
-    expect(runtime).toHaveTextContent("Workspace path");
-    expect(runtime).toHaveTextContent("/home/claudeuser/work/affent");
-    expect(runtime).toHaveTextContent("Session tokens");
-    expect(runtime).toHaveTextContent("0.0015M tokens (0.0012M in / 0.0003M out)");
-    expect(runtime).toHaveTextContent("Latest turn tokens");
-    expect(runtime).toHaveTextContent("Subagent tokens");
+    const usageCard = screen.getByTestId("workbench-usage-card");
+    expect(usageCard).toHaveTextContent("Token usage");
+    expect(usageCard).toHaveTextContent("Conversation context");
+    expect(usageCard).toHaveTextContent("96/120 context messages");
+    expect(usageCard).toHaveTextContent("24 messages before compaction");
+    expect(usageCard).toHaveTextContent("0.0015M tokens");
+    expect(usageCard).toHaveTextContent("Session tokens");
+    expect(usageCard).toHaveTextContent("0.0015M tokens (0.0012M in / 0.0003M out)");
+    expect(usageCard).toHaveTextContent("Latest turn tokens");
+    expect(usageCard).toHaveTextContent("Subagent tokens");
+    expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("/home/claudeuser/work/affent");
 
-    await user.click(screen.getByRole("button", { name: "Open workspace" }));
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
     expect(onSelectSection).toHaveBeenCalledWith("workspace");
-    await user.click(screen.getByRole("button", { name: "Use context as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Workspace path: /home/claudeuser/work/affent"), "evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Subagent tokens: 0.0004M tokens (0.0003M in / 0.0001M out)"), "evidence");
   });
 
-  it("links automation only when the current session has automation attention", async () => {
+  it("links tool issue cards to concrete run evidence and suppresses generic next-step templates", async () => {
     const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        onSelectSection={onSelectSection}
+        overview={overview({
+          headline: "Inspect runtime issue",
+          detail: "A tool call failed.",
+          metrics: [
+            { label: "Tool issue", value: "1", tone: "warning" },
+            { label: "Next step", value: "continue from the current plan state, execute the next concrete step, or answer the user", tone: "warning" },
+          ],
+        })}
+        run={{
+          summary: "1 failed command",
+          detail: "1 failed",
+          tone: "error",
+          commands: [
+            { command: "npm test -- checkout.spec.ts", status: "failed", turnNumber: 2, exitCode: 1, detail: "checkout assertion failed", next: "update payment route then rerun" },
+          ],
+        }}
+      />,
+    );
+
+    const statusCards = screen.getByTestId("workbench-context-actions-list");
+    expect(statusCards).toHaveTextContent("Tool issue");
+    expect(statusCards).toHaveTextContent("checkout assertion failed");
+    expect(statusCards).toHaveTextContent("Next: update payment route then rerun");
+    expect(statusCards).not.toHaveTextContent("continue from the current plan state");
+
+    await user.click(within(statusCards).getByRole("button", { name: /Tool issue/ }));
+    expect(onSelectSection).toHaveBeenCalledWith("run");
+  });
+
+  it("shows concrete non-shell tool issues instead of a generic trace instruction", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "inspect source" } },
+      { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "web_fetch", args: { url: "https://example.invalid" } } },
+      { id: 4, type: "tool.result", data: { turn_id: "t1", call_id: "c1", exit_code: 1, failure_kind: "network_error", result_summary: "provider returned 503\nNext: retry later\nFailure: kind=network_error" } },
+    ]);
+
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        session={session}
+        overview={overview({
+          headline: "Inspect source",
+          detail: "A web fetch failed.",
+          metrics: [{ label: "Tool issue", value: "1", tone: "warning" }],
+        })}
+      />,
+    );
+
+    const statusCards = screen.getByTestId("workbench-context-actions-list");
+    expect(statusCards).toHaveTextContent("web_fetch");
+    expect(statusCards).toHaveTextContent("network");
+    expect(statusCards).toHaveTextContent("provider returned 503");
+    expect(statusCards).not.toHaveTextContent("Open trace to inspect");
+  });
+
+  it("keeps automation out of the context evidence cards", () => {
     const onSelectSection = vi.fn();
 
     render(
@@ -162,11 +227,9 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Loop waiting · 1 timer pending");
-    expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Answer setup question before LOOP.md can run.");
-
-    await user.click(screen.getByTestId("workbench-context-automation"));
-    expect(onSelectSection).toHaveBeenCalledWith("automation");
+    expect(screen.queryByTestId("workbench-context-automation")).toBeNull();
+    expect(screen.queryByText("AUTOMATION")).toBeNull();
+    expect(onSelectSection).not.toHaveBeenCalled();
   });
 
   it("uses the context attention detail as the status evidence", () => {
@@ -193,7 +256,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-status")).not.toHaveTextContent("npm test -- checkout.spec.ts: Next");
   });
 
-  it("keeps the completed chat state in the collapsed summary", () => {
+  it("keeps completed chat state labels out of the collapsed summary", () => {
     render(
       <WorkbenchContextPanel
         defaultOpen
@@ -208,8 +271,9 @@ describe("WorkbenchContextPanel", () => {
     );
 
     const summary = within(screen.getByTestId("workbench-context-panel")).getByText("Context").closest("summary");
-    expect(summary).toHaveTextContent("Result ready");
-    expect(summary).toHaveTextContent("Checkout route inspected");
+    expect(summary).toHaveTextContent("Conversation context");
+    expect(summary).not.toHaveTextContent("Result ready");
+    expect(summary).not.toHaveTextContent("Checkout route inspected");
     expect(summary).not.toHaveTextContent("Chat ready");
   });
 
@@ -223,11 +287,9 @@ describe("WorkbenchContextPanel", () => {
     );
 
     const panel = screen.getByTestId("workbench-context-panel");
-    expect(within(panel).getByText("Fresh task")).toBeVisible();
-    expect(panel).toHaveTextContent("Start or open a chat");
+    expect(within(panel).getByText("No chat selected")).toBeVisible();
     expect(panel).toHaveTextContent("Start a task or open a saved chat before inspecting session evidence.");
     expect(panel).not.toHaveTextContent("run evidence, changes, memory, and automation");
-    expect(panel).not.toHaveTextContent("No chat selected");
     expect(screen.queryByRole("button", { name: "Copy context" })).toBeNull();
   });
 });

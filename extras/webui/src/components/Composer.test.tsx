@@ -17,6 +17,7 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer")).toHaveAttribute("data-active", "true");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("2 lines");
     expect(input).toHaveValue("first line\nsecond line");
+    expect(screen.queryByTestId("composer-automation")).toBeNull();
 
     await user.keyboard("{Enter}");
     expect(onSubmit).toHaveBeenCalledWith("first line\nsecond line");
@@ -64,6 +65,17 @@ describe("Composer", () => {
 
     expect((input as HTMLTextAreaElement).value).toContain("Set up a scheduled task:");
     expect((input as HTMLTextAreaElement).value).toContain("Schedule or frequency:");
+  });
+
+  it("closes the add menu when clicking outside it", async () => {
+    const user = userEvent.setup();
+    render(<Composer disabled={false} busy={false} hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
+
+    await user.click(screen.getByRole("button", { name: "Add context or automation" }));
+    expect(screen.getByTestId("composer-add")).toHaveAttribute("open");
+
+    await user.click(screen.getByPlaceholderText("Message Affent..."));
+    expect(screen.getByTestId("composer-add")).not.toHaveAttribute("open");
   });
 
   it("adds selected text files to the editable message", async () => {

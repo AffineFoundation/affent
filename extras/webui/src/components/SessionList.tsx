@@ -131,9 +131,10 @@ export function SessionList({
             type="button"
             className="session-collapse-action"
             aria-label="Hide chats"
+            title="Hide chats"
             onClick={onCollapse}
           >
-            Hide
+            <span aria-hidden="true">‹</span>
           </button>
         ) : null}
         <button
@@ -270,7 +271,7 @@ export function SessionList({
                       disabled={deleting}
                       onClick={() => setConfirmDeleteId(row.id)}
                     >
-                      {deleting ? "Deleting" : "Delete"}
+                      <span aria-hidden="true">{deleting ? "…" : "×"}</span>
                     </button>
                   ) : null}
                   {onDelete && confirmingDelete ? (

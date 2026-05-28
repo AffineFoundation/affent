@@ -1,4 +1,5 @@
-import type { SessionSummary } from "../api/sessions";
+import type { SessionContextSummary, SessionSummary } from "../api/sessions";
+import { EventType } from "../api/events";
 import type { SessionState, TurnState } from "../store/sessionState";
 import { buildExecutionTree, type ExecutionTokenUsage, type ExecutionTreeNode } from "./executionTree";
 import type { SessionChangesView } from "./sessionChanges";
@@ -24,8 +25,21 @@ export interface WorkbenchContextUsageItem {
   detail?: string;
 }
 
+export interface WorkbenchContextUsageTrendPoint {
+  label: string;
+  value: number;
+  valueLabel: string;
+  detail?: string;
+}
+
 export interface WorkbenchContextUsageView {
   items: WorkbenchContextUsageItem[];
+  trend: WorkbenchContextUsageTrendPoint[];
+  totalTokens: number;
+}
+
+export interface WorkbenchConversationContextView extends SessionContextSummary {
+  estimated?: boolean;
 }
 
 export interface WorkbenchAttachment {
@@ -67,7 +81,8 @@ export function workbenchContextSummary(overview: SessionOverview, hasSelectedSe
 }
 
 export function workbenchContextStatusDetail(input: Pick<WorkbenchContextEvidenceInput, "overview" | "attention">): string {
-  return input.attention?.target === "context" ? input.attention.detail : input.overview.detail;
+  const detail = input.attention?.target === "context" ? input.attention.detail : input.overview.detail;
+  return isLowSignalStatusDetail(detail) ? input.overview.headline : detail;
 }
 
 export function buildWorkbenchContextEvidence({
@@ -132,6 +147,7 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
   const summaryInput = summary?.usage?.input_tokens ?? 0;
   const summaryOutput = summary?.usage?.output_tokens ?? 0;
   const summaryTotal = tokenTotal(summaryInput, summaryOutput);
+  const totalTokens = traceTotal > 0 ? traceTotal : summaryTotal;
   if (traceTotal > 0) {
     items.push({
       label: "Session tokens",
@@ -174,7 +190,22 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
     });
   }
 
-  return { items };
+  return { items, trend: usageTrend(session, summary), totalTokens };
+}
+
+export function buildConversationContextView(session: SessionState, summary?: SessionContextSummary): WorkbenchConversationContextView | undefined {
+  if (summary && summary.compact_trigger > 0) return { ...summary };
+  const messageCount = estimateModelContextMessages(session);
+  if (messageCount <= 0) return undefined;
+  const compactTrigger = 240;
+  const messagesUntilCompact = Math.max(0, compactTrigger - messageCount);
+  return {
+    message_count: messageCount,
+    compact_trigger: compactTrigger,
+    compact_percent: Math.round((messageCount * 100) / compactTrigger),
+    messages_until_compact: messagesUntilCompact,
+    estimated: true,
+  };
 }
 
 export function workbenchContextUsageSummary(usage?: WorkbenchContextUsageView): string | undefined {
@@ -228,9 +259,6 @@ export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInpu
     lines.push(`${item.label}: ${item.value}${item.detail ? ` · ${item.detail}` : ""}`);
   }
   for (const item of buildWorkbenchContextEvidence(input)) lines.push(`${item.label}: ${item.summary} · ${item.detail}`);
-  if (input.automationTitle) {
-    lines.push(`Automation: ${input.automationTitle}${input.automationDetail ? ` · ${input.automationDetail}` : ""}`);
-  }
   return lines.filter((line) => line.trim()).join("\n");
 }
 
@@ -240,6 +268,97 @@ export function workbenchContextEvidenceDraft(input: WorkbenchContextEvidenceInp
 
 function latestTurnWithUsage(session: SessionState): TurnState | undefined {
   return [...session.turns].reverse().find((turn) => !!turn.usage);
+}
+
+function estimateModelContextMessages(session: SessionState): number {
+  let count = 0;
+  let assistantToolTurn: string | undefined;
+  let toolRequestsInBatch = 0;
+  for (const event of session.events) {
+    switch (event.type) {
+      case EventType.UserMessage:
+        count += 1;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      case EventType.MessageDone:
+        count += 1;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      case EventType.ToolRequest:
+        if (event.turnId !== assistantToolTurn || toolRequestsInBatch === 0) {
+          count += 1;
+          assistantToolTurn = event.turnId;
+          toolRequestsInBatch = 1;
+        } else {
+          toolRequestsInBatch += 1;
+        }
+        break;
+      case EventType.ToolResult:
+        count += 1;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      case EventType.ContextCompacted: {
+        const after = readNumber(event.data, "after_messages");
+        if (after != null) count = after;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      }
+    }
+  }
+  return count;
+}
+
+function readNumber(data: unknown, key: string): number | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const value = (data as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function isLowSignalStatusDetail(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase() ?? "";
+  return normalized.startsWith("continue from the current plan state") ||
+    normalized.startsWith("execute the next concrete step") ||
+    normalized.startsWith("the tool-step budget for this turn is exhausted") ||
+    normalized.startsWith("tool-step budget for this turn is exhausted");
+}
+
+function usageTrend(session: SessionState, summary?: SessionSummary): WorkbenchContextUsageTrendPoint[] {
+  const turnPoints = session.turns
+    .map<WorkbenchContextUsageTrendPoint | undefined>((turn, index) => {
+      const total = tokenTotal(turn.usage?.inputTokens ?? 0, turn.usage?.outputTokens ?? 0);
+      if (total <= 0) return undefined;
+      return {
+        label: `Turn ${index + 1}`,
+        value: total,
+        valueLabel: formatTokenCountMillions(total),
+        detail: turn.id,
+      };
+    })
+    .filter((point): point is WorkbenchContextUsageTrendPoint => Boolean(point));
+  if (turnPoints.length > 0) return turnPoints.slice(-12);
+
+  const summaryTotal = tokenTotal(summary?.usage?.input_tokens ?? 0, summary?.usage?.output_tokens ?? 0);
+  if (summaryTotal > 0) {
+    const turns = summary?.usage?.turns ?? 0;
+    return [{
+      label: turns > 0 ? `${turns} ${turns === 1 ? "turn" : "turns"}` : "Session",
+      value: summaryTotal,
+      valueLabel: formatTokenCountMillions(summaryTotal),
+      detail: "from session index",
+    }];
+  }
+
+  const checkpoint = latestCheckpointUsage(summary);
+  if (checkpoint) {
+    const total = tokenTotal(checkpoint.inputTokens, checkpoint.outputTokens);
+    return [{ label: "Latest turn", value: total, valueLabel: formatTokenCountMillions(total), detail: "from loop checkpoint" }];
+  }
+
+  return [];
 }
 
 function latestCheckpointUsage(summary?: SessionSummary): { inputTokens: number; outputTokens: number } | undefined {

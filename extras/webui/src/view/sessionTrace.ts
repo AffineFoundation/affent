@@ -5,6 +5,7 @@ export interface SessionTraceView {
   summary: string;
   detail: string;
   eventCount: number;
+  toolIssueCount: number;
   recordCount: number;
   metadataCount: number;
   unknownCount: number;
@@ -21,6 +22,10 @@ export function buildSessionTrace(session: SessionState): SessionTraceView {
   const recordCount = model.items.length + (metadataCount > 0 ? 1 : 0);
   const latest = latestTraceRecord(model.items);
   const eventCount = session.events.length;
+  const toolIssueCount = session.turns.reduce(
+    (sum, turn) => sum + turn.toolCalls.filter((call) => call.status === "error" || (call.exitCode != null && call.exitCode !== 0) || !!call.failureKind || !!call.failureKinds?.length).length,
+    0,
+  );
   const summary = eventCount > 0
     ? `${eventCount} trace ${eventCount === 1 ? "entry" : "entries"}`
     : "No trace entries";
@@ -34,6 +39,7 @@ export function buildSessionTrace(session: SessionState): SessionTraceView {
     summary,
     detail: detailParts.join(" · ") || "No persisted trace loaded for this chat.",
     eventCount,
+    toolIssueCount,
     recordCount,
     metadataCount,
     unknownCount: session.unknownEventCount,

@@ -27,15 +27,17 @@ describe("buildWorkbenchNavItems", () => {
 
     expect(items.map((item) => item.key)).toEqual([
       "context",
+      "loop",
       "memory",
       "skills",
       "config",
       "trace",
     ]);
-    expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Review needed" });
+    expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Current chat" });
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
     expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
       "context",
+      "loop",
     ]);
     expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
       "memory",
@@ -48,7 +50,11 @@ describe("buildWorkbenchNavItems", () => {
   it("surfaces only actionable counts and attention tones", () => {
     const items = buildWorkbenchNavItems({
       overview,
-      usage: { items: [{ label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" }] },
+      usage: {
+        totalTokens: 1540,
+        trend: [{ label: "Turn 1", value: 1540, valueLabel: "0.0015M tokens", detail: "t1" }],
+        items: [{ label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" }],
+      },
       changes: {
         summary: "1 changed file",
         detail: "1 changed",
@@ -103,12 +109,13 @@ describe("buildWorkbenchNavItems", () => {
       latestMemoryUpdate: { action: "add", target: "memory", topic: "checkout", location: "memory:checkout", preview: "payment fixture" },
     });
 
-    expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Review needed · 0.0015M tokens" });
+    expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "0.0015M tokens" });
     expect(items.find((item) => item.key === "changes")).toMatchObject({ badge: "1" });
     expect(items.find((item) => item.key === "run")).toMatchObject({ badge: "1", tone: "error" });
     expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 generated file · 1 full output · 4 KiB" });
-    expect(items.find((item) => item.key === "workspace")).toMatchObject({ badge: "!", tone: "warning" });
-    expect(items.find((item) => item.key === "automation")).toMatchObject({ badge: "active", detail: "Loop waiting" });
+    expect(items.find((item) => item.key === "workspace")).toMatchObject({ badge: "!" });
+    expect(items.find((item) => item.key === "workspace")?.tone).toBeUndefined();
+    expect(items.find((item) => item.key === "loop")).toMatchObject({ badge: "active", detail: "Loop waiting" });
     expect(items.find((item) => item.key === "memory")).toMatchObject({ badge: "updated", detail: "1 topics" });
     expect(items.find((item) => item.key === "skills")).toMatchObject({ badge: "1", detail: "1 reusable workflows" });
     expect(items.find((item) => item.key === "config")).toMatchObject({ badge: "1", detail: "1 env configured" });
@@ -126,6 +133,7 @@ describe("buildWorkbenchNavItems", () => {
         summary: "12 trace entries",
         detail: "5 grouped records · schema v1",
         eventCount: 12,
+        toolIssueCount: 0,
         recordCount: 5,
         metadataCount: 1,
         unknownCount: 0,
@@ -147,6 +155,6 @@ describe("buildWorkbenchNavItems", () => {
 
   it("maps attention targets to Workbench tabs", () => {
     expect(workbenchTabFromAttention("workspace")).toBe("workspace");
-    expect(workbenchTabFromAttention("automation")).toBe("automation");
+    expect(workbenchTabFromAttention("automation")).toBe("loop");
   });
 });

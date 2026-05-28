@@ -443,12 +443,20 @@ function toolNextHint(summary?: string, result?: string): string | undefined {
   const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
   const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
   const next = match?.[1]?.trim();
+  if (next && isInternalRuntimePrompt(next)) return undefined;
+  if (next && isGenericContinuationHint(next)) return undefined;
   return next || undefined;
 }
 
 function recoveryMetric(hint: string): string | undefined {
   const value = hint.replace(/\s+/g, " ").trim();
   return value ? `Next step ${summarize(value, 72)}` : undefined;
+}
+
+function isGenericContinuationHint(text: string): boolean {
+  const normalized = normalizeComparableTitle(text);
+  return normalized.startsWith("continue from the current plan state") ||
+    normalized.startsWith("execute the next concrete step");
 }
 
 function turnNeedsAttention(turn: SessionState["turns"][number]): boolean {
@@ -921,9 +929,12 @@ function isPlaceholderTitle(text: string): boolean {
 
 function isInternalRuntimePrompt(text: string): boolean {
   const normalized = normalizeComparableTitle(text);
-  return normalized.startsWith("tools are disabled for the rest of this turn") ||
+  return normalized.startsWith("the tool-step budget for this turn is exhausted") ||
+    normalized.startsWith("tool-step budget for this turn is exhausted") ||
+    normalized.startsWith("tools are disabled for the rest of this turn") ||
     normalized.startsWith("do not call tools.") ||
     normalized.startsWith("do not call tools again.") ||
+    normalized.startsWith("do not call more tools.") ||
     normalized.startsWith("do not execute the task yet.") ||
     normalized.includes("previous assistant step still requested another tool") ||
     normalized.includes("use only existing tool results");

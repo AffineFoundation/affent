@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { buildComposerTaskHint } from "../view/composerTaskHint";
-import { automationActionLabel, shouldOfferLoopSetupAction } from "../view/automationActions";
 import { draftMergeMode, draftSourceLabel, type DraftSource } from "../view/draftSource";
 import type { RuntimeCapabilityView } from "../view/runtimeCapabilities";
 
@@ -28,12 +27,6 @@ export function Composer({
   disabledReason,
   runtimeCapabilities,
   onSubmit,
-  onStartLoop,
-  onScheduleLoopTick,
-  onScheduleCheckIn,
-  onScheduleDaily,
-  automationAvailable = false,
-  automationBusy,
   onCancel,
 }: {
   disabled: boolean;
@@ -89,6 +82,19 @@ export function Composer({
     textareaRef.current?.focus();
   }, [disabled, focusSignal]);
 
+  useEffect(() => {
+    function handleDocumentPointerDown(event: PointerEvent) {
+      const menu = addMenuRef.current;
+      if (!menu?.open) return;
+      const target = event.target;
+      if (target instanceof Node && menu.contains(target)) return;
+      menu.open = false;
+    }
+
+    document.addEventListener("pointerdown", handleDocumentPointerDown);
+    return () => document.removeEventListener("pointerdown", handleDocumentPointerDown);
+  }, []);
+
   async function submit() {
     const trimmed = content.trim();
     if (!trimmed || disabled || cancelling) return;
@@ -99,23 +105,6 @@ export function Composer({
     } catch {
       textareaRef.current?.focus();
     }
-  }
-
-  async function startLoop() {
-    const trimmed = content.trim();
-    if (!trimmed || disabled || busy || cancelling || !onStartLoop) return;
-    try {
-      await onStartLoop(trimmed);
-      setContent("");
-      setDraftContext(undefined);
-    } catch {
-      textareaRef.current?.focus();
-    }
-  }
-
-  async function runAutomation(action?: () => Promise<void> | void) {
-    if (!action || disabled || busy || cancelling || automationBusy) return;
-    await action();
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -224,11 +213,6 @@ export function Composer({
   const composerStatus = composerStatusLabel({ busy, cancelling, dragActive, draftContext, hasSession, hasContent });
   const composerMeta = composerMetaLabel({ contentText, lineCount, draftContext, busy, cancelling });
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
-  const hasLoopAutomation = !!onStartLoop && hasContent && shouldOfferLoopSetupAction(contentText);
-  const canShowScheduleAutomation = hasSession && automationAvailable;
-  const hasScheduleLoopTick = canShowScheduleAutomation && !!onScheduleLoopTick && !hasLoopAutomation;
-  const hasScheduleAutomation = canShowScheduleAutomation && !!(hasScheduleLoopTick || onScheduleCheckIn || onScheduleDaily);
-  const hasAvailableAutomation = hasLoopAutomation || hasScheduleAutomation;
   const showIntent = composerStatus !== "" || !!composerMeta;
   const placeholder = "Message Affent...";
 
@@ -333,33 +317,6 @@ export function Composer({
           <button type="button" className="secondary-action" disabled={cancelling} onClick={() => void onCancel()}>
             {cancelling ? "Stopping" : "Stop"}
           </button>
-        ) : null}
-        {!busy && hasAvailableAutomation ? (
-          <details className="composer-automation" data-testid="composer-automation">
-            <summary className="secondary-action">Automation</summary>
-            <div className="composer-automation-menu">
-              {hasLoopAutomation ? (
-                <button type="button" className="ghost-action" disabled={!hasContent || cancelling || !!automationBusy} onClick={() => void startLoop()}>
-                  {automationActionLabel("loop_setup", automationBusy === "loop")}
-                </button>
-              ) : null}
-              {canShowScheduleAutomation && onScheduleCheckIn ? (
-                <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleCheckIn)}>
-                  {automationActionLabel("checkin", automationBusy === "checkin")}
-                </button>
-              ) : null}
-              {hasScheduleLoopTick ? (
-                <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleLoopTick)}>
-                  {automationActionLabel("loop_tick", automationBusy === "loop")}
-                </button>
-              ) : null}
-              {canShowScheduleAutomation && onScheduleDaily ? (
-                <button type="button" className="ghost-action" disabled={cancelling || !!automationBusy} onClick={() => void runAutomation(onScheduleDaily)}>
-                  {automationActionLabel("daily", automationBusy === "daily")}
-                </button>
-              ) : null}
-            </div>
-          </details>
         ) : null}
       </div>
     </div>

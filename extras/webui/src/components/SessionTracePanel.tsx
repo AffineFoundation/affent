@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { EventType, type ToolResultPayload } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import { filterEventTraceEvents } from "../view/eventTrace";
 import {
@@ -24,10 +25,14 @@ export function SessionTracePanel({
   onUseAsDraft?: (draft: string, source: DraftSource) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [issueOnly, setIssueOnly] = useState(false);
   const trimmedQuery = query.trim();
   const visibleEvents = useMemo(
-    () => (trimmedQuery ? filterEventTraceEvents(events, trimmedQuery) : events),
-    [events, trimmedQuery],
+    () => {
+      const source = issueOnly ? filterToolIssueEvents(events) : events;
+      return trimmedQuery ? filterEventTraceEvents(source, trimmedQuery) : source;
+    },
+    [events, issueOnly, trimmedQuery],
   );
 
   return (
@@ -59,12 +64,23 @@ export function SessionTracePanel({
                     Clear
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  className="session-trace-filter"
+                  aria-pressed={issueOnly}
+                  disabled={trace.toolIssueCount === 0}
+                  onClick={() => setIssueOnly((enabled) => !enabled)}
+                >
+                  Tool issues{trace.toolIssueCount > 0 ? ` ${trace.toolIssueCount}` : ""}
+                </button>
               </div>
             ) : null}
             <div className="session-trace-metrics" data-testid="session-trace-metrics">
               <span><strong>Entries</strong>{trace.eventCount}</span>
               <span><strong>Records</strong>{trace.recordCount}</span>
+              {trace.toolIssueCount > 0 ? <span data-tone="error"><strong>Tool issues</strong>{trace.toolIssueCount}</span> : null}
               {trimmedQuery ? <span><strong>Matching</strong>{visibleEvents.length}</span> : null}
+              {issueOnly ? <span><strong>Filter</strong>Tool issues</span> : null}
               {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
               {trace.unknownCount > 0 ? <span data-tone="warning"><strong>Unclassified</strong>{trace.unknownCount}</span> : null}
             </div>
@@ -77,7 +93,7 @@ export function SessionTracePanel({
             {visibleEvents.length > 0 ? (
               <EventTrace events={visibleEvents} onOpenArtifact={onOpenArtifact} />
             ) : (
-              <div className="session-skills-empty">No trace entries matching "{trimmedQuery}".</div>
+              <div className="session-skills-empty">No trace entries matching {issueOnly ? "tool issues" : `"${trimmedQuery}"`}.</div>
             )}
           </>
         ) : (
@@ -86,4 +102,21 @@ export function SessionTracePanel({
       </div>
     </details>
   );
+}
+
+function filterToolIssueEvents(events: readonly NormalizedEvent[]): NormalizedEvent[] {
+  const failedCallIds = new Set<string>();
+  for (const event of events) {
+    if (event.type !== EventType.ToolResult) continue;
+    const data = event.data as ToolResultPayload;
+    if ((data.exit_code ?? 0) !== 0 || data.failure_kind || data.failure_kinds?.length) failedCallIds.add(data.call_id);
+  }
+  return events.filter((event) => {
+    if (event.type === EventType.ToolRequest || event.type === EventType.ToolResult) {
+      const data = event.data as { call_id?: unknown };
+      const callId = typeof data.call_id === "string" ? data.call_id : "";
+      return failedCallIds.has(callId);
+    }
+    return false;
+  });
 }

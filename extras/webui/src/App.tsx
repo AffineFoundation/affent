@@ -29,6 +29,7 @@ import {
   type SessionLoopProtocolResponse,
   type SessionMemoryResponse,
   type SessionPlanSummary,
+  type SessionContextSummary,
   type SessionSkillInfo,
   type SessionSkillInstallRequest,
   type SessionSummary,
@@ -47,7 +48,6 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
-import { SessionAutomationPanel } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
@@ -63,8 +63,6 @@ import { SessionTracePanel } from "./components/SessionTracePanel";
 import { WorkbenchEmpty, WorkbenchPanel } from "./components/WorkbenchPanel";
 import { WorkspaceStatusPill } from "./components/WorkspaceStatusPill";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
-import { WorkflowStatus } from "./components/WorkflowStatus";
-import { RunDetails } from "./components/RunDetails";
 import { completedTurn } from "./fixtures/completedTurn";
 import { applyRawEvent, reduceRawEvents } from "./store/reduce";
 import { initialSessionState, type SessionState } from "./store/sessionState";
@@ -72,14 +70,20 @@ import { deriveWorkflowStatus } from "./store/workflowStatus";
 import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
-import { buildSessionOverview, displayChatContextMetrics, type SessionOverview } from "./view/sessionOverview";
+import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
 import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace } from "./view/sessionWorkspace";
 import { buildSessionTrace } from "./view/sessionTrace";
-import { buildWorkbenchAttachment, buildWorkbenchContextUsage } from "./view/workbenchContext";
+import {
+  buildConversationContextView,
+  buildWorkbenchAttachment,
+  buildWorkbenchContextUsage,
+  workbenchContextUsageSummary,
+  type WorkbenchContextUsageView,
+} from "./view/workbenchContext";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { buildWorkbenchNavItems, workbenchTabFromAttention, type WorkbenchTab } from "./view/workbenchNav";
 import { buildSessionPlanFromToolResults } from "./view/sessionPlan";
@@ -328,6 +332,7 @@ export function App() {
   const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
   const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
+  const conversationContext = useMemo(() => buildConversationContextView(session, selectedSession?.context), [selectedSession?.context, session]);
   const workbenchAttachment = useMemo(
     () => buildWorkbenchAttachment({
       selectedSessionId,
@@ -339,7 +344,6 @@ export function App() {
     [selectedSession, selectedSessionId, selectedSessionTitle, sessionWorkspace, workbenchContextUsage],
   );
   const sessionTrace = useMemo(() => buildSessionTrace(session), [session]);
-  const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const hasSessionNav = !demoActive && sessions.length > 0;
   const showSessionNav = hasSessionNav && (!workbenchOpen || sessionsExpandedInWorkbench);
   const showSessionRailToggle = hasSessionNav && (
@@ -365,7 +369,7 @@ export function App() {
     }),
     [automationContext, overview, sessionChanges, sessionFiles, sessionRun, sessionWorkspace],
   );
-  const showSurfaceContext = showChatContext || showWorkflowStatus;
+  const showSurfaceContext = showChatContext;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -617,6 +621,32 @@ export function App() {
     },
     [client],
   );
+
+  const handleRefreshSkills = useCallback(async () => {
+    setSkillsState({ state: "loading" });
+    try {
+      const resp = await listSkills(client);
+      setSkillsState({ state: "ready", skills: resp.skills, installEnabled: resp.install_enabled });
+    } catch (err) {
+      setSkillsState({ state: "error", error: formatError(err) });
+      throw err;
+    }
+  }, [client]);
+
+  const handleRefreshMemory = useCallback(async () => {
+    if (!selectedSessionId) {
+      setMemoryState({ state: "empty" });
+      return;
+    }
+    setMemoryState({ state: "loading" });
+    try {
+      const memory = await getSessionMemory(client, selectedSessionId);
+      setMemoryState({ state: "ready", memory });
+    } catch (err) {
+      setMemoryState({ state: "error", error: formatError(err) });
+      throw err;
+    }
+  }, [client, selectedSessionId]);
 
   const handleRefreshAccountSettings = useCallback(async () => {
     const settings = await getAccountSettings(client);
@@ -1439,18 +1469,16 @@ export function App() {
     }
   }
 
-  function renderAutomationPanel(defaultOpen = false, testId = "session-automation-panel") {
-    if (!automationContext) return null;
+  function renderLoopWorkbenchTab() {
+    if (!showLoopContext && !showScheduleContext) {
+      return <WorkbenchEmpty title="No loop or timers" detail="This chat has no LOOP.md or scheduled follow-ups yet." />;
+    }
     return (
-      <SessionAutomationPanel
-        title={automationContext.title}
-        detail={automationContext.detail}
-        defaultOpen={defaultOpen}
-        testId={testId}
-      >
+      <>
         {showLoopContext ? (
           <SessionLoopPanel
             embedded
+            defaultOpen
             summary={selectedSession?.loop_protocol}
             state={selectedLoopState}
             disabling={loopProtocolBusy}
@@ -1465,10 +1493,13 @@ export function App() {
             onLoadProtocol={handleLoadLoopProtocol}
             onUseAsDraft={handleUseLoopProtocolDraft}
           />
-        ) : null}
+        ) : (
+          <WorkbenchEmpty title="No LOOP.md" detail="Timers can appear here, but this chat does not have a loop protocol file yet." />
+        )}
         {showScheduleContext ? (
           <SessionSchedulePanel
             embedded
+            defaultOpen
             summary={selectedSession?.schedules}
             schedules={selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined}
             busy={scheduleBusy}
@@ -1482,8 +1513,10 @@ export function App() {
             onUpdateSchedule={handleUpdateSchedule}
             onDeleteSchedule={handleDeleteSchedule}
           />
-        ) : null}
-      </SessionAutomationPanel>
+        ) : (
+          <WorkbenchEmpty title="No timers" detail="No scheduled loop ticks or check-ins are attached to this chat." />
+        )}
+      </>
     );
   }
 
@@ -1524,6 +1557,7 @@ export function App() {
         error={memoryState.state === "error" ? memoryState.error : undefined}
         noSession={memoryState.state === "empty"}
         defaultOpen={defaultOpen}
+        onRefresh={handleRefreshMemory}
         onUseAsDraft={handleUseAsDraft}
       />
     );
@@ -1537,6 +1571,7 @@ export function App() {
         error={skillsState.state === "error" ? skillsState.error : undefined}
         defaultOpen={defaultOpen}
         installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
+        onRefresh={handleRefreshSkills}
         onReadSkill={handleReadSkill}
         onInstallSkill={handleInstallSkill}
         onUseAsDraft={handleUseAsDraft}
@@ -1564,6 +1599,13 @@ export function App() {
   useEffect(() => {
     if (!workbenchNavItems.some((item) => item.key === workbenchTab)) setWorkbenchTab("context");
   }, [workbenchNavItems, workbenchTab]);
+
+  useEffect(() => {
+    if (!workbenchOpen || workbenchTab !== "loop") return;
+    if (!showLoopContext || !selectedSession?.has_loop_protocol) return;
+    if (selectedLoopProtocolState.state !== "idle") return;
+    void handleLoadLoopProtocol();
+  }, [selectedLoopProtocolState.state, selectedSession?.has_loop_protocol, showLoopContext, workbenchOpen, workbenchTab]);
 
   function openWorkbench(tab: WorkbenchTab = "context") {
     setWorkbenchTab(tab);
@@ -1616,11 +1658,12 @@ export function App() {
             changes={sessionChanges}
             artifacts={sessionArtifacts}
             run={sessionRun}
+            session={session}
             usage={workbenchContextUsage}
+            contextSummary={conversationContext}
             automationTitle={automationContext?.title}
             automationDetail={automationContext?.detail}
             onSelectSection={handleSelectWorkbenchTab}
-            onUseAsDraft={handleUseAsDraft}
             defaultOpen
           />
         </>
@@ -1680,10 +1723,8 @@ export function App() {
         <WorkbenchEmpty title="No workspace evidence" detail="Open or start a chat with workspace-bound file or command activity." />
       );
     }
-    if (workbenchTab === "automation") {
-      return renderAutomationPanel(true, "workbench-automation-panel") ?? (
-        <WorkbenchEmpty title="No active automation" detail="Loop and timer controls appear here when this chat has long-running work." />
-      );
+    if (workbenchTab === "loop" || workbenchTab === "automation") {
+      return renderLoopWorkbenchTab();
     }
     if (workbenchTab === "memory") return renderMemoryPanel(true);
     if (workbenchTab === "skills") return renderSkillsPanel(true);
@@ -1763,7 +1804,7 @@ export function App() {
             </span>
             <span className="workbench-label">Workbench</span>
             {workbenchAttention ? (
-              <span className="workbench-attention" data-tone={workbenchAttention.tone} aria-hidden="true" />
+              <span className="workbench-attention" data-tone={workbenchAttention.tone === "error" ? "error" : undefined} aria-hidden="true" />
             ) : null}
           </button>
           {showHeaderNewChat ? (
@@ -1793,7 +1834,7 @@ export function App() {
               aria-label="Show chats"
               onClick={handleShowSessions}
             >
-              <span aria-hidden="true">☰</span>
+              <span aria-hidden="true">›</span>
             </button>
           ) : null}
           {showSessionNav && !sessionsCollapsed ? (
@@ -1819,7 +1860,7 @@ export function App() {
           >
             {showSurfaceContext ? (
               <div className="surface-context">
-                {showChatContext ? <ChatContextBar overview={overview} /> : null}
+                {showChatContext ? <ChatContextBar overview={overview} usage={workbenchContextUsage} contextSummary={conversationContext} /> : null}
                 <SessionPlanPanel
                   summary={planPanelSummary}
                   plan={planPanelPlan}
@@ -1831,7 +1872,6 @@ export function App() {
                   onRunRemaining={() => handleExecutePlanStep({ runRemaining: true })}
                   onStopRunRemaining={handleStopPlanRun}
                 />
-                {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>
             ) : null}
             <div className="conversation-scroll" ref={conversationScrollRef} data-testid="conversation-scroll">
@@ -2129,14 +2169,19 @@ function lastRawEventId(events: readonly RawEvent[]): number {
   return typeof last?.id === "number" ? last.id : -1;
 }
 
-function hasRecoveryMetric(overview: SessionOverview): boolean {
-  return overview.metrics.some((metric) => (metric.label === "Next step" || metric.label === "Recovery") && metric.value.trim() !== "");
-}
-
-function ChatContextBar({ overview }: { overview: SessionOverview }) {
+function ChatContextBar({
+  overview,
+  usage,
+  contextSummary,
+}: {
+  overview: SessionOverview;
+  usage?: WorkbenchContextUsageView;
+  contextSummary?: SessionContextSummary;
+}) {
   const context = chatContextDisplay(overview);
   const contextLabel = chatContextLabel({ overview, ...context });
-  const metrics = displayChatContextMetrics(overview.metrics);
+  const usageSummary = workbenchContextUsageSummary(usage);
+  const contextPercent = contextSummary && contextSummary.compact_trigger > 0 ? Math.max(0, Math.round(contextSummary.compact_percent)) : undefined;
   return (
     <div className="chat-context-bar" data-tone={overview.tone} data-testid="chat-context-bar" aria-label={contextLabel}>
       <span className="chat-context-state">{overview.stateLabel}</span>
@@ -2155,15 +2200,35 @@ function ChatContextBar({ overview }: { overview: SessionOverview }) {
           </>
         ) : null}
       </span>
-      <RunDetails
-        metrics={metrics}
-        className="chat-context-details"
-        testId="chat-context-details"
-        ariaLabel="Session metrics"
-        summaryLabel="Session metrics"
-        inlineLimit={1}
-      />
+      {(usageSummary || contextPercent != null) ? (
+        <span className="chat-context-stats" aria-label="Chat status statistics">
+          {usageSummary ? <span className="chat-context-token-stat">{usageSummary}</span> : null}
+          {contextPercent != null ? <ContextRing percent={contextPercent} /> : null}
+        </span>
+      ) : null}
     </div>
+  );
+}
+
+function ContextRing({ percent }: { percent: number }) {
+  const clamped = Math.max(0, Math.min(100, percent));
+  const radius = 12;
+  const circumference = 2 * Math.PI * radius;
+  const dash = (clamped / 100) * circumference;
+  return (
+    <span className="chat-context-ring" aria-label={`Context used ${clamped}%`} title={`Context used ${clamped}%`}>
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <circle className="chat-context-ring-track" cx="16" cy="16" r={radius} />
+        <circle
+          className="chat-context-ring-value"
+          cx="16"
+          cy="16"
+          r={radius}
+          strokeDasharray={`${dash} ${circumference - dash}`}
+        />
+      </svg>
+      <b>{clamped}%</b>
+    </span>
   );
 }
 

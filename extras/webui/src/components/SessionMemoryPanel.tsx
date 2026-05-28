@@ -28,6 +28,7 @@ export function SessionMemoryPanel({
   error,
   noSession = false,
   defaultOpen = false,
+  onRefresh,
   onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
@@ -36,6 +37,7 @@ export function SessionMemoryPanel({
   error?: string;
   noSession?: boolean;
   defaultOpen?: boolean;
+  onRefresh?: () => Promise<void> | void;
   onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
@@ -99,6 +101,11 @@ export function SessionMemoryPanel({
         {!loading && error ? (
           <div className="session-skills-empty error" role="alert">
             {error}
+            {onRefresh ? (
+              <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
+                Retry
+              </button>
+            ) : null}
           </div>
         ) : null}
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
@@ -122,6 +129,17 @@ export function SessionMemoryPanel({
                     {matchingEntryCount > 0 ? ` · ${matchingEntryCount} ${matchingEntryCount === 1 ? "entry" : "entries"}` : ""}
                   </span>
                 ) : null}
+                {onRefresh ? (
+                  <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
+                    Refresh
+                  </button>
+                ) : null}
+              </div>
+            ) : onRefresh ? (
+              <div className="session-skills-controls">
+                <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
+                  Refresh
+                </button>
               </div>
             ) : null}
             <div className="session-skills-list" data-testid="session-memory-list">

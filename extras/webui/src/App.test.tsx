@@ -148,7 +148,7 @@ describe("App", () => {
     const context = await screen.findByTestId("chat-context-bar");
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
-    expect(screen.getByTestId("chat-context-details")).toHaveTextContent("Tokens 0.0001M");
+    expect(screen.queryByTestId("chat-context-details")).toBeNull();
     expect(context).not.toHaveTextContent("Work 1 action");
     expect(context).not.toHaveTextContent("Tokens 138");
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
@@ -816,8 +816,7 @@ describe("App", () => {
     expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Workbench");
     expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Loop review");
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop review");
+    await selectWorkbenchTab(user, "Loop");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Activation review");
     await user.click(within(panel).getByRole("button", { name: "Review in chat" }));
@@ -893,8 +892,7 @@ describe("App", () => {
     expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Workbench");
     expect(screen.getByLabelText("Workbench")).not.toHaveTextContent("Loop waiting");
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
+    await selectWorkbenchTab(user, "Loop");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Waiting for your calibration answer");
     await user.click(within(panel).getByRole("button", { name: "Open answer draft" }));
@@ -987,15 +985,13 @@ describe("App", () => {
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     await user.click(screen.getByLabelText("Workbench"));
-    await selectWorkbenchTab(user, "Automation");
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running");
+    await selectWorkbenchTab(user, "Loop");
     let panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("Running protocol");
     expect(panel).toHaveTextContent("watch market evidence for several days");
     expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");
 
-    await user.click(within(panel).getByRole("button", { name: "View LOOP.md" }));
     expect(await screen.findByTestId("session-loop-protocol")).toHaveTextContent("# Loop Protocol: loop-control");
     await user.click(within(panel).getByRole("button", { name: "Update via chat" }));
     expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Review and update LOOP.md");
@@ -1004,7 +1000,6 @@ describe("App", () => {
     await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-control/loop-protocol", expect.objectContaining({ method: "DELETE" })));
-    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop disabled");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Disabled");
     expect(screen.queryByTestId("session-list")).toBeNull();
     expect(screen.queryByRole("button", { name: "Disable loop" })).toBeNull();
@@ -1289,12 +1284,9 @@ describe("App", () => {
 
     const context = await screen.findByTestId("chat-context-bar");
     expect(context).toHaveTextContent("Result ready");
-    expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
-    const details = screen.getByTestId("chat-context-details");
-    expect(chatContextMetric(details, "Artifact 1 file")).toBeVisible();
-    expect(details).not.toHaveTextContent("Work 1 action");
-    expect(details).not.toHaveTextContent("Tool context");
-    expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
+    expect(screen.queryByTestId("chat-context-details")).toBeNull();
+    expect(context).toHaveTextContent("saved output");
+    expect(context).not.toHaveTextContent("Artifact 1 file");
   });
 
   it("shows a pending follow-up as the active chat context", async () => {
@@ -2612,7 +2604,7 @@ describe("App", () => {
     live.close();
 
     await waitFor(() => expect(planCalls).toBe(1));
-    expect(await screen.findByTestId("chat-context-details")).toHaveTextContent("Plan 0/2 · step 1 active");
+    expect(screen.queryByTestId("chat-context-details")).toBeNull();
     const planPanel = await screen.findByTestId("session-plan-panel");
     expect(planPanel).toHaveTextContent("0/2 complete");
     expect(planPanel).toHaveTextContent("Collect evidence");
@@ -3033,10 +3025,6 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
-}
-
-function chatContextMetric(root: HTMLElement, text: string): HTMLElement {
-  return within(root).getAllByText((_, element) => element?.textContent?.includes(text) ?? false, { selector: "span" })[0];
 }
 
 function eventStreamResponse(body: string): Response {
