@@ -956,6 +956,42 @@ func TestWriteTraceDebugArtifactsChecksDurableChildTranscripts(t *testing.T) {
 	}
 }
 
+func TestChildTranscriptDiscoveryKeepsStorageLayoutsSeparate(t *testing.T) {
+	workspace := t.TempDir()
+	projectTranscript := filepath.Join(workspace, "focused-tasks", "project.jsonl")
+	workspaceTranscript := filepath.Join(workspace, ".affentctl", "focused-tasks", "debug-session", "focused_alpha.jsonl")
+	for path, body := range map[string]string{
+		projectTranscript:   `{"role":"system","content":"project fixture"}` + "\n",
+		workspaceTranscript: `{"role":"system","content":"focused child"}` + "\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	workspaceRefs := collectDebugChildTranscripts(workspace, maxDebugChildTranscriptRefs)
+	if len(workspaceRefs) != 1 ||
+		workspaceRefs[0].Path != ".affentctl/focused-tasks/debug-session/focused_alpha.jsonl" {
+		t.Fatalf("workspace child transcripts = %+v, want only .affentctl transcript", workspaceRefs)
+	}
+
+	sessionDir := t.TempDir()
+	durableTranscript := filepath.Join(sessionDir, "focused-tasks", "sess_child", "focused_beta.jsonl")
+	if err := os.MkdirAll(filepath.Dir(durableTranscript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(durableTranscript, []byte(`{"role":"system","content":"durable child"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	durableRefs := collectDurableSessionChildTranscripts(sessionDir, maxDebugChildTranscriptRefs)
+	if len(durableRefs) != 1 ||
+		durableRefs[0].Path != "focused-tasks/sess_child/focused_beta.jsonl" {
+		t.Fatalf("durable child transcripts = %+v, want durable session transcript", durableRefs)
+	}
+}
+
 func TestToolTruncationExamplesPrioritizeMissingArtifacts(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{

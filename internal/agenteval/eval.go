@@ -2042,19 +2042,30 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 }
 
 func collectDebugChildTranscripts(workspace string, maxRefs int) []DebugTranscriptRef {
-	if strings.TrimSpace(workspace) == "" || maxRefs <= 0 {
+	return collectDebugChildTranscriptsFromRoots(workspace, maxRefs, []debugChildTranscriptRoot{
+		{kind: "focused_task", path: filepath.Join(workspace, ".affentctl", "focused-tasks")},
+		{kind: "subagent", path: filepath.Join(workspace, ".affentctl", "subagents")},
+	})
+}
+
+func collectDurableSessionChildTranscripts(sessionDir string, maxRefs int) []DebugTranscriptRef {
+	return collectDebugChildTranscriptsFromRoots(sessionDir, maxRefs, []debugChildTranscriptRoot{
+		{kind: "focused_task", path: filepath.Join(sessionDir, "focused-tasks")},
+		{kind: "subagent", path: filepath.Join(sessionDir, "subagents")},
+	})
+}
+
+type debugChildTranscriptRoot struct {
+	kind string
+	path string
+}
+
+func collectDebugChildTranscriptsFromRoots(rootDir string, maxRefs int, roots []debugChildTranscriptRoot) []DebugTranscriptRef {
+	if strings.TrimSpace(rootDir) == "" || maxRefs <= 0 {
 		return nil
 	}
 	var refs []DebugTranscriptRef
-	for _, root := range []struct {
-		kind string
-		path string
-	}{
-		{kind: "focused_task", path: filepath.Join(workspace, ".affentctl", "focused-tasks")},
-		{kind: "subagent", path: filepath.Join(workspace, ".affentctl", "subagents")},
-		{kind: "focused_task", path: filepath.Join(workspace, "focused-tasks")},
-		{kind: "subagent", path: filepath.Join(workspace, "subagents")},
-	} {
+	for _, root := range roots {
 		_ = filepath.WalkDir(root.path, func(path string, d fs.DirEntry, err error) error {
 			if err != nil || d == nil {
 				return nil
@@ -2066,7 +2077,7 @@ func collectDebugChildTranscripts(workspace string, maxRefs int) []DebugTranscri
 			if err != nil {
 				return nil
 			}
-			rel, err := filepath.Rel(workspace, path)
+			rel, err := filepath.Rel(rootDir, path)
 			if err != nil {
 				rel = path
 			}
@@ -2799,7 +2810,7 @@ func WriteTraceDebugArtifacts(opts TraceDebugOptions) (BatchResult, error) {
 		childTranscriptRoot = filepath.Dir(tracePath)
 	}
 	trace.ChildTranscriptRootDir = childTranscriptRoot
-	trace.ChildTranscripts = collectDebugChildTranscripts(childTranscriptRoot, maxDebugChildTranscriptRefs)
+	trace.ChildTranscripts = collectDurableSessionChildTranscripts(childTranscriptRoot, maxDebugChildTranscriptRefs)
 	res := BatchResult{
 		BatchScenario: scenario.Name,
 		Workspace:     outputDir,
