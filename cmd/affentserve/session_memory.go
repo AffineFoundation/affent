@@ -4,10 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
+
+const sessionMemoryBucketPreviewChars = 180
 
 type sessionMemoryResponse struct {
 	SessionID        string                `json:"session_id"`
@@ -27,6 +31,7 @@ type sessionMemoryBucket struct {
 	CharsLimit int      `json:"chars_limit,omitempty"`
 	Percent    int      `json:"percent,omitempty"`
 	NewestAt   string   `json:"newest_at,omitempty"`
+	Preview    string   `json:"preview,omitempty"`
 }
 
 func handleSessionMemory(pool *SessionPool, sessionID string, w http.ResponseWriter, _ *http.Request) {
@@ -114,6 +119,7 @@ func inspectSessionMemoryBucket(store *memory.FileMemoryStore, target memory.Mem
 		Topic:    out.Topic,
 		Entries:  append([]string(nil), out.Entries...),
 		NewestAt: newestAt,
+		Preview:  sessionMemoryBucketPreview(out.Entries),
 	}
 	if target == memory.TargetUser {
 		bucket.Topic = "user"
@@ -125,4 +131,14 @@ func inspectSessionMemoryBucket(store *memory.FileMemoryStore, target memory.Mem
 		bucket.Percent = out.Usage.Percent
 	}
 	return bucket, bucket.EntryCount > 0, nil
+}
+
+func sessionMemoryBucketPreview(entries []string) string {
+	for i := len(entries) - 1; i >= 0; i-- {
+		entry := textutil.CompactWhitespace(strings.TrimSpace(entries[i]))
+		if entry != "" {
+			return textutil.Preview(entry, sessionMemoryBucketPreviewChars)
+		}
+	}
+	return ""
 }
