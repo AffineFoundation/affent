@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import { artifactEvidenceDraft, artifactEvidenceText } from "../view/sessionArtifacts";
 import { artifactSizeLabel, type TurnArtifact } from "../view/turnArtifacts";
@@ -16,6 +17,9 @@ export function SessionArtifactsPanel({
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
+  const [query, setQuery] = useState("");
+  const trimmedQuery = query.trim();
+  const visibleArtifacts = trimmedQuery ? artifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : artifacts;
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -24,9 +28,22 @@ export function SessionArtifactsPanel({
         <span>{artifactDetail(artifacts)}</span>
       </summary>
       <div className="session-skills-body">
-        {artifacts.length > 0 ? (
+        {artifacts.length > 1 ? (
+          <div className="session-skills-controls">
+            <label className="session-skills-search">
+              <span>Search artifacts</span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="name, source, or summary" />
+            </label>
+            {trimmedQuery ? (
+              <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                Clear
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {visibleArtifacts.length > 0 ? (
           <ol className="session-artifacts-list" data-testid="session-artifacts-list">
-            {artifacts.map((artifact) => {
+            {visibleArtifacts.map((artifact) => {
               const downloadUrl = downloadHref?.(artifact.path);
               return (
                 <li key={artifact.path} className="session-artifacts-item">
@@ -59,12 +76,26 @@ export function SessionArtifactsPanel({
               );
             })}
           </ol>
+        ) : artifacts.length > 0 ? (
+          <div className="session-skills-empty">No artifacts matching "{trimmedQuery}".</div>
         ) : (
           <div className="session-skills-empty">No artifacts in this chat.</div>
         )}
       </div>
     </details>
   );
+}
+
+function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
+  const haystack = [
+    artifact.name,
+    artifact.path,
+    artifact.source,
+    artifact.summary,
+    artifact.truncated ? "full output" : "file",
+    artifactSizeLabel(artifact),
+  ].filter(Boolean).join("\n").toLowerCase();
+  return haystack.includes(query.toLowerCase());
 }
 
 function artifactSummary(artifacts: readonly TurnArtifact[]): string {

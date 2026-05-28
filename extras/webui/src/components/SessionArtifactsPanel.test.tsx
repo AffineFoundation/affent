@@ -25,6 +25,14 @@ describe("SessionArtifactsPanel", () => {
             omittedBytes: 1024,
             capBytes: 4096,
           },
+          {
+            path: ".affent/artifacts/reports/checkout-report.md",
+            name: "checkout-report.md",
+            source: "final report",
+            summary: "checkout audit report",
+            truncated: false,
+            bytes: 2048,
+          },
         ]}
         downloadHref={(path) => `/v1/sessions/s1/artifacts/${path}`}
         onOpenArtifact={onOpenArtifact}
@@ -34,26 +42,40 @@ describe("SessionArtifactsPanel", () => {
 
     const panel = screen.getByTestId("session-artifacts-panel");
     expect(panel).toHaveAttribute("open");
-    expect(panel).toHaveTextContent("1 artifact");
-    expect(panel).toHaveTextContent("1 file · 1 full-output · 8 KiB recorded");
+    expect(panel).toHaveTextContent("2 artifacts");
+    expect(panel).toHaveTextContent("2 files · 1 full-output · 10 KiB recorded");
+    expect(screen.getByLabelText("Search artifacts")).toBeInTheDocument();
     const list = screen.getByTestId("session-artifacts-list");
     expect(list).toHaveTextContent("000001-test.txt");
+    expect(list).toHaveTextContent("checkout-report.md");
     expect(list).toHaveTextContent("Full output · npm test -- checkout.spec.ts");
-    expect(within(list).getByRole("link", { name: "Download" })).toHaveAttribute(
+    const firstArtifact = within(list).getAllByRole("listitem")[0];
+    expect(within(firstArtifact).getByRole("link", { name: "Download" })).toHaveAttribute(
       "href",
       "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-test.txt",
     );
-    expect(within(list).getByRole("link", { name: "Download" })).toHaveAttribute("download", "000001-test.txt");
+    expect(within(firstArtifact).getByRole("link", { name: "Download" })).toHaveAttribute("download", "000001-test.txt");
 
-    await user.click(within(list).getByRole("button", { name: "Copy path" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    await user.click(within(list).getByRole("button", { name: "Copy evidence" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Copy evidence" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Artifact evidence for .affent/artifacts/tool-results/000001-test.txt"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Summary: checkout spec failed"));
-    await user.click(within(list).getByRole("button", { name: "Open artifact" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Open artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    await user.click(within(list).getByRole("button", { name: "Use artifact as draft" }));
+    await user.click(within(firstArtifact).getByRole("button", { name: "Use artifact as draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Source: npm test -- checkout.spec.ts"), "artifact");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Summary: checkout spec failed"), "artifact");
+
+    await user.type(screen.getByLabelText("Search artifacts"), "report");
+    expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
+
+    await user.type(screen.getByLabelText("Search artifacts"), "missing.log");
+    expect(screen.queryByTestId("session-artifacts-list")).toBeNull();
+    expect(panel).toHaveTextContent('No artifacts matching "missing.log".');
   });
 });
