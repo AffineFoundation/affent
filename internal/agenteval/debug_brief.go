@@ -526,6 +526,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		if res.ContextCompactions.Reactive > 0 {
 			tags = append(tags, "context_compaction:reactive")
 		}
+		if res.ContextCompactions.ReducedBytes > 0 {
+			tags = append(tags, "context_compaction:bytes_reduced")
+		}
 		for _, reason := range sortedStringMapKeys(res.ContextCompactions.ByReason) {
 			tags = append(tags, "context_compaction:"+reason)
 		}
@@ -540,6 +543,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"count":            res.ContextCompactions.Count,
 			"reactive":         res.ContextCompactions.Reactive,
 			"removed_messages": res.ContextCompactions.RemovedMessages,
+			"reduced_bytes":    res.ContextCompactions.ReducedBytes,
 			"summary_bytes":    res.ContextCompactions.SummaryBytes,
 			"summary_missing":  res.ContextCompactions.SummaryMissing,
 			"summary_empty":    res.ContextCompactions.SummaryEmpty,

@@ -727,6 +727,9 @@ type ContextCompaction struct {
 	BeforeMessages      int    `json:"before_messages"`
 	AfterMessages       int    `json:"after_messages"`
 	RemovedMessages     int    `json:"removed_messages"`
+	BeforeBytes         int    `json:"before_bytes,omitempty"`
+	AfterBytes          int    `json:"after_bytes,omitempty"`
+	ReducedBytes        int    `json:"reduced_bytes,omitempty"`
 	Reactive            bool   `json:"reactive"`
 	Reason              string `json:"reason"`
 	SummaryPresent      bool   `json:"summary_present,omitempty"`
@@ -741,6 +744,7 @@ type ContextCompactionStats struct {
 	Reactive        int
 	Proactive       int
 	RemovedMessages int
+	ReducedBytes    int
 	SummaryBytes    int
 	SummaryMissing  int
 	SummaryEmpty    int
@@ -1902,6 +1906,7 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			stats.Proactive++
 		}
 		stats.RemovedMessages += compaction.RemovedMessages
+		stats.ReducedBytes += compaction.ReducedBytes
 		stats.SummaryBytes += compaction.SummaryBytes
 		if contextCompactionSummaryMissing(compaction) {
 			stats.SummaryMissing++
@@ -1917,6 +1922,9 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			BeforeMessages:      compaction.BeforeMessages,
 			AfterMessages:       compaction.AfterMessages,
 			RemovedMessages:     compaction.RemovedMessages,
+			BeforeBytes:         compaction.BeforeBytes,
+			AfterBytes:          compaction.AfterBytes,
+			ReducedBytes:        compaction.ReducedBytes,
 			Reactive:            compaction.Reactive,
 			Reason:              compaction.Reason,
 			SummaryPresent:      compaction.SummaryPresent,

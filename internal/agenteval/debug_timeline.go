@@ -239,10 +239,11 @@ func timelineMetricsSummary(res BatchResult) string {
 		))
 	}
 	if res.ContextCompactions.Count > 0 {
-		parts = append(parts, fmt.Sprintf("compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
+		parts = append(parts, fmt.Sprintf("compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			res.ContextCompactions.Count,
 			res.ContextCompactions.Reactive,
 			res.ContextCompactions.RemovedMessages,
+			res.ContextCompactions.ReducedBytes,
 			res.ContextCompactions.SummaryBytes,
 			res.ContextCompactions.SummaryMissing,
 			res.ContextCompactions.SummaryEmpty,
@@ -362,10 +363,11 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		if res.ContextCompactions.SummaryMissing > 0 || res.ContextCompactions.SummaryEmpty > 0 {
 			extra = fmt.Sprintf(", summary_missing=`%d`, summary_empty=`%d`", res.ContextCompactions.SummaryMissing, res.ContextCompactions.SummaryEmpty)
 		}
-		fmt.Fprintf(b, "- context: compactions=`%d`, reactive=`%d`, removed_messages=`%d`, summary_bytes=`%d`%s; inspect Context Compactions for possible state loss.\n",
+		fmt.Fprintf(b, "- context: compactions=`%d`, reactive=`%d`, removed_messages=`%d`, reduced_bytes=`%d`, summary_bytes=`%d`%s; inspect Context Compactions for possible state loss.\n",
 			res.ContextCompactions.Count,
 			res.ContextCompactions.Reactive,
 			res.ContextCompactions.RemovedMessages,
+			res.ContextCompactions.ReducedBytes,
 			res.ContextCompactions.SummaryBytes,
 			extra,
 		)
@@ -1283,13 +1285,18 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 	b.WriteString("\n## Context Compactions\n\n")
 	for i, c := range trace.ContextCompactions {
 		summaryState := contextCompactionSummaryState(c)
-		fmt.Fprintf(b, "%d. turn=`%s` reactive=`%t` messages=%d->%d removed=%d summary_state=%s summary_bytes=%d reason=%s\n",
+		fmt.Fprintf(b, "%d. turn=`%s` reactive=`%t` messages=%d->%d removed=%d",
 			i+1,
 			c.TurnID,
 			c.Reactive,
 			c.BeforeMessages,
 			c.AfterMessages,
 			c.RemovedMessages,
+		)
+		if c.BeforeBytes > 0 || c.AfterBytes > 0 || c.ReducedBytes > 0 {
+			fmt.Fprintf(b, " bytes=%d->%d reduced=%d", c.BeforeBytes, c.AfterBytes, c.ReducedBytes)
+		}
+		fmt.Fprintf(b, " summary_state=%s summary_bytes=%d reason=%s\n",
 			summaryState,
 			c.SummaryBytes,
 			timelineInline(c.Reason, 300),

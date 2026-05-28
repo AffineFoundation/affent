@@ -1871,7 +1871,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,reduced_bytes=0,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -2477,7 +2477,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_turn_checkpoint:50.0%,loop_protocol_feed:50.0%,loop_protocol_calibration_request:50.0%,loop_protocol_calibration:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
 		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -2542,7 +2542,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "loop_protocol_feed_scenarios=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1") {
 		t.Fatalf("summary output missing loop protocol feed rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,summary_bytes=2048,summary_missing=0,summary_empty=0") {
+	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,reduced_bytes=0,summary_bytes=2048,summary_missing=0,summary_empty=0") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
@@ -4598,6 +4598,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"avg_runtime_errors":                          float64(0.5),
 		"avg_context_compactions":                     float64(0.5),
 		"avg_context_removed_messages":                float64(16),
+		"avg_context_reduced_bytes":                   float64(0),
 		"avg_context_summary_bytes":                   float64(1024),
 		"avg_context_summary_missing":                 float64(0.5),
 		"avg_context_summary_empty":                   float64(0.5),
