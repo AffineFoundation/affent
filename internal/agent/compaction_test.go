@@ -530,6 +530,46 @@ func TestLLMSummaryCompactor_Compact_Real(t *testing.T) {
 		}
 	})
 
+	t.Run("byte trigger compacts large tool arguments below message trigger", func(t *testing.T) {
+		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 100, TriggerBytes: 512, KeepFirst: 1, KeepLast: 2}
+		msgs := []ChatMessage{
+			mk("system", "be helpful"),
+			mk("user", "create a file"),
+			{
+				Role:    "assistant",
+				Content: "writing file",
+				ToolCalls: []ToolCall{{
+					ID:   "call_large",
+					Type: "function",
+					Function: struct {
+						Name      string `json:"name"`
+						Arguments string `json:"arguments"`
+					}{Name: "write_file", Arguments: `{"path":"big.txt","content":"` + strings.Repeat("x", 2048) + `"}`},
+				}},
+			},
+			{Role: "tool", Name: "write_file", ToolCallID: "call_large", Content: "ok"},
+			mk("assistant", "done"),
+			mk("user", "continue"),
+		}
+		got, err := c.Compact(context.Background(), msgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(got) >= len(msgs) {
+			t.Fatalf("byte-triggered compaction did not shorten messages: got %d want < %d", len(got), len(msgs))
+		}
+		foundSummary := false
+		for _, msg := range got {
+			if msg.Role == "user" && strings.HasPrefix(msg.Content, summaryPrefix) {
+				foundSummary = true
+				break
+			}
+		}
+		if !foundSummary {
+			t.Fatalf("byte-triggered compaction missing summary message: %+v", got)
+		}
+	})
+
 	t.Run("above trigger folds middle into one summary msg", func(t *testing.T) {
 		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 0, KeepFirst: 2, KeepLast: 3}
 		// 1 system + 2 head + 6 middle + 3 tail = 12.

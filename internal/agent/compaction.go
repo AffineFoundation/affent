@@ -42,6 +42,12 @@ const loopProtocolSummaryPrefix = "LOOP_PROTOCOL:"
 // number themselves.
 const DefaultSummaryTriggerMsgs = 240
 
+// DefaultSummaryTriggerBytes caps approximate persisted conversation
+// pressure before proactive summarization. Message-count thresholds miss
+// long-running coding sessions where a few write_file or shell tool-call
+// arguments carry most of the context.
+const DefaultSummaryTriggerBytes = 512 * 1024
+
 // DefaultSummaryKeepLast is the OpenHands V1 keep_last value (10).
 const DefaultSummaryKeepLast = 10
 
@@ -82,6 +88,11 @@ type LLMSummaryCompactor struct {
 	// this internally by cloning the compactor with TriggerMsgs=0.
 	// Pick DefaultSummaryTriggerMsgs for an OpenHands-style default.
 	TriggerMsgs int
+
+	// TriggerBytes is an approximate conversation-size threshold that
+	// complements TriggerMsgs. Set to zero to disable byte-based proactive
+	// compaction. Reactive overflow compaction bypasses both thresholds.
+	TriggerBytes int
 
 	// KeepFirst is how many leading non-system messages to preserve
 	// verbatim — typically the initial user prompt(s). Default 2,
@@ -195,7 +206,7 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	if keepLast <= 0 {
 		keepLast = 10
 	}
-	if c.TriggerMsgs > 0 && len(msgs) <= c.TriggerMsgs {
+	if !c.shouldCompact(msgs) {
 		return msgs, nil
 	}
 
@@ -252,6 +263,30 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	})
 	out = append(out, msgs[tailStart:]...)
 	return out, nil
+}
+
+func (c *LLMSummaryCompactor) shouldCompact(msgs []ChatMessage) bool {
+	if c.TriggerMsgs <= 0 && c.TriggerBytes <= 0 {
+		return true
+	}
+	if c.TriggerMsgs > 0 && len(msgs) > c.TriggerMsgs {
+		return true
+	}
+	if c.TriggerBytes > 0 && approximateConversationBytes(msgs) > c.TriggerBytes {
+		return true
+	}
+	return false
+}
+
+func approximateConversationBytes(msgs []ChatMessage) int {
+	total := 0
+	for _, m := range msgs {
+		total += len(m.Role) + len(m.Content) + len(m.ReasoningContent) + len(m.Name) + len(m.ToolCallID) + 32
+		for _, tc := range m.ToolCalls {
+			total += len(tc.ID) + len(tc.Type) + len(tc.Function.Name) + len(tc.Function.Arguments) + 32
+		}
+	}
+	return total
 }
 
 // backUpToSafeBoundary moves cut earlier (toward 0) until it doesn't

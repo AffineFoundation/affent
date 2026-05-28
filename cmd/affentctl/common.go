@@ -1572,9 +1572,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	loop.Compactor = &agent.LLMSummaryCompactor{
-		LLM:         llm,
-		TriggerMsgs: triggerMsgs,
-		KeepLast:    keepLast,
+		LLM:          llm,
+		TriggerMsgs:  triggerMsgs,
+		TriggerBytes: agent.DefaultSummaryTriggerBytes,
+		KeepLast:     keepLast,
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		log.Error().Err(err).Msg("seed system prompt")

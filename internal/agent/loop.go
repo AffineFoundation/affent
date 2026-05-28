@@ -2705,6 +2705,7 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 		if c, ok := l.Compactor.(*LLMSummaryCompactor); ok {
 			emergency := *c
 			emergency.TriggerMsgs = 0
+			emergency.TriggerBytes = 0
 			if emergency.KeepLast > 4 {
 				emergency.KeepLast /= 2
 			}

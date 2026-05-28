@@ -1246,6 +1246,9 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	if lc.TriggerMsgs != 120 {
 		t.Errorf("TriggerMsgs = %d, want 120 from config", lc.TriggerMsgs)
 	}
+	if lc.TriggerBytes != agent.DefaultSummaryTriggerBytes {
+		t.Errorf("TriggerBytes = %d, want default %d", lc.TriggerBytes, agent.DefaultSummaryTriggerBytes)
+	}
 	if lc.KeepLast != 4 {
 		t.Errorf("KeepLast = %d, want 4 from config", lc.KeepLast)
 	}
@@ -1260,6 +1263,9 @@ func TestSessionPool_CompactorFallsBackToDefaults(t *testing.T) {
 	lc := s.loop.Compactor.(*agent.LLMSummaryCompactor)
 	if lc.TriggerMsgs != agent.DefaultSummaryTriggerMsgs {
 		t.Errorf("TriggerMsgs = %d, want default %d", lc.TriggerMsgs, agent.DefaultSummaryTriggerMsgs)
+	}
+	if lc.TriggerBytes != agent.DefaultSummaryTriggerBytes {
+		t.Errorf("TriggerBytes = %d, want default %d", lc.TriggerBytes, agent.DefaultSummaryTriggerBytes)
 	}
 	if lc.KeepLast != agent.DefaultSummaryKeepLast {
 		t.Errorf("KeepLast = %d, want default %d", lc.KeepLast, agent.DefaultSummaryKeepLast)

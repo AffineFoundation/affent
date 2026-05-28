@@ -766,9 +766,10 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		keepLast = agent.DefaultSummaryKeepLast
 	}
 	loop.Compactor = &agent.LLMSummaryCompactor{
-		LLM:         llm,
-		TriggerMsgs: triggerMsgs,
-		KeepLast:    keepLast,
+		LLM:          llm,
+		TriggerMsgs:  triggerMsgs,
+		TriggerBytes: agent.DefaultSummaryTriggerBytes,
+		KeepLast:     keepLast,
 	}
 	systemPrompt := p.cfg.SystemPrompt
 	if systemPrompt == "" {
