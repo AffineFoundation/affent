@@ -42,7 +42,9 @@ Shared metadata fields:
   thresholds are still written as ordinary gate fields, and explicitly supplied
   gate flags override profile defaults.
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
-  `min_loop_protocol_feed_rate`, `min_runtime_surface_rate`,
+  `min_loop_protocol_feed_rate`,
+  `min_loop_protocol_calibration_request_rate`,
+  `min_loop_protocol_calibration_rate`, `min_runtime_surface_rate`,
   `min_trace_event_rate`,
   `min_source_network_rate`,
   `min_source_access_verified_rate`,
@@ -540,7 +542,8 @@ Summary records aggregate all scenario records from the same process:
 - `scenarios`, `passed`, `failed`, `duration_ms`, `avg_duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
   `memory_update_rate`, `loop_protocol_feed_rate`, `runtime_surface_rate`,
-  `trace_event_rate`,
+  `loop_protocol_calibration_request_rate`,
+  `loop_protocol_calibration_rate`, `trace_event_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
   `loop_guard_intervention_rate` when tool calls were observed,
   `focused_task_error_rate` when focused-task calls were observed,
