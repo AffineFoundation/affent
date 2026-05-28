@@ -660,28 +660,32 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("基于已有证据输出报告");
   });
 
-  it("prefers a runtime summarized title over the first user message", () => {
+  it("keeps the user task title stable when runtime summaries change", () => {
     const rows = buildSessionRows([
       session({
         id: "affine-generated-title",
         durable: true,
         title: "Affine market research",
-        latest_user_message: "affine 是 Bittensor 的一个子网，请收集信息并向我介绍",
+        summary_title: "Generated market report summary",
+        generated_title: "Later generated Affine title",
+        topic_user_message: "真实收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+        latest_user_message: "请继续同一个任务。基于已有证据输出报告",
         last_used_at: "2026-05-24T17:37:00Z",
       }),
     ]);
 
     expect(rows[0]).toMatchObject({
-      title: "Affine market research",
-      titleSource: "provided",
+      title: "Affine（Bittensor 子网）",
+      titleSource: "topic",
       meta: ["May 24 17:37 UTC"],
       status: "Saved",
     });
-    expect(rows[0].searchText).toContain("affine 是 bittensor");
+    expect(rows[0].searchText).toContain("generated market report summary");
     expect(rows[0].searchText).toContain("affine market research");
+    expect(rows[0].searchText).toContain("请继续同一个任务");
   });
 
-  it("prefers explicit summary title fields over a rough runtime title", () => {
+  it("keeps explicit summary title fields searchable without replacing the user task title", () => {
     const rows = buildSessionRows([
       session({
         id: "summary-title-first",
@@ -694,9 +698,10 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "Affine（Bittensor 子网）",
-      titleSource: "provided",
+      titleSource: "topic",
     });
     expect(rows[0].searchText).toContain("请你收集 affine 信息");
+    expect(rows[0].searchText).toContain("affine（bittensor 子网）");
   });
 
   it("re-summarizes provided titles that are only the raw first prompt", () => {
@@ -726,7 +731,7 @@ describe("sessionList view model", () => {
     });
   });
 
-  it("skips truncated raw runtime titles before accepting generated summaries", () => {
+  it("skips truncated raw runtime titles before falling back to the user task title", () => {
     const rows = buildSessionRows([
       session({
         id: "truncated-runtime-title",
@@ -744,9 +749,10 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows.find((row) => row.id === "truncated-runtime-title")).toMatchObject({
-      title: "Affine subnet research",
-      titleSource: "provided",
+      title: "Affine（Bittensor 子网）",
+      titleSource: "topic",
     });
+    expect(rows.find((row) => row.id === "truncated-runtime-title")?.searchText).toContain("affine subnet research");
     expect(rows.find((row) => row.id === "raw-runtime-no-summary")).toMatchObject({
       title: "会话标题摘要",
       titleSource: "topic",
@@ -761,7 +767,6 @@ describe("sessionList view model", () => {
           durable: true,
           has_events: true,
           summary_title: "Repository file listing",
-          latest_user_message: "list the files",
         }),
       ]),
       "s1",
@@ -770,6 +775,29 @@ describe("sessionList view model", () => {
 
     expect(rows[0].title).toBe("Repository file listing");
     expect(rows[0].meta).not.toContain("s1");
+  });
+
+  it("does not retitle a selected chat once the user task title is known", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([
+        session({
+          id: "s1",
+          durable: true,
+          has_events: true,
+          topic_user_message: "review the WebUI session list behavior",
+          latest_user_message: "continue the same task",
+        }),
+      ]),
+      "s1",
+      reduceRawEvents(completedTurn),
+    );
+
+    expect(rows[0]).toMatchObject({
+      title: "WebUI session list behavior",
+      titleSource: "topic",
+      preview: "Answer · There are two files.",
+    });
+    expect(rows[0].searchText).toContain("list the files");
   });
 
   it("uses a pending first task as the selected chat title before events arrive", () => {

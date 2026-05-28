@@ -83,7 +83,7 @@ describe("SessionList", () => {
     expect(row).toHaveAccessibleDescription("Latest · 基于已有证据输出报告");
   });
 
-  it("shows a generated chat title instead of the first user message", () => {
+  it("keeps the user task title instead of replacing it with a generated title", () => {
     renderList([
       session({
         id: "affine-session",
@@ -94,8 +94,9 @@ describe("SessionList", () => {
       }),
     ]);
 
-    const row = screen.getByRole("button", { name: /Affine market research/ });
-    expect(row).toHaveTextContent("Affine market research");
+    const row = screen.getByRole("button", { name: /Affine（Bittensor 子网）/ });
+    expect(row).toHaveTextContent("Affine（Bittensor 子网）");
+    expect(row).not.toHaveTextContent("Affine market research");
     expect(row).not.toHaveTextContent("affine 是 Bittensor");
     expect(row).toHaveTextContent("May 24 17:37 UTC");
   });

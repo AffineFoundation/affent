@@ -46,8 +46,8 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const metrics = usageMetrics(session);
     const titleSource = displayUserMessage(session.topic_user_message) || displayUserMessage(session.latest_user_message);
     const providedTitle = providedSessionTitle(session);
-    const title = providedTitle ?? (titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session));
-    const titleKind: SessionTitleSource = providedTitle ? "provided" : titleSource ? "topic" : "fallback";
+    const title = titleSource ? summarizeSessionTitle(titleSource) : providedTitle ?? fallbackSessionTitle(session);
+    const titleKind: SessionTitleSource = titleSource ? "topic" : providedTitle ? "provided" : "fallback";
     const detail = summarizeSessionDetail(session, title);
     const preview = summarizeSessionPreview(session, title, detail);
     const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
@@ -181,7 +181,7 @@ function mergeCurrentDurableMetrics(current: string[], durable: string[]): strin
 }
 
 function currentSessionTitle(row: SessionRowView, session: SessionState | undefined, pending?: string): string {
-  if (row.titleSource === "provided") return row.title;
+  if (row.titleSource === "provided" || row.titleSource === "topic") return row.title;
   const topic = session ? conversationTopicFromTurns(session.turns) : undefined;
   if (topic) return summarizeSessionTitle(topic);
   return pending ? summarizeSessionTitle(pending) : row.title;
