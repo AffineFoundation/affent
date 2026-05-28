@@ -1489,7 +1489,7 @@ describe("Timeline", () => {
     await user.click(screen.getByRole("button", { name: /Action details|Run summary/ }));
     expect(screen.getByTestId("node-next-hint")).toHaveTextContent("check the Makefile path");
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /make/ }));
-    await user.click(screen.getByRole("button", { name: "Use as message" }));
+    await user.click(screen.getByRole("button", { name: "Use next step as draft" }));
 
     expect(screen.getByTestId("next-hint")).toHaveTextContent("check the Makefile path");
     expect(onUseAsDraft).toHaveBeenCalledWith("Continue: check the Makefile path", "tool_guidance");

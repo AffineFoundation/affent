@@ -2479,7 +2479,7 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: /Action details/ }));
     const executionTree = await screen.findByTestId("execution-tree");
     await user.click(within(executionTree).getByRole("button", { name: /make/ }));
-    await user.click(screen.getByRole("button", { name: "Use as message" }));
+    await user.click(screen.getByRole("button", { name: "Use next step as draft" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Continue: check the Makefile path");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");

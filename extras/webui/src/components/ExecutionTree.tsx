@@ -288,7 +288,7 @@ function NodeDetails({
               </span>
               {onUseAsDraft ? (
                 <button type="button" className="node-action" onClick={() => onUseAsDraft(`Continue: ${nextHint}`, "tool_guidance")}>
-                  Use as message
+                  Use next step as draft
                 </button>
               ) : null}
             </div>
