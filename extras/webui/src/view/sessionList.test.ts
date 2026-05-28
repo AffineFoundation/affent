@@ -56,7 +56,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 issue");
   });
 
-  it("surfaces durable recovery hints in row stats and search", () => {
+  it("keeps durable recovery hints searchable without putting them in row stats", () => {
     const rows = buildSessionRows([
       session({
         id: "recovery-session",
@@ -68,7 +68,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Next step run rg --files config before retrying");
-    expect(rows[0].stats).toContain("Next step run rg --files config before retrying");
+    expect(rows[0].stats).toBe("1 issue");
     expect(rows[0].searchText).toContain("next step run rg --files config before retrying");
     expect(countSessionsByFilter(rows).issues).toBe(1);
     expect(filterSessionRows(rows, "issues", "").map((row) => row.id)).toEqual(["recovery-session"]);
@@ -101,7 +101,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Memory 2 updates, 1 add, 1 replace, replaced memory:markets old dashboard rule -> prefer browser_network_read evidence");
-    expect(rows[0].stats).toContain("Memory 2 updates");
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].searchText).toContain("prefer browser_network_read evidence");
   });
 
@@ -151,7 +151,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Recall 2 hits, 1 context, 3 terms");
-    expect(rows[0].stats).toBe("Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
@@ -173,7 +173,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Recovery limit 2, 1 no-tool retry");
-    expect(rows[0].stats).toBe("2 issues · Recovery limit 2, 1 no-tool retry");
+    expect(rows[0].stats).toBe("2 issues");
     expect(rows[0].searchText).toContain("recovery limit 2, 1 no-tool retry");
   });
 
@@ -197,7 +197,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Issue types action budget 3, invalid request 1");
-    expect(rows[0].stats).toBe("2 issues · Issue types action budget 3, invalid request 1");
+    expect(rows[0].stats).toBe("2 issues");
     expect(rows[0].searchText).toContain("issue types action budget 3, invalid request 1");
     expect(countSessionsByFilter(rows).issues).toBe(1);
   });
@@ -248,7 +248,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics.some((metric) => metric.startsWith("Automation timer 0/1, 1 error, last LOOP.md not running"))).toBe(true);
-    expect(rows[0].stats).toContain("Automation timer 0/1, 1 error");
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].chips).toContain("automation");
     expect(rows[0].searchText).toContain("loop.md not running");
   });
@@ -295,7 +295,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics.some((metric) => metric.startsWith("Automation timer 1 pending/1, waiting for LOOP.md activation"))).toBe(true);
-    expect(rows[0].stats).toContain("Automation timer 1 pending/1");
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].chips).toContain("automation");
     expect(rows[0].searchText).toContain("waiting for loop.md activation");
   });
@@ -323,7 +323,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Automation timer 1/1");
-    expect(rows[0].stats).not.toContain("pending");
+    expect(rows[0].stats).toBeUndefined();
   });
 
   it("surfaces loop protocol status in row stats and chips", () => {
@@ -822,6 +822,34 @@ describe("sessionList view model", () => {
     expect(rows.find((row) => row.id === "long-loop")?.title).toBe("monitor runtime health");
   });
 
+  it("uses the loop goal instead of a numbered calibration answer as the chat title", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "loop-calibration-answer",
+        durable: true,
+        has_loop_protocol: true,
+        summary_title: "1. 全面覆盖 2. 每天更新一次",
+        topic_user_message: "1. 全面覆盖 2. 每天更新一次,每周进行一次深度分析 2. 你可以自己创建一个目录,每次基于增量补充",
+        latest_user_message: "1. 全面覆盖 2. 每天更新一次,每周进行一次深度分析 2. 你可以自己创建一个目录,每次基于增量补充",
+        loop_protocol: {
+          path: ".affent/loops/loop-calibration-answer/LOOP.md",
+          status: "draft",
+          bytes: 256,
+          state: {
+            version: 1,
+            status: "draft",
+            initial_goal_preview: "持续分析最近的世界形势,不断完善文档报告",
+          },
+        },
+      }),
+    ]);
+
+    expect(rows[0].title).toBe("持续分析最近的世界形势");
+    expect(rows[0].detail).toBeUndefined();
+    expect(rows[0].preview).toBeUndefined();
+    expect(rows[0].searchText).toContain("全面覆盖");
+  });
+
   it("uses a pending first task as the selected chat title before events arrive", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "new-1", active: true, durable: true })]),
@@ -1192,7 +1220,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("evidence 1/2 verified");
   });
 
-  it("surfaces live session search recall in the selected chat row stats", () => {
+  it("keeps live session search recall searchable without putting it in row stats", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -1216,11 +1244,11 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
-  it("surfaces live recovery guard interventions in the selected chat row stats", () => {
+  it("keeps live recovery guard interventions searchable without putting them in row stats", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -1244,11 +1272,11 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 issue · Recovery limit 2, 1 no-tool retry");
+    expect(rows[0].stats).toBe("1 issue");
     expect(rows[0].searchText).toContain("recovery limit 2, 1 no-tool retry");
   });
 
-  it("surfaces live structured tool failure kinds in the selected chat row stats", () => {
+  it("keeps live structured tool failure kinds searchable without putting them in row stats", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -1274,7 +1302,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("Issue types action budget 2, invalid request 1");
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].searchText).toContain("issue types action budget 2, invalid request 1");
   });
 

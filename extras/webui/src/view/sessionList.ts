@@ -44,12 +44,17 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const status = session.active ? "Live" : session.durable ? "Saved" : "Ephemeral";
     const chips = featureChips(session);
     const metrics = usageMetrics(session);
-    const titleSource = displayUserMessage(session.topic_user_message) || displayUserMessage(session.latest_user_message);
+    const userTitleSource = displayUserMessage(session.topic_user_message) || displayUserMessage(session.latest_user_message);
+    const loopGoalTitleSource = sessionLoopInitialGoal(session);
+    const preferLoopGoalTitle = shouldPreferLoopGoalTitle(userTitleSource, loopGoalTitleSource);
+    const titleSource = preferLoopGoalTitle
+      ? loopGoalTitleSource
+      : userTitleSource || loopGoalTitleSource;
     const providedTitle = providedSessionTitle(session);
     const title = titleSource ? summarizeSessionTitle(titleSource) : providedTitle ?? fallbackSessionTitle(session);
     const titleKind: SessionTitleSource = titleSource ? "topic" : providedTitle ? "provided" : "fallback";
-    const detail = summarizeSessionDetail(session, title);
-    const preview = summarizeSessionPreview(session, title, detail);
+    const detail = preferLoopGoalTitle ? undefined : summarizeSessionDetail(session, title);
+    const preview = preferLoopGoalTitle ? undefined : summarizeSessionPreview(session, title, detail);
     const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
     const stats = summarizeSessionStats(metrics);
     const searchText = [
@@ -62,6 +67,7 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
       session.generated_title,
       session.topic_user_message,
       session.latest_user_message,
+      loopGoalTitleSource,
       status,
       updated,
       ...metrics,
@@ -137,7 +143,9 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState | undefi
   const pending = pendingTask?.replace(/\s+/g, " ").trim();
   const title = currentSessionTitle(row, session, pending);
   const pendingDetail = pending ? `Sending · ${summarizeLatestPendingTask(pending, title)}` : undefined;
-  const detail = pendingDetail ?? (session ? currentSessionDetail(session, title) : row.detail);
+  const latestUserText = session ? [...session.turns].reverse().find((turn) => Boolean(turn.userText?.trim()))?.userText : undefined;
+  const suppressCurrentDetail = row.chips.includes("automation") && isLikelyNumberedCalibrationAnswer(latestUserText);
+  const detail = pendingDetail ?? (session && !suppressCurrentDetail ? currentSessionDetail(session, title) : row.detail);
   const preview = pending
     ? "Waiting for the next update."
     : session
@@ -338,7 +346,14 @@ function displaySessionStatMetric(metric: string): string[] {
 }
 
 function isLowSignalSessionStatPart(part: string): boolean {
-  return /^\d+ messages?$/.test(part) || /^\d+ actions?$/.test(part);
+  if (/^\d+ messages?$/.test(part) || /^\d+ actions?$/.test(part)) return true;
+  if (part.startsWith("Issue types ")) return true;
+  if (part.startsWith("Next step ")) return true;
+  if (part.startsWith("Recovery ")) return true;
+  if (part.startsWith("Automation ")) return true;
+  if (part.startsWith("Memory ")) return true;
+  if (part.startsWith("Recall ")) return true;
+  return false;
 }
 
 function currentSessionSearchMetrics(session: SessionState): string[] {
@@ -924,6 +939,24 @@ function displayUserMessage(value?: string): string | undefined {
   return text;
 }
 
+function sessionLoopInitialGoal(session: SessionSummary): string | undefined {
+  const goal = session.loop_protocol?.state?.initial_goal_preview?.trim() || session.loop_state?.initial_goal_preview?.trim();
+  return displayUserMessage(goal);
+}
+
+function shouldPreferLoopGoalTitle(userTitle: string | undefined, loopGoal: string | undefined): loopGoal is string {
+  if (!loopGoal) return false;
+  if (!userTitle) return true;
+  return isLikelyNumberedCalibrationAnswer(userTitle);
+}
+
+function isLikelyNumberedCalibrationAnswer(text: string | undefined): boolean {
+  const normalized = normalizeComparableTitle(text ?? "");
+  if (!normalized) return false;
+  if (/^\d+[.、)]\s*/.test(normalized)) return true;
+  return /^[-*]\s*\d+[.、)]?\s*/.test(normalized);
+}
+
 function isPlaceholderTitle(text: string): boolean {
   const normalized = normalizeComparableTitle(text).replace(/^[()[\]{}'"“”‘’]+|[()[\]{}'"“”‘’]+$/g, "");
   if (/^\d+$/.test(normalized)) return true;
@@ -1190,7 +1223,7 @@ function stripTopicPrefix(text: string): string {
 function trimTopicSuffix(text: string): string {
   return text
     .replace(/(?:的)?(?:相关)?(?:信息|资料|内容|数据)(?:并.*|，.*|,.*|$)/, "")
-    .replace(/(?:并)?(?:向我)?(?:介绍|说明|分析|总结|输出|生成).*/, "")
+    .replace(/(?:并|，|,|；|;)\s*(?:向我)?(?:介绍|说明|分析|总结|输出|生成).*/, "")
     .replace(/(?:是什么|是啥|是什麼)\s*$/, "")
     .trim();
 }

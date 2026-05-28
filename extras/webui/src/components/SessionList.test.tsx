@@ -632,7 +632,8 @@ describe("SessionList", () => {
 
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Limits/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("repeated web fetch failures");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("Recovery limit 1");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("1 issue");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("Recovery limit 1");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("taostats subnet metrics");
 
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Issues/ }));
