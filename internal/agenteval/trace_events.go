@@ -166,9 +166,10 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			if !traceEventMatchesTurn(p.TurnID, turnID) {
 				return false, nil
 			}
+			hadTurnEnd := t.TurnEndReason != ""
 			t.TurnEndReason = p.Reason
 			if p.ToolStats != nil {
-				t.ToolStats = ToolRuntimeStats{
+				stats := ToolRuntimeStats{
 					ToolRequests:               p.ToolStats.ToolRequests,
 					ToolNameCanonicalized:      p.ToolStats.ToolNameCanonicalized,
 					ToolArgsRepaired:           p.ToolStats.ToolArgsRepaired,
@@ -200,6 +201,11 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 					SessionSearchRecent:        p.ToolStats.SessionSearchRecent,
 					ToolContextTruncated:       p.ToolStats.ToolContextTruncated,
 					ToolContextOmittedBytes:    p.ToolStats.ToolContextOmittedBytes,
+				}
+				if hadTurnEnd && turnID == "" {
+					t.ToolStats = mergeToolRuntimeStats(t.ToolStats, stats)
+				} else {
+					t.ToolStats = stats
 				}
 			}
 			return true, nil
@@ -445,4 +451,53 @@ func firstString(values []string) string {
 
 func traceEventMatchesTurn(eventTurnID, wantTurnID string) bool {
 	return wantTurnID == "" || eventTurnID == "" || eventTurnID == wantTurnID
+}
+
+func mergeToolRuntimeStats(a, b ToolRuntimeStats) ToolRuntimeStats {
+	a.ToolRequests += b.ToolRequests
+	a.ToolNameCanonicalized += b.ToolNameCanonicalized
+	a.ToolArgsRepaired += b.ToolArgsRepaired
+	a.ToolRepairCalls += b.ToolRepairCalls
+	a.ToolRepairSucceeded += b.ToolRepairSucceeded
+	a.ToolRepairFailed += b.ToolRepairFailed
+	a.ToolRepairNotes += b.ToolRepairNotes
+	a.ToolRepairByKind = mergeStringIntMap(a.ToolRepairByKind, b.ToolRepairByKind)
+	a.ToolFailureByKind = mergeStringIntMap(a.ToolFailureByKind, b.ToolFailureByKind)
+	a.ToolErrors += b.ToolErrors
+	a.ToolDurationMS += b.ToolDurationMS
+	a.LoopGuardInterventions += b.LoopGuardInterventions
+	a.ForcedNoTools += b.ForcedNoTools
+	a.SourceAccessResults += b.SourceAccessResults
+	a.SourceAccessVerified += b.SourceAccessVerified
+	a.SourceAccessDiscoveryOnly += b.SourceAccessDiscoveryOnly
+	a.SourceAccessNetwork += b.SourceAccessNetwork
+	a.SourceAccessDynamicPartial += b.SourceAccessDynamicPartial
+	a.MemoryUpdates += b.MemoryUpdates
+	a.MemoryUpdateAdd += b.MemoryUpdateAdd
+	a.MemoryUpdateReplace += b.MemoryUpdateReplace
+	a.MemoryUpdateRemove += b.MemoryUpdateRemove
+	a.MemorySearchCalls += b.MemorySearchCalls
+	a.MemorySearchMisses += b.MemorySearchMisses
+	a.SessionSearchCalls += b.SessionSearchCalls
+	a.SessionSearchResults += b.SessionSearchResults
+	a.SessionSearchContextHits += b.SessionSearchContextHits
+	a.SessionSearchMatchedTerms += b.SessionSearchMatchedTerms
+	a.SessionSearchRecent += b.SessionSearchRecent
+	a.ToolContextTruncated += b.ToolContextTruncated
+	a.ToolContextOmittedBytes += b.ToolContextOmittedBytes
+	return a
+}
+
+func mergeStringIntMap(a, b map[string]int) map[string]int {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(a)+len(b))
+	for key, value := range a {
+		out[key] += value
+	}
+	for key, value := range b {
+		out[key] += value
+	}
+	return out
 }

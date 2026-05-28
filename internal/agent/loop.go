@@ -2076,6 +2076,7 @@ func safeToolResultArtifactComponent(s string) string {
 }
 
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) int {
+	content = skippedToolResultContent(content)
 	for _, skipped := range calls {
 		callID := skipped.ID
 		name := skipped.Function.Name
@@ -2114,6 +2115,14 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 		}
 	}
 	return len(calls)
+}
+
+func skippedToolResultContent(content string) string {
+	kind := toolfailure.KindForResult("", content, true)
+	if kind == "" || strings.Contains(content, "Failure: kind=") {
+		return content
+	}
+	return content + "\nFailure: kind=" + kind
 }
 
 // consumeAndPersist drains a single LLM streaming call: emits

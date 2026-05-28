@@ -45,17 +45,24 @@ func Kinds(output string) []string {
 }
 
 func KindForResult(tool, result string, failed bool) string {
-	if !failed && !IsNoEvidenceResult(tool, result) {
+	kinds := KindsForResult(tool, result, failed)
+	if len(kinds) == 0 {
 		return ""
 	}
-	return Kind(result)
+	return kinds[0]
 }
 
 func KindsForResult(tool, result string, failed bool) []string {
 	if !failed && !IsNoEvidenceResult(tool, result) {
 		return nil
 	}
-	return Kinds(result)
+	kinds := Kinds(result)
+	if failed {
+		if kind := skippedToolBudgetKind(result); kind != "" && !containsString(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	return kinds
 }
 
 func IsNoEvidenceResult(tool, result string) bool {
@@ -106,4 +113,24 @@ func validKind(kind string) bool {
 		return false
 	}
 	return true
+}
+
+func skippedToolBudgetKind(result string) string {
+	switch {
+	case strings.Contains(result, "max_turns reached before this tool ran"):
+		return "loop_guard_no_budget"
+	case strings.Contains(result, "tool call budget reached before this tool ran"):
+		return "loop_guard_no_budget"
+	default:
+		return ""
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

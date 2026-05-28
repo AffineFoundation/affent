@@ -47,6 +47,32 @@ func TestApplyTraceEventKeepsLegacyToolResultsWithoutTurnID(t *testing.T) {
 	}
 }
 
+func TestApplyTraceEventAggregatesDiskParsedTurnStats(t *testing.T) {
+	trace := Trace{}
+	pending := map[string]int{}
+
+	if done, err := applyTraceEvent(&trace, pending, sse.TypeTurnEnd, json.RawMessage(`{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":2,"tool_errors":1,"tool_failure_by_kind":{"invalid_args":1},"memory_updates":1}}`), ""); err != nil || !done {
+		t.Fatalf("first turn.end done=%t err=%v", done, err)
+	}
+	if done, err := applyTraceEvent(&trace, pending, sse.TypeTurnEnd, json.RawMessage(`{"turn_id":"turn-2","reason":"completed","tool_stats":{"tool_requests":3,"tool_errors":2,"tool_failure_by_kind":{"loop_guard_no_budget":2},"session_search_calls":1}}`), ""); err != nil || !done {
+		t.Fatalf("second turn.end done=%t err=%v", done, err)
+	}
+
+	if trace.TurnEndReason != "completed" {
+		t.Fatalf("TurnEndReason = %q, want completed", trace.TurnEndReason)
+	}
+	if trace.ToolStats.ToolRequests != 5 ||
+		trace.ToolStats.ToolErrors != 3 ||
+		trace.ToolStats.MemoryUpdates != 1 ||
+		trace.ToolStats.SessionSearchCalls != 1 {
+		t.Fatalf("ToolStats did not aggregate multi-turn values: %+v", trace.ToolStats)
+	}
+	if trace.ToolStats.ToolFailureByKind["invalid_args"] != 1 ||
+		trace.ToolStats.ToolFailureByKind["loop_guard_no_budget"] != 2 {
+		t.Fatalf("ToolFailureByKind did not aggregate: %+v", trace.ToolStats.ToolFailureByKind)
+	}
+}
+
 func TestApplyTraceEventCapturesContextInjectionMetadata(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

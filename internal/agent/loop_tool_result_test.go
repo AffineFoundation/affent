@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,6 +40,30 @@ func containsString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func TestSkippedToolResultContentAddsNoBudgetFailureKind(t *testing.T) {
+	cases := []string{
+		"(max_turns reached before this tool ran)",
+		"(tool call budget reached before this tool ran)",
+	}
+	for _, input := range cases {
+		got := skippedToolResultContent(input)
+		if !strings.Contains(got, input) {
+			t.Fatalf("skipped content lost original message: %q", got)
+		}
+		if !strings.Contains(got, "Failure: kind=loop_guard_no_budget") {
+			t.Fatalf("skipped content missing no-budget failure kind: %q", got)
+		}
+		if strings.Count(got, "Failure: kind=") != 1 {
+			t.Fatalf("skipped content duplicated failure kind: %q", got)
+		}
+	}
+
+	alreadyStructured := "(max_turns reached before this tool ran)\nFailure: kind=loop_guard_no_budget"
+	if got := skippedToolResultContent(alreadyStructured); got != alreadyStructured {
+		t.Fatalf("already structured content changed: %q", got)
+	}
 }
 
 func TestLoopGuardResultForcesNoTools(t *testing.T) {
@@ -1633,9 +1658,11 @@ func readReqBody(r *http.Request) (string, error) {
 	if r.Body == nil {
 		return "", nil
 	}
-	buf := make([]byte, 64*1024)
-	n, _ := r.Body.Read(buf)
-	return string(buf[:n]), nil
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		return "", err
+	}
+	return string(raw), nil
 }
 
 // TestRunTurn_MaxStepsEmitsMaxTurnsReason pins the "step limit" exit

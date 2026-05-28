@@ -50,6 +50,12 @@ func TestKindForResult(t *testing.T) {
 	if got := KindForResult("read_file", "Failure: kind=blocked", false); got != "" {
 		t.Fatalf("successful read_file content kind = %q, want empty", got)
 	}
+	if got := KindForResult("web_fetch", "(max_turns reached before this tool ran)", true); got != "loop_guard_no_budget" {
+		t.Fatalf("skipped max-turn tool kind = %q, want loop_guard_no_budget", got)
+	}
+	if got := KindForResult("web_fetch", "(tool call budget reached before this tool ran)", true); got != "loop_guard_no_budget" {
+		t.Fatalf("skipped tool-budget kind = %q, want loop_guard_no_budget", got)
+	}
 
 	got := KindsForResult("web_fetch", "[empty response: URL=https://example]\nFailure: kind=empty_response\n\nloop_guard\nFailure: kind=loop_guard_repeated_failures", false)
 	want := []string{"empty_response", "loop_guard_repeated_failures"}
