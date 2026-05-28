@@ -106,8 +106,11 @@ Scenario records describe one eval case:
   append to the same conversation and trace.
 - `expectations`: optional structured copy of the scenario's declarative checks,
   including required/forbidden tools, tool counts, source-access requirements,
-  loop-decision requirements, loop protocol calibration/feed, active plan
-  checkpoint/current-situation, and last-turn checkpoint requirements, context-compaction requirements, optional
+  direct `session_search` hit requirements, no-hit
+  `required_recent_session_search` anchor requirements, loop-decision
+  requirements, loop protocol calibration/feed, active plan
+  checkpoint/current-situation, and last-turn checkpoint requirements,
+  context-compaction requirements, optional
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
@@ -207,6 +210,7 @@ Scenario records describe one eval case:
   `browser_network`, `browser_network:no_matches`,
   `browser_network:unread_refs`, `browser_network:refs`,
   `memory_update:replace`, `empty_recall`,
+  `empty_recall:recent_sessions`,
   `loop_guard:forced_no_tools`,
   `recall:no_context`, `recall:no_matched_terms`,
   `recall:weak_context`, `recall:weak_matched_terms`,

@@ -123,6 +123,7 @@ func TestDebugRecoveryPriorityTagsIncludesRecallDegradation(t *testing.T) {
 		"recall:memory_no_topic_anchors",
 		"recall:weak_matched_terms",
 		"recall:weak_context",
+		"empty_recall:recent_sessions",
 		"source_network:partial_read",
 		"outcome:failed",
 		"misc:later",
@@ -130,10 +131,10 @@ func TestDebugRecoveryPriorityTagsIncludesRecallDegradation(t *testing.T) {
 	want := []string{
 		"outcome:failed",
 		"source_network:partial_read",
+		"empty_recall:recent_sessions",
 		"recall:weak_context",
 		"recall:weak_matched_terms",
 		"recall:memory_no_topic_anchors",
-		"recall:memory_topic_anchors",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)

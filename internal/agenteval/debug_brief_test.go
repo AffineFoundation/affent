@@ -291,6 +291,23 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	brief = BuildDebugBrief(BatchResult{
 		OK: true,
 		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:   1,
+			SessionSearchResults: 0,
+			SessionSearchRecent:  2,
+		},
+	})
+	empty = debugBriefItemByKind(brief, "empty_recall")
+	if empty == nil ||
+		empty.Severity != "info" ||
+		empty.Message != "session recall returned no direct hits but exposed recent session anchors for retry" ||
+		empty.Counts["recent"] != 2 ||
+		!stringSliceContains(brief.Tags, "empty_recall:recent_sessions") {
+		t.Fatalf("recent-session anchor recall debug item = %+v tags=%+v", empty, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
 			SessionSearchCalls:        2,
 			SessionSearchResults:      2,
 			SessionSearchContextHits:  2,

@@ -1312,11 +1312,16 @@ remote execution service, or comparable sandbox.
 
 ## Development
 
-Run the root module tests:
+Run the root module tests. The container target defaults to Affent-owned root
+packages so temporary cloned repositories under the workspace do not pollute the
+module wildcard during agent coding/PR tasks:
 
 ```bash
-go test ./...
+make test-container
 ```
+
+Use `TEST_PACKAGES=./...` only when the workspace is known not to contain
+unrelated Go packages.
 
 Run nested module tests separately:
 

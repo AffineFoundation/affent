@@ -74,7 +74,8 @@ CONTAINER_CPUS ?= 2
 CONTAINER_PIDS ?= 512
 TEST_DIR ?= .
 GO_TEST_FLAGS ?= -p=1
-TEST_PACKAGES ?= ./...
+ROOT_TEST_PACKAGES ?= ./cmd/affentctl ./cmd/affenteval ./internal/...
+TEST_PACKAGES ?= $(ROOT_TEST_PACKAGES)
 
 define require_affent_runtime_container
 if test -z "$(SERVE_CONTAINER_NAME)"; then \

@@ -1362,6 +1362,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"context_compaction:summary_missing",
 		"context_compaction:summary_empty",
 		"truncation:missing_artifact",
+		"empty_recall:recent_sessions",
 		"recall:no_context",
 		"recall:no_matched_terms",
 		"recall:weak_context",
