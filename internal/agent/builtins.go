@@ -570,6 +570,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 			// command. The Loop's dispatch wraps a non-nil err alongside
 			// res into "Error: <err>\n<res>" — exactly what we want.
 			out := redactSecretValues(formatShellOutput(res), deps.SecretValuesProvider)
+			out = relativizeWorkspacePathsInText(out, deps.HostWorkspaceDir)
 			if shellCommandNotFound(res) {
 				out += "\nNext: command not found. Check the executable name, run `which <command>` or inspect PATH, then retry with an installed tool."
 			}
@@ -653,6 +654,82 @@ func formatShellOutput(res executor.ExecResult) string {
 	}
 	fmt.Fprintf(&b, "\n[exit %d]", res.ExitCode)
 	return b.String()
+}
+
+func relativizeWorkspacePathsInText(text, workspace string) string {
+	workspace = strings.TrimSpace(workspace)
+	if text == "" || workspace == "" {
+		return text
+	}
+	candidates := []string{filepath.Clean(workspace), filepath.ToSlash(filepath.Clean(workspace))}
+	for _, candidate := range uniqueNonEmptyStrings(candidates) {
+		text = relativizeWorkspacePathCandidate(text, candidate)
+	}
+	return text
+}
+
+func uniqueNonEmptyStrings(values []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || value == "." || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func relativizeWorkspacePathCandidate(text, workspace string) string {
+	if text == "" || workspace == "" {
+		return text
+	}
+	var b strings.Builder
+	b.Grow(len(text))
+	for i := 0; i < len(text); {
+		j := strings.Index(text[i:], workspace)
+		if j < 0 {
+			b.WriteString(text[i:])
+			break
+		}
+		j += i
+		end := j + len(workspace)
+		if !workspacePathBoundaryBefore(text, j) || !workspacePathBoundaryAfter(text, end) {
+			b.WriteString(text[i:end])
+			i = end
+			continue
+		}
+		b.WriteString(text[i:j])
+		b.WriteByte('.')
+		i = end
+	}
+	return b.String()
+}
+
+func workspacePathBoundaryBefore(text string, idx int) bool {
+	if idx <= 0 {
+		return true
+	}
+	return !workspacePathWordByte(text[idx-1])
+}
+
+func workspacePathBoundaryAfter(text string, idx int) bool {
+	if idx >= len(text) {
+		return true
+	}
+	if text[idx] == '/' || text[idx] == '\\' {
+		return true
+	}
+	return !workspacePathWordByte(text[idx])
+}
+
+func workspacePathWordByte(b byte) bool {
+	return b == '/' || b == '\\' || b == '.' || b == '_' || b == '-' ||
+		(b >= '0' && b <= '9') ||
+		(b >= 'A' && b <= 'Z') ||
+		(b >= 'a' && b <= 'z')
 }
 
 func redactSecretValues(text string, provider func() []string) string {

@@ -957,6 +957,35 @@ func TestShellTool_OutputCaptureIsBounded(t *testing.T) {
 	}
 }
 
+func TestShellToolRelativizesWorkspacePathInOutput(t *testing.T) {
+	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	rec := &recordingExec{result: executor.ExecResult{
+		ExitCode: 0,
+		Stdout: strings.Join([]string{
+			ws,
+			filepath.Join(ws, "cmd", "main.go") + ":12",
+			ws + "-sibling",
+		}, "\n"),
+		Stderr: filepath.Join(ws, "internal", "agent") + "\n",
+	}}
+	tool := shellTool(BuiltinDeps{Executor: rec, HostWorkspaceDir: ws})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"pwd && go test ./..."}`))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(out, ws+"\n") || strings.Contains(out, filepath.Join(ws, "cmd")) || strings.Contains(out, filepath.Join(ws, "internal")) {
+		t.Fatalf("shell output leaked workspace absolute path:\n%s", out)
+	}
+	for _, want := range []string{".", "./cmd/main.go:12", "./internal/agent"} {
+		if !strings.Contains(filepath.ToSlash(out), want) {
+			t.Fatalf("shell output missing workspace-relative %q:\n%s", want, out)
+		}
+	}
+	if !strings.Contains(out, ws+"-sibling") {
+		t.Fatalf("path boundary should not rewrite sibling path:\n%s", out)
+	}
+}
+
 func TestShellToolNormalizesWorkspacePathAliasCWD(t *testing.T) {
 	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
 	rec := &recordingExec{}

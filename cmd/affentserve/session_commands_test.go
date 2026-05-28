@@ -29,8 +29,14 @@ func TestHandleSessionCommandRunsShellAndPersistsTrace(t *testing.T) {
 	if resp.SessionID != "workbench-command" || resp.ExitCode != 0 || !strings.Contains(resp.Result, "workbench-command") {
 		t.Fatalf("response = %+v", resp)
 	}
-	if resp.Workspace == "" || !strings.Contains(resp.Result, filepath.ToSlash(resp.Workspace)) {
-		t.Fatalf("command should default to the session workspace; workspace=%q result=%q", resp.Workspace, resp.Result)
+	if resp.Workspace == "" {
+		t.Fatalf("command response should include workspace metadata: %+v", resp)
+	}
+	if strings.Contains(filepath.ToSlash(resp.Result), filepath.ToSlash(resp.Workspace)) {
+		t.Fatalf("command result should expose a workspace-relative view, not the absolute workspace; workspace=%q result=%q", resp.Workspace, resp.Result)
+	}
+	if !strings.Contains(resp.Result, ".") {
+		t.Fatalf("command should default to the session workspace and render it as relative root; result=%q", resp.Result)
 	}
 	tracePath := filepath.Join(pool.sessionDirPath("workbench-command"), "events.jsonl")
 	waitForFileSubstring(t, tracePath, `"mode":"manual_command"`)
@@ -68,8 +74,11 @@ func TestHandleSessionCommandResolvesRelativeCWDInsideWorkspace(t *testing.T) {
 	if resp.ExitCode != 0 || !strings.Contains(resp.Result, "relative-cwd-ok") {
 		t.Fatalf("relative cwd command failed: %+v", resp)
 	}
-	if !strings.Contains(resp.Result, filepath.ToSlash(subdir)) {
-		t.Fatalf("relative cwd should resolve under workspace subdir %q; result=%q", subdir, resp.Result)
+	if strings.Contains(filepath.ToSlash(resp.Result), filepath.ToSlash(subdir)) {
+		t.Fatalf("relative cwd result should not leak absolute workspace subdir %q; result=%q", subdir, resp.Result)
+	}
+	if !strings.Contains(filepath.ToSlash(resp.Result), "./sub") {
+		t.Fatalf("relative cwd should render under workspace as ./sub; result=%q", resp.Result)
 	}
 }
 
