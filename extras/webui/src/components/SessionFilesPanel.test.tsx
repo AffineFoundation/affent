@@ -5,13 +5,12 @@ import { SessionFilesPanel } from "./SessionFilesPanel";
 import type { SessionFilesView } from "../view/sessionFiles";
 
 describe("SessionFilesPanel", () => {
-  it("renders file evidence and creates a path draft", async () => {
+  it("renders file evidence with review-first actions", async () => {
     const user = userEvent.setup();
     const onOpenArtifact = vi.fn();
-    const onUseAsDraft = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} />);
 
     const panel = screen.getByTestId("session-files-panel");
     const dashboard = screen.getByLabelText("File work summary");
@@ -20,8 +19,9 @@ describe("SessionFilesPanel", () => {
     expect(within(dashboard).getByText("All").closest("button")).toHaveTextContent("2");
     expect(within(dashboard).getByText("Changed").closest("button")).toHaveTextContent("1");
     expect(within(dashboard).getByText("Snapshot").closest("button")).toHaveTextContent("1");
+    expect(within(dashboard).queryByText("Issues")).toBeNull();
     expect(screen.getByText("Changed file")).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Review change" }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole("button", { name: "View snapshot" }).length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Search files")).toBeInTheDocument();
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Read + Changed · available · turn 2 · 2 actions");
@@ -38,29 +38,16 @@ describe("SessionFilesPanel", () => {
     await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
-    await user.click(screen.getByRole("button", { name: "Copy all evidence" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Session file evidence"));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"));
-
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy evidence" })[0]);
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"));
-
     await user.click(screen.getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File snapshot for src/payments.ts"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("export function checkout"));
 
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
-
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Review change" })[0]);
-    await user.click(screen.getByRole("button", { name: "Use all as draft" }));
-    await user.click(screen.getByRole("button", { name: "Use text as draft" }));
-
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("File evidence for src/payments.ts"), "file_evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Next: rerun checkout tests"), "file_evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Session file evidence"), "file_evidence");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("export function checkout"), "file_snapshot");
+    expect(screen.queryByRole("button", { name: "Copy all evidence" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use all as draft" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Copy evidence" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use text as draft" })).toBeNull();
 
     await user.clear(screen.getByLabelText("Search file snapshot"));
     await user.type(screen.getByLabelText("Search files"), "listed");

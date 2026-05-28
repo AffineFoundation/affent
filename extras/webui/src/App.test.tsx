@@ -2434,12 +2434,11 @@ describe("App", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence: read.txt");
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
     expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Inspect file" })[0]);
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file evidence");
-    const draft = screen.getByPlaceholderText("Message Affent...");
-    expect(draft).toHaveValue();
-    expect((draft as HTMLTextAreaElement).value).toContain("File evidence for src/payments.ts");
-    expect((draft as HTMLTextAreaElement).value).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "View snapshot" })[0]);
+    expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("checkout route handler");
+    const composerContext = screen.queryByTestId("composer-context");
+    if (composerContext) expect(composerContext).not.toHaveTextContent("Using file evidence");
   });
 
   it("surfaces workspace evidence inside Workbench without adding default Chat noise", async () => {

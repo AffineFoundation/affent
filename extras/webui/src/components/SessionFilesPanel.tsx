@@ -1,12 +1,7 @@
 import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import {
-  fileContentDraft,
   fileContentText,
-  fileEvidenceDraft,
-  fileEvidenceText,
-  filesEvidenceDraft,
-  filesEvidenceText,
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
@@ -19,7 +14,6 @@ export function SessionFilesPanel({
   files,
   defaultOpen = false,
   onOpenArtifact,
-  onUseAsDraft,
 }: {
   files: SessionFilesView;
   defaultOpen?: boolean;
@@ -58,16 +52,6 @@ export function SessionFilesPanel({
             <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
             <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
           </div>
-          {files.items.length > 0 ? (
-            <div className="session-files-overview-actions">
-              <CopyButton label="Copy all evidence" value={filesEvidenceText(files)} className="ghost-action" />
-              {onUseAsDraft ? (
-                <button type="button" className="ghost-action" onClick={() => onUseAsDraft(filesEvidenceDraft(files), "file_evidence")}>
-                  Use all as draft
-                </button>
-              ) : null}
-            </div>
-          ) : null}
         </div>
         {focus ? (
           <div className="session-files-focus" data-tone={focus.tone}>
@@ -76,12 +60,49 @@ export function SessionFilesPanel({
               <strong title={focus.item.path}>{displayPath(focus.item.path)}</strong>
               <small>{focus.detail}</small>
             </div>
-            {onUseAsDraft ? (
-              <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(focus.item), "file_evidence")}>
-                {fileDraftActionLabel(focus.item)}
-              </button>
+            {focus.item.contentPreview || (focus.item.artifactPath && onOpenArtifact) ? (
+              <span className="session-files-focus-actions">
+                {focus.item.contentPreview ? (
+                  <button type="button" className="ghost-action" onClick={() => setSelectedPath(focus.item.path)}>
+                    View snapshot
+                  </button>
+                ) : null}
+                {focus.item.artifactPath && onOpenArtifact ? (
+                  <button type="button" className="ghost-action" onClick={() => onOpenArtifact(focus.item.artifactPath ?? "")}>
+                    Open evidence
+                  </button>
+                ) : null}
+              </span>
             ) : null}
           </div>
+        ) : null}
+        {selectedItem ? (
+          <div className="session-file-preview" data-testid="session-file-preview">
+            <div className="session-file-preview-head">
+              <div>
+                <span>File snapshot</span>
+                <strong title={selectedItem.path}>{selectedItem.path}</strong>
+              </div>
+              <small>{selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
+            </div>
+            <div className="session-file-preview-toolbar">
+              <label className="session-skills-search">
+                <span>Search snapshot</span>
+                <input
+                  aria-label="Search file snapshot"
+                  value={previewQuery}
+                  onChange={(event) => setPreviewQuery(event.target.value)}
+                  placeholder="text in loaded file"
+                />
+              </label>
+              <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
+            </div>
+            <pre className="code session-file-preview-code" data-testid="session-file-preview-content">
+              <HighlightText text={selectedItem.contentPreview ?? ""} query={previewQuery} />
+            </pre>
+          </div>
+        ) : files.items.some((item) => item.contentPreview) && visibleItems.length > 0 ? (
+          <div className="session-skills-empty">No loaded file snapshot in the visible results.</div>
         ) : null}
         {files.items.length > 1 ? (
           <div className="session-skills-controls">
@@ -112,8 +133,6 @@ export function SessionFilesPanel({
                   ) : null}
                 </div>
                 <span className="session-files-actions">
-                  <CopyButton label="Copy path" value={item.path} className="ghost-action" />
-                  <CopyButton label="Copy evidence" value={fileEvidenceText(item)} className="ghost-action" />
                   {item.contentPreview ? (
                     <button
                       type="button"
@@ -129,11 +148,7 @@ export function SessionFilesPanel({
                       Open evidence
                     </button>
                   ) : null}
-                  {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
-                      {fileDraftActionLabel(item)}
-                    </button>
-                  ) : null}
+                  <CopyButton label="Copy path" value={item.path} className="ghost-action" />
                 </span>
               </li>
             ))}
@@ -143,39 +158,6 @@ export function SessionFilesPanel({
         ) : (
           <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
         )}
-        {selectedItem ? (
-          <div className="session-file-preview" data-testid="session-file-preview">
-            <div className="session-file-preview-head">
-              <div>
-                <span>File snapshot</span>
-                <strong title={selectedItem.path}>{selectedItem.path}</strong>
-              </div>
-              <small>{selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
-            </div>
-            <div className="session-file-preview-toolbar">
-              <label className="session-skills-search">
-                <span>Search snapshot</span>
-                <input
-                  aria-label="Search file snapshot"
-                  value={previewQuery}
-                  onChange={(event) => setPreviewQuery(event.target.value)}
-                  placeholder="text in loaded file"
-                />
-              </label>
-              <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
-              {onUseAsDraft ? (
-                <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileContentDraft(selectedItem), "file_snapshot")}>
-                  Use text as draft
-                </button>
-              ) : null}
-            </div>
-            <pre className="code session-file-preview-code" data-testid="session-file-preview-content">
-              <HighlightText text={selectedItem.contentPreview ?? ""} query={previewQuery} />
-            </pre>
-          </div>
-        ) : files.items.some((item) => item.contentPreview) && visibleItems.length > 0 ? (
-          <div className="session-skills-empty">No loaded file snapshot in the visible results.</div>
-        ) : null}
       </div>
     </details>
   );
@@ -192,6 +174,7 @@ function FileFilterButton({
   active: boolean;
   onClick: () => void;
 }) {
+  if (value === 0 && !active) return null;
   return (
     <button type="button" className="session-files-filter" data-active={active ? "true" : "false"} onClick={onClick}>
       <span>{label}</span>
@@ -252,15 +235,6 @@ function filesFocus(items: readonly SessionFileEvidence[]):
   const snapshot = items.find((item) => item.contentPreview);
   if (snapshot) return { label: "Loaded snapshot", detail: "read_file text is available for review.", tone: "snapshot", item: snapshot };
   return undefined;
-}
-
-function fileDraftActionLabel(item: SessionFileEvidence): string {
-  if (item.status === "failed") return "Fix path";
-  if (item.status === "running") return "Check status";
-  if (item.actions.includes("changed")) return "Review change";
-  if (item.contentPreview) return "Inspect file";
-  if (item.actions.includes("listed")) return "Continue here";
-  return "Use evidence";
 }
 
 function fileMeta(item: SessionFileEvidence): string {

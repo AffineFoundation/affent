@@ -1936,6 +1936,14 @@ button.workbench-context-runtime-item:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.session-files-focus-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
 .session-run-list {
   display: grid;
   gap: 7px;
@@ -2428,7 +2436,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-file-preview-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
   align-items: end;
   min-width: 0;
