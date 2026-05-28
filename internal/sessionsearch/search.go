@@ -138,6 +138,19 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 						sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
 					}
 				}
+				eventsPath := filepath.Join(sessionsDir, sid, "events.jsonl")
+				if mtime, ok := regularFileModTime(eventsPath); ok {
+					hits, serr := scoreEventsFile(ctx, eventsPath, sid, terms, maxPerSession, mtime)
+					if serr != nil {
+						if ctx.Err() != nil {
+							return nil, ctx.Err()
+						}
+					} else {
+						for _, hit := range hits {
+							sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
+						}
+					}
+				}
 				for _, hit := range sessionHits {
 					all = appendBoundedHits(all, hit, topK)
 				}
@@ -581,6 +594,65 @@ func scoreLoopFile(ctx context.Context, path, sid string, terms []string, mtime 
 		MatchedTerms: append([]string(nil), matchedTerms...),
 		ModTime:      mtime,
 	}, true, nil
+}
+
+func scoreEventsFile(ctx context.Context, path, sid string, terms []string, maxPerSession int, mtime string) ([]Hit, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, ok := regularFileInfo(path); !ok {
+		return nil, errors.New("events log must be a regular file")
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	reader := bufio.NewReaderSize(f, 64*1024)
+	var hits []Hit
+	eventIdx := 0
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		eventIdx++
+		if overLimit {
+			continue
+		}
+		var ev eventRecord
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		preview := recoveryPreviewFromEvent(ev)
+		if preview == "" {
+			continue
+		}
+		score, matchedTerms := scoreContentDetails(preview, terms)
+		if score <= 0 {
+			continue
+		}
+		hits = appendBoundedHits(hits, Hit{
+			SessionID:    sid,
+			MessageIdx:   eventIdx,
+			Role:         "event",
+			Snippet:      SnippetAround(preview, terms),
+			Score:        score,
+			MatchedTerms: append([]string(nil), matchedTerms...),
+			ModTime:      mtime,
+		}, maxPerSession)
+	}
+	sortHits(hits)
+	if maxPerSession > 0 && len(hits) > maxPerSession {
+		hits = hits[:maxPerSession]
+	}
+	return hits, nil
 }
 
 func planSearchContent(summary planstate.Summary) string {

@@ -206,6 +206,54 @@ Keep subnet research grounded in source evidence.
 	requireMatchedTerms(t, hit.MatchedTerms, "bittensor", "subnet", "120", "validator")
 }
 
+func TestSearchFindsRecoveryEventAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "stalled-loop",
+		mustEvent(t, "turn.end", map[string]any{
+			"turn_id": "t1",
+			"reason":  "max_turns",
+			"tool_stats": map[string]any{
+				"tool_failure_by_kind":     map[string]int{"loop_guard_no_new_evidence": 2, "blocked": 1},
+				"loop_guard_interventions": 2,
+				"tool_context_truncated":   1,
+			},
+		}),
+	)
+	writeDurableEvents(t, dir, "current",
+		mustEvent(t, "turn.end", map[string]any{
+			"turn_id": "current",
+			"reason":  "max_turns",
+			"tool_stats": map[string]any{
+				"tool_failure_by_kind": map[string]int{"loop_guard_current_only": 9},
+			},
+		}),
+	)
+
+	hits, err := Search(context.Background(), dir, "current", "loop_guard_no_new_evidence max_turns", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected direct recovery event hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != "stalled-loop" || hit.Role != "event" {
+		t.Fatalf("expected event hit from past session, got %+v", hit)
+	}
+	if hit.MessageIdx != 1 {
+		t.Fatalf("event hit message_idx = %d, want event line 1", hit.MessageIdx)
+	}
+	for _, want := range []string{"turn_end: reason=max_turns", "loop_guard_no_new_evidence:2", "loop_guards=2", "tool_context_truncated=1"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("event hit snippet missing %q:\n%+v", want, hit)
+		}
+	}
+	requireMatchedTerms(t, hit.MatchedTerms, "loop", "guard", "new", "evidence", "max", "turns")
+	if strings.Contains(fmt.Sprint(hits), "loop_guard_current_only") {
+		t.Fatalf("current session events leaked into search hits: %+v", hits)
+	}
+}
+
 func TestSearchExcludesCurrentAndSkipsNonConversationRoles(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "current", []testMessage{
