@@ -970,6 +970,54 @@ func TestSummarizeDurableSessionIncludesCompactMemorySummary(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionRestoresLatestMemoryUpdateFromLoopState(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "memory-loop-state")
+	dir := pool.sessionDirPath("memory-loop-state")
+	statePath := sessionLoopStatePath(pool, "memory-loop-state")
+
+	if err := loopstate.WriteState(statePath, loopstate.State{
+		Version:                1,
+		LoopID:                 "memory-loop-state",
+		OwnerSession:           "memory-loop-state",
+		Status:                 "running",
+		MemoryUpdateEvents:     1,
+		LastMemoryUpdateAction: "replace",
+		LastMemoryUpdateTarget: "memory",
+		LastMemoryUpdateTopic:  "markets",
+		LastMemoryUpdateLoc:    "memory:markets",
+		LastMemoryUpdatePrev:   "old dashboard rule",
+		LastMemoryUpdateNext:   "prefer browser network evidence",
+		LastMemoryUpdate:       "old dashboard rule -> prefer browser network evidence",
+	}); err != nil {
+		t.Fatalf("write loop state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t1", Reason: sse.TurnEndCompleted}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "memory-loop-state")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasLoopState {
+		t.Fatalf("loop state summary missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.LatestMemoryUpdate == nil ||
+		summary.LatestMemoryUpdate.Action != "replace" ||
+		summary.LatestMemoryUpdate.Target != "memory" ||
+		summary.LatestMemoryUpdate.Topic != "markets" ||
+		summary.LatestMemoryUpdate.Location != "memory:markets" ||
+		summary.LatestMemoryUpdate.Preview != "old dashboard rule -> prefer browser network evidence" ||
+		summary.LatestMemoryUpdate.PreviousPreview != "old dashboard rule" ||
+		summary.LatestMemoryUpdate.NextPreview != "prefer browser network evidence" {
+		t.Fatalf("latest_memory_update = %+v, want loop-state memory checkpoint", summary.LatestMemoryUpdate)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromContextCompactionGap(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

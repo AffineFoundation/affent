@@ -787,6 +787,9 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		} else if found {
 			summary.HasLoopState = true
 			summary.LoopState = &state
+			if summary.LatestMemoryUpdate == nil {
+				summary.LatestMemoryUpdate = memoryUpdateFromLoopState(state)
+			}
 		}
 	}
 	if summary.HasLoopState && loopStateMod.After(newest) {
@@ -1884,6 +1887,36 @@ func scanMemoryUpdatesFromEvents(r *bufio.Reader) (*sse.MemoryUpdateMeta, error)
 		latest = &update
 	}
 	return latest, nil
+}
+
+func memoryUpdateFromLoopState(state loopstate.State) *sse.MemoryUpdateMeta {
+	if strings.TrimSpace(state.LastMemoryUpdateAction) == "" &&
+		strings.TrimSpace(state.LastMemoryUpdateLoc) == "" &&
+		strings.TrimSpace(state.LastMemoryUpdate) == "" {
+		return nil
+	}
+	target := strings.TrimSpace(state.LastMemoryUpdateTarget)
+	if target == "" {
+		target = "memory"
+	}
+	topic := strings.TrimSpace(state.LastMemoryUpdateTopic)
+	location := strings.TrimSpace(state.LastMemoryUpdateLoc)
+	if location == "" && topic != "" {
+		location = target + ":" + topic
+	}
+	preview := strings.TrimSpace(state.LastMemoryUpdate)
+	if preview == "" {
+		preview = strings.TrimSpace(state.LastMemoryUpdateNext)
+	}
+	return &sse.MemoryUpdateMeta{
+		Action:          strings.TrimSpace(state.LastMemoryUpdateAction),
+		Target:          target,
+		Topic:           topic,
+		Location:        location,
+		Preview:         preview,
+		PreviousPreview: strings.TrimSpace(state.LastMemoryUpdatePrev),
+		NextPreview:     strings.TrimSpace(state.LastMemoryUpdateNext),
+	}
 }
 
 func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {

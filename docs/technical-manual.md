@@ -695,7 +695,11 @@ mod time, and a bounded compact preview from the start of each artifact so
 operators can choose the right large tool result without opening every file.
 They also include a compact memory summary with shared-user-memory status,
 bucket count, entry count, chars used, and the latest stamped target/topic so
-long-run recovery can decide whether to inspect memory before guessing.
+long-run recovery can decide whether to inspect memory before guessing. When
+the main session event log no longer exposes the latest memory mutation,
+`latest_memory_update` falls back to the loop-state memory checkpoint so WebUI
+can still show the action, target/topic, location, and bounded before/after
+preview.
 Durable-only session summaries also restore token/turn usage from recent
 `usage` and `turn.end` events, aggregate tool counters from recent persisted
 `turn.end.tool_stats` events, and runtime counters from recent `turn.end`,
