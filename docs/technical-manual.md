@@ -700,7 +700,9 @@ long-run recovery can decide whether to inspect memory before guessing. When
 the main session event log no longer exposes the latest memory mutation,
 `latest_memory_update` falls back to the loop-state memory checkpoint so WebUI
 can still show the action, target/topic, location, and bounded before/after
-preview.
+preview. When the main event log has no actionable recovery hint, durable
+loop-state decision and last-turn checkpoints can seed `latest_recovery_hint`
+so resumed sessions still show the next loop/plan evidence to inspect.
 Durable-only session summaries also restore token/turn usage from recent
 `usage` and `turn.end` events, aggregate tool counters from recent persisted
 `turn.end.tool_stats` events, and runtime counters from recent `turn.end`,

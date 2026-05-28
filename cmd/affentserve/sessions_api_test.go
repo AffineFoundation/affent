@@ -1086,6 +1086,86 @@ func TestSummarizeDurableSessionRestoresLatestMemoryUpdateFromLoopState(t *testi
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "decision-loop-state")
+	statePath := sessionLoopStatePath(pool, "decision-loop-state")
+
+	if err := loopstate.WriteState(statePath, loopstate.State{
+		Version:                1,
+		LoopID:                 "decision-loop-state",
+		OwnerSession:           "decision-loop-state",
+		Status:                 "running",
+		LastDecisionKind:       "evidence_quality",
+		LastDecision:           "defer",
+		LastDecisionAction:     "browser_network_read RECOVER-STATE-17",
+		LastTurnEndReason:      sse.TurnEndMaxTurns,
+		LastTurnLoopGuards:     1,
+		LastTurnMemoryMisses:   2,
+		LastTurnSessionSearch:  1,
+		LastPlanStep:           "RECOVER-STATE-17 evidence",
+		LastPlanStepStatus:     "in_progress",
+		LastPlanStepIndex:      2,
+		LastProtocolFeedMode:   "digest",
+		NeedsFullProtocolFeed:  true,
+		LastCalibrationAnswer:  "stop when network evidence is absent",
+		CalibrationAnswers:     1,
+		ContextCompactions:     1,
+		LastCompactionReason:   "context_overflow",
+		LastCompactionReactive: true,
+		MemoryUpdateEvents:     0,
+		LastMemoryUpdateAction: "",
+		LastMemoryUpdateLoc:    "",
+		LastMemoryUpdate:       "",
+		LastMemoryUpdateNext:   "",
+	}); err != nil {
+		t.Fatalf("write loop state: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "decision-loop-state")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasLoopState {
+		t.Fatalf("loop state summary missing: found=%v summary=%+v", found, summary)
+	}
+	for _, want := range []string{"loop decision evidence_quality=defer", "browser_network_read", "RECOVER-STATE-17", "end=max_turns", "guards=1", "mem_miss=2", "sess_search=1", "inspect LOOP/plan"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestSummarizeDurableSessionIgnoresRoutineLoopStateRecoveryHint(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "routine-loop-state")
+
+	if err := loopstate.WriteState(sessionLoopStatePath(pool, "routine-loop-state"), loopstate.State{
+		Version:       1,
+		LoopID:        "routine-loop-state",
+		OwnerSession:  "routine-loop-state",
+		Status:        "running",
+		LastDecision:  "continue",
+		LastPlanStep:  "continue normal task",
+		ProtocolFeeds: 3,
+	}); err != nil {
+		t.Fatalf("write loop state: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "routine-loop-state")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasLoopState {
+		t.Fatalf("loop state summary missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.LatestRecoveryHint != "" {
+		t.Fatalf("latest_recovery_hint = %q, want no routine loop state hint", summary.LatestRecoveryHint)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromContextCompactionGap(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

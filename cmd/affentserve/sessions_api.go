@@ -790,6 +790,9 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			if summary.LatestMemoryUpdate == nil {
 				summary.LatestMemoryUpdate = memoryUpdateFromLoopState(state)
 			}
+			if summary.LatestRecoveryHint == "" {
+				summary.LatestRecoveryHint = recoveryHintFromLoopState(state)
+			}
 		}
 	}
 	if summary.HasLoopState && loopStateMod.After(newest) {
@@ -2189,6 +2192,57 @@ func recoveryHintFromLoopProtocolFeed(p sse.LoopProtocolFeedPayload) string {
 	}
 	parts = append(parts, "inspect LOOP/plan")
 	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func recoveryHintFromLoopState(state loopstate.State) string {
+	var parts []string
+	if hint := recoveryHintFromLoopStateDecision(state); hint != "" {
+		parts = append(parts, hint)
+	}
+	endReason := strings.TrimSpace(state.LastTurnEndReason)
+	if endReason == sse.TurnEndMaxTurns || endReason == sse.TurnEndError || state.LastTurnLoopGuards > 0 || state.LastTurnMemoryMisses > 0 {
+		if len(parts) == 0 {
+			parts = append(parts, "loop state recovery")
+		}
+		if endReason != "" {
+			parts = append(parts, "end="+endReason)
+		}
+		if state.LastTurnLoopGuards > 0 {
+			parts = append(parts, fmt.Sprintf("guards=%d", state.LastTurnLoopGuards))
+		}
+		if state.LastTurnMemoryMisses > 0 {
+			parts = append(parts, fmt.Sprintf("mem_miss=%d", state.LastTurnMemoryMisses))
+		}
+		if state.LastTurnSessionSearch > 0 {
+			parts = append(parts, fmt.Sprintf("sess_search=%d", state.LastTurnSessionSearch))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	parts = append(parts, "inspect LOOP/plan")
+	if step := strings.TrimSpace(state.LastPlanStep); step != "" {
+		parts = append(parts, "step="+step)
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func recoveryHintFromLoopStateDecision(state loopstate.State) string {
+	action := strings.TrimSpace(state.LastDecisionAction)
+	if action == "" {
+		return ""
+	}
+	decision := strings.TrimSpace(state.LastDecision)
+	switch decision {
+	case "defer", "trigger", "stop", "pause", "request_input":
+		kind := strings.TrimSpace(state.LastDecisionKind)
+		if kind != "" {
+			return "loop decision " + kind + "=" + decision + "; action=" + action
+		}
+		return "loop decision " + decision + "; action=" + action
+	default:
+		return ""
+	}
 }
 
 func recoveryHintFromLoopDecision(p sse.LoopDecisionPayload) string {
