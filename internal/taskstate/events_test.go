@@ -207,6 +207,55 @@ func TestScanEventsPreservesDistinctEvidenceSourcesAtLimit(t *testing.T) {
 	}
 }
 
+func TestScanEventsPreservesHandoffEvidenceUnderRuntimePressure(t *testing.T) {
+	var input strings.Builder
+	input.WriteString(taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Fix, commit, and push.",
+	}))
+	for i, turnID := range []string{"rt-a", "rt-b", "rt-c"} {
+		input.WriteString(taskStateEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
+			TurnID:                      turnID,
+			ModelContextWindowTokens:    100000,
+			ReservedOutputTokens:        30000,
+			CompactTriggerInputTokens:   70000,
+			ToolSchemaBudgetTokens:      3000 + i,
+			EstimatedToolSchemaTokens:   2000 + i,
+			EstimatedRequestInputTokens: 5000 + i,
+		}))
+	}
+	for i, command := range []string{
+		`git commit -m "fix"`,
+		"git push origin main",
+	} {
+		callID := "shell-" + string(rune('a'+i))
+		input.WriteString(taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: callID,
+			Tool:   "shell",
+			Args:   map[string]any{"command": command},
+		}))
+		input.WriteString(taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   callID,
+			ExitCode: 0,
+			Result:   "ok",
+		}))
+	}
+
+	state, err := ScanEvents(strings.NewReader(input.String()), EventScanOptions{MaxItems: 6})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !taskStateEvidenceContains(state.Evidence, GitCommitEvidenceSource, `git commit -m "fix"`) ||
+		!taskStateEvidenceContains(state.Evidence, GitPushEvidenceSource, "git push origin main") {
+		t.Fatalf("evidence = %+v, want commit and push sources preserved under runtime pressure", state.Evidence)
+	}
+	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "tool_schema_budget_tokens=3002") {
+		t.Fatalf("evidence = %+v, want latest runtime pressure evidence preserved", state.Evidence)
+	}
+}
+
 func TestScanEventsPreservesDistinctAttemptedActionToolsAtLimit(t *testing.T) {
 	var input strings.Builder
 	input.WriteString(taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
