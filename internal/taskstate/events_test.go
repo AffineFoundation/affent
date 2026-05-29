@@ -206,6 +206,52 @@ func TestScanEventsKeepsRecoveryNextStepAfterCompletedFailedTurn(t *testing.T) {
 	}
 }
 
+func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
+	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Continue the long-running project.",
+	}) +
+		taskStateEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
+			TurnID:             "t1",
+			BeforeMessages:     42,
+			AfterMessages:      10,
+			RemovedMessages:    32,
+			BeforeBytes:        10000,
+			AfterBytes:         3000,
+			ReducedBytes:       7000,
+			Reactive:           true,
+			Reason:             "context_overflow",
+			SummaryPresent:     true,
+			SummaryBytes:       900,
+			LoopProtocolAnchor: "LOOP_PROTOCOL: id=demo status=running step=verify",
+		}) +
+		taskStateEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndMaxTurns,
+		})
+
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("ScanEvents returned nil")
+	}
+	if !taskStateEvidenceContains(state.Evidence, "context_compaction", "context_overflow") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction", "LOOP_PROTOCOL: id=demo") {
+		t.Fatalf("context compaction evidence = %+v", state.Evidence)
+	}
+	if !stringSliceContains(state.Sources, "context_compaction") {
+		t.Fatalf("sources = %+v, want context_compaction", state.Sources)
+	}
+	text := SearchText(state.Snapshot)
+	for _, want := range []string{"evidence: source=context_compaction", "removed_messages=32", "reactive=true", "LOOP_PROTOCOL: id=demo"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("SearchText missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 	t.Helper()
 	ev, err := sse.NewEvent(eventType, payload)
@@ -222,6 +268,15 @@ func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 func taskStateEvidenceContains(evidence []Evidence, source, summaryPart string) bool {
 	for _, item := range evidence {
 		if item.Source == source && strings.Contains(item.Summary, summaryPart) {
+			return true
+		}
+	}
+	return false
+}
+
+func stringSliceContains(items []string, want string) bool {
+	for _, item := range items {
+		if item == want {
 			return true
 		}
 	}

@@ -129,6 +129,19 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				}, opts.MaxItems)
 				seen = true
 			}
+		case sse.TypeContextCompact:
+			var p sse.ContextCompactPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			summary := contextCompactionSummary(p)
+			state.Evidence = appendEvidence(state.Evidence, Evidence{
+				Source:  "context_compaction",
+				Summary: compactSummary(summary, opts.SummaryMaxChar),
+				TurnID:  p.TurnID,
+			}, opts.MaxItems)
+			addSource(state, "context_compaction", opts.MaxItems)
+			seen = true
 		case sse.TypeToolRequest:
 			var p sse.ToolRequestPayload
 			if err := json.Unmarshal(ev.Data, &p); err != nil || p.CallID == "" {
@@ -332,6 +345,31 @@ func ToolEvidenceSource(tool string) string {
 	default:
 		return ""
 	}
+}
+
+func contextCompactionSummary(p sse.ContextCompactPayload) string {
+	var fields []string
+	reason := strings.TrimSpace(p.Reason)
+	if reason == "" {
+		reason = "threshold"
+	}
+	fields = append(fields, "reason="+reason)
+	if p.Reactive {
+		fields = append(fields, "reactive=true")
+	}
+	if p.RemovedMessages > 0 {
+		fields = append(fields, fmt.Sprintf("removed_messages=%d", p.RemovedMessages))
+	}
+	if p.ReducedBytes > 0 {
+		fields = append(fields, fmt.Sprintf("reduced_bytes=%d", p.ReducedBytes))
+	}
+	if p.SummaryPresent {
+		fields = append(fields, "summary_present=true")
+	}
+	if anchor := strings.TrimSpace(p.LoopProtocolAnchor); anchor != "" {
+		fields = append(fields, "loop_anchor="+anchor)
+	}
+	return strings.Join(fields, " ")
 }
 
 func ToolFailureKinds(result ToolResult, limit int) []string {
