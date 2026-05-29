@@ -375,6 +375,21 @@ func contextCompactionSummary(p sse.ContextCompactPayload) string {
 	if p.ReducedBytes > 0 {
 		fields = append(fields, fmt.Sprintf("reduced_bytes=%d", p.ReducedBytes))
 	}
+	if p.EstimatedInputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("estimated_input_tokens=%d", p.EstimatedInputTokens))
+	}
+	if p.TriggerInputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("trigger_input_tokens=%d", p.TriggerInputTokens))
+	}
+	if p.ModelContextWindowTokens > 0 {
+		fields = append(fields, fmt.Sprintf("model_context_window_tokens=%d", p.ModelContextWindowTokens))
+	}
+	if p.ReservedOutputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("reserved_output_tokens=%d", p.ReservedOutputTokens))
+	}
+	if p.CompactTriggerInputPercent > 0 {
+		fields = append(fields, fmt.Sprintf("compact_trigger_input_percent=%d", p.CompactTriggerInputPercent))
+	}
 	if p.SummaryPresent {
 		fields = append(fields, "summary_present=true")
 	}

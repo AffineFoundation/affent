@@ -3384,11 +3384,11 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 	if reactive {
 		reason = "context_overflow"
 	}
-	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason, 0)
+	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason, 0, nil)
 }
 
 func (l *Loop) maybeCompactForBudgetPressure(ctx context.Context, turnID string) bool {
-	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure", 0)
+	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure", 0, nil)
 }
 
 func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string, toolDefs []ToolDef) bool {
@@ -3404,7 +3404,10 @@ func (l *Loop) maybeCompactForRequestPressureWithKeepFirst(ctx context.Context, 
 	if estimated < limit {
 		return false
 	}
-	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst)
+	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst, &contextCompactPolicy{
+		EstimatedInputTokens: estimated,
+		TriggerInputTokens:   limit,
+	})
 	if compacted {
 		l.Log.Info().
 			Int("estimated_input_tokens", estimated).
@@ -3453,7 +3456,12 @@ func (l *Loop) reservedOutputTokens() int {
 	return *l.LLM.Sampling.MaxTokens
 }
 
-func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int) bool {
+type contextCompactPolicy struct {
+	EstimatedInputTokens int
+	TriggerInputTokens   int
+}
+
+func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int, policy *contextCompactPolicy) bool {
 	if l.Compactor == nil {
 		return false
 	}
@@ -3462,6 +3470,15 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		return false
 	}
 	beforeBytes := ApproximateConversationBytes(before)
+	effectivePolicy := l.contextCompactPolicy(before, nil)
+	if policy != nil {
+		if policy.EstimatedInputTokens > 0 {
+			effectivePolicy.EstimatedInputTokens = policy.EstimatedInputTokens
+		}
+		if policy.TriggerInputTokens > 0 {
+			effectivePolicy.TriggerInputTokens = policy.TriggerInputTokens
+		}
+	}
 	compactor := l.Compactor
 	if bypassThreshold {
 		if c, ok := l.Compactor.(*LLMSummaryCompactor); ok {
@@ -3490,7 +3507,7 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
 	}
-	l.publishContextCompacted(turnID, len(before), len(after), beforeBytes, afterBytes, reactive, reason, after)
+	l.publishContextCompacted(turnID, len(before), len(after), beforeBytes, afterBytes, reactive, reason, after, effectivePolicy)
 	l.markLoopProtocolCompacted(reactive, reason)
 	l.Log.Info().
 		Int("before", len(before)).
@@ -3501,6 +3518,13 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		Str("reason", reason).
 		Msg("conversation compacted")
 	return true
+}
+
+func (l *Loop) contextCompactPolicy(msgs []ChatMessage, toolDefs []ToolDef) contextCompactPolicy {
+	return contextCompactPolicy{
+		EstimatedInputTokens: estimateRequestInputTokens(msgs, toolDefs),
+		TriggerInputTokens:   l.compactTriggerInputTokens(),
+	}
 }
 
 func (l *Loop) markLoopProtocolCompacted(reactive bool, reason string) {
@@ -3519,7 +3543,7 @@ func (l *Loop) markLoopProtocolCompacted(reactive bool, reason string) {
 	}
 }
 
-func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes, afterBytes int, reactive bool, reason string, msgs []ChatMessage) {
+func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes, afterBytes int, reactive bool, reason string, msgs []ChatMessage, policy contextCompactPolicy) {
 	summaryBytes := 0
 	summaryPreview := ""
 	loopProtocolAnchor := ""
@@ -3537,19 +3561,24 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		reason = "threshold"
 	}
 	l.publish(sse.TypeContextCompact, sse.ContextCompactPayload{
-		TurnID:             turnID,
-		BeforeMessages:     before,
-		AfterMessages:      after,
-		RemovedMessages:    max(0, before-after),
-		BeforeBytes:        beforeBytes,
-		AfterBytes:         afterBytes,
-		ReducedBytes:       max(0, beforeBytes-afterBytes),
-		Reactive:           reactive,
-		Reason:             reason,
-		SummaryPresent:     summaryBytes > 0,
-		SummaryBytes:       summaryBytes,
-		SummaryPreview:     summaryPreview,
-		LoopProtocolAnchor: loopProtocolAnchor,
+		TurnID:                     turnID,
+		BeforeMessages:             before,
+		AfterMessages:              after,
+		RemovedMessages:            max(0, before-after),
+		BeforeBytes:                beforeBytes,
+		AfterBytes:                 afterBytes,
+		ReducedBytes:               max(0, beforeBytes-afterBytes),
+		EstimatedInputTokens:       policy.EstimatedInputTokens,
+		TriggerInputTokens:         policy.TriggerInputTokens,
+		ModelContextWindowTokens:   l.ModelContextWindowTokens,
+		ReservedOutputTokens:       l.reservedOutputTokens(),
+		CompactTriggerInputPercent: l.compactTriggerInputPercent(),
+		Reactive:                   reactive,
+		Reason:                     reason,
+		SummaryPresent:             summaryBytes > 0,
+		SummaryBytes:               summaryBytes,
+		SummaryPreview:             summaryPreview,
+		LoopProtocolAnchor:         loopProtocolAnchor,
 	})
 }
 

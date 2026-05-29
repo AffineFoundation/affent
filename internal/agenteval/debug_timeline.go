@@ -1463,6 +1463,25 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 		if c.BeforeBytes > 0 || c.AfterBytes > 0 || c.ReducedBytes > 0 {
 			fmt.Fprintf(b, " bytes=%d->%d reduced=%d", c.BeforeBytes, c.AfterBytes, c.ReducedBytes)
 		}
+		var policy []string
+		if c.EstimatedInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("estimated_input_tokens=%d", c.EstimatedInputTokens))
+		}
+		if c.TriggerInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("trigger_input_tokens=%d", c.TriggerInputTokens))
+		}
+		if c.ModelContextWindowTokens > 0 {
+			policy = append(policy, fmt.Sprintf("model_context_window_tokens=%d", c.ModelContextWindowTokens))
+		}
+		if c.ReservedOutputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("reserved_output_tokens=%d", c.ReservedOutputTokens))
+		}
+		if c.CompactTriggerInputPercent > 0 {
+			policy = append(policy, fmt.Sprintf("compact_trigger_input_percent=%d", c.CompactTriggerInputPercent))
+		}
+		if len(policy) > 0 {
+			fmt.Fprintf(b, " policy=%s", strings.Join(policy, ","))
+		}
 		fmt.Fprintf(b, " summary_state=%s summary_bytes=%d reason=%s\n",
 			summaryState,
 			c.SummaryBytes,

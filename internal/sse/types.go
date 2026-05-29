@@ -468,19 +468,24 @@ type LoopTurnCheckpointPayload struct {
 // publication so trace/UI can inspect what state survived without receiving an
 // unbounded copy of the conversation.
 type ContextCompactPayload struct {
-	TurnID             string `json:"turn_id,omitempty"`
-	BeforeMessages     int    `json:"before_messages"`
-	AfterMessages      int    `json:"after_messages"`
-	RemovedMessages    int    `json:"removed_messages"`
-	BeforeBytes        int    `json:"before_bytes,omitempty"`
-	AfterBytes         int    `json:"after_bytes,omitempty"`
-	ReducedBytes       int    `json:"reduced_bytes,omitempty"`
-	Reactive           bool   `json:"reactive"`
-	Reason             string `json:"reason"`
-	SummaryPresent     bool   `json:"summary_present"`
-	SummaryBytes       int    `json:"summary_bytes,omitempty"`
-	SummaryPreview     string `json:"summary_preview,omitempty"`
-	LoopProtocolAnchor string `json:"loop_protocol_anchor,omitempty"`
+	TurnID                     string `json:"turn_id,omitempty"`
+	BeforeMessages             int    `json:"before_messages"`
+	AfterMessages              int    `json:"after_messages"`
+	RemovedMessages            int    `json:"removed_messages"`
+	BeforeBytes                int    `json:"before_bytes,omitempty"`
+	AfterBytes                 int    `json:"after_bytes,omitempty"`
+	ReducedBytes               int    `json:"reduced_bytes,omitempty"`
+	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
+	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
+	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
+	Reactive                   bool   `json:"reactive"`
+	Reason                     string `json:"reason"`
+	SummaryPresent             bool   `json:"summary_present"`
+	SummaryBytes               int    `json:"summary_bytes,omitempty"`
+	SummaryPreview             string `json:"summary_preview,omitempty"`
+	LoopProtocolAnchor         string `json:"loop_protocol_anchor,omitempty"`
 }
 
 type ToolRuntimeStats struct {

@@ -226,25 +226,30 @@ func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
 		Text:   "Continue the long-running project.",
 	}) +
 		taskStateEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
-			TurnID:             "t1",
-			BeforeMessages:     42,
-			AfterMessages:      10,
-			RemovedMessages:    32,
-			BeforeBytes:        10000,
-			AfterBytes:         3000,
-			ReducedBytes:       7000,
-			Reactive:           true,
-			Reason:             "context_overflow",
-			SummaryPresent:     true,
-			SummaryBytes:       900,
-			LoopProtocolAnchor: "LOOP_PROTOCOL: id=demo status=running step=verify",
+			TurnID:                     "t1",
+			BeforeMessages:             42,
+			AfterMessages:              10,
+			RemovedMessages:            32,
+			BeforeBytes:                10000,
+			AfterBytes:                 3000,
+			ReducedBytes:               7000,
+			EstimatedInputTokens:       120000,
+			TriggerInputTokens:         70000,
+			ModelContextWindowTokens:   100000,
+			ReservedOutputTokens:       30000,
+			CompactTriggerInputPercent: 80,
+			Reactive:                   true,
+			Reason:                     "context_overflow",
+			SummaryPresent:             true,
+			SummaryBytes:               900,
+			LoopProtocolAnchor:         "LOOP_PROTOCOL: id=demo status=running step=verify",
 		}) +
 		taskStateEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
 			TurnID: "t1",
 			Reason: sse.TurnEndMaxTurns,
 		})
 
-	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{SummaryMaxChar: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,14 +257,16 @@ func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
 		t.Fatal("ScanEvents returned nil")
 	}
 	if !taskStateEvidenceContains(state.Evidence, "context_compaction", "context_overflow") ||
-		!taskStateEvidenceContains(state.Evidence, "context_compaction", "LOOP_PROTOCOL: id=demo") {
+		!taskStateEvidenceContains(state.Evidence, "context_compaction", "LOOP_PROTOCOL: id=demo") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction", "estimated_input_tokens=120000") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction", "trigger_input_tokens=70000") {
 		t.Fatalf("context compaction evidence = %+v", state.Evidence)
 	}
 	if !stringSliceContains(state.Sources, "context_compaction") {
 		t.Fatalf("sources = %+v, want context_compaction", state.Sources)
 	}
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"evidence: source=context_compaction", "removed_messages=32", "reactive=true", "LOOP_PROTOCOL: id=demo"} {
+	for _, want := range []string{"evidence: source=context_compaction", "removed_messages=32", "reactive=true", "estimated_input_tokens=120000", "trigger_input_tokens=70000", "LOOP_PROTOCOL: id=demo"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}
