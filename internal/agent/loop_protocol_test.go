@@ -1021,16 +1021,18 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
 	}
 	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
-		TurnID:             "turn_previous",
-		EndReason:          sse.TurnEndMaxTurns,
-		ToolRequests:       5,
-		ToolErrors:         2,
-		ForcedNoTools:      1,
-		MemoryUpdates:      1,
-		MemorySearchCalls:  3,
-		MemorySearchMisses: 2,
-		SessionSearchCalls: 1,
-		LoopGuards:         1,
+		TurnID:               "turn_previous",
+		EndReason:            sse.TurnEndMaxTurns,
+		ToolRequests:         5,
+		ToolRequestsAdmitted: 4,
+		ToolRequestsSkipped:  1,
+		ToolErrors:           2,
+		ForcedNoTools:        1,
+		MemoryUpdates:        1,
+		MemorySearchCalls:    3,
+		MemorySearchMisses:   2,
+		SessionSearchCalls:   1,
+		LoopGuards:           1,
 	}); err != nil {
 		t.Fatalf("RecordTurnCheckpoint: %v", err)
 	}
@@ -1085,6 +1087,8 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.LastTurnID != "turn_previous" ||
 			payload.LastTurnEndReason != sse.TurnEndMaxTurns ||
 			payload.LastTurnToolRequests != 5 ||
+			payload.LastTurnToolRequestsAdmitted != 4 ||
+			payload.LastTurnToolRequestsSkipped != 1 ||
 			payload.LastTurnToolErrors != 2 ||
 			payload.LastTurnForcedNoTools != 1 ||
 			payload.LastTurnMemoryUpdates != 1 ||
@@ -1121,6 +1125,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 	loop := &Loop{LoopProtocolPath: path, Events: eventsCh}
 	loop.recordLoopTurnCheckpoint("turn_runtime", sse.TurnEndMaxTurns, 300, 80, sse.ToolRuntimeStats{
 		ToolRequests:           4,
+		ToolRequestsAdmitted:   3,
+		ToolRequestsSkipped:    1,
 		ToolErrors:             2,
 		LoopGuardInterventions: 1,
 		ForcedNoTools:          1,
@@ -1140,6 +1146,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 		state.LastTurnInputTokens != 300 ||
 		state.LastTurnOutputTokens != 80 ||
 		state.LastTurnToolRequests != 4 ||
+		state.LastTurnToolRequestsAdmitted != 3 ||
+		state.LastTurnToolRequestsSkipped != 1 ||
 		state.LastTurnToolErrors != 2 ||
 		state.LastTurnLoopGuards != 1 ||
 		state.LastTurnForcedNoTools != 1 ||
@@ -1169,6 +1177,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 			payload.EndReason != sse.TurnEndMaxTurns ||
 			payload.TurnCheckpoints != 1 ||
 			payload.ToolRequests != 4 ||
+			payload.ToolRequestsAdmitted != 3 ||
+			payload.ToolRequestsSkipped != 1 ||
 			payload.ToolErrors != 2 ||
 			payload.LoopGuards != 1 ||
 			payload.ForcedNoTools != 1 ||

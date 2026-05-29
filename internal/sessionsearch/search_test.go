@@ -327,15 +327,18 @@ func TestSearchFindsLoopTurnCheckpointRecoveryEventAnchors(t *testing.T) {
 	dir := t.TempDir()
 	writeDurableEvents(t, dir, "checkpoint-loop",
 		mustEvent(t, "loop.turn_checkpoint", map[string]any{
-			"turn_id":              "turn-checkpoint",
-			"loop_id":              "longrun",
-			"status":               "running",
-			"end_reason":           sse.TurnEndMaxTurns,
-			"tool_errors":          2,
-			"loop_guards":          1,
-			"forced_no_tools":      1,
-			"memory_search_misses": 1,
-			"session_search_calls": 1,
+			"turn_id":                "turn-checkpoint",
+			"loop_id":                "longrun",
+			"status":                 "running",
+			"end_reason":             sse.TurnEndMaxTurns,
+			"tool_requests":          4,
+			"tool_requests_admitted": 3,
+			"tool_requests_skipped":  1,
+			"tool_errors":            2,
+			"loop_guards":            1,
+			"forced_no_tools":        1,
+			"memory_search_misses":   1,
+			"session_search_calls":   1,
 		}),
 	)
 
@@ -350,7 +353,7 @@ func TestSearchFindsLoopTurnCheckpointRecoveryEventAnchors(t *testing.T) {
 	if hit.SessionID != "checkpoint-loop" || hit.Role != "event" {
 		t.Fatalf("expected event hit from checkpoint session, got %+v", hit)
 	}
-	for _, want := range []string{"loop_turn_checkpoint", "end=max_turns", "loop=longrun", "tool_errors=2", "loop_guards=1", "forced_no_tools=1", "memory_misses=1", "session_search=1"} {
+	for _, want := range []string{"loop_turn_checkpoint", "end=max_turns", "loop=longrun", "tools=4", "tools_admitted=3", "tools_skipped=1", "tool_errors=2", "loop_guards=1", "forced_no_tools=1", "memory_misses=1", "session_search=1"} {
 		if !strings.Contains(hit.Snippet, want) {
 			t.Fatalf("checkpoint event hit snippet missing %q:\n%+v", want, hit)
 		}
@@ -566,24 +569,26 @@ event recovery checkpoint out of the recent_sessions loop preview. `+strings.Rep
 - current risk: model may forget the previous max_turns failure and repeat stale searches.
 `)
 	if _, err := loopstate.AppendEvent(loopstate.EventsPath(filepath.Join(dir, sessionID), sessionID), loopstate.Event{
-		Type:           "loop.protocol_feed",
-		Summary:        "digest feed preserved RECENT-EVENT-55 recovery anchors",
-		Mode:           "digest",
-		FeedNumber:     7,
-		TurnEndReason:  "max_turns",
-		PlanStep:       "continue RECENT-EVENT-55 via browser_network_read",
-		ToolRequests:   4,
-		ToolErrors:     1,
-		LoopGuards:     2,
-		ForcedNoTools:  1,
-		MemorySearches: 3,
-		MemoryMisses:   1,
-		SessionSearch:  1,
-		DecisionKind:   "evidence_quality",
-		Trigger:        "source_access_dynamic_partial",
-		Decision:       "defer",
-		Confidence:     "high",
-		RequiredAction: "read browser_network_read ref n7 before citing market cap",
+		Type:                 "loop.protocol_feed",
+		Summary:              "digest feed preserved RECENT-EVENT-55 recovery anchors",
+		Mode:                 "digest",
+		FeedNumber:           7,
+		TurnEndReason:        "max_turns",
+		PlanStep:             "continue RECENT-EVENT-55 via browser_network_read",
+		ToolRequests:         4,
+		ToolRequestsAdmitted: 3,
+		ToolRequestsSkipped:  1,
+		ToolErrors:           1,
+		LoopGuards:           2,
+		ForcedNoTools:        1,
+		MemorySearches:       3,
+		MemoryMisses:         1,
+		SessionSearch:        1,
+		DecisionKind:         "evidence_quality",
+		Trigger:              "source_access_dynamic_partial",
+		Decision:             "defer",
+		Confidence:           "high",
+		RequiredAction:       "read browser_network_read ref n7 before citing market cap",
 	}); err != nil {
 		t.Fatalf("AppendEvent: %v", err)
 	}
@@ -595,7 +600,7 @@ event recovery checkpoint out of the recent_sessions loop preview. `+strings.Rep
 	if len(recent) != 1 {
 		t.Fatalf("expected one recent loop anchor, got %+v", recent)
 	}
-	for _, want := range []string{"RECENT-EVENT-55", "max_turns", "browser_network_read", "tool_errors=1", "loop_guards=2", "forced_no_tools=1", "session_search=1"} {
+	for _, want := range []string{"RECENT-EVENT-55", "max_turns", "browser_network_read", "tools_admitted=3", "tools_skipped=1", "tool_errors=1", "loop_guards=2", "forced_no_tools=1", "session_search=1"} {
 		if !strings.Contains(recent[0].Loop, want) {
 			t.Fatalf("recent loop preview missing %q:\n%+v", want, recent[0])
 		}

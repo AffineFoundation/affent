@@ -322,40 +322,42 @@ type TurnEndPayload struct {
 // that decision into the normal session trace/SSE stream so WebUI and evals can
 // inspect long-run context pressure without reading sidecar loop files.
 type LoopProtocolFeedPayload struct {
-	TurnID                     string `json:"turn_id,omitempty"`
-	LoopID                     string `json:"loop_id,omitempty"`
-	Status                     string `json:"status,omitempty"`
-	Mode                       string `json:"mode"`
-	FeedNumber                 int    `json:"feed_number"`
-	ProtocolFeeds              int    `json:"protocol_feeds,omitempty"`
-	CalibrationAnswers         int    `json:"calibration_answers,omitempty"`
-	LastCalibrationAnswer      string `json:"last_calibration_answer_preview,omitempty"`
-	ProtocolPath               string `json:"protocol_path,omitempty"`
-	CurrentSituation           string `json:"current_situation_preview,omitempty"`
-	PlanLabel                  string `json:"plan_label,omitempty"`
-	PlanCurrentStepIndex       int    `json:"plan_current_step_index,omitempty"`
-	PlanCurrentStepStatus      string `json:"plan_current_step_status,omitempty"`
-	PlanCurrentStep            string `json:"plan_current_step,omitempty"`
-	LastTurnID                 string `json:"last_turn_id,omitempty"`
-	LastTurnEndReason          string `json:"last_turn_end_reason,omitempty"`
-	LastTurnToolRequests       int    `json:"last_turn_tool_requests,omitempty"`
-	LastTurnToolErrors         int    `json:"last_turn_tool_errors,omitempty"`
-	LastTurnForcedNoTools      int    `json:"last_turn_forced_no_tools,omitempty"`
-	LastTurnMemoryUpdates      int    `json:"last_turn_memory_updates,omitempty"`
-	LastTurnMemorySearchCalls  int    `json:"last_turn_memory_search_calls,omitempty"`
-	LastTurnMemorySearchMisses int    `json:"last_turn_memory_search_misses,omitempty"`
-	LastTurnSessionSearchCalls int    `json:"last_turn_session_search_calls,omitempty"`
-	LastTurnLoopGuards         int    `json:"last_turn_loop_guards,omitempty"`
-	LastDecisionKind           string `json:"last_decision_kind,omitempty"`
-	LastDecisionTrigger        string `json:"last_decision_trigger,omitempty"`
-	LastDecision               string `json:"last_decision,omitempty"`
-	LastDecisionConfidence     string `json:"last_decision_confidence,omitempty"`
-	LastDecisionReason         string `json:"last_decision_reason,omitempty"`
-	LastDecisionAction         string `json:"last_decision_required_action,omitempty"`
-	LastDecisionTokenBudget    int    `json:"last_decision_token_budget,omitempty"`
-	LastDecisionObservedInput  int    `json:"last_decision_observed_input_tokens,omitempty"`
-	LastDecisionProjectedInput int    `json:"last_decision_projected_input_tokens,omitempty"`
-	LastDecisionBudgetBytes    int    `json:"last_decision_budget_bytes,omitempty"`
+	TurnID                       string `json:"turn_id,omitempty"`
+	LoopID                       string `json:"loop_id,omitempty"`
+	Status                       string `json:"status,omitempty"`
+	Mode                         string `json:"mode"`
+	FeedNumber                   int    `json:"feed_number"`
+	ProtocolFeeds                int    `json:"protocol_feeds,omitempty"`
+	CalibrationAnswers           int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer        string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath                 string `json:"protocol_path,omitempty"`
+	CurrentSituation             string `json:"current_situation_preview,omitempty"`
+	PlanLabel                    string `json:"plan_label,omitempty"`
+	PlanCurrentStepIndex         int    `json:"plan_current_step_index,omitempty"`
+	PlanCurrentStepStatus        string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep              string `json:"plan_current_step,omitempty"`
+	LastTurnID                   string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason            string `json:"last_turn_end_reason,omitempty"`
+	LastTurnToolRequests         int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnToolRequestsAdmitted int    `json:"last_turn_tool_requests_admitted,omitempty"`
+	LastTurnToolRequestsSkipped  int    `json:"last_turn_tool_requests_skipped,omitempty"`
+	LastTurnToolErrors           int    `json:"last_turn_tool_errors,omitempty"`
+	LastTurnForcedNoTools        int    `json:"last_turn_forced_no_tools,omitempty"`
+	LastTurnMemoryUpdates        int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnMemorySearchCalls    int    `json:"last_turn_memory_search_calls,omitempty"`
+	LastTurnMemorySearchMisses   int    `json:"last_turn_memory_search_misses,omitempty"`
+	LastTurnSessionSearchCalls   int    `json:"last_turn_session_search_calls,omitempty"`
+	LastTurnLoopGuards           int    `json:"last_turn_loop_guards,omitempty"`
+	LastDecisionKind             string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger          string `json:"last_decision_trigger,omitempty"`
+	LastDecision                 string `json:"last_decision,omitempty"`
+	LastDecisionConfidence       string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason           string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction           string `json:"last_decision_required_action,omitempty"`
+	LastDecisionTokenBudget      int    `json:"last_decision_token_budget,omitempty"`
+	LastDecisionObservedInput    int    `json:"last_decision_observed_input_tokens,omitempty"`
+	LastDecisionProjectedInput   int    `json:"last_decision_projected_input_tokens,omitempty"`
+	LastDecisionBudgetBytes      int    `json:"last_decision_budget_bytes,omitempty"`
 }
 
 // LoopProtocolCalibrationPayload mirrors draft LOOP.md calibration questions
@@ -413,23 +415,25 @@ type LoopDecisionPayload struct {
 // authoritative; this event lets WebUI/eval consumers prove the checkpoint was
 // written without opening .affent/loops/<id>/state.json.
 type LoopTurnCheckpointPayload struct {
-	TurnID             string `json:"turn_id"`
-	LoopID             string `json:"loop_id,omitempty"`
-	Status             string `json:"status,omitempty"`
-	ProtocolPath       string `json:"protocol_path,omitempty"`
-	EventSeq           int    `json:"event_seq,omitempty"`
-	TurnCheckpoints    int    `json:"turn_checkpoints,omitempty"`
-	EndReason          string `json:"end_reason,omitempty"`
-	InputTokens        int    `json:"input_tokens,omitempty"`
-	OutputTokens       int    `json:"output_tokens,omitempty"`
-	ToolRequests       int    `json:"tool_requests,omitempty"`
-	ToolErrors         int    `json:"tool_errors,omitempty"`
-	LoopGuards         int    `json:"loop_guards,omitempty"`
-	ForcedNoTools      int    `json:"forced_no_tools,omitempty"`
-	MemoryUpdates      int    `json:"memory_updates,omitempty"`
-	MemorySearchCalls  int    `json:"memory_search_calls,omitempty"`
-	MemoryMisses       int    `json:"memory_search_misses,omitempty"`
-	SessionSearchCalls int    `json:"session_search_calls,omitempty"`
+	TurnID               string `json:"turn_id"`
+	LoopID               string `json:"loop_id,omitempty"`
+	Status               string `json:"status,omitempty"`
+	ProtocolPath         string `json:"protocol_path,omitempty"`
+	EventSeq             int    `json:"event_seq,omitempty"`
+	TurnCheckpoints      int    `json:"turn_checkpoints,omitempty"`
+	EndReason            string `json:"end_reason,omitempty"`
+	InputTokens          int    `json:"input_tokens,omitempty"`
+	OutputTokens         int    `json:"output_tokens,omitempty"`
+	ToolRequests         int    `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted int    `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped  int    `json:"tool_requests_skipped,omitempty"`
+	ToolErrors           int    `json:"tool_errors,omitempty"`
+	LoopGuards           int    `json:"loop_guards,omitempty"`
+	ForcedNoTools        int    `json:"forced_no_tools,omitempty"`
+	MemoryUpdates        int    `json:"memory_updates,omitempty"`
+	MemorySearchCalls    int    `json:"memory_search_calls,omitempty"`
+	MemoryMisses         int    `json:"memory_search_misses,omitempty"`
+	SessionSearchCalls   int    `json:"session_search_calls,omitempty"`
 }
 
 // ContextCompactPayload records when the model conversation was rewritten into

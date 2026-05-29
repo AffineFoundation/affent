@@ -613,41 +613,43 @@ type MessageRejectedStats struct {
 }
 
 type LoopProtocolFeed struct {
-	Scenario                   string `json:"scenario,omitempty"`
-	TurnID                     string `json:"turn_id,omitempty"`
-	LoopID                     string `json:"loop_id,omitempty"`
-	Status                     string `json:"status,omitempty"`
-	Mode                       string `json:"mode"`
-	FeedNumber                 int    `json:"feed_number"`
-	ProtocolFeeds              int    `json:"protocol_feeds,omitempty"`
-	CalibrationAnswers         int    `json:"calibration_answers,omitempty"`
-	LastCalibrationAnswer      string `json:"last_calibration_answer_preview,omitempty"`
-	ProtocolPath               string `json:"protocol_path,omitempty"`
-	CurrentSituation           string `json:"current_situation_preview,omitempty"`
-	PlanLabel                  string `json:"plan_label,omitempty"`
-	PlanCurrentStepIndex       int    `json:"plan_current_step_index,omitempty"`
-	PlanCurrentStepStatus      string `json:"plan_current_step_status,omitempty"`
-	PlanCurrentStep            string `json:"plan_current_step,omitempty"`
-	LastTurnID                 string `json:"last_turn_id,omitempty"`
-	LastTurnEndReason          string `json:"last_turn_end_reason,omitempty"`
-	LastTurnToolRequests       int    `json:"last_turn_tool_requests,omitempty"`
-	LastTurnToolErrors         int    `json:"last_turn_tool_errors,omitempty"`
-	LastTurnForcedNoTools      int    `json:"last_turn_forced_no_tools,omitempty"`
-	LastTurnMemoryUpdates      int    `json:"last_turn_memory_updates,omitempty"`
-	LastTurnMemorySearchCalls  int    `json:"last_turn_memory_search_calls,omitempty"`
-	LastTurnMemorySearchMisses int    `json:"last_turn_memory_search_misses,omitempty"`
-	LastTurnSessionSearchCalls int    `json:"last_turn_session_search_calls,omitempty"`
-	LastTurnLoopGuards         int    `json:"last_turn_loop_guards,omitempty"`
-	LastDecisionKind           string `json:"last_decision_kind,omitempty"`
-	LastDecisionTrigger        string `json:"last_decision_trigger,omitempty"`
-	LastDecision               string `json:"last_decision,omitempty"`
-	LastDecisionConfidence     string `json:"last_decision_confidence,omitempty"`
-	LastDecisionReason         string `json:"last_decision_reason,omitempty"`
-	LastDecisionAction         string `json:"last_decision_required_action,omitempty"`
-	LastDecisionTokenBudget    int    `json:"last_decision_token_budget,omitempty"`
-	LastDecisionObservedInput  int    `json:"last_decision_observed_input_tokens,omitempty"`
-	LastDecisionProjectedInput int    `json:"last_decision_projected_input_tokens,omitempty"`
-	LastDecisionBudgetBytes    int    `json:"last_decision_budget_bytes,omitempty"`
+	Scenario                     string `json:"scenario,omitempty"`
+	TurnID                       string `json:"turn_id,omitempty"`
+	LoopID                       string `json:"loop_id,omitempty"`
+	Status                       string `json:"status,omitempty"`
+	Mode                         string `json:"mode"`
+	FeedNumber                   int    `json:"feed_number"`
+	ProtocolFeeds                int    `json:"protocol_feeds,omitempty"`
+	CalibrationAnswers           int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer        string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath                 string `json:"protocol_path,omitempty"`
+	CurrentSituation             string `json:"current_situation_preview,omitempty"`
+	PlanLabel                    string `json:"plan_label,omitempty"`
+	PlanCurrentStepIndex         int    `json:"plan_current_step_index,omitempty"`
+	PlanCurrentStepStatus        string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep              string `json:"plan_current_step,omitempty"`
+	LastTurnID                   string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason            string `json:"last_turn_end_reason,omitempty"`
+	LastTurnToolRequests         int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnToolRequestsAdmitted int    `json:"last_turn_tool_requests_admitted,omitempty"`
+	LastTurnToolRequestsSkipped  int    `json:"last_turn_tool_requests_skipped,omitempty"`
+	LastTurnToolErrors           int    `json:"last_turn_tool_errors,omitempty"`
+	LastTurnForcedNoTools        int    `json:"last_turn_forced_no_tools,omitempty"`
+	LastTurnMemoryUpdates        int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnMemorySearchCalls    int    `json:"last_turn_memory_search_calls,omitempty"`
+	LastTurnMemorySearchMisses   int    `json:"last_turn_memory_search_misses,omitempty"`
+	LastTurnSessionSearchCalls   int    `json:"last_turn_session_search_calls,omitempty"`
+	LastTurnLoopGuards           int    `json:"last_turn_loop_guards,omitempty"`
+	LastDecisionKind             string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger          string `json:"last_decision_trigger,omitempty"`
+	LastDecision                 string `json:"last_decision,omitempty"`
+	LastDecisionConfidence       string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason           string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction           string `json:"last_decision_required_action,omitempty"`
+	LastDecisionTokenBudget      int    `json:"last_decision_token_budget,omitempty"`
+	LastDecisionObservedInput    int    `json:"last_decision_observed_input_tokens,omitempty"`
+	LastDecisionProjectedInput   int    `json:"last_decision_projected_input_tokens,omitempty"`
+	LastDecisionBudgetBytes      int    `json:"last_decision_budget_bytes,omitempty"`
 }
 
 type LoopProtocolCalibration struct {
@@ -663,24 +665,26 @@ type LoopProtocolCalibration struct {
 }
 
 type LoopTurnCheckpoint struct {
-	Scenario           string `json:"scenario,omitempty"`
-	TurnID             string `json:"turn_id,omitempty"`
-	LoopID             string `json:"loop_id,omitempty"`
-	Status             string `json:"status,omitempty"`
-	ProtocolPath       string `json:"protocol_path,omitempty"`
-	EventSeq           int    `json:"event_seq,omitempty"`
-	TurnCheckpoints    int    `json:"turn_checkpoints,omitempty"`
-	EndReason          string `json:"end_reason,omitempty"`
-	InputTokens        int    `json:"input_tokens,omitempty"`
-	OutputTokens       int    `json:"output_tokens,omitempty"`
-	ToolRequests       int    `json:"tool_requests,omitempty"`
-	ToolErrors         int    `json:"tool_errors,omitempty"`
-	LoopGuards         int    `json:"loop_guards,omitempty"`
-	ForcedNoTools      int    `json:"forced_no_tools,omitempty"`
-	MemoryUpdates      int    `json:"memory_updates,omitempty"`
-	MemorySearchCalls  int    `json:"memory_search_calls,omitempty"`
-	MemoryMisses       int    `json:"memory_search_misses,omitempty"`
-	SessionSearchCalls int    `json:"session_search_calls,omitempty"`
+	Scenario             string `json:"scenario,omitempty"`
+	TurnID               string `json:"turn_id,omitempty"`
+	LoopID               string `json:"loop_id,omitempty"`
+	Status               string `json:"status,omitempty"`
+	ProtocolPath         string `json:"protocol_path,omitempty"`
+	EventSeq             int    `json:"event_seq,omitempty"`
+	TurnCheckpoints      int    `json:"turn_checkpoints,omitempty"`
+	EndReason            string `json:"end_reason,omitempty"`
+	InputTokens          int    `json:"input_tokens,omitempty"`
+	OutputTokens         int    `json:"output_tokens,omitempty"`
+	ToolRequests         int    `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted int    `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped  int    `json:"tool_requests_skipped,omitempty"`
+	ToolErrors           int    `json:"tool_errors,omitempty"`
+	LoopGuards           int    `json:"loop_guards,omitempty"`
+	ForcedNoTools        int    `json:"forced_no_tools,omitempty"`
+	MemoryUpdates        int    `json:"memory_updates,omitempty"`
+	MemorySearchCalls    int    `json:"memory_search_calls,omitempty"`
+	MemoryMisses         int    `json:"memory_search_misses,omitempty"`
+	SessionSearchCalls   int    `json:"session_search_calls,omitempty"`
 }
 
 type TraceEventRef struct {
@@ -716,12 +720,14 @@ type LoopProtocolSetupOverrunStats struct {
 }
 
 type LoopTurnCheckpointStats struct {
-	Count           int
-	MaxToolRequests int
-	MaxInputTokens  int
-	MaxTotalTokens  int
-	Latest          LoopTurnCheckpoint
-	Examples        []LoopTurnCheckpoint
+	Count                   int
+	MaxToolRequests         int
+	MaxToolRequestsAdmitted int
+	MaxToolRequestsSkipped  int
+	MaxInputTokens          int
+	MaxTotalTokens          int
+	Latest                  LoopTurnCheckpoint
+	Examples                []LoopTurnCheckpoint
 }
 
 type ContextInjection struct {
@@ -1813,40 +1819,42 @@ func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, LoopProtocolFeed{
-			TurnID:                     feed.TurnID,
-			LoopID:                     feed.LoopID,
-			Status:                     feed.Status,
-			Mode:                       feed.Mode,
-			FeedNumber:                 feed.FeedNumber,
-			ProtocolFeeds:              feed.ProtocolFeeds,
-			CalibrationAnswers:         feed.CalibrationAnswers,
-			LastCalibrationAnswer:      feed.LastCalibrationAnswer,
-			ProtocolPath:               feed.ProtocolPath,
-			CurrentSituation:           feed.CurrentSituation,
-			PlanLabel:                  feed.PlanLabel,
-			PlanCurrentStepIndex:       feed.PlanCurrentStepIndex,
-			PlanCurrentStepStatus:      feed.PlanCurrentStepStatus,
-			PlanCurrentStep:            feed.PlanCurrentStep,
-			LastTurnID:                 feed.LastTurnID,
-			LastTurnEndReason:          feed.LastTurnEndReason,
-			LastTurnToolRequests:       feed.LastTurnToolRequests,
-			LastTurnToolErrors:         feed.LastTurnToolErrors,
-			LastTurnForcedNoTools:      feed.LastTurnForcedNoTools,
-			LastTurnMemoryUpdates:      feed.LastTurnMemoryUpdates,
-			LastTurnMemorySearchCalls:  feed.LastTurnMemorySearchCalls,
-			LastTurnMemorySearchMisses: feed.LastTurnMemorySearchMisses,
-			LastTurnSessionSearchCalls: feed.LastTurnSessionSearchCalls,
-			LastTurnLoopGuards:         feed.LastTurnLoopGuards,
-			LastDecisionKind:           feed.LastDecisionKind,
-			LastDecisionTrigger:        feed.LastDecisionTrigger,
-			LastDecision:               feed.LastDecision,
-			LastDecisionConfidence:     feed.LastDecisionConfidence,
-			LastDecisionReason:         feed.LastDecisionReason,
-			LastDecisionAction:         feed.LastDecisionAction,
-			LastDecisionTokenBudget:    feed.LastDecisionTokenBudget,
-			LastDecisionObservedInput:  feed.LastDecisionObservedInput,
-			LastDecisionProjectedInput: feed.LastDecisionProjectedInput,
-			LastDecisionBudgetBytes:    feed.LastDecisionBudgetBytes,
+			TurnID:                       feed.TurnID,
+			LoopID:                       feed.LoopID,
+			Status:                       feed.Status,
+			Mode:                         feed.Mode,
+			FeedNumber:                   feed.FeedNumber,
+			ProtocolFeeds:                feed.ProtocolFeeds,
+			CalibrationAnswers:           feed.CalibrationAnswers,
+			LastCalibrationAnswer:        feed.LastCalibrationAnswer,
+			ProtocolPath:                 feed.ProtocolPath,
+			CurrentSituation:             feed.CurrentSituation,
+			PlanLabel:                    feed.PlanLabel,
+			PlanCurrentStepIndex:         feed.PlanCurrentStepIndex,
+			PlanCurrentStepStatus:        feed.PlanCurrentStepStatus,
+			PlanCurrentStep:              feed.PlanCurrentStep,
+			LastTurnID:                   feed.LastTurnID,
+			LastTurnEndReason:            feed.LastTurnEndReason,
+			LastTurnToolRequests:         feed.LastTurnToolRequests,
+			LastTurnToolRequestsAdmitted: feed.LastTurnToolRequestsAdmitted,
+			LastTurnToolRequestsSkipped:  feed.LastTurnToolRequestsSkipped,
+			LastTurnToolErrors:           feed.LastTurnToolErrors,
+			LastTurnForcedNoTools:        feed.LastTurnForcedNoTools,
+			LastTurnMemoryUpdates:        feed.LastTurnMemoryUpdates,
+			LastTurnMemorySearchCalls:    feed.LastTurnMemorySearchCalls,
+			LastTurnMemorySearchMisses:   feed.LastTurnMemorySearchMisses,
+			LastTurnSessionSearchCalls:   feed.LastTurnSessionSearchCalls,
+			LastTurnLoopGuards:           feed.LastTurnLoopGuards,
+			LastDecisionKind:             feed.LastDecisionKind,
+			LastDecisionTrigger:          feed.LastDecisionTrigger,
+			LastDecision:                 feed.LastDecision,
+			LastDecisionConfidence:       feed.LastDecisionConfidence,
+			LastDecisionReason:           feed.LastDecisionReason,
+			LastDecisionAction:           feed.LastDecisionAction,
+			LastDecisionTokenBudget:      feed.LastDecisionTokenBudget,
+			LastDecisionObservedInput:    feed.LastDecisionObservedInput,
+			LastDecisionProjectedInput:   feed.LastDecisionProjectedInput,
+			LastDecisionBudgetBytes:      feed.LastDecisionBudgetBytes,
 		})
 	}
 	return stats
@@ -1881,6 +1889,12 @@ func (t Trace) LoopTurnCheckpointStats(maxExamples int) LoopTurnCheckpointStats 
 		if checkpoint.ToolRequests > stats.MaxToolRequests {
 			stats.MaxToolRequests = checkpoint.ToolRequests
 		}
+		if checkpoint.ToolRequestsAdmitted > stats.MaxToolRequestsAdmitted {
+			stats.MaxToolRequestsAdmitted = checkpoint.ToolRequestsAdmitted
+		}
+		if checkpoint.ToolRequestsSkipped > stats.MaxToolRequestsSkipped {
+			stats.MaxToolRequestsSkipped = checkpoint.ToolRequestsSkipped
+		}
 		if checkpoint.InputTokens > stats.MaxInputTokens {
 			stats.MaxInputTokens = checkpoint.InputTokens
 		}
@@ -1892,23 +1906,25 @@ func (t Trace) LoopTurnCheckpointStats(maxExamples int) LoopTurnCheckpointStats 
 			continue
 		}
 		stats.Examples = append(stats.Examples, LoopTurnCheckpoint{
-			TurnID:             checkpoint.TurnID,
-			LoopID:             checkpoint.LoopID,
-			Status:             checkpoint.Status,
-			ProtocolPath:       checkpoint.ProtocolPath,
-			EventSeq:           checkpoint.EventSeq,
-			TurnCheckpoints:    checkpoint.TurnCheckpoints,
-			EndReason:          checkpoint.EndReason,
-			InputTokens:        checkpoint.InputTokens,
-			OutputTokens:       checkpoint.OutputTokens,
-			ToolRequests:       checkpoint.ToolRequests,
-			ToolErrors:         checkpoint.ToolErrors,
-			LoopGuards:         checkpoint.LoopGuards,
-			ForcedNoTools:      checkpoint.ForcedNoTools,
-			MemoryUpdates:      checkpoint.MemoryUpdates,
-			MemorySearchCalls:  checkpoint.MemorySearchCalls,
-			MemoryMisses:       checkpoint.MemoryMisses,
-			SessionSearchCalls: checkpoint.SessionSearchCalls,
+			TurnID:               checkpoint.TurnID,
+			LoopID:               checkpoint.LoopID,
+			Status:               checkpoint.Status,
+			ProtocolPath:         checkpoint.ProtocolPath,
+			EventSeq:             checkpoint.EventSeq,
+			TurnCheckpoints:      checkpoint.TurnCheckpoints,
+			EndReason:            checkpoint.EndReason,
+			InputTokens:          checkpoint.InputTokens,
+			OutputTokens:         checkpoint.OutputTokens,
+			ToolRequests:         checkpoint.ToolRequests,
+			ToolRequestsAdmitted: checkpoint.ToolRequestsAdmitted,
+			ToolRequestsSkipped:  checkpoint.ToolRequestsSkipped,
+			ToolErrors:           checkpoint.ToolErrors,
+			LoopGuards:           checkpoint.LoopGuards,
+			ForcedNoTools:        checkpoint.ForcedNoTools,
+			MemoryUpdates:        checkpoint.MemoryUpdates,
+			MemorySearchCalls:    checkpoint.MemorySearchCalls,
+			MemoryMisses:         checkpoint.MemoryMisses,
+			SessionSearchCalls:   checkpoint.SessionSearchCalls,
 		})
 	}
 	return stats

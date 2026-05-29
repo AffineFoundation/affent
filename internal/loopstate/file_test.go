@@ -710,18 +710,20 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	state, event, err := RecordTurnCheckpoint(protocolPath, TurnCheckpoint{
-		TurnID:             "turn_123",
-		EndReason:          "completed",
-		InputTokens:        120,
-		OutputTokens:       45,
-		ToolRequests:       3,
-		ToolErrors:         1,
-		LoopGuards:         1,
-		ForcedNoTools:      0,
-		MemoryUpdates:      2,
-		MemorySearchCalls:  3,
-		MemorySearchMisses: 1,
-		SessionSearchCalls: 1,
+		TurnID:               "turn_123",
+		EndReason:            "completed",
+		InputTokens:          120,
+		OutputTokens:         45,
+		ToolRequests:         3,
+		ToolRequestsAdmitted: 2,
+		ToolRequestsSkipped:  1,
+		ToolErrors:           1,
+		LoopGuards:           1,
+		ForcedNoTools:        0,
+		MemoryUpdates:        2,
+		MemorySearchCalls:    3,
+		MemorySearchMisses:   1,
+		SessionSearchCalls:   1,
 	})
 	if err != nil {
 		t.Fatalf("RecordTurnCheckpoint: %v", err)
@@ -731,6 +733,8 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 		event.TurnEndReason != "completed" ||
 		event.InputTokens != 120 ||
 		event.ToolRequests != 3 ||
+		event.ToolRequestsAdmitted != 2 ||
+		event.ToolRequestsSkipped != 1 ||
 		event.LoopGuards != 1 ||
 		event.MemoryUpdates != 2 ||
 		event.MemorySearches != 3 ||
@@ -745,6 +749,8 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 		state.LastTurnInputTokens != 120 ||
 		state.LastTurnOutputTokens != 45 ||
 		state.LastTurnToolRequests != 3 ||
+		state.LastTurnToolRequestsAdmitted != 2 ||
+		state.LastTurnToolRequestsSkipped != 1 ||
 		state.LastTurnToolErrors != 1 ||
 		state.LastTurnLoopGuards != 1 ||
 		state.LastTurnMemoryUpdates != 2 ||

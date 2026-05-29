@@ -739,6 +739,8 @@ func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
 	observed := res.LoopTurnCheckpoints.MaxToolRequests
 	if res.ToolStats.ToolRequestsAdmitted > 0 || res.ToolStats.ToolRequestsSkipped > 0 {
 		observed = res.ToolStats.ToolRequestsAdmitted
+	} else if res.LoopTurnCheckpoints.MaxToolRequestsAdmitted > 0 || res.LoopTurnCheckpoints.MaxToolRequestsSkipped > 0 {
+		observed = res.LoopTurnCheckpoints.MaxToolRequestsAdmitted
 	}
 	if budget <= 0 || observed <= budget {
 		return nil, false
@@ -748,8 +750,12 @@ func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
 		"tool_call_budget":  budget,
 		"checkpoints":       res.LoopTurnCheckpoints.Count,
 	}
-	if res.ToolStats.ToolRequestsSkipped > 0 {
-		counts["skipped_tool_requests"] = res.ToolStats.ToolRequestsSkipped
+	skipped := res.ToolStats.ToolRequestsSkipped
+	if skipped == 0 {
+		skipped = res.LoopTurnCheckpoints.MaxToolRequestsSkipped
+	}
+	if skipped > 0 {
+		counts["skipped_tool_requests"] = skipped
 	}
 	if res.LoopTurnCheckpoints.MaxInputTokens > 0 {
 		counts["max_input_tokens"] = res.LoopTurnCheckpoints.MaxInputTokens
@@ -791,6 +797,19 @@ func effectiveToolCallBudget(res BatchResult) int {
 		return res.RuntimeSurface.MaxToolCalls
 	}
 	return res.RuntimeSurface.MaxTurnSteps
+}
+
+func longRunAdmittedToolRequests(res BatchResult) (int, int) {
+	if res.ToolStats.ToolRequestsAdmitted > 0 || res.ToolStats.ToolRequestsSkipped > 0 {
+		return res.ToolStats.ToolRequestsAdmitted, res.ToolStats.ToolRequestsSkipped
+	}
+	if res.LoopTurnCheckpoints.MaxToolRequestsAdmitted > 0 || res.LoopTurnCheckpoints.MaxToolRequestsSkipped > 0 {
+		return res.LoopTurnCheckpoints.MaxToolRequestsAdmitted, res.LoopTurnCheckpoints.MaxToolRequestsSkipped
+	}
+	if res.ToolStats.ToolRequests > 0 {
+		return res.ToolStats.ToolRequests, 0
+	}
+	return res.ToolCalls, 0
 }
 
 func loopProtocolCalibrationBacklogCounts(res BatchResult) (map[string]int, bool) {
@@ -854,10 +873,7 @@ func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, []string,
 	if res.ToolStats.MemoryUpdates > 0 {
 		return nil, nil, false
 	}
-	toolRequests := res.ToolStats.ToolRequests
-	if toolRequests == 0 {
-		toolRequests = res.ToolCalls
-	}
+	toolRequests, skippedRequests := longRunAdmittedToolRequests(res)
 	loopSignals := res.LoopTurnCheckpoints.Count + res.LoopProtocolFeeds.Count
 	totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens
 	longRun := loopSignals > 0 && (toolRequests >= 10 || totalTokens >= 100000)
@@ -869,6 +885,9 @@ func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, []string,
 		"loop_turn_checkpoints": res.LoopTurnCheckpoints.Count,
 		"loop_protocol_feeds":   res.LoopProtocolFeeds.Count,
 		"memory_search_calls":   res.ToolStats.MemorySearchCalls,
+	}
+	if skippedRequests > 0 {
+		counts["skipped_tool_requests"] = skippedRequests
 	}
 	tags := []string{"memory_update", "memory_update:absent_longrun"}
 	if res.RuntimeSurface != nil && (res.RuntimeSurface.Capabilities.Memory || runtimeSurfaceHasTool(res.RuntimeSurface, "memory")) {
@@ -890,10 +909,7 @@ func absentLongRunSessionSearchCounts(res BatchResult) (map[string]int, bool) {
 	if res.RuntimeSurface == nil || (!res.RuntimeSurface.Capabilities.SessionSearch && !runtimeSurfaceHasTool(res.RuntimeSurface, "session_search")) {
 		return nil, false
 	}
-	toolRequests := res.ToolStats.ToolRequests
-	if toolRequests == 0 {
-		toolRequests = res.ToolCalls
-	}
+	toolRequests, skippedRequests := longRunAdmittedToolRequests(res)
 	loopSignals := res.LoopTurnCheckpoints.Count + res.LoopProtocolFeeds.Count
 	totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens
 	longRun := loopSignals > 0 && (toolRequests >= 10 || totalTokens >= 100000)
@@ -905,6 +921,9 @@ func absentLongRunSessionSearchCounts(res BatchResult) (map[string]int, bool) {
 		"tool_requests":            toolRequests,
 		"loop_turn_checkpoints":    res.LoopTurnCheckpoints.Count,
 		"loop_protocol_feeds":      res.LoopProtocolFeeds.Count,
+	}
+	if skippedRequests > 0 {
+		counts["skipped_tool_requests"] = skippedRequests
 	}
 	if totalTokens > 0 {
 		counts["total_tokens"] = totalTokens

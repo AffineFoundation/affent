@@ -70,7 +70,7 @@ const (
 
 	sessionDirReadBatch       = 128
 	maxSessionLogLineBytes    = jsonl.DefaultMaxRecordBytes
-	recentSessionPreviewBytes = 220
+	recentSessionPreviewBytes = 320
 )
 
 func Search(ctx context.Context, sessionsDir, currentSessionID, query string, topK, maxPerSession int) ([]Hit, error) {
@@ -746,6 +746,8 @@ func recentLoopPreviewContent(path, sid string) (string, bool, error) {
 			"memory_misses="+stateSearchInt(summary.State.LastTurnMemoryMisses),
 			"memory_searches="+stateSearchInt(summary.State.LastTurnMemorySearches),
 			"tools="+stateSearchInt(summary.State.LastTurnToolRequests),
+			"tools_admitted="+stateSearchToolAdmitted(summary.State.LastTurnToolRequests, summary.State.LastTurnToolRequestsAdmitted, summary.State.LastTurnToolRequestsSkipped),
+			"tools_skipped="+stateSearchInt(summary.State.LastTurnToolRequestsSkipped),
 		)
 		appendLoopStateLine(&b, "last_plan",
 			"label="+stateSearchValue(summary.State.LastPlanLabel),
@@ -777,19 +779,21 @@ func appendLatestLoopEventPreview(b *strings.Builder, path string) {
 	}
 	ev := events[len(events)-1]
 	appendLoopStateLine(b, "recent_loop_event",
+		"action="+stateSearchPreview(ev.RequiredAction, 48),
 		"summary="+stateSearchValue(ev.Summary),
 		"turn_end="+stateSearchValue(ev.TurnEndReason),
+		"tools_admitted="+stateSearchToolAdmitted(ev.ToolRequests, ev.ToolRequestsAdmitted, ev.ToolRequestsSkipped),
+		"tools_skipped="+stateSearchInt(ev.ToolRequestsSkipped),
 		"tool_errors="+stateSearchInt(ev.ToolErrors),
+		"loop_guards="+stateSearchInt(ev.LoopGuards),
 		"forced_no_tools="+stateSearchInt(ev.ForcedNoTools),
 		"session_search="+stateSearchInt(ev.SessionSearch),
-		"loop_guards="+stateSearchInt(ev.LoopGuards),
-		"action="+stateSearchValue(ev.RequiredAction),
+		"tools="+stateSearchInt(ev.ToolRequests),
 		"memory_misses="+stateSearchInt(ev.MemoryMisses),
 		"memory_searches="+stateSearchInt(ev.MemorySearches),
 		"type="+stateSearchValue(ev.Type),
 		"mode="+stateSearchValue(ev.Mode),
 		"feed="+stateSearchInt(ev.FeedNumber),
-		"tools="+stateSearchInt(ev.ToolRequests),
 		"decision_kind="+stateSearchValue(ev.DecisionKind),
 		"decision="+stateSearchValue(ev.Decision),
 		"trigger="+stateSearchValue(ev.Trigger),
@@ -897,6 +901,9 @@ func recoveryPreviewFromEvent(ev eventRecord) string {
 			Reason    string `json:"reason"`
 			ToolStats *struct {
 				ToolFailureByKind      map[string]int `json:"tool_failure_by_kind,omitempty"`
+				ToolRequests           int            `json:"tool_requests,omitempty"`
+				ToolRequestsAdmitted   int            `json:"tool_requests_admitted,omitempty"`
+				ToolRequestsSkipped    int            `json:"tool_requests_skipped,omitempty"`
 				LoopGuardInterventions int            `json:"loop_guard_interventions,omitempty"`
 				ToolContextTruncated   int            `json:"tool_context_truncated,omitempty"`
 			} `json:"tool_stats,omitempty"`
@@ -915,6 +922,11 @@ func recoveryPreviewFromEvent(ev eventRecord) string {
 			if p.ToolStats.LoopGuardInterventions > 0 {
 				parts = append(parts, fmt.Sprintf("loop_guards=%d", p.ToolStats.LoopGuardInterventions))
 			}
+			if stateSearchToolAdmitted(p.ToolStats.ToolRequests, p.ToolStats.ToolRequestsAdmitted, p.ToolStats.ToolRequestsSkipped) != "" || p.ToolStats.ToolRequestsSkipped > 0 {
+				parts = append(parts, fmt.Sprintf("tools=%d", p.ToolStats.ToolRequests))
+				parts = append(parts, fmt.Sprintf("tools_admitted=%d", p.ToolStats.ToolRequestsAdmitted))
+				parts = append(parts, fmt.Sprintf("tools_skipped=%d", p.ToolStats.ToolRequestsSkipped))
+			}
 			if p.ToolStats.ToolContextTruncated > 0 {
 				parts = append(parts, fmt.Sprintf("tool_context_truncated=%d", p.ToolStats.ToolContextTruncated))
 			}
@@ -922,15 +934,18 @@ func recoveryPreviewFromEvent(ev eventRecord) string {
 		return strings.Join(parts, "; ")
 	case "loop.turn_checkpoint":
 		var p struct {
-			TurnID             string `json:"turn_id"`
-			LoopID             string `json:"loop_id,omitempty"`
-			Status             string `json:"status,omitempty"`
-			EndReason          string `json:"end_reason,omitempty"`
-			ToolErrors         int    `json:"tool_errors,omitempty"`
-			LoopGuards         int    `json:"loop_guards,omitempty"`
-			ForcedNoTools      int    `json:"forced_no_tools,omitempty"`
-			MemoryMisses       int    `json:"memory_search_misses,omitempty"`
-			SessionSearchCalls int    `json:"session_search_calls,omitempty"`
+			TurnID               string `json:"turn_id"`
+			LoopID               string `json:"loop_id,omitempty"`
+			Status               string `json:"status,omitempty"`
+			EndReason            string `json:"end_reason,omitempty"`
+			ToolRequests         int    `json:"tool_requests,omitempty"`
+			ToolRequestsAdmitted int    `json:"tool_requests_admitted,omitempty"`
+			ToolRequestsSkipped  int    `json:"tool_requests_skipped,omitempty"`
+			ToolErrors           int    `json:"tool_errors,omitempty"`
+			LoopGuards           int    `json:"loop_guards,omitempty"`
+			ForcedNoTools        int    `json:"forced_no_tools,omitempty"`
+			MemoryMisses         int    `json:"memory_search_misses,omitempty"`
+			SessionSearchCalls   int    `json:"session_search_calls,omitempty"`
 		}
 		if err := json.Unmarshal(ev.Data, &p); err != nil {
 			return ""
@@ -938,6 +953,7 @@ func recoveryPreviewFromEvent(ev eventRecord) string {
 		endReason := strings.TrimSpace(p.EndReason)
 		if endReason != "max_turns" && endReason != "error" &&
 			p.ToolErrors <= 0 &&
+			p.ToolRequestsSkipped <= 0 &&
 			p.LoopGuards <= 0 &&
 			p.ForcedNoTools <= 0 &&
 			p.MemoryMisses <= 0 {
@@ -952,6 +968,11 @@ func recoveryPreviewFromEvent(ev eventRecord) string {
 		}
 		if p.ToolErrors > 0 {
 			parts = append(parts, fmt.Sprintf("tool_errors=%d", p.ToolErrors))
+		}
+		if stateSearchToolAdmitted(p.ToolRequests, p.ToolRequestsAdmitted, p.ToolRequestsSkipped) != "" || p.ToolRequestsSkipped > 0 {
+			parts = append(parts, fmt.Sprintf("tools=%d", p.ToolRequests))
+			parts = append(parts, fmt.Sprintf("tools_admitted=%d", p.ToolRequestsAdmitted))
+			parts = append(parts, fmt.Sprintf("tools_skipped=%d", p.ToolRequestsSkipped))
 		}
 		if p.LoopGuards > 0 {
 			parts = append(parts, fmt.Sprintf("loop_guards=%d", p.LoopGuards))
@@ -1155,6 +1176,8 @@ func appendLoopStateSearchContent(b *strings.Builder, state *loopstate.State) {
 		"id="+stateSearchValue(state.LastTurnID),
 		"reason="+stateSearchValue(state.LastTurnEndReason),
 		"tools="+stateSearchInt(state.LastTurnToolRequests),
+		"tools_admitted="+stateSearchToolAdmitted(state.LastTurnToolRequests, state.LastTurnToolRequestsAdmitted, state.LastTurnToolRequestsSkipped),
+		"tools_skipped="+stateSearchInt(state.LastTurnToolRequestsSkipped),
 		"tool_errors="+stateSearchInt(state.LastTurnToolErrors),
 		"loop_guards="+stateSearchInt(state.LastTurnLoopGuards),
 		"forced_no_tools="+stateSearchInt(state.LastTurnForcedNoTools),
@@ -1213,11 +1236,24 @@ func stateSearchValue(value string) string {
 	return textutil.Preview(value, 300)
 }
 
+func stateSearchPreview(value string, limit int) string {
+	value = textutil.StripASCIIControls(value)
+	value = textutil.CompactWhitespace(value)
+	return textutil.Preview(value, limit)
+}
+
 func stateSearchInt(n int) string {
 	if n <= 0 {
 		return ""
 	}
 	return fmt.Sprintf("%d", n)
+}
+
+func stateSearchToolAdmitted(total, admitted, skipped int) string {
+	if skipped <= 0 && (admitted <= 0 || admitted == total) {
+		return ""
+	}
+	return stateSearchInt(admitted)
 }
 
 func stateSearchBool(v bool) string {

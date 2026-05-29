@@ -202,6 +202,9 @@ func loopProtocolStateLine(protocolPath string, livePlanCheckpoint loopstate.Pla
 		if state.LastTurnToolRequests > 0 {
 			turn = append(turn, fmt.Sprintf("tools=%d", state.LastTurnToolRequests))
 		}
+		if state.LastTurnToolRequestsSkipped > 0 || (state.LastTurnToolRequestsAdmitted > 0 && state.LastTurnToolRequestsAdmitted != state.LastTurnToolRequests) {
+			turn = append(turn, fmt.Sprintf("tools_admitted=%d tools_skipped=%d", state.LastTurnToolRequestsAdmitted, state.LastTurnToolRequestsSkipped))
+		}
 		if state.LastTurnToolErrors > 0 {
 			turn = append(turn, fmt.Sprintf("tool_errors=%d", state.LastTurnToolErrors))
 		}
@@ -606,6 +609,10 @@ func applyLoopProtocolLastTurnFields(payload *sse.LoopProtocolFeedPayload, raw s
 			payload.LastTurnEndReason = value
 		case "tools":
 			payload.LastTurnToolRequests = parsePositiveInt(value)
+		case "tools_admitted":
+			payload.LastTurnToolRequestsAdmitted = parsePositiveInt(value)
+		case "tools_skipped":
+			payload.LastTurnToolRequestsSkipped = parsePositiveInt(value)
 		case "tool_errors":
 			payload.LastTurnToolErrors = parsePositiveInt(value)
 		case "forced_no_tools":

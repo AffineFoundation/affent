@@ -621,6 +621,25 @@ func TestBuildDebugBriefClassifiesToolBudgetRunaway(t *testing.T) {
 	}); clean != nil {
 		t.Fatalf("within-budget run should not emit debug brief: %+v", clean)
 	}
+
+	skippedOnly := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			MemoryUpdates: 1,
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:                   1,
+			MaxToolRequests:         12,
+			MaxToolRequestsAdmitted: 10,
+			MaxToolRequestsSkipped:  2,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			MaxTurnSteps: 10,
+		},
+	})
+	if item := debugBriefItemByKind(skippedOnly, "tool_budget"); item != nil {
+		t.Fatalf("skipped protocol placeholders should not count as admitted budget overrun: %+v", item)
+	}
 }
 
 func TestBuildDebugBriefClassifiesInputBudgetRunaway(t *testing.T) {

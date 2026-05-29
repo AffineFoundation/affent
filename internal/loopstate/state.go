@@ -20,123 +20,127 @@ const (
 )
 
 type State struct {
-	Version                    int    `json:"version"`
-	LoopID                     string `json:"loop_id,omitempty"`
-	OwnerSession               string `json:"owner_session,omitempty"`
-	Status                     string `json:"status,omitempty"`
-	ProtocolPath               string `json:"protocol_path,omitempty"`
-	CreatedAt                  string `json:"created_at,omitempty"`
-	UpdatedAt                  string `json:"updated_at,omitempty"`
-	InitialGoalPreview         string `json:"initial_goal_preview,omitempty"`
-	InitialPlanLabel           string `json:"initial_plan_label,omitempty"`
-	LastProtocolUpdateAt       string `json:"last_protocol_update_at,omitempty"`
-	ProtocolUpdates            int    `json:"protocol_updates,omitempty"`
-	CalibrationQuestions       int    `json:"calibration_questions,omitempty"`
-	LastCalibrationQuestionAt  string `json:"last_calibration_question_at,omitempty"`
-	LastCalibrationQuestion    string `json:"last_calibration_question_preview,omitempty"`
-	CalibrationAnswers         int    `json:"calibration_answers,omitempty"`
-	LastCalibrationAnswerAt    string `json:"last_calibration_answer_at,omitempty"`
-	LastCalibrationAnswer      string `json:"last_calibration_answer_preview,omitempty"`
-	ProtocolFeeds              int    `json:"protocol_feeds,omitempty"`
-	LastProtocolFeedAt         string `json:"last_protocol_feed_at,omitempty"`
-	LastProtocolFeedMode       string `json:"last_protocol_feed_mode,omitempty"`
-	NeedsFullProtocolFeed      bool   `json:"needs_full_protocol_feed,omitempty"`
-	LastPlanLabel              string `json:"last_plan_label,omitempty"`
-	LastPlanStepIndex          int    `json:"last_plan_step_index,omitempty"`
-	LastPlanStepStatus         string `json:"last_plan_step_status,omitempty"`
-	LastPlanStep               string `json:"last_plan_step,omitempty"`
-	TurnCheckpoints            int    `json:"turn_checkpoints,omitempty"`
-	LastTurnID                 string `json:"last_turn_id,omitempty"`
-	LastTurnEndReason          string `json:"last_turn_end_reason,omitempty"`
-	LastTurnAt                 string `json:"last_turn_at,omitempty"`
-	LastTurnInputTokens        int    `json:"last_turn_input_tokens,omitempty"`
-	LastTurnOutputTokens       int    `json:"last_turn_output_tokens,omitempty"`
-	LastTurnToolRequests       int    `json:"last_turn_tool_requests,omitempty"`
-	LastTurnToolErrors         int    `json:"last_turn_tool_errors,omitempty"`
-	LastTurnLoopGuards         int    `json:"last_turn_loop_guards,omitempty"`
-	LastTurnForcedNoTools      int    `json:"last_turn_forced_no_tools,omitempty"`
-	LastTurnMemoryUpdates      int    `json:"last_turn_memory_updates,omitempty"`
-	LastTurnMemorySearches     int    `json:"last_turn_memory_search_calls,omitempty"`
-	LastTurnMemoryMisses       int    `json:"last_turn_memory_search_misses,omitempty"`
-	LastTurnSessionSearch      int    `json:"last_turn_session_search_calls,omitempty"`
-	MemoryUpdateEvents         int    `json:"memory_update_events,omitempty"`
-	LastMemoryUpdateAction     string `json:"last_memory_update_action,omitempty"`
-	LastMemoryUpdateTarget     string `json:"last_memory_update_target,omitempty"`
-	LastMemoryUpdateTopic      string `json:"last_memory_update_topic,omitempty"`
-	LastMemoryUpdateLoc        string `json:"last_memory_update_location,omitempty"`
-	LastMemoryUpdatePrev       string `json:"last_memory_update_previous_preview,omitempty"`
-	LastMemoryUpdateNext       string `json:"last_memory_update_next_preview,omitempty"`
-	LastMemoryUpdate           string `json:"last_memory_update_preview,omitempty"`
-	LastMemoryUpdateAt         string `json:"last_memory_update_at,omitempty"`
-	LoopDecisions              int    `json:"loop_decisions,omitempty"`
-	LastDecisionID             string `json:"last_decision_id,omitempty"`
-	LastDecisionKind           string `json:"last_decision_kind,omitempty"`
-	LastDecisionTrigger        string `json:"last_decision_trigger,omitempty"`
-	LastDecision               string `json:"last_decision,omitempty"`
-	LastDecisionConfidence     string `json:"last_decision_confidence,omitempty"`
-	LastDecisionReason         string `json:"last_decision_reason,omitempty"`
-	LastDecisionAction         string `json:"last_decision_required_action,omitempty"`
-	LastDecisionTokenBudget    int    `json:"last_decision_token_budget,omitempty"`
-	LastDecisionObservedInput  int    `json:"last_decision_observed_input_tokens,omitempty"`
-	LastDecisionProjectedInput int    `json:"last_decision_projected_input_tokens,omitempty"`
-	LastDecisionBudgetBytes    int    `json:"last_decision_budget_bytes,omitempty"`
-	LastDecisionAt             string `json:"last_decision_at,omitempty"`
-	ContextCompactions         int    `json:"context_compactions,omitempty"`
-	LastCompactionAt           string `json:"last_context_compaction_at,omitempty"`
-	LastCompactionReason       string `json:"last_context_compaction_reason,omitempty"`
-	LastCompactionReactive     bool   `json:"last_context_compaction_reactive,omitempty"`
-	EventCount                 int    `json:"event_count,omitempty"`
-	LastEventType              string `json:"last_event_type,omitempty"`
-	LastEventSummary           string `json:"last_event_summary,omitempty"`
-	LastEventAt                string `json:"last_event_at,omitempty"`
+	Version                      int    `json:"version"`
+	LoopID                       string `json:"loop_id,omitempty"`
+	OwnerSession                 string `json:"owner_session,omitempty"`
+	Status                       string `json:"status,omitempty"`
+	ProtocolPath                 string `json:"protocol_path,omitempty"`
+	CreatedAt                    string `json:"created_at,omitempty"`
+	UpdatedAt                    string `json:"updated_at,omitempty"`
+	InitialGoalPreview           string `json:"initial_goal_preview,omitempty"`
+	InitialPlanLabel             string `json:"initial_plan_label,omitempty"`
+	LastProtocolUpdateAt         string `json:"last_protocol_update_at,omitempty"`
+	ProtocolUpdates              int    `json:"protocol_updates,omitempty"`
+	CalibrationQuestions         int    `json:"calibration_questions,omitempty"`
+	LastCalibrationQuestionAt    string `json:"last_calibration_question_at,omitempty"`
+	LastCalibrationQuestion      string `json:"last_calibration_question_preview,omitempty"`
+	CalibrationAnswers           int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswerAt      string `json:"last_calibration_answer_at,omitempty"`
+	LastCalibrationAnswer        string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolFeeds                int    `json:"protocol_feeds,omitempty"`
+	LastProtocolFeedAt           string `json:"last_protocol_feed_at,omitempty"`
+	LastProtocolFeedMode         string `json:"last_protocol_feed_mode,omitempty"`
+	NeedsFullProtocolFeed        bool   `json:"needs_full_protocol_feed,omitempty"`
+	LastPlanLabel                string `json:"last_plan_label,omitempty"`
+	LastPlanStepIndex            int    `json:"last_plan_step_index,omitempty"`
+	LastPlanStepStatus           string `json:"last_plan_step_status,omitempty"`
+	LastPlanStep                 string `json:"last_plan_step,omitempty"`
+	TurnCheckpoints              int    `json:"turn_checkpoints,omitempty"`
+	LastTurnID                   string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason            string `json:"last_turn_end_reason,omitempty"`
+	LastTurnAt                   string `json:"last_turn_at,omitempty"`
+	LastTurnInputTokens          int    `json:"last_turn_input_tokens,omitempty"`
+	LastTurnOutputTokens         int    `json:"last_turn_output_tokens,omitempty"`
+	LastTurnToolRequests         int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnToolRequestsAdmitted int    `json:"last_turn_tool_requests_admitted,omitempty"`
+	LastTurnToolRequestsSkipped  int    `json:"last_turn_tool_requests_skipped,omitempty"`
+	LastTurnToolErrors           int    `json:"last_turn_tool_errors,omitempty"`
+	LastTurnLoopGuards           int    `json:"last_turn_loop_guards,omitempty"`
+	LastTurnForcedNoTools        int    `json:"last_turn_forced_no_tools,omitempty"`
+	LastTurnMemoryUpdates        int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnMemorySearches       int    `json:"last_turn_memory_search_calls,omitempty"`
+	LastTurnMemoryMisses         int    `json:"last_turn_memory_search_misses,omitempty"`
+	LastTurnSessionSearch        int    `json:"last_turn_session_search_calls,omitempty"`
+	MemoryUpdateEvents           int    `json:"memory_update_events,omitempty"`
+	LastMemoryUpdateAction       string `json:"last_memory_update_action,omitempty"`
+	LastMemoryUpdateTarget       string `json:"last_memory_update_target,omitempty"`
+	LastMemoryUpdateTopic        string `json:"last_memory_update_topic,omitempty"`
+	LastMemoryUpdateLoc          string `json:"last_memory_update_location,omitempty"`
+	LastMemoryUpdatePrev         string `json:"last_memory_update_previous_preview,omitempty"`
+	LastMemoryUpdateNext         string `json:"last_memory_update_next_preview,omitempty"`
+	LastMemoryUpdate             string `json:"last_memory_update_preview,omitempty"`
+	LastMemoryUpdateAt           string `json:"last_memory_update_at,omitempty"`
+	LoopDecisions                int    `json:"loop_decisions,omitempty"`
+	LastDecisionID               string `json:"last_decision_id,omitempty"`
+	LastDecisionKind             string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger          string `json:"last_decision_trigger,omitempty"`
+	LastDecision                 string `json:"last_decision,omitempty"`
+	LastDecisionConfidence       string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason           string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction           string `json:"last_decision_required_action,omitempty"`
+	LastDecisionTokenBudget      int    `json:"last_decision_token_budget,omitempty"`
+	LastDecisionObservedInput    int    `json:"last_decision_observed_input_tokens,omitempty"`
+	LastDecisionProjectedInput   int    `json:"last_decision_projected_input_tokens,omitempty"`
+	LastDecisionBudgetBytes      int    `json:"last_decision_budget_bytes,omitempty"`
+	LastDecisionAt               string `json:"last_decision_at,omitempty"`
+	ContextCompactions           int    `json:"context_compactions,omitempty"`
+	LastCompactionAt             string `json:"last_context_compaction_at,omitempty"`
+	LastCompactionReason         string `json:"last_context_compaction_reason,omitempty"`
+	LastCompactionReactive       bool   `json:"last_context_compaction_reactive,omitempty"`
+	EventCount                   int    `json:"event_count,omitempty"`
+	LastEventType                string `json:"last_event_type,omitempty"`
+	LastEventSummary             string `json:"last_event_summary,omitempty"`
+	LastEventAt                  string `json:"last_event_at,omitempty"`
 }
 
 type Event struct {
-	Seq             int      `json:"seq"`
-	Time            string   `json:"time"`
-	Type            string   `json:"type"`
-	Summary         string   `json:"summary,omitempty"`
-	SectionsChanged []string `json:"sections_changed,omitempty"`
-	Reason          string   `json:"reason,omitempty"`
-	Path            string   `json:"path,omitempty"`
-	Mode            string   `json:"mode,omitempty"`
-	Reactive        bool     `json:"reactive,omitempty"`
-	FeedNumber      int      `json:"feed_number,omitempty"`
-	PlanLabel       string   `json:"plan_label,omitempty"`
-	PlanStepIndex   int      `json:"plan_step_index,omitempty"`
-	PlanStepStatus  string   `json:"plan_step_status,omitempty"`
-	PlanStep        string   `json:"plan_step,omitempty"`
-	TurnID          string   `json:"turn_id,omitempty"`
-	TurnEndReason   string   `json:"turn_end_reason,omitempty"`
-	InputTokens     int      `json:"input_tokens,omitempty"`
-	OutputTokens    int      `json:"output_tokens,omitempty"`
-	ToolRequests    int      `json:"tool_requests,omitempty"`
-	ToolErrors      int      `json:"tool_errors,omitempty"`
-	LoopGuards      int      `json:"loop_guards,omitempty"`
-	ForcedNoTools   int      `json:"forced_no_tools,omitempty"`
-	MemoryUpdates   int      `json:"memory_updates,omitempty"`
-	MemorySearches  int      `json:"memory_search_calls,omitempty"`
-	MemoryMisses    int      `json:"memory_search_misses,omitempty"`
-	SessionSearch   int      `json:"session_search_calls,omitempty"`
-	DecisionID      string   `json:"decision_id,omitempty"`
-	DecisionKind    string   `json:"decision_kind,omitempty"`
-	Trigger         string   `json:"trigger,omitempty"`
-	Decision        string   `json:"decision,omitempty"`
-	Confidence      string   `json:"confidence,omitempty"`
-	RequiredAction  string   `json:"required_action,omitempty"`
-	TokenBudget     int      `json:"token_budget,omitempty"`
-	ObservedInput   int      `json:"observed_input_tokens,omitempty"`
-	ProjectedInput  int      `json:"projected_input_tokens,omitempty"`
-	BudgetBytes     int      `json:"budget_bytes,omitempty"`
-	CallID          string   `json:"call_id,omitempty"`
-	MemoryAction    string   `json:"memory_action,omitempty"`
-	MemoryTarget    string   `json:"memory_target,omitempty"`
-	MemoryTopic     string   `json:"memory_topic,omitempty"`
-	MemoryLocation  string   `json:"memory_location,omitempty"`
-	MemoryPreview   string   `json:"memory_preview,omitempty"`
-	PreviousPreview string   `json:"previous_preview,omitempty"`
-	NextPreview     string   `json:"next_preview,omitempty"`
-	Calibration     string   `json:"calibration_preview,omitempty"`
+	Seq                  int      `json:"seq"`
+	Time                 string   `json:"time"`
+	Type                 string   `json:"type"`
+	Summary              string   `json:"summary,omitempty"`
+	SectionsChanged      []string `json:"sections_changed,omitempty"`
+	Reason               string   `json:"reason,omitempty"`
+	Path                 string   `json:"path,omitempty"`
+	Mode                 string   `json:"mode,omitempty"`
+	Reactive             bool     `json:"reactive,omitempty"`
+	FeedNumber           int      `json:"feed_number,omitempty"`
+	PlanLabel            string   `json:"plan_label,omitempty"`
+	PlanStepIndex        int      `json:"plan_step_index,omitempty"`
+	PlanStepStatus       string   `json:"plan_step_status,omitempty"`
+	PlanStep             string   `json:"plan_step,omitempty"`
+	TurnID               string   `json:"turn_id,omitempty"`
+	TurnEndReason        string   `json:"turn_end_reason,omitempty"`
+	InputTokens          int      `json:"input_tokens,omitempty"`
+	OutputTokens         int      `json:"output_tokens,omitempty"`
+	ToolRequests         int      `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted int      `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped  int      `json:"tool_requests_skipped,omitempty"`
+	ToolErrors           int      `json:"tool_errors,omitempty"`
+	LoopGuards           int      `json:"loop_guards,omitempty"`
+	ForcedNoTools        int      `json:"forced_no_tools,omitempty"`
+	MemoryUpdates        int      `json:"memory_updates,omitempty"`
+	MemorySearches       int      `json:"memory_search_calls,omitempty"`
+	MemoryMisses         int      `json:"memory_search_misses,omitempty"`
+	SessionSearch        int      `json:"session_search_calls,omitempty"`
+	DecisionID           string   `json:"decision_id,omitempty"`
+	DecisionKind         string   `json:"decision_kind,omitempty"`
+	Trigger              string   `json:"trigger,omitempty"`
+	Decision             string   `json:"decision,omitempty"`
+	Confidence           string   `json:"confidence,omitempty"`
+	RequiredAction       string   `json:"required_action,omitempty"`
+	TokenBudget          int      `json:"token_budget,omitempty"`
+	ObservedInput        int      `json:"observed_input_tokens,omitempty"`
+	ProjectedInput       int      `json:"projected_input_tokens,omitempty"`
+	BudgetBytes          int      `json:"budget_bytes,omitempty"`
+	CallID               string   `json:"call_id,omitempty"`
+	MemoryAction         string   `json:"memory_action,omitempty"`
+	MemoryTarget         string   `json:"memory_target,omitempty"`
+	MemoryTopic          string   `json:"memory_topic,omitempty"`
+	MemoryLocation       string   `json:"memory_location,omitempty"`
+	MemoryPreview        string   `json:"memory_preview,omitempty"`
+	PreviousPreview      string   `json:"previous_preview,omitempty"`
+	NextPreview          string   `json:"next_preview,omitempty"`
+	Calibration          string   `json:"calibration_preview,omitempty"`
 }
 
 type DecisionCheckpoint struct {
@@ -154,18 +158,20 @@ type DecisionCheckpoint struct {
 }
 
 type TurnCheckpoint struct {
-	TurnID             string
-	EndReason          string
-	InputTokens        int
-	OutputTokens       int
-	ToolRequests       int
-	ToolErrors         int
-	LoopGuards         int
-	ForcedNoTools      int
-	MemoryUpdates      int
-	MemorySearchCalls  int
-	MemorySearchMisses int
-	SessionSearchCalls int
+	TurnID               string
+	EndReason            string
+	InputTokens          int
+	OutputTokens         int
+	ToolRequests         int
+	ToolRequestsAdmitted int
+	ToolRequestsSkipped  int
+	ToolErrors           int
+	LoopGuards           int
+	ForcedNoTools        int
+	MemoryUpdates        int
+	MemorySearchCalls    int
+	MemorySearchMisses   int
+	SessionSearchCalls   int
 }
 
 type MemoryUpdateCheckpoint struct {
@@ -396,24 +402,31 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 	if checkpoint.EndReason == "" {
 		checkpoint.EndReason = "unknown"
 	}
+	toolRequests, toolRequestsAdmitted, toolRequestsSkipped := normalizeToolRequestCounts(
+		checkpoint.ToolRequests,
+		checkpoint.ToolRequestsAdmitted,
+		checkpoint.ToolRequestsSkipped,
+	)
 	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
-		Type:           "loop.turn_checkpoint",
-		Summary:        "Turn ended: " + checkpoint.EndReason,
-		Reason:         "turn_end",
-		Path:           ProtocolRelPath(loopID),
-		Time:           formatTime(now),
-		TurnID:         checkpoint.TurnID,
-		TurnEndReason:  checkpoint.EndReason,
-		InputTokens:    clampNonNegative(checkpoint.InputTokens),
-		OutputTokens:   clampNonNegative(checkpoint.OutputTokens),
-		ToolRequests:   clampNonNegative(checkpoint.ToolRequests),
-		ToolErrors:     clampNonNegative(checkpoint.ToolErrors),
-		LoopGuards:     clampNonNegative(checkpoint.LoopGuards),
-		ForcedNoTools:  clampNonNegative(checkpoint.ForcedNoTools),
-		MemoryUpdates:  clampNonNegative(checkpoint.MemoryUpdates),
-		MemorySearches: clampNonNegative(checkpoint.MemorySearchCalls),
-		MemoryMisses:   clampNonNegative(checkpoint.MemorySearchMisses),
-		SessionSearch:  clampNonNegative(checkpoint.SessionSearchCalls),
+		Type:                 "loop.turn_checkpoint",
+		Summary:              "Turn ended: " + checkpoint.EndReason,
+		Reason:               "turn_end",
+		Path:                 ProtocolRelPath(loopID),
+		Time:                 formatTime(now),
+		TurnID:               checkpoint.TurnID,
+		TurnEndReason:        checkpoint.EndReason,
+		InputTokens:          clampNonNegative(checkpoint.InputTokens),
+		OutputTokens:         clampNonNegative(checkpoint.OutputTokens),
+		ToolRequests:         toolRequests,
+		ToolRequestsAdmitted: toolRequestsAdmitted,
+		ToolRequestsSkipped:  toolRequestsSkipped,
+		ToolErrors:           clampNonNegative(checkpoint.ToolErrors),
+		LoopGuards:           clampNonNegative(checkpoint.LoopGuards),
+		ForcedNoTools:        clampNonNegative(checkpoint.ForcedNoTools),
+		MemoryUpdates:        clampNonNegative(checkpoint.MemoryUpdates),
+		MemorySearches:       clampNonNegative(checkpoint.MemorySearchCalls),
+		MemoryMisses:         clampNonNegative(checkpoint.MemorySearchMisses),
+		SessionSearch:        clampNonNegative(checkpoint.SessionSearchCalls),
 	})
 	if err != nil {
 		return State{}, Event{}, err
@@ -425,6 +438,8 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 	state.LastTurnInputTokens = event.InputTokens
 	state.LastTurnOutputTokens = event.OutputTokens
 	state.LastTurnToolRequests = event.ToolRequests
+	state.LastTurnToolRequestsAdmitted = event.ToolRequestsAdmitted
+	state.LastTurnToolRequestsSkipped = event.ToolRequestsSkipped
 	state.LastTurnToolErrors = event.ToolErrors
 	state.LastTurnLoopGuards = event.LoopGuards
 	state.LastTurnForcedNoTools = event.ForcedNoTools
@@ -441,6 +456,19 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 		return State{}, Event{}, err
 	}
 	return state, event, nil
+}
+
+func normalizeToolRequestCounts(total, admitted, skipped int) (int, int, int) {
+	total = clampNonNegative(total)
+	admitted = clampNonNegative(admitted)
+	skipped = clampNonNegative(skipped)
+	if admitted == 0 && skipped == 0 && total > 0 {
+		admitted = total
+	}
+	if sum := admitted + skipped; sum > total {
+		total = sum
+	}
+	return total, admitted, skipped
 }
 
 func RecordMemoryUpdate(protocolPath string, checkpoint MemoryUpdateCheckpoint) (State, Event, error) {
