@@ -699,26 +699,28 @@ type LoopProtocolCalibration struct {
 }
 
 type LoopTurnCheckpoint struct {
-	Scenario             string `json:"scenario,omitempty"`
-	TurnID               string `json:"turn_id,omitempty"`
-	LoopID               string `json:"loop_id,omitempty"`
-	Status               string `json:"status,omitempty"`
-	ProtocolPath         string `json:"protocol_path,omitempty"`
-	EventSeq             int    `json:"event_seq,omitempty"`
-	TurnCheckpoints      int    `json:"turn_checkpoints,omitempty"`
-	EndReason            string `json:"end_reason,omitempty"`
-	InputTokens          int    `json:"input_tokens,omitempty"`
-	OutputTokens         int    `json:"output_tokens,omitempty"`
-	ToolRequests         int    `json:"tool_requests,omitempty"`
-	ToolRequestsAdmitted int    `json:"tool_requests_admitted,omitempty"`
-	ToolRequestsSkipped  int    `json:"tool_requests_skipped,omitempty"`
-	ToolErrors           int    `json:"tool_errors,omitempty"`
-	LoopGuards           int    `json:"loop_guards,omitempty"`
-	ForcedNoTools        int    `json:"forced_no_tools,omitempty"`
-	MemoryUpdates        int    `json:"memory_updates,omitempty"`
-	MemorySearchCalls    int    `json:"memory_search_calls,omitempty"`
-	MemoryMisses         int    `json:"memory_search_misses,omitempty"`
-	SessionSearchCalls   int    `json:"session_search_calls,omitempty"`
+	Scenario                 string `json:"scenario,omitempty"`
+	TurnID                   string `json:"turn_id,omitempty"`
+	LoopID                   string `json:"loop_id,omitempty"`
+	Status                   string `json:"status,omitempty"`
+	ProtocolPath             string `json:"protocol_path,omitempty"`
+	FinalizationPolicy       string `json:"finalization_policy,omitempty"`
+	RequiresCloseBeforeFinal bool   `json:"requires_close_before_final,omitempty"`
+	EventSeq                 int    `json:"event_seq,omitempty"`
+	TurnCheckpoints          int    `json:"turn_checkpoints,omitempty"`
+	EndReason                string `json:"end_reason,omitempty"`
+	InputTokens              int    `json:"input_tokens,omitempty"`
+	OutputTokens             int    `json:"output_tokens,omitempty"`
+	ToolRequests             int    `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted     int    `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped      int    `json:"tool_requests_skipped,omitempty"`
+	ToolErrors               int    `json:"tool_errors,omitempty"`
+	LoopGuards               int    `json:"loop_guards,omitempty"`
+	ForcedNoTools            int    `json:"forced_no_tools,omitempty"`
+	MemoryUpdates            int    `json:"memory_updates,omitempty"`
+	MemorySearchCalls        int    `json:"memory_search_calls,omitempty"`
+	MemoryMisses             int    `json:"memory_search_misses,omitempty"`
+	SessionSearchCalls       int    `json:"session_search_calls,omitempty"`
 }
 
 type TraceEventRef struct {
@@ -1978,25 +1980,27 @@ func (t Trace) LoopTurnCheckpointStats(maxExamples int) LoopTurnCheckpointStats 
 			continue
 		}
 		stats.Examples = append(stats.Examples, LoopTurnCheckpoint{
-			TurnID:               checkpoint.TurnID,
-			LoopID:               checkpoint.LoopID,
-			Status:               checkpoint.Status,
-			ProtocolPath:         checkpoint.ProtocolPath,
-			EventSeq:             checkpoint.EventSeq,
-			TurnCheckpoints:      checkpoint.TurnCheckpoints,
-			EndReason:            checkpoint.EndReason,
-			InputTokens:          checkpoint.InputTokens,
-			OutputTokens:         checkpoint.OutputTokens,
-			ToolRequests:         checkpoint.ToolRequests,
-			ToolRequestsAdmitted: checkpoint.ToolRequestsAdmitted,
-			ToolRequestsSkipped:  checkpoint.ToolRequestsSkipped,
-			ToolErrors:           checkpoint.ToolErrors,
-			LoopGuards:           checkpoint.LoopGuards,
-			ForcedNoTools:        checkpoint.ForcedNoTools,
-			MemoryUpdates:        checkpoint.MemoryUpdates,
-			MemorySearchCalls:    checkpoint.MemorySearchCalls,
-			MemoryMisses:         checkpoint.MemoryMisses,
-			SessionSearchCalls:   checkpoint.SessionSearchCalls,
+			TurnID:                   checkpoint.TurnID,
+			LoopID:                   checkpoint.LoopID,
+			Status:                   checkpoint.Status,
+			ProtocolPath:             checkpoint.ProtocolPath,
+			FinalizationPolicy:       checkpoint.FinalizationPolicy,
+			RequiresCloseBeforeFinal: checkpoint.RequiresCloseBeforeFinal,
+			EventSeq:                 checkpoint.EventSeq,
+			TurnCheckpoints:          checkpoint.TurnCheckpoints,
+			EndReason:                checkpoint.EndReason,
+			InputTokens:              checkpoint.InputTokens,
+			OutputTokens:             checkpoint.OutputTokens,
+			ToolRequests:             checkpoint.ToolRequests,
+			ToolRequestsAdmitted:     checkpoint.ToolRequestsAdmitted,
+			ToolRequestsSkipped:      checkpoint.ToolRequestsSkipped,
+			ToolErrors:               checkpoint.ToolErrors,
+			LoopGuards:               checkpoint.LoopGuards,
+			ForcedNoTools:            checkpoint.ForcedNoTools,
+			MemoryUpdates:            checkpoint.MemoryUpdates,
+			MemorySearchCalls:        checkpoint.MemorySearchCalls,
+			MemoryMisses:             checkpoint.MemoryMisses,
+			SessionSearchCalls:       checkpoint.SessionSearchCalls,
 		})
 	}
 	return stats

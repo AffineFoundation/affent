@@ -800,6 +800,20 @@ func TestParseFlagsAndConfig_RuntimeBoundaryEnv(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_AllowsDisablingModelContextWindowAuto(t *testing.T) {
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--model-context-window-auto=false",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.ModelContextWindowAuto {
+		t.Fatal("ModelContextWindowAuto = true, want explicit false")
+	}
+}
+
 func TestParseFlagsAndConfig_RuntimeBoundaryEnvRejectsMalformed(t *testing.T) {
 	t.Setenv("AFFENTSERVE_BASE_URL", "https://example/v1")
 	t.Setenv("AFFENTSERVE_MODEL", "m")

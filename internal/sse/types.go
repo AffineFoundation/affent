@@ -452,25 +452,27 @@ type LoopDecisionPayload struct {
 // authoritative; this event lets WebUI/eval consumers prove the checkpoint was
 // written without opening .affent/loops/<id>/state.json.
 type LoopTurnCheckpointPayload struct {
-	TurnID               string `json:"turn_id"`
-	LoopID               string `json:"loop_id,omitempty"`
-	Status               string `json:"status,omitempty"`
-	ProtocolPath         string `json:"protocol_path,omitempty"`
-	EventSeq             int    `json:"event_seq,omitempty"`
-	TurnCheckpoints      int    `json:"turn_checkpoints,omitempty"`
-	EndReason            string `json:"end_reason,omitempty"`
-	InputTokens          int    `json:"input_tokens,omitempty"`
-	OutputTokens         int    `json:"output_tokens,omitempty"`
-	ToolRequests         int    `json:"tool_requests,omitempty"`
-	ToolRequestsAdmitted int    `json:"tool_requests_admitted,omitempty"`
-	ToolRequestsSkipped  int    `json:"tool_requests_skipped,omitempty"`
-	ToolErrors           int    `json:"tool_errors,omitempty"`
-	LoopGuards           int    `json:"loop_guards,omitempty"`
-	ForcedNoTools        int    `json:"forced_no_tools,omitempty"`
-	MemoryUpdates        int    `json:"memory_updates,omitempty"`
-	MemorySearchCalls    int    `json:"memory_search_calls,omitempty"`
-	MemoryMisses         int    `json:"memory_search_misses,omitempty"`
-	SessionSearchCalls   int    `json:"session_search_calls,omitempty"`
+	TurnID                   string `json:"turn_id"`
+	LoopID                   string `json:"loop_id,omitempty"`
+	Status                   string `json:"status,omitempty"`
+	ProtocolPath             string `json:"protocol_path,omitempty"`
+	FinalizationPolicy       string `json:"finalization_policy,omitempty"`
+	RequiresCloseBeforeFinal bool   `json:"requires_close_before_final,omitempty"`
+	EventSeq                 int    `json:"event_seq,omitempty"`
+	TurnCheckpoints          int    `json:"turn_checkpoints,omitempty"`
+	EndReason                string `json:"end_reason,omitempty"`
+	InputTokens              int    `json:"input_tokens,omitempty"`
+	OutputTokens             int    `json:"output_tokens,omitempty"`
+	ToolRequests             int    `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted     int    `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped      int    `json:"tool_requests_skipped,omitempty"`
+	ToolErrors               int    `json:"tool_errors,omitempty"`
+	LoopGuards               int    `json:"loop_guards,omitempty"`
+	ForcedNoTools            int    `json:"forced_no_tools,omitempty"`
+	MemoryUpdates            int    `json:"memory_updates,omitempty"`
+	MemorySearchCalls        int    `json:"memory_search_calls,omitempty"`
+	MemoryMisses             int    `json:"memory_search_misses,omitempty"`
+	SessionSearchCalls       int    `json:"session_search_calls,omitempty"`
 }
 
 // ContextCompactPayload records when the model conversation was rewritten into

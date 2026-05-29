@@ -2158,27 +2158,39 @@ func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, o
 		l.Log.Warn().Err(err).Msg("record loop turn checkpoint failed")
 		return
 	}
+	finalizationPolicy := loopTurnCheckpointFinalizationPolicy(path)
 	l.publish(sse.TypeLoopTurnCheckpoint, sse.LoopTurnCheckpointPayload{
-		TurnID:               event.TurnID,
-		LoopID:               state.LoopID,
-		Status:               state.Status,
-		ProtocolPath:         state.ProtocolPath,
-		EventSeq:             event.Seq,
-		TurnCheckpoints:      state.TurnCheckpoints,
-		EndReason:            event.TurnEndReason,
-		InputTokens:          event.InputTokens,
-		OutputTokens:         event.OutputTokens,
-		ToolRequests:         event.ToolRequests,
-		ToolRequestsAdmitted: event.ToolRequestsAdmitted,
-		ToolRequestsSkipped:  event.ToolRequestsSkipped,
-		ToolErrors:           event.ToolErrors,
-		LoopGuards:           event.LoopGuards,
-		ForcedNoTools:        event.ForcedNoTools,
-		MemoryUpdates:        event.MemoryUpdates,
-		MemorySearchCalls:    event.MemorySearches,
-		MemoryMisses:         event.MemoryMisses,
-		SessionSearchCalls:   event.SessionSearch,
+		TurnID:                   event.TurnID,
+		LoopID:                   state.LoopID,
+		Status:                   state.Status,
+		ProtocolPath:             state.ProtocolPath,
+		FinalizationPolicy:       finalizationPolicy,
+		RequiresCloseBeforeFinal: strings.EqualFold(finalizationPolicy, "require_close_before_final"),
+		EventSeq:                 event.Seq,
+		TurnCheckpoints:          state.TurnCheckpoints,
+		EndReason:                event.TurnEndReason,
+		InputTokens:              event.InputTokens,
+		OutputTokens:             event.OutputTokens,
+		ToolRequests:             event.ToolRequests,
+		ToolRequestsAdmitted:     event.ToolRequestsAdmitted,
+		ToolRequestsSkipped:      event.ToolRequestsSkipped,
+		ToolErrors:               event.ToolErrors,
+		LoopGuards:               event.LoopGuards,
+		ForcedNoTools:            event.ForcedNoTools,
+		MemoryUpdates:            event.MemoryUpdates,
+		MemorySearchCalls:        event.MemorySearches,
+		MemoryMisses:             event.MemoryMisses,
+		SessionSearchCalls:       event.SessionSearch,
 	})
+}
+
+func loopTurnCheckpointFinalizationPolicy(protocolPath string) string {
+	relPath := loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))
+	summary, found, err := loopstate.SummarizeFile(protocolPath, relPath)
+	if err != nil || !found {
+		return ""
+	}
+	return strings.TrimSpace(summary.FinalizationPolicy)
 }
 
 const researchCheckpointSkillMarker = "AFFENT RESEARCH CHECKPOINT:"

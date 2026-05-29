@@ -3218,6 +3218,12 @@ func printLoopTurnCheckpointExampleLines(w io.Writer, examples []agenteval.LoopT
 		if ex.ProtocolPath != "" {
 			fmt.Fprintf(w, " path=%s", ex.ProtocolPath)
 		}
+		if ex.FinalizationPolicy != "" {
+			fmt.Fprintf(w, " finalization_policy=%s", ex.FinalizationPolicy)
+		}
+		if ex.RequiresCloseBeforeFinal {
+			fmt.Fprintf(w, " requires_close_before_final=true")
+		}
 		if ex.EventSeq > 0 {
 			fmt.Fprintf(w, " event_seq=%d", ex.EventSeq)
 		}

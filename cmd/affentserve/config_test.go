@@ -285,6 +285,38 @@ func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
 	}
 }
 
+func TestConfigResolveDefaultsModelContextWindowAuto(t *testing.T) {
+	cfg := Config{BaseURL: "https://example/v1", Model: "demo"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.ModelContextWindowAuto {
+		t.Fatal("ModelContextWindowAuto = false, want default true")
+	}
+}
+
+func TestConfigResolvePreservesExplicitModelContextWindowAutoFalse(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cfg.json")
+	if err := os.WriteFile(path, []byte(`{
+		"base_url": "https://example/v1",
+		"model": "demo",
+		"model_context_window_auto": false
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ModelContextWindowAuto {
+		t.Fatal("explicit model_context_window_auto:false should survive Resolve")
+	}
+}
+
 func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 	base := Config{
 		EvalMode:           true,

@@ -172,10 +172,12 @@ func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
 		LoopTurnCheckpoints: LoopTurnCheckpointStats{
 			Count: 5,
 			Latest: LoopTurnCheckpoint{
-				Status:        "running",
-				ToolRequests:  4,
-				ToolErrors:    1,
-				ForcedNoTools: 1,
+				Status:                   "running",
+				FinalizationPolicy:       "require_close_before_final",
+				RequiresCloseBeforeFinal: true,
+				ToolRequests:             4,
+				ToolErrors:               1,
+				ForcedNoTools:            1,
 			},
 		},
 		LoopProtocolFeeds: LoopProtocolFeedStats{Count: 3},
@@ -244,6 +246,25 @@ func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
 	if item := debugBriefItemByKind(brief, "loop_protocol_state"); item != nil {
 		t.Fatalf("setup activation transition should not produce running-state warning: %+v", item)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 1,
+			Latest: LoopTurnCheckpoint{
+				Status: "running",
+			},
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Tools: []sse.RuntimeSurfaceTool{{Name: "loop_protocol"}},
+		},
+	})
+	item = debugBriefItemByKind(brief, "loop_protocol_state")
+	if item == nil ||
+		item.Counts["missing_completion_guard"] != 0 ||
+		stringSliceContains(brief.Tags, "completion_guard:missing_loop_protocol") {
+		t.Fatalf("ordinary running loop should not require close guard: item=%+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T) {
@@ -253,8 +274,10 @@ func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T
 		LoopTurnCheckpoints: LoopTurnCheckpointStats{
 			Count: 5,
 			Latest: LoopTurnCheckpoint{
-				Status:       "running",
-				ToolRequests: 5,
+				Status:                   "running",
+				FinalizationPolicy:       "require_close_before_final",
+				RequiresCloseBeforeFinal: true,
+				ToolRequests:             5,
 			},
 		},
 		Plan: PlanStats{
@@ -335,6 +358,17 @@ func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T
 	})
 	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
 		t.Fatalf("setup activation transition should not produce durable completion warning: %+v", item)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK:        true,
+		FinalText: "The loop is running and will continue from checkpoints.",
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Latest: LoopTurnCheckpoint{Status: "running"},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
+		t.Fatalf("ordinary long-running loop should not require durable close before final: %+v", item)
 	}
 }
 

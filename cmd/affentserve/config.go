@@ -129,7 +129,8 @@ type Config struct {
 	// OpenAI-compatible /models endpoint when ModelContextWindowTokens is zero.
 	// Discovery is advisory: failures or missing metadata keep the window
 	// unknown instead of failing startup.
-	ModelContextWindowAuto bool `json:"model_context_window_auto"`
+	ModelContextWindowAuto    bool `json:"model_context_window_auto"`
+	modelContextWindowAutoSet bool
 
 	// CompactTriggerInputPercent derives request-input compaction from
 	// ModelContextWindowTokens. Zero uses the agent runtime default.
@@ -306,6 +307,7 @@ func LoadConfig(path string) (Config, error) {
 		EnableSubagent     *bool `json:"enable_subagent"`
 		SubagentMaxDepth   *int  `json:"subagent_max_depth"`
 		EnableFocusedTasks *bool `json:"enable_focused_tasks"`
+		ModelContextAuto   *bool `json:"model_context_window_auto"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
@@ -320,6 +322,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.enableSubagentSet = raw.EnableSubagent != nil
 	cfg.subagentMaxDepthSet = raw.SubagentMaxDepth != nil
 	cfg.enableFocusedTasksSet = raw.EnableFocusedTasks != nil
+	cfg.modelContextWindowAutoSet = raw.ModelContextAuto != nil
 	return cfg, nil
 }
 
@@ -371,6 +374,9 @@ func (c *Config) Resolve() error {
 	}
 	if !c.enableLoopProtocolSet {
 		c.EnableLoopProtocol = true
+	}
+	if !c.modelContextWindowAutoSet {
+		c.ModelContextWindowAuto = true
 	}
 	if c.EnableBuiltins {
 		c.enableBuiltinsSet = true
@@ -457,6 +463,8 @@ func (c *Config) Resolve() error {
 				c.enableWebSearchSet = true
 			case "AFFENTSERVE_MEMORY":
 				c.enableMemorySet = true
+			case "AFFENTSERVE_MODEL_CONTEXT_WINDOW_AUTO":
+				c.modelContextWindowAutoSet = true
 			case "AFFENTSERVE_LOOP_PROTOCOL":
 				c.enableLoopProtocolSet = true
 			case "AFFENTSERVE_BUILTINS":

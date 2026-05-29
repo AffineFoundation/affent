@@ -1623,7 +1623,7 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")
-	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nAudit every long-run turn."), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 0. Metadata\n\n- finalization_policy: require_close_before_final\n\n## North Star\n\nAudit every long-run turn."), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	eventsCh := make(chan sse.Event, 1)
@@ -1680,6 +1680,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 		}
 		if payload.TurnID != "turn_runtime" ||
 			payload.EndReason != sse.TurnEndMaxTurns ||
+			payload.FinalizationPolicy != "require_close_before_final" ||
+			!payload.RequiresCloseBeforeFinal ||
 			payload.TurnCheckpoints != 1 ||
 			payload.ToolRequests != 4 ||
 			payload.ToolRequestsAdmitted != 3 ||

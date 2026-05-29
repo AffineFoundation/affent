@@ -700,7 +700,7 @@ func loopProtocolStillRunningCounts(res BatchResult) (map[string]int, []string, 
 		"message_rejected": res.MessageRejectedStats.Count,
 	}
 	tags := []string{"loop_protocol", "loop_protocol:still_running"}
-	if !runtimeSurfaceHasCompletionGuard(res.RuntimeSurface, "loop_protocol_running") {
+	if latest.RequiresCloseBeforeFinal && !runtimeSurfaceHasCompletionGuard(res.RuntimeSurface, "loop_protocol_running") {
 		counts["missing_completion_guard"] = 1
 		tags = append(tags, "completion_guard:missing_loop_protocol")
 	}
@@ -735,7 +735,9 @@ func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string
 	if strings.TrimSpace(res.FinalText) == "" {
 		return nil, nil, false
 	}
-	loopRunning := strings.ToLower(strings.TrimSpace(res.LoopTurnCheckpoints.Latest.Status)) == "running" && !loopProtocolRunningExpected(res)
+	latestLoopCheckpoint := res.LoopTurnCheckpoints.Latest
+	loopRequiresClose := latestLoopCheckpoint.RequiresCloseBeforeFinal
+	loopRunning := strings.ToLower(strings.TrimSpace(latestLoopCheckpoint.Status)) == "running" && loopRequiresClose && !loopProtocolRunningExpected(res)
 	planUnfinished := res.Plan.TotalSteps > 0 && res.Plan.CompletedSteps < res.Plan.TotalSteps
 	if !loopRunning && !planUnfinished {
 		return nil, nil, false
