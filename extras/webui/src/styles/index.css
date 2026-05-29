@@ -5374,6 +5374,11 @@ button.workbench-context-runtime-item:focus-visible {
   background: linear-gradient(180deg, rgba(254, 242, 242, 0.72), rgba(255, 255, 255, 0.64));
 }
 
+.account-config-card[data-state="review"] {
+  border-color: rgba(20, 184, 166, 0.28);
+  background: rgba(240, 253, 250, 0.72);
+}
+
 .account-config-card span,
 .account-config-card small {
   min-width: 0;
@@ -13799,6 +13804,11 @@ html[data-theme="dark"] .account-config-focus {
 html[data-theme="dark"] .account-config-focus[data-tone="attention"] {
   border-color: rgba(248, 113, 113, 0.28);
   background: rgba(69, 10, 10, 0.2);
+}
+
+html[data-theme="dark"] .account-config-card[data-state="review"] {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(20, 83, 80, 0.28);
 }
 
 html[data-theme="dark"] .account-config-focus[data-tone="missing"] {

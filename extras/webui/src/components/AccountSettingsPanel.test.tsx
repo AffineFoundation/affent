@@ -29,6 +29,8 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("1 env");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Run tasks normally");
+    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Env review");
+    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Clean");
     expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy public key" })).toBeInTheDocument();
     expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" })).toBeInTheDocument();
     expect(panel).toHaveTextContent("Existing keys are never overwritten");
@@ -86,6 +88,8 @@ describe("AccountSettingsPanel", () => {
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("2 envs");
+    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Env review");
+    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Empty 1");
     expect(screen.getByTestId("account-env-review")).toHaveTextContent("1 finding");
     expect(screen.getByTestId("account-env-review")).toHaveTextContent("EMPTY_TOKEN");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");

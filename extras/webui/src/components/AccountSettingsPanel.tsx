@@ -464,6 +464,7 @@ function ConfigDashboard({ settings }: { settings: AccountSettingsResponse }) {
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
+  const envReviewFindings = accountEnvReviewFindings(settings);
   const ssh = settings.ssh;
   const keyPath = ssh.public_key_path ?? (ssh.exists ? "Path not reported" : "No key");
   const keyPathDisplay = sshPathDisplay(ssh.public_key_path) || keyPath;
@@ -486,8 +487,24 @@ function ConfigDashboard({ settings }: { settings: AccountSettingsResponse }) {
         <strong>{settings.env.length}</strong>
         <small>{latestEnvUpdate ? `updated ${formatTimestamp(latestEnvUpdate)}` : "no saved values"}</small>
       </div>
+      <div className="account-config-card" data-state={envReviewFindings.length > 0 ? "review" : undefined}>
+        <span>Env review</span>
+        <strong>{envReviewFindings.length}</strong>
+        <small>{accountEnvReviewSummary(envReviewFindings)}</small>
+      </div>
     </div>
   );
+}
+
+function accountEnvReviewSummary(findings: ReturnType<typeof accountEnvReviewFindings>): string {
+  if (findings.length === 0) return "Clean";
+  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
+    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts)
+    .map(([kind, count]) => `${kind === "empty" ? "Empty" : "Incomplete"} ${count}`)
+    .join(" · ");
 }
 
 function formatPanelError(err: unknown): string {
