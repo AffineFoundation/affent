@@ -789,27 +789,28 @@ type ContextInjectionStats struct {
 }
 
 type ContextCompaction struct {
-	Scenario                   string `json:"scenario,omitempty"`
-	TurnID                     string `json:"turn_id,omitempty"`
-	BeforeMessages             int    `json:"before_messages"`
-	AfterMessages              int    `json:"after_messages"`
-	RemovedMessages            int    `json:"removed_messages"`
-	BeforeBytes                int    `json:"before_bytes,omitempty"`
-	AfterBytes                 int    `json:"after_bytes,omitempty"`
-	ReducedBytes               int    `json:"reduced_bytes,omitempty"`
-	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
-	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
-	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
-	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
-	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
-	Reactive                   bool   `json:"reactive"`
-	Reason                     string `json:"reason"`
-	SummaryPresent             bool   `json:"summary_present,omitempty"`
-	SummaryPresentKnown        bool   `json:"summary_present_known,omitempty"`
-	SummaryBytes               int    `json:"summary_bytes,omitempty"`
-	SummaryPreview             string `json:"summary_preview,omitempty"`
-	LoopProtocolAnchor         string `json:"loop_protocol_anchor,omitempty"`
+	Scenario                           string `json:"scenario,omitempty"`
+	TurnID                             string `json:"turn_id,omitempty"`
+	BeforeMessages                     int    `json:"before_messages"`
+	AfterMessages                      int    `json:"after_messages"`
+	RemovedMessages                    int    `json:"removed_messages"`
+	BeforeBytes                        int    `json:"before_bytes,omitempty"`
+	AfterBytes                         int    `json:"after_bytes,omitempty"`
+	ReducedBytes                       int    `json:"reduced_bytes,omitempty"`
+	EstimatedInputTokens               int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens          int    `json:"after_estimated_input_tokens,omitempty"`
+	TriggerInputTokens                 int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	Reactive                           bool   `json:"reactive"`
+	Reason                             string `json:"reason"`
+	SummaryPresent                     bool   `json:"summary_present,omitempty"`
+	SummaryPresentKnown                bool   `json:"summary_present_known,omitempty"`
+	SummaryBytes                       int    `json:"summary_bytes,omitempty"`
+	SummaryPreview                     string `json:"summary_preview,omitempty"`
+	LoopProtocolAnchor                 string `json:"loop_protocol_anchor,omitempty"`
 }
 
 type ContextCompactionStats struct {
@@ -831,20 +832,21 @@ type ContextCompactionStats struct {
 }
 
 type ContextCompactionSkip struct {
-	Scenario                   string `json:"scenario,omitempty"`
-	TurnID                     string `json:"turn_id,omitempty"`
-	Cause                      string `json:"cause"`
-	Reason                     string `json:"reason,omitempty"`
-	BeforeMessages             int    `json:"before_messages,omitempty"`
-	CandidateMessages          int    `json:"candidate_messages,omitempty"`
-	BeforeBytes                int    `json:"before_bytes,omitempty"`
-	CandidateBytes             int    `json:"candidate_bytes,omitempty"`
-	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
-	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
-	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
-	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
-	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
+	Scenario                           string `json:"scenario,omitempty"`
+	TurnID                             string `json:"turn_id,omitempty"`
+	Cause                              string `json:"cause"`
+	Reason                             string `json:"reason,omitempty"`
+	BeforeMessages                     int    `json:"before_messages,omitempty"`
+	CandidateMessages                  int    `json:"candidate_messages,omitempty"`
+	BeforeBytes                        int    `json:"before_bytes,omitempty"`
+	CandidateBytes                     int    `json:"candidate_bytes,omitempty"`
+	EstimatedInputTokens               int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens          int    `json:"after_estimated_input_tokens,omitempty"`
+	TriggerInputTokens                 int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
 }
 
 type ContextCompactionSkipStats struct {
@@ -2113,26 +2115,27 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, ContextCompaction{
-			TurnID:                     compaction.TurnID,
-			BeforeMessages:             compaction.BeforeMessages,
-			AfterMessages:              compaction.AfterMessages,
-			RemovedMessages:            compaction.RemovedMessages,
-			BeforeBytes:                compaction.BeforeBytes,
-			AfterBytes:                 compaction.AfterBytes,
-			ReducedBytes:               compaction.ReducedBytes,
-			EstimatedInputTokens:       compaction.EstimatedInputTokens,
-			AfterEstimatedInputTokens:  compaction.AfterEstimatedInputTokens,
-			TriggerInputTokens:         compaction.TriggerInputTokens,
-			ModelContextWindowTokens:   compaction.ModelContextWindowTokens,
-			ReservedOutputTokens:       compaction.ReservedOutputTokens,
-			CompactTriggerInputPercent: compaction.CompactTriggerInputPercent,
-			Reactive:                   compaction.Reactive,
-			Reason:                     compaction.Reason,
-			SummaryPresent:             compaction.SummaryPresent,
-			SummaryPresentKnown:        compaction.SummaryPresentKnown,
-			SummaryBytes:               compaction.SummaryBytes,
-			SummaryPreview:             compactOneLine(compaction.SummaryPreview, 600),
-			LoopProtocolAnchor:         compaction.LoopProtocolAnchor,
+			TurnID:                             compaction.TurnID,
+			BeforeMessages:                     compaction.BeforeMessages,
+			AfterMessages:                      compaction.AfterMessages,
+			RemovedMessages:                    compaction.RemovedMessages,
+			BeforeBytes:                        compaction.BeforeBytes,
+			AfterBytes:                         compaction.AfterBytes,
+			ReducedBytes:                       compaction.ReducedBytes,
+			EstimatedInputTokens:               compaction.EstimatedInputTokens,
+			AfterEstimatedInputTokens:          compaction.AfterEstimatedInputTokens,
+			TriggerInputTokens:                 compaction.TriggerInputTokens,
+			ModelContextWindowTokens:           compaction.ModelContextWindowTokens,
+			ModelContextWindowEffectivePercent: compaction.ModelContextWindowEffectivePercent,
+			ReservedOutputTokens:               compaction.ReservedOutputTokens,
+			CompactTriggerInputPercent:         compaction.CompactTriggerInputPercent,
+			Reactive:                           compaction.Reactive,
+			Reason:                             compaction.Reason,
+			SummaryPresent:                     compaction.SummaryPresent,
+			SummaryPresentKnown:                compaction.SummaryPresentKnown,
+			SummaryBytes:                       compaction.SummaryBytes,
+			SummaryPreview:                     compactOneLine(compaction.SummaryPreview, 600),
+			LoopProtocolAnchor:                 compaction.LoopProtocolAnchor,
 		})
 	}
 	return stats

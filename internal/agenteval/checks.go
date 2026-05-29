@@ -1162,6 +1162,30 @@ func RuntimeSurfaceModelContextWindowTokens(expected int) Check {
 	}
 }
 
+func RuntimeSurfaceModelContextWindowEffectivePercent(expected int) Check {
+	return Check{
+		Name: fmt.Sprintf("runtime_surface_model_context_window_effective_percent:%d", expected),
+		Eval: func(t Trace) CheckResult {
+			if expected <= 0 {
+				return CheckResult{Pass: true}
+			}
+			var observed []int
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.ModelContextWindowEffectivePercent > 0 {
+					observed = append(observed, surface.ModelContextWindowEffectivePercent)
+				}
+				if surface.ModelContextWindowEffectivePercent == expected {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("model_context_window_effective_percent=%d", expected)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface model_context_window_effective_percent=%d; observed=%v", expected, observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceCompactTriggerInputTokens(expected int) Check {
 	return Check{
 		Name: fmt.Sprintf("runtime_surface_compact_trigger_input_tokens:%d", expected),

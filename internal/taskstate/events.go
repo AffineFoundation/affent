@@ -114,6 +114,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				addSource(state, "runtime_surface", opts.MaxItems)
 				seen = true
 			}
+			if summary := RuntimeSurfaceCompactionPolicySummary(&p); summary != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "runtime_surface",
+					Summary: compactSummary(summary, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+				addSource(state, "runtime_surface", opts.MaxItems)
+				seen = true
+			}
 			if summary := RuntimeSurfaceRequestPressureSummary(&p); summary != "" {
 				state.Evidence = appendEvidence(state.Evidence, Evidence{
 					Source:  "runtime_surface",
@@ -406,6 +415,9 @@ func contextCompactionSummary(p sse.ContextCompactPayload) string {
 	if p.ModelContextWindowTokens > 0 {
 		fields = append(fields, fmt.Sprintf("model_context_window_tokens=%d", p.ModelContextWindowTokens))
 	}
+	if p.ModelContextWindowEffectivePercent > 0 {
+		fields = append(fields, fmt.Sprintf("model_context_window_effective_percent=%d", p.ModelContextWindowEffectivePercent))
+	}
 	if p.ReservedOutputTokens > 0 {
 		fields = append(fields, fmt.Sprintf("reserved_output_tokens=%d", p.ReservedOutputTokens))
 	}
@@ -447,6 +459,9 @@ func contextCompactionSkippedSummary(p sse.ContextCompactSkippedPayload) string 
 	}
 	if p.ModelContextWindowTokens > 0 {
 		fields = append(fields, fmt.Sprintf("model_context_window_tokens=%d", p.ModelContextWindowTokens))
+	}
+	if p.ModelContextWindowEffectivePercent > 0 {
+		fields = append(fields, fmt.Sprintf("model_context_window_effective_percent=%d", p.ModelContextWindowEffectivePercent))
 	}
 	if p.ReservedOutputTokens > 0 {
 		fields = append(fields, fmt.Sprintf("reserved_output_tokens=%d", p.ReservedOutputTokens))
@@ -719,15 +734,32 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	if p.ModelContextWindowAuto {
 		fields = append(fields, "model_context_window_auto=true")
 	}
+	addIntField("model_context_window_effective_percent", p.ModelContextWindowEffectivePercent)
 	addIntField("reserved_output_tokens", p.ReservedOutputTokens)
-	addIntField("compact_trigger_input_tokens", p.CompactTriggerInputTokens)
-	addIntField("compact_trigger_input_percent", p.CompactTriggerInputPercent)
-	addIntField("compact_summary_prompt_max_bytes", p.CompactSummaryPromptMaxBytes)
 	addIntField("max_turn_steps", p.MaxTurnSteps)
 	addIntField("max_tool_calls", p.MaxToolCalls)
 	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
 	addIntField("available_tool_count", p.AvailableToolCount)
 	addIntField("excluded_tool_count", p.ExcludedToolCount)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Join(fields, " ")
+}
+
+func RuntimeSurfaceCompactionPolicySummary(p *sse.RuntimeSurfacePayload) string {
+	if p == nil {
+		return ""
+	}
+	var fields []string
+	addIntField := func(name string, value int) {
+		if value > 0 {
+			fields = append(fields, fmt.Sprintf("%s=%d", name, value))
+		}
+	}
+	addIntField("compact_trigger_input_tokens", p.CompactTriggerInputTokens)
+	addIntField("compact_trigger_input_percent", p.CompactTriggerInputPercent)
+	addIntField("compact_summary_prompt_max_bytes", p.CompactSummaryPromptMaxBytes)
 	if len(fields) == 0 {
 		return ""
 	}

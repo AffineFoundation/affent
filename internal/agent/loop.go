@@ -133,6 +133,11 @@ type Loop struct {
 	// ModelContextWindowAuto reports whether the effective model context window
 	// was resolved from provider metadata rather than only explicit config.
 	ModelContextWindowAuto bool
+	// ModelContextWindowEffectivePercent records a provider-advertised usable
+	// context percentage when ModelContextWindowTokens was derived from model
+	// metadata. It is trace/UI metadata; ModelContextWindowTokens already holds
+	// the effective value used by runtime policy.
+	ModelContextWindowEffectivePercent int
 	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
 	// used for the derived request-input compaction trigger. Zero uses the
 	// runtime default.
@@ -2973,29 +2978,30 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 	}
 	inputEstimate := EstimateRequestInput(messages, toolSurface.Defs)
 	payload := sse.RuntimeSurfacePayload{
-		TurnID:                       turnID,
-		MaxTurnSteps:                 l.maxTurnStepsForSurface(),
-		MaxToolCalls:                 l.maxToolCallsForTurn(opts),
-		MaxTurnInputTokens:           l.maxTurnInputTokensForTurn(opts),
-		ModelContextWindowTokens:     l.ModelContextWindowTokens,
-		ModelContextWindowAuto:       l.ModelContextWindowAuto,
-		ReservedOutputTokens:         l.reservedOutputTokens(),
-		CompactTriggerInputTokens:    l.compactTriggerInputTokens(),
-		CompactTriggerInputPercent:   l.compactTriggerInputPercent(),
-		CompactSummaryPromptMaxBytes: l.compactSummaryPromptMaxBytes(),
-		ConversationBytes:            inputEstimate.ConversationBytes,
-		ToolSchemaBytes:              inputEstimate.ToolSchemaBytes,
-		EstimatedConversationTokens:  inputEstimate.ConversationTokens,
-		EstimatedToolSchemaTokens:    inputEstimate.ToolSchemaTokens,
-		EstimatedRequestInputTokens:  inputEstimate.EstimatedInputTokens,
-		AvailableToolCount:           toolSurface.AvailableCount,
-		ExcludedToolCount:            len(toolSurface.ExcludedCatalog),
-		ToolSchemaBudgetTokens:       toolSurface.SchemaBudgetTokens,
-		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,
-		ToolResultContextMaxBytes:    l.toolResultMaxBytesInContext(),
-		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),
-		ToolResultArtifactPrefix:     l.ToolResultArtifactPathPrefix,
-		TurnToolOverride:             opts.Tools != nil,
+		TurnID:                             turnID,
+		MaxTurnSteps:                       l.maxTurnStepsForSurface(),
+		MaxToolCalls:                       l.maxToolCallsForTurn(opts),
+		MaxTurnInputTokens:                 l.maxTurnInputTokensForTurn(opts),
+		ModelContextWindowTokens:           l.ModelContextWindowTokens,
+		ModelContextWindowAuto:             l.ModelContextWindowAuto,
+		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
+		ReservedOutputTokens:               l.reservedOutputTokens(),
+		CompactTriggerInputTokens:          l.compactTriggerInputTokens(),
+		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
+		CompactSummaryPromptMaxBytes:       l.compactSummaryPromptMaxBytes(),
+		ConversationBytes:                  inputEstimate.ConversationBytes,
+		ToolSchemaBytes:                    inputEstimate.ToolSchemaBytes,
+		EstimatedConversationTokens:        inputEstimate.ConversationTokens,
+		EstimatedToolSchemaTokens:          inputEstimate.ToolSchemaTokens,
+		EstimatedRequestInputTokens:        inputEstimate.EstimatedInputTokens,
+		AvailableToolCount:                 toolSurface.AvailableCount,
+		ExcludedToolCount:                  len(toolSurface.ExcludedCatalog),
+		ToolSchemaBudgetTokens:             toolSurface.SchemaBudgetTokens,
+		ToolResultEventCapBytes:            MaxToolResultBytesInEvent,
+		ToolResultContextMaxBytes:          l.toolResultMaxBytesInContext(),
+		ToolResultContextBudgetBytes:       l.toolResultContextBudgetBytes(),
+		ToolResultArtifactPrefix:           l.ToolResultArtifactPathPrefix,
+		TurnToolOverride:                   opts.Tools != nil,
 	}
 	if len(l.CompletionGuardLabels) > 0 {
 		payload.CompletionGuards = append([]string(nil), l.CompletionGuardLabels...)
@@ -3807,25 +3813,26 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		reason = "threshold"
 	}
 	l.publish(sse.TypeContextCompact, sse.ContextCompactPayload{
-		TurnID:                     turnID,
-		BeforeMessages:             before,
-		AfterMessages:              after,
-		RemovedMessages:            max(0, before-after),
-		BeforeBytes:                beforeBytes,
-		AfterBytes:                 afterBytes,
-		ReducedBytes:               max(0, beforeBytes-afterBytes),
-		EstimatedInputTokens:       policy.EstimatedInputTokens,
-		AfterEstimatedInputTokens:  policy.AfterEstimatedInputTokens,
-		TriggerInputTokens:         policy.TriggerInputTokens,
-		ModelContextWindowTokens:   l.ModelContextWindowTokens,
-		ReservedOutputTokens:       l.reservedOutputTokens(),
-		CompactTriggerInputPercent: l.compactTriggerInputPercent(),
-		Reactive:                   reactive,
-		Reason:                     reason,
-		SummaryPresent:             summaryBytes > 0,
-		SummaryBytes:               summaryBytes,
-		SummaryPreview:             summaryPreview,
-		LoopProtocolAnchor:         loopProtocolAnchor,
+		TurnID:                             turnID,
+		BeforeMessages:                     before,
+		AfterMessages:                      after,
+		RemovedMessages:                    max(0, before-after),
+		BeforeBytes:                        beforeBytes,
+		AfterBytes:                         afterBytes,
+		ReducedBytes:                       max(0, beforeBytes-afterBytes),
+		EstimatedInputTokens:               policy.EstimatedInputTokens,
+		AfterEstimatedInputTokens:          policy.AfterEstimatedInputTokens,
+		TriggerInputTokens:                 policy.TriggerInputTokens,
+		ModelContextWindowTokens:           l.ModelContextWindowTokens,
+		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
+		ReservedOutputTokens:               l.reservedOutputTokens(),
+		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
+		Reactive:                           reactive,
+		Reason:                             reason,
+		SummaryPresent:                     summaryBytes > 0,
+		SummaryBytes:                       summaryBytes,
+		SummaryPreview:                     summaryPreview,
+		LoopProtocolAnchor:                 loopProtocolAnchor,
 	})
 }
 
@@ -3839,19 +3846,20 @@ func (l *Loop) publishContextCompactSkipped(turnID, cause string, before, candid
 		reason = "threshold"
 	}
 	l.publish(sse.TypeContextCompactSkipped, sse.ContextCompactSkippedPayload{
-		TurnID:                     turnID,
-		Cause:                      cause,
-		Reason:                     reason,
-		BeforeMessages:             before,
-		CandidateMessages:          candidate,
-		BeforeBytes:                beforeBytes,
-		CandidateBytes:             candidateBytes,
-		EstimatedInputTokens:       policy.EstimatedInputTokens,
-		AfterEstimatedInputTokens:  policy.AfterEstimatedInputTokens,
-		TriggerInputTokens:         policy.TriggerInputTokens,
-		ModelContextWindowTokens:   l.ModelContextWindowTokens,
-		ReservedOutputTokens:       l.reservedOutputTokens(),
-		CompactTriggerInputPercent: l.compactTriggerInputPercent(),
+		TurnID:                             turnID,
+		Cause:                              cause,
+		Reason:                             reason,
+		BeforeMessages:                     before,
+		CandidateMessages:                  candidate,
+		BeforeBytes:                        beforeBytes,
+		CandidateBytes:                     candidateBytes,
+		EstimatedInputTokens:               policy.EstimatedInputTokens,
+		AfterEstimatedInputTokens:          policy.AfterEstimatedInputTokens,
+		TriggerInputTokens:                 policy.TriggerInputTokens,
+		ModelContextWindowTokens:           l.ModelContextWindowTokens,
+		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
+		ReservedOutputTokens:               l.reservedOutputTokens(),
+		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
 	})
 }
 

@@ -1245,19 +1245,20 @@ func TestSessionPool_AttachesRollingCompactor(t *testing.T) {
 // the compactor stays on the 240/10 defaults forever.
 func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	cfg := Config{
-		Listen:                     "127.0.0.1:0",
-		MaxSessions:                4,
-		SessionIdleTTL:             "5m",
-		WorkspaceRoot:              t.TempDir(),
-		BaseURL:                    "http://127.0.0.1:0",
-		APIKey:                     "test",
-		Model:                      "fake",
-		CompactTrigger:             120,
-		CompactTriggerInputTokens:  4096,
-		ModelContextWindowTokens:   100000,
-		ModelContextWindowAuto:     true,
-		CompactTriggerInputPercent: 75,
-		CompactKeepLast:            4,
+		Listen:                             "127.0.0.1:0",
+		MaxSessions:                        4,
+		SessionIdleTTL:                     "5m",
+		WorkspaceRoot:                      t.TempDir(),
+		BaseURL:                            "http://127.0.0.1:0",
+		APIKey:                             "test",
+		Model:                              "fake",
+		CompactTrigger:                     120,
+		CompactTriggerInputTokens:          4096,
+		ModelContextWindowTokens:           100000,
+		ModelContextWindowAuto:             true,
+		ModelContextWindowEffectivePercent: 95,
+		CompactTriggerInputPercent:         75,
+		CompactKeepLast:                    4,
 	}
 	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
 	if err != nil {
@@ -1290,6 +1291,9 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	}
 	if !s.loop.ModelContextWindowAuto {
 		t.Error("ModelContextWindowAuto = false, want true from config")
+	}
+	if s.loop.ModelContextWindowEffectivePercent != 95 {
+		t.Errorf("ModelContextWindowEffectivePercent = %d, want 95 from config", s.loop.ModelContextWindowEffectivePercent)
 	}
 	if s.loop.CompactTriggerInputPercent != 75 {
 		t.Errorf("CompactTriggerInputPercent = %d, want 75 from config", s.loop.CompactTriggerInputPercent)

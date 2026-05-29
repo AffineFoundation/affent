@@ -64,6 +64,10 @@ type Runner struct {
 	// from provider metadata rather than only explicit runner config.
 	ModelContextWindowAuto bool
 
+	// ModelContextWindowEffectivePercent reports the provider-advertised usable
+	// context percentage when ModelContextWindowTokens is derived from metadata.
+	ModelContextWindowEffectivePercent int
+
 	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
 	// used for derived request-input pressure. Zero uses the runtime default.
 	CompactTriggerInputPercent int
@@ -204,10 +208,11 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 			KeepLast:       compactKeepLast,
 			MaxPromptBytes: maxSummaryPromptBytes,
 		},
-		CompactTriggerInputTokens:  r.CompactTriggerInputTokens,
-		ModelContextWindowTokens:   r.ModelContextWindowTokens,
-		ModelContextWindowAuto:     r.ModelContextWindowAuto,
-		CompactTriggerInputPercent: r.CompactTriggerInputPercent,
+		CompactTriggerInputTokens:          r.CompactTriggerInputTokens,
+		ModelContextWindowTokens:           r.ModelContextWindowTokens,
+		ModelContextWindowAuto:             r.ModelContextWindowAuto,
+		ModelContextWindowEffectivePercent: r.ModelContextWindowEffectivePercent,
+		CompactTriggerInputPercent:         r.CompactTriggerInputPercent,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",

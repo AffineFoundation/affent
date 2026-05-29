@@ -134,6 +134,9 @@ func TestNewSessionPoolUsesEffectiveModelContextWindowFromProvider(t *testing.T)
 	if pool.cfg.ModelContextWindowTokens != 95000 {
 		t.Fatalf("ModelContextWindowTokens = %d, want effective 95000", pool.cfg.ModelContextWindowTokens)
 	}
+	if pool.cfg.ModelContextWindowEffectivePercent != 95 {
+		t.Fatalf("ModelContextWindowEffectivePercent = %d, want 95", pool.cfg.ModelContextWindowEffectivePercent)
+	}
 	if pool.cfg.CompactTriggerInputTokens != 76000 {
 		t.Fatalf("CompactTriggerInputTokens = %d, want provider limit clamped to 80%% of effective window", pool.cfg.CompactTriggerInputTokens)
 	}

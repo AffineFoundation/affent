@@ -4454,34 +4454,35 @@ type batchSummaryRecord struct {
 }
 
 type runtimeSurfaceSummary struct {
-	ToolCount                    int                      `json:"tool_count"`
-	Tools                        []string                 `json:"tools,omitempty"`
-	AvailableToolCount           int                      `json:"available_tool_count,omitempty"`
-	ExcludedToolCount            int                      `json:"excluded_tool_count,omitempty"`
-	ExcludedTools                []string                 `json:"excluded_tools,omitempty"`
-	WorkspacePathArgs            map[string][]string      `json:"workspace_path_args,omitempty"`
-	ToolCallCaps                 map[string]int           `json:"tool_call_caps,omitempty"`
-	Capabilities                 *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
-	Workspace                    *sse.RuntimeWorkspace    `json:"workspace,omitempty"`
-	MaxTurnSteps                 int                      `json:"max_turn_steps,omitempty"`
-	MaxToolCalls                 int                      `json:"max_tool_calls,omitempty"`
-	MaxTurnInputTokens           int                      `json:"max_turn_input_tokens,omitempty"`
-	ModelContextWindowTokens     int                      `json:"model_context_window_tokens,omitempty"`
-	ReservedOutputTokens         int                      `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputTokens    int                      `json:"compact_trigger_input_tokens,omitempty"`
-	CompactTriggerInputPercent   int                      `json:"compact_trigger_input_percent,omitempty"`
-	ConversationBytes            int                      `json:"conversation_bytes,omitempty"`
-	ToolSchemaBytes              int                      `json:"tool_schema_bytes,omitempty"`
-	ToolSchemaBudgetTokens       int                      `json:"tool_schema_budget_tokens,omitempty"`
-	EstimatedConversationTokens  int                      `json:"estimated_conversation_tokens,omitempty"`
-	EstimatedToolSchemaTokens    int                      `json:"estimated_tool_schema_tokens,omitempty"`
-	EstimatedRequestInputTokens  int                      `json:"estimated_request_input_tokens,omitempty"`
-	ToolSchemaPressurePercent    int                      `json:"tool_schema_pressure_percent,omitempty"`
-	ToolResultEventCapBytes      int                      `json:"tool_result_event_cap_bytes,omitempty"`
-	ToolResultContextMaxBytes    int                      `json:"tool_result_context_max_bytes,omitempty"`
-	ToolResultContextBudgetBytes int                      `json:"tool_result_context_budget_bytes,omitempty"`
-	ToolResultArtifactPrefix     string                   `json:"tool_result_artifact_prefix,omitempty"`
-	TurnToolOverride             bool                     `json:"turn_tool_override,omitempty"`
+	ToolCount                          int                      `json:"tool_count"`
+	Tools                              []string                 `json:"tools,omitempty"`
+	AvailableToolCount                 int                      `json:"available_tool_count,omitempty"`
+	ExcludedToolCount                  int                      `json:"excluded_tool_count,omitempty"`
+	ExcludedTools                      []string                 `json:"excluded_tools,omitempty"`
+	WorkspacePathArgs                  map[string][]string      `json:"workspace_path_args,omitempty"`
+	ToolCallCaps                       map[string]int           `json:"tool_call_caps,omitempty"`
+	Capabilities                       *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
+	Workspace                          *sse.RuntimeWorkspace    `json:"workspace,omitempty"`
+	MaxTurnSteps                       int                      `json:"max_turn_steps,omitempty"`
+	MaxToolCalls                       int                      `json:"max_tool_calls,omitempty"`
+	MaxTurnInputTokens                 int                      `json:"max_turn_input_tokens,omitempty"`
+	ModelContextWindowTokens           int                      `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowEffectivePercent int                      `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int                      `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputTokens          int                      `json:"compact_trigger_input_tokens,omitempty"`
+	CompactTriggerInputPercent         int                      `json:"compact_trigger_input_percent,omitempty"`
+	ConversationBytes                  int                      `json:"conversation_bytes,omitempty"`
+	ToolSchemaBytes                    int                      `json:"tool_schema_bytes,omitempty"`
+	ToolSchemaBudgetTokens             int                      `json:"tool_schema_budget_tokens,omitempty"`
+	EstimatedConversationTokens        int                      `json:"estimated_conversation_tokens,omitempty"`
+	EstimatedToolSchemaTokens          int                      `json:"estimated_tool_schema_tokens,omitempty"`
+	EstimatedRequestInputTokens        int                      `json:"estimated_request_input_tokens,omitempty"`
+	ToolSchemaPressurePercent          int                      `json:"tool_schema_pressure_percent,omitempty"`
+	ToolResultEventCapBytes            int                      `json:"tool_result_event_cap_bytes,omitempty"`
+	ToolResultContextMaxBytes          int                      `json:"tool_result_context_max_bytes,omitempty"`
+	ToolResultContextBudgetBytes       int                      `json:"tool_result_context_budget_bytes,omitempty"`
+	ToolResultArtifactPrefix           string                   `json:"tool_result_artifact_prefix,omitempty"`
+	TurnToolOverride                   bool                     `json:"turn_tool_override,omitempty"`
 }
 
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
@@ -4659,34 +4660,35 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 	tools := runtimeSurfaceToolNames(surface)
 	caps := surface.Capabilities
 	return &runtimeSurfaceSummary{
-		ToolCount:                    surface.ToolCount,
-		Tools:                        tools,
-		AvailableToolCount:           surface.AvailableToolCount,
-		ExcludedToolCount:            surface.ExcludedToolCount,
-		ExcludedTools:                runtimeSurfaceExcludedToolNames(surface),
-		WorkspacePathArgs:            runtimeSurfaceWorkspacePathArgs(surface),
-		ToolCallCaps:                 runtimeSurfaceToolCallCaps(surface),
-		Capabilities:                 &caps,
-		Workspace:                    surface.Workspace,
-		MaxTurnSteps:                 surface.MaxTurnSteps,
-		MaxToolCalls:                 surface.MaxToolCalls,
-		MaxTurnInputTokens:           surface.MaxTurnInputTokens,
-		ModelContextWindowTokens:     surface.ModelContextWindowTokens,
-		ReservedOutputTokens:         surface.ReservedOutputTokens,
-		CompactTriggerInputTokens:    surface.CompactTriggerInputTokens,
-		CompactTriggerInputPercent:   surface.CompactTriggerInputPercent,
-		ConversationBytes:            surface.ConversationBytes,
-		ToolSchemaBytes:              surface.ToolSchemaBytes,
-		ToolSchemaBudgetTokens:       surface.ToolSchemaBudgetTokens,
-		EstimatedConversationTokens:  surface.EstimatedConversationTokens,
-		EstimatedToolSchemaTokens:    surface.EstimatedToolSchemaTokens,
-		EstimatedRequestInputTokens:  surface.EstimatedRequestInputTokens,
-		ToolSchemaPressurePercent:    runtimeSurfaceToolSchemaPressurePercent(surface),
-		ToolResultEventCapBytes:      surface.ToolResultEventCapBytes,
-		ToolResultContextMaxBytes:    surface.ToolResultContextMaxBytes,
-		ToolResultContextBudgetBytes: surface.ToolResultContextBudgetBytes,
-		ToolResultArtifactPrefix:     surface.ToolResultArtifactPrefix,
-		TurnToolOverride:             surface.TurnToolOverride,
+		ToolCount:                          surface.ToolCount,
+		Tools:                              tools,
+		AvailableToolCount:                 surface.AvailableToolCount,
+		ExcludedToolCount:                  surface.ExcludedToolCount,
+		ExcludedTools:                      runtimeSurfaceExcludedToolNames(surface),
+		WorkspacePathArgs:                  runtimeSurfaceWorkspacePathArgs(surface),
+		ToolCallCaps:                       runtimeSurfaceToolCallCaps(surface),
+		Capabilities:                       &caps,
+		Workspace:                          surface.Workspace,
+		MaxTurnSteps:                       surface.MaxTurnSteps,
+		MaxToolCalls:                       surface.MaxToolCalls,
+		MaxTurnInputTokens:                 surface.MaxTurnInputTokens,
+		ModelContextWindowTokens:           surface.ModelContextWindowTokens,
+		ModelContextWindowEffectivePercent: surface.ModelContextWindowEffectivePercent,
+		ReservedOutputTokens:               surface.ReservedOutputTokens,
+		CompactTriggerInputTokens:          surface.CompactTriggerInputTokens,
+		CompactTriggerInputPercent:         surface.CompactTriggerInputPercent,
+		ConversationBytes:                  surface.ConversationBytes,
+		ToolSchemaBytes:                    surface.ToolSchemaBytes,
+		ToolSchemaBudgetTokens:             surface.ToolSchemaBudgetTokens,
+		EstimatedConversationTokens:        surface.EstimatedConversationTokens,
+		EstimatedToolSchemaTokens:          surface.EstimatedToolSchemaTokens,
+		EstimatedRequestInputTokens:        surface.EstimatedRequestInputTokens,
+		ToolSchemaPressurePercent:          runtimeSurfaceToolSchemaPressurePercent(surface),
+		ToolResultEventCapBytes:            surface.ToolResultEventCapBytes,
+		ToolResultContextMaxBytes:          surface.ToolResultContextMaxBytes,
+		ToolResultContextBudgetBytes:       surface.ToolResultContextBudgetBytes,
+		ToolResultArtifactPrefix:           surface.ToolResultArtifactPrefix,
+		TurnToolOverride:                   surface.TurnToolOverride,
 	}
 }
 

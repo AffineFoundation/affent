@@ -132,6 +132,11 @@ type Config struct {
 	ModelContextWindowAuto    bool `json:"model_context_window_auto"`
 	modelContextWindowAutoSet bool
 
+	// ModelContextWindowEffectivePercent records provider metadata used to
+	// derive ModelContextWindowTokens. It is surfaced for diagnostics and UI
+	// only; ModelContextWindowTokens already holds the effective runtime value.
+	ModelContextWindowEffectivePercent int `json:"model_context_window_effective_percent"`
+
 	// CompactTriggerInputPercent derives request-input compaction from
 	// ModelContextWindowTokens. Zero uses the agent runtime default.
 	CompactTriggerInputPercent int `json:"compact_trigger_input_percent"`
@@ -850,6 +855,9 @@ func (c Config) Validate() error {
 	}
 	if c.ModelContextWindowTokens < 0 {
 		return fmt.Errorf("model_context_window_tokens must be zero or a positive integer")
+	}
+	if c.ModelContextWindowEffectivePercent < 0 || c.ModelContextWindowEffectivePercent > 100 {
+		return fmt.Errorf("model_context_window_effective_percent must be between 0 and 100")
 	}
 	if c.CompactTriggerInputPercent < 0 || c.CompactTriggerInputPercent > 100 {
 		return fmt.Errorf("compact_trigger_input_percent must be between 0 and 100")

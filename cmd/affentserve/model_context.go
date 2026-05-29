@@ -30,6 +30,7 @@ func resolveModelContextWindowFromProvider(cfg Config, logger zerolog.Logger) Co
 		return cfg
 	}
 	cfg.ModelContextWindowTokens = meta.ContextWindowTokens
+	cfg.ModelContextWindowEffectivePercent = meta.EffectiveContextWindowPercent
 	if cfg.CompactTriggerInputTokens == 0 && meta.AutoCompactTokenLimit > 0 {
 		cfg.CompactTriggerInputTokens = agent.ClampAutoCompactTokenLimit(meta.AutoCompactTokenLimit, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg))
 	}

@@ -104,29 +104,30 @@ type sessionSummary struct {
 }
 
 type sessionContextSummary struct {
-	MessageCount                   int  `json:"message_count"`
-	CompactTrigger                 int  `json:"compact_trigger"`
-	CompactPercent                 int  `json:"compact_percent"`
-	MessagesUntilCompact           int  `json:"messages_until_compact"`
-	ContextBytes                   int  `json:"context_bytes,omitempty"`
-	ConversationBytes              int  `json:"conversation_bytes,omitempty"`
-	ToolSchemaBytes                int  `json:"tool_schema_bytes,omitempty"`
-	CompactTriggerBytes            int  `json:"compact_trigger_bytes,omitempty"`
-	ByteCompactPercent             int  `json:"byte_compact_percent,omitempty"`
-	BytesUntilCompact              int  `json:"bytes_until_compact,omitempty"`
-	MessageCompactPercent          int  `json:"message_compact_percent,omitempty"`
-	EstimatedRequestInputTokens    int  `json:"estimated_request_input_tokens,omitempty"`
-	EstimatedConversationTokens    int  `json:"estimated_conversation_tokens,omitempty"`
-	EstimatedToolSchemaTokens      int  `json:"estimated_tool_schema_tokens,omitempty"`
-	ToolSchemaBudgetTokens         int  `json:"tool_schema_budget_tokens,omitempty"`
-	ModelContextWindowTokens       int  `json:"model_context_window_tokens,omitempty"`
-	ModelContextWindowAuto         bool `json:"model_context_window_auto,omitempty"`
-	ReservedOutputTokens           int  `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputPercent     int  `json:"compact_trigger_input_percent,omitempty"`
-	CompactTriggerInputTokens      int  `json:"compact_trigger_input_tokens,omitempty"`
-	CompactSummaryPromptMaxBytes   int  `json:"compact_summary_prompt_max_bytes,omitempty"`
-	RequestInputCompactPercent     int  `json:"request_input_compact_percent,omitempty"`
-	RequestInputTokensUntilCompact int  `json:"request_input_tokens_until_compact,omitempty"`
+	MessageCount                       int  `json:"message_count"`
+	CompactTrigger                     int  `json:"compact_trigger"`
+	CompactPercent                     int  `json:"compact_percent"`
+	MessagesUntilCompact               int  `json:"messages_until_compact"`
+	ContextBytes                       int  `json:"context_bytes,omitempty"`
+	ConversationBytes                  int  `json:"conversation_bytes,omitempty"`
+	ToolSchemaBytes                    int  `json:"tool_schema_bytes,omitempty"`
+	CompactTriggerBytes                int  `json:"compact_trigger_bytes,omitempty"`
+	ByteCompactPercent                 int  `json:"byte_compact_percent,omitempty"`
+	BytesUntilCompact                  int  `json:"bytes_until_compact,omitempty"`
+	MessageCompactPercent              int  `json:"message_compact_percent,omitempty"`
+	EstimatedRequestInputTokens        int  `json:"estimated_request_input_tokens,omitempty"`
+	EstimatedConversationTokens        int  `json:"estimated_conversation_tokens,omitempty"`
+	EstimatedToolSchemaTokens          int  `json:"estimated_tool_schema_tokens,omitempty"`
+	ToolSchemaBudgetTokens             int  `json:"tool_schema_budget_tokens,omitempty"`
+	ModelContextWindowTokens           int  `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowAuto             bool `json:"model_context_window_auto,omitempty"`
+	ModelContextWindowEffectivePercent int  `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int  `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent         int  `json:"compact_trigger_input_percent,omitempty"`
+	CompactTriggerInputTokens          int  `json:"compact_trigger_input_tokens,omitempty"`
+	CompactSummaryPromptMaxBytes       int  `json:"compact_summary_prompt_max_bytes,omitempty"`
+	RequestInputCompactPercent         int  `json:"request_input_compact_percent,omitempty"`
+	RequestInputTokensUntilCompact     int  `json:"request_input_tokens_until_compact,omitempty"`
 }
 
 type sessionContextCompactionSummary struct {
@@ -1478,28 +1479,29 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		percent = inputPercent
 	}
 	return sessionContextSummary{
-		MessageCount:                   messageCount,
-		CompactTrigger:                 trigger,
-		CompactPercent:                 percent,
-		MessagesUntilCompact:           remaining,
-		ContextBytes:                   contextBytes,
-		ConversationBytes:              inputEstimate.ConversationBytes,
-		ToolSchemaBytes:                inputEstimate.ToolSchemaBytes,
-		CompactTriggerBytes:            byteTrigger,
-		ByteCompactPercent:             bytePercent,
-		BytesUntilCompact:              bytesUntilCompact,
-		MessageCompactPercent:          messagePercent,
-		EstimatedRequestInputTokens:    estimatedRequestInputTokens,
-		EstimatedConversationTokens:    inputEstimate.ConversationTokens,
-		EstimatedToolSchemaTokens:      inputEstimate.ToolSchemaTokens,
-		ModelContextWindowTokens:       cfg.ModelContextWindowTokens,
-		ModelContextWindowAuto:         cfg.ModelContextWindowAuto,
-		ReservedOutputTokens:           reservedOutputTokensForConfig(cfg),
-		CompactTriggerInputPercent:     compactTriggerInputPercentForConfig(cfg),
-		CompactTriggerInputTokens:      inputTrigger,
-		CompactSummaryPromptMaxBytes:   compactSummaryPromptMaxBytesForConfig(cfg),
-		RequestInputCompactPercent:     inputPercent,
-		RequestInputTokensUntilCompact: inputTokensUntilCompact,
+		MessageCount:                       messageCount,
+		CompactTrigger:                     trigger,
+		CompactPercent:                     percent,
+		MessagesUntilCompact:               remaining,
+		ContextBytes:                       contextBytes,
+		ConversationBytes:                  inputEstimate.ConversationBytes,
+		ToolSchemaBytes:                    inputEstimate.ToolSchemaBytes,
+		CompactTriggerBytes:                byteTrigger,
+		ByteCompactPercent:                 bytePercent,
+		BytesUntilCompact:                  bytesUntilCompact,
+		MessageCompactPercent:              messagePercent,
+		EstimatedRequestInputTokens:        estimatedRequestInputTokens,
+		EstimatedConversationTokens:        inputEstimate.ConversationTokens,
+		EstimatedToolSchemaTokens:          inputEstimate.ToolSchemaTokens,
+		ModelContextWindowTokens:           cfg.ModelContextWindowTokens,
+		ModelContextWindowAuto:             cfg.ModelContextWindowAuto,
+		ModelContextWindowEffectivePercent: cfg.ModelContextWindowEffectivePercent,
+		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
+		CompactTriggerInputPercent:         compactTriggerInputPercentForConfig(cfg),
+		CompactTriggerInputTokens:          inputTrigger,
+		CompactSummaryPromptMaxBytes:       compactSummaryPromptMaxBytesForConfig(cfg),
+		RequestInputCompactPercent:         inputPercent,
+		RequestInputTokensUntilCompact:     inputTokensUntilCompact,
 	}
 }
 

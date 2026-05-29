@@ -73,36 +73,37 @@ type UserMessagePayload struct {
 // to debug "why did the agent not use web/browser/memory?" without inferring
 // the registered tools from later model behavior.
 type RuntimeSurfacePayload struct {
-	TurnID                       string               `json:"turn_id"`
-	ToolCount                    int                  `json:"tool_count"`
-	Tools                        []RuntimeSurfaceTool `json:"tools,omitempty"`
-	AvailableToolCount           int                  `json:"available_tool_count,omitempty"`
-	ExcludedToolCount            int                  `json:"excluded_tool_count,omitempty"`
-	ExcludedTools                []RuntimeSurfaceTool `json:"excluded_tools,omitempty"`
-	ToolCallCaps                 []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
-	CompletionGuards             []string             `json:"completion_guards,omitempty"`
-	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
-	Workspace                    *RuntimeWorkspace    `json:"workspace,omitempty"`
-	MaxTurnSteps                 int                  `json:"max_turn_steps,omitempty"`
-	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`
-	MaxTurnInputTokens           int                  `json:"max_turn_input_tokens,omitempty"`
-	ModelContextWindowTokens     int                  `json:"model_context_window_tokens,omitempty"`
-	ModelContextWindowAuto       bool                 `json:"model_context_window_auto,omitempty"`
-	ReservedOutputTokens         int                  `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputTokens    int                  `json:"compact_trigger_input_tokens,omitempty"`
-	CompactTriggerInputPercent   int                  `json:"compact_trigger_input_percent,omitempty"`
-	CompactSummaryPromptMaxBytes int                  `json:"compact_summary_prompt_max_bytes,omitempty"`
-	ConversationBytes            int                  `json:"conversation_bytes,omitempty"`
-	ToolSchemaBytes              int                  `json:"tool_schema_bytes,omitempty"`
-	ToolSchemaBudgetTokens       int                  `json:"tool_schema_budget_tokens,omitempty"`
-	EstimatedConversationTokens  int                  `json:"estimated_conversation_tokens,omitempty"`
-	EstimatedToolSchemaTokens    int                  `json:"estimated_tool_schema_tokens,omitempty"`
-	EstimatedRequestInputTokens  int                  `json:"estimated_request_input_tokens,omitempty"`
-	ToolResultEventCapBytes      int                  `json:"tool_result_event_cap_bytes,omitempty"`
-	ToolResultContextMaxBytes    int                  `json:"tool_result_context_max_bytes,omitempty"`
-	ToolResultContextBudgetBytes int                  `json:"tool_result_context_budget_bytes,omitempty"`
-	ToolResultArtifactPrefix     string               `json:"tool_result_artifact_prefix,omitempty"`
-	TurnToolOverride             bool                 `json:"turn_tool_override,omitempty"`
+	TurnID                             string               `json:"turn_id"`
+	ToolCount                          int                  `json:"tool_count"`
+	Tools                              []RuntimeSurfaceTool `json:"tools,omitempty"`
+	AvailableToolCount                 int                  `json:"available_tool_count,omitempty"`
+	ExcludedToolCount                  int                  `json:"excluded_tool_count,omitempty"`
+	ExcludedTools                      []RuntimeSurfaceTool `json:"excluded_tools,omitempty"`
+	ToolCallCaps                       []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
+	CompletionGuards                   []string             `json:"completion_guards,omitempty"`
+	Capabilities                       RuntimeCapabilities  `json:"capabilities"`
+	Workspace                          *RuntimeWorkspace    `json:"workspace,omitempty"`
+	MaxTurnSteps                       int                  `json:"max_turn_steps,omitempty"`
+	MaxToolCalls                       int                  `json:"max_tool_calls,omitempty"`
+	MaxTurnInputTokens                 int                  `json:"max_turn_input_tokens,omitempty"`
+	ModelContextWindowTokens           int                  `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowAuto             bool                 `json:"model_context_window_auto,omitempty"`
+	ModelContextWindowEffectivePercent int                  `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int                  `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputTokens          int                  `json:"compact_trigger_input_tokens,omitempty"`
+	CompactTriggerInputPercent         int                  `json:"compact_trigger_input_percent,omitempty"`
+	CompactSummaryPromptMaxBytes       int                  `json:"compact_summary_prompt_max_bytes,omitempty"`
+	ConversationBytes                  int                  `json:"conversation_bytes,omitempty"`
+	ToolSchemaBytes                    int                  `json:"tool_schema_bytes,omitempty"`
+	ToolSchemaBudgetTokens             int                  `json:"tool_schema_budget_tokens,omitempty"`
+	EstimatedConversationTokens        int                  `json:"estimated_conversation_tokens,omitempty"`
+	EstimatedToolSchemaTokens          int                  `json:"estimated_tool_schema_tokens,omitempty"`
+	EstimatedRequestInputTokens        int                  `json:"estimated_request_input_tokens,omitempty"`
+	ToolResultEventCapBytes            int                  `json:"tool_result_event_cap_bytes,omitempty"`
+	ToolResultContextMaxBytes          int                  `json:"tool_result_context_max_bytes,omitempty"`
+	ToolResultContextBudgetBytes       int                  `json:"tool_result_context_budget_bytes,omitempty"`
+	ToolResultArtifactPrefix           string               `json:"tool_result_artifact_prefix,omitempty"`
+	TurnToolOverride                   bool                 `json:"turn_tool_override,omitempty"`
 }
 
 type RuntimeWorkspace struct {
@@ -481,43 +482,45 @@ type LoopTurnCheckpointPayload struct {
 // publication so trace/UI can inspect what state survived without receiving an
 // unbounded copy of the conversation.
 type ContextCompactPayload struct {
-	TurnID                     string `json:"turn_id,omitempty"`
-	BeforeMessages             int    `json:"before_messages"`
-	AfterMessages              int    `json:"after_messages"`
-	RemovedMessages            int    `json:"removed_messages"`
-	BeforeBytes                int    `json:"before_bytes,omitempty"`
-	AfterBytes                 int    `json:"after_bytes,omitempty"`
-	ReducedBytes               int    `json:"reduced_bytes,omitempty"`
-	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
-	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
-	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
-	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
-	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
-	Reactive                   bool   `json:"reactive"`
-	Reason                     string `json:"reason"`
-	SummaryPresent             bool   `json:"summary_present"`
-	SummaryBytes               int    `json:"summary_bytes,omitempty"`
-	SummaryPreview             string `json:"summary_preview,omitempty"`
-	LoopProtocolAnchor         string `json:"loop_protocol_anchor,omitempty"`
+	TurnID                             string `json:"turn_id,omitempty"`
+	BeforeMessages                     int    `json:"before_messages"`
+	AfterMessages                      int    `json:"after_messages"`
+	RemovedMessages                    int    `json:"removed_messages"`
+	BeforeBytes                        int    `json:"before_bytes,omitempty"`
+	AfterBytes                         int    `json:"after_bytes,omitempty"`
+	ReducedBytes                       int    `json:"reduced_bytes,omitempty"`
+	EstimatedInputTokens               int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens          int    `json:"after_estimated_input_tokens,omitempty"`
+	TriggerInputTokens                 int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	Reactive                           bool   `json:"reactive"`
+	Reason                             string `json:"reason"`
+	SummaryPresent                     bool   `json:"summary_present"`
+	SummaryBytes                       int    `json:"summary_bytes,omitempty"`
+	SummaryPreview                     string `json:"summary_preview,omitempty"`
+	LoopProtocolAnchor                 string `json:"loop_protocol_anchor,omitempty"`
 }
 
 // ContextCompactSkippedPayload records a compaction candidate that was
 // intentionally discarded before replacing conversation state.
 type ContextCompactSkippedPayload struct {
-	TurnID                     string `json:"turn_id,omitempty"`
-	Cause                      string `json:"cause"`
-	Reason                     string `json:"reason,omitempty"`
-	BeforeMessages             int    `json:"before_messages,omitempty"`
-	CandidateMessages          int    `json:"candidate_messages,omitempty"`
-	BeforeBytes                int    `json:"before_bytes,omitempty"`
-	CandidateBytes             int    `json:"candidate_bytes,omitempty"`
-	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
-	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
-	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
-	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
-	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
+	TurnID                             string `json:"turn_id,omitempty"`
+	Cause                              string `json:"cause"`
+	Reason                             string `json:"reason,omitempty"`
+	BeforeMessages                     int    `json:"before_messages,omitempty"`
+	CandidateMessages                  int    `json:"candidate_messages,omitempty"`
+	BeforeBytes                        int    `json:"before_bytes,omitempty"`
+	CandidateBytes                     int    `json:"candidate_bytes,omitempty"`
+	EstimatedInputTokens               int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens          int    `json:"after_estimated_input_tokens,omitempty"`
+	TriggerInputTokens                 int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
 }
 
 type ToolRuntimeStats struct {

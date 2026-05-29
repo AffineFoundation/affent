@@ -318,19 +318,21 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 			ContextCompactionsAtLeast(1),
 			ContextCompactionReasonAtLeast("estimated_context_pressure", 1),
 			RuntimeSurfaceModelContextWindowTokens(200),
+			RuntimeSurfaceModelContextWindowEffectivePercent(95),
 			RuntimeSurfaceCompactTriggerInputTokens(160),
 		},
 	}
 
 	runner := &Runner{
-		LLM:                        agent.NewLLMClient(srv.URL, "", "fake-model"),
-		MaxTurnSteps:               2,
-		ModelContextWindowTokens:   200,
-		CompactTriggerInputPercent: 80,
-		CompactKeepLast:            1,
-		PerCallTimeout:             5 * time.Second,
-		RunTimeout:                 20 * time.Second,
-		Log:                        zerolog.Nop(),
+		LLM:                                agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:                       2,
+		ModelContextWindowTokens:           200,
+		ModelContextWindowEffectivePercent: 95,
+		CompactTriggerInputPercent:         80,
+		CompactKeepLast:                    1,
+		PerCallTimeout:                     5 * time.Second,
+		RunTimeout:                         20 * time.Second,
+		Log:                                zerolog.Nop(),
 	}
 	out, err := runner.Run(context.Background(), scenario)
 	if err != nil {
@@ -344,9 +346,10 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 	}
 	latestSurface := out.Trace.RuntimeSurfaces[len(out.Trace.RuntimeSurfaces)-1]
 	if latestSurface.ModelContextWindowTokens != 200 ||
+		latestSurface.ModelContextWindowEffectivePercent != 95 ||
 		latestSurface.CompactTriggerInputTokens != 160 ||
 		latestSurface.CompactSummaryPromptMaxBytes != 640 {
-		t.Fatalf("runtime surface policy = window:%d trigger:%d summary_prompt:%d", latestSurface.ModelContextWindowTokens, latestSurface.CompactTriggerInputTokens, latestSurface.CompactSummaryPromptMaxBytes)
+		t.Fatalf("runtime surface policy = window:%d effective_percent:%d trigger:%d summary_prompt:%d", latestSurface.ModelContextWindowTokens, latestSurface.ModelContextWindowEffectivePercent, latestSurface.CompactTriggerInputTokens, latestSurface.CompactSummaryPromptMaxBytes)
 	}
 	if out.Trace.RawTypes["context.compacted"] != 1 {
 		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)

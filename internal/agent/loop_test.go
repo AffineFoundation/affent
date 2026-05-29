@@ -1929,19 +1929,20 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	reg.Add(&Tool{Name: MemoryToolName, CatalogGroup: "Memory"})
 	reg.Add(&Tool{Name: SessionScheduleToolName, CatalogGroup: "Core"})
 	loop := &Loop{
-		Tools:                        reg,
-		Events:                       events,
-		MaxTurnSteps:                 7,
-		MaxToolCalls:                 5,
-		SessionScheduleRunner:        true,
-		MaxTurnInputTokens:           12345,
-		ModelContextWindowTokens:     100000,
-		ModelContextWindowAuto:       true,
-		CompactTriggerInputPercent:   80,
-		ToolResultMaxBytesInContext:  1234,
-		ToolResultContextBudgetBytes: 5678,
-		ToolResultArtifactPathPrefix: ".affent/custom",
-		WorkspaceRoot:                workspace,
+		Tools:                              reg,
+		Events:                             events,
+		MaxTurnSteps:                       7,
+		MaxToolCalls:                       5,
+		SessionScheduleRunner:              true,
+		MaxTurnInputTokens:                 12345,
+		ModelContextWindowTokens:           100000,
+		ModelContextWindowAuto:             true,
+		ModelContextWindowEffectivePercent: 95,
+		CompactTriggerInputPercent:         80,
+		ToolResultMaxBytesInContext:        1234,
+		ToolResultContextBudgetBytes:       5678,
+		ToolResultArtifactPathPrefix:       ".affent/custom",
+		WorkspaceRoot:                      workspace,
 		CompletionGuards: []CompletionGuard{
 			func() CompletionGuardResult { return CompletionGuardResult{} },
 		},
@@ -1979,6 +1980,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		payload.MaxTurnInputTokens != 12345 ||
 		payload.ModelContextWindowTokens != 100000 ||
 		!payload.ModelContextWindowAuto ||
+		payload.ModelContextWindowEffectivePercent != 95 ||
 		payload.CompactTriggerInputTokens != 80000 ||
 		payload.CompactTriggerInputPercent != 80 ||
 		payload.ToolSchemaBytes <= 0 ||
