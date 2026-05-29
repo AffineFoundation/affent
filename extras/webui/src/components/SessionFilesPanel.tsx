@@ -46,6 +46,7 @@ export function SessionFilesPanel({
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const [selectedEvidencePath, setSelectedEvidencePath] = useState<string | undefined>();
   const [selectedRange, setSelectedRange] = useState<{ path: string; start: number; end: number } | undefined>();
+  const [collapsedPaths, setCollapsedPaths] = useState<ReadonlySet<string>>(() => new Set());
   const [filter, setFilter] = useState<FileFilter>("all");
   const [wrapLines, setWrapLines] = useState(true);
   const trimmedQuery = query.trim();
@@ -72,6 +73,16 @@ export function SessionFilesPanel({
   const workspaceParent = workspaceReady ? parentWorkspacePath(workspaceReady.path) : undefined;
   const canOpenWorkspacePath = Boolean(onOpenWorkspacePath);
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
+  const editorTitle = workspaceReady?.kind === "file"
+    ? workspaceReady.path
+    : selectedItem?.path ?? selectedEvidence?.path ?? "No file selected";
+  const editorDetail = workspaceReady?.kind === "file"
+    ? `Workspace file · ${workspaceReady.detail}`
+    : selectedItem
+      ? snapshotEditorDetail(selectedItem, snapshotLines.length)
+      : selectedEvidence
+        ? `${fileEvidenceKindLabel(selectedEvidence)} · ${compactFileMeta(selectedEvidence)}`
+        : "Open a workspace path or select recorded file evidence.";
 
   function openEvidenceItem(item: SessionFileEvidence) {
     setSelectedEvidencePath(item.path);
@@ -114,6 +125,15 @@ export function SessionFilesPanel({
       return;
     }
     onOpenWorkspacePanel?.();
+  }
+
+  function toggleTreePath(path: string) {
+    setCollapsedPaths((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   }
 
   return (
@@ -201,6 +221,8 @@ export function SessionFilesPanel({
             <FileEvidenceTree
               nodes={treeNodes}
               selectedPath={selectedEvidence?.path}
+              collapsedPaths={collapsedPaths}
+              onToggleDirectory={toggleTreePath}
               onOpenDirectory={(path) => onOpenWorkspacePath?.(path)}
               onOpenItem={openEvidenceItem}
             />
@@ -213,6 +235,13 @@ export function SessionFilesPanel({
             ) : null}
           </aside>
           <section className="session-files-editor" aria-label="File editor preview">
+            <div className="session-files-editor-chrome" data-testid="session-files-editor-chrome">
+              <div>
+                <span>{workspaceReady?.kind === "file" ? "Workspace" : selectedItem ? "Snapshot" : selectedEvidence ? "Evidence" : "Editor"}</span>
+                <strong title={editorTitle}>{editorTitle}</strong>
+              </div>
+              <small>{editorDetail}</small>
+            </div>
             {workspaceReady?.kind === "file" ? (
               <WorkspaceFilePreview
                 file={workspaceReady}
@@ -323,6 +352,12 @@ export function SessionFilesPanel({
                     );
                   })}
                 </div>
+                <FileEditorStatus
+                  source={selectedItem.contentStale ? "snapshot stale" : "snapshot"}
+                  path={selectedItem.path}
+                  lines={snapshotLines.length}
+                  detail={compactFileMeta(selectedItem)}
+                />
               </div>
             ) : selectedEvidence ? (
               <FileEvidenceInspector
@@ -444,6 +479,12 @@ function WorkspaceFilePreview({
           </div>
         ))}
       </div>
+      <FileEditorStatus
+        source="workspace"
+        path={file.path}
+        lines={file.lines.length}
+        detail={file.hasMore ? "truncated" : "loaded"}
+      />
       {file.hasMore ? <small className="session-workspace-browser-more">Preview truncated; open through the agent before making broad edits.</small> : null}
     </div>
   );
@@ -452,11 +493,15 @@ function WorkspaceFilePreview({
 function FileEvidenceTree({
   nodes,
   selectedPath,
+  collapsedPaths,
+  onToggleDirectory,
   onOpenDirectory,
   onOpenItem,
 }: {
   nodes: FileTreeNode[];
   selectedPath?: string;
+  collapsedPaths: ReadonlySet<string>;
+  onToggleDirectory: (path: string) => void;
   onOpenDirectory: (path: string) => void;
   onOpenItem: (item: SessionFileEvidence) => void;
 }) {
@@ -469,6 +514,8 @@ function FileEvidenceTree({
           node={node}
           depth={0}
           selectedPath={selectedPath}
+          collapsedPaths={collapsedPaths}
+          onToggleDirectory={onToggleDirectory}
           onOpenDirectory={onOpenDirectory}
           onOpenItem={onOpenItem}
         />
@@ -481,32 +528,52 @@ function FileTreeBranch({
   node,
   depth,
   selectedPath,
+  collapsedPaths,
+  onToggleDirectory,
   onOpenDirectory,
   onOpenItem,
 }: {
   node: FileTreeNode;
   depth: number;
   selectedPath?: string;
+  collapsedPaths: ReadonlySet<string>;
+  onToggleDirectory: (path: string) => void;
   onOpenDirectory: (path: string) => void;
   onOpenItem: (item: SessionFileEvidence) => void;
 }) {
   const isDirectory = node.children.length > 0 || isDirectoryEvidence(node.item);
   const item = node.item;
+  const hasChildren = node.children.length > 0;
+  const expanded = !collapsedPaths.has(node.path);
   return (
     <li className="session-files-tree-node" data-kind={isDirectory ? "directory" : "file"} data-status={item?.status} data-selected={selectedPath === item?.path ? "true" : "false"}>
       <button
         type="button"
         className="session-files-tree-row"
         style={{ "--depth": depth } as CSSProperties}
-        onClick={() => (item ? onOpenItem(item) : onOpenDirectory(node.path))}
+        aria-expanded={hasChildren ? expanded : undefined}
+        onClick={(event) => {
+          const target = event.target;
+          const clickedChevron = target instanceof HTMLElement && Boolean(target.closest(".session-files-tree-chevron"));
+          if (hasChildren && (!item || clickedChevron)) {
+            onToggleDirectory(node.path);
+            return;
+          }
+          if (item) {
+            onOpenItem(item);
+            return;
+          }
+          onOpenDirectory(node.path);
+        }}
       >
+        <span className="session-files-tree-chevron" data-visible={hasChildren ? "true" : "false"} aria-hidden="true" />
         <span className="session-files-tree-icon" aria-hidden="true">
           <span data-icon={fileTreeIcon(item, isDirectory)} />
         </span>
         <strong title={node.path}>{displayTreeName(node)}</strong>
         {item ? <small>{compactFileMeta(item)}</small> : <small>{node.children.length}</small>}
       </button>
-      {node.children.length > 0 ? (
+      {hasChildren && expanded ? (
         <ol>
           {node.children.map((child) => (
             <FileTreeBranch
@@ -514,6 +581,8 @@ function FileTreeBranch({
               node={child}
               depth={depth + 1}
               selectedPath={selectedPath}
+              collapsedPaths={collapsedPaths}
+              onToggleDirectory={onToggleDirectory}
               onOpenDirectory={onOpenDirectory}
               onOpenItem={onOpenItem}
             />
@@ -585,6 +654,28 @@ function FileEvidenceInspector({
         ) : null}
         <CopyButton label="Copy path" value={item.path} className="ghost-action" />
       </span>
+      <FileEditorStatus source="evidence" path={item.path} lines={item.contentPreview ? fileLines(item).length : undefined} detail={compactFileMeta(item)} />
+    </div>
+  );
+}
+
+function FileEditorStatus({
+  source,
+  path,
+  lines,
+  detail,
+}: {
+  source: string;
+  path: string;
+  lines?: number;
+  detail?: string;
+}) {
+  return (
+    <div className="session-files-editor-status" data-testid="session-files-editor-status">
+      <span>{source}</span>
+      <strong title={path}>{path === "." ? "workspace root" : path}</strong>
+      {Number.isFinite(lines) ? <span>{lines} {lines === 1 ? "line" : "lines"}</span> : null}
+      {detail ? <span>{detail}</span> : null}
     </div>
   );
 }
@@ -687,6 +778,23 @@ function fileDraftActionLabel(item: SessionFileEvidence): string {
   if (item.actions.includes("listed")) return "Use listing";
   if (item.contentPreview) return "Use snapshot";
   return "Use evidence";
+}
+
+function fileEvidenceKindLabel(item: SessionFileEvidence): string {
+  if (item.status === "failed") return "Path issue";
+  if (item.actions.includes("changed")) return "Changed file";
+  if (item.contentPreview) return "Loaded snapshot";
+  if (item.actions.includes("listed")) return "Directory listing";
+  return "File evidence";
+}
+
+function snapshotEditorDetail(item: SessionFileEvidence, lines: number): string {
+  const parts = [
+    item.contentStale ? "stale snapshot" : item.contentTruncated ? "partial snapshot" : "loaded snapshot",
+    `${lines} ${lines === 1 ? "line" : "lines"}`,
+    compactFileMeta(item),
+  ].filter(Boolean);
+  return parts.join(" · ");
 }
 
 function isDirectoryEvidence(item: SessionFileEvidence | undefined): boolean {
