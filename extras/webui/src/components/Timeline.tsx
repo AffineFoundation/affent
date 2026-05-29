@@ -38,7 +38,7 @@ export function Timeline({
   onOpenLatestChat?: () => void;
   initialHistoryFocus?: "answer" | "latest";
   /** True while the chat's events are being fetched. Suppresses the
-   * "No messages loaded" empty state so we don't render a misleading
+   * selected-chat empty state so we don't render a misleading
    * page before the fetch resolves. */
   loading?: boolean;
   /** Optional one-line label for the loading row (e.g. chat title). */
@@ -187,9 +187,9 @@ export function Timeline({
 
   if (session.turns.length === 0 && !pendingMessage && sessionId) {
     if (loading) {
-      // Suppress the "No messages loaded" empty state while the fetch
-      // is still in flight: rendering it would be a fake page, since
-      // we don't actually know yet whether the chat has events.
+      // Suppress the selected-chat empty state while the fetch is still
+      // in flight: rendering it would be a fake page, since we don't
+      // actually know yet whether the chat has events.
       return (
         <section
           className="flow-turn intro-turn"
@@ -220,8 +220,8 @@ export function Timeline({
             <div className="flow-step flow-step-assistant">
               <div className="flow-text intro-copy">
                 <div className="intro-heading">
-                  <strong>No messages loaded</strong>
-                  <span>This chat exists, but no persisted conversation events are available yet.</span>
+                  <strong>Empty chat</strong>
+                  <span>No visible conversation yet. Continue below or switch to another chat.</span>
                 </div>
               </div>
             </div>

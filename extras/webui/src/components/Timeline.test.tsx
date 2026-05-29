@@ -290,8 +290,10 @@ describe("Timeline", () => {
     renderTimeline([], "empty-create-failure");
 
     expect(screen.queryByTestId("timeline-empty")).toBeNull();
-    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No messages loaded");
-    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("no persisted conversation events");
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("Empty chat");
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No visible conversation yet");
+    expect(screen.queryByText("No messages loaded")).toBeNull();
+    expect(screen.queryByText("persisted conversation events")).toBeNull();
     expect(screen.queryByText("What should we work on?")).toBeNull();
   });
 
@@ -321,7 +323,8 @@ describe("Timeline", () => {
     );
 
     expect(screen.queryByTestId("timeline-loading-session")).toBeNull();
-    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No messages loaded");
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("Empty chat");
+    expect(screen.queryByText("No messages loaded")).toBeNull();
   });
 
   it("offers a direct way back to the latest saved chat without auto-opening it", async () => {

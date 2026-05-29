@@ -1981,7 +1981,8 @@ describe("App", () => {
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s2/history?after=-1&limit=500", expect.anything()));
     await waitFor(() => expect(screen.queryByText("There are two files.")).toBeNull());
     expect(screen.queryByTestId("timeline-loading")).toBeNull();
-    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No messages loaded");
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("Empty chat");
+    expect(screen.queryByText("No messages loaded")).toBeNull();
   });
 
   it("keeps technical server details out of the top status strip", async () => {
