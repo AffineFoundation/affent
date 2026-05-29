@@ -3,11 +3,14 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +20,7 @@ import (
 
 func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	memRoot := t.TempDir()
-	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "due-one")
 	writeLoopProtocolStatusFixture(t, pool, "due-one", "running")
 	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
@@ -35,19 +38,14 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
 		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
 	}
-	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "due-one"))
-	if err != nil || !found {
-		t.Fatalf("read schedules found=%v err=%v", found, err)
+	schedule := waitSchedule(t, pool, "due-one", "sched_due", func(schedule sessionSchedule) bool {
+		return schedule.LastError != ""
+	})
+	if !schedule.Enabled {
+		t.Fatalf("schedule = %+v, want failed one-shot re-enabled for retry", schedule)
 	}
-	if len(file.Schedules) != 1 {
-		t.Fatalf("schedules = %+v, want one", file.Schedules)
-	}
-	schedule := file.Schedules[0]
-	if schedule.Enabled {
-		t.Fatalf("schedule = %+v, want one-shot disabled after firing", schedule)
-	}
-	if schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastRunAt != now.Format(time.RFC3339) || schedule.LastError != "" {
-		t.Fatalf("schedule = %+v, want successful run metadata", schedule)
+	if schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) {
+		t.Fatalf("schedule = %+v, want turn-end failure metadata instead of false success", schedule)
 	}
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
 	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.ScheduleKind != sessionScheduleKindLoopTick || userMessage.Text != "Scheduled check-in for session: due-one" || userMessage.DisplayText != "Loop tick: due-one" {
@@ -74,7 +72,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 
 func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
-	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "draft-loop")
 	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
 	writeScheduleFixture(t, pool, "draft-loop", sessionSchedule{
@@ -91,11 +89,9 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProt
 	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
 		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
 	}
-	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "draft-loop"))
-	if err != nil || !found {
-		t.Fatalf("read schedules found=%v err=%v", found, err)
-	}
-	schedule := file.Schedules[0]
+	schedule := waitSchedule(t, pool, "draft-loop", "sched_loop", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
 	if !schedule.Enabled || schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastError != "" {
 		t.Fatalf("schedule = %+v, want recurring timer fired without LOOP.md", schedule)
 	}
@@ -110,7 +106,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProt
 
 func TestSessionPool_RunDueSessionSchedulesOnceFiresLoopTickWhenStateStillDraft(t *testing.T) {
 	memRoot := t.TempDir()
-	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "stale-draft-loop")
 	writeLoopProtocolStatusFixture(t, pool, "stale-draft-loop", "running")
 	if err := loopstate.WriteState(sessionLoopStatePath(pool, "stale-draft-loop"), loopstate.State{
@@ -135,11 +131,9 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresLoopTickWhenStateStillDraft(
 	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
 		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
 	}
-	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "stale-draft-loop"))
-	if err != nil || !found {
-		t.Fatalf("read schedules found=%v err=%v", found, err)
-	}
-	schedule := file.Schedules[0]
+	schedule := waitSchedule(t, pool, "stale-draft-loop", "sched_loop", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
 	if schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastError != "" {
 		t.Fatalf("schedule = %+v, want fired loop tick independent from sidecar state", schedule)
 	}
@@ -147,7 +141,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresLoopTickWhenStateStillDraft(
 
 func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShotLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
-	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "draft-one-shot-loop")
 	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
 	writeScheduleFixture(t, pool, "draft-one-shot-loop", sessionSchedule{
@@ -163,11 +157,9 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShotLoopTickWithoutProtoc
 	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
 		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
 	}
-	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "draft-one-shot-loop"))
-	if err != nil || !found {
-		t.Fatalf("read schedules found=%v err=%v", found, err)
-	}
-	schedule := file.Schedules[0]
+	schedule := waitSchedule(t, pool, "draft-one-shot-loop", "sched_loop_once", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
 	if schedule.Enabled || schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastError != "" {
 		t.Fatalf("schedule = %+v, want one-shot timer fired and disabled", schedule)
 	}
@@ -226,7 +218,7 @@ func TestCreateSessionScheduleLoopTickDoesNotInitializeProtocol(t *testing.T) {
 
 func TestSessionPool_RunDueSessionSchedulesOnceAdvancesRecurring(t *testing.T) {
 	memRoot := t.TempDir()
-	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "due-recurring")
 	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
 	writeScheduleFixture(t, pool, "due-recurring", sessionSchedule{
@@ -242,11 +234,9 @@ func TestSessionPool_RunDueSessionSchedulesOnceAdvancesRecurring(t *testing.T) {
 	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
 		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
 	}
-	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "due-recurring"))
-	if err != nil || !found {
-		t.Fatalf("read schedules found=%v err=%v", found, err)
-	}
-	schedule := file.Schedules[0]
+	schedule := waitSchedule(t, pool, "due-recurring", "sched_daily", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
 	if !schedule.Enabled {
 		t.Fatalf("schedule = %+v, want recurring schedule to stay enabled", schedule)
 	}
@@ -300,6 +290,69 @@ func writeScheduleFixture(t *testing.T, pool *SessionPool, sessionID string, sch
 	}); err != nil {
 		t.Fatalf("write schedules: %v", err)
 	}
+}
+
+func newPoolWithSuccessfulScheduledTurns(t *testing.T, memRoot string) *SessionPool {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read LLM request: %v", err)
+		}
+		body := string(raw)
+		if strings.Contains(body, "AFFENT LOOP PROTOCOL") || (strings.Contains(body, "loop_protocol") && strings.Contains(body, "close")) {
+			args := `{"action":"close","status":"paused","reason":"scheduled test turn reached a clean checkpoint"}`
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"close_loop\",\"type\":\"function\",\"function\":{\"name\":\"loop_protocol\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(args))
+			fmt.Fprint(w, "data: [DONE]\n\n")
+			return
+		}
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Scheduled turn completed.\"},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    8,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        srv.URL,
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	return pool
+}
+
+func waitSchedule(t *testing.T, pool *SessionPool, sessionID, scheduleID string, ready func(sessionSchedule) bool) sessionSchedule {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	var last sessionSchedule
+	for time.Now().Before(deadline) {
+		file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, sessionID))
+		if err != nil {
+			t.Fatalf("read schedules: %v", err)
+		}
+		if found {
+			for _, schedule := range file.Schedules {
+				if schedule.ID != scheduleID {
+					continue
+				}
+				last = schedule
+				if ready == nil || ready(schedule) {
+					return schedule
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for schedule %s in %s; last=%+v", scheduleID, sessionID, last)
+	return sessionSchedule{}
 }
 
 func writeLoopProtocolStatusFixture(t *testing.T, pool *SessionPool, sessionID string, status string) {

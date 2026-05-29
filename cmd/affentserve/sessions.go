@@ -51,12 +51,15 @@ type Session struct {
 	loopProtocolPath string
 	loopProtocolInit bool
 	planPath         string
+	pool             *SessionPool
 	createdAt        time.Time
 	lastUsed         time.Time
 	trace            *eventlog.Recorder
 	traceFile        *os.File
 	nextEventLine    int64
 	activeTurns      atomic.Int64
+	scheduleTurnsMu  sync.Mutex
+	scheduleTurns    map[string]sessionScheduleRun
 
 	// Per-session lifetime token counters, accumulated in fanout as
 	// sse.TypeUsage events flow through. Atomic so the /v1/stats
@@ -843,6 +846,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loopProtocolPath: loopProtocolPath,
 		loopProtocolInit: p.cfg.EnableLoopProtocol && !p.cfg.EvalMode,
 		planPath:         planPath,
+		pool:             p,
 		createdAt:        time.Now(),
 		lastUsed:         time.Now(),
 		trace:            trace,
@@ -851,6 +855,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		subs:             map[int]chan sse.Event{},
 		closedCh:         make(chan struct{}),
 		fanoutDone:       make(chan struct{}),
+		scheduleTurns:    map[string]sessionScheduleRun{},
 	}
 	if err := s.seedStatsFromEventsFile(filepath.Join(sessionDir, "events.jsonl")); err != nil {
 		p.logger.Warn().Err(err).Str("session_id", id).Msg("seed session stats from event log")
@@ -1126,7 +1131,10 @@ func (s *Session) dispatchSessionEvent(ev sse.Event) {
 	s.touch()
 	s.observeForStats(ev)
 	if ev.Type == sse.TypeTurnEnd {
+		s.completeScheduledTurn(ev)
 		s.endTurn()
+	} else if ev.Type == sse.TypeUserMessage {
+		s.observeScheduledTurn(ev)
 	}
 	s.subsMu.Lock()
 	for _, ch := range s.subs {
@@ -1549,8 +1557,9 @@ func (p *SessionPool) Get(id string) (*Session, error) {
 }
 
 // SendUser is the single-turn driver: take the lock, push a user
-// message, and signal the caller when the turn ends. Returns the
-// turn id assigned by agent.
+// message, and return once the turn has been accepted. The actual
+// work runs asynchronously and reports completion through turn.end.
+// Returns the turn id assigned by agent.
 func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 	return s.SendUserWithOptions(ctx, text, agent.TurnOptions{})
 }

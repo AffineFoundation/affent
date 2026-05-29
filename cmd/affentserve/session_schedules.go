@@ -18,6 +18,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 const (
@@ -862,11 +863,68 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		_ = p.recordSessionScheduleFailure(run, now, err)
 		return err
 	}
-	if err := p.recordSessionScheduleSuccess(run, now, turnID); err != nil {
-		return err
-	}
 	p.logger.Info().Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Str("turn_id", turnID).Msg("session schedule fired")
 	return nil
+}
+
+func (s *Session) observeScheduledTurn(ev sse.Event) {
+	if s == nil || s.pool == nil {
+		return
+	}
+	var payload sse.UserMessagePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		s.pool.logger.Warn().Err(err).Str("session_id", s.ID).Msg("decode scheduled user message")
+		return
+	}
+	if payload.Source != "schedule" || strings.TrimSpace(payload.ScheduleID) == "" || strings.TrimSpace(payload.TurnID) == "" {
+		return
+	}
+	run := sessionScheduleRun{
+		SessionID:    s.ID,
+		ScheduleID:   payload.ScheduleID,
+		ScheduleKind: payload.ScheduleKind,
+		Prompt:       payload.Text,
+		DisplayText:  payload.DisplayText,
+	}
+	s.scheduleTurnsMu.Lock()
+	s.scheduleTurns[payload.TurnID] = run
+	s.scheduleTurnsMu.Unlock()
+}
+
+func (s *Session) completeScheduledTurn(ev sse.Event) {
+	if s == nil || s.pool == nil {
+		return
+	}
+	var payload sse.TurnEndPayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		s.pool.logger.Warn().Err(err).Str("session_id", s.ID).Msg("decode scheduled turn end")
+		return
+	}
+	if strings.TrimSpace(payload.TurnID) == "" {
+		return
+	}
+	s.scheduleTurnsMu.Lock()
+	run, ok := s.scheduleTurns[payload.TurnID]
+	if ok {
+		delete(s.scheduleTurns, payload.TurnID)
+	}
+	s.scheduleTurnsMu.Unlock()
+	if !ok {
+		return
+	}
+	if payload.Reason == sse.TurnEndCompleted {
+		if err := s.pool.recordSessionScheduleSuccess(run, time.Now().UTC(), payload.TurnID); err != nil {
+			s.pool.logger.Warn().Err(err).Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Msg("record session schedule success")
+		}
+		return
+	}
+	reason := strings.TrimSpace(payload.Reason)
+	if reason == "" {
+		reason = sse.TurnEndError
+	}
+	if err := s.pool.recordSessionScheduleFailure(run, time.Now().UTC(), fmt.Errorf("scheduled turn ended with %s", reason)); err != nil {
+		s.pool.logger.Warn().Err(err).Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Msg("record session schedule failure")
+	}
 }
 
 func (p *SessionPool) recordSessionScheduleSuccess(run sessionScheduleRun, now time.Time, turnID string) error {
