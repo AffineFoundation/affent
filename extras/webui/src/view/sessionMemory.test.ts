@@ -136,7 +136,7 @@ describe("sessionMemory view helpers", () => {
       }],
     });
 
-    expect(draft).toContain("suggest durable memory entries");
+    expect(draft).toContain("Find durable memory candidates");
     expect(draft).toContain("non-secret");
     expect(draft).toContain("Do not save memory yet");
     expect(draft).toContain("Current memory: 1 entry");

@@ -66,8 +66,8 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Searchable durable memory");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
-    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Suggest from chat" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("suggest durable memory entries"), "memory");
+    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Find candidates" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Find durable memory candidates"), "memory");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Current memory: 4 entries"), "memory");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Review snapshot" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("durable memory snapshot"), "memory");
@@ -349,10 +349,12 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Session scoped");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No durable memory saved");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Save only stable, non-secret facts");
+    expect(within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Find candidates" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
     expect(screen.getByTestId("session-memory-form")).toBeInTheDocument();
-    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Suggest from chat");
-    screen.getByRole("button", { name: "Suggest from chat" }).click();
+    expect(screen.getByTestId("session-memory-toolbar")).not.toHaveTextContent("Find candidates");
+    within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Find candidates" }).click();
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Do not save memory yet"), "memory");
     expect(panel).not.toHaveTextContent("No matching memory.");
   });

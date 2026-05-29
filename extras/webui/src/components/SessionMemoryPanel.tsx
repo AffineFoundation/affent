@@ -399,7 +399,12 @@ export function SessionMemoryPanel({
               ) : (
                 <div className="session-memory-empty-state">
                   <strong>{buckets.length > 0 ? "No matching memory" : "No durable memory saved"}</strong>
-                  <span>{buckets.length > 0 ? "Clear the filters or search to inspect another bucket." : "Store stable project facts, user preferences, or recurring workflow rules below."}</span>
+                  <span>{buckets.length > 0 ? "Clear the filters or search to inspect another bucket." : "Save only stable, non-secret facts that will help future turns."}</span>
+                  {buckets.length === 0 && onUseAsDraft ? (
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySuggestionDraft(memory), "memory")}>
+                      Find candidates
+                    </button>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -594,12 +599,13 @@ function MemoryPanelActions({
   if (!memory && !onRefresh) return null;
   const hasSavedMemory = Boolean(memory?.has_memory);
   const minimal = !hasSavedMemory && !hasSearch;
+  const candidateDraftHandler = !minimal ? onUseAsDraft : undefined;
   return (
     <div className="session-memory-toolbar" data-mode={minimal ? "minimal" : undefined} data-testid="session-memory-toolbar">
       {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="ghost-action" /> : null}
-      {onUseAsDraft ? (
-        <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySuggestionDraft(memory), "memory")}>
-          Suggest from chat
+      {candidateDraftHandler ? (
+        <button type="button" className="ghost-action" onClick={() => candidateDraftHandler(memorySuggestionDraft(memory), "memory")}>
+          Find candidates
         </button>
       ) : null}
       {memory && hasSavedMemory && onUseAsDraft ? (

@@ -7400,7 +7400,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-memory-empty-state {
   display: grid;
-  gap: 3px;
+  gap: 6px;
   border: 1px dashed rgba(148, 163, 184, 0.46);
   border-radius: var(--radius-sm);
   background: rgba(248, 250, 252, 0.62);
@@ -7417,6 +7417,11 @@ button.workbench-context-runtime-item:focus-visible {
   color: var(--text-faint);
   font-size: 12px;
   line-height: 1.4;
+}
+
+.session-memory-empty-state .ghost-action {
+  width: fit-content;
+  margin-top: 2px;
 }
 
 .session-memory-actions {

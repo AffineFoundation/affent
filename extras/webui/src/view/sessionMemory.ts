@@ -247,7 +247,7 @@ export function memorySnapshotDraft(memory: SessionMemoryResponse): string {
 
 export function memorySuggestionDraft(memory?: SessionMemoryResponse): string {
   const lines = [
-    "Review the current chat and suggest durable memory entries worth saving.",
+    "Find durable memory candidates from the current chat.",
     "",
     "Only propose facts that are stable, useful in future sessions, and non-secret.",
     "For each candidate include target, topic, content, and why it should or should not be saved.",
