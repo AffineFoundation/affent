@@ -4232,6 +4232,26 @@ func TestBuiltinLoopProtocolFeedScenariosRequireTurnCheckpoints(t *testing.T) {
 	}
 }
 
+func TestBuiltinLoopFinalClosureGuardScenariosRequireProtocolPolicy(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresLoopFinalClosureGuard(scenario) {
+			continue
+		}
+		if !stringSliceContains(scenario.RequiredCompletionGuards, "loop_protocol_running") {
+			t.Fatalf("%s rejects final output for a running loop but does not require the runtime completion guard: %#v", scenario.Name, scenario.RequiredCompletionGuards)
+		}
+		if !scenarioLoopProtocolFixtureContains(scenario, "- finalization_policy: require_close_before_final") {
+			t.Fatalf("%s rejects final output for a running loop but its LOOP.md fixture lacks finalization_policy=require_close_before_final", scenario.Name)
+		}
+		if !toolArgRequirementContains(scenario.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "close"}) {
+			t.Fatalf("%s requires loop final closure but does not require a loop_protocol close action: %#v", scenario.Name, scenario.RequiredToolArgContains)
+		}
+		if scenario.RequiredLoopProtocolFinalStatus != "completed" {
+			t.Fatalf("%s requires loop final closure but final status = %q, want completed", scenario.Name, scenario.RequiredLoopProtocolFinalStatus)
+		}
+	}
+}
+
 func TestBuiltinSkillInstallScenariosRequireSameSessionActivationEvidence(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresSkillInstallConfirmation(scenario) {
@@ -4378,6 +4398,21 @@ func scenarioRequiresDurableMemoryWrite(scenario BatchScenario) bool {
 	}
 	for _, req := range scenario.RequiredToolArgContains {
 		if req.Tool == "memory" && req.Arg == "action" && req.Substring == "add" {
+			return true
+		}
+	}
+	return false
+}
+
+func scenarioRequiresLoopFinalClosureGuard(scenario BatchScenario) bool {
+	return scenario.RequiredMessageRejected["loop_protocol_running"] > 0 ||
+		stringSliceContains(scenario.RequiredCompletionGuards, "loop_protocol_running") &&
+			toolArgRequirementContains(scenario.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "close"})
+}
+
+func scenarioLoopProtocolFixtureContains(scenario BatchScenario, text string) bool {
+	for path, body := range scenario.Files {
+		if strings.HasSuffix(path, "/LOOP.md") && strings.Contains(body, text) {
 			return true
 		}
 	}
