@@ -66,18 +66,17 @@ describe("WorkbenchContextPanel", () => {
 
     const panel = screen.getByTestId("workbench-context-panel");
     expect(panel).toHaveAttribute("open");
-    expect(panel).toHaveTextContent("Context");
-    expect(panel).toHaveTextContent("Conversation context");
+    expect(panel).toHaveTextContent("Task");
+    expect(panel).toHaveTextContent("Current task");
     expect(panel).not.toHaveTextContent("Review needed");
-    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Current situation");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Task");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Fix failing checkout tests");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Verification");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Unresolved failure");
-    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Best drilldown");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Open first");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Run");
     expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
-    expect(screen.getByTestId("workbench-usage-card")).toHaveTextContent("Token usage");
-    expect(screen.getByTestId("workbench-usage-card")).toHaveTextContent("Waiting for usage");
+    expect(screen.queryByTestId("workbench-usage-card")).toBeNull();
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("affent");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("/work/affent");
@@ -154,7 +153,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("/home/claudeuser/work/affent");
 
     await user.click(within(screen.getByTestId("workbench-context-brief")).getByRole("button", { name: "Open Workspace" }));
-    expect(onSelectSection).toHaveBeenCalledWith("workspace");
+    expect(onSelectSection).toHaveBeenCalledWith("files");
   });
 
   it("shows derived task state without treating recovered failures as current errors", async () => {
@@ -337,8 +336,8 @@ describe("WorkbenchContextPanel", () => {
     );
 
     expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
-    expect(screen.getByTestId("workbench-context-health")).toHaveTextContent("Context has room");
-    expect(screen.getByTestId("workbench-context-health")).toHaveTextContent("41%");
+    expect(screen.queryByTestId("workbench-context-health")).toBeNull();
+    expect(screen.getByTestId("workbench-context-panel")).not.toHaveTextContent("41% used");
     expect(screen.getByTestId("workbench-context-panel")).not.toHaveTextContent("8 trims");
     expect(screen.getByTestId("workbench-context-panel")).not.toHaveTextContent("2 actions");
   });
@@ -455,8 +454,8 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    const summary = within(screen.getByTestId("workbench-context-panel")).getByText("Context").closest("summary");
-    expect(summary).toHaveTextContent("Conversation context");
+    const summary = within(screen.getByTestId("workbench-context-panel")).getByText("Current task").closest("summary");
+    expect(summary).toHaveTextContent("Current task");
     expect(summary).not.toHaveTextContent("Result ready");
     expect(summary).not.toHaveTextContent("Checkout route inspected");
     expect(summary).not.toHaveTextContent("Chat ready");
@@ -472,8 +471,8 @@ describe("WorkbenchContextPanel", () => {
     );
 
     const panel = screen.getByTestId("workbench-context-panel");
-    expect(within(panel).getByText("No chat selected")).toBeVisible();
-    expect(panel).toHaveTextContent("Start a task or open a saved chat before inspecting session evidence.");
+    expect(within(panel).getByText("No task selected")).toBeVisible();
+    expect(panel).toHaveTextContent("Start or open a chat to see the objective, next step, and source tabs.");
     expect(panel).not.toHaveTextContent("run evidence, changes, memory, and automation");
     expect(screen.queryByRole("button", { name: "Copy context" })).toBeNull();
   });

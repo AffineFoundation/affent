@@ -73,6 +73,7 @@ export function WorkbenchContextPanel({
     usage,
     contextSummary,
     taskState,
+    requestMode,
   }) : undefined;
   const snapshot = hasSelectedSession ? contextSnapshotCards({
     metrics: displaySessionOverviewMetrics(overview.metrics),
@@ -84,8 +85,8 @@ export function WorkbenchContextPanel({
   return (
     <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
-        <span className="session-skills-kicker">Context</span>
-        <strong>{hasSelectedSession ? "Conversation context" : "No chat selected"}</strong>
+        <span className="session-skills-kicker">Task</span>
+        <strong>{hasSelectedSession ? "Current task" : "No task selected"}</strong>
       </summary>
       <div className="session-skills-body">
         {overview.tone === "error" ? (
@@ -102,10 +103,10 @@ export function WorkbenchContextPanel({
         {brief ? <ContextBriefCard brief={brief} onSelectSection={onSelectSection} /> : null}
         {hasTaskState(taskState) ? <TaskStateCard taskState={taskState} onSelectSection={onSelectSection} /> : null}
         {snapshot.length > 0 ? (
-          <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Runtime signals">
+          <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Action needed">
             <div className="workbench-context-snapshot-head">
-              <strong>Runtime signals</strong>
-              <span>Needs attention</span>
+              <strong>Action needed</strong>
+              <span>Open the source tab</span>
             </div>
             <div className="workbench-context-snapshot-grid">
               {snapshot.map((item) => {
@@ -138,12 +139,12 @@ export function WorkbenchContextPanel({
             </div>
           </section>
         ) : null}
-        {hasSelectedSession ? <WorkbenchUsageCard usage={usage} contextSummary={contextSummary} /> : null}
+        {hasSelectedSession && shouldShowTaskUsageCard(usage, contextSummary) ? <WorkbenchUsageCard usage={usage} contextSummary={contextSummary} /> : null}
         {hasEvidence ? (
           <div className="workbench-context-evidence" data-testid="workbench-context-evidence">
             {evidence.map((item) => (
               <button
-                key={item.target}
+                key={`${item.target}:${item.label}`}
                 type="button"
                 className="workbench-context-evidence-item"
                 data-tone={item.tone === "error" ? "error" : undefined}
@@ -157,7 +158,7 @@ export function WorkbenchContextPanel({
             ))}
           </div>
         ) : null}
-        {!hasSelectedSession ? <div className="session-skills-empty">Start a task or open a saved chat before inspecting session evidence.</div> : null}
+        {!hasSelectedSession ? <div className="session-skills-empty">Start or open a chat to see the objective, next step, and source tabs.</div> : null}
       </div>
     </details>
   );
@@ -196,9 +197,9 @@ function ContextBriefCard({
   onSelectSection?: (tab: WorkbenchTab) => void;
 }) {
   return (
-    <section className="workbench-context-brief" data-testid="workbench-context-brief" aria-label="Current situation">
+    <section className="workbench-context-brief" data-testid="workbench-context-brief" aria-label="Current task">
       <div className="workbench-context-brief-main">
-        <span>Current situation</span>
+        <span>Task</span>
         <strong>{brief.title}</strong>
         {brief.detail ? <p>{brief.detail}</p> : null}
       </div>
@@ -235,8 +236,9 @@ function ContextBriefCard({
           className="workbench-context-brief-drilldown"
           data-tone={brief.drilldown.tone}
           onClick={() => onSelectSection?.(brief.drilldown?.target ?? "context")}
+          aria-label={`Open ${brief.drilldown.value}`}
         >
-          <span>Best drilldown</span>
+          <span>Open first</span>
           <strong>{brief.drilldown.value}</strong>
           {brief.drilldown.detail ? <small>{brief.drilldown.detail}</small> : null}
         </button>
@@ -256,6 +258,7 @@ function buildContextBrief({
   usage,
   contextSummary,
   taskState,
+  requestMode,
 }: {
   overview: SessionOverview;
   statusDetail: string;
@@ -267,9 +270,11 @@ function buildContextBrief({
   usage?: WorkbenchContextUsageView;
   contextSummary?: SessionContextSummary;
   taskState?: SessionTaskStateSummary;
+  requestMode?: WorkbenchRequestModeView;
 }): ContextBriefView {
   const facts = compact([
     taskStateBriefFact(taskState),
+    requestModeBriefFact(requestMode),
     workspaceBriefFact(workspace),
     runBriefFact(run),
     changesBriefFact(changes),
@@ -306,7 +311,18 @@ function workspaceBriefFact(workspace?: SessionWorkspaceView): ContextBriefFact 
     value: workspace.summary,
     detail: workspace.path || workspace.lastAgentCwd || workspace.detail,
     tone,
-    target: "workspace",
+    target: "files",
+  };
+}
+
+function requestModeBriefFact(requestMode?: WorkbenchRequestModeView): ContextBriefFact | undefined {
+  if (!requestMode) return undefined;
+  return {
+    label: "Request",
+    value: requestMode.label,
+    detail: requestMode.detail,
+    tone: requestMode.source === "schedule" ? "attention" : "ready",
+    target: "trace",
   };
 }
 
@@ -353,17 +369,16 @@ function artifactsBriefFact(artifacts?: readonly TurnArtifact[]): ContextBriefFa
     value: `${artifacts.length} captured`,
     detail: workbenchArtifactContextDetail(artifacts),
     tone: "ready",
-    target: "artifacts",
+    target: "run",
   };
 }
 
 function contextBriefFact(context?: SessionContextSummary, usage?: WorkbenchContextUsageView): ContextBriefFact | undefined {
   const tokens = workbenchContextUsageSummary(usage);
-  if (!context || context.compact_trigger <= 0) {
-    return tokens ? { label: "Context", value: tokens, detail: "Token total loaded from trace or session index.", tone: "ready" } : undefined;
-  }
+  if (!context || context.compact_trigger <= 0) return undefined;
   const percent = Math.max(0, Math.min(100, Math.round(context.compact_percent)));
   const tone = percent >= 95 ? "error" : percent >= 72 ? "attention" : "ready";
+  if (tone === "ready") return undefined;
   const pressure = dominantContextPressure(context);
   return {
     label: "Context",
@@ -394,7 +409,7 @@ function bestContextDrilldown({
     return { label: "Best drilldown", value: "Task state", detail: taskState.open_questions.at(-1), tone: "attention", target: "context" };
   }
   if (workspace?.hasData && (workspace.verification === "mismatch" || workspace.verification === "missing_binding")) {
-    return { label: "Best drilldown", value: "Workspace", detail: workspace.issue ?? "Confirm the real working directory before trusting file operations.", tone: "attention", target: "workspace" };
+    return { label: "Best drilldown", value: "Files", detail: workspace.issue ?? "Confirm the real working directory before trusting file operations.", tone: "attention", target: "files" };
   }
   if (run?.commands.length) {
     const review = runReviewFocus(run.commands);
@@ -416,7 +431,7 @@ function bestContextDrilldown({
     return { label: "Best drilldown", value: "Trace", detail: taskStateFailureSummary(latest), tone: "error", target: "trace" };
   }
   if (files?.items.length) return { label: "Best drilldown", value: "Files", detail: files.summary, tone: "ready", target: "files" };
-  if (artifacts?.length) return { label: "Best drilldown", value: "Artifacts", detail: `${artifacts.length} captured`, tone: "ready", target: "artifacts" };
+  if (artifacts?.length) return { label: "Best drilldown", value: "Run", detail: `${artifacts.length} captured`, tone: "ready", target: "run" };
   if (run?.commands.length) return { label: "Best drilldown", value: "Run", detail: run.summary, tone: "ready", target: "run" };
   return undefined;
 }
@@ -756,6 +771,11 @@ function failureKindLabel(kind: string): string {
   if (normalized === "loop_guard_no_new_evidence") return "no new evidence";
   if (normalized === "loop_guard_direct_reader_warning") return "source warning";
   return normalized.replace(/^loop_guard_/, "").replace(/_/g, " ");
+}
+
+function shouldShowTaskUsageCard(usage?: WorkbenchContextUsageView, contextSummary?: SessionContextSummary): boolean {
+  if (!contextSummary || contextSummary.compact_trigger <= 0) return false;
+  return contextHealthView(contextSummary, workbenchContextUsageSummary(usage)).tone !== "ready";
 }
 
 function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContextUsageView; contextSummary?: SessionContextSummary }) {

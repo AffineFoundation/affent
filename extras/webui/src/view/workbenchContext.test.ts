@@ -44,7 +44,7 @@ describe("workbenchContext", () => {
     };
 
     expect(workbenchContextSummary(overview, true)).toBe("Review needed");
-    expect(buildWorkbenchContextEvidence(input).map((item) => item.label)).toEqual(["Changes", "Run", "Artifacts"]);
+    expect(buildWorkbenchContextEvidence(input).map((item) => [item.label, item.target])).toEqual([["Changes", "changes"], ["Run", "run"], ["Artifacts", "run"]]);
     expect(workbenchContextEvidenceText(input)).toContain("Next step: update payment route");
     expect(workbenchContextEvidenceText(input)).toContain("Task request mode: execute_plan");
     expect(workbenchContextEvidenceText(input)).toContain("Task request source: schedule · checkin · sched_checkout");

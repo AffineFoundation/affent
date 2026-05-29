@@ -106,7 +106,7 @@ export function buildWorkbenchContextEvidence({
   const items: WorkbenchContextEvidenceItem[] = [];
   if (workspace?.hasData) {
     items.push({
-      target: "workspace",
+      target: "files",
       label: "Workspace",
       summary: workspace.summary,
       detail: workspace.detail,
@@ -142,7 +142,7 @@ export function buildWorkbenchContextEvidence({
   }
   if (artifacts.length > 0) {
     items.push({
-      target: "artifacts",
+      target: "run",
       label: "Artifacts",
       summary: `${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`,
       detail: workbenchArtifactContextDetail(artifacts),
