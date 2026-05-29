@@ -223,6 +223,70 @@ func TestRunner_MultiTurnRequestPressureCompaction(t *testing.T) {
 	}
 }
 
+func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
+	final := func(text string) []string {
+		return []string{
+			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, text),
+			`[DONE]`,
+		}
+	}
+	summary := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: preserve model-window policy markers. NEXT_ACTION: answer the third turn."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{
+		final("MODEL-WINDOW-POLICY-OK-1"),
+		final("MODEL-WINDOW-POLICY-OK-2"),
+		summary,
+		final("MODEL-WINDOW-POLICY-OK-3"),
+	})
+
+	scenario := Scenario{
+		Name: "model_window_compaction_policy",
+		Prompts: []string{
+			"Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-1",
+			"Continue the same session. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-2",
+			"Continue after runtime context policy maintenance. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-3",
+		},
+		MaxTurnSteps: 2,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			FinalTextContains("MODEL-WINDOW-POLICY-OK-3"),
+			ContextCompactionsAtLeast(1),
+			RuntimeSurfaceModelContextWindowTokens(200),
+			RuntimeSurfaceCompactTriggerInputTokens(160),
+		},
+	}
+
+	runner := &Runner{
+		LLM:                        agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:               2,
+		ModelContextWindowTokens:   200,
+		CompactTriggerInputPercent: 80,
+		CompactKeepLast:            1,
+		PerCallTimeout:             5 * time.Second,
+		RunTimeout:                 20 * time.Second,
+		Log:                        zerolog.Nop(),
+	}
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	if len(out.Trace.RuntimeSurfaces) == 0 {
+		t.Fatal("expected runtime.surface events")
+	}
+	latestSurface := out.Trace.RuntimeSurfaces[len(out.Trace.RuntimeSurfaces)-1]
+	if latestSurface.ModelContextWindowTokens != 200 || latestSurface.CompactTriggerInputTokens != 160 {
+		t.Fatalf("runtime surface policy = window:%d trigger:%d", latestSurface.ModelContextWindowTokens, latestSurface.CompactTriggerInputTokens)
+	}
+	if out.Trace.RawTypes["context.compacted"] != 1 {
+		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
+	}
+}
+
 func TestRunner_CustomMemoryOnlyRegistryUsesMatchingPrompt(t *testing.T) {
 	type capturedRequest struct {
 		Messages []struct {

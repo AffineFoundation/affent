@@ -56,6 +56,14 @@ type Runner struct {
 	// explicit threshold, and negative disables the request-pressure path.
 	CompactTriggerInputTokens int
 
+	// ModelContextWindowTokens is the effective model context window used to
+	// derive request-input compaction pressure when no explicit trigger is set.
+	ModelContextWindowTokens int
+
+	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
+	// used for derived request-input pressure. Zero uses the runtime default.
+	CompactTriggerInputPercent int
+
 	// CompactKeepLast controls how many tail messages survive compaction.
 	// Zero falls back to agent.DefaultSummaryKeepLast.
 	CompactKeepLast int
@@ -164,6 +172,10 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	if compactKeepLast <= 0 {
 		compactKeepLast = agent.DefaultSummaryKeepLast
 	}
+	triggerBytes := agent.DefaultSummaryTriggerBytes
+	if r.ModelContextWindowTokens > 0 && r.CompactTriggerInputTokens == 0 {
+		triggerBytes = agent.CompactTriggerBytesForPolicy(0, r.ModelContextWindowTokens, r.CompactTriggerInputPercent, agent.DefaultSummaryTriggerBytes)
+	}
 	loop := &agent.Loop{
 		LLM:                   r.LLM,
 		Tools:                 reg,
@@ -178,10 +190,12 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		Compactor: &agent.LLMSummaryCompactor{
 			LLM:          r.LLM,
 			TriggerMsgs:  compactTriggerMsgs,
-			TriggerBytes: agent.DefaultSummaryTriggerBytes,
+			TriggerBytes: triggerBytes,
 			KeepLast:     compactKeepLast,
 		},
-		CompactTriggerInputTokens: r.CompactTriggerInputTokens,
+		CompactTriggerInputTokens:  r.CompactTriggerInputTokens,
+		ModelContextWindowTokens:   r.ModelContextWindowTokens,
+		CompactTriggerInputPercent: r.CompactTriggerInputPercent,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",

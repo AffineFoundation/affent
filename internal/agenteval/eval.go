@@ -272,6 +272,8 @@ type BatchScenario struct {
 	MaxTurns                                       int
 	CompactTrigger                                 int
 	CompactTriggerInputTokens                      int
+	ModelContextWindowTokens                       int
+	CompactTriggerInputPercent                     int
 	CompactKeepLast                                int
 }
 
@@ -534,6 +536,8 @@ type DebugScenarioExpectations struct {
 	MaxTurns                                       int                                    `json:"max_turns,omitempty"`
 	CompactTrigger                                 int                                    `json:"compact_trigger,omitempty"`
 	CompactTriggerInputTokens                      int                                    `json:"compact_trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens                       int                                    `json:"model_context_window_tokens,omitempty"`
+	CompactTriggerInputPercent                     int                                    `json:"compact_trigger_input_percent,omitempty"`
 	CompactKeepLast                                int                                    `json:"compact_keep_last,omitempty"`
 }
 
@@ -1224,6 +1228,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCrashDuplicateToolResultResumeScenario(),
 		longRunContextCompactionRetentionScenario(),
 		longRunRequestInputPressureCompactionScenario(),
+		longRunModelWindowCompactionPolicyScenario(),
 		longRunInputBudgetPressureScenario(),
 		longRunLoopSetupNormalTextScenario(),
 		longRunLoopActivationCalibrationScenario(),
@@ -2365,6 +2370,8 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		MaxTurns:                                       s.MaxTurns,
 		CompactTrigger:                                 s.CompactTrigger,
 		CompactTriggerInputTokens:                      s.CompactTriggerInputTokens,
+		ModelContextWindowTokens:                       s.ModelContextWindowTokens,
+		CompactTriggerInputPercent:                     s.CompactTriggerInputPercent,
 		CompactKeepLast:                                s.CompactKeepLast,
 	}
 }
@@ -2566,6 +2573,12 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if scenario.CompactTriggerInputTokens != 0 {
 		args = append(args, "--compact-trigger-input-tokens", fmt.Sprint(scenario.CompactTriggerInputTokens))
+	}
+	if scenario.ModelContextWindowTokens > 0 {
+		args = append(args, "--model-context-window-tokens", fmt.Sprint(scenario.ModelContextWindowTokens))
+	}
+	if scenario.CompactTriggerInputPercent > 0 {
+		args = append(args, "--compact-trigger-input-percent", fmt.Sprint(scenario.CompactTriggerInputPercent))
 	}
 	if scenario.CompactKeepLast > 0 {
 		args = append(args, "--compact-keep-last", fmt.Sprint(scenario.CompactKeepLast))
@@ -3655,6 +3668,14 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RuntimeMaxTurnInputTokens > 0 {
 		checks = append(checks, RuntimeSurfaceMaxTurnInputTokens(scenario.RuntimeMaxTurnInputTokens))
+	}
+	if scenario.ModelContextWindowTokens > 0 {
+		checks = append(checks, RuntimeSurfaceModelContextWindowTokens(scenario.ModelContextWindowTokens))
+	}
+	if scenario.CompactTriggerInputTokens > 0 {
+		checks = append(checks, RuntimeSurfaceCompactTriggerInputTokens(scenario.CompactTriggerInputTokens))
+	} else if scenario.ModelContextWindowTokens > 0 {
+		checks = append(checks, RuntimeSurfaceCompactTriggerInputTokens(agent.CompactTriggerInputTokensForPolicy(0, scenario.ModelContextWindowTokens, scenario.CompactTriggerInputPercent, agent.DefaultSummaryTriggerInputTokens)))
 	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())

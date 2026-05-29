@@ -1025,7 +1025,7 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000},
+		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, CompactTriggerInputTokens: 80000},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
@@ -1033,11 +1033,26 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceMaxTurnInputTokens(300000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface input budget check to pass: %+v", res)
 	}
+	if res := RuntimeSurfaceModelContextWindowTokens(100000).Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface model context check to pass: %+v", res)
+	}
+	if res := RuntimeSurfaceCompactTriggerInputTokens(80000).Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface compact trigger check to pass: %+v", res)
+	}
 	res := RuntimeSurfaceMaxTurnInputTokens(1).Eval(trace)
 	if res.Pass {
 		t.Fatal("expected mismatched runtime surface input budget to fail")
 	}
 	for _, want := range []string{"max_turn_input_tokens=1", "observed=[300000]"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
+		}
+	}
+	res = RuntimeSurfaceCompactTriggerInputTokens(1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected mismatched runtime surface compact trigger to fail")
+	}
+	for _, want := range []string{"compact_trigger_input_tokens=1", "observed=[80000]"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
 		}

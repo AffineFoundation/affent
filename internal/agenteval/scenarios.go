@@ -2201,6 +2201,34 @@ func longRunRequestInputPressureCompactionScenario() BatchScenario {
 	}
 }
 
+func longRunModelWindowCompactionPolicyScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-model-window-compaction-policy",
+		Suites:    []string{longRunSuite},
+		Domains:   []string{contextCompactionDomain, longRunRecoveryDomain},
+		SessionID: "longrun-model-window-compaction-policy",
+		Prompt:    "Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-1",
+		Prompts: []string{
+			"Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-1",
+			"Continue the same session. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-2",
+			"Continue after runtime context policy maintenance. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-3",
+		},
+		RequiredContextCompactions: 1,
+		RequiredFinalText:          []string{"MODEL-WINDOW-POLICY-OK-3"},
+		RequiredTraceEventCounts: map[string]int{
+			"context.compacted": 1,
+			"runtime.surface":   1,
+		},
+		ForbiddenTools:             []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
+		MaxParentToolCalls:         0,
+		MaxTurns:                   2,
+		CompactTrigger:             240,
+		ModelContextWindowTokens:   200,
+		CompactTriggerInputPercent: 80,
+		CompactKeepLast:            1,
+	}
+}
+
 func longRunResearchCheckpointScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-research-checkpoint",

@@ -2268,8 +2268,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 35 {
-		t.Fatalf("long-run suite size = %d, want 35", len(scenarios))
+	if len(scenarios) != 36 {
+		t.Fatalf("long-run suite size = %d, want 36", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -3386,6 +3386,45 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_reason_at_least:estimated_context_pressure:1") {
 		t.Fatalf("request pressure checks missing compaction reason assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
+	}
+
+	modelWindowPolicy, ok := seen["longrun-model-window-compaction-policy"]
+	if !ok {
+		t.Fatalf("long-run suite missing model-window compaction policy scenario")
+	}
+	if modelWindowPolicy.SessionID != "longrun-model-window-compaction-policy" ||
+		len(modelWindowPolicy.Prompts) != 3 ||
+		modelWindowPolicy.ModelContextWindowTokens != 200 ||
+		modelWindowPolicy.CompactTriggerInputPercent != 80 ||
+		modelWindowPolicy.CompactTriggerInputTokens != 0 ||
+		modelWindowPolicy.CompactKeepLast != 1 {
+		t.Fatalf("model-window policy scenario fields = session:%q prompts:%d window:%d percent:%d explicit:%d keep:%d",
+			modelWindowPolicy.SessionID,
+			len(modelWindowPolicy.Prompts),
+			modelWindowPolicy.ModelContextWindowTokens,
+			modelWindowPolicy.CompactTriggerInputPercent,
+			modelWindowPolicy.CompactTriggerInputTokens,
+			modelWindowPolicy.CompactKeepLast,
+		)
+	}
+	if modelWindowPolicy.RequiredContextCompactions != 1 ||
+		modelWindowPolicy.RequiredTraceEventCounts["context.compacted"] != 1 ||
+		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-3") {
+		t.Fatalf("model-window policy requirements = compactions:%d trace:%#v final:%#v",
+			modelWindowPolicy.RequiredContextCompactions,
+			modelWindowPolicy.RequiredTraceEventCounts,
+			modelWindowPolicy.RequiredFinalText,
+		)
+	}
+	modelWindowChecks := checkNamesFor(BatchScenarioChecks(modelWindowPolicy))
+	for _, want := range []string{
+		"runtime_surface_model_context_window_tokens:200",
+		"runtime_surface_compact_trigger_input_tokens:160",
+		"context_compactions_at_least:1",
+	} {
+		if !stringSliceContains(modelWindowChecks, want) {
+			t.Fatalf("model-window policy checks missing %q: %#v", want, modelWindowChecks)
+		}
 	}
 
 	loopCalibration, ok := seen["longrun-loop-activation-calibration"]
@@ -6285,16 +6324,18 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
-		Prompt:                    "fix it",
-		SessionID:                 "planned",
-		ExecutePlan:               true,
-		EnableMemory:              true,
-		EnableLoopProtocol:        true,
-		MaxTurns:                  3,
-		RuntimeMaxTurnInputTokens: 7,
-		CompactTrigger:            6,
-		CompactTriggerInputTokens: 5,
-		CompactKeepLast:           3,
+		Prompt:                     "fix it",
+		SessionID:                  "planned",
+		ExecutePlan:                true,
+		EnableMemory:               true,
+		EnableLoopProtocol:         true,
+		MaxTurns:                   3,
+		RuntimeMaxTurnInputTokens:  7,
+		CompactTrigger:             6,
+		CompactTriggerInputTokens:  5,
+		ModelContextWindowTokens:   100000,
+		CompactTriggerInputPercent: 80,
+		CompactKeepLast:            3,
 	}, "fix it", PromptOptions{
 		UserSource:      "schedule",
 		UserDisplayText: "Scheduled fix",
@@ -6313,6 +6354,8 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--max-turn-input-tokens\x007",
 		"--compact-trigger\x006",
 		"--compact-trigger-input-tokens\x005",
+		"--model-context-window-tokens\x00100000",
+		"--compact-trigger-input-percent\x0080",
 		"--compact-keep-last\x003",
 		"--temperature\x000",
 		"--top-p\x000.9",
