@@ -35,7 +35,7 @@ describe("SessionTracePanel", () => {
 
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("7 trace entries");
     expect(screen.getByLabelText("Search trace")).toBeInTheDocument();
-    expect(screen.getByLabelText("Trace search shortcuts")).toHaveTextContent("status:failed");
+    expect(screen.getByLabelText("Trace search shortcuts")).toHaveTextContent("failed tools");
     expect(screen.getByLabelText("Trace search shortcuts")).toHaveTextContent("exit:1");
     expect(screen.queryByTestId("session-trace-focus")).toBeNull();
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
@@ -138,7 +138,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started action");
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
-    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "status:failed" }));
+    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "failed tools" }));
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("1");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started action");
@@ -207,7 +207,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("line 1");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
-    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "truncated" }));
+    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "truncated output" }));
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Truncated");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Truncated");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("truncated");
@@ -310,8 +310,8 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · shell");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · read_file");
 
-    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "exit:1" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: exit:1");
+    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "exit:128" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: exit:128");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · shell");
     expect(screen.getByTestId("session-trace-issues")).not.toHaveTextContent("read_file");

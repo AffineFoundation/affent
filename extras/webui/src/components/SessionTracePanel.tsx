@@ -23,7 +23,7 @@ export function SessionTracePanel({
   const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
-  const dynamicSearches = useMemo(() => traceDynamicSearches(trace.toolIssues), [trace.toolIssues]);
+  const searchShortcuts = useMemo(() => traceSearchShortcuts(events, trace), [events, trace]);
   const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(
     () => {
@@ -61,7 +61,7 @@ export function SessionTracePanel({
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="plain text, tool:shell, status:failed, exit:1, turn:t1"
-                    aria-describedby="session-trace-search-help"
+                    aria-describedby={searchShortcuts.length > 0 ? "session-trace-search-help" : undefined}
                   />
                 </label>
                 {trimmedQuery ? (
@@ -85,18 +85,10 @@ export function SessionTracePanel({
                 </div>
               </div>
             ) : null}
-            {events.length > 1 ? (
+            {events.length > 1 && searchShortcuts.length > 0 ? (
               <div className="session-trace-query-tools" id="session-trace-search-help" aria-label="Trace search shortcuts">
                 <span>Quick search</span>
-                <button type="button" onClick={() => applySearch("status:failed", "all")}>status:failed</button>
-                <button type="button" onClick={() => applySearch("exit:1", "issues")}>exit:1</button>
-                <button type="button" onClick={() => applySearch("tool:shell", "commands")}>tool:shell</button>
-                <button type="button" onClick={() => applySearch("repaired", "repairs")}>repaired</button>
-                <button type="button" onClick={() => applySearch("truncated", "truncated")}>truncated</button>
-                <button type="button" onClick={() => applySearch("artifact:", "artifacts")}>artifact:</button>
-                <button type="button" onClick={() => applySearch("path:", "files")}>path:</button>
-                <button type="button" onClick={() => applySearch("unclassified", "unclassified")}>unclassified</button>
-                {dynamicSearches.map((shortcut) => (
+                {searchShortcuts.map((shortcut) => (
                   <button key={shortcut.label} type="button" onClick={() => applySearch(shortcut.query, shortcut.filter)}>
                     {shortcut.label}
                   </button>
@@ -349,6 +341,36 @@ function traceDynamicSearches(issues: SessionTraceView["toolIssues"]): TraceSear
   }
   if (/git@github\.com|github\.com/.test(text)) {
     shortcuts.push({ label: "github", query: "github.com", filter: "commands" });
+  }
+  return shortcuts;
+}
+
+function traceSearchShortcuts(events: readonly NormalizedEvent[], trace: SessionTraceView): TraceSearchShortcut[] {
+  const shortcuts: TraceSearchShortcut[] = [];
+  const exitCodes = [...new Set(trace.toolIssues
+    .map((issue) => issue.exitCode)
+    .filter((exitCode): exitCode is number => typeof exitCode === "number" && exitCode !== 0))]
+    .sort((a, b) => a - b);
+
+  if (trace.toolIssueCount > 0) {
+    shortcuts.push({ label: "failed tools", query: "status:failed", filter: "issues" });
+    for (const exitCode of exitCodes.slice(0, 3)) {
+      shortcuts.push({ label: `exit:${exitCode}`, query: `exit:${exitCode}`, filter: "issues" });
+    }
+  }
+
+  if (countFilter(events, "commands") > 0) shortcuts.push({ label: "shell", query: "tool:shell", filter: "commands" });
+  if (countFilter(events, "repairs") > 0) shortcuts.push({ label: "repaired args", query: "repaired", filter: "repairs" });
+  if (countFilter(events, "truncated") > 0) shortcuts.push({ label: "truncated output", query: "truncated", filter: "truncated" });
+  if (countFilter(events, "artifacts") > 0) shortcuts.push({ label: "stored output", query: "artifact:", filter: "artifacts" });
+  if (countFilter(events, "files") > 0) shortcuts.push({ label: "file actions", query: "path:", filter: "files" });
+  if (trace.unknownCount > 0) shortcuts.push({ label: "unclassified", query: "unclassified", filter: "unclassified" });
+
+  const seen = new Set(shortcuts.map((shortcut) => shortcut.label));
+  for (const shortcut of traceDynamicSearches(trace.toolIssues)) {
+    if (seen.has(shortcut.label)) continue;
+    shortcuts.push(shortcut);
+    seen.add(shortcut.label);
   }
   return shortcuts;
 }

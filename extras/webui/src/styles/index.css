@@ -14076,10 +14076,12 @@ pre.code {
 
 .session-trace-query-tools {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
   min-width: 0;
+  min-height: 24px;
   margin-top: -4px;
   max-height: 58px;
   overflow: auto;
@@ -14588,6 +14590,15 @@ pre.code {
   overscroll-behavior: contain;
   padding-right: 2px;
   scrollbar-width: thin;
+}
+
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-controls,
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-query-tools,
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-resultbar,
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-selection,
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-issues,
+.workbench-tab-surface > .session-trace-panel[open] .session-trace-latest {
+  flex: 0 0 auto;
 }
 
 .workbench-tab-surface > .session-trace-panel[open] .session-trace-results {
