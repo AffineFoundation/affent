@@ -555,6 +555,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		if res.ContextCompactions.ReducedBytes > 0 {
 			tags = append(tags, "context_compaction:bytes_reduced")
 		}
+		policyMissing := max(0, res.ContextCompactions.Count-res.ContextCompactions.PolicyObserved)
+		if policyMissing > 0 {
+			tags = append(tags, "context_compaction:policy_missing")
+			message = "context compaction events lacked policy metadata; inspect runtime compaction telemetry before judging input-budget behavior"
+		}
 		for _, reason := range sortedStringMapKeys(res.ContextCompactions.ByReason) {
 			tags = append(tags, "context_compaction:"+reason)
 		}
@@ -573,6 +578,8 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"summary_bytes":    res.ContextCompactions.SummaryBytes,
 			"summary_missing":  res.ContextCompactions.SummaryMissing,
 			"summary_empty":    res.ContextCompactions.SummaryEmpty,
+			"policy_observed":  res.ContextCompactions.PolicyObserved,
+			"policy_missing":   policyMissing,
 		}, tags...)
 	}
 	if hasDebugBriefTruncation(res) {

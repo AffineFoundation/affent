@@ -716,6 +716,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "input_budget", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_schedule", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"},
 				RequiredExpectationDomains:            []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "schedule_automation", "session_recovery"},
 				MaxDebugBriefTagRates: map[string]float64{
+					"context_compaction:policy_missing":  0,
 					"context_compaction:summary_empty":   0,
 					"context_compaction:summary_missing": 0,
 					"durable_completion":                 0,
@@ -798,6 +799,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxDebugBriefTagRates: map[string]float64{
 					"browser_network:unread_refs":                 0,
 					"browser_scroll:stuck_without_network":        0,
+					"context_compaction:policy_missing":           0,
 					"context_compaction:summary_empty":            0,
 					"context_compaction:summary_missing":          0,
 					"source_discovery_only_all":                   0,

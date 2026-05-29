@@ -1477,6 +1477,22 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 		!stringSliceContains(brief.Tags, "context_compaction:summary_empty") {
 		t.Fatalf("empty-summary compaction item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ContextCompactions: ContextCompactionStats{
+			Count:          2,
+			PolicyObserved: 1,
+		},
+	})
+	item = debugBriefItemByKind(brief, "context_compaction")
+	if item == nil ||
+		item.Message != "context compaction events lacked policy metadata; inspect runtime compaction telemetry before judging input-budget behavior" ||
+		item.Counts["policy_missing"] != 1 ||
+		item.Counts["policy_observed"] != 1 ||
+		!stringSliceContains(brief.Tags, "context_compaction:policy_missing") {
+		t.Fatalf("policy-missing compaction item = %+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesTruncationArtifactQuality(t *testing.T) {

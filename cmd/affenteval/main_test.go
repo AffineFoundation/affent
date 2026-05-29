@@ -1440,6 +1440,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		t.Fatalf("longrun profile should not gate memory search miss rate by default: %#v", gates.MaxMemorySearchMissRate)
 	}
 	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
+		gates.MaxDebugBriefTagRates["context_compaction:policy_missing"] != 0 ||
 		gates.MaxDebugBriefTagRates["context_compaction:summary_empty"] != 0 ||
 		gates.MaxDebugBriefTagRates["context_compaction:summary_missing"] != 0 ||
 		gates.MaxDebugBriefTagRates["durable_completion"] != 0 ||
@@ -1494,6 +1495,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		!reflect.DeepEqual(webGates.MaxExpectationDomainLoopGuardInterventionRates, map[string]float64{"web_evidence": 0.25}) ||
 		webGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
 		webGates.MaxDebugBriefTagRates["browser_scroll:stuck_without_network"] != 0 ||
+		webGates.MaxDebugBriefTagRates["context_compaction:policy_missing"] != 0 ||
 		webGates.MaxDebugBriefTagRates["context_compaction:summary_empty"] != 0 ||
 		webGates.MaxDebugBriefTagRates["context_compaction:summary_missing"] != 0 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
@@ -1916,7 +1918,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,reduced_bytes=0,summary_bytes=4096,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=129% context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,reduced_bytes=0,summary_bytes=4096,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=129% context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:policy_missing,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
