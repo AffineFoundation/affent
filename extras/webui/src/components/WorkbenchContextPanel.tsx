@@ -464,7 +464,7 @@ function TaskStateCard({
           items={latestFailures.map((item) => taskStateFailureSummary(item))}
           actionLabel="Open trace"
           onAction={() => onSelectSection?.("trace")}
-          tone={taskStateHasCurrentFailure(taskState) ? "error" : "attention"}
+          tone={taskStateHasCurrentFailure(taskState) ? "error" : undefined}
         />
       ) : null}
       {latestEvidence.length > 0 ? (
