@@ -167,6 +167,44 @@ describe("SessionMemoryPanel", () => {
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("");
   });
 
+  it("shows session-derived memory candidates and loads them into the write form", async () => {
+    const user = userEvent.setup();
+    const onAddMemory = vi.fn(async () => ({ session_id: "s1", has_memory: true, topics: [] }));
+    render(
+      <SessionMemoryPanel
+        defaultOpen
+        memory={{ session_id: "s1", has_memory: false, topics: [] }}
+        onAddMemory={onAddMemory}
+        candidates={[
+          {
+            id: "project-goal",
+            target: "memory",
+            topic: "project",
+            content: "Project goal: Build a Python CLI 2048 game.",
+            source: "Loop goal",
+            reason: "Useful for resuming this project without rereading the whole chat.",
+          },
+        ]}
+      />,
+    );
+
+    const candidates = screen.getByTestId("session-memory-candidates");
+    expect(candidates).toHaveTextContent("Candidate facts");
+    expect(candidates).toHaveTextContent("Project goal: Build a Python CLI 2048 game.");
+    await user.click(within(candidates).getByRole("button", { name: "Use in form" }));
+    expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic")).toHaveValue("project");
+    expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("Project goal: Build a Python CLI 2048 game.");
+    expect(screen.getByText("Candidate loaded. Review before saving.")).toBeInTheDocument();
+
+    await user.click(within(candidates).getByRole("button", { name: "Save" }));
+    expect(onAddMemory).toHaveBeenCalledWith({
+      target: "memory",
+      topic: "project",
+      content: "Project goal: Build a Python CLI 2048 game.",
+    });
+    expect(await screen.findByText("Memory candidate saved.")).toBeInTheDocument();
+  });
+
   it("removes memory entries with confirmation when the runtime supports edits", async () => {
     const user = userEvent.setup();
     const onRemoveMemory = vi.fn(async () => ({

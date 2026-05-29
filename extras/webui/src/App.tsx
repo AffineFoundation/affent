@@ -109,6 +109,7 @@ import {
 } from "./view/automationContext";
 import { conversationTopicFromTurns, isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
+import { buildSessionMemoryCandidates } from "./view/sessionMemory";
 
 type SurfaceState = "connecting" | "connected" | "live" | "loading" | "demo" | "disconnected" | "error";
 
@@ -1774,10 +1775,12 @@ export function App() {
   }
 
   function renderMemoryPanel(defaultOpen = false) {
+    const memorySnapshot = memoryStateSnapshot(memoryState);
     return (
       <SessionMemoryPanel
-        memory={memoryStateSnapshot(memoryState)}
+        memory={memorySnapshot}
         latestUpdate={latestMemoryUpdate}
+        candidates={buildSessionMemoryCandidates({ memory: memorySnapshot, session: selectedSession, changes: sessionChanges, files: sessionFiles })}
         loading={memoryState.state === "loading"}
         error={memoryState.state === "error" ? memoryState.error : undefined}
         noSession={memoryState.state === "empty"}

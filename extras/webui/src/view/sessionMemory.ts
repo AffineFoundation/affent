@@ -1,5 +1,7 @@
 import type { MemoryUpdateMeta } from "../api/events";
-import type { SessionMemoryBucket, SessionMemoryResponse } from "../api/sessions";
+import type { SessionMemoryBucket, SessionMemoryResponse, SessionSummary } from "../api/sessions";
+import type { SessionChangesView } from "./sessionChanges";
+import type { SessionFilesView } from "./sessionFiles";
 
 export interface SessionMemoryStats {
   bucketCount: number;
@@ -21,6 +23,22 @@ export interface MemoryReviewFinding {
   detail: string;
 }
 
+export interface SessionMemoryCandidate {
+  id: string;
+  target: "memory" | "user";
+  topic: string;
+  content: string;
+  source: string;
+  reason: string;
+}
+
+export interface SessionMemoryCandidateInput {
+  memory?: SessionMemoryResponse;
+  session?: SessionSummary;
+  changes?: SessionChangesView;
+  files?: SessionFilesView;
+}
+
 export function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBucket[] {
   if (!memory) return [];
   const out: SessionMemoryBucket[] = [];
@@ -28,6 +46,58 @@ export function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBuck
   if (memory.core) out.push(memory.core);
   out.push(...(memory.topics ?? []));
   return out;
+}
+
+export function buildSessionMemoryCandidates(input: SessionMemoryCandidateInput): SessionMemoryCandidate[] {
+  const existing = new Set(memoryBuckets(input.memory).flatMap((bucket) => bucket.entries ?? []).map(normalizeMemoryEntry).filter(Boolean));
+  const candidates: SessionMemoryCandidate[] = [];
+  const add = (candidate: SessionMemoryCandidate) => {
+    const normalized = normalizeMemoryEntry(candidate.content);
+    if (!normalized || existing.has(normalized) || candidates.some((item) => normalizeMemoryEntry(item.content) === normalized)) return;
+    candidates.push(candidate);
+  };
+  const goal = durableGoal(input.session);
+  if (goal) {
+    add({
+      id: "project-goal",
+      target: "memory",
+      topic: "project",
+      content: `Project goal: ${goal}`,
+      source: input.session?.has_loop_protocol || input.session?.has_loop_state ? "Loop goal" : "Chat task",
+      reason: "Useful for resuming this project without rereading the whole chat.",
+    });
+  }
+  const changedPaths = (input.changes?.files ?? [])
+    .filter((file) => file.status === "changed")
+    .map((file) => file.path)
+    .filter(Boolean)
+    .slice(0, 5);
+  if (changedPaths.length > 0) {
+    add({
+      id: "changed-files",
+      target: "memory",
+      topic: "project",
+      content: `Changed files for this task: ${changedPaths.join(", ")}`,
+      source: "Changes",
+      reason: "Helps the next turn inspect the files that carry the current implementation state.",
+    });
+  }
+  const readPaths = (input.files?.items ?? [])
+    .filter((item) => item.actions.includes("read") && item.contentPreview)
+    .map((item) => item.path)
+    .filter(Boolean)
+    .slice(0, 5);
+  if (readPaths.length > 0 && readPaths.some((path) => !changedPaths.includes(path))) {
+    add({
+      id: "read-files",
+      target: "memory",
+      topic: "project",
+      content: `Relevant files read for this task: ${readPaths.join(", ")}`,
+      source: "Files",
+      reason: "Keeps the evidence boundary visible when the session is resumed later.",
+    });
+  }
+  return candidates.slice(0, 4);
 }
 
 export function memoryStats(memory?: SessionMemoryResponse): SessionMemoryStats {
@@ -299,6 +369,26 @@ function memoryPressure(percent: number | undefined, bucketCount: number): Sessi
   if (percent >= 90) return "full";
   if (percent >= 70) return "watch";
   return "ok";
+}
+
+function durableGoal(session: SessionSummary | undefined): string | undefined {
+  const raw = [
+    session?.loop_state?.initial_goal_preview,
+    session?.loop_protocol?.state?.initial_goal_preview,
+    session?.topic_user_message,
+    session?.latest_user_message,
+  ].find((value) => value?.trim())?.trim();
+  if (!raw) return undefined;
+  const compact = raw.replace(/\s+/g, " ");
+  if (compact.length < 12) return undefined;
+  if (/^(?:push|done|ok|yes|no|continue|继续|可以|好的|推了吗|push了吗)[？?。!.]*$/i.test(compact)) return undefined;
+  return compactMemoryCandidate(compact, 220);
+}
+
+function compactMemoryCandidate(value: string, maxLength: number): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength - 3).trimEnd()}...`;
 }
 
 function memoryBucketSearchText(bucket: SessionMemoryBucket): string {

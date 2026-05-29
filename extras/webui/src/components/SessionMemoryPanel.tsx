@@ -27,6 +27,7 @@ import {
   memoryUpdateLocation,
   memoryUpdatePreview,
   manualMemoryDraft,
+  type SessionMemoryCandidate,
 } from "../view/sessionMemory";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
@@ -44,9 +45,11 @@ export function SessionMemoryPanel({
   onRemoveMemory,
   onReplaceMemory,
   onUseAsDraft,
+  candidates = [],
 }: {
   memory?: SessionMemoryResponse;
   latestUpdate?: MemoryUpdateMeta;
+  candidates?: readonly SessionMemoryCandidate[];
   loading?: boolean;
   error?: string;
   noSession?: boolean;
@@ -68,6 +71,8 @@ export function SessionMemoryPanel({
   const [editingEntry, setEditingEntry] = useState<{ key: string; value: string } | undefined>();
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | undefined>();
   const [scopeFilter, setScopeFilter] = useState<MemoryScopeFilter>("all");
+  const [writeOpen, setWriteOpen] = useState(!memory?.has_memory);
+  const [savingCandidateId, setSavingCandidateId] = useState<string | undefined>();
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const reviewFindings = useMemo(() => memoryReviewFindings(memory), [memory]);
   const reviewBucketKeys = useMemo(() => memoryBucketsNeedingReview(memory), [memory]);
@@ -131,6 +136,28 @@ export function SessionMemoryPanel({
     if (!onUseAsDraft) return;
     onUseAsDraft(manualMemoryDraft({ content, target: memoryTarget, topic: memoryTopic }), "memory");
     setMemorySaveState({ state: "saved", message: "Memory draft prepared." });
+  }
+
+  function handleUseCandidate(candidate: SessionMemoryCandidate) {
+    setMemoryTarget(candidate.target);
+    setMemoryTopic(candidate.topic);
+    setMemoryContent(candidate.content);
+    setWriteOpen(true);
+    setMemorySaveState({ state: "saved", message: "Candidate loaded. Review before saving." });
+  }
+
+  async function handleSaveCandidate(candidate: SessionMemoryCandidate) {
+    if (!onAddMemory) return;
+    setSavingCandidateId(candidate.id);
+    setMemorySaveState({ state: "saving" });
+    try {
+      await onAddMemory({ content: candidate.content, target: candidate.target, topic: candidate.topic });
+      setMemorySaveState({ state: "saved", message: "Memory candidate saved." });
+    } catch (err) {
+      setMemorySaveState({ state: "error", message: formatPanelError(err) });
+    } finally {
+      setSavingCandidateId(undefined);
+    }
   }
 
   async function handleRemoveMemory(bucket: SessionMemoryBucket, entry: string) {
@@ -232,6 +259,15 @@ export function SessionMemoryPanel({
               onRefresh={onRefresh}
               onUseAsDraft={onUseAsDraft}
             />
+            {candidates.length > 0 ? (
+              <MemoryCandidateReview
+                candidates={candidates}
+                canSave={Boolean(onAddMemory)}
+                savingCandidateId={savingCandidateId}
+                onUseCandidate={handleUseCandidate}
+                onSaveCandidate={(candidate) => void handleSaveCandidate(candidate)}
+              />
+            ) : null}
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
             {focusedBucket ? <MemoryBucketFocus bucket={focusedBucket} onUseAsDraft={onUseAsDraft} /> : null}
             {hasSearch ? (
@@ -402,7 +438,7 @@ export function SessionMemoryPanel({
                     </details>
                   );
                 })
-              ) : (
+              ) : candidates.length > 0 ? null : (
                 <div className="session-memory-empty-state">
                   <strong>{buckets.length > 0 ? "No matching memory" : "No durable memory saved"}</strong>
                   <span>{buckets.length > 0 ? "Clear the filters or search to inspect another bucket." : "Save only stable, non-secret facts that will help future turns."}</span>
@@ -418,7 +454,7 @@ export function SessionMemoryPanel({
               <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
             ) : null}
             {onAddMemory || onUseAsDraft ? (
-              <details className="session-memory-write" open={!memory?.has_memory}>
+              <details className="session-memory-write" open={writeOpen || !memory?.has_memory} onToggle={(event) => setWriteOpen(event.currentTarget.open)}>
                 <summary>
                   <strong>{onAddMemory ? "Add memory" : "Prepare memory draft"}</strong>
                   <span>{onAddMemory ? "Write a durable fact into this chat's memory." : "Prepare an agent instruction to write memory."}</span>
@@ -626,6 +662,56 @@ function MemoryPanelActions({
         </button>
       ) : null}
     </div>
+  );
+}
+
+function MemoryCandidateReview({
+  candidates,
+  canSave,
+  savingCandidateId,
+  onUseCandidate,
+  onSaveCandidate,
+}: {
+  candidates: readonly SessionMemoryCandidate[];
+  canSave: boolean;
+  savingCandidateId?: string;
+  onUseCandidate: (candidate: SessionMemoryCandidate) => void;
+  onSaveCandidate: (candidate: SessionMemoryCandidate) => void;
+}) {
+  return (
+    <section className="session-memory-candidates" data-testid="session-memory-candidates" aria-label="Memory candidates">
+      <div className="session-memory-candidates-head">
+        <span>Candidate facts</span>
+        <strong>{candidates.length} from current session evidence</strong>
+      </div>
+      <ul>
+        {candidates.map((candidate) => (
+          <li key={candidate.id}>
+            <div>
+              <span>{candidate.source}</span>
+              <strong>{candidate.topic}</strong>
+              <p>{candidate.content}</p>
+              <small>{candidate.reason}</small>
+            </div>
+            <div className="session-memory-actions">
+              <button type="button" className="ghost-action" onClick={() => onUseCandidate(candidate)}>
+                Use in form
+              </button>
+              {canSave ? (
+                <button
+                  type="button"
+                  className="ghost-action primary-run-action"
+                  disabled={savingCandidateId === candidate.id}
+                  onClick={() => onSaveCandidate(candidate)}
+                >
+                  {savingCandidateId === candidate.id ? "Saving" : "Save"}
+                </button>
+              ) : null}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

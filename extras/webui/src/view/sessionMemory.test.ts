@@ -8,6 +8,7 @@ import {
   memoryBucketLabel,
   memoryBucketUsage,
   memoryBucketsNeedingReview,
+  buildSessionMemoryCandidates,
   memoryPressureLabel,
   memoryReviewFindings,
   memoryScopeLabel,
@@ -140,6 +141,53 @@ describe("sessionMemory view helpers", () => {
     expect(draft).toContain("non-secret");
     expect(draft).toContain("Do not save memory yet");
     expect(draft).toContain("Current memory: 1 entry");
+  });
+
+  it("proposes durable candidates from session evidence without duplicating saved memory", () => {
+    const candidates = buildSessionMemoryCandidates({
+      memory: {
+        session_id: "s1",
+        has_memory: true,
+        topics: [
+          {
+            target: "memory",
+            topic: "project",
+            entries: ["Project goal: Build a Python CLI 2048 game."],
+            entry_count: 1,
+            chars_used: 41,
+          },
+        ],
+      },
+      session: {
+        id: "s1",
+        active: true,
+        durable: true,
+        has_conversation: true,
+        has_events: true,
+        has_artifacts: false,
+        has_memory: true,
+        has_runtime_skills: false,
+        loop_state: { version: 1, initial_goal_preview: "Build a Python CLI 2048 game." },
+      },
+      changes: {
+        files: [{ path: "game2048.py", operation: "write", status: "changed", turnNumber: 2, actionCount: 1 }],
+        summary: "1 changed file",
+        detail: "1 changed",
+      },
+      files: {
+        items: [{ path: "game2048.py", actions: ["read"], status: "available", turnNumber: 1, actionCount: 1, contentPreview: "class Game:" }],
+        summary: "1 file",
+        detail: "1 read",
+      },
+    });
+
+    expect(candidates.map((candidate) => candidate.id)).toEqual(["changed-files"]);
+    expect(candidates[0]).toMatchObject({
+      target: "memory",
+      topic: "project",
+      content: "Changed files for this task: game2048.py",
+      source: "Changes",
+    });
   });
 
   it("summarizes memory scope and capacity pressure", () => {
