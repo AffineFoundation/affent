@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
@@ -56,6 +57,15 @@ type scheduleRunnerStats struct {
 	FrontendIndependent    bool   `json:"frontend_independent"`
 	SweepInterval          string `json:"sweep_interval,omitempty"`
 	DurableSessionStateDir string `json:"durable_session_state_dir,omitempty"`
+	SessionsWithSchedules  int    `json:"sessions_with_schedules,omitempty"`
+	Schedules              int    `json:"schedules,omitempty"`
+	EnabledSchedules       int    `json:"enabled_schedules,omitempty"`
+	DueSchedules           int    `json:"due_schedules,omitempty"`
+	ErrorSchedules         int    `json:"error_schedules,omitempty"`
+	NextRunAt              string `json:"next_run_at,omitempty"`
+	NextSessionID          string `json:"next_session_id,omitempty"`
+	NextScheduleID         string `json:"next_schedule_id,omitempty"`
+	LastError              string `json:"last_error,omitempty"`
 	DisabledReason         string `json:"disabled_reason,omitempty"`
 }
 
@@ -274,7 +284,64 @@ func scheduleRunnerStatsForPool(cfg Config, pool *SessionPool) scheduleRunnerSta
 	if !stats.Active {
 		stats.DisabledReason = "session pool is shutting down"
 	}
+	if pool != nil {
+		stats.addDurableQueueSnapshot(pool, time.Now().UTC())
+	}
 	return stats
+}
+
+func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now time.Time) {
+	if stats == nil || pool == nil {
+		return
+	}
+	ids, err := pool.sessionIDsWithSchedules()
+	if err != nil {
+		stats.LastError = err.Error()
+		return
+	}
+	stats.SessionsWithSchedules = len(ids)
+	var nextSessionID string
+	var nextSchedule *sessionSchedule
+	var latestError *sessionSchedule
+	for _, sessionID := range ids {
+		file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, sessionID))
+		if err != nil {
+			stats.LastError = err.Error()
+			return
+		}
+		if !found {
+			continue
+		}
+		for i := range file.Schedules {
+			schedule := &file.Schedules[i]
+			stats.Schedules++
+			if strings.TrimSpace(schedule.LastError) != "" {
+				stats.ErrorSchedules++
+				if latestError == nil || scheduleTimeBefore(latestError.UpdatedAt, schedule.UpdatedAt) {
+					latestError = schedule
+				}
+			}
+			if !schedule.Enabled {
+				continue
+			}
+			stats.EnabledSchedules++
+			if sessionScheduleDue(*schedule, now) {
+				stats.DueSchedules++
+			}
+			if nextSchedule == nil || scheduleTimeBefore(schedule.NextRunAt, nextSchedule.NextRunAt) {
+				nextSchedule = schedule
+				nextSessionID = sessionID
+			}
+		}
+	}
+	if nextSchedule != nil {
+		stats.NextRunAt = nextSchedule.NextRunAt
+		stats.NextSessionID = nextSessionID
+		stats.NextScheduleID = nextSchedule.ID
+	}
+	if latestError != nil {
+		stats.LastError = latestError.LastError
+	}
 }
 
 func statsWebSearchBackend(cfg Config) string {

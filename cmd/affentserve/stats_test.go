@@ -89,6 +89,11 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 		resp.ScheduleRunner.DurableSessionStateDir != pool.sessionRootPath() {
 		t.Fatalf("ScheduleRunner = %+v, want active server-owned runner", resp.ScheduleRunner)
 	}
+	if resp.ScheduleRunner.SessionsWithSchedules != 0 || resp.ScheduleRunner.Schedules != 0 ||
+		resp.ScheduleRunner.EnabledSchedules != 0 || resp.ScheduleRunner.DueSchedules != 0 ||
+		resp.ScheduleRunner.ErrorSchedules != 0 {
+		t.Fatalf("ScheduleRunner = %+v, want empty durable queue summary", resp.ScheduleRunner)
+	}
 	if resp.Boundaries.MaxTurnSteps != agent.DefaultMaxTurnSteps {
 		t.Fatalf("Boundaries.MaxTurnSteps = %d, want default %d", resp.Boundaries.MaxTurnSteps, agent.DefaultMaxTurnSteps)
 	}
@@ -155,6 +160,78 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	}
 	if resp.ServerTime == "" {
 		t.Fatal("ServerTime must be populated")
+	}
+}
+
+func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := &SessionPool{
+		cfg:      Config{MemoryRoot: memRoot},
+		sessions: map[string]*Session{},
+	}
+	now := time.Now().UTC()
+	createDurableSessionDir(t, pool, "timers-a")
+	createDurableSessionDir(t, pool, "timers-b")
+	if err := writeSessionSchedulesFile(sessionSchedulesPath(pool, "timers-a"), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{
+			{
+				ID:        "sched_due",
+				Prompt:    "run due timer",
+				Enabled:   true,
+				NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
+				CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+				UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+			},
+			{
+				ID:        "sched_paused_error",
+				Prompt:    "paused failing timer",
+				Enabled:   false,
+				NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
+				CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+				UpdatedAt: now.Format(time.RFC3339),
+				LastError: "previous scheduled turn failed",
+			},
+		},
+	}); err != nil {
+		t.Fatalf("write timers-a schedules: %v", err)
+	}
+	if err := writeSessionSchedulesFile(sessionSchedulesPath(pool, "timers-b"), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{
+			{
+				ID:        "sched_later",
+				Prompt:    "run later timer",
+				Enabled:   true,
+				NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
+				CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+				UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("write timers-b schedules: %v", err)
+	}
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	got := resp.ScheduleRunner
+	if got.SessionsWithSchedules != 2 || got.Schedules != 3 || got.EnabledSchedules != 2 ||
+		got.DueSchedules != 1 || got.ErrorSchedules != 1 {
+		t.Fatalf("ScheduleRunner = %+v, want aggregate queue counts", got)
+	}
+	if got.NextSessionID != "timers-a" || got.NextScheduleID != "sched_due" ||
+		got.NextRunAt != now.Add(-time.Minute).Format(time.RFC3339) {
+		t.Fatalf("ScheduleRunner = %+v, want due schedule as next run", got)
+	}
+	if got.LastError != "previous scheduled turn failed" {
+		t.Fatalf("ScheduleRunner.LastError = %q, want latest schedule error", got.LastError)
 	}
 }
 
