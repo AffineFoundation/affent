@@ -511,6 +511,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		fmt.Fprintf(b, "- required_task_state_schedule_kind: `%s`\n", timelineInline(exp.RequiredTaskStateScheduleKind, timelineArgsPreviewBytes))
 	}
 	writeTimelineTaskStateActions(b, "required_task_state_attempted_actions", exp.RequiredTaskStateAttemptedActions)
+	writeTimelineTaskStateChangedFiles(b, "required_task_state_changed_files", exp.RequiredTaskStateChangedFiles)
 	writeTimelineTaskStateEvidence(b, "required_task_state_evidence", exp.RequiredTaskStateEvidence)
 	writeTimelineCountsLine(b, "required_context_injection_sources", exp.RequiredContextInjectionSources)
 	writeTimelineCountsLine(b, "required_conversation_repair_stats_at_least", exp.RequiredConversationRepairStatsAtLeast)
@@ -925,6 +926,25 @@ func writeTimelineTaskStateActions(b *strings.Builder, label string, reqs []Debu
 		parts := []string{timelineInline(req.Tool, 120)}
 		if strings.TrimSpace(req.SummaryContains) != "" {
 			parts = append(parts, "summary~"+timelineInline(req.SummaryContains, 180))
+		}
+		if req.Min > 0 {
+			parts = append(parts, fmt.Sprintf("min=%d", req.Min))
+		}
+		fmt.Fprintf(b, "- %s: `%s`\n", label, strings.Join(parts, " "))
+	}
+}
+
+func writeTimelineTaskStateChangedFiles(b *strings.Builder, label string, reqs []DebugTaskStateChangedFileRequirement) {
+	for _, req := range reqs {
+		if strings.TrimSpace(req.PathContains) == "" && strings.TrimSpace(req.Action) == "" {
+			continue
+		}
+		var parts []string
+		if strings.TrimSpace(req.PathContains) != "" {
+			parts = append(parts, "path~"+timelineInline(req.PathContains, 180))
+		}
+		if strings.TrimSpace(req.Action) != "" {
+			parts = append(parts, "action="+timelineInline(req.Action, 80))
 		}
 		if req.Min > 0 {
 			parts = append(parts, fmt.Sprintf("min=%d", req.Min))

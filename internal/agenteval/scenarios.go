@@ -3170,6 +3170,9 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
 			{Tool: "shell", SummaryContains: "git push"},
 		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "set/set.go", Action: "edit"},
+		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},
 			{Source: "git_push"},
@@ -3281,6 +3284,9 @@ func TestClampAboveRange(t *testing.T) {
 		},
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
 			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "app/mathutil/clamp.go", Action: "edit"},
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},
@@ -3396,6 +3402,9 @@ func TestMessageUsesName(t *testing.T) {
 		},
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
 			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "app/greet/greet.go", Action: "edit"},
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},
@@ -3517,6 +3526,11 @@ This repository starts almost empty. The agent must create the project, tests, d
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
 			{Tool: "shell", SummaryContains: "git push"},
 			{Tool: "loop_protocol", SummaryContains: "close"},
+		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "todo_core/store.py", Action: "write"},
+			{PathContains: "tests/test_store.py", Action: "write"},
+			{PathContains: "README.md", Action: "write"},
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},

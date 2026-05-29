@@ -1544,6 +1544,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
 			{Tool: "shell", SummaryContains: "git push"},
 		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "main.go", Action: "edit"},
+		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_push", SummaryContains: "git push"},
 		},
@@ -1644,6 +1647,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"task_state_schedule_id:sched_clamp",
 		"task_state_schedule_kind:checkin",
 		"task_state_attempted_action_at_least:shell:git push:1",
+		"task_state_changed_file_at_least:main.go:edit:1",
 		"task_state_evidence_at_least:git_push:git push:1",
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
@@ -1726,16 +1730,20 @@ func TestDebugScenarioExpectationsCopiesCompletionGuards(t *testing.T) {
 func TestDebugScenarioExpectationsCopiesTaskStateRequirements(t *testing.T) {
 	scenario := BatchScenario{
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{{Tool: "shell", SummaryContains: "git push", Min: 1}},
+		RequiredTaskStateChangedFiles:     []TaskStateChangedFileRequirement{{PathContains: "app/main.go", Action: "edit", Min: 1}},
 		RequiredTaskStateEvidence:         []TaskStateEvidenceRequirement{{Source: "git_push", SummaryContains: "git push", Min: 1}},
 	}
 	exp := debugScenarioExpectations(scenario)
 	if !reflect.DeepEqual(exp.RequiredTaskStateAttemptedActions, []DebugTaskStateActionRequirement{{Tool: "shell", SummaryContains: "git push", Min: 1}}) {
 		t.Fatalf("RequiredTaskStateAttemptedActions = %#v", exp.RequiredTaskStateAttemptedActions)
 	}
+	if !reflect.DeepEqual(exp.RequiredTaskStateChangedFiles, []DebugTaskStateChangedFileRequirement{{PathContains: "app/main.go", Action: "edit", Min: 1}}) {
+		t.Fatalf("RequiredTaskStateChangedFiles = %#v", exp.RequiredTaskStateChangedFiles)
+	}
 	if !reflect.DeepEqual(exp.RequiredTaskStateEvidence, []DebugTaskStateEvidenceRequirement{{Source: "git_push", SummaryContains: "git push", Min: 1}}) {
 		t.Fatalf("RequiredTaskStateEvidence = %#v", exp.RequiredTaskStateEvidence)
 	}
-	for _, want := range []string{"task_state_attempted_action_at_least:shell:git push:1", "task_state_evidence_at_least:git_push:git push:1"} {
+	for _, want := range []string{"task_state_attempted_action_at_least:shell:git push:1", "task_state_changed_file_at_least:app/main.go:edit:1", "task_state_evidence_at_least:git_push:git push:1"} {
 		if !stringSliceContains(exp.CheckNames, want) {
 			t.Fatalf("CheckNames = %#v, want %q", exp.CheckNames, want)
 		}
@@ -2393,6 +2401,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(commitPush.ProtectedFiles, "set/set_test.go") {
 		t.Fatalf("commit/push ProtectedFiles = %#v, want test protection", commitPush.ProtectedFiles)
 	}
+	if !taskStateChangedFileRequirementContains(commitPush.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "set/set.go", Action: "edit"}) {
+		t.Fatalf("commit/push RequiredTaskStateChangedFiles = %#v, want set/set.go edit", commitPush.RequiredTaskStateChangedFiles)
+	}
 	if !stringSliceContains(commitPush.Domains, codePRDomain) {
 		t.Fatalf("commit/push Domains = %#v, want code_pr", commitPush.Domains)
 	}
@@ -2443,6 +2454,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if got := clonePush.RequiredFileSubstrings["app/mathutil/clamp.go"]; !stringSliceContains(got, "return max") {
 		t.Fatalf("clone/push RequiredFileSubstrings = %#v, want fixed clamp", clonePush.RequiredFileSubstrings)
+	}
+	if !taskStateChangedFileRequirementContains(clonePush.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "app/mathutil/clamp.go", Action: "edit"}) {
+		t.Fatalf("clone/push RequiredTaskStateChangedFiles = %#v, want app/mathutil/clamp.go edit", clonePush.RequiredTaskStateChangedFiles)
 	}
 	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") || !stringSliceContains(clonePush.RequiredFinalText, "clean") || !stringSliceContains(clonePush.RequiredFinalText, "hash") {
 		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command, changed file, clean status evidence, and commit hash evidence", clonePush.RequiredFinalText)
@@ -2507,6 +2521,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(sourceRepo.ProtectedFiles, "app/greet/greet_test.go") {
 		t.Fatalf("source repo ProtectedFiles = %#v, want cloned test protection", sourceRepo.ProtectedFiles)
+	}
+	if !taskStateChangedFileRequirementContains(sourceRepo.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "app/greet/greet.go", Action: "edit"}) {
+		t.Fatalf("source repo RequiredTaskStateChangedFiles = %#v, want app/greet/greet.go edit", sourceRepo.RequiredTaskStateChangedFiles)
 	}
 	sourceRepoCaps := ScenarioExpectationCapabilityNames(sourceRepo)
 	for _, want := range []string{"source_repo", "workspace", "verifier", "skill"} {
@@ -2609,6 +2626,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(scratchProject.Domains, codePRDomain) || !stringSliceContains(scratchProject.Domains, longRunRecoveryDomain) {
 		t.Fatalf("scratch project Domains = %#v, want code_pr and longrun_recovery", scratchProject.Domains)
+	}
+	for _, want := range []TaskStateChangedFileRequirement{
+		{PathContains: "todo_core/store.py", Action: "write"},
+		{PathContains: "tests/test_store.py", Action: "write"},
+		{PathContains: "README.md", Action: "write"},
+	} {
+		if !taskStateChangedFileRequirementContains(scratchProject.RequiredTaskStateChangedFiles, want) {
+			t.Fatalf("scratch project RequiredTaskStateChangedFiles = %#v, want %#v", scratchProject.RequiredTaskStateChangedFiles, want)
+		}
 	}
 	if !scratchProject.ForbidWorkspaceAbsolutePaths || scratchProject.MaxLoopTurnInputTokens != 300000 || scratchProject.MaxLoopTurnTotalTokens != 320000 {
 		t.Fatalf("scratch project path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", scratchProject.ForbidWorkspaceAbsolutePaths, scratchProject.MaxLoopTurnInputTokens, scratchProject.MaxLoopTurnTotalTokens)
@@ -4267,6 +4293,15 @@ func stringSliceContains(values []string, want string) bool {
 }
 
 func toolArgRequirementContains(values []ToolArgContainsRequirement, want ToolArgContainsRequirement) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func taskStateChangedFileRequirementContains(values []TaskStateChangedFileRequirement, want TaskStateChangedFileRequirement) bool {
 	for _, value := range values {
 		if value == want {
 			return true

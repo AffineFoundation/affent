@@ -751,6 +751,9 @@ func TestTaskStateRequestProvenanceChecks(t *testing.T) {
 
 func TestTaskStateActionAndEvidenceChecks(t *testing.T) {
 	trace := Trace{TaskState: TaskStateSnapshot{
+		ChangedFiles: []TaskStateFile{
+			{Path: "app/mathutil/clamp.go", Action: "edit"},
+		},
 		AttemptedActions: []TaskStateAction{
 			{Tool: "shell", Summary: "git push origin main"},
 			{Tool: "loop_protocol", Summary: "close completed"},
@@ -766,8 +769,14 @@ func TestTaskStateActionAndEvidenceChecks(t *testing.T) {
 	if res := TaskStateEvidenceAtLeast("git_push", "git push", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected evidence check to pass: %+v", res)
 	}
+	if res := TaskStateChangedFileAtLeast("mathutil/clamp.go", "edit", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected changed file check to pass: %+v", res)
+	}
 	if res := TaskStateAttemptedActionAtLeast("shell", "git commit", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "git push origin main") {
 		t.Fatalf("expected attempted action mismatch to show observed actions: %+v", res)
+	}
+	if res := TaskStateChangedFileAtLeast("README.md", "edit", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "app/mathutil/clamp.go") {
+		t.Fatalf("expected changed file mismatch to show observed files: %+v", res)
 	}
 	if res := TaskStateEvidenceAtLeast("git_commit", "", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "git_push") {
 		t.Fatalf("expected evidence mismatch to show observed evidence: %+v", res)

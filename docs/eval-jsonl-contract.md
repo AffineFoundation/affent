@@ -156,7 +156,8 @@ Scenario records describe one eval case:
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
   task-state request provenance plus optional
-  `required_task_state_attempted_actions` and `required_task_state_evidence`
+  `required_task_state_attempted_actions`,
+  `required_task_state_changed_files`, and `required_task_state_evidence`
   checks for canonical TaskState reviewability,
   plan/delegation constraints, protected files, optional
   `required_turn_end_reason` for intentional non-completed endings, optional

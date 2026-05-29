@@ -249,6 +249,40 @@ func TaskStateAttemptedActionAtLeast(tool, summaryContains string, min int) Chec
 	}
 }
 
+func TaskStateChangedFileAtLeast(pathContains, action string, min int) Check {
+	pathContains = strings.TrimSpace(pathContains)
+	action = strings.TrimSpace(action)
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("task_state_changed_file_at_least:%s:%s:%d", checkNamePart(pathContains), checkNamePart(action), min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var observed []string
+			for _, file := range t.TaskState.ChangedFiles {
+				if len(observed) < 5 {
+					observed = append(observed, taskStateActionExample(file.Action, file.Path))
+				}
+				if pathContains != "" && !strings.Contains(file.Path, pathContains) {
+					continue
+				}
+				if action != "" && strings.TrimSpace(file.Action) != action {
+					continue
+				}
+				count++
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched=%d", count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("matched=%d, want >= %d; observed=%v", count, min, observed),
+			}
+		},
+	}
+}
+
 func TaskStateEvidenceAtLeast(source, summaryContains string, min int) Check {
 	source = strings.TrimSpace(source)
 	summaryContains = strings.TrimSpace(summaryContains)
