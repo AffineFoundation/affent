@@ -165,7 +165,7 @@ export function SessionLoopPanel({
         <div className="session-loop-actions">
           {onLoadProtocol ? (
             <button type="button" className="ghost-action" disabled={loadingProtocol} onClick={() => void onLoadProtocol()}>
-              {loadingProtocol ? "Loading LOOP.md" : protocol ? "Refresh LOOP.md" : "View LOOP.md"}
+              {loadingProtocol ? "Loading LOOP.md" : protocol ? "Reload LOOP.md" : "Load LOOP.md"}
             </button>
           ) : null}
           {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}

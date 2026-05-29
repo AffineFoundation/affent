@@ -1682,7 +1682,7 @@ export function App() {
             ) : null}
             {hasLoop ? (
               <button type="button" className="ghost-action" disabled={selectedLoopProtocolState.state === "loading"} onClick={() => void handleLoadLoopProtocol()}>
-                {selectedLoopProtocolState.state === "loading" ? "Loading LOOP.md" : selectedLoopProtocolState.state === "ready" ? "Refresh LOOP.md" : "View LOOP.md"}
+                {selectedLoopProtocolState.state === "loading" ? "Loading LOOP.md" : selectedLoopProtocolState.state === "ready" ? "Reload LOOP.md" : "Load LOOP.md"}
               </button>
             ) : null}
             {hasScheduleSummary && selectedScheduleState.state !== "ready" ? (
@@ -2466,7 +2466,7 @@ function automationWorkbenchQueue(
       id: "loop-error",
       label: "Loop",
       title: "LOOP.md unavailable",
-      detail: automationCompact(loopPanelState.error) ?? "Refresh LOOP.md before relying on this loop.",
+      detail: automationCompact(loopPanelState.error) ?? "Reload LOOP.md before relying on this loop.",
       tone: "danger",
       meta: path,
     });
