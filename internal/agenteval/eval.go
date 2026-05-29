@@ -157,6 +157,7 @@ type BatchScenario struct {
 	ExecutePlan                                    bool
 	EnableMemory                                   bool
 	EnableLoopProtocol                             bool
+	ExposeLoopProtocolTool                         bool
 	RequiredTurnEndReason                          string
 	Files                                          map[string]string
 	SetupCommands                                  []string
@@ -176,6 +177,7 @@ type BatchScenario struct {
 	RequiredToolStatsAtLeast                       map[string]int
 	RequiredTraceEventCounts                       map[string]int
 	RequiredUserMessageModes                       map[string]int
+	ForbiddenUserMessageModes                      []string
 	RequiredConversationRepairStatsAtLeast         map[string]int
 	RequiredConversationRepairKinds                map[string]int
 	RequiredLoopDecisionKinds                      map[string]int
@@ -409,6 +411,7 @@ type DebugScenarioExpectations struct {
 	ExecutePlan                                    bool                                  `json:"execute_plan,omitempty"`
 	EnableMemory                                   bool                                  `json:"enable_memory,omitempty"`
 	EnableLoopProtocol                             bool                                  `json:"enable_loop_protocol,omitempty"`
+	ExposeLoopProtocolTool                         bool                                  `json:"expose_loop_protocol_tool,omitempty"`
 	RequiredTurnEndReason                          string                                `json:"required_turn_end_reason,omitempty"`
 	VerifyCommand                                  string                                `json:"verify_command,omitempty"`
 	SetupCommands                                  []string                              `json:"setup_commands,omitempty"`
@@ -429,6 +432,7 @@ type DebugScenarioExpectations struct {
 	RequiredToolStatsAtLeast                       map[string]int                        `json:"required_tool_stats_at_least,omitempty"`
 	RequiredTraceEventCounts                       map[string]int                        `json:"required_trace_event_counts,omitempty"`
 	RequiredUserMessageModes                       map[string]int                        `json:"required_user_message_modes,omitempty"`
+	ForbiddenUserMessageModes                      []string                              `json:"forbidden_user_message_modes,omitempty"`
 	RequiredConversationRepairStatsAtLeast         map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
 	RequiredConversationRepairKinds                map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
 	RequiredLoopDecisionKinds                      map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
@@ -514,6 +518,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if exp.EnableMemory {
 		caps["memory"] = true
+	}
+	if exp.ExposeLoopProtocolTool {
+		caps["loop_protocol"] = true
 	}
 	if exp.RuntimeMaxTurnInputTokens > 0 {
 		caps["input_budget"] = true
@@ -624,7 +631,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	for stat := range exp.RequiredToolStatsAtLeast {
 		addExpectationStatCapabilities(caps, stat)
 	}
-	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 {
+	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 || len(exp.ForbiddenUserMessageModes) > 0 {
 		caps["trace"] = true
 	}
 	if len(exp.RequiredConversationRepairStatsAtLeast) > 0 || len(exp.RequiredConversationRepairKinds) > 0 {
@@ -1122,6 +1129,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunContextCompactionRetentionScenario(),
 		longRunRequestInputPressureCompactionScenario(),
 		longRunInputBudgetPressureScenario(),
+		longRunLoopSetupNormalTextScenario(),
 		longRunLoopActivationCalibrationScenario(),
 		longRunLoopActivationCompletedDraftScenario(),
 		longRunResearchCheckpointScenario(),
@@ -2144,6 +2152,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ExecutePlan:                             s.ExecutePlan,
 		EnableMemory:                            s.EnableMemory,
 		EnableLoopProtocol:                      s.EnableLoopProtocol,
+		ExposeLoopProtocolTool:                  s.ExposeLoopProtocolTool,
 		RequiredTurnEndReason:                   strings.TrimSpace(s.RequiredTurnEndReason),
 		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
 		SetupCommands:                           compactNonEmptyStrings(s.SetupCommands),
@@ -2163,6 +2172,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredToolStatsAtLeast:                cloneStringIntMap(s.RequiredToolStatsAtLeast),
 		RequiredTraceEventCounts:                cloneStringIntMap(s.RequiredTraceEventCounts),
 		RequiredUserMessageModes:                cloneStringIntMap(s.RequiredUserMessageModes),
+		ForbiddenUserMessageModes:               append([]string(nil), s.ForbiddenUserMessageModes...),
 		RequiredConversationRepairStatsAtLeast:  cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
 		RequiredConversationRepairKinds:         cloneStringIntMap(s.RequiredConversationRepairKinds),
 		RequiredLoopDecisionKinds:               cloneStringIntMap(s.RequiredLoopDecisionKinds),
@@ -2431,14 +2441,18 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	args = appendStringFlag(args, "--top-p", r.TopP)
 	args = appendStringFlag(args, "--max-tokens", r.MaxTokens)
 	args = appendStringFlag(args, "--seed", r.Seed)
-	runtimeEvalMode := r.RuntimeEvalMode || strings.TrimSpace(r.RuntimeTools) != "" || r.RuntimeAllTools
+	runtimeEvalMode := r.RuntimeEvalMode || strings.TrimSpace(r.RuntimeTools) != "" || r.RuntimeAllTools || scenario.ExposeLoopProtocolTool
 	if runtimeEvalMode {
 		args = append(args, "--eval-mode")
 	}
 	if r.RuntimeAllTools {
 		args = append(args, "--eval-all-tools")
 	}
-	args = appendStringFlag(args, "--eval-tools", r.RuntimeTools)
+	evalTools := r.RuntimeTools
+	if scenario.ExposeLoopProtocolTool && !r.RuntimeAllTools {
+		evalTools = appendCSVValue(evalTools, agent.LoopProtocolToolName)
+	}
+	args = appendStringFlag(args, "--eval-tools", evalTools)
 	if r.RuntimeMemory || scenario.EnableMemory {
 		args = append(args, "--memory=true")
 	}
@@ -2461,6 +2475,23 @@ func appendStringFlag(args []string, flagName, value string) []string {
 		return args
 	}
 	return append(args, flagName, value)
+}
+
+func appendCSVValue(csv, value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return strings.TrimSpace(csv)
+	}
+	csv = strings.TrimSpace(csv)
+	if csv == "" {
+		return value
+	}
+	for _, part := range strings.FieldsFunc(csv, func(r rune) bool { return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t' }) {
+		if strings.TrimSpace(part) == value {
+			return csv
+		}
+	}
+	return csv + "," + value
 }
 
 func batchScenarioPrompts(s BatchScenario) []string {
@@ -3324,6 +3355,11 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, mode := range sortedStringMapKeys(scenario.RequiredUserMessageModes) {
 		checks = append(checks, UserMessageModeAtLeast(mode, scenario.RequiredUserMessageModes[mode]))
+	}
+	for _, mode := range scenario.ForbiddenUserMessageModes {
+		if strings.TrimSpace(mode) != "" {
+			checks = append(checks, UserMessageModeAtMost(mode, 0))
+		}
 	}
 	for _, field := range sortedStringMapKeys(scenario.RequiredConversationRepairStatsAtLeast) {
 		checks = append(checks, ConversationRepairStatsAtLeast(field, scenario.RequiredConversationRepairStatsAtLeast[field]))

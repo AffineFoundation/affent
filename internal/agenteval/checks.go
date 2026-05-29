@@ -113,6 +113,39 @@ func UserMessageModeAtLeast(mode string, min int) Check {
 	}
 }
 
+func UserMessageModeAtMost(mode string, max int) Check {
+	if max < 0 {
+		max = 0
+	}
+	mode = strings.TrimSpace(mode)
+	return Check{
+		Name: fmt.Sprintf("user_message_mode_at_most:%s:%d", mode, max),
+		Eval: func(t Trace) CheckResult {
+			got := 0
+			var observed []string
+			for _, msg := range t.UserMessages {
+				observedMode := strings.TrimSpace(msg.Mode)
+				if observedMode == "" {
+					observedMode = "normal"
+				}
+				if len(observed) < 6 {
+					observed = append(observed, observedMode)
+				}
+				if observedMode == mode {
+					got++
+				}
+			}
+			if got <= max {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", mode, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at most %d user.message mode %q event(s), got %d; observed=%v", max, mode, got, observed),
+			}
+		},
+	}
+}
+
 func ContextInjectionSourceAtLeast(source string, min int) Check {
 	if min <= 0 {
 		min = 1

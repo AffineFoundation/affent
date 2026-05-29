@@ -1269,6 +1269,45 @@ func TestSetupLoop_EvalModeAllowsLoopProtocolTool(t *testing.T) {
 	}
 }
 
+func TestSetupLoop_EvalModeCanExposeLoopProtocolToolWithoutStartingSetup(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	workspace := t.TempDir()
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--session-id", "loop-normal",
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--eval-tools=loop_protocol",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	cf.loopProtocolGoal = "Set up loop: normal text should stay normal."
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if _, ok := b.loop.Tools.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol should be registered when requested by --eval-tools")
+	}
+	if b.loopProtocolInitialized {
+		t.Fatal("eval loop_protocol availability must not create a LOOP.md draft or force loop_setup mode")
+	}
+	if b.loop.LoopProtocolPath != "" {
+		t.Fatalf("LoopProtocolPath = %q, want empty until a protocol exists", b.loop.LoopProtocolPath)
+	}
+	if _, err := os.Stat(loopstate.ProtocolPath(workspace, "loop-normal")); !os.IsNotExist(err) {
+		t.Fatalf("LOOP.md draft should not be created; stat err=%v", err)
+	}
+}
+
 func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	workspace := t.TempDir()
 	sessionID := "plan-loop"

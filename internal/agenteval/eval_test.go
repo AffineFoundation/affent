@@ -3289,6 +3289,37 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatal("loop calibration setup scenario must not require a pre-active LOOP.md fixture")
 	}
 
+	normalLoopText, ok := seen["longrun-loop-setup-normal-text-is-chat"]
+	if !ok {
+		t.Fatalf("long-run suite missing normal loop text scenario")
+	}
+	if normalLoopText.EnableLoopProtocol || !normalLoopText.ExposeLoopProtocolTool || normalLoopText.SessionID != "loop-normal-text" {
+		t.Fatalf("normal loop text fields = enable:%v expose:%v session:%q", normalLoopText.EnableLoopProtocol, normalLoopText.ExposeLoopProtocolTool, normalLoopText.SessionID)
+	}
+	if normalLoopText.RequiredUserMessageModes["normal"] != 1 ||
+		!stringSliceContains(normalLoopText.ForbiddenUserMessageModes, agent.UserModeLoopSetup) ||
+		normalLoopText.MaxSuccessfulToolCallsByTool[agent.LoopProtocolToolName] != 0 ||
+		!strings.Contains(normalLoopText.VerifyCommand, `test ! -e .affent/loops/loop-normal-text/LOOP.md`) ||
+		!stringSliceContains(normalLoopText.RequiredFinalText, "LOOP-NORMAL-TEXT-42") {
+		t.Fatalf("normal loop text expectations = modes:%#v forbidden_modes:%#v max_tools:%#v verify:%q final:%#v",
+			normalLoopText.RequiredUserMessageModes,
+			normalLoopText.ForbiddenUserMessageModes,
+			normalLoopText.MaxSuccessfulToolCallsByTool,
+			normalLoopText.VerifyCommand,
+			normalLoopText.RequiredFinalText,
+		)
+	}
+	normalLoopTextChecks := checkNamesFor(BatchScenarioChecks(normalLoopText))
+	for _, want := range []string{
+		"user_message_mode_at_least:normal:1",
+		"user_message_mode_at_most:loop_setup:0",
+		"max_successful_tool_calls:loop_protocol:0",
+	} {
+		if !stringSliceContains(normalLoopTextChecks, want) {
+			t.Fatalf("normal loop text checks = %#v, want %q", normalLoopTextChecks, want)
+		}
+	}
+
 	loopActivation, ok := seen["longrun-loop-activation-completed-draft"]
 	if !ok {
 		t.Fatalf("long-run suite missing loop activation completed-draft scenario")
@@ -6091,9 +6122,18 @@ func TestBatchRunnerAffentctlRunArgsEvalToolFlagsImplyEvalMode(t *testing.T) {
 			runner: BatchRunner{RuntimeAllTools: true},
 			want:   "--eval-all-tools",
 		},
+		{
+			name:   "scenario loop protocol surface",
+			runner: BatchRunner{},
+			want:   "--eval-tools\x00loop_protocol",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug", MaxTurns: 1}, "debug")
+			scenario := BatchScenario{Prompt: "debug", MaxTurns: 1}
+			if tc.name == "scenario loop protocol surface" {
+				scenario.ExposeLoopProtocolTool = true
+			}
+			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", scenario, "debug")
 			joined := strings.Join(args, "\x00")
 			if !strings.Contains(joined, "--eval-mode") {
 				t.Fatalf("eval tool flags should imply --eval-mode:\n%q", args)

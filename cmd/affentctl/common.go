@@ -1034,6 +1034,17 @@ func evalKnownToolSet() map[string]bool {
 	return out
 }
 
+func evalModeRequestsLoopProtocolTool(c commonFlags) bool {
+	if !c.evalMode {
+		return false
+	}
+	if c.evalAllTools {
+		return true
+	}
+	allowed, _ := evalToolAllowlist(c)
+	return allowed[agent.LoopProtocolToolName]
+}
+
 func evalAllowlistHasUnknown(allowed map[string]bool) bool {
 	known := evalKnownToolSet()
 	for name := range allowed {
@@ -1363,7 +1374,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		}
 		loopProtocolToolPath := ""
 		loopProtocolExists := affentctlLoopProtocolFileExists(loopProtocolPath)
-		if c.loopProtocol || loopProtocolExists {
+		if c.loopProtocol || loopProtocolExists || evalModeRequestsLoopProtocolTool(c) {
 			loopProtocolToolPath = loopProtocolPath
 		}
 		sessionsDir := convDir

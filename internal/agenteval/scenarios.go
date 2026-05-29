@@ -2319,6 +2319,29 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 	}
 }
 
+func longRunLoopSetupNormalTextScenario() BatchScenario {
+	return BatchScenario{
+		Name:                   "longrun-loop-setup-normal-text-is-chat",
+		Suites:                 []string{longRunSuite},
+		Domains:                []string{longRunRecoveryDomain},
+		SessionID:              "loop-normal-text",
+		ExposeLoopProtocolTool: true,
+		Prompt:                 "Set up loop: This is ordinary chat text for a regression check, not structured loop setup. Reply with LOOP-NORMAL-TEXT-42 and do not call tools.",
+		RequiredUserMessageModes: map[string]int{
+			"normal": 1,
+		},
+		ForbiddenUserMessageModes: []string{
+			agent.UserModeLoopSetup,
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.LoopProtocolToolName: 0,
+		},
+		VerifyCommand:     `test ! -e .affent/loops/loop-normal-text/LOOP.md`,
+		RequiredFinalText: []string{"LOOP-NORMAL-TEXT-42"},
+		MaxTurns:          4,
+	}
+}
+
 func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-loop-activation-completed-draft",

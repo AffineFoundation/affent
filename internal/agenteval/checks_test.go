@@ -677,10 +677,14 @@ func TestUserMessageModeAtLeast(t *testing.T) {
 	trace := Trace{UserMessages: []UserMessage{
 		{TurnID: "t1", Mode: "normal"},
 		{TurnID: "t2", Mode: "execute_plan", DisplayText: "Run plan step 2"},
+		{TurnID: "t3"},
 	}}
 
 	if res := UserMessageModeAtLeast("execute_plan", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected execute_plan mode check to pass: %+v", res)
+	}
+	if res := UserMessageModeAtLeast("normal", 2).Eval(trace); !res.Pass {
+		t.Fatalf("empty user.message mode should count as normal: %+v", res)
 	}
 	res := UserMessageModeAtLeast("loop_setup", 1).Eval(trace)
 	if res.Pass {
@@ -688,6 +692,27 @@ func TestUserMessageModeAtLeast(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "execute_plan") {
 		t.Fatalf("failure detail should include observed modes: %s", res.Detail)
+	}
+}
+
+func TestUserMessageModeAtMost(t *testing.T) {
+	trace := Trace{UserMessages: []UserMessage{
+		{TurnID: "t1", Mode: "normal"},
+		{TurnID: "t2", Mode: "loop_setup"},
+		{TurnID: "t3"},
+	}}
+	if res := UserMessageModeAtMost("loop_setup", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected one loop_setup mode to pass max=1: %+v", res)
+	}
+	if res := UserMessageModeAtMost("normal", 2).Eval(trace); !res.Pass {
+		t.Fatalf("empty user.message mode should count as normal for max checks: %+v", res)
+	}
+	res := UserMessageModeAtMost("loop_setup", 0).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected forbidden loop_setup mode to fail")
+	}
+	if !strings.Contains(res.Detail, "at most 0") || !strings.Contains(res.Detail, "observed") {
+		t.Fatalf("failure detail should include limit and observed modes: %s", res.Detail)
 	}
 }
 
