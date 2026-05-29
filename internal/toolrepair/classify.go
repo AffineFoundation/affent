@@ -26,6 +26,8 @@ func Kind(note string) string {
 		return "type_coercion"
 	case strings.HasPrefix(note, "dropped unknown field "):
 		return "unknown_field_drop"
+	case strings.HasPrefix(note, "dropped action-inapplicable field "):
+		return "action_field_drop"
 	default:
 		return "other"
 	}

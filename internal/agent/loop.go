@@ -1446,6 +1446,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					}
 				}
 			}
+			var actionRepaired bool
+			var actionRepairNotes []string
+			args, actionRepaired, actionRepairNotes = repairToolArgsForAction(toolName, args)
+			argsRepaired = argsRepaired || actionRepaired
+			repairNotes = append(repairNotes, actionRepairNotes...)
 			if argsRepaired && len(repairNotes) == 0 {
 				repairNotes = append(repairNotes, "repaired malformed JSON arguments")
 			}

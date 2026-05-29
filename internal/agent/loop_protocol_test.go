@@ -235,8 +235,10 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "setup-gate")
 	startSetupArgs, err := json.Marshal(map[string]any{
-		"action": "start_setup",
-		"goal":   "Build a CLI puzzle game.",
+		"action":           "start_setup",
+		"goal":             "Build a CLI puzzle game.",
+		"protocol":         "# Loop Protocol\n\nlarge stale draft that should not enter runtime state",
+		"sections_changed": []string{"Goal"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -322,12 +324,30 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 	}
 
 	deadline := time.After(10 * time.Second)
+	sawRepairedStartSetupArgs := false
 	sawSkippedTool := false
 	sawCalibrationQuestion := false
 	for {
 		select {
 		case ev := <-events:
 			switch ev.Type {
+			case sse.TypeToolRequest:
+				var p sse.ToolRequestPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.request: %v", err)
+				}
+				if p.CallID == "lp_start" {
+					if _, ok := p.Args["protocol"]; ok {
+						t.Fatalf("start_setup protocol arg should be repaired out before dispatch: %+v", p)
+					}
+					if _, ok := p.Args["sections_changed"]; ok {
+						t.Fatalf("start_setup sections_changed arg should be repaired out before dispatch: %+v", p)
+					}
+					if !p.ArgsRepaired || !containsString(p.RepairNotes, "dropped action-inapplicable field protocol for loop_protocol action=start_setup") {
+						t.Fatalf("start_setup repair metadata missing: %+v", p)
+					}
+					sawRepairedStartSetupArgs = true
+				}
 			case sse.TypeToolResult:
 				var p sse.ToolResultPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -350,6 +370,9 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 				if err != nil || !found {
 					t.Fatalf("ReadState found=%v err=%v", found, err)
+				}
+				if !sawRepairedStartSetupArgs {
+					t.Fatal("turn ended without repaired start_setup tool request")
 				}
 				if !sawSkippedTool {
 					t.Fatal("expected tool request after start_setup to be skipped until calibration")
