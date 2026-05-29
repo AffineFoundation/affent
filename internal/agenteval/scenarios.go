@@ -2305,7 +2305,7 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			agent.UserModeLoopSetup: 1,
 		},
 		RequiredToolCounts: map[string]int{
-			"loop_protocol": 2,
+			"loop_protocol": 3,
 		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "loop_protocol", Arg: "action", Substring: "patch_draft"},
@@ -2322,9 +2322,10 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			},
 		},
 		MaxToolFailureKindCounts: map[string]int{
-			"loop_protocol_activation_status":  0,
-			"loop_protocol_activation_unready": 0,
-			"loop_protocol_activation_invalid": 0,
+			"loop_protocol_calibration_required": 0,
+			"loop_protocol_activation_status":    0,
+			"loop_protocol_activation_unready":   0,
+			"loop_protocol_activation_invalid":   0,
 		},
 		RequiredLoopProtocolCalibrationRequests: 1,
 		RequiredLoopProtocolCalibrations:        1,

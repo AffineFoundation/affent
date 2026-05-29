@@ -22,7 +22,10 @@ func TestLoopProtocolToolStartsSetupFromChat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start_setup: %v", err)
 	}
-	if !strings.Contains(out, "initialized LOOP.md draft status=draft") || !strings.Contains(out, "ask one concise calibration question") {
+	if !strings.Contains(out, "initialized LOOP.md draft status=draft") ||
+		!strings.Contains(out, "ask one concise calibration question") ||
+		!strings.Contains(out, "after_answer=patch_draft compact existing sections") ||
+		!strings.Contains(out, "patchable_sections=") {
 		t.Fatalf("start_setup output = %q", out)
 	}
 	protocol, found, err := loopstate.ReadProtocol(path)
@@ -41,6 +44,67 @@ func TestLoopProtocolToolStartsSetupFromChat(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Dir(path)); err != nil {
 		t.Fatalf("loop dir not created: %v", err)
+	}
+}
+
+func TestLoopProtocolToolExistingUncalibratedDraftNextActionDoesNotSuggestRead(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "chat-loop")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "chat-loop",
+		OwnerSession: "chat-loop",
+		Goal:         "Run multi-day subnet research with stable recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action": "start_setup",
+		"goal":   "Run multi-day subnet research with stable recovery context.",
+	})))
+	if err != nil {
+		t.Fatalf("start_setup existing draft: %v", err)
+	}
+	if !strings.Contains(out, "setup already exists status=draft") ||
+		!strings.Contains(out, "next=ask one concise calibration question before running more tools or activating") ||
+		!strings.Contains(out, "after_answer=patch_draft compact existing sections") ||
+		strings.Contains(out, "next=read") {
+		t.Fatalf("existing uncalibrated start_setup output = %q", out)
+	}
+}
+
+func TestLoopProtocolToolExistingDraftNextActionTracksCalibrationState(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "chat-loop")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "chat-loop",
+		OwnerSession: "chat-loop",
+		Goal:         "Run multi-day subnet research with stable recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"start_setup","goal":"Run multi-day subnet research with stable recovery context."}`))
+	if err != nil {
+		t.Fatalf("start_setup awaiting answer: %v", err)
+	}
+	if !strings.Contains(out, "next=wait for the user's calibration answer before running more tools or activating") {
+		t.Fatalf("awaiting answer output = %q", out)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Pause when source evidence is unavailable."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	out, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"start_setup","goal":"Run multi-day subnet research with stable recovery context."}`))
+	if err != nil {
+		t.Fatalf("start_setup answered draft: %v", err)
+	}
+	if !strings.Contains(out, "next=patch the saved draft if needed, then call complete_activation without a protocol body") {
+		t.Fatalf("answered draft output = %q", out)
 	}
 }
 
@@ -369,6 +433,39 @@ func TestLoopProtocolToolPatchesDraftBeforeActivation(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolPatchDraftAllowsExistingNonMetadataSections(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID: "longrun",
+		Goal:   "Keep a loop recoverable.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action": "patch_draft",
+		"patches": []map[string]string{{
+			"heading": "## 1. North Star",
+			"body": strings.Join([]string{
+				"Long-term objective:",
+				"",
+				"1. Keep a loop recoverable.",
+				"2. Preserve evidence and stop conditions.",
+				"3. Keep durable state compact.",
+			}, "\n"),
+		}},
+	})))
+	if err != nil {
+		t.Fatalf("patch_draft existing heading: %v", err)
+	}
+	if !strings.Contains(out, "patched LOOP.md draft status=draft") ||
+		!strings.Contains(out, "sections=## 1. North Star") {
+		t.Fatalf("patch output = %q", out)
+	}
+}
+
 func TestLoopProtocolToolPatchDraftRejectsUnknownHeading(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
@@ -387,8 +484,35 @@ func TestLoopProtocolToolPatchDraftRejectsUnknownHeading(t *testing.T) {
 			"body":    "details",
 		}},
 	})))
-	if err == nil || !strings.Contains(err.Error(), "unsupported patch heading") {
+	if err == nil ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_patch_invalid") ||
+		!strings.Contains(err.Error(), "Available sections: ## 1. North Star") {
 		t.Fatalf("patch_draft unknown heading err = %v", err)
+	}
+}
+
+func TestLoopProtocolToolPatchDraftRejectsMetadataSection(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID: "longrun",
+		Goal:   "Keep a loop recoverable.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	_, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action": "patch_draft",
+		"patches": []map[string]string{{
+			"heading": "## 0. Metadata",
+			"body":    "- status: running",
+		}},
+	})))
+	if err == nil ||
+		!strings.Contains(err.Error(), "cannot replace metadata section") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_patch_invalid") {
+		t.Fatalf("patch_draft metadata err = %v", err)
 	}
 }
 

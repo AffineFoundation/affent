@@ -58,9 +58,9 @@ func loopProtocolTool(protocolPath string) *Tool {
             "protocol": {"type": "string", "maxLength": %d, "description": "Full LOOP.md markdown for update_draft or unusual complete_activation structural rewrites. Prefer patch_draft plus complete_activation without protocol for normal setup."},
             "reason": {"type": "string", "maxLength": %d, "description": "Short reason for the protocol update or activation."},
             "sections_changed": {"type": "array", "maxItems": 16, "items": {"type": "string", "minLength": 1, "maxLength": %d}, "description": "Optional LOOP.md section names changed by this update."},
-            "patches": {"type": "array", "maxItems": 4, "items": {"type": "object", "additionalProperties": false, "required": ["heading", "body"], "properties": {"heading": {"type": "string", "enum": ["## 2. Current Situation", "## 5. Rules", "## 7. Evidence And Recovery Index"], "description": "Existing LOOP.md section heading to replace."}, "body": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Compact replacement body for the section."}}}, "description": "Section patches for action=patch_draft. Use this instead of sending the full protocol for ordinary setup supplementation."}
+            "patches": {"type": "array", "maxItems": 4, "items": {"type": "object", "additionalProperties": false, "required": ["heading", "body"], "properties": {"heading": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Existing non-metadata LOOP.md section heading to replace, for example ## 1. North Star, ## 2. Current Situation, ## 5. Rules, or ## 7. Evidence And Recovery Index."}, "body": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Compact replacement body for the section."}}}, "description": "Section patches for action=patch_draft. Use this instead of sending the full protocol for ordinary setup supplementation."}
         }
-    }`, maxLoopProtocolActionBytes, maxLoopProtocolGoalBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes, maxLoopProtocolPatchBodyBytes))
+    }`, maxLoopProtocolActionBytes, maxLoopProtocolGoalBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes, maxLoopProtocolSectionBytes, maxLoopProtocolPatchBodyBytes))
 	return &Tool{
 		Name:         LoopProtocolToolName,
 		Description:  "Start setup, read, patch, update, complete activation, or close this session's LOOP.md. Use during loop activation or long-run protocol maintenance. If the user asks in chat to enable loop and LOOP.md is missing, call start_setup, then ask a concise calibration question. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status. When the loop objective is complete or cannot continue, use action=close with status completed, blocked, or paused.",
@@ -127,9 +127,39 @@ func startLoopProtocolSetup(protocolPath string, p loopProtocolToolArgs) (string
 		if status == "" {
 			status = "unknown"
 		}
-		return fmt.Sprintf("LOOP.md setup already exists status=%s path=%s next=read LOOP.md and ask one concise calibration question if activation is still draft", status, loopstate.ProtocolRelPath(loopIDFromProtocolPath(protocolPath))), nil
+		return fmt.Sprintf("LOOP.md setup already exists status=%s path=%s next=%s%s", status, loopstate.ProtocolRelPath(loopIDFromProtocolPath(protocolPath)), loopProtocolSetupNextAction(state), loopProtocolSetupAffordance(protocolPath, state)), nil
 	}
-	return fmt.Sprintf("initialized LOOP.md draft status=%s event_seq=%d path=%s next=ask one concise calibration question before activation", state.Status, event.Seq, loopstate.ProtocolRelPath(loopIDFromProtocolPath(protocolPath))), nil
+	return fmt.Sprintf("initialized LOOP.md draft status=%s event_seq=%d path=%s next=%s%s", state.Status, event.Seq, loopstate.ProtocolRelPath(loopIDFromProtocolPath(protocolPath)), loopProtocolSetupNextAction(state), loopProtocolSetupAffordance(protocolPath, state)), nil
+}
+
+func loopProtocolSetupNextAction(state loopstate.State) string {
+	switch strings.ToLower(strings.TrimSpace(state.Status)) {
+	case "draft":
+		if state.CalibrationQuestions == 0 {
+			return "ask one concise calibration question before running more tools or activating"
+		}
+		if state.CalibrationQuestions > state.CalibrationAnswers {
+			return "wait for the user's calibration answer before running more tools or activating"
+		}
+		return "patch the saved draft if needed, then call complete_activation without a protocol body"
+	case "running":
+		return "continue with the active loop protocol; close it only when the objective is complete, blocked, or paused"
+	case "completed", "blocked", "paused":
+		return "do not restart automatically; ask the user before reopening or replacing this closed loop"
+	default:
+		return "inspect the saved loop protocol state before changing it"
+	}
+}
+
+func loopProtocolSetupAffordance(protocolPath string, state loopstate.State) string {
+	if strings.ToLower(strings.TrimSpace(state.Status)) != "draft" {
+		return ""
+	}
+	headings, err := loopProtocolPatchableHeadingsFromFile(protocolPath)
+	if err != nil || len(headings) == 0 {
+		return " after_answer=patch_draft compact existing sections, then complete_activation without protocol"
+	}
+	return fmt.Sprintf(" after_answer=patch_draft compact existing sections, then complete_activation without protocol patchable_sections=%q", strings.Join(headings, "; "))
 }
 
 func readLoopProtocolToolResult(protocolPath string) (string, error) {
@@ -149,7 +179,7 @@ func readLoopProtocolToolResult(protocolPath string) (string, error) {
 
 func patchLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (string, error) {
 	if len(p.Patches) == 0 {
-		return "", errors.New("patches are required for patch_draft\nNext: retry with compact patches for Current Situation, Rules, or Evidence And Recovery Index, or use update_draft only when a full rewrite is necessary")
+		return "", errors.New("patches are required for patch_draft\nNext: retry with compact patches for existing non-metadata LOOP.md sections, or use update_draft only when a full rewrite is necessary")
 	}
 	protocol, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil {
@@ -166,8 +196,11 @@ func patchLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (string
 	for _, patch := range p.Patches {
 		heading := strings.TrimSpace(patch.Heading)
 		body := strings.TrimSpace(patch.Body)
-		if !allowedLoopProtocolPatchHeading(heading) {
-			return "", fmt.Errorf("unsupported patch heading %q\nNext: patch only ## 2. Current Situation, ## 5. Rules, or ## 7. Evidence And Recovery Index", heading)
+		if loopProtocolMetadataPatchHeading(heading) {
+			return "", loopProtocolFailure(
+				fmt.Sprintf("patch_draft cannot replace metadata section %q\nNext: patch only non-metadata LOOP.md sections; activation and close actions own status transitions", heading),
+				"loop_protocol_patch_invalid",
+			)
 		}
 		if len([]byte(body)) > maxLoopProtocolPatchBodyBytes {
 			return "", fmt.Errorf("patch body for %s is %d bytes; supports up to %d bytes\nNext: keep LOOP.md sections compact and move detailed history to plan, trace, artifacts, or memory", heading, len([]byte(body)), maxLoopProtocolPatchBodyBytes)
@@ -176,7 +209,10 @@ func patchLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (string
 	}
 	next, changed, err := loopstate.ApplyProtocolSectionPatches(protocol, patches)
 	if err != nil {
-		return "", err
+		return "", loopProtocolFailure(
+			fmt.Sprintf("%v\nNext: retry with exact existing non-metadata LOOP.md section headings. Available sections: %s", err, strings.Join(loopProtocolPatchableHeadings(protocol), "; ")),
+			"loop_protocol_patch_invalid",
+		)
 	}
 	if err := loopstate.WriteProtocol(protocolPath, next); err != nil {
 		return "", err
@@ -191,13 +227,32 @@ func patchLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (string
 	return fmt.Sprintf("patched LOOP.md draft status=%s event_seq=%d updates=%d sections=%s next=call complete_activation without protocol after calibration is recorded and placeholders are resolved", state.Status, event.Seq, state.ProtocolUpdates, strings.Join(changed, ", ")), nil
 }
 
-func allowedLoopProtocolPatchHeading(heading string) bool {
-	switch heading {
-	case "## 2. Current Situation", "## 5. Rules", "## 7. Evidence And Recovery Index":
-		return true
-	default:
-		return false
+func loopProtocolMetadataPatchHeading(heading string) bool {
+	heading = strings.ToLower(strings.TrimSpace(heading))
+	return strings.HasPrefix(heading, "## 0.") || heading == "## metadata"
+}
+
+func loopProtocolPatchableHeadings(protocol string) []string {
+	var headings []string
+	for _, line := range strings.Split(protocol, "\n") {
+		heading := strings.TrimSpace(line)
+		if !strings.HasPrefix(heading, "## ") || loopProtocolMetadataPatchHeading(heading) {
+			continue
+		}
+		headings = append(headings, heading)
 	}
+	if len(headings) == 0 {
+		return []string{"none found"}
+	}
+	return headings
+}
+
+func loopProtocolPatchableHeadingsFromFile(protocolPath string) ([]string, error) {
+	protocol, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		return nil, err
+	}
+	return loopProtocolPatchableHeadings(protocol), nil
 }
 
 func updateLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (string, error) {
