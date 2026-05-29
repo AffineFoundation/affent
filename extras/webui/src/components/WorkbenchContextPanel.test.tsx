@@ -75,14 +75,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Unresolved failure");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Best drilldown");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Run");
-    expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Developer snapshot");
-    expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Current task");
-    expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Workspace");
-    expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Execution");
-    expect(screen.getByTestId("workbench-context-snapshot")).not.toHaveTextContent("Artifact");
-    expect(screen.getByTestId("workbench-context-snapshot")).not.toHaveTextContent("Next step");
-    expect(screen.getByTestId("workbench-context-snapshot")).not.toHaveTextContent("rerun checkout spec");
-    expect(screen.getByTestId("workbench-context-snapshot")).not.toHaveTextContent("Tokens 12k");
+    expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
     expect(screen.getByTestId("workbench-usage-card")).toHaveTextContent("Token usage");
     expect(screen.getByTestId("workbench-usage-card")).toHaveTextContent("Waiting for usage");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
@@ -98,7 +91,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.queryByRole("button", { name: "Copy context" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use context as draft" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Open Execution" }));
+    await user.click(screen.getByRole("button", { name: "Open Verification" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
   });
 
@@ -160,7 +153,7 @@ describe("WorkbenchContextPanel", () => {
     expect(usageCard).toHaveTextContent("Subagent tokens");
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("/home/claudeuser/work/affent");
 
-    await user.click(within(screen.getByTestId("workbench-context-snapshot")).getByRole("button", { name: "Open Workspace" }));
+    await user.click(within(screen.getByTestId("workbench-context-brief")).getByRole("button", { name: "Open Workspace" }));
     expect(onSelectSection).toHaveBeenCalledWith("workspace");
   });
 
@@ -220,7 +213,7 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    expect(screen.getByTestId("workbench-context-snapshot")).toHaveTextContent("Current task");
+    expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
     expect(screen.getByTestId("workbench-context-health")).toHaveTextContent("Context has room");
     expect(screen.getByTestId("workbench-context-health")).toHaveTextContent("41%");
     expect(screen.getByTestId("workbench-context-panel")).not.toHaveTextContent("8 trims");
