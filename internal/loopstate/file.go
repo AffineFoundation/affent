@@ -21,6 +21,15 @@ const (
 	MaxCurrentSituationChars = 1200
 )
 
+const (
+	defaultActivationHardConstraints       = "follow system, user, tool, workspace, and safety policy; preserve evidence requirements."
+	defaultActivationKnownEvidence         = "none recorded yet."
+	defaultActivationRiskOrBlocker         = "none recorded yet."
+	defaultActivationImportantArtifacts    = "none recorded yet."
+	defaultActivationImportantTraceSpans   = "loop initialization."
+	defaultActivationLastKnownRecoveryNote = "reload LOOP.md, plan state, memory search/list, and recent trace before continuing."
+)
+
 type ProtocolTemplateOptions struct {
 	LoopID       string
 	OwnerSession string
@@ -130,9 +139,9 @@ Operational stop conditions:
 Keep this section short: at most 8 bullets or about 1200 characters. It is the compact global snapshot used after long runs, compaction, or session recovery.
 
 - current intent: ` + goal + `
-- hard constraints: follow system, user, tool, workspace, and safety policy; preserve evidence requirements.
-- known evidence: none recorded yet.
-- current risk or blocker: none recorded yet.
+- hard constraints: ` + defaultActivationHardConstraints + `
+- known evidence: ` + defaultActivationKnownEvidence + `
+- current risk or blocker: ` + defaultActivationRiskOrBlocker + `
 - next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing
 
 ## 3. Evolution Protocol
@@ -195,9 +204,9 @@ Keep this section short. Store detailed history in artifacts or trace.
 
 - loop state: state.json and events.jsonl
 - memory lookup: use the memory tool or memory files only for stable facts and lessons
-- important artifacts: none recorded yet.
-- important trace spans: loop initialization.
-- last known recovery note: reload LOOP.md, plan state, memory search/list, and recent trace before continuing.
+- important artifacts: ` + defaultActivationImportantArtifacts + `
+- important trace spans: ` + defaultActivationImportantTraceSpans + `
+- last known recovery note: ` + defaultActivationLastKnownRecoveryNote + `
 `)
 }
 
@@ -292,6 +301,57 @@ func ValidateProtocolActivationReady(protocolPath string) error {
 	return nil
 }
 
+// PrepareProtocolActivation resolves the protocol that should be activated.
+// Activation is a state transition on the saved LOOP.md; a submitted protocol
+// body is accepted only when it is a complete LOOP.md with metadata, so every
+// caller shares the same transition semantics.
+func PrepareProtocolActivation(protocolPath, submittedProtocol string) (string, bool, error) {
+	protocol := strings.TrimSpace(submittedProtocol)
+	ignoredSubmittedProtocol := false
+	if protocol == "" || ProtocolStatus(protocol) == "" {
+		saved, found, err := ReadProtocol(protocolPath)
+		if err != nil {
+			return "", false, err
+		}
+		if !found {
+			return "", false, errors.New("LOOP.md is not initialized for this session")
+		}
+		if protocol != "" {
+			ignoredSubmittedProtocol = true
+		}
+		protocol = saved
+	}
+	status := ProtocolStatus(protocol)
+	switch status {
+	case "draft":
+		next, ok := ProtocolWithStatus(protocol, "running")
+		if !ok {
+			return "", ignoredSubmittedProtocol, errors.New("complete_activation could not update LOOP.md metadata status to running")
+		}
+		protocol = next
+	case "running":
+	default:
+		return "", ignoredSubmittedProtocol, errors.New("complete_activation requires LOOP.md metadata status: draft or running")
+	}
+	return protocol, ignoredSubmittedProtocol, nil
+}
+
+type activationDefaultField struct {
+	name  string
+	value string
+}
+
+func activationDefaultFields() []activationDefaultField {
+	return []activationDefaultField{
+		{name: "hard constraints", value: defaultActivationHardConstraints},
+		{name: "known evidence", value: defaultActivationKnownEvidence},
+		{name: "current risk or blocker", value: defaultActivationRiskOrBlocker},
+		{name: "important artifacts", value: defaultActivationImportantArtifacts},
+		{name: "important trace spans", value: defaultActivationImportantTraceSpans},
+		{name: "last known recovery note", value: defaultActivationLastKnownRecoveryNote},
+	}
+}
+
 // RepairRecordedCalibrationFromProtocol recovers old draft loop state when the
 // full protocol already contains a compact "Calibration Q&A (recorded)"
 // section but state.json missed the corresponding calibration events.
@@ -380,17 +440,13 @@ func recordedCalibrationPairFromLine(line string) (recordedCalibrationPair, bool
 }
 
 func unresolvedActivationPlaceholders(protocol string) []string {
-	blankMarkers := map[string]bool{
-		"- hard constraints:":         true,
-		"- known evidence:":           true,
-		"- current risk or blocker:":  true,
-		"- important artifacts:":      true,
-		"- important trace spans:":    true,
-		"- last known recovery note:": true,
+	blankMarkers := make(map[string]bool, len(activationDefaultFields()))
+	for _, field := range activationDefaultFields() {
+		blankMarkers["- "+strings.ToLower(field.name)+":"] = true
 	}
 	var unresolved []string
 	for _, line := range strings.Split(protocol, "\n") {
-		trimmed := strings.TrimSpace(line)
+		trimmed := strings.ToLower(strings.TrimSpace(line))
 		if blankMarkers[trimmed] {
 			unresolved = append(unresolved, strings.TrimPrefix(trimmed, "- "))
 		}

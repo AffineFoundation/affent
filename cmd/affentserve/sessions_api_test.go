@@ -2940,6 +2940,54 @@ func TestActivateSessionLoopProtocolAcceptsCompletedDraft(t *testing.T) {
 	}
 }
 
+func TestActivateSessionLoopProtocolActivatesSavedCompletedDraftWithoutProtocol(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	sessionID := "loop-saved-draft"
+	protocolPath := sessionLoopProtocolPath(pool, sessionID)
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       sessionID,
+		OwnerSession: sessionID,
+		Goal:         "Keep a long-running implementation loop recoverable.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Pause after tests pass and code is committed."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+
+	body, err := json.Marshal(sessionLoopProtocolUpdateRequest{
+		Activate: true,
+		Reason:   "activate saved completed draft",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/"+sessionID+"/loop-protocol", bytes.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, sessionID) != nil {
+		t.Fatal("POST loop-protocol activation must not reopen an inactive durable session")
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil ||
+		resp.State.Status != "running" ||
+		resp.State.LastEventType != "loop.protocol_activate" ||
+		loopstate.ProtocolStatus(resp.Protocol) != "running" {
+		t.Fatalf("response state/status = %+v protocol status=%q", resp.State, loopstate.ProtocolStatus(resp.Protocol))
+	}
+}
+
 func TestReadSessionLoopProtocolDoesNotRepairRecordedCalibration(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

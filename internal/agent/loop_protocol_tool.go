@@ -229,43 +229,10 @@ func updateLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (strin
 }
 
 func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs) (string, error) {
-	protocol := strings.TrimSpace(p.Protocol)
-	ignoredMalformedProtocol := false
-	if protocol != "" {
-		if loopstate.ProtocolStatus(protocol) == "" {
-			saved, ok, err := savedLoopProtocolForActivation(protocolPath)
-			if err != nil {
-				return "", err
-			}
-			if ok {
-				protocol = saved
-				ignoredMalformedProtocol = true
-			}
-		}
-	} else {
-		var found bool
-		var err error
-		protocol, found, err = loopstate.ReadProtocol(protocolPath)
-		if err != nil {
-			return "", err
-		}
-		if !found {
-			return "", errors.New("LOOP.md is not initialized for this session\nNext: start loop activation before completing activation")
-		}
-	}
-	status := loopstate.ProtocolStatus(protocol)
-	if status == "draft" {
-		var ok bool
-		protocol, ok = loopstate.ProtocolWithStatus(protocol, "running")
-		if !ok {
-			return "", loopProtocolFailure(
-				"complete_activation could not update LOOP.md metadata status to running\n"+loopProtocolActivationStatusNext,
-				loopProtocolActivationStatusFailureKind,
-			)
-		}
-	} else if status != "running" {
+	protocol, ignoredMalformedProtocol, err := loopstate.PrepareProtocolActivation(protocolPath, p.Protocol)
+	if err != nil {
 		return "", loopProtocolFailure(
-			"complete_activation requires LOOP.md metadata status: draft or running\n"+loopProtocolActivationStatusNext,
+			err.Error()+"\n"+loopProtocolActivationStatusNext,
 			loopProtocolActivationStatusFailureKind,
 		)
 	}

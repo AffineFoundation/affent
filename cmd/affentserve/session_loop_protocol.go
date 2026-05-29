@@ -198,46 +198,44 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 	}
 	path := sessionLoopProtocolPath(pool, sessionID)
 	if req.Activate && strings.TrimSpace(req.Protocol) == "" {
-		_, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
-			LoopID:       sessionID,
-			OwnerSession: sessionID,
-			Goal:         req.Goal,
-			Status:       "draft",
-			Plan:         serveLoopProtocolCurrentPlanCheckpoint(filepath.Join(pool.sessionDirPath(sessionID), "plan.json")),
-		})
-		if err != nil {
+		if _, found, err := loopstate.ReadProtocol(path); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+		} else if !found {
+			_, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+				LoopID:       sessionID,
+				OwnerSession: sessionID,
+				Goal:         req.Goal,
+				Status:       "draft",
+				Plan:         serveLoopProtocolCurrentPlanCheckpoint(filepath.Join(pool.sessionDirPath(sessionID), "plan.json")),
+			})
+			if err != nil {
+				return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+			}
+			protocol, summary, statePtr, events, found, err := readSessionLoopProtocol(pool, sessionID)
+			if err != nil {
+				return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+			}
+			if !found || statePtr == nil {
+				return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, os.ErrNotExist
+			}
+			return protocol, summary, *statePtr, events, nil
 		}
-		protocol, summary, statePtr, events, found, err := readSessionLoopProtocol(pool, sessionID)
-		if err != nil {
-			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
-		}
-		if !found || statePtr == nil {
-			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, os.ErrNotExist
-		}
-		return protocol, summary, *statePtr, events, nil
 	}
 	if req.Activate {
-		status := loopstate.ProtocolStatus(req.Protocol)
-		if status == "draft" {
-			var ok bool
-			req.Protocol, ok = loopstate.ProtocolWithStatus(req.Protocol, "running")
-			if !ok {
-				return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate could not update LOOP.md metadata status to running")}
-			}
-		} else if status != "running" {
-			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate requires LOOP.md metadata status draft or running")}
-		}
-		if err := loopstate.ValidateProtocolActivation(req.Protocol); err != nil {
+		protocol, _, err := loopstate.PrepareProtocolActivation(path, req.Protocol)
+		if err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
 		}
-		if _, err := loopstate.RepairRecordedCalibrationFromProtocol(path, req.Protocol); err != nil {
+		if err := loopstate.ValidateProtocolActivation(protocol); err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
+		}
+		if _, err := loopstate.RepairRecordedCalibrationFromProtocol(path, protocol); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 		}
 		if err := loopstate.ValidateProtocolActivationReady(path); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
 		}
-		if err := loopstate.WriteProtocol(path, req.Protocol); err != nil {
+		if err := loopstate.WriteProtocol(path, protocol); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 		}
 		if _, _, err := loopstate.RecordProtocolActivation(path, req.Reason); err != nil {
