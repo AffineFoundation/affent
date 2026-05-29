@@ -23,6 +23,7 @@ const (
 	maxSessionFileReadLimit     = 1024 * 1024
 	defaultSessionDirListLimit  = 200
 	maxSessionDirListLimit      = 500
+	maxSessionFileWriteBytes    = 2 * 1024 * 1024
 )
 
 type sessionFileResponse struct {
@@ -45,6 +46,11 @@ type sessionFileEntry struct {
 	ModTime string `json:"mod_time,omitempty"`
 }
 
+type sessionFileWriteRequest struct {
+	Path string `json:"path"`
+	Text string `json:"text"`
+}
+
 func handleSessionFiles(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
 	if pool == nil {
 		writeJSONError(w, http.StatusNotFound, "session not found", nil)
@@ -61,6 +67,10 @@ func handleSessionFiles(pool *SessionPool, sessionID string, w http.ResponseWrit
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "open workspace", err)
+		return
+	}
+	if r.Method == http.MethodPost {
+		handleSessionFileWrite(sessionID, workspace, w, r)
 		return
 	}
 	rel, err := cleanSessionFileRequestPath(r.URL.Query().Get("path"))
@@ -88,6 +98,66 @@ func handleSessionFiles(pool *SessionPool, sessionID string, w http.ResponseWrit
 	}
 	if info.IsDir() {
 		handleSessionFileDirectory(sessionID, full, rel, info, w, r)
+		return
+	}
+	handleSessionFileRead(sessionID, full, rel, info, w, r)
+}
+
+func handleSessionFileWrite(sessionID, workspace string, w http.ResponseWriter, r *http.Request) {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSessionFileWriteBytes+4096))
+	dec.DisallowUnknownFields()
+	var req sessionFileWriteRequest
+	if err := dec.Decode(&req); err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid file upload", err, "bad_request")
+		return
+	}
+	var extra map[string]any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid file upload", errors.New("request body must contain exactly one JSON object"), "bad_request")
+		return
+	}
+	rel, err := cleanSessionFileRequestPath(req.Path)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid file path", err, "bad_request")
+		return
+	}
+	if rel == "." {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "upload path must be a file", nil, "bad_request")
+		return
+	}
+	if len([]byte(req.Text)) > maxSessionFileWriteBytes {
+		writeJSONErrorTyped(w, http.StatusRequestEntityTooLarge, "file upload too large", nil, "payload_too_large")
+		return
+	}
+	full, err := resolveSessionWorkspacePath(workspace, rel)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid file path", err, "bad_request")
+		return
+	}
+	if info, err := os.Lstat(full); err == nil {
+		if info.IsDir() {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "upload path is a directory", nil, "bad_request")
+			return
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "workspace path must not be a symlink", nil, "bad_request")
+			return
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		writeJSONError(w, http.StatusInternalServerError, "stat file", err)
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "create parent directory", err)
+		return
+	}
+	if err := os.WriteFile(full, []byte(req.Text), 0o644); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "write file", err)
+		return
+	}
+	info, err := os.Lstat(full)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "stat file", err)
 		return
 	}
 	handleSessionFileRead(sessionID, full, rel, info, w, r)

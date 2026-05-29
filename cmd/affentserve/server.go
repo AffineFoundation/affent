@@ -145,7 +145,7 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionTranscripts(pool, sessionID, strings.TrimPrefix(sub, "transcripts"), w, r)
 		case (sub == "artifacts" || strings.HasPrefix(sub, "artifacts/")) && r.Method == http.MethodGet:
 			handleSessionArtifacts(pool, sessionID, strings.TrimPrefix(sub, "artifacts"), w, r)
-		case sub == "files" && r.Method == http.MethodGet:
+		case sub == "files" && (r.Method == http.MethodGet || r.Method == http.MethodPost):
 			handleSessionFiles(pool, sessionID, w, r)
 		case sub == "messages" && r.Method == http.MethodPost:
 			handleSessionMessage(pool, sessionID, w, r)
