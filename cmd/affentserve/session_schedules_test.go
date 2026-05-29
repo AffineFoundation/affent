@@ -11,10 +11,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -115,6 +117,98 @@ func TestSessionPool_ScheduleLoopSweepsDueSchedulesOnStartup(t *testing.T) {
 	})
 	if schedule.Enabled || schedule.LastError != "" {
 		t.Fatalf("schedule = %+v, want one-shot startup schedule completed without waiting for first ticker interval", schedule)
+	}
+}
+
+func TestSessionPool_StartupScheduleRestoresActiveWorkspace(t *testing.T) {
+	memRoot := t.TempDir()
+	workspaceRoot := t.TempDir()
+	sessionID := "startup-workspace"
+	sessionDir := filepath.Join(memRoot, sessionID)
+	project := filepath.Join(workspaceRoot, "app")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(project, "marker.txt"), []byte("scheduled-workspace-marker\n"), 0o644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+	if err := sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
+		SessionID:     sessionID,
+		WorkspaceRoot: workspaceRoot,
+		WorkspacePath: project,
+	}); err != nil {
+		t.Fatalf("write session metadata: %v", err)
+	}
+	now := time.Now().UTC()
+	if err := writeSessionSchedulesFile(filepath.Join(sessionDir, sessionSchedulesFileName), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{{
+			ID:          "sched_workspace",
+			Kind:        sessionScheduleKindCustom,
+			Prompt:      "Read marker.txt from the active project workspace.",
+			DisplayText: "Read project marker",
+			Enabled:     true,
+			NextRunAt:   now.Add(-time.Minute).Format(time.RFC3339),
+			CreatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+			UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+		}},
+	}); err != nil {
+		t.Fatalf("write startup schedule: %v", err)
+	}
+
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch calls.Add(1) {
+		case 1:
+			streamToolCall(t, w, "read_marker", "shell", `{"command":"pwd; cat marker.txt","timeout_sec":5}`)
+		case 2:
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"role":"assistant","content":"Read marker from active project workspace."},"finish_reason":"stop"}]}`+"\n\n")
+		default:
+			t.Errorf("unexpected LLM call %d", calls.Load())
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"role":"assistant","content":"unexpected"},"finish_reason":"stop"}]}`+"\n\n")
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    8,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  workspaceRoot,
+		MemoryRoot:     memRoot,
+		BaseURL:        srv.URL,
+		APIKey:         "test",
+		Model:          "fake",
+		EnableBuiltins: true,
+		MaxTurnSteps:   4,
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	schedule := waitSchedule(t, pool, sessionID, "sched_workspace", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
+	if schedule.Enabled || schedule.LastError != "" {
+		t.Fatalf("schedule = %+v, want one-shot active-workspace schedule completed", schedule)
+	}
+	sess := activeSessionByID(pool, sessionID)
+	if sess == nil {
+		t.Fatal("scheduled startup turn should reopen the durable session")
+	}
+	if sess.Workspace() != project {
+		t.Fatalf("active workspace = %q, want restored project %q", sess.Workspace(), project)
+	}
+	userMessage := waitScheduleUserMessage(t, pool, sessionID)
+	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_workspace" || userMessage.DisplayText != "Read project marker" {
+		t.Fatalf("user.message = %+v, want scheduled provenance", userMessage)
+	}
+	result := waitScheduleToolResult(t, pool, sessionID, "read_marker")
+	if !strings.Contains(result.Result, "scheduled-workspace-marker") || !strings.Contains(result.Result, "[exit 0]") {
+		t.Fatalf("scheduled shell result did not read marker from active workspace:\n%s", result.Result)
 	}
 }
 
@@ -485,4 +579,29 @@ func waitScheduleUserMessage(t *testing.T, pool *SessionPool, sessionID string) 
 	}
 	t.Fatalf("timed out waiting for schedule user.message in %s", sessionID)
 	return sse.UserMessagePayload{}
+}
+
+func waitScheduleToolResult(t *testing.T, pool *SessionPool, sessionID, callID string) sse.ToolResultPayload {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		history, err := readSessionHistory(pool.sessionDirPath(sessionID), sessionID, -1, 100)
+		if err == nil {
+			for _, ev := range history.Events {
+				if ev.Type != sse.TypeToolResult {
+					continue
+				}
+				var payload sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &payload); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if payload.CallID == callID {
+					return payload
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for schedule tool.result %s in %s", callID, sessionID)
+	return sse.ToolResultPayload{}
 }
