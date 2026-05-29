@@ -13239,12 +13239,15 @@ pre.code {
   flex-direction: column;
   height: calc(100vh - 330px);
   max-height: none;
-  overflow: hidden;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-width: thin;
 }
 
 .workbench-tab-surface > .session-trace-panel[open] .session-trace-results {
-  flex: 1 1 0;
-  max-height: none;
+  flex: 0 0 auto;
+  max-height: min(44vh, 520px);
   min-height: 180px;
 }
 
