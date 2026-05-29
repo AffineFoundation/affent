@@ -1018,6 +1018,12 @@ When rolling compaction later summarizes the session, `run_task` and
 (`summary`/`findings` or `report` plus bounded metadata and tool-call names)
 instead of raw JSON, so long sessions preserve the evidence the parent acted on
 without paying to re-summarize child transcripts or bulky response metadata.
+Before each model call, the loop also estimates request input pressure from
+the conversation plus currently registered tool schemas. If that estimate
+crosses the compaction input-token trigger, it performs proactive rolling
+compaction with reason `estimated_context_pressure`; this covers sessions where
+tool schemas or a few large messages would approach the model window before the
+message-count trigger fires.
 Compacted plan tool results also include the same `plan:x/y:status` label so
 post-compaction recovery can identify current progress even if natural-language
 step text was shortened.

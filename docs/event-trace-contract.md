@@ -332,7 +332,8 @@ the model to answer without more tools.
   message counts before and after the rewrite.
 - `reactive`: true when compaction happened after an upstream context-overflow
   rejection; false for proactive threshold compaction.
-- `reason`: compact reason, currently `threshold` or `context_overflow`.
+- `reason`: compact reason, currently `threshold`, `estimated_context_pressure`,
+  `input_budget_pressure`, or `context_overflow`.
 - `summary_present`, `summary_bytes`, `summary_preview`: bounded diagnostics
   for the rolling summary inserted back into model context. `summary_present`
   is emitted even when false so consumers can distinguish a confirmed missing

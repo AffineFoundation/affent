@@ -51,6 +51,12 @@ const DefaultSummaryTriggerMsgs = 240
 // fully represented in the persisted conversation byte count.
 const DefaultSummaryTriggerBytes = 192 * 1024
 
+// DefaultSummaryTriggerInputTokens is the request-level companion to
+// DefaultSummaryTriggerBytes. It lets the loop include tool schemas in
+// pre-call pressure checks while reusing the same conservative byte heuristic
+// when provider token usage is not available before the request.
+const DefaultSummaryTriggerInputTokens = DefaultSummaryTriggerBytes / 4
+
 // DefaultSummaryKeepLast is the OpenHands V1 keep_last value (10).
 const DefaultSummaryKeepLast = 10
 

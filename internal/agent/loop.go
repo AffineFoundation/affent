@@ -116,6 +116,11 @@ type Loop struct {
 	// provider for one user turn. Zero uses DefaultMaxTurnInputTokens; negative
 	// disables the budget for backends that do not report reliable usage.
 	MaxTurnInputTokens int
+	// CompactTriggerInputTokens proactively compacts before a model call when
+	// the estimated request input, including tool schemas, reaches this limit.
+	// Zero derives from the configured LLMSummaryCompactor byte trigger; negative
+	// disables this request-pressure trigger.
+	CompactTriggerInputTokens int
 
 	// ToolResultMaxBytesInContext caps the tool result bytes persisted
 	// into conversation history for subsequent LLM calls. Zero uses
@@ -3075,7 +3080,9 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 		// Proactive compaction: shrink before the call when the log is
 		// long enough. The Compactor decides if it actually does work
 		// (LLMSummaryCompactor short-circuits below TriggerMsgs).
-		l.maybeCompact(ctx, turnID, false)
+		if !l.maybeCompact(ctx, turnID, false) {
+			l.maybeCompactForRequestPressure(ctx, turnID, toolDefs)
+		}
 
 		callCtx, callCancel := context.WithTimeout(ctx, timeout)
 		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), toolDefs)
@@ -3187,6 +3194,41 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 
 func (l *Loop) maybeCompactForBudgetPressure(ctx context.Context, turnID string) bool {
 	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure")
+}
+
+func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string, toolDefs []ToolDef) bool {
+	limit := l.compactTriggerInputTokens()
+	if limit <= 0 {
+		return false
+	}
+	estimated := estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+	if estimated < limit {
+		return false
+	}
+	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure")
+	if compacted {
+		l.Log.Info().
+			Int("estimated_input_tokens", estimated).
+			Int("trigger_input_tokens", limit).
+			Msg("conversation compacted before request input pressure")
+	}
+	return compacted
+}
+
+func (l *Loop) compactTriggerInputTokens() int {
+	if l.CompactTriggerInputTokens < 0 {
+		return 0
+	}
+	if l.CompactTriggerInputTokens > 0 {
+		return l.CompactTriggerInputTokens
+	}
+	if c, ok := l.Compactor.(*LLMSummaryCompactor); ok && c.TriggerBytes > 0 {
+		if c.TriggerBytes == DefaultSummaryTriggerBytes {
+			return DefaultSummaryTriggerInputTokens
+		}
+		return max(1, (c.TriggerBytes+3)/4)
+	}
+	return 0
 }
 
 func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string) bool {

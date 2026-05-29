@@ -989,6 +989,57 @@ func TestLoopMaybeCompactAcceptsByteReductionWithoutMessageReduction(t *testing.
 	}
 }
 
+func TestLoopMaybeCompactForRequestPressureIncludesToolSchemas(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "initial task"},
+		{Role: "assistant", Content: "historical progress"},
+		{Role: "user", Content: "continue"},
+	}
+	if err := conv.Replace(msgs); err != nil {
+		t.Fatal(err)
+	}
+	var toolDef ToolDef
+	toolDef.Type = "function"
+	toolDef.Function.Name = "large_schema_tool"
+	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
+	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	events := make(chan sse.Event, 8)
+	loop := &Loop{
+		Conv:                      conv,
+		Events:                    events,
+		CompactTriggerInputTokens: 32,
+		Compactor:                 sameCountByteCompactor{},
+	}
+
+	if !loop.maybeCompactForRequestPressure(context.Background(), "turn-pressure", []ToolDef{toolDef}) {
+		t.Fatal("request-pressure compaction should run when tool schemas push estimated input tokens over the trigger")
+	}
+
+	var payload sse.ContextCompactPayload
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeContextCompact {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompact)
+		}
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode context.compacted: %v", err)
+		}
+	default:
+		t.Fatal("expected context.compacted event")
+	}
+	if payload.Reactive || payload.Reason != "estimated_context_pressure" {
+		t.Fatalf("payload = %+v, want proactive estimated_context_pressure", payload)
+	}
+	if got := conv.Snapshot(); len(got) != 3 || !strings.Contains(got[1].Content, "short summary") {
+		t.Fatalf("conversation was not compacted through request pressure: %+v", got)
+	}
+}
+
 // Rolling: a second compaction pass should detect the existing summary
 // (left by the first pass), not start over from msg #1.
 func TestCompact_RollingDoesNotMultiplySummary(t *testing.T) {
