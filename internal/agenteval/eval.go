@@ -1460,7 +1460,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
 	if scenario.ExpectedSkill != "" {
-		if err := checkConversationSkill(workspace, scenario.ExpectedSkill); err != nil {
+		if err := checkConversationSkill(workspace, scenario.ExpectedSkill, parsedTrace); err != nil {
 			res.Failures = append(res.Failures, err.Error())
 		}
 	}
@@ -3843,7 +3843,17 @@ func CheckBatchTrace(trace Trace, scenario BatchScenario) []string {
 	return failures
 }
 
-func checkConversationSkill(workspace, skill string) error {
+func checkConversationSkill(workspace, skill string, trace *Trace) error {
+	if trace != nil {
+		for _, injection := range trace.ContextInjections {
+			if injection.Source == "skill" &&
+				(strings.Contains(injection.Preview, skill) ||
+					strings.Contains(injection.Summary, skill) ||
+					strings.Contains(injection.Name, skill)) {
+				return nil
+			}
+		}
+	}
 	root := filepath.Join(workspace, ".affentctl")
 	found := false
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {

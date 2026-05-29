@@ -31,25 +31,27 @@ const (
 )
 
 type ProtocolTemplateOptions struct {
-	LoopID       string
-	OwnerSession string
-	Goal         string
-	Workspace    string
-	Status       string
-	Plan         PlanCheckpoint
-	Stop         []string
-	CreatedAt    time.Time
+	LoopID             string
+	OwnerSession       string
+	Goal               string
+	Workspace          string
+	Status             string
+	FinalizationPolicy string
+	Plan               PlanCheckpoint
+	Stop               []string
+	CreatedAt          time.Time
 }
 
 type Summary struct {
-	Path         string `json:"path,omitempty"`
-	LoopID       string `json:"loop_id,omitempty"`
-	OwnerSession string `json:"owner_session,omitempty"`
-	Status       string `json:"status,omitempty"`
-	UpdatedAt    string `json:"updated_at,omitempty"`
-	Bytes        int    `json:"bytes"`
-	Preview      string `json:"preview,omitempty"`
-	State        *State `json:"state,omitempty"`
+	Path               string `json:"path,omitempty"`
+	LoopID             string `json:"loop_id,omitempty"`
+	OwnerSession       string `json:"owner_session,omitempty"`
+	Status             string `json:"status,omitempty"`
+	FinalizationPolicy string `json:"finalization_policy,omitempty"`
+	UpdatedAt          string `json:"updated_at,omitempty"`
+	Bytes              int    `json:"bytes"`
+	Preview            string `json:"preview,omitempty"`
+	State              *State `json:"state,omitempty"`
 }
 
 type ProtocolSectionPatch struct {
@@ -102,6 +104,10 @@ func DefaultProtocolTemplate(opts ProtocolTemplateOptions) string {
 	if status == "" {
 		status = "running"
 	}
+	finalizationPolicy := templateFinalizationPolicy(opts.FinalizationPolicy)
+	if finalizationPolicy == "" {
+		finalizationPolicy = "keep_running"
+	}
 	planBlock := protocolTemplatePlanBlock(opts.Plan)
 	stopBlock := protocolTemplateStopBlock(opts.Stop)
 	return strings.TrimSpace(`# Loop Protocol: ` + templateLine(loopID) + `
@@ -111,6 +117,7 @@ func DefaultProtocolTemplate(opts ProtocolTemplateOptions) string {
 - loop_id: ` + templateLine(loopID) + `
 - owner_session: ` + templateLine(owner) + `
 - status: ` + status + `
+- finalization_policy: ` + finalizationPolicy + `
 - protocol_version: 1
 - created_at: ` + formatTime(createdAt) + `
 - updated_at: ` + formatTime(createdAt) + `
@@ -1033,6 +1040,8 @@ func SummarizeFile(path, relPath string) (Summary, bool, error) {
 			summary.OwnerSession = value
 		case "status":
 			summary.Status = value
+		case "finalization_policy":
+			summary.FinalizationPolicy = templateFinalizationPolicy(value)
 		}
 	}
 	if state, found, err := ReadState(filepath.Join(filepath.Dir(path), StateFileName)); err != nil {
@@ -1062,6 +1071,17 @@ func ProtocolStatus(content string) string {
 			continue
 		}
 		return templateStatus(value)
+	}
+	return ""
+}
+
+func ProtocolFinalizationPolicy(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		key, value, ok := parseMetadataLine(line)
+		if !ok || key != "finalization_policy" {
+			continue
+		}
+		return templateFinalizationPolicy(value)
 	}
 	return ""
 }
@@ -1172,6 +1192,17 @@ func templateStatus(s string) string {
 	s = strings.ToLower(templateLine(s))
 	switch s {
 	case "draft", "running", "paused", "stopping", "completed", "blocked", "disabled":
+		return s
+	default:
+		return ""
+	}
+}
+
+func templateFinalizationPolicy(s string) string {
+	s = strings.ToLower(templateLine(s))
+	s = strings.ReplaceAll(s, "-", "_")
+	switch s {
+	case "keep_running", "require_close_before_final":
 		return s
 	default:
 		return ""

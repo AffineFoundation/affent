@@ -1394,6 +1394,7 @@ func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 
 - loop_id: plan-loop
 - status: running
+- finalization_policy: require_close_before_final
 - north_star: preserve durable loop protocol state.
 `), 0o644); err != nil {
 		t.Fatal(err)

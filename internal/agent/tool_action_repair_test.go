@@ -115,6 +115,93 @@ func TestRepairPlanArgsForActionInfersUpdate(t *testing.T) {
 	}
 }
 
+func TestRepairPlanArgsForActionInfersBatchUpdate(t *testing.T) {
+	args := json.RawMessage(`{
+		"updates": [
+			{"index": 1, "status": "completed"},
+			{"index": 2, "status": "in_progress"}
+		]
+	}`)
+	got, repaired, notes := repairToolArgsForAction(PlanToolName, args)
+	if !repaired {
+		t.Fatal("expected missing plan batch update action to be repaired")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v", err)
+	}
+	if obj["action"] != "update" || obj["updates"] == nil {
+		t.Fatalf("required batch update args were not preserved: %s", got)
+	}
+	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "action=update") {
+		t.Fatalf("repair notes should explain inferred batch update action: %v", notes)
+	}
+}
+
+func TestRepairPlanArgsForActionDecodesStringifiedBatchUpdate(t *testing.T) {
+	args := json.RawMessage(`{
+		"action": "update",
+		"updates": "[{\"index\": 4, \"status\": \"completed\", \"evidence\": [\"git status clean\"]}]"
+	}`)
+	got, repaired, notes := repairToolArgsForAction(PlanToolName, args)
+	if !repaired {
+		t.Fatal("expected stringified plan updates to be repaired")
+	}
+	var obj struct {
+		Action  string       `json:"action"`
+		Updates []planUpdate `json:"updates"`
+	}
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v\n%s", err, got)
+	}
+	if obj.Action != "update" || len(obj.Updates) != 1 || obj.Updates[0].Index != 4 || obj.Updates[0].Status != "completed" {
+		t.Fatalf("decoded updates not preserved: %+v args=%s", obj, got)
+	}
+	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "decoded stringified JSON array field updates") {
+		t.Fatalf("repair notes should explain decoded updates: %v", notes)
+	}
+}
+
+func TestRepairPlanArgsForActionCompletesStringifiedBatchUpdateArray(t *testing.T) {
+	args := json.RawMessage(`{
+		"updates": "\n[{\"index\": 4, \"status\": \"completed\", \"evidence\": [\"git status clean\"]}\n"
+	}`)
+	got, repaired, notes := repairToolArgsForAction(PlanToolName, args)
+	if !repaired {
+		t.Fatal("expected unterminated stringified plan updates array to be repaired")
+	}
+	var obj struct {
+		Action  string       `json:"action"`
+		Updates []planUpdate `json:"updates"`
+	}
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v\n%s", err, got)
+	}
+	if obj.Action != "update" || len(obj.Updates) != 1 || obj.Updates[0].Index != 4 {
+		t.Fatalf("decoded updates not preserved: %+v args=%s notes=%v", obj, got, notes)
+	}
+}
+
+func TestRepairPlanArgsForActionTrimsObjectSuffixFromStringifiedBatchUpdate(t *testing.T) {
+	args := json.RawMessage(`{
+		"updates": "\n[{\"index\": 4, \"status\": \"completed\"}, {\"index\": 5, \"status\": \"completed\"}]}\n"
+	}`)
+	got, repaired, _ := repairToolArgsForAction(PlanToolName, args)
+	if !repaired {
+		t.Fatal("expected object-suffixed stringified plan updates array to be repaired")
+	}
+	var obj struct {
+		Action  string       `json:"action"`
+		Updates []planUpdate `json:"updates"`
+	}
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v\n%s", err, got)
+	}
+	if obj.Action != "update" || len(obj.Updates) != 2 || obj.Updates[1].Index != 5 {
+		t.Fatalf("decoded updates not preserved: %+v args=%s", obj, got)
+	}
+}
+
 func TestRepairPlanArgsForActionInfersSet(t *testing.T) {
 	args := json.RawMessage(`{
 		"steps": [
@@ -135,6 +222,24 @@ func TestRepairPlanArgsForActionInfersSet(t *testing.T) {
 	}
 	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "action=set") {
 		t.Fatalf("repair notes should explain inferred set action: %v", notes)
+	}
+}
+
+func TestRepairMemoryArgsForActionInfersSearch(t *testing.T) {
+	args := json.RawMessage(`{"query":"AUTO-MEM-64 JSON","topic":"conventions"}`)
+	got, repaired, notes := repairToolArgsForAction(MemoryToolName, args)
+	if !repaired {
+		t.Fatal("expected missing memory search action to be repaired")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v", err)
+	}
+	if obj["action"] != memoryActionSearch || obj["query"] != "AUTO-MEM-64 JSON" {
+		t.Fatalf("required search args were not preserved: %s", got)
+	}
+	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "action=search") || !strings.Contains(joined, MemoryToolName) {
+		t.Fatalf("repair notes should explain inferred memory action: %v", notes)
 	}
 }
 

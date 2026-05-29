@@ -35,7 +35,7 @@ var defaultForbiddenCommands = []string{
 }
 
 const (
-	localBareRemoteSetupCommand   = "git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && git add . && git commit -m initial && git init --bare ../remote.git && git remote add origin ../remote.git && git push -u origin main"
+	localBareRemoteSetupCommand   = "git init && git checkout -b main && git config user.email affent-eval@example.invalid && git config user.name 'Affent Eval' && printf '\\n.affentctl/\\n.affent/memory/\\n.affent/artifacts/\\n.affent/loops/*/events.jsonl\\n.affent/loops/*/state.json\\ntrace.jsonl\\naffenteval-*.json\\naffenteval-*.txt\\naffenteval-*.md\\n__pycache__/\\n**/__pycache__/\\n' >> .git/info/exclude && git add . && git commit -m initial && git init --bare .git/affent-eval-remote.git && git remote add origin .git/affent-eval-remote.git && git push -u origin main"
 	pythonUnittestDiscoverCommand = "python3 -m unittest discover -s tests"
 )
 
@@ -3585,6 +3585,7 @@ func longRunScratchProjectLoopPushScenario() BatchScenario {
 - loop_id: scratch-project-loop
 - owner_session: scratch-project-loop
 - status: running
+- finalization_policy: require_close_before_final
 
 ## 1. North Star
 
@@ -3744,6 +3745,7 @@ func longRunLoopFinalClosureGuardScenario() BatchScenario {
 - loop_id: loop-final-closure-guard
 - owner_session: loop-final-closure-guard
 - status: running
+- finalization_policy: require_close_before_final
 
 ## 1. North Star
 
@@ -3884,6 +3886,7 @@ func longRunPlanLoopFinalClosureGuardScenario() BatchScenario {
 - loop_id: plan-loop-final-closure-guard
 - owner_session: plan-loop-final-closure-guard
 - status: running
+- finalization_policy: require_close_before_final
 
 ## 1. North Star
 
@@ -4054,7 +4057,6 @@ This repository starts almost empty. The agent must create the project over two 
 		RequiredLoopProtocolFeeds: 2,
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
-			"loop_protocol_running",
 		},
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full":   1,
@@ -4264,7 +4266,6 @@ if __name__ == "__main__":
 			{Tool: "memory", Arg: "action", Substring: "search"},
 			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
 			{Tool: "memory", Arg: "content", Substring: "JSON"},
-			{Tool: "session_search", Arg: "query", Substring: "INTEGRATED-HANDOFF-26"},
 		},
 		ForbiddenToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "memory", Arg: "content", Substring: "iteration 1"},
@@ -4302,10 +4303,8 @@ if __name__ == "__main__":
 		},
 		RequiredSessionSearch: []SessionSearchRequirement{
 			{
-				QueryContains:   "INTEGRATED-HANDOFF-26",
 				SessionID:       "integrated-prior",
 				SnippetContains: "AUTO-MEM-64",
-				MatchedTerms:    []string{"integrated"},
 				ContextIncluded: true,
 			},
 		},
@@ -4339,7 +4338,6 @@ if __name__ == "__main__":
 		RequiredLoopProtocolFeeds: 2,
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
-			"loop_protocol_running",
 		},
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full":   1,

@@ -34,13 +34,22 @@ const (
 )
 
 type planToolArgs struct {
-	Action   string     `json:"action"`
-	Steps    []planStep `json:"steps"`
-	Index    int        `json:"index"`
-	Status   string     `json:"status"`
-	Text     string     `json:"text"`
-	Evidence []string   `json:"evidence"`
-	Note     string     `json:"note"`
+	Action   string       `json:"action"`
+	Steps    []planStep   `json:"steps"`
+	Updates  []planUpdate `json:"updates"`
+	Index    int          `json:"index"`
+	Status   string       `json:"status"`
+	Text     string       `json:"text"`
+	Evidence []string     `json:"evidence"`
+	Note     string       `json:"note"`
+}
+
+type planUpdate struct {
+	Index    int      `json:"index"`
+	Status   string   `json:"status"`
+	Text     string   `json:"text"`
+	Evidence []string `json:"evidence"`
+	Note     string   `json:"note"`
 }
 
 type planState struct {
@@ -51,6 +60,7 @@ type planState struct {
 }
 
 type planStep struct {
+	Index    int      `json:"index,omitempty"`
 	Text     string   `json:"text"`
 	Status   string   `json:"status"`
 	Evidence []string `json:"evidence,omitempty"`
@@ -63,15 +73,16 @@ func planTool(path string) *Tool {
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "enum": ["view", "set", "update", "clear"], "description": "view returns the current plan; set creates a plan when no active unfinished plan exists; update changes one step by 1-based index; clear removes the active plan."},
-            "steps": {"type": "array", "minItems": 1, "maxItems": %d, "items": {"type": "object", "additionalProperties": false, "required": ["text"], "properties": {"text": {"type": "string", "minLength": 1, "maxLength": %d}, "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"]}, "evidence": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}}, "note": {"type": "string", "maxLength": %d}}}},
-            "index": {"type": "integer", "minimum": 1, "maximum": %d, "description": "1-based step index for update."},
+            "action": {"type": "string", "enum": ["view", "set", "update", "clear"], "description": "view returns the current plan; set creates a plan when no active unfinished plan exists; update changes one or more steps; clear removes the active plan."},
+			"steps": {"type": "array", "minItems": 1, "maxItems": %d, "items": {"type": "object", "additionalProperties": false, "required": ["text"], "properties": {"index": {"type": "integer", "minimum": 1, "maximum": %d, "description": "Optional ordinal label accepted for model ergonomics; storage derives order from the array."}, "text": {"type": "string", "minLength": 1, "maxLength": %d}, "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"]}, "evidence": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}}, "note": {"type": "string", "maxLength": %d}}}},
+            "updates": {"type": "array", "minItems": 1, "maxItems": %d, "description": "Batch step updates for action=update; prefer this when completing one step and starting or closing another in the same turn.", "items": {"type": "object", "additionalProperties": false, "required": ["index"], "properties": {"index": {"type": "integer", "minimum": 1, "maximum": %d}, "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"]}, "text": {"type": "string", "minLength": 1, "maxLength": %d}, "evidence": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}}, "note": {"type": "string", "maxLength": %d}}}},
+            "index": {"type": "integer", "minimum": 1, "maximum": %d, "description": "1-based step index for single-step update."},
             "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"], "description": "Replacement status for update."},
             "text": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Replacement step text for update."},
             "evidence": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}, "description": "Replacement evidence refs for update."},
             "note": {"type": "string", "maxLength": %d, "description": "Replacement note for update."}
         }
-    }`, maxPlanSteps, maxPlanStepTextBytes, maxPlanEvidence, maxPlanEvidenceBytes, maxPlanNoteBytes, maxPlanSteps, maxPlanStepTextBytes, maxPlanEvidence, maxPlanEvidenceBytes, maxPlanNoteBytes))
+	}`, maxPlanSteps, maxPlanSteps, maxPlanStepTextBytes, maxPlanEvidence, maxPlanEvidenceBytes, maxPlanNoteBytes, maxPlanSteps, maxPlanSteps, maxPlanStepTextBytes, maxPlanEvidence, maxPlanEvidenceBytes, maxPlanNoteBytes, maxPlanSteps, maxPlanStepTextBytes, maxPlanEvidence, maxPlanEvidenceBytes, maxPlanNoteBytes))
 
 	var mu sync.Mutex
 	return &Tool{
@@ -133,25 +144,20 @@ func planTool(path string) *Tool {
 				if len(st.Steps) == 0 {
 					return "", errors.New("no active plan to update\nNext: call plan with action=set and concise steps before updating a step")
 				}
-				if !present["index"] {
-					return "", errors.New("index is required when action=update\nNext: call plan with action=view, then retry with a valid 1-based index")
-				}
-				if p.Index < 1 || p.Index > len(st.Steps) {
-					return "", fmt.Errorf("index %d is outside the current plan length %d\nNext: call plan with action=view, then update a valid 1-based index", p.Index, len(st.Steps))
-				}
-				changed, err := applyPlanUpdate(&st.Steps[p.Index-1], p, present)
+				changed, updated, err := applyPlanToolUpdate(&st, p, present)
 				if err != nil {
 					return "", err
 				}
 				if !changed {
-					return "", errors.New("update requires at least one of status, text, evidence, or note\nNext: retry with the step field you intend to change")
+					return "", errors.New("update requires at least one of status, text, evidence, note, or updates\nNext: retry with the step field you intend to change")
 				}
+				autoAdvancePlan(&st)
 				steps, err := normalizePlanSteps(st.Steps)
 				if err != nil {
 					return "", err
 				}
 				st.Steps = steps
-				st = newPlanState(st.Steps, fmt.Sprintf("updated step %d", p.Index))
+				st = newPlanState(st.Steps, planUpdateMessage(updated))
 				if err := writePlanState(path, st); err != nil {
 					return "", err
 				}
@@ -195,6 +201,7 @@ func rejectUnusedPlanArgs(action string, present map[string]bool) error {
 	case "set":
 		allowed["steps"] = true
 	case "update":
+		allowed["updates"] = true
 		allowed["index"] = true
 		allowed["status"] = true
 		allowed["text"] = true
@@ -214,6 +221,105 @@ func rejectUnusedPlanArgs(action string, present map[string]bool) error {
 		return fmt.Errorf("unused field(s) for action=%s: %s\nNext: remove fields that action does not use", action, strings.Join(unused, ", "))
 	}
 	return nil
+}
+
+func singlePlanUpdateFromArgs(p planToolArgs) planUpdate {
+	return planUpdate{
+		Index:    p.Index,
+		Status:   p.Status,
+		Text:     p.Text,
+		Evidence: p.Evidence,
+		Note:     p.Note,
+	}
+}
+
+func applyPlanToolUpdate(st *planState, p planToolArgs, present map[string]bool) (bool, []int, error) {
+	if present["updates"] {
+		if present["index"] || present["status"] || present["text"] || present["evidence"] || present["note"] {
+			return false, nil, errors.New("updates cannot be combined with top-level index, status, text, evidence, or note\nNext: either use updates for a batch change or top-level fields for one step")
+		}
+		if len(p.Updates) == 0 {
+			return false, nil, errors.New("updates is empty\nNext: provide at least one step update")
+		}
+		changed := false
+		updated := make([]int, 0, len(p.Updates))
+		seen := map[int]bool{}
+		for _, update := range p.Updates {
+			if update.Index < 1 || update.Index > len(st.Steps) {
+				return false, nil, fmt.Errorf("index %d is outside the current plan length %d\nNext: call plan with action=view, then update a valid 1-based index", update.Index, len(st.Steps))
+			}
+			if seen[update.Index] {
+				return false, nil, fmt.Errorf("updates repeats index %d\nNext: merge duplicate updates for the same step", update.Index)
+			}
+			seen[update.Index] = true
+			stepChanged, err := applyPlanUpdate(&st.Steps[update.Index-1], update, update.presentFields())
+			if err != nil {
+				return false, nil, fmt.Errorf("update index %d: %w", update.Index, err)
+			}
+			if !stepChanged {
+				return false, nil, fmt.Errorf("update index %d requires at least one of status, text, evidence, or note\nNext: include the step field you intend to change", update.Index)
+			}
+			changed = true
+			updated = append(updated, update.Index)
+		}
+		return changed, updated, nil
+	}
+	if !present["index"] {
+		return false, nil, errors.New("index is required when action=update\nNext: call plan with action=view, then retry with a valid 1-based index")
+	}
+	if p.Index < 1 || p.Index > len(st.Steps) {
+		return false, nil, fmt.Errorf("index %d is outside the current plan length %d\nNext: call plan with action=view, then update a valid 1-based index", p.Index, len(st.Steps))
+	}
+	changed, err := applyPlanUpdate(&st.Steps[p.Index-1], singlePlanUpdateFromArgs(p), present)
+	if err != nil {
+		return false, nil, err
+	}
+	return changed, []int{p.Index}, nil
+}
+
+func (p planUpdate) presentFields() map[string]bool {
+	present := map[string]bool{"index": true}
+	if strings.TrimSpace(p.Status) != "" {
+		present["status"] = true
+	}
+	if strings.TrimSpace(p.Text) != "" {
+		present["text"] = true
+	}
+	if p.Evidence != nil {
+		present["evidence"] = true
+	}
+	if strings.TrimSpace(p.Note) != "" {
+		present["note"] = true
+	}
+	return present
+}
+
+func autoAdvancePlan(st *planState) {
+	if st == nil || len(st.Steps) == 0 {
+		return
+	}
+	for _, step := range st.Steps {
+		if strings.TrimSpace(step.Status) == "in_progress" {
+			return
+		}
+	}
+	for i := range st.Steps {
+		if strings.TrimSpace(st.Steps[i].Status) == "pending" {
+			st.Steps[i].Status = "in_progress"
+			return
+		}
+	}
+}
+
+func planUpdateMessage(updated []int) string {
+	if len(updated) == 1 {
+		return fmt.Sprintf("updated step %d", updated[0])
+	}
+	parts := make([]string, 0, len(updated))
+	for _, index := range updated {
+		parts = append(parts, fmt.Sprint(index))
+	}
+	return "updated steps " + strings.Join(parts, ",")
 }
 
 func planHasOpenWork(st planState) bool {
@@ -298,6 +404,7 @@ func canonicalPlanStepText(text string) string {
 }
 
 func normalizePlanStep(step planStep) (planStep, error) {
+	step.Index = 0
 	step.Text = strings.TrimSpace(step.Text)
 	if step.Text == "" {
 		return planStep{}, errors.New("text is required")
@@ -358,7 +465,7 @@ func normalizePlanEvidence(in []string) ([]string, error) {
 	return out, nil
 }
 
-func applyPlanUpdate(step *planStep, p planToolArgs, present map[string]bool) (bool, error) {
+func applyPlanUpdate(step *planStep, p planUpdate, present map[string]bool) (bool, error) {
 	changed := false
 	if present["status"] {
 		status, err := normalizePlanStatus(p.Status)

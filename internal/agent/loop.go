@@ -1441,7 +1441,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					endReason = sse.TurnEndMaxTurns
 					break
 				}
-				if err := l.appendCompletionGuardPrompt(turnID, guard); err != nil {
+				if err := l.appendCompletionGuardPrompt(turnID, guard, final.Final.Content); err != nil {
 					endReason = sse.TurnEndError
 					break
 				}
@@ -2027,16 +2027,29 @@ func (l *Loop) publishCompletionGuardDecision(turnID string, guard CompletionGua
 	})
 }
 
-func (l *Loop) appendCompletionGuardPrompt(turnID string, guard CompletionGuardResult) error {
+func (l *Loop) appendCompletionGuardPrompt(turnID string, guard CompletionGuardResult, rejectedDraft string) error {
 	prompt := strings.TrimSpace(guard.Prompt)
 	if prompt == "" {
 		return nil
+	}
+	if draft := completionGuardRejectedDraftBlock(rejectedDraft); draft != "" {
+		prompt += "\n\n" + draft
 	}
 	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append completion guard prompt")
 		return err
 	}
 	return nil
+}
+
+func completionGuardRejectedDraftBlock(draft string) string {
+	draft = strings.TrimSpace(draft)
+	if draft == "" {
+		return ""
+	}
+	return "AFFENT REJECTED FINAL DRAFT:\n" +
+		textutil.Preview(draft, 3000) + "\n\n" +
+		"After completing the required durable-state action, answer the user from this draft's concrete evidence instead of replying only that the state was updated."
 }
 
 func (l *Loop) recordLoopDecision(payload sse.LoopDecisionPayload) {

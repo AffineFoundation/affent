@@ -147,6 +147,7 @@ func TestSummarizeFileExtractsMetadata(t *testing.T) {
 - loop_id: market-run
 - owner_session: sess-market
 - status: running
+- finalization_policy: require_close_before_final
 
 ## 1. North Star
 
@@ -165,6 +166,7 @@ Keep market evidence cited.`
 		got.LoopID != "market-run" ||
 		got.OwnerSession != "sess-market" ||
 		got.Status != "running" ||
+		got.FinalizationPolicy != "require_close_before_final" ||
 		got.UpdatedAt == "" ||
 		got.Bytes != len([]byte(content)) ||
 		!strings.Contains(got.Preview, "Keep market evidence cited.") {

@@ -52,6 +52,70 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 	}
 }
 
+func TestPlanToolAutoAdvancesNextPendingStep(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect","status":"in_progress"},{"text":"fix"},{"text":"verify"}]}`)); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"update","index":1,"status":"completed","evidence":["read_file:reporter/cli.py"]}`))
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode update response: %v\n%s", err, out)
+	}
+	if st.Steps[0].Status != "completed" || st.Steps[1].Status != "in_progress" || st.Steps[2].Status != "pending" {
+		t.Fatalf("auto-advanced steps = %+v", st.Steps)
+	}
+}
+
+func TestPlanToolSetAcceptsOrdinalStepIndexLabels(t *testing.T) {
+	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
+
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"index":1,"text":"inspect","status":"in_progress"},{"index":2,"text":"ship"}]}`))
+	if err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode set response: %v\n%s", err, out)
+	}
+	if st.Steps[0].Index != 0 || st.Steps[1].Index != 0 {
+		t.Fatalf("ordinal labels should not be persisted as task state: %+v", st.Steps)
+	}
+	if st.Steps[0].Text != "inspect" || st.Steps[1].Text != "ship" {
+		t.Fatalf("steps = %+v", st.Steps)
+	}
+}
+
+func TestPlanToolBatchUpdatesMultipleSteps(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect","status":"completed"},{"text":"fix","status":"in_progress"},{"text":"verify"},{"text":"commit"}]}`)); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"update","updates":[{"index":2,"status":"completed","evidence":["edit_file:reporter/cli.py"]},{"index":3,"status":"completed","evidence":["python3 -m unittest discover -s tests"]},{"index":4,"status":"in_progress"}]}`))
+	if err != nil {
+		t.Fatalf("batch update: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode batch update response: %v\n%s", err, out)
+	}
+	if st.Message != "updated steps 2,3,4" {
+		t.Fatalf("message = %q, want batch update message", st.Message)
+	}
+	for i, want := range []string{"completed", "completed", "completed", "in_progress"} {
+		if st.Steps[i].Status != want {
+			t.Fatalf("step %d status = %q, want %q; steps=%+v", i+1, st.Steps[i].Status, want, st.Steps)
+		}
+	}
+}
+
 func TestPlanToolRejectsSetOverUnfinishedPlan(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
 	tool := planTool(path)

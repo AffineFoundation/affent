@@ -189,9 +189,22 @@ func loopProtocolActive(protocolPath string) bool {
 	return status == "" || status == "running"
 }
 
+func LoopProtocolRequiresCloseBeforeFinal(protocolPath string) bool {
+	if strings.TrimSpace(protocolPath) == "" {
+		return false
+	}
+	relPath := loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))
+	summary, found, err := loopstate.SummarizeFile(protocolPath, relPath)
+	if err != nil || !found || strings.TrimSpace(summary.Status) != "running" {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(summary.FinalizationPolicy), "require_close_before_final")
+}
+
 // LoopProtocolCompletionGuard prevents a final answer from leaving an active
-// long-running LOOP.md in status=running. It observes the durable protocol
-// state directly so it works after resume, restart, or protocol closure.
+// LOOP.md open only when the protocol explicitly opts into final-close
+// semantics. Ordinary long-running loops may end a turn while remaining
+// status=running; recovery is carried by checkpoints and protocol feeds.
 func LoopProtocolCompletionGuard(protocolPath string) CompletionGuard {
 	return func() CompletionGuardResult {
 		if strings.TrimSpace(protocolPath) == "" {
@@ -200,6 +213,9 @@ func LoopProtocolCompletionGuard(protocolPath string) CompletionGuard {
 		relPath := loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))
 		summary, found, err := loopstate.SummarizeFile(protocolPath, relPath)
 		if err != nil || !found || strings.TrimSpace(summary.Status) != "running" {
+			return CompletionGuardResult{}
+		}
+		if !strings.EqualFold(strings.TrimSpace(summary.FinalizationPolicy), "require_close_before_final") {
 			return CompletionGuardResult{}
 		}
 		reason := "Active loop protocol is still running."

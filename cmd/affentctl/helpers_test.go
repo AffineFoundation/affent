@@ -514,11 +514,12 @@ func TestFinalizeCurrentSessionLoopActivationLabelsCompletionGuard(t *testing.T)
 	sessionID := "loop-finalize"
 	path := loopstate.ProtocolPath(workspace, sessionID)
 	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
-		LoopID:       sessionID,
-		OwnerSession: sessionID,
-		Goal:         "finish a durable loop",
-		Workspace:    workspace,
-		Status:       "running",
+		LoopID:             sessionID,
+		OwnerSession:       sessionID,
+		Goal:               "finish a durable loop",
+		Workspace:          workspace,
+		Status:             "running",
+		FinalizationPolicy: "require_close_before_final",
 	}); err != nil {
 		t.Fatalf("EnsureProtocolTemplate: %v", err)
 	}

@@ -1980,9 +1980,6 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	if s.loop.LoopProtocolPath != path {
 		t.Fatalf("LoopProtocolPath = %q, want %q", s.loop.LoopProtocolPath, path)
 	}
-	if !stringSliceContains(s.loop.CompletionGuardLabels, "loop_protocol_running") {
-		t.Fatalf("completion guard labels = %#v, want loop_protocol_running", s.loop.CompletionGuardLabels)
-	}
 	got := s.loop.SkillProvider("continue")
 	for _, want := range []string{
 		"AFFENT LOOP PROTOCOL:",
@@ -1995,7 +1992,7 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	}
 }
 
-func TestSessionPool_LoopProtocolCompletionGuardBlocksRunningLoop(t *testing.T) {
+func TestSessionPool_LoopProtocolCompletionGuardBlocksOnlyWhenPolicyRequiresClose(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
 	createDurableSessionDir(t, pool, "loop-guard")
@@ -2011,6 +2008,19 @@ func TestSessionPool_LoopProtocolCompletionGuardBlocksRunningLoop(t *testing.T) 
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
+	for _, guard := range s.loop.CompletionGuards {
+		if res := guard(); res.Blocked {
+			t.Fatalf("default running loop should not block per-turn completion: %+v", res)
+		}
+	}
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 0. Metadata\n\n- loop_id: loop-guard\n- status: running\n- finalization_policy: require_close_before_final\n\n## 1. North Star\n\nFinish the project."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err = pool.GetOrCreate("loop-guard-policy")
+	if err != nil {
+		t.Fatalf("GetOrCreate policy: %v", err)
+	}
+	s.loop.CompletionGuards = append(s.loop.CompletionGuards, agent.LoopProtocolCompletionGuard(path))
 	var blocked agent.CompletionGuardResult
 	for _, guard := range s.loop.CompletionGuards {
 		if res := guard(); res.Blocked {

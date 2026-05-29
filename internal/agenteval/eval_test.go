@@ -2451,9 +2451,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if len(commitPush.SetupCommands) != 1 ||
 		!strings.Contains(commitPush.SetupCommands[0], "git init") ||
-		!strings.Contains(commitPush.SetupCommands[0], "git init --bare ../remote.git") ||
+		!strings.Contains(commitPush.SetupCommands[0], ".git/info/exclude") ||
+		!strings.Contains(commitPush.SetupCommands[0], ".affentctl/") ||
+		!strings.Contains(commitPush.SetupCommands[0], "git init --bare .git/affent-eval-remote.git") ||
 		!strings.Contains(commitPush.SetupCommands[0], "git push -u origin main") {
-		t.Fatalf("commit/push SetupCommands = %#v, want local bare remote initialization", commitPush.SetupCommands)
+		t.Fatalf("commit/push SetupCommands = %#v, want isolated local bare remote initialization and runtime artifact excludes", commitPush.SetupCommands)
 	}
 	for _, want := range []string{"git status --porcelain", "git log -1", "git ls-remote --heads origin main", "git remote get-url origin", "git clone --quiet --branch main"} {
 		if !strings.Contains(commitPush.VerifyCommand, want) {
@@ -2876,7 +2878,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if len(iterativeProject.Prompts) != 2 || iterativeProject.Prompt != "" {
 		t.Fatalf("iterative scratch project prompts = prompt:%q prompts:%d", iterativeProject.Prompt, len(iterativeProject.Prompts))
 	}
-	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished"}) {
 		t.Fatalf("iterative scratch project RequiredCompletionGuards = %#v", iterativeProject.RequiredCompletionGuards)
 	}
 	for _, prompt := range iterativeProject.Prompts {
@@ -2945,7 +2947,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if integrated.SessionID != "integrated-memory-recovery" || !integrated.EnableMemory || !integrated.EnableLoopProtocol {
 		t.Fatalf("integrated memory recovery fields = session:%q memory:%v loop:%v", integrated.SessionID, integrated.EnableMemory, integrated.EnableLoopProtocol)
 	}
-	if !reflect.DeepEqual(integrated.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+	if !reflect.DeepEqual(integrated.RequiredCompletionGuards, []string{"active_plan_unfinished"}) {
 		t.Fatalf("integrated memory recovery RequiredCompletionGuards = %#v", integrated.RequiredCompletionGuards)
 	}
 	if len(integrated.Prompts) != 2 || integrated.Prompt != "" {
@@ -2979,7 +2981,6 @@ func TestSelectLongRunSuite(t *testing.T) {
 		{Tool: "memory", Arg: "action", Substring: "add"},
 		{Tool: "memory", Arg: "action", Substring: "search"},
 		{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
-		{Tool: "session_search", Arg: "query", Substring: "INTEGRATED-HANDOFF-26"},
 		{Tool: "read_file", Arg: "path", Substring: "docs/conventions.md"},
 	} {
 		if !toolArgRequirementContains(integrated.RequiredToolArgContains, want) {
@@ -3011,8 +3012,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if len(integrated.RequiredSessionSearch) != 1 ||
 		integrated.RequiredSessionSearch[0].SessionID != "integrated-prior" ||
-		integrated.RequiredSessionSearch[0].QueryContains != "INTEGRATED-HANDOFF-26" ||
 		integrated.RequiredSessionSearch[0].SnippetContains != "AUTO-MEM-64" ||
+		len(integrated.RequiredSessionSearch[0].MatchedTerms) != 0 ||
 		!integrated.RequiredSessionSearch[0].ContextIncluded {
 		t.Fatalf("integrated memory recovery RequiredSessionSearch = %#v", integrated.RequiredSessionSearch)
 	}
