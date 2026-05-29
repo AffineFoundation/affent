@@ -176,12 +176,14 @@ func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 		Version: 1,
 		Schedules: []sessionSchedule{
 			{
-				ID:        "sched_due",
-				Prompt:    "run due timer",
-				Enabled:   true,
-				NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
-				CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
-				UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+				ID:          "sched_due",
+				Kind:        sessionScheduleKindCheckIn,
+				Prompt:      "run due timer",
+				DisplayText: "Due timer",
+				Enabled:     true,
+				NextRunAt:   now.Add(-time.Minute).Format(time.RFC3339),
+				CreatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+				UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
 			},
 			{
 				ID:        "sched_paused_error",
@@ -227,8 +229,13 @@ func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 		t.Fatalf("ScheduleRunner = %+v, want aggregate queue counts", got)
 	}
 	if got.NextSessionID != "timers-a" || got.NextScheduleID != "sched_due" ||
+		got.NextScheduleKind != sessionScheduleKindCheckIn ||
+		got.NextPromptPreview != "Due timer" ||
 		got.NextRunAt != now.Add(-time.Minute).Format(time.RFC3339) {
 		t.Fatalf("ScheduleRunner = %+v, want due schedule as next run", got)
+	}
+	if got.LastErrorSessionID != "timers-a" || got.LastErrorScheduleID != "sched_paused_error" {
+		t.Fatalf("ScheduleRunner = %+v, want latest error schedule identity", got)
 	}
 	if got.LastError != "previous scheduled turn failed" {
 		t.Fatalf("ScheduleRunner.LastError = %q, want latest schedule error", got.LastError)

@@ -65,6 +65,10 @@ type scheduleRunnerStats struct {
 	NextRunAt              string `json:"next_run_at,omitempty"`
 	NextSessionID          string `json:"next_session_id,omitempty"`
 	NextScheduleID         string `json:"next_schedule_id,omitempty"`
+	NextScheduleKind       string `json:"next_schedule_kind,omitempty"`
+	NextPromptPreview      string `json:"next_prompt_preview,omitempty"`
+	LastErrorSessionID     string `json:"last_error_session_id,omitempty"`
+	LastErrorScheduleID    string `json:"last_error_schedule_id,omitempty"`
 	LastError              string `json:"last_error,omitempty"`
 	DisabledReason         string `json:"disabled_reason,omitempty"`
 }
@@ -302,6 +306,7 @@ func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now
 	stats.SessionsWithSchedules = len(ids)
 	var nextSessionID string
 	var nextSchedule *sessionSchedule
+	var latestErrorSessionID string
 	var latestError *sessionSchedule
 	for _, sessionID := range ids {
 		file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, sessionID))
@@ -319,6 +324,7 @@ func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now
 				stats.ErrorSchedules++
 				if latestError == nil || scheduleTimeBefore(latestError.UpdatedAt, schedule.UpdatedAt) {
 					latestError = schedule
+					latestErrorSessionID = sessionID
 				}
 			}
 			if !schedule.Enabled {
@@ -338,8 +344,12 @@ func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now
 		stats.NextRunAt = nextSchedule.NextRunAt
 		stats.NextSessionID = nextSessionID
 		stats.NextScheduleID = nextSchedule.ID
+		stats.NextScheduleKind = nextSchedule.Kind
+		stats.NextPromptPreview = previewSessionSchedulePrompt(sessionScheduleDisplayText(*nextSchedule))
 	}
 	if latestError != nil {
+		stats.LastErrorSessionID = latestErrorSessionID
+		stats.LastErrorScheduleID = latestError.ID
 		stats.LastError = latestError.LastError
 	}
 }

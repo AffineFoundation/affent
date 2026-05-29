@@ -234,7 +234,10 @@ function scheduleRunnerMetric(runner?: ScheduleRunnerStats): RuntimeMetric | und
   if ((runner.sessions_with_schedules ?? 0) > 0) parts.push(`${runner.sessions_with_schedules} sessions`);
   if (due > 0) parts.push(`${due} due`);
   if (runner.next_session_id && runner.next_schedule_id) parts.push(`next ${runner.next_session_id}/${runner.next_schedule_id}`);
+  if (runner.next_schedule_kind) parts.push(runner.next_schedule_kind);
+  if (runner.next_prompt_preview) parts.push(runner.next_prompt_preview);
   if (errors > 0) parts.push(`${errors} errors`);
+  if (runner.last_error_session_id && runner.last_error_schedule_id) parts.push(`error ${runner.last_error_session_id}/${runner.last_error_schedule_id}`);
   if (lastError) parts.push(lastError);
   if (disabledReason && total > 0) parts.push(disabledReason);
   if (parts.length === 0) return undefined;

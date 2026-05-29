@@ -87,6 +87,10 @@ export interface ScheduleRunnerStats {
   next_run_at?: string;
   next_session_id?: string;
   next_schedule_id?: string;
+  next_schedule_kind?: string;
+  next_prompt_preview?: string;
+  last_error_session_id?: string;
+  last_error_schedule_id?: string;
   last_error?: string;
   disabled_reason?: string;
 }
