@@ -1406,6 +1406,68 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	}
 }
 
+func TestSummarizeDurableSessionKeepsFailureRecoveryAfterCompletedTurn(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "task-state-completed-failure")
+	dir := pool.sessionDirPath("task-state-completed-failure")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Append the latest BTC price to the tracker.",
+	}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "read-tracker",
+			Tool:   "read_file",
+			Args:   map[string]any{"path": "btc_price_tracker.md"},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "read-tracker",
+			ExitCode:      1,
+			FailureKind:   "not_found",
+			ResultSummary: "Error: btc_price_tracker.md not found",
+			Result:        "Error: btc_price_tracker.md not found\nFailure: kind=not_found\nNext: call list_files on . or the workspace root to find the correct path, then retry read_file",
+		}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "write-tracker",
+			Tool:   "write_file",
+			Args:   map[string]any{"path": "btc_price_tracker.md"},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "write-tracker",
+			ExitCode:      0,
+			ResultSummary: "wrote 128 bytes to btc_price_tracker.md",
+		}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+		})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "task-state-completed-failure")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if task.Status != "completed" || task.VerificationState != "failed" {
+		t.Fatalf("task state status/verification = %q/%q, want completed/failed", task.Status, task.VerificationState)
+	}
+	if task.NextStep != "call list_files on . or the workspace root to find the correct path, then retry read_file" {
+		t.Fatalf("next_step = %q, want latest failed tool recovery hint", task.NextStep)
+	}
+	if len(task.FailedActions) != 1 || task.FailedActions[0].Tool != "read_file" || !stringSliceContains(task.FailedActions[0].Kinds, "not_found") {
+		t.Fatalf("failed_actions = %+v, want unresolved read_file not_found", task.FailedActions)
+	}
+}
+
 func TestSummarizeDurableSessionDefaultsTaskRequestSourceToUser(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

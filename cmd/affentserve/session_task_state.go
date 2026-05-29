@@ -213,7 +213,11 @@ func sessionTaskNextStep(task sessionTaskStateSummary, summary sessionSummary) s
 	if task.Status == "completed" && task.VerificationState == "last_shell_passed" {
 		return ""
 	}
-	if len(task.FailedActions) > 0 && task.VerificationState != "last_shell_passed" && task.Status != "completed" {
+	if len(task.FailedActions) > 0 && task.VerificationState != "last_shell_passed" {
+		latest := task.FailedActions[len(task.FailedActions)-1]
+		if next := strings.TrimSpace(latest.Next); next != "" {
+			return next
+		}
 		return "latest failed action is unresolved"
 	}
 	if summary.PlanSummary != nil && summary.PlanSummary.CurrentStep != "" {
