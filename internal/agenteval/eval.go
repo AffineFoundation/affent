@@ -1811,6 +1811,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "loop_protocol:setup_tool_overrun") {
 		add("For loop_protocol:setup_tool_overrun, inspect tool_timeline and loop protocol calibration events; the runtime should stop tool work after draft setup until a calibration question is recorded.")
 	}
+	if containsString(tags, "tool_failure:loop_protocol_activation_status") || containsString(tags, "tool_failure:loop_protocol_activation_invalid") {
+		add("For loop protocol activation failures, inspect tool_failure_examples, saved LOOP.md status, and calibration events; recover through patch_draft for compact draft fixes and complete_activation for the draft-to-running transition.")
+	}
 	if containsString(tags, "memory_update:missing") {
 		add("For memory_update:missing, inspect memory tool calls and result metadata; either fix the autonomous write decision or make the scenario expectation explicit about why no durable update should occur.")
 	}
@@ -1887,6 +1890,8 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"loop_protocol:fixture",
 		"loop_protocol:calibration_backlog",
 		"loop_protocol:setup_tool_overrun",
+		"tool_failure:loop_protocol_activation_status",
+		"tool_failure:loop_protocol_activation_invalid",
 		"memory_update:missing",
 		"memory_update:available_unused",
 		"recall:session_search_available_unused",
