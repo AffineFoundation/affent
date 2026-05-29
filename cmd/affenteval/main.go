@@ -267,51 +267,52 @@ func run(args []string) int {
 		keepWorkspaces                            = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
 		qualityProfile                            = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
 		gates                                     = qualityGateConfig{
-			MinPassRate:                           fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
-			MinCompletionRate:                     fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
-			MinMemoryUpdateRate:                   fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
-			MinLoopTurnCheckpointRate:             fs.Float64("min-loop-turn-checkpoint-rate", -1, "optional quality gate: minimum scenario rate with persisted loop turn checkpoints, 0..1"),
-			MinLoopProtocolFeedRate:               fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
-			MinLoopProtocolCalibrationRequestRate: fs.Float64("min-loop-protocol-calibration-request-rate", -1, "optional quality gate: minimum scenario rate with loop protocol calibration requests, 0..1"),
-			MinLoopProtocolCalibrationRate:        fs.Float64("min-loop-protocol-calibration-rate", -1, "optional quality gate: minimum scenario rate with accepted loop protocol calibrations, 0..1"),
-			MinRuntimeSurfaceRate:                 fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
-			MinTraceEventRate:                     fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
-			MinSourceNetworkRate:                  fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
-			MinSourceAccessVerifiedRate:           fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
-			MinExpectationCapabilityPassRate:      fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
-			MinEachExpectationCapabilityPassRate:  fs.Float64("min-each-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation capability family, 0..1"),
-			MinExpectationDomainPassRate:          fs.Float64("min-expectation-domain-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation domain instances, 0..1"),
-			MinEachExpectationDomainPassRate:      fs.Float64("min-each-expectation-domain-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation domain, 0..1"),
-			MinSessionSearchContextHitRate:        fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
-			MinSessionSearchMatchedTermsPerCall:   fs.Float64("min-session-search-matched-terms-per-call", -1, "optional quality gate: minimum average unique matched session_search terms per call"),
-			MinToolRepairSuccessRate:              fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
-			MinVerifierPassRate:                   fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
-			MaxFocusedTaskErrorRate:               fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
-			MaxForcedNoToolsRate:                  fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
-			MaxLoopGuardInterventionRate:          fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
-			MaxPlanErrorRate:                      fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
-			MaxMemorySearchMissRate:               fs.Float64("max-memory-search-miss-rate", -1, "optional quality gate: maximum memory search miss rate per memory search call, 0..1"),
-			MaxSourceDiscoveryOnlyRate:            fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
-			MaxSourceDynamicPartialRate:           fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
-			MaxSubagentErrorRate:                  fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
-			MaxToolErrorRate:                      fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
-			MaxToolContextTruncationRate:          fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
-			MaxToolResultTruncationRate:           fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
-			MaxAvgRuntimeErrors:                   fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
-			MaxAvgContextCompactions:              fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
-			MaxAvgReactiveCompactions:             fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
-			MaxAvgContextRemovedMessages:          fs.Float64("max-avg-context-removed-messages", -1, "optional quality gate: maximum average messages removed by context compaction per scenario"),
-			MaxAvgContextSummaryBytes:             fs.Float64("max-avg-context-summary-bytes", -1, "optional quality gate: maximum average context compaction summary bytes per scenario"),
-			MaxAvgContextSummaryMissing:           fs.Float64("max-avg-context-summary-missing", -1, "optional quality gate: maximum average missing context compaction summaries per scenario"),
-			MaxAvgContextSummaryEmpty:             fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
-			MaxContextCompactionPolicyPressure:    fs.Float64("max-context-compaction-policy-pressure-percent", -1, "optional quality gate: maximum observed context compaction estimated-input/trigger pressure percent"),
-			MaxAvgContextInjections:               fs.Float64("max-avg-context-injections", -1, "optional quality gate: maximum average injected system-context blocks per scenario"),
-			MaxAvgContextInjectionBytes:           fs.Float64("max-avg-context-injection-bytes", -1, "optional quality gate: maximum average injected system-context bytes per scenario"),
-			MaxAvgContextInjectionEstimatedTokens: fs.Float64("max-avg-context-injection-estimated-tokens", -1, "optional quality gate: maximum average estimated injected system-context tokens per scenario"),
-			MaxAvgToolCalls:                       fs.Float64("max-avg-tool-calls", -1, "optional quality gate: maximum average tool calls per scenario"),
-			MaxAvgDurationMS:                      fs.Float64("max-avg-duration-ms", -1, "optional quality gate: maximum average scenario duration in milliseconds"),
-			MaxAvgTotalTokens:                     fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
-			MaxScenarioTotalTokens:                fs.Float64("max-scenario-total-tokens", -1, "optional quality gate: maximum total tokens for any single scenario"),
+			MinPassRate:                            fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
+			MinCompletionRate:                      fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
+			MinMemoryUpdateRate:                    fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
+			MinLoopTurnCheckpointRate:              fs.Float64("min-loop-turn-checkpoint-rate", -1, "optional quality gate: minimum scenario rate with persisted loop turn checkpoints, 0..1"),
+			MinLoopProtocolFeedRate:                fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
+			MinLoopProtocolCalibrationRequestRate:  fs.Float64("min-loop-protocol-calibration-request-rate", -1, "optional quality gate: minimum scenario rate with loop protocol calibration requests, 0..1"),
+			MinLoopProtocolCalibrationRate:         fs.Float64("min-loop-protocol-calibration-rate", -1, "optional quality gate: minimum scenario rate with accepted loop protocol calibrations, 0..1"),
+			MinRuntimeSurfaceRate:                  fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
+			MinTraceEventRate:                      fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
+			MinSourceNetworkRate:                   fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
+			MinSourceAccessVerifiedRate:            fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
+			MinExpectationCapabilityPassRate:       fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
+			MinEachExpectationCapabilityPassRate:   fs.Float64("min-each-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation capability family, 0..1"),
+			MinExpectationDomainPassRate:           fs.Float64("min-expectation-domain-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation domain instances, 0..1"),
+			MinEachExpectationDomainPassRate:       fs.Float64("min-each-expectation-domain-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation domain, 0..1"),
+			MinSessionSearchContextHitRate:         fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
+			MinSessionSearchMatchedTermsPerCall:    fs.Float64("min-session-search-matched-terms-per-call", -1, "optional quality gate: minimum average unique matched session_search terms per call"),
+			MinToolRepairSuccessRate:               fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
+			MinVerifierPassRate:                    fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
+			MaxFocusedTaskErrorRate:                fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
+			MaxForcedNoToolsRate:                   fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
+			MaxLoopGuardInterventionRate:           fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
+			MaxPlanErrorRate:                       fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
+			MaxMemorySearchMissRate:                fs.Float64("max-memory-search-miss-rate", -1, "optional quality gate: maximum memory search miss rate per memory search call, 0..1"),
+			MaxSourceDiscoveryOnlyRate:             fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
+			MaxSourceDynamicPartialRate:            fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
+			MaxSubagentErrorRate:                   fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
+			MaxToolErrorRate:                       fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
+			MaxToolContextTruncationRate:           fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
+			MaxToolResultTruncationRate:            fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
+			MaxAvgRuntimeErrors:                    fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
+			MaxAvgContextCompactions:               fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
+			MaxAvgReactiveCompactions:              fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
+			MaxAvgContextRemovedMessages:           fs.Float64("max-avg-context-removed-messages", -1, "optional quality gate: maximum average messages removed by context compaction per scenario"),
+			MaxAvgContextSummaryBytes:              fs.Float64("max-avg-context-summary-bytes", -1, "optional quality gate: maximum average context compaction summary bytes per scenario"),
+			MaxAvgContextSummaryMissing:            fs.Float64("max-avg-context-summary-missing", -1, "optional quality gate: maximum average missing context compaction summaries per scenario"),
+			MaxAvgContextSummaryEmpty:              fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
+			MinContextCompactionPolicyObservedRate: fs.Float64("min-context-compaction-policy-observed-rate", -1, "optional quality gate: minimum context compaction rate with policy metadata, 0..1"),
+			MaxContextCompactionPolicyPressure:     fs.Float64("max-context-compaction-policy-pressure-percent", -1, "optional quality gate: maximum observed context compaction estimated-input/trigger pressure percent"),
+			MaxAvgContextInjections:                fs.Float64("max-avg-context-injections", -1, "optional quality gate: maximum average injected system-context blocks per scenario"),
+			MaxAvgContextInjectionBytes:            fs.Float64("max-avg-context-injection-bytes", -1, "optional quality gate: maximum average injected system-context bytes per scenario"),
+			MaxAvgContextInjectionEstimatedTokens:  fs.Float64("max-avg-context-injection-estimated-tokens", -1, "optional quality gate: maximum average estimated injected system-context tokens per scenario"),
+			MaxAvgToolCalls:                        fs.Float64("max-avg-tool-calls", -1, "optional quality gate: maximum average tool calls per scenario"),
+			MaxAvgDurationMS:                       fs.Float64("max-avg-duration-ms", -1, "optional quality gate: maximum average scenario duration in milliseconds"),
+			MaxAvgTotalTokens:                      fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
+			MaxScenarioTotalTokens:                 fs.Float64("max-scenario-total-tokens", -1, "optional quality gate: maximum total tokens for any single scenario"),
 		}
 	)
 	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
@@ -644,6 +645,7 @@ type qualityGateConfig struct {
 	MaxAvgContextSummaryBytes                      *float64
 	MaxAvgContextSummaryMissing                    *float64
 	MaxAvgContextSummaryEmpty                      *float64
+	MinContextCompactionPolicyObservedRate         *float64
 	MaxContextCompactionPolicyPressure             *float64
 	MaxAvgContextInjections                        *float64
 	MaxAvgContextInjectionBytes                    *float64
@@ -866,6 +868,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes)
 	add("max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing)
 	add("max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty)
+	add("min-context-compaction-policy-observed-rate", g.MinContextCompactionPolicyObservedRate)
 	add("max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure)
 	add("max-avg-context-injections", g.MaxAvgContextInjections)
 	add("max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes)
@@ -960,6 +963,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-context-summary-bytes", &g.MaxAvgContextSummaryBytes, profileConfig.MaxAvgContextSummaryBytes)
 	apply("max-avg-context-summary-missing", &g.MaxAvgContextSummaryMissing, profileConfig.MaxAvgContextSummaryMissing)
 	apply("max-avg-context-summary-empty", &g.MaxAvgContextSummaryEmpty, profileConfig.MaxAvgContextSummaryEmpty)
+	apply("min-context-compaction-policy-observed-rate", &g.MinContextCompactionPolicyObservedRate, profileConfig.MinContextCompactionPolicyObservedRate)
 	apply("max-context-compaction-policy-pressure-percent", &g.MaxContextCompactionPolicyPressure, profileConfig.MaxContextCompactionPolicyPressure)
 	apply("max-avg-context-injections", &g.MaxAvgContextInjections, profileConfig.MaxAvgContextInjections)
 	apply("max-avg-context-injection-bytes", &g.MaxAvgContextInjectionBytes, profileConfig.MaxAvgContextInjectionBytes)
@@ -2477,6 +2481,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes, false},
 		{"--max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing, false},
 		{"--max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty, false},
+		{"--min-context-compaction-policy-observed-rate", g.MinContextCompactionPolicyObservedRate, true},
 		{"--max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure, false},
 		{"--max-avg-context-injections", g.MaxAvgContextInjections, false},
 		{"--max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes, false},
@@ -2647,6 +2652,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_context_summary_bytes", batchAverage(s.ContextCompactionSummary, s.Total), g.MaxAvgContextSummaryBytes, s.Total > 0)
 	checkMax("avg_context_summary_missing", batchAverage(s.ContextCompactionSummaryMissing, s.Total), g.MaxAvgContextSummaryMissing, s.Total > 0)
 	checkMax("avg_context_summary_empty", batchAverage(s.ContextCompactionSummaryEmpty, s.Total), g.MaxAvgContextSummaryEmpty, s.Total > 0)
+	checkMin("context_compaction_policy_observed_rate", batchRatio(s.ContextCompactionPolicyObserved, s.ContextCompactions), g.MinContextCompactionPolicyObservedRate, s.ContextCompactions > 0)
 	checkMax("context_compaction_policy_pressure_percent", float64(s.ContextCompactionMaxPolicyPressure), g.MaxContextCompactionPolicyPressure, s.ContextCompactionPolicyObserved > 0)
 	checkMax("avg_context_injections", batchAverage(s.ContextInjections, s.Total), g.MaxAvgContextInjections, s.Total > 0)
 	checkMax("avg_context_injection_bytes", batchAverage(s.ContextInjectionBytes, s.Total), g.MaxAvgContextInjectionBytes, s.Total > 0)
@@ -3715,6 +3721,7 @@ type evalJSONLMetadata struct {
 	MaxAvgContextSummaryBytes                      *float64           `json:"max_avg_context_summary_bytes,omitempty"`
 	MaxAvgContextSummaryMissing                    *float64           `json:"max_avg_context_summary_missing,omitempty"`
 	MaxAvgContextSummaryEmpty                      *float64           `json:"max_avg_context_summary_empty,omitempty"`
+	MinContextCompactionPolicyObservedRate         *float64           `json:"min_context_compaction_policy_observed_rate,omitempty"`
 	MaxContextCompactionPolicyPressure             *float64           `json:"max_context_compaction_policy_pressure_percent,omitempty"`
 	MaxAvgContextInjections                        *float64           `json:"max_avg_context_injections,omitempty"`
 	MaxAvgContextInjectionBytes                    *float64           `json:"max_avg_context_injection_bytes,omitempty"`
@@ -3800,6 +3807,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgContextSummaryBytes:                      enabledQualityGateValue(gates.MaxAvgContextSummaryBytes),
 		MaxAvgContextSummaryMissing:                    enabledQualityGateValue(gates.MaxAvgContextSummaryMissing),
 		MaxAvgContextSummaryEmpty:                      enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
+		MinContextCompactionPolicyObservedRate:         enabledQualityGateValue(gates.MinContextCompactionPolicyObservedRate),
 		MaxContextCompactionPolicyPressure:             enabledQualityGateValue(gates.MaxContextCompactionPolicyPressure),
 		MaxAvgContextInjections:                        enabledQualityGateValue(gates.MaxAvgContextInjections),
 		MaxAvgContextInjectionBytes:                    enabledQualityGateValue(gates.MaxAvgContextInjectionBytes),
@@ -4807,6 +4815,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgContextSummaryBytes != nil ||
 		meta.MaxAvgContextSummaryMissing != nil ||
 		meta.MaxAvgContextSummaryEmpty != nil ||
+		meta.MinContextCompactionPolicyObservedRate != nil ||
 		meta.MaxContextCompactionPolicyPressure != nil ||
 		meta.MaxAvgContextInjections != nil ||
 		meta.MaxAvgContextInjectionBytes != nil ||
