@@ -7,6 +7,7 @@ import (
 )
 
 func TestLoadDotEnvFile_ParsesAndSetsUnsetKeys(t *testing.T) {
+	preserveEnv(t, "AFFENTSERVE_BASE_URL", "AFFENTSERVE_API_KEY", "AFFENTSERVE_AUTH_TOKEN")
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".env")
 	content := `# header
@@ -34,6 +35,29 @@ export AFFENTSERVE_AUTH_TOKEN='token-xyz'
 	if got := os.Getenv("AFFENTSERVE_AUTH_TOKEN"); got != "token-xyz" {
 		t.Errorf("AUTH_TOKEN = %q", got)
 	}
+}
+
+func preserveEnv(t *testing.T, keys ...string) {
+	t.Helper()
+	type entry struct {
+		key string
+		val string
+		set bool
+	}
+	entries := make([]entry, 0, len(keys))
+	for _, key := range keys {
+		val, set := os.LookupEnv(key)
+		entries = append(entries, entry{key: key, val: val, set: set})
+	}
+	t.Cleanup(func() {
+		for _, e := range entries {
+			if e.set {
+				_ = os.Setenv(e.key, e.val)
+			} else {
+				_ = os.Unsetenv(e.key)
+			}
+		}
+	})
 }
 
 func TestLoadDotEnvFile_ShellEnvWinsOverFile(t *testing.T) {

@@ -241,12 +241,9 @@ func TestLoadDotEnv_LooksAtCwdAndHomeConfig(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(orig) })
 
 	// Pre-condition: neither var is set.
+	preserveEnv(t, "AFFENT_LOAD_DOTENV_CWD", "AFFENT_LOAD_DOTENV_HOME")
 	os.Unsetenv("AFFENT_LOAD_DOTENV_CWD")
 	os.Unsetenv("AFFENT_LOAD_DOTENV_HOME")
-	t.Cleanup(func() {
-		os.Unsetenv("AFFENT_LOAD_DOTENV_CWD")
-		os.Unsetenv("AFFENT_LOAD_DOTENV_HOME")
-	})
 
 	if err := loadDotEnv(); err != nil {
 		t.Fatal(err)
