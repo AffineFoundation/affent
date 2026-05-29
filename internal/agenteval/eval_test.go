@@ -93,6 +93,17 @@ func TestExpectationCapabilityNamesIncludesSkillInstall(t *testing.T) {
 	}
 }
 
+func TestExpectationCapabilityNamesIncludesAgentGitClone(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		RequiredCommands: []string{`git clone`, `go test`},
+	})
+	for _, want := range []string{"source_repo", "workspace"} {
+		if !stringSliceContains(caps, want) {
+			t.Fatalf("ExpectationCapabilityNames = %#v, want %q for agent-driven git clone", caps, want)
+		}
+	}
+}
+
 func TestExpectationCapabilityNamesIncludesSessionSchedule(t *testing.T) {
 	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
 		RequiredTools: []string{agent.SessionScheduleToolName},
@@ -2565,6 +2576,12 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !clonePush.ForbidWorkspaceAbsolutePaths || clonePush.MaxLoopTurnInputTokens != 300000 || clonePush.MaxLoopTurnTotalTokens != 320000 {
 		t.Fatalf("clone/push path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", clonePush.ForbidWorkspaceAbsolutePaths, clonePush.MaxLoopTurnInputTokens, clonePush.MaxLoopTurnTotalTokens)
+	}
+	clonePushCaps := ScenarioExpectationCapabilityNames(clonePush)
+	for _, want := range []string{"source_repo", "workspace", "verifier", "skill"} {
+		if !stringSliceContains(clonePushCaps, want) {
+			t.Fatalf("clone/push expectation capabilities = %#v, want %q", clonePushCaps, want)
+		}
 	}
 
 	sourceRepo, ok := seen["longrun-code-source-repo-modify-push-local-remote"]

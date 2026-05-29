@@ -607,7 +607,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["skill"] = true
 		caps["skill_install"] = true
 	}
-	if strings.TrimSpace(exp.SourceRepoURL) != "" {
+	if expectationRequiresSourceRepo(exp) {
 		caps["source_repo"] = true
 		caps["workspace"] = true
 	}
@@ -787,6 +787,19 @@ func expectationRequiresSkillInstall(exp DebugScenarioExpectations) bool {
 		}
 		switch strings.TrimSpace(req.Substring) {
 		case "install", "propose_url", "propose_install", "confirm_install":
+			return true
+		}
+	}
+	return false
+}
+
+func expectationRequiresSourceRepo(exp DebugScenarioExpectations) bool {
+	if strings.TrimSpace(exp.SourceRepoURL) != "" {
+		return true
+	}
+	for _, command := range exp.RequiredCommands {
+		normalized := strings.ToLower(strings.Join(strings.Fields(command), " "))
+		if strings.Contains(normalized, "git clone") {
 			return true
 		}
 	}
