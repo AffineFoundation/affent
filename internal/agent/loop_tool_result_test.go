@@ -1122,6 +1122,96 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestRunTurn_NormalizesShellWorkspacePathsBeforeRequestEvent(t *testing.T) {
+	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	modelArgs := fmt.Sprintf(`{"command":"ls -la %s && cat %s","cwd":%q}`,
+		filepath.ToSlash(ws),
+		filepath.ToSlash(filepath.Join(ws, "notes", "todo.md")),
+		filepath.Join(ws, "notes"),
+	)
+	modelArgsJSON, err := json.Marshal(modelArgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if !strings.Contains(body, `"role":"tool"`) {
+			line := fmt.Sprintf(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"shell-1","type":"function","function":{"name":"shell","arguments":%s}}]},"finish_reason":null}]}`, modelArgsJSON)
+			w.Write([]byte(line + "\n\n"))
+			w.Write([]byte(`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"done\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	rec := &recordingExec{}
+	reg := NewRegistry()
+	reg.Add(shellTool(BuiltinDeps{Executor: rec, HostWorkspaceDir: ws}))
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "inspect workspace"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var gotRequest sse.ToolRequestPayload
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type == sse.TypeToolRequest {
+				if err := json.Unmarshal(ev.Data, &gotRequest); err != nil {
+					t.Fatalf("decode tool.request: %v", err)
+				}
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			var end sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &end); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			command, _ := gotRequest.Args["command"].(string)
+			cwd, _ := gotRequest.Args["cwd"].(string)
+			if strings.Contains(filepath.ToSlash(command), filepath.ToSlash(ws)) || strings.Contains(filepath.ToSlash(cwd), filepath.ToSlash(ws)) {
+				t.Fatalf("tool.request leaked absolute workspace args: %+v", gotRequest.Args)
+			}
+			if command != "ls -la . && cat ./notes/todo.md" || cwd != "notes" {
+				t.Fatalf("normalized request args = command:%q cwd:%q", command, cwd)
+			}
+			if rec.gotArgv[2] != command || rec.gotOpts.WorkingDir != cwd {
+				t.Fatalf("dispatch saw command=%q cwd=%q, want request args command=%q cwd=%q", rec.gotArgv[2], rec.gotOpts.WorkingDir, command, cwd)
+			}
+			if !gotRequest.ArgsRepaired || len(gotRequest.RepairNotes) == 0 {
+				t.Fatalf("expected workspace normalization repair metadata: %+v", gotRequest)
+			}
+			if end.ToolStats == nil || end.ToolStats.ToolRepairByKind["workspace_path_normalization"] != 2 {
+				t.Fatalf("tool repair stats = %+v", end.ToolStats)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestToolRequestArgsViewCapsLargeStringValues(t *testing.T) {
 	raw := json.RawMessage(`{"path":"huge.txt","content":` + mustJSON(t, strings.Repeat("x", maxToolRequestArgStringBytes+1024)) + `}`)
 	view := toolRequestArgsEventView(raw)

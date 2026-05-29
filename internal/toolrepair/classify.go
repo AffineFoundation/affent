@@ -30,6 +30,8 @@ func Kind(note string) string {
 		return "action_field_drop"
 	case strings.HasPrefix(note, "inferred missing action="):
 		return "action_inference"
+	case strings.HasPrefix(note, "normalized workspace path field "):
+		return "workspace_path_normalization"
 	default:
 		return "other"
 	}

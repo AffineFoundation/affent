@@ -18,6 +18,7 @@ type Tool struct {
 	Name           string
 	Description    string
 	Schema         json.RawMessage // JSON Schema for the function arguments
+	NormalizeArgs  func(args json.RawMessage) (json.RawMessage, bool, []string)
 	Execute        func(ctx context.Context, args json.RawMessage) (string, error)
 	CatalogGroup   string
 	CatalogSource  string

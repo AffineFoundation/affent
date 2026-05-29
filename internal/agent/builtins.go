@@ -519,9 +519,10 @@ func shellTool(deps BuiltinDeps) *Tool {
 	verifyIndicators := append([]string{}, verificationCommandIndicators...)
 	verifyIndicators = append(verifyIndicators, deps.ExtraVerificationIndicators...)
 	return &Tool{
-		Name:        "shell",
-		Description: "Run one Linux shell command from the session workspace by default for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Large stdout/stderr streams are capped; redirect huge logs to files and inspect chunks. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
-		Schema:      schema,
+		Name:          "shell",
+		Description:   "Run one Linux shell command from the session workspace by default for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Large stdout/stderr streams are capped; redirect huge logs to files and inspect chunks. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
+		Schema:        schema,
+		NormalizeArgs: normalizeShellWorkspaceArgs(deps),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, err := decodeBuiltinToolArgs[struct {
 				Command    string `json:"command"`
@@ -534,7 +535,9 @@ func shellTool(deps BuiltinDeps) *Tool {
 			if strings.TrimSpace(p.Command) == "" {
 				return "", errors.New("command is required\nNext: retry shell with one concrete command, or use read_file/list_files for ordinary workspace inspection")
 			}
+			p.Command = normalizeShellCommandWorkspacePaths(p.Command, deps.HostWorkspaceDir)
 			p.Cwd = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Cwd))
+			p.Cwd = normalizeWorkspaceAbsolutePathArg(deps, p.Cwd)
 			if len(p.Command) > maxShellCommandBytes {
 				return "", fmt.Errorf("command is %d bytes; shell command supports up to %d bytes. Put long scripts in a workspace file and run that file instead\nNext: write the script to a workspace file, then retry shell with a short command that runs it", len(p.Command), maxShellCommandBytes)
 			}
@@ -577,6 +580,110 @@ func shellTool(deps BuiltinDeps) *Tool {
 			return out, redactSecretError(err, deps.SecretValuesProvider)
 		},
 	}
+}
+
+func normalizeShellWorkspaceArgs(deps BuiltinDeps) func(json.RawMessage) (json.RawMessage, bool, []string) {
+	return func(args json.RawMessage) (json.RawMessage, bool, []string) {
+		if strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+			return args, false, nil
+		}
+		var obj map[string]any
+		if err := json.Unmarshal(args, &obj); err != nil || obj == nil {
+			return args, false, nil
+		}
+		changed := false
+		var notes []string
+		if value, ok := obj["command"].(string); ok {
+			next := normalizeShellCommandWorkspacePaths(value, deps.HostWorkspaceDir)
+			if next != value {
+				obj["command"] = next
+				changed = true
+				notes = append(notes, "normalized workspace path field command for shell")
+			}
+		}
+		if value, ok := obj["cwd"].(string); ok {
+			next := normalizeWorkspacePathAlias(deps, strings.TrimSpace(value))
+			next = normalizeWorkspaceAbsolutePathArg(deps, next)
+			if next != value {
+				obj["cwd"] = next
+				changed = true
+				notes = append(notes, "normalized workspace path field cwd for shell")
+			}
+		}
+		if !changed {
+			return args, false, nil
+		}
+		raw, err := json.Marshal(obj)
+		if err != nil {
+			return args, false, nil
+		}
+		return json.RawMessage(raw), true, notes
+	}
+}
+
+func normalizeShellCommandWorkspacePaths(command, workspace string) string {
+	if command == "" || strings.ContainsAny(command, "\r\n") {
+		return command
+	}
+	workspace = strings.TrimSpace(workspace)
+	if workspace == "" {
+		return command
+	}
+	candidates := uniqueNonEmptyStrings([]string{
+		filepath.Clean(workspace),
+		filepath.ToSlash(filepath.Clean(workspace)),
+	})
+	if len(candidates) == 0 {
+		return command
+	}
+	var b strings.Builder
+	b.Grow(len(command))
+	segmentStart := 0
+	for i := 0; i < len(command); i++ {
+		switch command[i] {
+		case '\'':
+			b.WriteString(relativizeWorkspacePathCandidates(command[segmentStart:i], candidates))
+			end := i + 1
+			for end < len(command) && command[end] != '\'' {
+				end++
+			}
+			if end < len(command) {
+				end++
+			}
+			b.WriteString(command[i:end])
+			i = end - 1
+			segmentStart = end
+		case '"':
+			b.WriteString(relativizeWorkspacePathCandidates(command[segmentStart:i], candidates))
+			end := i + 1
+			escaped := false
+			for end < len(command) {
+				if command[end] == '\\' && !escaped {
+					escaped = true
+					end++
+					continue
+				}
+				if command[end] == '"' && !escaped {
+					end++
+					break
+				}
+				escaped = false
+				end++
+			}
+			b.WriteString(command[i:end])
+			i = end - 1
+			segmentStart = end
+		}
+	}
+	b.WriteString(relativizeWorkspacePathCandidates(command[segmentStart:], candidates))
+	return b.String()
+}
+
+func relativizeWorkspacePathCandidates(text string, candidates []string) string {
+	for _, candidate := range candidates {
+		text = relativizeWorkspacePathCandidate(text, candidate)
+	}
+	return text
 }
 
 // defaultBroadScanIndicators are lowercased substrings that, together
@@ -855,6 +962,21 @@ func normalizeWorkspacePathAlias(deps BuiltinDeps, p string) string {
 		return "."
 	}
 	return filepath.FromSlash(strings.Join(rest, "/"))
+}
+
+func normalizeWorkspaceAbsolutePathArg(deps BuiltinDeps, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || !filepath.IsAbs(p) || strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+		return p
+	}
+	rel, err := filepath.Rel(filepath.Clean(deps.HostWorkspaceDir), filepath.Clean(p))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return p
+	}
+	if rel == "." {
+		return "."
+	}
+	return filepath.ToSlash(rel)
 }
 
 func pathComponents(p string) []string {

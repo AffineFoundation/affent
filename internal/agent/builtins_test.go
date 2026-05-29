@@ -1000,6 +1000,45 @@ func TestShellToolNormalizesWorkspacePathAliasCWD(t *testing.T) {
 	}
 }
 
+func TestShellToolNormalizesWorkspaceAbsoluteCommandAndCWD(t *testing.T) {
+	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	rec := &recordingExec{}
+	tool := shellTool(BuiltinDeps{Executor: rec, HostWorkspaceDir: ws})
+	args, _ := json.Marshal(map[string]any{
+		"command": "ls -la " + filepath.ToSlash(ws) + " && cat " + filepath.ToSlash(filepath.Join(ws, "notes", "todo.md")),
+		"cwd":     filepath.Join(ws, "notes"),
+	})
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(filepath.ToSlash(rec.gotArgv[2]), filepath.ToSlash(ws)) {
+		t.Fatalf("command leaked absolute workspace path: %q", rec.gotArgv[2])
+	}
+	if !strings.Contains(filepath.ToSlash(rec.gotArgv[2]), "ls -la .") ||
+		!strings.Contains(filepath.ToSlash(rec.gotArgv[2]), "cat ./notes/todo.md") {
+		t.Fatalf("command was not normalized to workspace-relative paths: %q", rec.gotArgv[2])
+	}
+	if rec.gotOpts.WorkingDir != "notes" {
+		t.Fatalf("cwd = %q, want notes", rec.gotOpts.WorkingDir)
+	}
+}
+
+func TestNormalizeShellCommandWorkspacePathsLeavesQuotedAndMultilineContent(t *testing.T) {
+	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	quoted := "printf '%s\\n' " + strconv.Quote(filepath.ToSlash(ws)) + " && ls " + filepath.ToSlash(ws)
+	got := normalizeShellCommandWorkspacePaths(quoted, ws)
+	if !strings.Contains(got, strconv.Quote(filepath.ToSlash(ws))) {
+		t.Fatalf("quoted workspace data should remain unchanged: %q", got)
+	}
+	if !strings.Contains(got, "&& ls .") {
+		t.Fatalf("unquoted workspace path should normalize: %q", got)
+	}
+	multiline := "cat <<'EOF'\n" + filepath.ToSlash(ws) + "\nEOF"
+	if got := normalizeShellCommandWorkspacePaths(multiline, ws); got != multiline {
+		t.Fatalf("multiline shell scripts should remain unchanged:\n%s", got)
+	}
+}
+
 func TestShellTool_RedactsSecretValuesFromOutput(t *testing.T) {
 	const secret = "ghp_super_secret_token"
 	rec := &recordingExec{

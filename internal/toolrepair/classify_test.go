@@ -19,6 +19,7 @@ func TestKind(t *testing.T) {
 		{"coerced field max_bytes from string to integer", "type_coercion"},
 		{"dropped unknown field foo", "unknown_field_drop"},
 		{"dropped action-inapplicable field protocol for loop_protocol action=start_setup", "action_field_drop"},
+		{"normalized workspace path field command for shell", "workspace_path_normalization"},
 		{"some new repair note", "other"},
 	}
 	for _, tt := range tests {

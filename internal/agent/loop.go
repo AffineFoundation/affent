@@ -1428,6 +1428,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			args, argsRepaired, argsRepairErr := repairToolCallArgsForDispatch(tc.Function.Arguments)
 			toolName := tc.Function.Name
 			canonicalChanged := false
+			var dispatchTool *Tool
 			var repairNotes []string
 			if tools := l.toolsForTurn(opts); tools != nil {
 				if canonical, ok, changed := tools.canonicalName(toolName); ok {
@@ -1438,6 +1439,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 						repairNotes = append(repairNotes, fmt.Sprintf("canonicalized tool %s to %s", originalTool, toolName))
 					}
 					if t, _ := tools.Get(toolName); t != nil {
+						dispatchTool = t
 						var schemaRepaired bool
 						var schemaNotes []string
 						args, schemaRepaired, schemaNotes = repairToolArgsWithSchema(args, t.Schema)
@@ -1451,6 +1453,18 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			args, actionRepaired, actionRepairNotes = repairToolArgsForAction(toolName, args)
 			argsRepaired = argsRepaired || actionRepaired
 			repairNotes = append(repairNotes, actionRepairNotes...)
+			if dispatchTool == nil {
+				if tools := l.toolsForTurn(opts); tools != nil {
+					dispatchTool, _ = tools.Get(toolName)
+				}
+			}
+			if dispatchTool != nil && dispatchTool.NormalizeArgs != nil {
+				var normalized bool
+				var normalizeNotes []string
+				args, normalized, normalizeNotes = dispatchTool.NormalizeArgs(args)
+				argsRepaired = argsRepaired || normalized
+				repairNotes = append(repairNotes, normalizeNotes...)
+			}
 			if argsRepaired && len(repairNotes) == 0 {
 				repairNotes = append(repairNotes, "repaired malformed JSON arguments")
 			}
