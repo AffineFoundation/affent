@@ -400,9 +400,11 @@ func TestSessionContextSnapshotDerivesRequestInputTriggerFromModelContext(t *tes
 	got := sessionContextSnapshot(12, testRequestInputEstimate(16*1024, 60_000), Config{
 		CompactTrigger:             240,
 		ModelContextWindowTokens:   100_000,
+		ModelContextWindowAuto:     true,
 		CompactTriggerInputPercent: 80,
 	})
 	if got.ModelContextWindowTokens != 100_000 ||
+		!got.ModelContextWindowAuto ||
 		got.CompactTriggerInputPercent != 80 ||
 		got.CompactTriggerInputTokens != 80_000 ||
 		got.RequestInputCompactPercent != 75 ||

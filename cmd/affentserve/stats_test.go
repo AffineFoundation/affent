@@ -113,9 +113,10 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	reserved := statsBoundarySnapshot(Config{
 		MaxTokens:                  &maxTokens,
 		ModelContextWindowTokens:   100_000,
+		ModelContextWindowAuto:     true,
 		CompactTriggerInputPercent: 80,
 	})
-	if reserved.ReservedOutputTokens != 30_000 || reserved.CompactTriggerInputTokens != 70_000 {
+	if reserved.ReservedOutputTokens != 30_000 || reserved.CompactTriggerInputTokens != 70_000 || !reserved.ModelContextWindowAuto {
 		t.Fatalf("reserved compaction boundaries = %+v, want reserve=30000 trigger=70000", reserved)
 	}
 	if resp.Boundaries.MCPToolResultBytes <= 0 {
