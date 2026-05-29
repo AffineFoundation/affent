@@ -114,6 +114,51 @@ func TestAppendUserMessageInjectsRuntimeWorkspaceContext(t *testing.T) {
 	}
 }
 
+func TestAppendUserMessageInjectsScheduledTurnContext(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 2)
+	loop := &Loop{
+		Conv:   conv,
+		Events: events,
+	}
+
+	if err := loop.appendUserMessage("turn_schedule", "inspect metrics", TurnOptions{
+		UserSource:   "schedule",
+		ScheduleID:   "sched_metrics",
+		ScheduleKind: "custom",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := <-events
+	if ev.Type != sse.TypeContextInjected {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextInjected)
+	}
+	var payload sse.ContextInjectedPayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload.Source != "schedule" ||
+		payload.Title != "Scheduled turn context injected" ||
+		!strings.Contains(payload.Preview, "sched_metrics") {
+		t.Fatalf("schedule payload = %+v", payload)
+	}
+	msgs := conv.Snapshot()
+	if len(msgs) != 2 ||
+		msgs[0].Role != "system" ||
+		!msgs[0].TransientContext ||
+		!strings.Contains(msgs[0].Content, "AFFENT SCHEDULED TURN:") ||
+		!strings.Contains(msgs[0].Content, "- schedule_kind: custom") ||
+		!strings.Contains(msgs[0].Content, "do not say the schedule was newly set") ||
+		msgs[1].Role != "user" ||
+		msgs[1].Content != "inspect metrics" {
+		t.Fatalf("scheduled context should be transient before user message: %+v", msgs)
+	}
+}
+
 func TestAppendUserMessagePublishesLoopDraftActivationContext(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
 	if err != nil {
