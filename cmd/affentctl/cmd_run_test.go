@@ -120,7 +120,7 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 	defer srv.Close()
 
 	tracePath := filepath.Join(workspace, "trace.jsonl")
-	out := captureStdout(t, func() {
+	_ = captureStdout(t, func() {
 		code := runCmd([]string{
 			"--workspace", workspace,
 			"--session-id", sessionID,
@@ -132,23 +132,23 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 			"--quiet",
 			"--max-turns", "1",
 		})
-		if code != 0 {
-			t.Fatalf("runCmd exit = %d", code)
+		if code != 2 {
+			t.Fatalf("runCmd exit = %d, want max_turns after activation guard blocks implicit completion", code)
 		}
 	})
-	if !strings.Contains(out, "Recorded the calibration answer.") {
-		t.Fatalf("runCmd stdout = %q", out)
-	}
 	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
 	if state.CalibrationQuestions != 1 ||
 		state.CalibrationAnswers != 1 ||
-		state.Status != "running" ||
+		state.Status != "draft" ||
 		!strings.Contains(state.LastCalibrationQuestion, "stop condition") ||
 		!strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
 		t.Fatalf("calibration state = %+v", state)
+	}
+	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
+		t.Fatalf("ValidateProtocolActivationReady after CLI answer: %v", err)
 	}
 	trace, err := os.ReadFile(tracePath)
 	if err != nil {
@@ -156,12 +156,15 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"type":"loop.protocol_calibration"`,
-		`"type":"loop.protocol_activate"`,
+		`"trigger":"loop_protocol_activation_pending"`,
 		`"last_calibration_answer_preview":"Pause if source quality is weak or the market report is complete."`,
 	} {
 		if !strings.Contains(string(trace), want) {
 			t.Fatalf("trace missing %q:\n%s", want, trace)
 		}
+	}
+	if strings.Contains(string(trace), `"type":"loop.protocol_activate"`) {
+		t.Fatalf("calibration answer should not implicitly activate LOOP.md:\n%s", trace)
 	}
 }
 

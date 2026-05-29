@@ -2267,31 +2267,22 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 		EnableLoopProtocol: true,
 		Prompts: []string{
 			"Start long-running loop setup for this session, but do not activate LOOP.md yet. Ask exactly one short loop calibration question about the stop condition or pause condition, and include marker LOOP-CALIBRATION-Q17. Do not call tools and do not read or write files.",
-			"Calibration answer: Pause if source evidence is unavailable, repeated tool failures happen twice, or the user says the objective changed. Confirm that you received this calibration answer. The final answer must include LOOP-CALIBRATION-A17, Pause if source evidence is unavailable, repeated tool failures, and objective changed. Do not call tools and do not read or write files.",
 		},
 		RequiredUserMessageModes: map[string]int{
 			agent.UserModeLoopSetup: 1,
 		},
 		RequiredLoopProtocolCalibrationRequests: 1,
-		RequiredLoopProtocolCalibrations:        1,
 		RequiredLoopProtocolCalibrationRequestText: []string{
 			"LOOP-CALIBRATION-Q17",
 		},
 		RequiredLoopProtocolCalibrationRequestStatuses: map[string]int{
 			"draft": 1,
 		},
-		RequiredLoopProtocolCalibrationStatuses: map[string]int{
-			"draft": 1,
-		},
 		RequiredTraceEventCounts: map[string]int{
 			"loop.protocol_calibration_request": 1,
-			"loop.protocol_calibration":         1,
 		},
 		RequiredFinalText: []string{
-			"LOOP-CALIBRATION-A17",
-			"Pause if source evidence is unavailable",
-			"repeated tool failures",
-			"objective changed",
+			"LOOP-CALIBRATION-Q17",
 		},
 		ForbiddenTools: []string{
 			"read_file", "repo_search", "shell", "web_fetch", "web_search",

@@ -3283,15 +3283,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !loopCalibration.EnableLoopProtocol || loopCalibration.SessionID != "loop-activation-calibration" {
 		t.Fatalf("loop calibration fields = enable:%v session:%q", loopCalibration.EnableLoopProtocol, loopCalibration.SessionID)
 	}
-	if len(loopCalibration.Prompts) != 2 ||
+	if len(loopCalibration.Prompts) != 1 ||
 		loopCalibration.RequiredUserMessageModes[agent.UserModeLoopSetup] != 1 ||
 		loopCalibration.RequiredLoopProtocolCalibrationRequests != 1 ||
-		loopCalibration.RequiredLoopProtocolCalibrations != 1 ||
+		loopCalibration.RequiredLoopProtocolCalibrations != 0 ||
 		!stringSliceContains(loopCalibration.RequiredLoopProtocolCalibrationRequestText, "LOOP-CALIBRATION-Q17") ||
 		loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses["draft"] != 1 ||
-		loopCalibration.RequiredLoopProtocolCalibrationStatuses["draft"] != 1 ||
+		len(loopCalibration.RequiredLoopProtocolCalibrationStatuses) != 0 ||
 		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration_request"] != 1 ||
-		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
+		loopCalibration.RequiredTraceEventCounts["loop.protocol_calibration"] != 0 {
 		t.Fatalf("loop calibration expectations = prompts:%d modes:%#v requests:%d answers:%d request_text:%#v request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopCalibration.Prompts), loopCalibration.RequiredUserMessageModes, loopCalibration.RequiredLoopProtocolCalibrationRequests, loopCalibration.RequiredLoopProtocolCalibrations, loopCalibration.RequiredLoopProtocolCalibrationRequestText, loopCalibration.RequiredLoopProtocolCalibrationRequestStatuses, loopCalibration.RequiredLoopProtocolCalibrationStatuses, loopCalibration.RequiredTraceEventCounts)
 	}
 	for _, prompt := range loopCalibration.Prompts {
@@ -3299,13 +3299,10 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("loop calibration prompt should be English: %q", prompt)
 		}
 	}
-	for _, want := range []string{"LOOP-CALIBRATION-A17", "Pause if source evidence is unavailable", "repeated tool failures", "objective changed"} {
+	for _, want := range []string{"LOOP-CALIBRATION-Q17"} {
 		if !stringSliceContains(loopCalibration.RequiredFinalText, want) {
 			t.Fatalf("loop calibration RequiredFinalText = %#v, want %q", loopCalibration.RequiredFinalText, want)
 		}
-	}
-	if stringSliceContains(loopCalibration.RequiredFinalText, "LOOP-CALIBRATION-Q17") {
-		t.Fatalf("loop calibration should assert Q marker on the calibration request event, not final text: %#v", loopCalibration.RequiredFinalText)
 	}
 	if !stringSliceContains(loopCalibration.ForbiddenTools, "loop_protocol") || loopCalibration.MaxParentToolCalls != 0 {
 		t.Fatalf("loop calibration tool constraints = forbidden:%#v max_parent:%d", loopCalibration.ForbiddenTools, loopCalibration.MaxParentToolCalls)

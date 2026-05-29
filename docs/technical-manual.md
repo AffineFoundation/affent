@@ -864,9 +864,10 @@ Affent stores durable state as inspectable files:
   `affentctl --loop-protocol`, `affentctl chat` `/loop on [goal]`, and
   `POST /v1/sessions/{id}/loop-protocol` with `{"activate":true}` initialize a
   draft protocol template when the file is missing; existing files are honored
-  without rewriting them. `affentserve` does not create this draft for ordinary
-  chat messages; chat-driven setup must go through the `loop_protocol`
-  `start_setup` action so loop state only appears after explicit user intent.
+  without rewriting them. `affentserve` does not create this draft from ordinary
+  chat messages or keyword-like text. Loop setup must enter the explicit
+  `loop_setup` runtime mode, or use the server/API loop-protocol endpoint, so
+  durable loop state only appears after an intentional runtime transition.
   A draft protocol is not treated as an active loop and is not fed into ordinary
   turns, even if its sidecar `state.json` is missing after manual file edits or
   partial recovery. The activation turn must make the model understand the user's intent,
@@ -897,15 +898,17 @@ Affent stores durable state as inspectable files:
   then close the loop through plan/rule/protocol/eval changes only when the
   evidence changes direction.
   When `affentserve` loop protocol support is enabled, the model also sees the
-  narrow `loop_protocol` tool. It can initialize a chat-driven draft with
-  `start_setup`, read the draft, write bounded draft updates, or call
-  `complete_activation` with the full supplemented protocol;
+  narrow `loop_protocol` tool. In explicit loop setup mode it can initialize a
+  draft with `start_setup`; otherwise it can read the draft, write bounded draft
+  updates, or call `complete_activation` with the full supplemented protocol;
   `complete_activation` requires metadata `status: running` plus a recorded
   calibration question/answer pair, and each recorded follow-up calibration
   question must be answered before activation. It records
-  `loop.protocol_activate`. This lets ordinary chat requests and WebUI buttons
-  share the same calibration-first setup path, and avoids asking the model to
-  edit server-managed session state through ordinary workspace file tools.
+  `loop.protocol_activate`. This lets WebUI buttons, CLI loop setup, and API
+  activation share the same calibration-first setup path, while ordinary chat
+  remains a non-activation surface unless the runtime has already transitioned
+  into loop setup. It also avoids asking the model to edit server-managed
+  session state through ordinary workspace file tools.
   One-shot `affentctl run` resumes the same draft-session calibration state as
   chat: when a previous assistant message asked a loop calibration question,
   the next run prompt is recorded as a `loop.protocol_calibration` event before

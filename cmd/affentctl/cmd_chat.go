@@ -172,9 +172,9 @@ Slash commands inside the REPL:
 				}
 			}
 		}
-		loopActivatedFromCalibration := false
+		loopCalibrationRecorded := false
 		if !strings.HasPrefix(line, "/") {
-			loopActivatedFromCalibration = recordCurrentSessionLoopCalibrationAnswerIfReady(b, turnText)
+			loopCalibrationRecorded = recordCurrentSessionLoopCalibrationAnswerIfReady(b, turnText)
 		}
 
 		// Per-turn cancellation context: Ctrl+C only kills the active
@@ -202,8 +202,8 @@ Slash commands inside the REPL:
 		}
 		if loopActivationAttempt {
 			finalizeCurrentSessionLoopActivation(b)
-		} else if loopActivatedFromCalibration {
-			installCurrentSessionLoopProtocol(b)
+		} else if loopCalibrationRecorded {
+			fmt.Fprintln(os.Stderr, "[loop] calibration answer recorded; activate with loop_protocol complete_activation after any needed draft patches")
 		}
 		emitPlanChange(planBefore, currentSessionPlanSummary(b))
 		cancelTurn()
@@ -619,7 +619,7 @@ func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string
 		return false
 	}
 	publishCurrentSessionLoopCalibrationEvent(b, sse.TypeLoopCalibration, state)
-	return activateCurrentSessionLoopProtocolIfReady(b, path)
+	return true
 }
 
 func publishCurrentSessionLoopCalibrationEvent(b *loopBundle, typ string, state loopstate.State) {
