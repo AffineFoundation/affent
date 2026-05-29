@@ -90,7 +90,9 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				continue
 			}
 			state.LatestRequestText = compactSummary(p.Text, opts.SummaryMaxChar)
-			state.Objective = compactSummary(firstNonEmpty(p.DisplayText, p.Text), opts.SummaryMaxChar)
+			if state.Objective == "" {
+				state.Objective = compactSummary(firstNonEmpty(p.DisplayText, p.Text), opts.SummaryMaxChar)
+			}
 			state.RequestMode = NormalizeRequestMode(p.Mode)
 			state.RequestSource = NormalizeRequestSource(p.Source)
 			state.ScheduleID = strings.TrimSpace(p.ScheduleID)

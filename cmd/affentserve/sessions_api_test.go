@@ -1423,6 +1423,54 @@ func TestSummarizeDurableSessionDefaultsTaskRequestSourceToUser(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionKeepsTaskObjectiveAcrossScheduledTicks(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "task-state-scheduled-objective")
+	dir := pool.sessionDirPath("task-state-scheduled-objective")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Build a release notes generator and keep iterating until tests pass.",
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t1",
+		Reason: sse.TurnEndCompleted,
+	}) + sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID:       "t2",
+		Text:         "Scheduled loop tick for release notes generator",
+		DisplayText:  "Loop tick: continue release notes generator",
+		Source:       "schedule",
+		ScheduleID:   "sched_release_notes",
+		ScheduleKind: sessionScheduleKindLoopTick,
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t2",
+		Reason: sse.TurnEndCompleted,
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "task-state-scheduled-objective")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if summary.TopicUserMessage != "Build a release notes generator and keep iterating until tests pass." {
+		t.Fatalf("topic_user_message = %q, want durable first task request", summary.TopicUserMessage)
+	}
+	if task.Objective != "Build a release notes generator and keep iterating until tests pass." {
+		t.Fatalf("objective = %q, want durable first task request", task.Objective)
+	}
+	if task.RequestSource != "schedule" || task.ScheduleKind != sessionScheduleKindLoopTick || task.ScheduleID != "sched_release_notes" {
+		t.Fatalf("request provenance = source:%q kind:%q id:%q, want latest scheduled tick", task.RequestSource, task.ScheduleKind, task.ScheduleID)
+	}
+	if !stringSliceContains(task.KnownFacts, "latest request source: schedule "+sessionScheduleKindLoopTick+" sched_release_notes") {
+		t.Fatalf("known_facts = %+v, want latest scheduled request fact", task.KnownFacts)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRuntimeOwnedToolEvidence(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

@@ -41,7 +41,7 @@ func populateSessionTaskState(summary *sessionSummary, eventsPath string) error 
 
 func deriveSessionTaskState(summary sessionSummary, eventState sessionTaskEventState) sessionTaskStateSummary {
 	task := sessionTaskStateSummary{
-		Objective:         firstNonEmpty(summary.TopicUserMessage, eventState.LatestRequestText, summary.LatestUserMessage),
+		Objective:         firstNonEmpty(eventState.Objective, summary.TopicUserMessage, eventState.LatestRequestText, summary.LatestUserMessage),
 		Status:            sessionTaskStatus(summary, eventState),
 		CurrentStep:       sessionTaskCurrentStep(summary),
 		RequestMode:       eventState.RequestMode,

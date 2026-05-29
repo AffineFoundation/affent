@@ -127,6 +127,46 @@ func TestToolSemanticsAreSharedTaskStateInputs(t *testing.T) {
 	}
 }
 
+func TestScanEventsKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
+	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Build a small release notes generator and keep iterating until tests pass.",
+	}) +
+		taskStateEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+		}) +
+		taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+			TurnID:       "t2",
+			Text:         "Scheduled loop tick for release notes generator",
+			DisplayText:  "Loop tick: continue release notes generator",
+			Source:       "schedule",
+			ScheduleID:   "sched_release_notes",
+			ScheduleKind: "loop_tick",
+		}) +
+		taskStateEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t2",
+			Reason: sse.TurnEndCompleted,
+		})
+
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("ScanEvents returned nil")
+	}
+	if state.Objective != "Build a small release notes generator and keep iterating until tests pass." {
+		t.Fatalf("objective = %q, want first durable task request", state.Objective)
+	}
+	if state.LatestRequestText != "Scheduled loop tick for release notes generator" {
+		t.Fatalf("latest request = %q, want latest scheduled prompt", state.LatestRequestText)
+	}
+	if state.RequestSource != "schedule" || state.ScheduleKind != "loop_tick" || state.ScheduleID != "sched_release_notes" {
+		t.Fatalf("request provenance = source:%q kind:%q id:%q, want latest scheduled tick", state.RequestSource, state.ScheduleKind, state.ScheduleID)
+	}
+}
+
 func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 	t.Helper()
 	ev, err := sse.NewEvent(eventType, payload)

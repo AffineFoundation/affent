@@ -1593,9 +1593,9 @@ func userMessageSummariesFromEventsFile(path string) (string, string, error) {
 	if latest == "" {
 		latest = head.Latest
 	}
-	topic := tail.Topic
+	topic := head.Topic
 	if topic == "" {
-		topic = head.Topic
+		topic = tail.Topic
 	}
 	if topic == "" {
 		topic = latest
@@ -1630,7 +1630,7 @@ func scanUserMessagesFromEvents(r *bufio.Reader) (sessionUserMessageScan, error)
 			continue
 		}
 		scan.Latest = summary
-		if !isContinuationSessionPrompt(summary) {
+		if scan.Topic == "" && !isContinuationSessionPrompt(summary) {
 			scan.Topic = summary
 		}
 	}
