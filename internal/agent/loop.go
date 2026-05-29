@@ -602,8 +602,10 @@ func WithRuntimeContextSystemGuidance(prompt string, now time.Time) string {
 	if now.IsZero() {
 		now = time.Now()
 	}
+	now = now.UTC()
 	return prompt + "\n\n" + runtimeContextSystemGuidanceMarker + "\n" +
-		"- Current UTC date: " + now.UTC().Format(time.DateOnly) + ".\n" +
+		"- Current UTC date: " + now.Format(time.DateOnly) + ".\n" +
+		"- Current UTC time: " + now.Format(time.RFC3339) + ". Use this timestamp for relative timer and reminder calculations.\n" +
 		"- For current/latest/market/news facts, use this as the access date only when a source lacks its own timestamp. Do not invent source dates; distinguish source publication/update dates from access date."
 }
 
@@ -735,6 +737,9 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	}
 	if hasRegisteredTool(reg, LoopProtocolToolName) {
 		prompt = WithLoopProtocolSystemGuidance(prompt)
+	}
+	if hasRegisteredTool(reg, SessionScheduleToolName) {
+		prompt = WithSessionScheduleSystemGuidance(prompt)
 	}
 	return prompt
 }

@@ -490,6 +490,8 @@ func TestWithRuntimeContextSystemGuidance_IncludesDateAndFreshnessRule(t *testin
 	for _, want := range []string{
 		"Runtime context:",
 		"Current UTC date: 2026-05-25.",
+		"Current UTC time: 2026-05-25T04:34:56Z.",
+		"relative timer and reminder calculations",
 		"access date",
 		"Do not invent source dates",
 		"distinguish source publication/update dates from access date",
@@ -497,6 +499,54 @@ func TestWithRuntimeContextSystemGuidance_IncludesDateAndFreshnessRule(t *testin
 		if !strings.Contains(got, want) {
 			t.Fatalf("runtime context guidance missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestWithSessionScheduleSystemGuidance_AppendsOnce(t *testing.T) {
+	base := "be helpful"
+	once := WithSessionScheduleSystemGuidance(base)
+	for _, want := range []string{
+		"Session scheduling:",
+		"session_schedule",
+		"timers",
+		"recurring checks",
+		"does not require LOOP.md",
+		"loop_protocol only for durable long-running task state",
+		"RFC3339 next_run_at",
+		"repeat_interval_seconds",
+		"kind=loop_tick",
+		"already-running LOOP.md",
+	} {
+		if !strings.Contains(once, want) {
+			t.Fatalf("session schedule guidance missing %q:\n%s", want, once)
+		}
+	}
+	if twice := WithSessionScheduleSystemGuidance(once); twice != once {
+		t.Fatal("session schedule guidance should be idempotent")
+	}
+	if got := WithSessionScheduleSystemGuidance(""); !strings.Contains(got, DefaultSystemPrompt) || !strings.Contains(got, "Session scheduling:") {
+		t.Fatalf("empty prompt should fall back to default + session schedule guidance:\n%s", got)
+	}
+}
+
+func TestWithRegistrySystemGuidanceSeparatesScheduleAndLoopResponsibilities(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: LoopProtocolToolName})
+	reg.Add(&Tool{Name: SessionScheduleToolName})
+
+	got := WithRegistrySystemGuidance("be helpful", reg)
+	for _, want := range []string{
+		"Loop protocol maintenance:",
+		"Session scheduling:",
+		"ordinary timers and recurring checks should create or update a session_schedule",
+		"Use kind=loop_tick only when a scheduled turn is intentionally nudging an already-running LOOP.md",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("registry guidance missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Index(got, "Session scheduling:") < strings.Index(got, "Loop protocol maintenance:") {
+		t.Fatalf("schedule guidance should follow loop guidance so the boundary is the latest tool-governance note:\n%s", got)
 	}
 }
 
