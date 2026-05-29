@@ -24,6 +24,8 @@ describe("SessionFilesPanel", () => {
     expect(tree).toHaveTextContent("src");
     expect(tree).toHaveTextContent("payments.ts");
     expect(tree).toHaveTextContent("Read + Changed");
+    expect(screen.getByTestId("session-files-selected")).toHaveTextContent("src/payments.ts");
+    expect(within(tree).queryByRole("button", { name: "Copy path" })).not.toBeInTheDocument();
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("snapshot before latest change");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("export function checkout");
@@ -52,15 +54,19 @@ describe("SessionFilesPanel", () => {
     await user.click(screen.getByRole("button", { name: "Go" }));
     expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 2-2");
 
-    await user.click(within(tree).getAllByRole("button", { name: "Copy path" })[0]);
+    await user.click(within(tree).getByRole("button", { name: /src Listed/ }));
+    expect(screen.getByTestId("session-files-selected")).toHaveTextContent("src");
+    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith("src");
     await user.click(screen.getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File snapshot for src/payments.ts"));
-    await user.click(within(tree).getByRole("button", { name: "Evidence" }));
+    await user.click(within(tree).getByRole("button", { name: /payments.ts Read/ }));
+    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
-    await user.click(within(tree).getByRole("button", { name: "Review file" }));
+    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Review file" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review this changed file in the next step"), "file_evidence");
-    await user.click(within(tree).getByRole("button", { name: "Use listing" }));
+    await user.click(within(tree).getByRole("button", { name: /src Listed/ }));
+    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Use listing" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this listed directory in the next step"), "file_evidence");
 
     await user.clear(screen.getByLabelText("Search file snapshot"));
@@ -72,7 +78,7 @@ describe("SessionFilesPanel", () => {
 
     await user.click(within(screen.getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ }));
     expect(tree).toHaveTextContent("payments.ts");
-    expect(within(tree).queryByRole("button", { name: "Use listing" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("session-files-selected")).toHaveTextContent("payments.ts");
 
     await user.type(screen.getByLabelText("Search files"), "missing.ts");
     expect(screen.queryByTestId("session-files-list")).toBeNull();
@@ -151,9 +157,7 @@ describe("SessionFilesPanel", () => {
       />,
     );
 
-    const tree = screen.getByTestId("session-files-list");
-    const currentButtons = within(tree).getAllByRole("button", { name: "Current" });
-    await user.click(currentButtons[1]);
+    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Open current" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
 
     expect(screen.getByLabelText("File explorer")).toHaveTextContent("Workspace root");

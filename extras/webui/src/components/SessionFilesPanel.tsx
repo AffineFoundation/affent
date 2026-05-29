@@ -44,6 +44,7 @@ export function SessionFilesPanel({
   const [lineJump, setLineJump] = useState("");
   const [workspaceQuery, setWorkspaceQuery] = useState("");
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
+  const [selectedEvidencePath, setSelectedEvidencePath] = useState<string | undefined>();
   const [selectedRange, setSelectedRange] = useState<{ path: string; start: number; end: number } | undefined>();
   const [filter, setFilter] = useState<FileFilter>("all");
   const [wrapLines, setWrapLines] = useState(true);
@@ -54,6 +55,9 @@ export function SessionFilesPanel({
   const treeNodes = useMemo(() => buildFileTree(visibleItems), [visibleItems]);
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
   const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
+  const selectedEvidence = visibleItems.find((item) => item.path === selectedEvidencePath)
+    ?? selectedItem
+    ?? visibleItems[0];
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
   const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
   const workspaceReady = workspaceBrowser?.state === "ready" ? workspaceBrowser.file : undefined;
@@ -66,6 +70,7 @@ export function SessionFilesPanel({
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
 
   function openEvidenceItem(item: SessionFileEvidence) {
+    setSelectedEvidencePath(item.path);
     if (item.contentPreview) {
       setSelectedPath(item.path);
       return;
@@ -187,14 +192,19 @@ export function SessionFilesPanel({
               <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
               <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
             </div>
+            {selectedEvidence ? (
+              <SelectedFileEvidence
+                item={selectedEvidence}
+                onOpenWorkspacePath={onOpenWorkspacePath}
+                onOpenArtifact={onOpenArtifact}
+                onUseAsDraft={onUseAsDraft}
+              />
+            ) : null}
             <FileEvidenceTree
               nodes={treeNodes}
-              selectedPath={selectedItem?.path}
+              selectedPath={selectedEvidence?.path}
               onOpenDirectory={(path) => onOpenWorkspacePath?.(path)}
               onOpenItem={openEvidenceItem}
-              onOpenWorkspacePath={onOpenWorkspacePath}
-              onOpenArtifact={onOpenArtifact}
-              onUseAsDraft={onUseAsDraft}
             />
             {visibleItems.length === 0 ? (
               files.items.length > 0 ? (
@@ -421,17 +431,11 @@ function FileEvidenceTree({
   selectedPath,
   onOpenDirectory,
   onOpenItem,
-  onOpenWorkspacePath,
-  onOpenArtifact,
-  onUseAsDraft,
 }: {
   nodes: FileTreeNode[];
   selectedPath?: string;
   onOpenDirectory: (path: string) => void;
   onOpenItem: (item: SessionFileEvidence) => void;
-  onOpenWorkspacePath?: (path: string) => void;
-  onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   if (nodes.length === 0) return null;
   return (
@@ -444,9 +448,6 @@ function FileEvidenceTree({
           selectedPath={selectedPath}
           onOpenDirectory={onOpenDirectory}
           onOpenItem={onOpenItem}
-          onOpenWorkspacePath={onOpenWorkspacePath}
-          onOpenArtifact={onOpenArtifact}
-          onUseAsDraft={onUseAsDraft}
         />
       ))}
     </ol>
@@ -459,20 +460,14 @@ function FileTreeBranch({
   selectedPath,
   onOpenDirectory,
   onOpenItem,
-  onOpenWorkspacePath,
-  onOpenArtifact,
-  onUseAsDraft,
 }: {
   node: FileTreeNode;
   depth: number;
   selectedPath?: string;
   onOpenDirectory: (path: string) => void;
   onOpenItem: (item: SessionFileEvidence) => void;
-  onOpenWorkspacePath?: (path: string) => void;
-  onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
-  const isDirectory = node.children.length > 0;
+  const isDirectory = node.children.length > 0 || isDirectoryEvidence(node.item);
   const item = node.item;
   return (
     <li className="session-files-tree-node" data-kind={isDirectory ? "directory" : "file"} data-status={item?.status} data-selected={selectedPath === item?.path ? "true" : "false"}>
@@ -483,31 +478,11 @@ function FileTreeBranch({
         onClick={() => (item ? onOpenItem(item) : onOpenDirectory(node.path))}
       >
         <span className="session-files-tree-icon" aria-hidden="true">
-          {isDirectory ? "▸" : item?.actions.includes("changed") ? "M" : item?.contentPreview ? "R" : "F"}
+          {isDirectory ? "D" : item?.actions.includes("changed") ? "M" : item?.contentPreview ? "R" : "F"}
         </span>
-        <strong title={node.path}>{node.name}</strong>
+        <strong title={node.path}>{displayTreeName(node)}</strong>
         {item ? <small>{compactFileMeta(item)}</small> : <small>{node.children.length}</small>}
       </button>
-      {item ? (
-        <span className="session-files-actions" style={{ "--depth": depth } as CSSProperties}>
-          {onOpenWorkspacePath ? (
-            <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(item.path)}>
-              Current
-            </button>
-          ) : null}
-          {item.artifactPath && onOpenArtifact ? (
-            <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
-              Evidence
-            </button>
-          ) : null}
-          {onUseAsDraft ? (
-            <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
-              {fileDraftActionLabel(item)}
-            </button>
-          ) : null}
-          <CopyButton label="Copy path" value={item.path} className="ghost-action" />
-        </span>
-      ) : null}
       {node.children.length > 0 ? (
         <ol>
           {node.children.map((child) => (
@@ -518,14 +493,51 @@ function FileTreeBranch({
               selectedPath={selectedPath}
               onOpenDirectory={onOpenDirectory}
               onOpenItem={onOpenItem}
-              onOpenWorkspacePath={onOpenWorkspacePath}
-              onOpenArtifact={onOpenArtifact}
-              onUseAsDraft={onUseAsDraft}
             />
           ))}
         </ol>
       ) : null}
     </li>
+  );
+}
+
+function SelectedFileEvidence({
+  item,
+  onOpenWorkspacePath,
+  onOpenArtifact,
+  onUseAsDraft,
+}: {
+  item: SessionFileEvidence;
+  onOpenWorkspacePath?: (path: string) => void;
+  onOpenArtifact?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  return (
+    <div className="session-files-selected" data-testid="session-files-selected" data-status={item.status}>
+      <div>
+        <span>Selected</span>
+        <strong title={item.path}>{item.path === "." ? "workspace root" : item.path}</strong>
+        <small>{compactFileMeta(item)}</small>
+      </div>
+      <span className="session-files-selected-actions">
+        {onOpenWorkspacePath ? (
+          <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(item.path)}>
+            Open current
+          </button>
+        ) : null}
+        {item.artifactPath && onOpenArtifact ? (
+          <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
+            Evidence
+          </button>
+        ) : null}
+        {onUseAsDraft ? (
+          <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
+            {fileDraftActionLabel(item)}
+          </button>
+        ) : null}
+        <CopyButton label="Copy path" value={item.path} className="ghost-action" />
+      </span>
+    </div>
   );
 }
 
@@ -627,6 +639,15 @@ function fileDraftActionLabel(item: SessionFileEvidence): string {
   if (item.actions.includes("listed")) return "Use listing";
   if (item.contentPreview) return "Use snapshot";
   return "Use evidence";
+}
+
+function isDirectoryEvidence(item: SessionFileEvidence | undefined): boolean {
+  return Boolean(item?.actions.includes("listed") && !item.contentPreview && !item.actions.includes("changed"));
+}
+
+function displayTreeName(node: FileTreeNode): string {
+  if (node.path === "." || node.name === ".") return "workspace root";
+  return node.name;
 }
 
 function fileStats(files: SessionFilesView) {
