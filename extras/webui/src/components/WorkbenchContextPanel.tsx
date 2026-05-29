@@ -431,6 +431,8 @@ function TaskStateCard({
   if (!hasTaskState(taskState)) return null;
   const tone = taskStateTone(taskState);
   const rows = compact([
+    taskState.request_mode && taskState.request_mode !== "normal" ? { label: "Request mode", value: requestModeSummary(taskState) } : undefined,
+    taskState.request_source ? { label: "Request source", value: requestSourceSummary(taskState) } : undefined,
     taskState.current_step ? { label: "Current step", value: taskState.current_step } : undefined,
     taskState.next_step ? { label: "Next step", value: taskState.next_step } : undefined,
     taskState.verification_state && taskState.verification_state !== "unknown" ? { label: "Verification", value: verificationStateLabel(taskState.verification_state) } : undefined,
@@ -524,6 +526,10 @@ function hasTaskState(taskState?: SessionTaskStateSummary): taskState is Session
   return Boolean(
     taskState.objective?.trim()
       || taskState.current_step?.trim()
+      || taskState.request_mode?.trim()
+      || taskState.request_source?.trim()
+      || taskState.schedule_id?.trim()
+      || taskState.schedule_kind?.trim()
       || taskState.next_step?.trim()
       || (taskState.status && taskState.status !== "unknown")
       || taskState.constraints?.length
@@ -535,6 +541,18 @@ function hasTaskState(taskState?: SessionTaskStateSummary): taskState is Session
       || taskState.open_questions?.length
       || taskState.sources?.length,
   );
+}
+
+function requestModeSummary(taskState: SessionTaskStateSummary): string {
+  return taskState.request_mode?.trim().replace(/_/g, " ") || "normal";
+}
+
+function requestSourceSummary(taskState: SessionTaskStateSummary): string {
+  return compact([
+    taskState.request_source?.trim(),
+    taskState.schedule_kind?.trim(),
+    taskState.schedule_id?.trim(),
+  ]).join(" · ");
 }
 
 function taskStateTone(taskState: SessionTaskStateSummary): "ready" | "attention" | "error" {

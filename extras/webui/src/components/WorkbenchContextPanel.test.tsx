@@ -257,6 +257,10 @@ describe("WorkbenchContextPanel", () => {
         taskState={{
           objective: "Harden inline message editing",
           status: "running",
+          request_mode: "execute_plan",
+          request_source: "schedule",
+          schedule_id: "sched_context",
+          schedule_kind: "checkin",
           current_step: "Wire task_state into Workbench Context",
           next_step: "Run WorkbenchContextPanel tests and screenshot the Context tab",
           changed_files: [{ path: "extras/webui/src/components/WorkbenchContextPanel.tsx", action: "edit" }],
@@ -277,6 +281,10 @@ describe("WorkbenchContextPanel", () => {
 
     const taskState = screen.getByTestId("workbench-task-state");
     expect(taskState).toHaveTextContent("Harden inline message editing");
+    expect(taskState).toHaveTextContent("Request mode");
+    expect(taskState).toHaveTextContent("execute plan");
+    expect(taskState).toHaveTextContent("Request source");
+    expect(taskState).toHaveTextContent("schedule · checkin · sched_context");
     expect(taskState).toHaveTextContent("Current step");
     expect(taskState).toHaveTextContent("Wire task_state into Workbench Context");
     expect(taskState).toHaveTextContent("Next step");

@@ -30,6 +30,14 @@ describe("workbenchContext", () => {
     const input = {
       overview,
       hasSelectedSession: true,
+      taskState: {
+        objective: "Fix checkout tests",
+        status: "running",
+        request_mode: "execute_plan",
+        request_source: "schedule",
+        schedule_kind: "checkin",
+        schedule_id: "sched_checkout",
+      },
       changes: { summary: "2 changed files", detail: "2 changed", files: [{ path: "src/payments.ts", operation: "edit" as const, status: "changed" as const, turnNumber: 1, actionCount: 1 }] },
       run: { summary: "1 failed command", detail: "1 failed", tone: "error" as const, commands: [{ command: "npm test", status: "failed" as const, turnNumber: 1, exitCode: 1 }] },
       artifacts: [{ path: ".affent/artifacts/test.log", name: "test.log", source: "npm test", summary: "checkout failure log", truncated: true, bytes: 4096 }],
@@ -38,6 +46,8 @@ describe("workbenchContext", () => {
     expect(workbenchContextSummary(overview, true)).toBe("Review needed");
     expect(buildWorkbenchContextEvidence(input).map((item) => item.label)).toEqual(["Changes", "Run", "Artifacts"]);
     expect(workbenchContextEvidenceText(input)).toContain("Next step: update payment route");
+    expect(workbenchContextEvidenceText(input)).toContain("Task request mode: execute_plan");
+    expect(workbenchContextEvidenceText(input)).toContain("Task request source: schedule · checkin · sched_checkout");
     expect(workbenchContextEvidenceText(input)).toContain("Artifacts: 1 artifact · Latest full output: test.log · from npm test");
     expect(workbenchContextEvidenceText(input)).not.toContain("checkout failure log");
     expect(workbenchContextEvidenceText(input)).not.toContain("Tokens: 12k");

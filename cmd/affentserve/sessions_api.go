@@ -135,6 +135,10 @@ type sessionTaskStateSummary struct {
 	Objective         string                     `json:"objective,omitempty"`
 	Status            string                     `json:"status,omitempty"`
 	CurrentStep       string                     `json:"current_step,omitempty"`
+	RequestMode       string                     `json:"request_mode,omitempty"`
+	RequestSource     string                     `json:"request_source,omitempty"`
+	ScheduleID        string                     `json:"schedule_id,omitempty"`
+	ScheduleKind      string                     `json:"schedule_kind,omitempty"`
 	Constraints       []string                   `json:"constraints,omitempty"`
 	KnownFacts        []string                   `json:"known_facts,omitempty"`
 	ChangedFiles      []sessionTaskStateFile     `json:"changed_files,omitempty"`
@@ -1289,6 +1293,18 @@ func taskStateSummaryEvidence(s *sessionTaskStateSummary) int64 {
 		total++
 	}
 	if s.CurrentStep != "" {
+		total++
+	}
+	if s.RequestMode != "" {
+		total++
+	}
+	if s.RequestSource != "" {
+		total++
+	}
+	if s.ScheduleID != "" {
+		total++
+	}
+	if s.ScheduleKind != "" {
 		total++
 	}
 	if s.NextStep != "" {

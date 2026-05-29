@@ -1246,8 +1246,13 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	dir := pool.sessionDirPath("task-state-events")
 
 	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
-		TurnID: "t1",
-		Text:   "Fix clamp behavior, verify it, and push the code",
+		TurnID:       "t1",
+		Text:         "Fix clamp behavior, verify it, and push the code",
+		DisplayText:  "Scheduled fix clamp behavior",
+		Mode:         "execute_plan",
+		Source:       "schedule",
+		ScheduleID:   "sched_clamp",
+		ScheduleKind: "checkin",
 	}) +
 		sessionEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
 			TurnID:    "t1",
@@ -1337,8 +1342,11 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
 	}
 	task := summary.TaskState
-	if task.Objective != "Fix clamp behavior, verify it, and push the code" || task.Status != "completed" {
+	if task.Objective != "Scheduled fix clamp behavior" || task.Status != "completed" {
 		t.Fatalf("task_state objective/status = %q/%q, want completed clamp task", task.Objective, task.Status)
+	}
+	if task.RequestMode != "execute_plan" || task.RequestSource != "schedule" || task.ScheduleID != "sched_clamp" || task.ScheduleKind != "checkin" {
+		t.Fatalf("request fields = mode:%q source:%q schedule:%q kind:%q, want scheduled execute_plan", task.RequestMode, task.RequestSource, task.ScheduleID, task.ScheduleKind)
 	}
 	if task.VerificationState != "last_shell_passed" {
 		t.Fatalf("verification_state = %q, want last_shell_passed", task.VerificationState)
@@ -1358,8 +1366,12 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	if !stringSliceContains(task.KnownFacts, "available capabilities: workspace, memory/history") {
 		t.Fatalf("known_facts = %+v, want available runtime capabilities", task.KnownFacts)
 	}
-	if !stringSliceContains(task.Sources, "runtime_surface") || !stringSliceContains(task.Sources, "runtime_workspace") {
-		t.Fatalf("sources = %+v, want runtime workspace sources", task.Sources)
+	if !stringSliceContains(task.KnownFacts, "latest request mode: execute_plan") ||
+		!stringSliceContains(task.KnownFacts, "latest request source: schedule checkin sched_clamp") {
+		t.Fatalf("known_facts = %+v, want request provenance", task.KnownFacts)
+	}
+	if !stringSliceContains(task.Sources, "runtime_surface") || !stringSliceContains(task.Sources, "runtime_workspace") || !stringSliceContains(task.Sources, "schedule") {
+		t.Fatalf("sources = %+v, want runtime workspace and schedule sources", task.Sources)
 	}
 	if len(task.ChangedFiles) != 1 || task.ChangedFiles[0].Path != "app/mathutil/clamp.go" || task.ChangedFiles[0].Action != "edit" {
 		t.Fatalf("changed_files = %+v, want edited clamp.go", task.ChangedFiles)

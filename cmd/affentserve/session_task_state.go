@@ -22,6 +22,11 @@ const (
 
 type sessionTaskEventState struct {
 	LatestTurnStatus  string
+	LatestRequestText string
+	RequestMode       string
+	RequestSource     string
+	ScheduleID        string
+	ScheduleKind      string
 	RuntimeSurface    *sse.RuntimeSurfacePayload
 	RuntimeWorkspace  *sse.RuntimeWorkspace
 	ChangedFiles      []sessionTaskStateFile
@@ -65,9 +70,13 @@ func populateSessionTaskState(summary *sessionSummary, eventsPath string) error 
 
 func deriveSessionTaskState(summary sessionSummary, eventState sessionTaskEventState) sessionTaskStateSummary {
 	task := sessionTaskStateSummary{
-		Objective:         firstNonEmpty(summary.TopicUserMessage, summary.LatestUserMessage),
+		Objective:         firstNonEmpty(summary.TopicUserMessage, eventState.LatestRequestText, summary.LatestUserMessage),
 		Status:            sessionTaskStatus(summary, eventState),
 		CurrentStep:       sessionTaskCurrentStep(summary),
+		RequestMode:       eventState.RequestMode,
+		RequestSource:     eventState.RequestSource,
+		ScheduleID:        eventState.ScheduleID,
+		ScheduleKind:      eventState.ScheduleKind,
 		ChangedFiles:      eventState.ChangedFiles,
 		AttemptedActions:  eventState.AttemptedActions,
 		FailedActions:     eventState.FailedActions,
@@ -121,6 +130,18 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 			continue
 		}
 		switch ev.Type {
+		case sse.TypeUserMessage:
+			var p sse.UserMessagePayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			state.LatestRequestText = compactTaskSummary(p.Text)
+			state.RequestMode = strings.TrimSpace(p.Mode)
+			state.RequestSource = strings.TrimSpace(p.Source)
+			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
+			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
+			addTaskStateSource(state, state.RequestSource)
+			seen = true
 		case sse.TypeRuntimeSurface:
 			var p sse.RuntimeSurfacePayload
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -292,6 +313,12 @@ func sessionTaskConstraints(summary sessionSummary, eventState sessionTaskEventS
 
 func sessionTaskKnownFacts(summary sessionSummary, eventState sessionTaskEventState) []string {
 	var out []string
+	if requestMode := strings.TrimSpace(eventState.RequestMode); requestMode != "" && requestMode != "normal" {
+		out = appendUniqueLimited(out, "latest request mode: "+requestMode, sessionTaskStateMaxItems)
+	}
+	if requestSource := sessionTaskRequestSourceFact(eventState); requestSource != "" {
+		out = appendUniqueLimited(out, requestSource, sessionTaskStateMaxItems)
+	}
 	if summary.WorkspaceLabel != "" {
 		out = appendUniqueLimited(out, "workspace: "+summary.WorkspaceLabel, sessionTaskStateMaxItems)
 	}
@@ -316,6 +343,22 @@ func sessionTaskKnownFacts(summary sessionSummary, eventState sessionTaskEventSt
 		out = appendUniqueLimited(out, "available capabilities: "+strings.Join(available, ", "), sessionTaskStateMaxItems)
 	}
 	return out
+}
+
+func sessionTaskRequestSourceFact(eventState sessionTaskEventState) string {
+	source := strings.TrimSpace(eventState.RequestSource)
+	if source == "" {
+		return ""
+	}
+	var parts []string
+	parts = append(parts, "latest request source: "+source)
+	if kind := strings.TrimSpace(eventState.ScheduleKind); kind != "" {
+		parts = append(parts, kind)
+	}
+	if id := strings.TrimSpace(eventState.ScheduleID); id != "" {
+		parts = append(parts, id)
+	}
+	return strings.Join(parts, " ")
 }
 
 func sessionTaskNextStep(task sessionTaskStateSummary, summary sessionSummary) string {
@@ -462,6 +505,10 @@ func sessionTaskStateEmpty(task sessionTaskStateSummary) bool {
 	return task.Objective == "" &&
 		(task.Status == "" || task.Status == "unknown") &&
 		task.CurrentStep == "" &&
+		task.RequestMode == "" &&
+		task.RequestSource == "" &&
+		task.ScheduleID == "" &&
+		task.ScheduleKind == "" &&
 		len(task.Constraints) == 0 &&
 		len(task.KnownFacts) == 0 &&
 		len(task.ChangedFiles) == 0 &&

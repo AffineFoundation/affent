@@ -528,6 +528,10 @@ export interface SessionTaskStateSummary {
   objective?: string;
   status?: string;
   current_step?: string;
+  request_mode?: string;
+  request_source?: string;
+  schedule_id?: string;
+  schedule_kind?: string;
   constraints?: string[];
   known_facts?: string[];
   changed_files?: SessionTaskStateFile[];

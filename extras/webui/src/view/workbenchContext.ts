@@ -302,6 +302,10 @@ export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInpu
   if (input.requestMode) lines.push(`Request mode: ${input.requestMode.label}${input.requestMode.detail ? ` · ${input.requestMode.detail}` : ""}`);
   if (input.taskState?.objective) lines.push(`Task objective: ${input.taskState.objective}`);
   if (input.taskState?.status && input.taskState.status !== "unknown") lines.push(`Task status: ${input.taskState.status}`);
+  if (input.taskState?.request_mode && input.taskState.request_mode !== "normal") lines.push(`Task request mode: ${input.taskState.request_mode}`);
+  if (input.taskState?.request_source) {
+    lines.push(`Task request source: ${[input.taskState.request_source, input.taskState.schedule_kind, input.taskState.schedule_id].filter(Boolean).join(" · ")}`);
+  }
   if (input.taskState?.current_step) lines.push(`Current step: ${input.taskState.current_step}`);
   if (input.taskState?.next_step) lines.push(`Next step: ${input.taskState.next_step}`);
   if (input.taskState?.verification_state && input.taskState.verification_state !== "unknown") lines.push(`Verification: ${input.taskState.verification_state}`);
