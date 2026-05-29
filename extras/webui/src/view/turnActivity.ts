@@ -5,7 +5,7 @@ import { summarizeUserError } from "./errorSummary";
 import { buildExecutionTree, formatTokenUsageCompact, type ExecutionTreeNode } from "./executionTree";
 import { memoryUpdatesForTurn, type MemoryUpdateSummary } from "./memoryUpdate";
 import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
-import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
+import { artifactCountLabel, chatVisibleTurnArtifacts } from "./turnArtifacts";
 import { formatByteCount } from "./byteFormat";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
 
@@ -627,7 +627,7 @@ function hasDelegatedWork(nodes: readonly TurnActivityNode[]): boolean {
 function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string[] {
   const meta: string[] = [];
   const evidenceCount = countEvidence(nodes);
-  const artifactLabel = artifactCountLabel(buildTurnArtifacts(turn));
+  const artifactLabel = artifactCountLabel(chatVisibleTurnArtifacts(turn));
   const delegatedCount = nodes.filter(isDelegatedNode).length;
   if (delegatedCount > 0) {
     meta.push(`${delegatedCount} delegated ${pluralize("task", delegatedCount)}`);

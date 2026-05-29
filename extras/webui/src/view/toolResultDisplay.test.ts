@@ -13,6 +13,15 @@ describe("tool result display policy", () => {
     }
   });
 
+  it("recognizes raw source capture artifacts when only the display source is available", () => {
+    const source = { source: "browser_navigate" };
+
+    expect(showsChatArtifact(source)).toBe(false);
+    expect(showsWorkbenchArtifact(source)).toBe(false);
+    expect(showsResultStorageChrome(source)).toBe(false);
+    expect(showsToolContextChrome(source)).toBe(false);
+  });
+
   it("keeps normal tool output chrome visible", () => {
     const source = { tool: "shell" };
 

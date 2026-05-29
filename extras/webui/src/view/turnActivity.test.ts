@@ -1012,6 +1012,33 @@ describe("buildTurnActivity", () => {
     expect(activity?.items.map((item) => item.label)).not.toContain("Artifact");
   });
 
+  it("keeps browser capture artifacts out of the activity digest meta", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "browser", tool: "browser_navigate", args: { url: "https://example.test" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "browser",
+          exit_code: 0,
+          duration_ms: 80,
+          result_summary: "PAGE TEXT: Example",
+          result: "PAGE TEXT: Example",
+          result_artifact_path: ".affent/artifacts/tool-results/000001-call_browser.txt",
+          result_bytes: 22000,
+          result_cap_bytes: 262144,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest.meta.join(" ")).not.toContain("file");
+    expect(activity?.digest.meta.join(" ")).not.toContain("000001-call_browser.txt");
+  });
+
   it("labels max-turn continuation as a draft request", () => {
     const turn = reduceRawEvents(maxTurns).turns[0];
     const activity = buildTurnActivity(turn);

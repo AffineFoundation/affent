@@ -1,6 +1,7 @@
 export interface ToolResultSource {
   tool?: string;
   originalTool?: string;
+  source?: string;
 }
 
 export function showsChatArtifact(source: ToolResultSource): boolean {
@@ -24,7 +25,7 @@ function isRawSourceCapture(source: ToolResultSource): boolean {
 }
 
 function toolNames(source: ToolResultSource): string[] {
-  return [source.tool, source.originalTool].filter((tool): tool is string => typeof tool === "string" && tool.length > 0);
+  return [source.tool, source.originalTool, source.source].filter((tool): tool is string => typeof tool === "string" && tool.length > 0);
 }
 
 const rawSourceCaptureTools = new Set([

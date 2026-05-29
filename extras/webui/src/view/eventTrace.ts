@@ -4,6 +4,7 @@ import { formatByteCount } from "./byteFormat";
 import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactDisplayLabel, artifactName } from "./turnArtifacts";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
+import { showsResultStorageChrome } from "./toolResultDisplay";
 
 export type EventTraceItem =
   | { kind: "event"; event: NormalizedEvent; display: EventDisplay }
@@ -746,7 +747,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
     sourceAccess?.resultPreview ? `preview ${sourceAccess.resultPreview}` : undefined,
     toolContextMeta(contextBytes, contextOmittedBytes),
-    artifactPath
+    artifactPath && showsResultStorageChrome({ tool })
       ? `artifact ${artifactDisplayLabel({
           path: artifactPath,
           name: artifactName(artifactPath),
