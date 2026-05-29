@@ -1236,6 +1236,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		if surface.CompactWindowPrefillInputTokens > 0 {
 			parts = append(parts, fmt.Sprintf("compact_window_prefill_input_tokens=`%d`", surface.CompactWindowPrefillInputTokens))
 		}
+		if surface.CompactWindowPrefillSource != "" {
+			parts = append(parts, fmt.Sprintf("compact_window_prefill_source=`%s`", timelineInline(surface.CompactWindowPrefillSource, 80)))
+		}
 		if surface.CompactScopedInputTokens > 0 {
 			parts = append(parts, fmt.Sprintf("compact_scoped_input_tokens=`%d`", surface.CompactScopedInputTokens))
 		}
@@ -1580,6 +1583,9 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 		if c.CompactWindowPrefillInputTokens > 0 {
 			policy = append(policy, fmt.Sprintf("compact_window_prefill_input_tokens=%d", c.CompactWindowPrefillInputTokens))
 		}
+		if c.CompactWindowPrefillSource != "" {
+			policy = append(policy, fmt.Sprintf("compact_window_prefill_source=%s", timelineInline(c.CompactWindowPrefillSource, 80)))
+		}
 		if c.CompactScopedInputTokens > 0 {
 			policy = append(policy, fmt.Sprintf("compact_scoped_input_tokens=%d", c.CompactScopedInputTokens))
 		}
@@ -1653,6 +1659,9 @@ func renderTimelineCompactionSkips(b *strings.Builder, trace *Trace) {
 		}
 		if skipped.CompactWindowPrefillInputTokens > 0 {
 			policy = append(policy, fmt.Sprintf("compact_window_prefill_input_tokens=%d", skipped.CompactWindowPrefillInputTokens))
+		}
+		if skipped.CompactWindowPrefillSource != "" {
+			policy = append(policy, fmt.Sprintf("compact_window_prefill_source=%s", timelineInline(skipped.CompactWindowPrefillSource, 80)))
 		}
 		if skipped.CompactScopedInputTokens > 0 {
 			policy = append(policy, fmt.Sprintf("compact_scoped_input_tokens=%d", skipped.CompactScopedInputTokens))

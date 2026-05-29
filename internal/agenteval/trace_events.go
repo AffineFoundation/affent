@@ -407,6 +407,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			CompactScopeActive:                 p.CompactScopeActive,
 			CompactWindowOrdinal:               p.CompactWindowOrdinal,
 			CompactWindowPrefillInputTokens:    p.CompactWindowPrefillInputTokens,
+			CompactWindowPrefillSource:         p.CompactWindowPrefillSource,
 			CompactScopedInputTokens:           p.CompactScopedInputTokens,
 			CompactHardInputLimitTokens:        p.CompactHardInputLimitTokens,
 			Reactive:                           p.Reactive,
@@ -443,6 +444,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			CompactScopeActive:                 p.CompactScopeActive,
 			CompactWindowOrdinal:               p.CompactWindowOrdinal,
 			CompactWindowPrefillInputTokens:    p.CompactWindowPrefillInputTokens,
+			CompactWindowPrefillSource:         p.CompactWindowPrefillSource,
 			CompactScopedInputTokens:           p.CompactScopedInputTokens,
 			CompactHardInputLimitTokens:        p.CompactHardInputLimitTokens,
 		})

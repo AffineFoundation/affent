@@ -2141,7 +2141,7 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 }
 
 func TestPublishRuntimeSurfaceReportsAutoCompactWindowScope(t *testing.T) {
-	events := make(chan sse.Event, 1)
+	events := make(chan sse.Event, 2)
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
 	if err != nil {
 		t.Fatal(err)
@@ -2173,9 +2173,21 @@ func TestPublishRuntimeSurfaceReportsAutoCompactWindowScope(t *testing.T) {
 	if !payload.CompactScopeActive ||
 		payload.CompactWindowOrdinal != 1 ||
 		payload.CompactWindowPrefillInputTokens != 1_000 ||
+		payload.CompactWindowPrefillSource != "estimated" ||
 		payload.CompactScopedInputTokens <= 0 ||
 		payload.CompactHardInputLimitTokens != 100_000 {
 		t.Fatalf("compact scope surface = %+v", payload)
+	}
+
+	loop.observeAutoCompactWindowInputTokens(1_200)
+	loop.publishRuntimeSurface("turn_scope_observed", TurnOptions{})
+	ev = <-events
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode observed runtime surface: %v", err)
+	}
+	if payload.CompactWindowPrefillInputTokens != 1_200 ||
+		payload.CompactWindowPrefillSource != "server_observed" {
+		t.Fatalf("observed compact scope surface = %+v", payload)
 	}
 }
 

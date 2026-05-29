@@ -309,6 +309,11 @@ const (
 	UserModeLoopSetup   = "loop_setup"
 )
 
+const (
+	compactWindowPrefillSourceEstimated      = "estimated"
+	compactWindowPrefillSourceServerObserved = "server_observed"
+)
+
 // TurnOptions scopes runtime controls to one SendUser call. Empty options
 // preserve the Loop's configured behavior.
 type TurnOptions struct {
@@ -3004,6 +3009,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		CompactScopeActive:                 requestPressure.ScopedWindowActivated,
 		CompactWindowOrdinal:               requestPressure.WindowOrdinal,
 		CompactWindowPrefillInputTokens:    requestPressure.PrefillInputTokens,
+		CompactWindowPrefillSource:         requestPressure.PrefillSource,
 		CompactScopedInputTokens:           requestPressure.ScopedInputTokens,
 		CompactHardInputLimitTokens:        requestPressure.HardInputLimitTokens,
 		CompactSummaryPromptMaxBytes:       l.compactSummaryPromptMaxBytes(),
@@ -3668,6 +3674,7 @@ type requestPressureStatus struct {
 	TriggerInputTokens    int
 	ScopedInputTokens     int
 	PrefillInputTokens    int
+	PrefillSource         string
 	WindowOrdinal         int64
 	HardInputLimitTokens  int
 	LimitReached          bool
@@ -3693,9 +3700,10 @@ func (l *Loop) requestPressureStatusForMessages(msgs []ChatMessage, toolDefs []T
 		status.LimitReached = true
 		return status
 	}
-	if ordinal, prefill, ok := l.autoCompactWindowPrefillTokens(); ok && l.autoCompactWindowScopeEnabled() {
+	if ordinal, prefill, source, ok := l.autoCompactWindowPrefillTokens(); ok && l.autoCompactWindowScopeEnabled() {
 		status.WindowOrdinal = ordinal
 		status.PrefillInputTokens = prefill
+		status.PrefillSource = source
 		status.ScopedInputTokens = max(0, estimated-prefill)
 		status.ScopedWindowActivated = true
 		status.LimitReached = status.ScopedInputTokens >= trigger
@@ -3771,17 +3779,19 @@ func (l *Loop) reservedOutputTokens() int {
 }
 
 type contextCompactPolicy struct {
-	EstimatedInputTokens       int
-	AfterEstimatedInputTokens  int
-	TriggerInputTokens         int
-	ScopedInputTokens          int
-	PrefillInputTokens         int
-	WindowOrdinal              int64
-	HardInputLimitTokens       int
-	ScopedWindowActivated      bool
-	WindowPrefillAfterCompact  int
-	WindowOrdinalAfterCompact  int64
-	RequireInputTokenReduction bool
+	EstimatedInputTokens            int
+	AfterEstimatedInputTokens       int
+	TriggerInputTokens              int
+	ScopedInputTokens               int
+	PrefillInputTokens              int
+	PrefillSource                   string
+	WindowOrdinal                   int64
+	HardInputLimitTokens            int
+	ScopedWindowActivated           bool
+	WindowPrefillAfterCompact       int
+	WindowPrefillSourceAfterCompact string
+	WindowOrdinalAfterCompact       int64
+	RequireInputTokenReduction      bool
 }
 
 func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int, policy *contextCompactPolicy, toolDefs []ToolDef) bool {
@@ -3809,6 +3819,9 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		}
 		if policy.PrefillInputTokens > 0 {
 			effectivePolicy.PrefillInputTokens = policy.PrefillInputTokens
+		}
+		if policy.PrefillSource != "" {
+			effectivePolicy.PrefillSource = policy.PrefillSource
 		}
 		if policy.WindowOrdinal > 0 {
 			effectivePolicy.WindowOrdinal = policy.WindowOrdinal
@@ -3865,9 +3878,10 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		return false
 	}
 	l.startNextAutoCompactWindow(effectivePolicy.AfterEstimatedInputTokens)
-	if ordinal, prefill, ok := l.autoCompactWindowPrefillTokens(); ok {
+	if ordinal, prefill, source, ok := l.autoCompactWindowPrefillTokens(); ok {
 		effectivePolicy.WindowOrdinalAfterCompact = ordinal
 		effectivePolicy.WindowPrefillAfterCompact = prefill
+		effectivePolicy.WindowPrefillSourceAfterCompact = source
 	}
 	l.publishContextCompacted(turnID, len(before), len(after), beforeBytes, afterBytes, reactive, reason, after, effectivePolicy)
 	l.markLoopProtocolCompacted(reactive, reason)
@@ -3907,16 +3921,20 @@ func (l *Loop) observeAutoCompactWindowInputTokens(inputTokens int) {
 	l.autoCompactWindow.observed = true
 }
 
-func (l *Loop) autoCompactWindowPrefillTokens() (int64, int, bool) {
+func (l *Loop) autoCompactWindowPrefillTokens() (int64, int, string, bool) {
 	if !l.autoCompactWindowScopeEnabled() {
-		return 0, 0, false
+		return 0, 0, "", false
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.prefillTokens <= 0 {
-		return 0, 0, false
+		return 0, 0, "", false
 	}
-	return l.autoCompactWindow.ordinal, l.autoCompactWindow.prefillTokens, true
+	source := compactWindowPrefillSourceEstimated
+	if l.autoCompactWindow.observed {
+		source = compactWindowPrefillSourceServerObserved
+	}
+	return l.autoCompactWindow.ordinal, l.autoCompactWindow.prefillTokens, source, true
 }
 
 func (l *Loop) contextCompactPolicy(msgs []ChatMessage, toolDefs []ToolDef) contextCompactPolicy {
@@ -3926,6 +3944,7 @@ func (l *Loop) contextCompactPolicy(msgs []ChatMessage, toolDefs []ToolDef) cont
 		TriggerInputTokens:        status.TriggerInputTokens,
 		ScopedInputTokens:         status.ScopedInputTokens,
 		PrefillInputTokens:        status.PrefillInputTokens,
+		PrefillSource:             status.PrefillSource,
 		WindowOrdinal:             status.WindowOrdinal,
 		HardInputLimitTokens:      status.HardInputLimitTokens,
 		ScopedWindowActivated:     status.ScopedWindowActivated,
@@ -3984,6 +4003,7 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		CompactScopeActive:                 policy.ScopedWindowActivated || policy.WindowPrefillAfterCompact > 0,
 		CompactWindowOrdinal:               compactWindowOrdinalForEvent(policy),
 		CompactWindowPrefillInputTokens:    compactWindowPrefillForEvent(policy),
+		CompactWindowPrefillSource:         compactWindowPrefillSourceForEvent(policy),
 		CompactScopedInputTokens:           compactScopedInputForEvent(policy),
 		CompactHardInputLimitTokens:        policy.HardInputLimitTokens,
 		Reactive:                           reactive,
@@ -4022,6 +4042,7 @@ func (l *Loop) publishContextCompactSkipped(turnID, cause string, before, candid
 		CompactScopeActive:                 policy.ScopedWindowActivated,
 		CompactWindowOrdinal:               policy.WindowOrdinal,
 		CompactWindowPrefillInputTokens:    policy.PrefillInputTokens,
+		CompactWindowPrefillSource:         policy.PrefillSource,
 		CompactScopedInputTokens:           policy.ScopedInputTokens,
 		CompactHardInputLimitTokens:        policy.HardInputLimitTokens,
 	})
@@ -4039,6 +4060,13 @@ func compactWindowPrefillForEvent(policy contextCompactPolicy) int {
 		return policy.WindowPrefillAfterCompact
 	}
 	return policy.PrefillInputTokens
+}
+
+func compactWindowPrefillSourceForEvent(policy contextCompactPolicy) string {
+	if policy.WindowPrefillSourceAfterCompact != "" {
+		return policy.WindowPrefillSourceAfterCompact
+	}
+	return policy.PrefillSource
 }
 
 func compactScopedInputForEvent(policy contextCompactPolicy) int {

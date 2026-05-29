@@ -95,6 +95,7 @@ type RuntimeSurfacePayload struct {
 	CompactScopeActive                 bool                 `json:"compact_scope_active,omitempty"`
 	CompactWindowOrdinal               int64                `json:"compact_window_ordinal,omitempty"`
 	CompactWindowPrefillInputTokens    int                  `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactWindowPrefillSource         string               `json:"compact_window_prefill_source,omitempty"`
 	CompactScopedInputTokens           int                  `json:"compact_scoped_input_tokens,omitempty"`
 	CompactHardInputLimitTokens        int                  `json:"compact_hard_input_limit_tokens,omitempty"`
 	CompactSummaryPromptMaxBytes       int                  `json:"compact_summary_prompt_max_bytes,omitempty"`
@@ -504,6 +505,7 @@ type ContextCompactPayload struct {
 	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
 	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
 	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactWindowPrefillSource         string `json:"compact_window_prefill_source,omitempty"`
 	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
 	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 	Reactive                           bool   `json:"reactive"`
@@ -534,6 +536,7 @@ type ContextCompactSkippedPayload struct {
 	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
 	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
 	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactWindowPrefillSource         string `json:"compact_window_prefill_source,omitempty"`
 	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
 	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 }
