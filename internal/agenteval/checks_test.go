@@ -2203,6 +2203,50 @@ func TestShellCommandLacksWorkspaceAbsolutePath(t *testing.T) {
 	})
 }
 
+func TestTraceWorkspaceAbsolutePathStats(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "workspace")
+	transcriptRel := filepath.ToSlash(filepath.Join(".affentctl", "subagents", "parent", "child.jsonl"))
+	transcriptPath := filepath.Join(workspace, filepath.FromSlash(transcriptRel))
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"role":"assistant","tool_calls":[{"id":"child1","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"` + filepath.ToSlash(filepath.Join(workspace, "docs/runtime.md")) + `\"}"}}]}`
+	if err := os.WriteFile(transcriptPath, []byte(line+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	trace := Trace{
+		WorkspaceDir: workspace,
+		Tools: []ToolCall{
+			{
+				CallID: "arg",
+				Tool:   "shell",
+				Args:   map[string]any{"command": "cat " + filepath.Join(workspace, "data/value.txt")},
+			},
+			{
+				CallID:        "result",
+				Tool:          "read_file",
+				Args:          map[string]any{"path": "data/value.txt"},
+				ResultSummary: filepath.Join(workspace, "data/value.txt"),
+			},
+		},
+		ChildTranscripts: []DebugTranscriptRef{{Kind: "subagent", Path: transcriptRel}},
+	}
+
+	stats := TraceWorkspaceAbsolutePathStats(trace, 2)
+	if stats.ArgOccurrences != 1 ||
+		stats.ResultOccurrences != 1 ||
+		stats.ChildTranscriptOccurrences != 1 ||
+		stats.Total() != 3 {
+		t.Fatalf("workspace path stats = %+v, want one arg/result/child occurrence", stats)
+	}
+	if len(stats.Examples) != 2 ||
+		!strings.Contains(stats.Examples[0], "used workspace absolute path") ||
+		!strings.Contains(stats.Examples[1], "returned workspace absolute path") {
+		t.Fatalf("workspace path examples = %#v", stats.Examples)
+	}
+}
+
 func TestFileNotEdited(t *testing.T) {
 	t.Run("fails when protected file edited", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{

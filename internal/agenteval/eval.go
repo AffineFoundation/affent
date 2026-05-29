@@ -309,6 +309,7 @@ type BatchResult struct {
 	PlanExamples                    []PlanExample
 	ToolTruncationExamples          []ToolTruncationExample
 	ToolTruncation                  ToolTruncationStats
+	WorkspacePath                   WorkspacePathStats
 	Usage                           Usage
 	Verifier                        VerifierResult
 	WorkspaceRemoved                bool
@@ -1610,6 +1611,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.PlanExamples = trace.PlanExamples(maxDebugPlanExamples)
 	res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
 	res.ToolTruncation = SummarizeToolTruncation(trace)
+	res.WorkspacePath = TraceWorkspaceAbsolutePathStats(trace, 3)
 	res.Usage = trace.Usage
 	res.Delegation = trace.DelegationStats()
 	res.Plan = trace.PlanStats()

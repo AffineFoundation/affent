@@ -731,6 +731,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"verifier:abnormal":                  0,
 					"verifier:failed":                    0,
 					"verifier:not_run":                   0,
+					"workspace_path:absolute":            0,
 				},
 			},
 		},

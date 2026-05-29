@@ -1423,8 +1423,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		gates.MaxDebugBriefTagRates["tool_repair:failed"] != 0 ||
 		gates.MaxDebugBriefTagRates["verifier:failed"] != 0 ||
 		gates.MaxDebugBriefTagRates["verifier:not_run"] != 0 ||
-		gates.MaxDebugBriefTagRates["verifier:abnormal"] != 0 {
-		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, repair, verifier, and truncation artifact gates", gates.MaxDebugBriefTagRates)
+		gates.MaxDebugBriefTagRates["verifier:abnormal"] != 0 ||
+		gates.MaxDebugBriefTagRates["workspace_path:absolute"] != 0 {
+		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, repair, verifier, workspace path, and truncation artifact gates", gates.MaxDebugBriefTagRates)
 	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}

@@ -54,9 +54,12 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"failures": count,
 		}, "source_repo", "source_repo:setup")
 	}
-	if count := workspaceAbsolutePathFailureCount(res.Failures); count > 0 {
+	if count := workspaceAbsolutePathFailureCount(res.Failures); count > 0 || res.WorkspacePath.Total() > 0 {
 		add("workspace_path", "fail", "agent used the workspace absolute path where the runtime expected workspace-relative commands or file args; inspect tool arguments and prompt/context path guidance before comparing task quality", []string{"failures", "tool_timeline", "runtime_surface", "timeline"}, map[string]int{
-			"failures": count,
+			"failures":           count,
+			"arg_occurrences":    res.WorkspacePath.ArgOccurrences,
+			"result_occurrences": res.WorkspacePath.ResultOccurrences,
+			"child_transcripts":  res.WorkspacePath.ChildTranscriptOccurrences,
 		}, "workspace_path", "workspace_path:absolute")
 	}
 	if counts, tags, ok := loopProtocolStillRunningCounts(res); ok {

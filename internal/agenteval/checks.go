@@ -2720,6 +2720,93 @@ func childTranscriptWorkspaceToolCallsLackNeedles(t Trace, needles []string, res
 	return CheckResult{Pass: true}
 }
 
+type WorkspacePathStats struct {
+	ArgOccurrences             int
+	ResultOccurrences          int
+	ChildTranscriptOccurrences int
+	Examples                   []string
+}
+
+func (s WorkspacePathStats) Total() int {
+	return s.ArgOccurrences + s.ResultOccurrences + s.ChildTranscriptOccurrences
+}
+
+func TraceWorkspaceAbsolutePathStats(t Trace, maxExamples int) WorkspacePathStats {
+	needles := workspaceAbsolutePathNeedles(t.WorkspaceDir)
+	if len(needles) == 0 {
+		return WorkspacePathStats{}
+	}
+	resolver := workspaceArgPolicyResolverForTrace(t)
+	var stats WorkspacePathStats
+	addExample := func(text string) {
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			return
+		}
+		stats.Examples = append(stats.Examples, text)
+	}
+	for _, c := range t.Tools {
+		for argName, text := range workspaceAbsoluteArgTexts(c.Tool, c.TurnID, c.Args, resolver) {
+			if text == "" || !containsAny(text, needles) {
+				continue
+			}
+			stats.ArgOccurrences++
+			addExample(fmt.Sprintf("%s call_id=%s used workspace absolute path in %s: %q", c.Tool, c.CallID, argName, previewSubstr(text, 160)))
+		}
+		if len(resolver.workspacePathArgNames(c.Tool, c.TurnID)) == 0 {
+			continue
+		}
+		for field, text := range map[string]string{
+			"result":         c.Result,
+			"result_summary": c.ResultSummary,
+		} {
+			if text == "" || !containsAny(text, needles) {
+				continue
+			}
+			stats.ResultOccurrences++
+			addExample(fmt.Sprintf("%s call_id=%s returned workspace absolute path in %s: %q", c.Tool, c.CallID, field, previewSubstr(text, 160)))
+		}
+	}
+	root := strings.TrimSpace(t.ChildTranscriptRootDir)
+	if root == "" {
+		root = t.WorkspaceDir
+	}
+	for _, ref := range t.ChildTranscripts {
+		path, ok := resolveChildTranscriptPath(root, ref.Path)
+		if !ok {
+			continue
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		for lineNo, line := range strings.Split(string(raw), "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			for _, call := range childTranscriptWorkspaceToolCalls(line, resolver) {
+				for argName, text := range workspaceAbsoluteArgTexts(call.Tool, "", call.Args, resolver) {
+					if text == "" || !containsAny(text, needles) {
+						continue
+					}
+					stats.ChildTranscriptOccurrences++
+					addExample(fmt.Sprintf("%s child transcript %s:%d %s call_id=%s used workspace absolute path in %s: %q", ref.Kind, ref.Path, lineNo+1, call.Tool, call.CallID, argName, previewSubstr(text, 160)))
+				}
+			}
+		}
+	}
+	return stats
+}
+
+func containsAny(text string, needles []string) bool {
+	for _, needle := range needles {
+		if needle != "" && strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
+}
+
 func workspaceAbsoluteArgTexts(tool, turnID string, args map[string]any, resolver workspaceArgPolicyResolver) map[string]string {
 	names := resolver.workspacePathArgNames(tool, turnID)
 	if len(names) == 0 {

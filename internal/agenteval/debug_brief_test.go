@@ -270,6 +270,26 @@ func TestBuildDebugBriefClassifiesWorkspaceAbsolutePathFailures(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesWorkspaceAbsolutePathTraceStats(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		WorkspacePath: WorkspacePathStats{
+			ArgOccurrences:             2,
+			ResultOccurrences:          1,
+			ChildTranscriptOccurrences: 1,
+		},
+	})
+	item := debugBriefItemByKind(brief, "workspace_path")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["arg_occurrences"] != 2 ||
+		item.Counts["result_occurrences"] != 1 ||
+		item.Counts["child_transcripts"] != 1 ||
+		!stringSliceContains(brief.Tags, "workspace_path:absolute") {
+		t.Fatalf("workspace path trace stats debug brief item=%+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefHonorsExpectedTurnEndReason(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK:            true,
