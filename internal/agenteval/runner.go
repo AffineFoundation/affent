@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
@@ -45,6 +46,19 @@ type Runner struct {
 	// MaxTurnSteps caps assistant<->tool round trips. Scenario value
 	// overrides; zero here falls back to 8.
 	MaxTurnSteps int
+
+	// CompactTriggerMsgs controls the rolling-summary message trigger.
+	// Zero falls back to agent.DefaultSummaryTriggerMsgs.
+	CompactTriggerMsgs int
+
+	// CompactTriggerInputTokens controls proactive request-input pressure
+	// compaction. Zero keeps the runtime-derived default, positive sets an
+	// explicit threshold, and negative disables the request-pressure path.
+	CompactTriggerInputTokens int
+
+	// CompactKeepLast controls how many tail messages survive compaction.
+	// Zero falls back to agent.DefaultSummaryKeepLast.
+	CompactKeepLast int
 
 	// PerCallTimeout overrides the Loop default for each LLM call.
 	// Zero leaves the Loop default.
@@ -138,6 +152,14 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	if maxTurns <= 0 {
 		maxTurns = DefaultRunnerMaxTurnSteps
 	}
+	compactTriggerMsgs := r.CompactTriggerMsgs
+	if compactTriggerMsgs <= 0 {
+		compactTriggerMsgs = agent.DefaultSummaryTriggerMsgs
+	}
+	compactKeepLast := r.CompactKeepLast
+	if compactKeepLast <= 0 {
+		compactKeepLast = agent.DefaultSummaryKeepLast
+	}
 	loop := &agent.Loop{
 		LLM:            r.LLM,
 		Tools:          reg,
@@ -148,6 +170,13 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		MaxToolCalls:   maxTurns,
 		PerCallTimeout: r.PerCallTimeout,
 		WorkspaceRoot:  workspace,
+		Compactor: &agent.LLMSummaryCompactor{
+			LLM:          r.LLM,
+			TriggerMsgs:  compactTriggerMsgs,
+			TriggerBytes: agent.DefaultSummaryTriggerBytes,
+			KeepLast:     compactKeepLast,
+		},
+		CompactTriggerInputTokens: r.CompactTriggerInputTokens,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",
@@ -162,12 +191,16 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		return Outcome{}, fmt.Errorf("system prompt: %w", err)
 	}
-	turnID, err := loop.SendUser(ctx, s.Prompt)
-	if err != nil {
-		return Outcome{}, fmt.Errorf("send user: %w", err)
+	prompts := runnerScenarioPrompts(s)
+	trace := newRunnerTrace(s, workspace, runnerPromptDisplay(prompts))
+	for _, prompt := range prompts {
+		turnID, err := loop.SendUser(ctx, prompt)
+		if err != nil {
+			return Outcome{}, fmt.Errorf("send user: %w", err)
+		}
+		drainTraceInto(ctx, events, turnID, &trace)
 	}
 
-	trace := drainTrace(ctx, events, turnID, s, workspace)
 	trace.ChildTranscripts = collectDebugChildTranscripts(workspace, maxDebugChildTranscriptRefs)
 	trace.TaskState = DeriveTaskState(trace)
 	results := evaluateChecks(trace, s.Checks)
@@ -177,6 +210,30 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		Results:  results,
 		Pass:     allPass(results),
 	}, nil
+}
+
+func runnerScenarioPrompts(s Scenario) []string {
+	if len(s.Prompts) > 0 {
+		return append([]string(nil), s.Prompts...)
+	}
+	return []string{s.Prompt}
+}
+
+func runnerPromptDisplay(prompts []string) string {
+	if len(prompts) == 0 {
+		return ""
+	}
+	if len(prompts) == 1 {
+		return prompts[0]
+	}
+	var out strings.Builder
+	for i, prompt := range prompts {
+		if i > 0 {
+			out.WriteString("\n\n")
+		}
+		fmt.Fprintf(&out, "Turn %d:\n%s", i+1, prompt)
+	}
+	return out.String()
 }
 
 func makeWorkspace(scenarioName string) (string, func(), error) {
@@ -231,33 +288,42 @@ func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.
 // frozen Trace. Pairs tool.request with its later tool.result by
 // CallID; out-of-order pairs work the same way the subagent's drain
 // handles them.
-func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s Scenario, workspaceDir string) Trace {
-	t := Trace{
+func newRunnerTrace(s Scenario, workspaceDir, prompt string) Trace {
+	return Trace{
 		SchemaVersion: sse.TraceSchemaVersion,
 		Scenario:      s.Name,
 		WorkspaceDir:  workspaceDir,
-		Prompt:        s.Prompt,
+		Prompt:        prompt,
 		RawTypes:      map[string]int{},
 	}
+}
+
+func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s Scenario, workspaceDir string) Trace {
+	t := newRunnerTrace(s, workspaceDir, runnerPromptDisplay(runnerScenarioPrompts(s)))
+	drainTraceInto(ctx, events, turnID, &t)
+	return t
+}
+
+func drainTraceInto(ctx context.Context, events <-chan sse.Event, turnID string, t *Trace) {
 	pending := map[string]int{}
 	for {
 		select {
 		case <-ctx.Done():
 			t.TurnEndReason = "cancelled"
-			return t
+			return
 		case ev, ok := <-events:
 			if !ok {
-				return t
+				return
 			}
 			t.RawTypes[ev.Type]++
-			done, err := applyTraceEvent(&t, pending, ev.Type, ev.Data, turnID)
+			done, err := applyTraceEvent(t, pending, ev.Type, ev.Data, turnID)
 			if err != nil {
 				t.LoopErrors = append(t.LoopErrors, err.Error())
 			} else {
-				appendTraceEventRef(&t, ev.Type, ev.Data, turnID)
+				appendTraceEventRef(t, ev.Type, ev.Data, turnID)
 			}
 			if done {
-				return t
+				return
 			}
 		}
 	}

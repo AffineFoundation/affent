@@ -19,7 +19,7 @@ import (
 
 // Scenario describes one bounded evaluation task. Scenarios are
 // deterministic and reproducible: same Setup + same LLM (real or
-// fake) + same Prompt → same Trace.
+// fake) + same Prompt/Prompts → same Trace.
 //
 // A Scenario does not own the LLM client or the runtime. Those come
 // from the Runner so the same scenario can be replayed against
@@ -36,9 +36,13 @@ type Scenario struct {
 
 	// Prompt is the user message sent to the agent. May be the empty
 	// string if Setup writes a longer multi-turn fixture (in which
-	// case Setup must SendUser itself — but the v0 framework only
-	// supports single-prompt scenarios).
+	// case Prompts should carry the actual turn messages).
 	Prompt string
+
+	// Prompts is an optional ordered multi-turn prompt list. When set,
+	// Prompt is only a display fallback and the runner sends each item
+	// as a separate user turn against the same conversation.
+	Prompts []string
 
 	// Setup populates the workspace directory before the run. May
 	// be nil for scenarios that need no fixture (a "does the agent

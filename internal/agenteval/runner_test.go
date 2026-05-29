@@ -160,6 +160,69 @@ func TestRunner_EndToEnd_OneToolCall(t *testing.T) {
 	}
 }
 
+func TestRunner_MultiTurnRequestPressureCompaction(t *testing.T) {
+	final := func(text string) []string {
+		return []string{
+			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, text),
+			`[DONE]`,
+		}
+	}
+	summary := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: preserve request-pressure markers. NEXT_ACTION: answer the third turn."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{
+		final("REQUEST-PRESSURE-OK-1"),
+		final("REQUEST-PRESSURE-OK-2"),
+		summary,
+		final("REQUEST-PRESSURE-OK-3"),
+	})
+
+	scenario := Scenario{
+		Name: "request_pressure_compaction",
+		Prompts: []string{
+			"Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-1",
+			"Continue the same session. Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-2",
+			"Continue after runtime context maintenance. Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-3",
+		},
+		MaxTurnSteps: 2,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			FinalTextContains("REQUEST-PRESSURE-OK-3"),
+			ContextCompactionsAtLeast(1),
+			ContextCompactionReasonAtLeast("estimated_context_pressure", 1),
+		},
+	}
+
+	runner := &Runner{
+		LLM:                       agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:              2,
+		CompactTriggerInputTokens: 1,
+		CompactKeepLast:           1,
+		PerCallTimeout:            5 * time.Second,
+		RunTimeout:                20 * time.Second,
+		Log:                       zerolog.Nop(),
+	}
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	if out.Trace.RawTypes["context.compacted"] != 1 {
+		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
+	}
+	if len(out.Trace.ContextCompactions) != 1 ||
+		out.Trace.ContextCompactions[0].Reason != "estimated_context_pressure" ||
+		out.Trace.ContextCompactions[0].Reactive {
+		t.Fatalf("context compactions = %+v", out.Trace.ContextCompactions)
+	}
+	if !strings.Contains(out.Trace.Prompt, "Turn 3:") {
+		t.Fatalf("multi-turn prompt display missing turn labels: %q", out.Trace.Prompt)
+	}
+}
+
 func TestRunner_CustomMemoryOnlyRegistryUsesMatchingPrompt(t *testing.T) {
 	type capturedRequest struct {
 		Messages []struct {
