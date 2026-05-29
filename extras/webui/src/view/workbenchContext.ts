@@ -7,6 +7,7 @@ import type { SessionFilesView } from "./sessionFiles";
 import { displaySessionOverviewMetrics, type SessionOverview } from "./sessionOverview";
 import type { SessionRunView } from "./sessionRun";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
+import { isToolResultStoragePath } from "./toolResultDisplay";
 import type { TurnArtifact } from "./turnArtifacts";
 import type { WorkbenchAttention } from "./workbenchAttention";
 import type { WorkbenchTab } from "./workbenchNav";
@@ -154,13 +155,14 @@ export function workbenchArtifactContextDetail(artifacts: readonly TurnArtifact[
   const latest = artifacts.at(-1);
   if (!latest) return "Generated files available";
   const kind = artifactIsFullOutput(latest) ? "full output" : "deliverable";
+  const title = artifactContextTitle(latest);
   const origin = compact([
     latest.turnNumber != null ? `turn ${latest.turnNumber}` : undefined,
     latest.tool,
   ]).join(" · ");
   const source = compactSource(latest.source);
   const parts = [
-    `Latest ${kind}: ${latest.name || artifactName(latest.path)}`,
+    `Latest ${kind}: ${title}`,
     origin || undefined,
     source ? `from ${source}` : undefined,
   ];
@@ -400,6 +402,11 @@ function requestModeLabel(mode: string): string {
 
 function artifactIsFullOutput(artifact: TurnArtifact): boolean {
   return artifact.truncated || artifact.path.replace(/\\/g, "/").includes("/tool-results/");
+}
+
+function artifactContextTitle(artifact: TurnArtifact): string {
+  if (isToolResultStoragePath(artifact.path) || isToolResultStoragePath(artifact.name)) return "Saved tool output";
+  return artifact.name || artifactName(artifact.path);
 }
 
 function artifactName(path: string): string {

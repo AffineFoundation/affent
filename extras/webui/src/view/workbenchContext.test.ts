@@ -66,7 +66,9 @@ describe("workbenchContext", () => {
     }];
 
     const detail = workbenchArtifactContextDetail(artifacts);
-    expect(detail).toBe("Latest full output: 000008-shell.txt · turn 4 · shell · from shell");
+    expect(detail).toBe("Latest full output: Saved tool output · turn 4 · shell · from shell");
+    expect(detail).not.toContain("000008-shell.txt");
+    expect(detail).not.toContain(".affent/artifacts/tool-results");
     expect(detail).not.toContain("nothing added to commit");
   });
 
