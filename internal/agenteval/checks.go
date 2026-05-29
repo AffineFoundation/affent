@@ -1255,6 +1255,36 @@ func RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy() Check {
 	}
 }
 
+func RuntimeSurfaceToolSchemaWithinBudget() Check {
+	return Check{
+		Name: "runtime_surface_tool_schema_within_budget",
+		Eval: func(t Trace) CheckResult {
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.ToolSchemaBudgetTokens <= 0 {
+					continue
+				}
+				observed = append(observed, fmt.Sprintf("tool_schema_tokens=%d budget=%d excluded=%d/%d",
+					surface.EstimatedToolSchemaTokens,
+					surface.ToolSchemaBudgetTokens,
+					surface.ExcludedToolCount,
+					surface.AvailableToolCount,
+				))
+				if surface.EstimatedToolSchemaTokens > surface.ToolSchemaBudgetTokens {
+					return CheckResult{
+						Pass:   false,
+						Detail: fmt.Sprintf("runtime.surface tool schema exceeded budget; observed=%v", observed),
+					}
+				}
+			}
+			if len(observed) == 0 {
+				return CheckResult{Pass: true, Detail: "no budgeted tool surface observed"}
+			}
+			return CheckResult{Pass: true, Detail: fmt.Sprintf("budgeted tool surfaces within budget; observed=%v", observed)}
+		},
+	}
+}
+
 func RuntimeSurfaceReservedOutputTokens(expected int) Check {
 	return Check{
 		Name: fmt.Sprintf("runtime_surface_reserved_output_tokens:%d", expected),

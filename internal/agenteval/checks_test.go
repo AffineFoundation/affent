@@ -1026,7 +1026,7 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes},
+		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
@@ -1045,6 +1045,9 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	}
 	if res := RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface summary prompt policy check to pass: %+v", res)
+	}
+	if res := RuntimeSurfaceToolSchemaWithinBudget().Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface tool schema budget check to pass: %+v", res)
 	}
 	if res := RuntimeSurfaceReservedOutputTokens(30000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface reserved output check to pass: %+v", res)
@@ -1092,6 +1095,20 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	for _, want := range []string{"expected=640", "summary_prompt_max_bytes=196608"} {
 		if !strings.Contains(badSummaryPolicy.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", badSummaryPolicy.Detail, want)
+		}
+	}
+	badToolBudget := RuntimeSurfaceToolSchemaWithinBudget().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+		EstimatedToolSchemaTokens: 600,
+		ToolSchemaBudgetTokens:    500,
+		ExcludedToolCount:         2,
+		AvailableToolCount:        5,
+	}}})
+	if badToolBudget.Pass {
+		t.Fatal("expected runtime surface tool schema budget check to fail")
+	}
+	for _, want := range []string{"tool schema exceeded budget", "tool_schema_tokens=600", "budget=500", "excluded=2/5"} {
+		if !strings.Contains(badToolBudget.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", badToolBudget.Detail, want)
 		}
 	}
 	res = RuntimeSurfaceCompletionGuard("missing_guard").Eval(trace)
