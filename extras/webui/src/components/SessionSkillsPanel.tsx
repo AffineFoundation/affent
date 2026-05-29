@@ -602,6 +602,29 @@ function SkillReviewFocus({
         <strong>{skill.name}</strong>
         <small>{skill.description || "No summary"}</small>
       </div>
+      <div className="session-skill-actions">
+        <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
+        {onLoadBody && !body ? (
+          <button type="button" className="node-action" onClick={onLoadBody}>
+            Load content
+          </button>
+        ) : null}
+        {onEdit ? (
+          <button type="button" className="node-action" onClick={onEdit}>
+            Edit skill
+          </button>
+        ) : null}
+        {onUseAsDraft ? (
+          <>
+            <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
+              Start from skill
+            </button>
+            <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
+              Revise skill
+            </button>
+          </>
+        ) : null}
+      </div>
       <div className="session-skills-focus-grid">
         <SkillFocusFact label="Source" value={skillOriginLabel(skill) ?? "Runtime"} />
         <SkillFocusFact label="Size" value={skillSizeLabel(skill)} />
@@ -623,24 +646,6 @@ function SkillReviewFocus({
         {bodyState?.loading ? <p>Loading full content...</p> : null}
         {bodyState?.error ? <p className="error">{bodyState.error}</p> : null}
         {!bodyState?.loading && !bodyState?.error && preview ? <p>{summarizeSkillPreview(preview)}</p> : null}
-      </div>
-      <div className="session-skill-actions">
-        <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
-        {onLoadBody && !body ? (
-          <button type="button" className="node-action" onClick={onLoadBody}>
-            Load content
-          </button>
-        ) : null}
-        {onEdit ? (
-          <button type="button" className="node-action" onClick={onEdit}>
-            Edit skill
-          </button>
-        ) : null}
-        {onUseAsDraft ? (
-          <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
-            Revise skill
-          </button>
-        ) : null}
       </div>
     </section>
   );
