@@ -113,6 +113,11 @@ describe("SessionRunPanel", () => {
     const onUseAsDraft = vi.fn();
     render(<SessionRunPanel defaultOpen run={run} onRunCommand={onRunCommand} onUseAsDraft={onUseAsDraft} />);
 
+    expect(screen.getByTestId("session-run-quick")).toHaveTextContent("Quick commands");
+    expect(screen.getByTestId("session-run-quick")).toHaveTextContent("Git status");
+    await user.click(within(screen.getByTestId("session-run-quick")).getByRole("button", { name: "Git status" }));
+    expect(onRunCommand).toHaveBeenCalledWith({ command: "git status --short --branch", cwd: "extras/webui" });
+
     const focus = screen.getByTestId("session-run-focus");
     await user.click(within(focus).getByRole("button", { name: "Rerun now" }));
     expect(onRunCommand).toHaveBeenCalledWith({ command: "npm test -- checkout.spec.ts", cwd: "extras/webui" });

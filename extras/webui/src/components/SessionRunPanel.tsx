@@ -35,6 +35,7 @@ export function SessionRunPanel({
   const focus = runFocusCommand(visibleCommands);
   const historyCommands = focus ? visibleCommands.filter((command) => command !== focus.command) : visibleCommands;
   const canInspectRecoveredFailure = !!latestFailedCommand && focus?.command !== latestFailedCommand;
+  const quickCommands = runQuickCommands(run.commands, run.latestCommandCwd);
 
   async function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,6 +122,28 @@ export function SessionRunPanel({
             onUseAsDraft={onUseAsDraft}
           />
         ) : null}
+        {(onUseAsDraft || onRunCommand) && quickCommands.length > 0 ? (
+          <div className="session-run-quick" data-testid="session-run-quick" aria-label="Quick run commands">
+            <div>
+              <strong>Quick commands</strong>
+              <span>{onRunCommand ? "Run read-only checks in the session workspace." : "Prepare a command draft for Affent."}</span>
+            </div>
+            <div className="session-run-quick-actions">
+              {quickCommands.map((item) => (
+                <button
+                  key={`${item.label}:${item.command}:${item.cwd ?? ""}`}
+                  type="button"
+                  className="ghost-action"
+                  disabled={runCommandBusy}
+                  title={item.command}
+                  onClick={() => void handleQuickCommand(item)}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {onUseAsDraft || onRunCommand ? (
           <details className="session-run-manual-disclosure" open={run.commands.length === 0}>
             <summary>
@@ -166,33 +189,39 @@ export function SessionRunPanel({
           </div>
         ) : null}
         {historyCommands.length > 0 ? (
-          <ol className="session-run-list" data-testid="session-run-list">
-            {historyCommands.map((command, index) => (
-              <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
-                <div className="session-run-main">
-                  <strong title={command.command}>{commandLabel(command.command)}</strong>
-                  <span>{runCommandMeta(command)}</span>
-                  {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
-                  {command.detail ? <small>{command.detail}</small> : null}
-                  {command.next ? <small>Next: {command.next}</small> : null}
-                  {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
-                </div>
-                <span className="session-evidence-actions">
-                  <CopyButton label="Copy command" value={command.command} className="ghost-action" />
-                  {command.artifactPath && onOpenArtifact ? (
-                    <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
-                      Open command output
-                    </button>
-                  ) : null}
-                  {onRunCommand && command.status !== "passed" ? (
-                    <button type="button" className="ghost-action primary-run-action" disabled={runCommandBusy} onClick={() => onRunCommand(runCommandRequest(command))}>
-                      Rerun now
-                    </button>
-                  ) : null}
-                </span>
-              </li>
-            ))}
-          </ol>
+          <section className="session-run-history" data-testid="session-run-history" aria-label="Command history">
+            <div className="session-run-history-head">
+              <strong>Command history</strong>
+              <span>{historyCommands.length} {historyCommands.length === 1 ? "entry" : "entries"}</span>
+            </div>
+            <ol className="session-run-list" data-testid="session-run-list">
+              {historyCommands.map((command, index) => (
+                <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
+                  <div className="session-run-main">
+                    <strong title={command.command}>{commandLabel(command.command)}</strong>
+                    <span>{runCommandMeta(command)}</span>
+                    {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
+                    {command.detail ? <small>{command.detail}</small> : null}
+                    {command.next ? <small>Next: {command.next}</small> : null}
+                    {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
+                  </div>
+                  <span className="session-evidence-actions">
+                    <CopyButton label="Copy command" value={command.command} className="ghost-action" />
+                    {command.artifactPath && onOpenArtifact ? (
+                      <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
+                        Open command output
+                      </button>
+                    ) : null}
+                    {onRunCommand && command.status !== "passed" ? (
+                      <button type="button" className="ghost-action primary-run-action" disabled={runCommandBusy} onClick={() => onRunCommand(runCommandRequest(command))}>
+                        Rerun now
+                      </button>
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
         ) : visibleCommands.length > 0 ? null : run.commands.length > 0 ? (
           <div className="session-skills-empty">No commands matching "{trimmedQuery}".</div>
         ) : (
@@ -201,6 +230,20 @@ export function SessionRunPanel({
       </div>
     </details>
   );
+
+  async function handleQuickCommand(item: RunQuickCommand) {
+    if (onRunCommand) {
+      await onRunCommand({ command: item.command, cwd: item.cwd });
+      return;
+    }
+    onUseAsDraft?.(manualRunDraft(item.command, item.cwd), "run_command");
+  }
+}
+
+interface RunQuickCommand {
+  label: string;
+  command: string;
+  cwd?: string;
 }
 
 function RunFilterButton({
@@ -243,6 +286,40 @@ function runMatchesQuery(command: SessionRunCommand, query: string): boolean {
     command.artifactPath,
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
+}
+
+function runQuickCommands(commands: readonly SessionRunCommand[], latestCwd?: string): RunQuickCommand[] {
+  const quick: RunQuickCommand[] = [];
+  const cwd = latestCwd ?? commands
+    .filter((command) => command.cwd)
+    .sort((a, b) => commandOrder(b) - commandOrder(a))[0]?.cwd;
+  const latestVerification = commands
+    .filter((command) => isVerificationCommand(command))
+    .sort((a, b) => commandOrder(b) - commandOrder(a))[0];
+  if (latestVerification) {
+    quick.push({ label: "Rerun verification", command: latestVerification.command, cwd: latestVerification.cwd });
+  }
+  quick.push(
+    { label: "Git status", command: "git status --short --branch", cwd },
+    { label: "Diff stat", command: "git diff --stat", cwd },
+    { label: "Print cwd", command: "pwd", cwd },
+  );
+  const seen = new Set<string>();
+  return quick.filter((item) => {
+    const key = `${item.command}\n${item.cwd ?? ""}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 4);
+}
+
+function isVerificationCommand(command: SessionRunCommand): boolean {
+  const kind = runCommandKind(command);
+  return kind === "test" || kind === "build" || kind === "lint" || kind === "typecheck";
+}
+
+function commandOrder(command: SessionRunCommand): number {
+  return command.turnNumber * 1_000_000 + (command.sequence ?? 0);
 }
 
 function RunFocus({
