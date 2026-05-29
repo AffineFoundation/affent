@@ -260,7 +260,7 @@ export function SessionSkillsPanel({
         {!loading && !error ? (
           <>
             <SkillsDashboard skills={allSkills} installEnabled={installEnabled} />
-            {allSkills.length > 0 ? (
+            {hasSkillMaintenanceSignal(allSkills) ? (
               <SkillCoverageMap
                 skills={allSkills}
                 onFilter={setSkillFilter}
@@ -516,6 +516,11 @@ function skillMatchesFilter(skill: SessionSkillInfo, filter: SkillFilter): boole
   return true;
 }
 
+function hasSkillMaintenanceSignal(skills: readonly SessionSkillInfo[]): boolean {
+  if (skills.length === 0) return false;
+  return skills.some((skill) => skill.runtime || skillTriggers(skill).length === 0 || !skill.description?.trim());
+}
+
 function SkillCoverageMap({ skills, onFilter }: { skills: readonly SessionSkillInfo[]; onFilter: (filter: SkillFilter) => void }) {
   const triggerable = skills.filter((skill) => skillTriggers(skill).length > 0).length;
   const manual = skills.length - triggerable;
@@ -528,7 +533,7 @@ function SkillCoverageMap({ skills, onFilter }: { skills: readonly SessionSkillI
     <section className="session-skills-coverage" data-testid="session-skills-coverage" aria-label="Skills coverage">
       <div className="session-skills-coverage-main">
         <div className="session-skills-coverage-head">
-          <span>Activation coverage</span>
+          <span>Skill maintenance</span>
           <strong>{triggerable}/{skills.length}</strong>
         </div>
         <div className="session-skills-bar" aria-label={`${triggerPercent}% triggerable`}>
