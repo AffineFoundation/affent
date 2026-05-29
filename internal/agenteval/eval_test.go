@@ -1891,6 +1891,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			if scenario.RequiredUserMessageModes["execute_plan"] != 1 {
 				t.Fatalf("plan-resume-current-step RequiredUserMessageModes = %#v, want execute_plan=1", scenario.RequiredUserMessageModes)
 			}
+			if scenario.RequiredTaskStateRequestMode != "execute_plan" || scenario.RequiredTaskStateRequestSource != "user" {
+				t.Fatalf("plan-resume-current-step task request provenance = mode:%q source:%q, want execute_plan/user", scenario.RequiredTaskStateRequestMode, scenario.RequiredTaskStateRequestSource)
+			}
 			if scenario.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
 				t.Fatalf("plan-resume-current-step read_file cap = %#v, want 1", scenario.MaxSuccessfulToolCallsByTool)
 			}
@@ -2876,6 +2879,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if planResume.RequiredUserMessageModes["execute_plan"] != 1 {
 		t.Fatalf("plan resume RequiredUserMessageModes = %#v, want execute_plan=1", planResume.RequiredUserMessageModes)
+	}
+	if planResume.RequiredTaskStateRequestMode != "execute_plan" || planResume.RequiredTaskStateRequestSource != "user" {
+		t.Fatalf("plan resume task request provenance = mode:%q source:%q, want execute_plan/user", planResume.RequiredTaskStateRequestMode, planResume.RequiredTaskStateRequestSource)
 	}
 	if !stringSliceContains(planResume.RequiredFinalText, "RESUME-CURRENT-42") || !stringSliceContains(planResume.ForbiddenFinalText, "STALE-PLAN-99") {
 		t.Fatalf("plan resume final text constraints = required:%#v forbidden:%#v", planResume.RequiredFinalText, planResume.ForbiddenFinalText)

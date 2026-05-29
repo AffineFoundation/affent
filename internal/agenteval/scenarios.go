@@ -1279,7 +1279,9 @@ Resume only the active persisted plan step and preserve current evidence across 
 		RequiredUserMessageModes: map[string]int{
 			"execute_plan": 1,
 		},
-		RequiredLoopProtocolFeeds: 1,
+		RequiredTaskStateRequestMode:   "execute_plan",
+		RequiredTaskStateRequestSource: "user",
+		RequiredLoopProtocolFeeds:      1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 1,
 		},
