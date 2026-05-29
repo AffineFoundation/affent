@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,6 +66,51 @@ func TestAppendUserMessagePublishesContextInjectedEvents(t *testing.T) {
 	msgs := conv.Snapshot()
 	if len(msgs) != 2 || !msgs[0].TransientContext || msgs[1].Role != "user" {
 		t.Fatalf("dynamic context should be persisted as transient before the user message: %+v", msgs)
+	}
+}
+
+func TestAppendUserMessageInjectsRuntimeWorkspaceContext(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "remote.git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 2)
+	loop := &Loop{
+		Conv:          conv,
+		Events:        events,
+		WorkspaceRoot: dir,
+		Tools: func() *Registry {
+			reg := NewRegistry()
+			reg.Add(readFileTool(BuiltinDeps{HostWorkspaceDir: dir}))
+			return reg
+		}(),
+	}
+
+	if err := loop.appendUserMessage("turn_workspace", "clone and test", TurnOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := <-events
+	if ev.Type != sse.TypeContextInjected {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextInjected)
+	}
+	var payload sse.ContextInjectedPayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload.Source != "runtime_workspace" || !strings.Contains(payload.Preview, "workspace-relative") {
+		t.Fatalf("workspace payload = %+v", payload)
+	}
+	msgs := conv.Snapshot()
+	if len(msgs) != 2 || msgs[0].Role != "system" || !msgs[0].TransientContext || !strings.Contains(msgs[0].Content, `"remote.git" (dir)`) {
+		t.Fatalf("workspace context should be transient before user message: %+v", msgs)
 	}
 }
 

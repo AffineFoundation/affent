@@ -189,6 +189,12 @@ type Loop struct {
 	// snapshot. Files are read-only — affent never writes to them.
 	ProjectContextDir string
 
+	// WorkspaceRoot, when non-empty, describes the active workspace as typed
+	// runtime state. The model sees a compact transient block with relative
+	// path semantics and top-level entries; trace/UI see the same state through
+	// runtime.surface.
+	WorkspaceRoot string
+
 	// FirstToolPolicy optionally forces a named tool to be used before
 	// other tools for turns matching Trigger. This is a generic runtime
 	// guardrail for small models that ignore a user's explicit
@@ -942,6 +948,8 @@ func describeContextInjectedSection(section string) (source, title, summary, pre
 		return "account_access", "Account access context injected", "Account-level environment and SSH access hints were made available for this turn.", accountAccessContextPreview(section), true
 	case strings.HasPrefix(first, "AFFENT ACTIVE PLAN:"):
 		return "active_plan", "Active plan context injected", activePlanContextSummary(section), activePlanContextPreview(section), true
+	case strings.HasPrefix(first, "AFFENT RUNTIME WORKSPACE:"):
+		return "runtime_workspace", "Runtime workspace context injected", "Workspace-relative path semantics and top-level entries were made available for this turn.", safeContextInjectedPreview(section), true
 	case strings.HasPrefix(first, "AFFENT ACTIVE SKILL:"):
 		name := strings.TrimSpace(strings.TrimPrefix(first, "AFFENT ACTIVE SKILL:"))
 		if name == "" {
@@ -1028,6 +1036,9 @@ func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
 	if err := l.Conv.PruneTransientContext(); err != nil {
 		return err
 	}
+	if err := l.appendRuntimeWorkspaceContext(turnID, opts); err != nil {
+		return err
+	}
 	if err := l.appendActiveSkills(turnID, text); err != nil {
 		return err
 	}
@@ -1038,6 +1049,18 @@ func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
 		l.publishContextInjected(turnID, block)
 	}
 	return l.Conv.Append(ChatMessage{Role: "user", Content: text})
+}
+
+func (l *Loop) appendRuntimeWorkspaceContext(turnID string, opts TurnOptions) error {
+	block := runtimeWorkspaceContextBlock(l.runtimeWorkspaceSurfaceForTurn(opts))
+	if block == "" {
+		return nil
+	}
+	if err := l.Conv.Append(ChatMessage{Role: "system", Content: block, TransientContext: true}); err != nil {
+		return err
+	}
+	l.publishContextInjected(turnID, block)
+	return nil
 }
 
 // Cancel aborts the current turn if any.
@@ -2741,8 +2764,19 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		}
 		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(catalog)
 		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)
+		if len(payload.Capabilities.WorkspaceTools) > 0 {
+			payload.Workspace = runtimeWorkspaceSurface(l.WorkspaceRoot)
+		}
 	}
 	l.publish(sse.TypeRuntimeSurface, payload)
+}
+
+func (l *Loop) runtimeWorkspaceSurfaceForTurn(opts TurnOptions) *sse.RuntimeWorkspace {
+	tools := l.toolsForTurn(opts)
+	if tools == nil || len(runtimeWorkspaceToolsForRegistry(tools)) == 0 {
+		return nil
+	}
+	return runtimeWorkspaceSurface(l.WorkspaceRoot)
 }
 
 func (l *Loop) maxTurnStepsForSurface() int {

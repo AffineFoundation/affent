@@ -4110,6 +4110,7 @@ type runtimeSurfaceSummary struct {
 	WorkspacePathArgs            map[string][]string      `json:"workspace_path_args,omitempty"`
 	ToolCallCaps                 map[string]int           `json:"tool_call_caps,omitempty"`
 	Capabilities                 *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
+	Workspace                    *sse.RuntimeWorkspace    `json:"workspace,omitempty"`
 	MaxTurnSteps                 int                      `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                      `json:"max_tool_calls,omitempty"`
 	ToolResultEventCapBytes      int                      `json:"tool_result_event_cap_bytes,omitempty"`
@@ -4274,6 +4275,7 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 		WorkspacePathArgs:            runtimeSurfaceWorkspacePathArgs(surface),
 		ToolCallCaps:                 runtimeSurfaceToolCallCaps(surface),
 		Capabilities:                 &caps,
+		Workspace:                    surface.Workspace,
 		MaxTurnSteps:                 surface.MaxTurnSteps,
 		MaxToolCalls:                 surface.MaxToolCalls,
 		ToolResultEventCapBytes:      surface.ToolResultEventCapBytes,

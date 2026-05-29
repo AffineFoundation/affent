@@ -1114,6 +1114,32 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if len(names) > 0 {
 		fmt.Fprintf(b, "- tools: `%s`\n", strings.Join(names, "`, `"))
 	}
+	if ws := surface.Workspace; ws != nil {
+		if ws.DefaultCWD != "" || ws.PathMode != "" || len(ws.RootEntries) > 0 {
+			var parts []string
+			if ws.DefaultCWD != "" {
+				parts = append(parts, "default_cwd="+ws.DefaultCWD)
+			}
+			if ws.PathMode != "" {
+				parts = append(parts, "path_mode="+ws.PathMode)
+			}
+			if len(ws.RootEntries) > 0 {
+				var entries []string
+				for _, entry := range ws.RootEntries {
+					label := entry.Name
+					if entry.Kind != "" {
+						label += " (" + entry.Kind + ")"
+					}
+					entries = append(entries, label)
+				}
+				if ws.RootEntriesTruncated {
+					entries = append(entries, fmt.Sprintf("... (%d total)", ws.RootEntryCount))
+				}
+				parts = append(parts, "root_entries="+strings.Join(entries, ", "))
+			}
+			fmt.Fprintf(b, "- workspace: `%s`\n", strings.Join(parts, "; "))
+		}
+	}
 	if pathArgs := runtimeSurfaceWorkspacePathArgs(surface); len(pathArgs) > 0 {
 		fmt.Fprintf(b, "- workspace_path_args: `%s`\n", strings.Join(pathArgs, "`, `"))
 	}

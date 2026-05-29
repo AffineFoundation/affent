@@ -69,6 +69,7 @@ export interface RuntimeSurfacePayload {
   tools?: RuntimeSurfaceTool[];
   completion_guards?: string[];
   capabilities: RuntimeCapabilities;
+  workspace?: RuntimeWorkspace;
   max_turn_steps?: number;
   max_tool_calls?: number;
   max_turn_input_tokens?: number;
@@ -89,6 +90,20 @@ export interface RuntimeSurfaceTool {
 
 export interface RuntimeToolArgPolicy {
   workspace_path_args?: string[];
+}
+
+export interface RuntimeWorkspace {
+  default_cwd?: string;
+  path_mode?: string;
+  root?: string;
+  root_entries?: RuntimeWorkspaceEntry[];
+  root_entry_count?: number;
+  root_entries_truncated?: boolean;
+}
+
+export interface RuntimeWorkspaceEntry {
+  name: string;
+  kind?: string;
 }
 
 export interface RuntimeCapabilities {

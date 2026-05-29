@@ -147,6 +147,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		MaxTurnSteps:   maxTurns,
 		MaxToolCalls:   maxTurns,
 		PerCallTimeout: r.PerCallTimeout,
+		WorkspaceRoot:  workspace,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",

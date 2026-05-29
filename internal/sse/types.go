@@ -78,6 +78,7 @@ type RuntimeSurfacePayload struct {
 	ToolCallCaps                 []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
 	CompletionGuards             []string             `json:"completion_guards,omitempty"`
 	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
+	Workspace                    *RuntimeWorkspace    `json:"workspace,omitempty"`
 	MaxTurnSteps                 int                  `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`
 	MaxTurnInputTokens           int                  `json:"max_turn_input_tokens,omitempty"`
@@ -86,6 +87,20 @@ type RuntimeSurfacePayload struct {
 	ToolResultContextBudgetBytes int                  `json:"tool_result_context_budget_bytes,omitempty"`
 	ToolResultArtifactPrefix     string               `json:"tool_result_artifact_prefix,omitempty"`
 	TurnToolOverride             bool                 `json:"turn_tool_override,omitempty"`
+}
+
+type RuntimeWorkspace struct {
+	DefaultCWD           string                  `json:"default_cwd,omitempty"`
+	PathMode             string                  `json:"path_mode,omitempty"`
+	Root                 string                  `json:"root,omitempty"`
+	RootEntries          []RuntimeWorkspaceEntry `json:"root_entries,omitempty"`
+	RootEntryCount       int                     `json:"root_entry_count,omitempty"`
+	RootEntriesTruncated bool                    `json:"root_entries_truncated,omitempty"`
+}
+
+type RuntimeWorkspaceEntry struct {
+	Name string `json:"name"`
+	Kind string `json:"kind,omitempty"`
 }
 
 type RuntimeSurfaceTool struct {

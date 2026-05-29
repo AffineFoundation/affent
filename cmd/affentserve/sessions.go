@@ -716,6 +716,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		PerCallTimeout:         perCallTimeout,
 		MaxTransientRetries:    p.cfg.MaxTransientRetries,
 		TransientBackoff:       retryBackoff,
+		WorkspaceRoot:          workspace,
 		ToolResultArtifactDir: filepath.Join(
 			sessionDir,
 			".affent",

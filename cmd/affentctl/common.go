@@ -1527,6 +1527,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		PerCallTimeout:         c.callTimeout,
 		MaxTransientRetries:    c.retryTransient,
 		TransientBackoff:       c.retryBackoff,
+		WorkspaceRoot:          workspace,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",

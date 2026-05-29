@@ -1715,6 +1715,10 @@ func TestPublish_NilEventsIsSilent(t *testing.T) {
 
 func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	events := make(chan sse.Event, 1)
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	reg := NewRegistry()
 	reg.Add(&Tool{Name: "read_file", CatalogGroup: "Workspace"})
 	reg.Add(&Tool{Name: "web_fetch", CatalogGroup: "Web"})
@@ -1729,6 +1733,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		ToolResultMaxBytesInContext:  1234,
 		ToolResultContextBudgetBytes: 5678,
 		ToolResultArtifactPathPrefix: ".affent/custom",
+		WorkspaceRoot:                workspace,
 		CompletionGuards: []CompletionGuard{
 			func() CompletionGuardResult { return CompletionGuardResult{} },
 		},
@@ -1776,6 +1781,13 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	}
 	if !reflect.DeepEqual(payload.CompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
 		t.Fatalf("completion guards = %#v", payload.CompletionGuards)
+	}
+	if payload.Workspace == nil ||
+		payload.Workspace.DefaultCWD != "workspace_root" ||
+		payload.Workspace.PathMode != "workspace_relative" ||
+		len(payload.Workspace.RootEntries) == 0 ||
+		payload.Workspace.RootEntries[0].Name != "README.md" {
+		t.Fatalf("workspace surface = %+v", payload.Workspace)
 	}
 }
 
