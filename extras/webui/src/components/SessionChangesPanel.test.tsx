@@ -22,6 +22,7 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-changes-review")).toHaveTextContent("1 file needs current-file review");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Diff");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("1/2");
+    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("1 stale");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Scale");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("+2 -1");
     expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("Verify current file");
@@ -114,6 +115,7 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-changes-review")).toHaveTextContent("No diff preview for game2048.py");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Evidence");
     expect(screen.getByLabelText("Change review facts")).toHaveTextContent("0/1");
+    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("none captured");
     expect(panel).toHaveTextContent("No diff preview captured");
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Diff/ })).toBeNull();
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Issues/ })).toBeNull();

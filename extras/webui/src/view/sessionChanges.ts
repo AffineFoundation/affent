@@ -179,7 +179,7 @@ export function changesReviewFacts(files: readonly SessionChangedFile[]): Sessio
     {
       label: "Diff",
       value: total > 0 ? `${diff}/${total}` : "0/0",
-      detail: stale > 0 ? `${stale} stale` : "preview captured",
+      detail: stale > 0 ? `${stale} stale` : diff === 0 ? "none captured" : diff === total ? "all captured" : "partial preview",
       tone: total === 0 ? "neutral" : stale > 0 ? "attention" : diff === total ? "ok" : "attention",
     },
     {
