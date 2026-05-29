@@ -17,6 +17,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/rs/zerolog"
 )
@@ -1892,6 +1893,129 @@ func TestRunner_EndToEnd_ToolArgRepairFixesMalformedJSON(t *testing.T) {
 	}
 	if !strings.Contains(tc.Result, "hello agent") {
 		t.Errorf("repaired call's tool result should contain the file contents; got %q", tc.Result)
+	}
+}
+
+func TestRunner_EndToEnd_LoopActivationIgnoresMalformedProtocolPayload(t *testing.T) {
+	activationArgs, err := json.Marshal(map[string]any{
+		"action":   "complete_activation",
+		"protocol": "# Loop Protocol - stale model payload without metadata\n\n## Goal\nWrong task",
+		"reason":   "calibration answered",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activationArgsJSON, err := json.Marshal(string(activationArgs))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn1 := []string{
+		fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"lp_activate","type":"function","function":{"name":"loop_protocol","arguments":%s}}]},"finish_reason":null}]}`, activationArgsJSON),
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Loop activated from the saved protocol."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:        "loop_activation_repair_malformed_protocol",
+		Description: "runtime drops malformed complete_activation protocol payloads and activates the saved calibrated draft",
+		Prompt:      "python",
+		Setup: func(workspaceDir string) error {
+			protocolPath := loopstate.ProtocolPath(workspaceDir, "activation-repair")
+			if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+				LoopID:       "activation-repair",
+				OwnerSession: "activation-repair",
+				Goal:         "Build a CLI puzzle game.",
+				Status:       "draft",
+				Workspace:    ".",
+			}); err != nil {
+				return err
+			}
+			protocol, found, err := loopstate.ReadProtocol(protocolPath)
+			if err != nil {
+				return err
+			}
+			if !found {
+				return fmt.Errorf("protocol fixture not found")
+			}
+			replacements := map[string]string{
+				"- hard constraints:":         "- hard constraints: pause after repeated tool failures",
+				"- known evidence:":           "- known evidence: user chose Python for the CLI game",
+				"- current risk or blocker:":  "- current risk or blocker: none",
+				"- important artifacts:":      "- important artifacts: none yet",
+				"- important trace spans:":    "- important trace spans: setup turn",
+				"- last known recovery note:": "- last known recovery note: reload plan and LOOP.md before continuing",
+			}
+			for old, next := range replacements {
+				protocol = strings.Replace(protocol, old, next, 1)
+			}
+			if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
+				return err
+			}
+			if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "Which implementation language should I use?"); err != nil {
+				return err
+			}
+			if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Python"); err != nil {
+				return err
+			}
+			return nil
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("loop_protocol", func(args map[string]any) bool {
+				action, _ := args["action"].(string)
+				_, hasProtocol := args["protocol"]
+				return action == "complete_activation" && !hasProtocol
+			}),
+			ToolRequestRepaired("loop_protocol"),
+			ToolRepairKindAtLeast("action_field_drop", 1),
+			ToolStatsAtLeast("tool_args_repaired", 1),
+			ToolResultContains("loop_protocol", "activated LOOP.md status=running"),
+			ToolArgContainsAtMost("loop_protocol", "protocol", "# Loop Protocol", 0),
+			FinalTextContains("saved protocol"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(_ context.Context, workspaceDir string, _ executor.Executor) (*agent.Registry, error) {
+			reg := agent.NewRegistry()
+			agent.RegisterLoopProtocolOnly(reg, loopstate.ProtocolPath(workspaceDir, "activation-repair"))
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("expected exactly one loop_protocol call; got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if !tc.ArgsRepaired || len(tc.RepairNotes) == 0 {
+		t.Fatalf("loop activation call should carry repair metadata: %+v", tc)
+	}
+	if _, ok := tc.Args["protocol"]; ok {
+		t.Fatalf("repaired loop activation args still contain protocol: %+v", tc.Args)
+	}
+	if tc.IsErr || !strings.Contains(tc.Result, "activated LOOP.md status=running") {
+		t.Fatalf("loop activation should succeed from saved protocol, err=%v result=%q", tc.IsErr, tc.Result)
 	}
 }
 
