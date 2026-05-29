@@ -700,6 +700,14 @@ type LoopProtocolCalibrationStats struct {
 	Examples []LoopProtocolCalibration
 }
 
+type LoopProtocolSetupOverrunStats struct {
+	Initializations     int
+	PostSetupToolCalls  int
+	NonSkippedToolCalls int
+	SkippedToolCalls    int
+	Examples            []string
+}
+
 type LoopTurnCheckpointStats struct {
 	Count           int
 	MaxToolRequests int
@@ -790,6 +798,47 @@ func (t Trace) RepairStats() ToolRepairStats {
 		}
 	}
 	return stats
+}
+
+func (t Trace) LoopProtocolSetupOverrunStats(maxExamples int) LoopProtocolSetupOverrunStats {
+	var stats LoopProtocolSetupOverrunStats
+	for i, call := range t.Tools {
+		if !loopProtocolFreshStartSetup(call) {
+			continue
+		}
+		stats.Initializations++
+		for j := i + 1; j < len(t.Tools); j++ {
+			next := t.Tools[j]
+			if next.TurnID != call.TurnID {
+				continue
+			}
+			stats.PostSetupToolCalls++
+			if loopProtocolSetupSkippedTool(next) {
+				stats.SkippedToolCalls++
+			} else {
+				stats.NonSkippedToolCalls++
+				if maxExamples > 0 && len(stats.Examples) < maxExamples {
+					stats.Examples = append(stats.Examples, fmt.Sprintf("after %s start_setup, %s call_id=%s ran in same turn", call.CallID, next.Tool, next.CallID))
+				}
+			}
+		}
+	}
+	return stats
+}
+
+func loopProtocolFreshStartSetup(call ToolCall) bool {
+	if call.Tool != agent.LoopProtocolToolName || call.ExitCode != 0 {
+		return false
+	}
+	action := strings.ToLower(strings.TrimSpace(fmt.Sprint(call.Args["action"])))
+	if action != "start_setup" {
+		return false
+	}
+	return strings.Contains(call.Result, "initialized LOOP.md draft status=draft")
+}
+
+func loopProtocolSetupSkippedTool(call ToolCall) bool {
+	return call.ExitCode != 0 && strings.Contains(call.Result, "calibration question required before more tools")
 }
 
 func (t Trace) ToolRepairExamples(maxExamples int) []ToolRepairExample {

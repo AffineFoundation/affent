@@ -130,6 +130,42 @@ func TestBuildDebugBriefClassifiesLoopProtocolCalibrationBacklog(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesLoopProtocolSetupOverrun(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopProtocolSetupOverrun: LoopProtocolSetupOverrunStats{
+			Initializations:     1,
+			PostSetupToolCalls:  4,
+			NonSkippedToolCalls: 3,
+			SkippedToolCalls:    1,
+		},
+	})
+	item := debugBriefItemByKind(brief, "loop_protocol_setup_overrun")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["initializations"] != 1 ||
+		item.Counts["post_setup_tools"] != 4 ||
+		item.Counts["non_skipped_tools"] != 3 ||
+		item.Counts["runtime_skipped_tools"] != 1 ||
+		!stringSliceContains(item.Inspect, "tool_timeline") ||
+		!stringSliceContains(brief.Tags, "loop_protocol") ||
+		!stringSliceContains(brief.Tags, "loop_protocol:setup_tool_overrun") {
+		t.Fatalf("loop protocol setup overrun item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopProtocolSetupOverrun: LoopProtocolSetupOverrunStats{
+			Initializations:     1,
+			PostSetupToolCalls:  1,
+			NonSkippedToolCalls: 0,
+			SkippedToolCalls:    1,
+		},
+	}); clean != nil {
+		t.Fatalf("runtime-skipped setup tool attempt should not fail debug brief: %+v", clean)
+	}
+}
+
 func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

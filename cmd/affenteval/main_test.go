@@ -1413,6 +1413,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		gates.MaxDebugBriefTagRates["empty_recall:no_recent_sessions"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_protocol:calibration_backlog"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_protocol:fixture"] != 0 ||
+		gates.MaxDebugBriefTagRates["loop_protocol:setup_tool_overrun"] != 0 ||
 		gates.MaxDebugBriefTagRates["loop_guard:forced_no_tools"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:memory_no_topic_anchors"] != 0 ||
 		gates.MaxDebugBriefTagRates["source_repo:setup"] != 0 ||

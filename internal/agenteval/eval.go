@@ -294,6 +294,7 @@ type BatchResult struct {
 	LoopProtocolFeeds               LoopProtocolFeedStats
 	LoopProtocolCalibrationRequests LoopProtocolCalibrationStats
 	LoopProtocolCalibrations        LoopProtocolCalibrationStats
+	LoopProtocolSetupOverrun        LoopProtocolSetupOverrunStats
 	LoopTurnCheckpoints             LoopTurnCheckpointStats
 	ContextInjections               ContextInjectionStats
 	ContextCompactions              ContextCompactionStats
@@ -1596,6 +1597,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
 	res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
 	res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
+	res.LoopProtocolSetupOverrun = trace.LoopProtocolSetupOverrunStats(3)
 	res.LoopTurnCheckpoints = trace.LoopTurnCheckpointStats(2)
 	res.ContextInjections = trace.ContextInjectionStats(2)
 	res.ContextCompactions = trace.ContextCompactionStats(2)
@@ -1806,6 +1808,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "loop_protocol:calibration_backlog") {
 		add("For loop_protocol:calibration_backlog, inspect calibration request/answer examples and trace events before continuing; the setup loop is spending budget without closing the protocol handshake.")
 	}
+	if containsString(tags, "loop_protocol:setup_tool_overrun") {
+		add("For loop_protocol:setup_tool_overrun, inspect tool_timeline and loop protocol calibration events; the runtime should stop tool work after draft setup until a calibration question is recorded.")
+	}
 	if containsString(tags, "tool_budget:turn_overrun") {
 		add("For tool_budget:turn_overrun, inspect runtime_surface and loop_turn_checkpoint_examples; align runtime MaxToolCalls/MaxTurnSteps before trusting long-run token cost.")
 	}
@@ -1869,6 +1874,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"durable_completion",
 		"loop_protocol:fixture",
 		"loop_protocol:calibration_backlog",
+		"loop_protocol:setup_tool_overrun",
 		"tool_budget:turn_overrun",
 		"research_checkpoint:no_external_evidence",
 		"loop_guard:forced_no_tools",

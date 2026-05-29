@@ -73,6 +73,50 @@ func TestApplyTraceEventAggregatesDiskParsedTurnStats(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolSetupOverrunStats(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			TurnID:   "turn-1",
+			CallID:   "setup",
+			Tool:     "loop_protocol",
+			Args:     map[string]any{"action": "start_setup"},
+			ExitCode: 0,
+			Result:   "initialized LOOP.md draft status=draft event_seq=1",
+		},
+		{
+			TurnID:   "turn-1",
+			CallID:   "shell1",
+			Tool:     "shell",
+			ExitCode: 0,
+			Result:   "README.md",
+		},
+		{
+			TurnID:   "turn-1",
+			CallID:   "read1",
+			Tool:     "read_file",
+			ExitCode: 1,
+			Result:   "(loop protocol draft initialized; calibration question required before more tools)\nFailure: kind=tool_skipped",
+		},
+		{
+			TurnID:   "turn-2",
+			CallID:   "later",
+			Tool:     "shell",
+			ExitCode: 0,
+			Result:   "ok",
+		},
+	}}
+
+	stats := trace.LoopProtocolSetupOverrunStats(2)
+	if stats.Initializations != 1 ||
+		stats.PostSetupToolCalls != 2 ||
+		stats.NonSkippedToolCalls != 1 ||
+		stats.SkippedToolCalls != 1 ||
+		len(stats.Examples) != 1 ||
+		!strings.Contains(stats.Examples[0], "shell1") {
+		t.Fatalf("setup overrun stats = %+v", stats)
+	}
+}
+
 func TestApplyTraceEventCapturesContextInjectionMetadata(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

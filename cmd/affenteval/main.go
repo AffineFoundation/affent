@@ -718,6 +718,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"empty_recall:no_recent_sessions":    0,
 					"loop_protocol:calibration_backlog":  0,
 					"loop_protocol:fixture":              0,
+					"loop_protocol:setup_tool_overrun":   0,
 					"loop_guard:forced_no_tools":         0,
 					"recall:memory_no_topic_anchors":     0,
 					"recall:no_context":                  0,

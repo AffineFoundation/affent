@@ -49,6 +49,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if counts, ok := loopProtocolCalibrationBacklogCounts(res); ok {
 		add("loop_protocol_calibration_backlog", "warn", "loop protocol calibration requests outpaced recorded answers; inspect setup state before spending more turn budget", []string{"loop_protocol_calibration_request_examples", "loop_protocol_calibration_examples", "trace_events", "timeline"}, counts, "loop_protocol", "loop_protocol:calibration_backlog")
 	}
+	if counts, ok := loopProtocolSetupOverrunCounts(res); ok {
+		add("loop_protocol_setup_overrun", "fail", "loop protocol draft setup was followed by more non-skipped tool work in the same turn; ask calibration before spending task budget", []string{"tool_timeline", "loop_protocol_calibration_request_examples", "trace_events", "timeline"}, counts, "loop_protocol", "loop_protocol:setup_tool_overrun")
+	}
 	if count := sourceRepoSetupFailureCount(res.Failures); count > 0 {
 		add("source_repo_setup", "fail", "source repository setup failed before the agent turn; fix the eval repository URL, ref, target directory, or setup command before judging model behavior", []string{"failures", "expectations", "debug_manifest", "workspace"}, map[string]int{
 			"failures": count,
@@ -781,6 +784,19 @@ func loopProtocolCalibrationBacklogCounts(res BatchResult) (map[string]int, bool
 		"request_events":  questionEvents,
 		"answer_events":   answerEvents,
 		"pending_allowed": 1,
+	}, true
+}
+
+func loopProtocolSetupOverrunCounts(res BatchResult) (map[string]int, bool) {
+	stats := res.LoopProtocolSetupOverrun
+	if stats.NonSkippedToolCalls <= 0 {
+		return nil, false
+	}
+	return map[string]int{
+		"initializations":       stats.Initializations,
+		"post_setup_tools":      stats.PostSetupToolCalls,
+		"non_skipped_tools":     stats.NonSkippedToolCalls,
+		"runtime_skipped_tools": stats.SkippedToolCalls,
 	}, true
 }
 
