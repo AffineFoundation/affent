@@ -87,7 +87,7 @@ export function accountGitAccessVerifyRequest(host: string): AccountGitCheckRequ
 }
 
 export function accountGitRemoteVerifyRequest(remote: string): AccountGitCheckRequest {
-  const normalizedRemote = remote.trim();
+  const normalizedRemote = normalizeGitRemote(remote);
   return {
     kind: "remote",
     target: normalizedRemote,
@@ -228,4 +228,18 @@ function normalizeGitHost(value: string): string {
   const trimmed = value.trim().replace(/^ssh:\/\//i, "").replace(/^git@/i, "").replace(/[:/].*$/, "");
   const safe = trimmed.toLowerCase().replace(/[^a-z0-9.-]/g, "");
   return safe || "github.com";
+}
+
+function normalizeGitRemote(value: string): string {
+  const trimmed = value.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:") return trimmed;
+    const host = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.replace(/^\/+|\/+$/g, "").replace(/\.git$/i, "");
+    if (!host || !path || !path.includes("/")) return trimmed;
+    return `git@${host}:${path}.git`;
+  } catch {
+    return trimmed;
+  }
 }

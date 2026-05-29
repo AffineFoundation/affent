@@ -66,7 +66,7 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByText("Reachable")).toBeInTheDocument();
     expect(screen.getByText("successfully authenticated")).toBeInTheDocument();
 
-    await user.type(screen.getByPlaceholderText("git@github.com:owner/repo.git"), "git@github.com:team/private-repo.git");
+    await user.type(screen.getByPlaceholderText("git@github.com:owner/repo.git or https://github.com/owner/repo"), "https://github.com/team/private-repo");
     await user.click(screen.getByRole("button", { name: "Check repository" }));
     expect(onVerifyGitAccess).toHaveBeenCalledWith({ kind: "remote", target: "git@github.com:team/private-repo.git" });
     expect(screen.getByText("repo reachable")).toBeInTheDocument();

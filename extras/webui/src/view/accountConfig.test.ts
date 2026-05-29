@@ -70,6 +70,17 @@ describe("accountConfig view helpers", () => {
     expect(request).toEqual({ kind: "remote", target: "git@github.com:team/private-repo.git" });
   });
 
+  it("normalizes common HTTPS repository URLs before checking SSH permission", () => {
+    expect(accountGitRemoteVerifyRequest("https://github.com/team/private-repo")).toEqual({
+      kind: "remote",
+      target: "git@github.com:team/private-repo.git",
+    });
+    expect(accountGitRemoteVerifyRequest("https://gitlab.com/group/subgroup/repo.git")).toEqual({
+      kind: "remote",
+      target: "git@gitlab.com:group/subgroup/repo.git",
+    });
+  });
+
   it("surfaces SSH key issues as runtime config evidence", () => {
     const settings = {
       env: [],

@@ -482,11 +482,11 @@ function AccountConfigFocus({
           <div className="account-config-verify">
             <div className="account-config-verify-title">
               <strong>Repository permission</strong>
-              <span>Checks whether the key can read a specific SSH remote without involving the agent.</span>
+              <span>Checks whether the key can read a specific repository. HTTPS GitHub/GitLab URLs are converted to SSH for the check.</span>
             </div>
             <label>
               <span>SSH remote</span>
-              <input value={gitRemote} onChange={(event) => setGitRemote(event.target.value)} placeholder="git@github.com:owner/repo.git" disabled={!!busy || !canVerifyGit} />
+              <input value={gitRemote} onChange={(event) => setGitRemote(event.target.value)} placeholder="git@github.com:owner/repo.git or https://github.com/owner/repo" disabled={!!busy || !canVerifyGit} />
             </label>
             <button
               type="button"
