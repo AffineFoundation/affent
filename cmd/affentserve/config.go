@@ -118,7 +118,8 @@ type Config struct {
 	// compaction. Zero falls back to the runtime-derived default,
 	// positive sets an explicit estimated input-token trigger, and
 	// negative disables this proactive path.
-	CompactTriggerInputTokens int `json:"compact_trigger_input_tokens"`
+	CompactTriggerInputTokens     int `json:"compact_trigger_input_tokens"`
+	compactTriggerInputTokensAuto bool
 
 	// ModelContextWindowTokens is the effective model context window used to
 	// derive proactive compaction limits when CompactTriggerInputTokens is not

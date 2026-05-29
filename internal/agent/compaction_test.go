@@ -1277,6 +1277,133 @@ func TestLoopCompactBeforeRequestPrioritizesRequestPressure(t *testing.T) {
 	}
 }
 
+func TestLoopRequestPressureUsesAutoCompactWindowBaseline(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("OLD_CONTEXT ", 1200)},
+		{Role: "assistant", Content: "historical progress"},
+		{Role: "user", Content: "continue"},
+	}
+	if err := conv.Replace(msgs); err != nil {
+		t.Fatal(err)
+	}
+	var toolDef ToolDef
+	toolDef.Type = "function"
+	toolDef.Function.Name = "pressure_tool"
+	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
+	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	compactor := &stagedPreRequestCompactor{}
+	loop := &Loop{
+		Conv:                        conv,
+		Events:                      make(chan sse.Event, 8),
+		ModelContextWindowTokens:    10_000,
+		CompactTriggerInputPercent:  5,
+		Compactor:                   compactor,
+		CompactTriggerInputTokens:   0,
+		ToolResultMaxBytesInContext: 1024,
+	}
+
+	loop.compactBeforeRequest(context.Background(), "turn-preflight", []ToolDef{toolDef})
+
+	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
+		t.Fatalf("compaction calls = %d, want one pass before starting a scoped auto-compact window", got)
+	}
+	afterFirst := EstimateRequestInputTokens(conv.Snapshot(), []ToolDef{toolDef})
+	if trigger := loop.compactTriggerInputTokens(); afterFirst < trigger {
+		t.Fatalf("test setup invalid: after first compaction estimate = %d, want still above trigger %d", afterFirst, trigger)
+	}
+
+	loop.compactForRequestPressure(context.Background(), "turn-same-window", []ToolDef{toolDef}, 0)
+
+	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
+		t.Fatalf("compaction calls = %d, want no immediate repeat inside same auto-compact window", got)
+	}
+}
+
+func TestLoopRequestPressureKeepsExplicitTriggerTotalScoped(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("OLD_CONTEXT ", 1200)},
+		{Role: "assistant", Content: "historical progress"},
+		{Role: "user", Content: "continue"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var toolDef ToolDef
+	toolDef.Type = "function"
+	toolDef.Function.Name = "pressure_tool"
+	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
+	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	compactor := &stagedPreRequestCompactor{}
+	loop := &Loop{
+		Conv:                      conv,
+		Events:                    make(chan sse.Event, 8),
+		ModelContextWindowTokens:  10_000,
+		CompactTriggerInputTokens: 500,
+		Compactor:                 compactor,
+	}
+
+	loop.compactForRequestPressure(context.Background(), "turn-explicit", []ToolDef{toolDef}, 0)
+	loop.compactForRequestPressure(context.Background(), "turn-explicit-repeat", []ToolDef{toolDef}, 0)
+
+	if got := atomic.LoadInt32(&compactor.calls); got != 2 {
+		t.Fatalf("compaction calls = %d, want explicit trigger to remain total-request scoped", got)
+	}
+}
+
+func TestLoopRequestPressureRecompactsAfterScopedGrowth(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("OLD_CONTEXT ", 1200)},
+		{Role: "assistant", Content: "historical progress"},
+		{Role: "user", Content: "continue"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var toolDef ToolDef
+	toolDef.Type = "function"
+	toolDef.Function.Name = "pressure_tool"
+	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
+	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	compactor := &stagedPreRequestCompactor{}
+	loop := &Loop{
+		Conv:                       conv,
+		Events:                     make(chan sse.Event, 8),
+		ModelContextWindowTokens:   10_000,
+		CompactTriggerInputPercent: 5,
+		Compactor:                  compactor,
+	}
+
+	loop.compactBeforeRequest(context.Background(), "turn-preflight", []ToolDef{toolDef})
+	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
+		t.Fatalf("compaction calls = %d, want first compaction", got)
+	}
+	if err := conv.Append(ChatMessage{Role: "assistant", Content: strings.Repeat("NEW_CONTEXT ", 2500)}); err != nil {
+		t.Fatal(err)
+	}
+
+	loop.compactForRequestPressure(context.Background(), "turn-growth", []ToolDef{toolDef}, 0)
+
+	if got := atomic.LoadInt32(&compactor.calls); got != 2 {
+		t.Fatalf("compaction calls = %d, want scoped growth to trigger a second compaction", got)
+	}
+	if got := conv.Snapshot(); len(got) != 3 || !strings.Contains(got[1].Content, "FINAL_SMALL_SUMMARY") {
+		t.Fatalf("conversation after scoped growth compaction = %+v", got)
+	}
+}
+
 func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	if got := CompactTriggerInputTokensForPolicy(4096, 100_000, 80, DefaultSummaryTriggerInputTokens); got != 4096 {
 		t.Fatalf("explicit trigger = %d, want 4096", got)

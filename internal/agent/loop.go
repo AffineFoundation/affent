@@ -126,6 +126,9 @@ type Loop struct {
 	// Zero derives from the configured LLMSummaryCompactor byte trigger; negative
 	// disables this request-pressure trigger.
 	CompactTriggerInputTokens int
+	// CompactTriggerInputTokensAuto reports that CompactTriggerInputTokens came
+	// from provider/model metadata rather than an explicit operator setting.
+	CompactTriggerInputTokensAuto bool
 	// ModelContextWindowTokens is the effective model context window when known.
 	// Zero means unknown. When set and CompactTriggerInputTokens is zero, the
 	// proactive compaction trigger is derived from this window.
@@ -180,6 +183,8 @@ type Loop struct {
 	mu       sync.Mutex
 	current  string // currently active turn_id; empty if idle
 	cancelFn context.CancelFunc
+
+	autoCompactWindow autoCompactWindowState
 
 	// eventSeq numbers every published event monotonically per loop.
 	// Lets trace consumers detect drops and order events independently
@@ -286,6 +291,13 @@ type CompletionGuardResult struct {
 	Reason         string
 	RequiredAction string
 	Prompt         string
+}
+
+type autoCompactWindowState struct {
+	ordinal       int64
+	prefillTokens int
+	prefillSet    bool
+	observed      bool
 }
 
 const maxCompletionGuardInterventions = 2
@@ -3480,6 +3492,9 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 			return nil, sse.TurnEndCancelled, ctx.Err()
 		}
 		if err == nil {
+			if final != nil && final.InputTokens > 0 {
+				l.observeAutoCompactWindowInputTokens(final.InputTokens)
+			}
 			return final, "", nil
 		}
 		err = l.annotateLLMCallError(code, err, timeout)
@@ -3589,30 +3604,29 @@ type requestPressureCompactionResult struct {
 }
 
 func (l *Loop) compactForRequestPressure(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) requestPressureCompactionResult {
-	limit := l.compactTriggerInputTokens()
-	if limit <= 0 {
+	status := l.requestPressureStatus(toolDefs)
+	if status.TriggerInputTokens <= 0 {
 		return requestPressureCompactionResult{}
 	}
-	estimated := estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
 	result := requestPressureCompactionResult{
-		EstimatedInputTokens: estimated,
-		TriggerInputTokens:   limit,
+		EstimatedInputTokens: status.EstimatedInputTokens,
+		TriggerInputTokens:   status.TriggerInputTokens,
 	}
-	if estimated < limit {
+	if !status.LimitReached {
 		return result
 	}
 	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst, &contextCompactPolicy{
-		EstimatedInputTokens:       estimated,
-		TriggerInputTokens:         limit,
+		EstimatedInputTokens:       status.EstimatedInputTokens,
+		TriggerInputTokens:         status.TriggerInputTokens,
 		RequireInputTokenReduction: true,
 	}, toolDefs)
 	result.Compacted = compacted
 	if compacted {
 		result.AfterEstimatedInputTokens = estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
 		l.Log.Info().
-			Int("estimated_input_tokens", estimated).
+			Int("estimated_input_tokens", status.EstimatedInputTokens).
 			Int("after_estimated_input_tokens", result.AfterEstimatedInputTokens).
-			Int("trigger_input_tokens", limit).
+			Int("trigger_input_tokens", status.TriggerInputTokens).
 			Msg("conversation compacted before request input pressure")
 	}
 	return result
@@ -3635,8 +3649,44 @@ func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs
 }
 
 func (l *Loop) requestPressureOverLimit(toolDefs []ToolDef) bool {
-	limit := l.compactTriggerInputTokens()
-	return limit > 0 && estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs) >= limit
+	return l.requestPressureStatus(toolDefs).LimitReached
+}
+
+type requestPressureStatus struct {
+	EstimatedInputTokens  int
+	TriggerInputTokens    int
+	ScopedInputTokens     int
+	PrefillInputTokens    int
+	HardInputLimitTokens  int
+	LimitReached          bool
+	ScopedWindowActivated bool
+}
+
+func (l *Loop) requestPressureStatus(toolDefs []ToolDef) requestPressureStatus {
+	trigger := l.compactTriggerInputTokens()
+	if trigger <= 0 {
+		return requestPressureStatus{}
+	}
+	estimated := estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+	status := requestPressureStatus{
+		EstimatedInputTokens: estimated,
+		TriggerInputTokens:   trigger,
+		ScopedInputTokens:    estimated,
+		HardInputLimitTokens: l.modelInputCapacityTokens(),
+	}
+	if status.HardInputLimitTokens > 0 && estimated >= status.HardInputLimitTokens {
+		status.LimitReached = true
+		return status
+	}
+	if prefill, ok := l.autoCompactWindowPrefillTokens(); ok && l.autoCompactWindowScopeEnabled() {
+		status.PrefillInputTokens = prefill
+		status.ScopedInputTokens = max(0, estimated-prefill)
+		status.ScopedWindowActivated = true
+		status.LimitReached = status.ScopedInputTokens >= trigger
+		return status
+	}
+	status.LimitReached = estimated >= trigger
+	return status
 }
 
 func (l *Loop) compactRequestPressureUntilDiminishing(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) {
@@ -3667,6 +3717,23 @@ func (l *Loop) compactTriggerInputTokens() int {
 		}
 	}
 	return CompactTriggerInputTokensForModelPolicy(l.CompactTriggerInputTokens, l.ModelContextWindowTokens, l.CompactTriggerInputPercent, l.reservedOutputTokens(), fallback)
+}
+
+func (l *Loop) modelInputCapacityTokens() int {
+	if l == nil || l.ModelContextWindowTokens <= 0 {
+		return 0
+	}
+	capacity := l.ModelContextWindowTokens - l.reservedOutputTokens()
+	if capacity < 1 {
+		return 1
+	}
+	return capacity
+}
+
+func (l *Loop) autoCompactWindowScopeEnabled() bool {
+	return l != nil &&
+		l.ModelContextWindowTokens > 0 &&
+		(l.CompactTriggerInputTokens == 0 || l.CompactTriggerInputTokensAuto)
 }
 
 func (l *Loop) compactSummaryPromptMaxBytes() int {
@@ -3759,6 +3826,7 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
 	}
+	l.startNextAutoCompactWindow(effectivePolicy.AfterEstimatedInputTokens)
 	l.publishContextCompacted(turnID, len(before), len(after), beforeBytes, afterBytes, reactive, reason, after, effectivePolicy)
 	l.markLoopProtocolCompacted(reactive, reason)
 	l.Log.Info().
@@ -3770,6 +3838,43 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		Str("reason", reason).
 		Msg("conversation compacted")
 	return true
+}
+
+func (l *Loop) startNextAutoCompactWindow(estimatedPrefillTokens int) {
+	if !l.autoCompactWindowScopeEnabled() || estimatedPrefillTokens <= 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.autoCompactWindow.ordinal++
+	l.autoCompactWindow.prefillTokens = estimatedPrefillTokens
+	l.autoCompactWindow.prefillSet = true
+	l.autoCompactWindow.observed = false
+}
+
+func (l *Loop) observeAutoCompactWindowInputTokens(inputTokens int) {
+	if !l.autoCompactWindowScopeEnabled() || inputTokens <= 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.observed {
+		return
+	}
+	l.autoCompactWindow.prefillTokens = inputTokens
+	l.autoCompactWindow.observed = true
+}
+
+func (l *Loop) autoCompactWindowPrefillTokens() (int, bool) {
+	if !l.autoCompactWindowScopeEnabled() {
+		return 0, false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.prefillTokens <= 0 {
+		return 0, false
+	}
+	return l.autoCompactWindow.prefillTokens, true
 }
 
 func (l *Loop) contextCompactPolicy(msgs []ChatMessage, toolDefs []ToolDef) contextCompactPolicy {

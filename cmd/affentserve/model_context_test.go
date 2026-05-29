@@ -140,6 +140,9 @@ func TestNewSessionPoolUsesEffectiveModelContextWindowFromProvider(t *testing.T)
 	if pool.cfg.CompactTriggerInputTokens != 76000 {
 		t.Fatalf("CompactTriggerInputTokens = %d, want provider limit clamped to 80%% of effective window", pool.cfg.CompactTriggerInputTokens)
 	}
+	if !pool.cfg.compactTriggerInputTokensAuto {
+		t.Fatal("compactTriggerInputTokensAuto = false, want provider-derived auto compact limit")
+	}
 }
 
 func TestNewSessionPoolExplicitModelContextWindowSkipsProvider(t *testing.T) {

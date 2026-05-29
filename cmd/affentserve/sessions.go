@@ -769,6 +769,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		ModelContextWindowAuto:             p.cfg.ModelContextWindowAuto,
 		ModelContextWindowEffectivePercent: p.cfg.ModelContextWindowEffectivePercent,
 		CompactTriggerInputPercent:         p.cfg.CompactTriggerInputPercent,
+		CompactTriggerInputTokensAuto:      p.cfg.compactTriggerInputTokensAuto,
 		FinalNoToolsOnMaxTurns:             true,
 		SessionScheduleRunner:              !p.cfg.EvalMode,
 		PerCallTimeout:                     perCallTimeout,
