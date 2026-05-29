@@ -252,4 +252,67 @@ describe("SessionSchedulePanel", () => {
     await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
     expect(onDeleteSchedule).toHaveBeenCalledWith("sched_checkin");
   });
+
+  it("orders timers by action priority before next-run time", () => {
+    render(
+      <SessionSchedulePanel
+        loopStatus="draft"
+        defaultOpen
+        summary={{ count: 4, enabled: 3, pending_loop_ticks: 1 }}
+        schedules={[
+          {
+            id: "sched_active_later",
+            kind: "checkin",
+            prompt: "Later check-in",
+            display_text: "Later check-in",
+            enabled: true,
+            next_run_at: "2026-05-27T18:00:00Z",
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+          },
+          {
+            id: "sched_paused_early",
+            kind: "checkin",
+            prompt: "Paused early check-in",
+            display_text: "Paused early check-in",
+            enabled: false,
+            next_run_at: "2026-05-27T12:00:00Z",
+            created_at: "2026-05-27T11:30:00Z",
+            updated_at: "2026-05-27T11:30:00Z",
+          },
+          {
+            id: "sched_pending_loop",
+            kind: "loop_tick",
+            prompt: "Pending loop tick",
+            display_text: "Pending loop tick",
+            enabled: true,
+            next_run_at: "2026-05-27T17:00:00Z",
+            repeat_interval_seconds: 1800,
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+          },
+          {
+            id: "sched_failed",
+            kind: "daily_checkin",
+            prompt: "Failed daily check-in",
+            display_text: "Failed daily check-in",
+            enabled: true,
+            next_run_at: "2026-05-27T19:00:00Z",
+            repeat_interval_seconds: 86400,
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+            last_error: "network unavailable",
+          },
+        ]}
+      />,
+    );
+
+    const rows = within(screen.getByTestId("session-schedule-list")).getAllByRole("listitem");
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Failed daily check-in"),
+      expect.stringContaining("Pending loop tick"),
+      expect.stringContaining("Later check-in"),
+      expect.stringContaining("Paused early check-in"),
+    ]);
+  });
 });

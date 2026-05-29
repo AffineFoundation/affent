@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { SessionSchedule, SessionSchedulesSummary } from "../api/sessions";
 import { automationActionLabel } from "../view/automationActions";
 import { SessionPanelFrame } from "./SessionPanelFrame";
@@ -50,6 +50,7 @@ export function SessionSchedulePanel({
   const runningLoop = loopProtocolRunning(loopStatus);
   const title = schedulePanelTitle(summary, pendingLoopTimers);
   const detail = schedulePanelDetail(summary, { lastError, pendingLoopTimers, next, preview });
+  const orderedSchedules = useMemo(() => orderSchedules(schedules ?? [], loopStatus), [loopStatus, schedules]);
 
   async function deleteSchedule(scheduleId: string) {
     await onDeleteSchedule?.(scheduleId);
@@ -84,9 +85,9 @@ export function SessionSchedulePanel({
             {error}
           </div>
         ) : null}
-        {schedules && schedules.length > 0 ? (
+        {orderedSchedules.length > 0 ? (
           <ol className="session-schedule-list" data-testid="session-schedule-list">
-            {schedules.map((schedule) => {
+            {orderedSchedules.map((schedule) => {
               const confirmingDelete = confirmDeleteId === schedule.id;
               return (
                 <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
@@ -303,6 +304,26 @@ function pendingLoopTimerCount(schedules?: SessionSchedule[], summary?: SessionS
   const preview = compact(summary?.next_prompt_preview)?.toLowerCase() ?? "";
   if ((summary?.enabled ?? 0) > 0 && preview.includes("scheduled loop tick")) return summary?.enabled ?? 1;
   return 0;
+}
+
+function orderSchedules(schedules: readonly SessionSchedule[], loopStatus?: string): SessionSchedule[] {
+  return [...schedules].sort((left, right) => {
+    const leftRank = schedulePriority(left, loopStatus);
+    const rightRank = schedulePriority(right, loopStatus);
+    if (leftRank !== rightRank) return leftRank - rightRank;
+    const leftTime = Date.parse(left.next_run_at);
+    const rightTime = Date.parse(right.next_run_at);
+    if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+    if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) return Number.isFinite(leftTime) ? -1 : 1;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function schedulePriority(schedule: SessionSchedule, loopStatus?: string): number {
+  if (compact(schedule.last_error)) return 0;
+  if (loopTimerPendingCalibration(schedule, loopStatus)) return 1;
+  if (schedule.enabled) return 2;
+  return 3;
 }
 
 function loopTimerPendingCalibration(schedule: SessionSchedule, loopStatus?: string): boolean {
