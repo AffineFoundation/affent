@@ -3783,6 +3783,12 @@ type batchResultRecord struct {
 	RuntimeErrorByKind                     map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples                   map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
 	RuntimeSurface                         *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
+	TaskState                              *agenteval.TaskStateSnapshot               `json:"task_state,omitempty"`
+	TaskStateStatus                        string                                     `json:"task_state_status,omitempty"`
+	TaskStateVerification                  string                                     `json:"task_state_verification,omitempty"`
+	TaskStateChangedFiles                  int                                        `json:"task_state_changed_files,omitempty"`
+	TaskStateFailedActions                 int                                        `json:"task_state_failed_actions,omitempty"`
+	TaskStateEvidence                      int                                        `json:"task_state_evidence,omitempty"`
 	RuntimeSurfaceScenarios                int                                        `json:"runtime_surface_scenarios,omitempty"`
 	RuntimeSurfaceTools                    map[string]int                             `json:"runtime_surface_tools,omitempty"`
 	RuntimeSurfaceCapabilities             map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
@@ -4164,6 +4170,12 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		RuntimeErrorByKind:                     cloneStringIntMap(res.RuntimeErrorByKind),
 		RuntimeErrorExamples:                   cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
 		RuntimeSurface:                         runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
+		TaskState:                              agenteval.CloneTaskStateSnapshotPtr(res.TaskState),
+		TaskStateStatus:                        res.TaskState.Status,
+		TaskStateVerification:                  res.TaskState.VerificationState,
+		TaskStateChangedFiles:                  len(res.TaskState.ChangedFiles),
+		TaskStateFailedActions:                 len(res.TaskState.FailedActions),
+		TaskStateEvidence:                      len(res.TaskState.Evidence),
 		LoopDecisions:                          res.LoopDecisionStats.Count,
 		LoopDecisionByKind:                     cloneStringIntMap(res.LoopDecisionStats.ByKind),
 		LoopDecisionByDecision:                 cloneStringIntMap(res.LoopDecisionStats.ByDecision),

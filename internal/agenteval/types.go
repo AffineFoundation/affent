@@ -203,6 +203,10 @@ type Trace struct {
 	// start. This lets eval/debug tooling explain missing web/browser/memory
 	// behavior without inferring availability from later tool calls.
 	RuntimeSurfaces []sse.RuntimeSurfacePayload
+	// TaskState is a read-only task snapshot derived from trace facts. It is
+	// not fed back into the runtime; eval/debug tooling uses it to review
+	// objective, progress, verification, changes, failures, and evidence.
+	TaskState TaskStateSnapshot
 
 	// RawTypes counts every event type the run produced, by name
 	// (e.g. {"tool.request": 5, "message.delta": 1300}). Populated

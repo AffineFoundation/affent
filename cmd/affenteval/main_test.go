@@ -3878,6 +3878,60 @@ func TestPrintBatchResultJSONLIncludesFailureKinds(t *testing.T) {
 	}
 }
 
+func TestPrintBatchResultJSONLIncludesTaskState(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+		BatchScenario:      "task-state",
+		Workspace:          "/tmp/ws",
+		TracePath:          "/tmp/ws/trace.jsonl",
+		OK:                 true,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+		TaskState: agenteval.TaskStateSnapshot{
+			Objective:         "Fix clamp and verify tests.",
+			Status:            "completed",
+			VerificationState: "last_shell_passed",
+			ChangedFiles:      []agenteval.TaskStateFile{{Path: "app/mathutil/clamp.go", Action: "edit"}},
+			FailedActions: []agenteval.TaskStateFailure{{
+				Tool:    "shell",
+				Summary: "FAIL ./...",
+				Kinds:   []string{"test_failed"},
+			}},
+			Evidence: []agenteval.TaskStateEvidence{{Source: "shell", Summary: "go test ./..."}},
+			Sources:  []string{"runtime_surface"},
+		},
+	})
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("jsonl result did not decode: %v\n%s", err, out.String())
+	}
+	if got["task_state_status"] != "completed" ||
+		got["task_state_verification"] != "last_shell_passed" ||
+		got["task_state_changed_files"] != float64(1) ||
+		got["task_state_failed_actions"] != float64(1) ||
+		got["task_state_evidence"] != float64(1) {
+		t.Fatalf("task state metrics missing: %#v\njson=%s", got, out.String())
+	}
+	taskState, ok := got["task_state"].(map[string]any)
+	if !ok {
+		t.Fatalf("task_state missing or wrong type: %#v\njson=%s", got["task_state"], out.String())
+	}
+	if taskState["objective"] != "Fix clamp and verify tests." ||
+		taskState["status"] != "completed" ||
+		taskState["verification_state"] != "last_shell_passed" {
+		t.Fatalf("task_state summary = %#v\njson=%s", taskState, out.String())
+	}
+	changedFiles, ok := taskState["changed_files"].([]any)
+	if !ok || len(changedFiles) != 1 {
+		t.Fatalf("changed_files = %#v\njson=%s", taskState["changed_files"], out.String())
+	}
+	changedFile, ok := changedFiles[0].(map[string]any)
+	if !ok || changedFile["path"] != "app/mathutil/clamp.go" || changedFile["action"] != "edit" {
+		t.Fatalf("changed_files[0] = %#v\njson=%s", changedFiles[0], out.String())
+	}
+}
+
 func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 	res := agenteval.BatchResult{
 		BatchScenario: "llm-failing",

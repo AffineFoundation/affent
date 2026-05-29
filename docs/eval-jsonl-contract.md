@@ -195,6 +195,14 @@ Scenario records describe one eval case:
   caps for capped registered tools, plus key tool-result limits. Retained debug
   manifests include the fuller `runtime_surface` block with per-tool
   group/source metadata.
+- `task_state`: optional derived snapshot of the scenario's objective, status,
+  current step, next step, verification state, changed files, failed actions,
+  evidence, and runtime/context sources. It is derived from trace facts for
+  audit/debug output and is not fed back into the agent runtime.
+- `task_state_status`, `task_state_verification`,
+  `task_state_changed_files`, `task_state_failed_actions`, and
+  `task_state_evidence`: compact task-state columns for dashboards that do not
+  need to parse the full `task_state` object.
 - `run_exit_code`: `affentctl run` exit code for the scenario.
 - `turn_end_reason`: runtime turn end reason, when available. Scenarios default
   to expecting `completed`; set `required_turn_end_reason` when a scenario is

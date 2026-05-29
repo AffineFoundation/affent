@@ -331,6 +331,9 @@ type BatchResult struct {
 	// RuntimeSurface is the latest effective tool/runtime surface observed
 	// in the trace. Nil for old traces or runs that failed before turn start.
 	RuntimeSurface *sse.RuntimeSurfacePayload
+	// TaskState is the derived task-state snapshot used by debug output and
+	// eval JSONL to keep long-run progress auditable.
+	TaskState TaskStateSnapshot
 }
 
 type DebugManifest struct {
@@ -384,6 +387,7 @@ type DebugManifest struct {
 	ChildTranscripts                       []DebugTranscriptRef              `json:"child_transcripts,omitempty"`
 	Metrics                                DebugMetrics                      `json:"metrics"`
 	RuntimeSurface                         *sse.RuntimeSurfacePayload        `json:"runtime_surface,omitempty"`
+	TaskState                              *TaskStateSnapshot                `json:"task_state,omitempty"`
 	GeneratedAt                            string                            `json:"generated_at"`
 }
 
@@ -1045,6 +1049,11 @@ type DebugMetrics struct {
 	OutputTokens                    int            `json:"output_tokens"`
 	TraceEvents                     int            `json:"trace_events,omitempty"`
 	TraceEventTypes                 map[string]int `json:"trace_event_types,omitempty"`
+	TaskStateStatus                 string         `json:"task_state_status,omitempty"`
+	TaskStateVerification           string         `json:"task_state_verification,omitempty"`
+	TaskStateChangedFiles           int            `json:"task_state_changed_files,omitempty"`
+	TaskStateFailedActions          int            `json:"task_state_failed_actions,omitempty"`
+	TaskStateEvidence               int            `json:"task_state_evidence,omitempty"`
 }
 
 type VerifierResult struct {
@@ -1469,6 +1478,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ContextCompactionExamples:              append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
 		ChildTranscripts:                       append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
 		RuntimeSurface:                         cloneRuntimeSurface(res.RuntimeSurface),
+		TaskState:                              CloneTaskStateSnapshotPtr(res.TaskState),
 		Metrics: DebugMetrics{
 			TurnEndReason:                   res.TurnEndReason,
 			ToolCalls:                       res.ToolCalls,
@@ -1542,6 +1552,11 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			OutputTokens:                    res.Usage.OutputTokens,
 			TraceEvents:                     res.TraceEvents,
 			TraceEventTypes:                 cloneStringIntMap(res.TraceEventTypes),
+			TaskStateStatus:                 res.TaskState.Status,
+			TaskStateVerification:           res.TaskState.VerificationState,
+			TaskStateChangedFiles:           len(res.TaskState.ChangedFiles),
+			TaskStateFailedActions:          len(res.TaskState.FailedActions),
+			TaskStateEvidence:               len(res.TaskState.Evidence),
 		},
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}
@@ -1629,6 +1644,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.Plan = trace.PlanStats()
 	res.Repair = trace.RepairStats()
 	res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
+	res.TaskState = trace.TaskState
 	res.ChildTranscripts = append([]DebugTranscriptRef(nil), trace.ChildTranscripts...)
 	res.TraceWorkspace = strings.TrimSpace(trace.WorkspaceDir)
 	res.ChildTranscriptRoot = strings.TrimSpace(trace.ChildTranscriptRootDir)
@@ -3026,6 +3042,7 @@ func ParseTraceFile(path string) (Trace, error) {
 		}
 		appendTraceEventRef(&trace, ev.Type, ev.Data, "")
 	}
+	trace.TaskState = DeriveTaskState(trace)
 	return trace, nil
 }
 
