@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { AccountSettingsResponse } from "../api/settings";
 import {
   accountGitAccessVerifyRequest,
+  accountGitRemoteVerifyRequest,
   accountConfigDetail,
   accountConfigReview,
   accountConfigSummary,
@@ -48,6 +49,7 @@ export function AccountSettingsPanel({
   const [value, setValue] = useState("");
   const [query, setQuery] = useState("");
   const [gitHost, setGitHost] = useState("github.com");
+  const [gitRemote, setGitRemote] = useState("");
   const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
   const [mutationStatus, setMutationStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
   const [envFilter, setEnvFilter] = useState<AccountEnvFilter>("all");
@@ -151,6 +153,8 @@ export function AccountSettingsPanel({
                   onEnsureSSHKey={onEnsureSSHKey ? ensureSSHKey : undefined}
                   gitHost={gitHost}
                   setGitHost={setGitHost}
+                  gitRemote={gitRemote}
+                  setGitRemote={setGitRemote}
                   onVerifyGitAccess={onVerifyGitAccess}
                 />
                 <div className="account-settings-actions">
@@ -381,6 +385,8 @@ function AccountConfigFocus({
   onEnsureSSHKey,
   gitHost,
   setGitHost,
+  gitRemote,
+  setGitRemote,
   onVerifyGitAccess,
 }: {
   settings: AccountSettingsResponse;
@@ -389,10 +395,13 @@ function AccountConfigFocus({
   onEnsureSSHKey?: () => Promise<void> | void;
   gitHost: string;
   setGitHost: (value: string) => void;
+  gitRemote: string;
+  setGitRemote: (value: string) => void;
   onVerifyGitAccess?: (request: RunCommandExecutionRequest) => Promise<void> | void;
 }) {
   const review = accountConfigReview(settings);
   const canVerifyGit = Boolean(settings.ssh.public_key && onVerifyGitAccess);
+  const canVerifyRemote = canVerifyGit && gitRemote.trim().length > 0;
   return (
     <section className="account-config-focus" data-testid="account-config-focus" data-tone={review.tone} aria-label="Runtime config review">
       <div className="account-config-focus-head">
@@ -417,19 +426,35 @@ function AccountConfigFocus({
         </div>
       ) : null}
       {settings.ssh.public_key ? (
-        <div className="account-config-verify" data-testid="account-config-verify">
-          <label>
-            <span>Test private Git host</span>
-            <input value={gitHost} onChange={(event) => setGitHost(event.target.value)} placeholder="github.com" disabled={!!busy || !canVerifyGit} />
-          </label>
-          <button
-            type="button"
-            className="secondary-action"
-            disabled={!!busy || !canVerifyGit}
-            onClick={() => onVerifyGitAccess?.(accountGitAccessVerifyRequest(gitHost))}
-          >
-            Test SSH
-          </button>
+        <div className="account-config-verify-stack" data-testid="account-config-verify">
+          <div className="account-config-verify">
+            <label>
+              <span>Test private Git host</span>
+              <input value={gitHost} onChange={(event) => setGitHost(event.target.value)} placeholder="github.com" disabled={!!busy || !canVerifyGit} />
+            </label>
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={!!busy || !canVerifyGit}
+              onClick={() => onVerifyGitAccess?.(accountGitAccessVerifyRequest(gitHost))}
+            >
+              Test SSH
+            </button>
+          </div>
+          <div className="account-config-verify">
+            <label>
+              <span>Test repository remote</span>
+              <input value={gitRemote} onChange={(event) => setGitRemote(event.target.value)} placeholder="git@github.com:owner/repo.git" disabled={!!busy || !canVerifyGit} />
+            </label>
+            <button
+              type="button"
+              className="secondary-action"
+              disabled={!!busy || !canVerifyRemote}
+              onClick={() => onVerifyGitAccess?.(accountGitRemoteVerifyRequest(gitRemote))}
+            >
+              Test remote
+            </button>
+          </div>
         </div>
       ) : null}
       <div className="account-config-focus-actions">

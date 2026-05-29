@@ -9,6 +9,7 @@ import {
   accountEnvReviewFindings,
   accountEnvReviewNames,
   accountGitAccessVerifyRequest,
+  accountGitRemoteVerifyRequest,
   sshAccessDescription,
   sshPathDisplay,
   sshPathState,
@@ -68,6 +69,14 @@ describe("accountConfig view helpers", () => {
     expect(request.command).toContain("git@$host");
     expect(request.command).toContain("successfully authenticated");
     expect(request.command).not.toContain("team/private-repo");
+  });
+
+  it("builds a direct remote verification command for a private repository", () => {
+    const request = accountGitRemoteVerifyRequest("git@github.com:team/private-repo.git");
+
+    expect(request.cwd).toBeUndefined();
+    expect(request.command).toContain("remote='git@github.com:team/private-repo.git'");
+    expect(request.command).toContain("git ls-remote --exit-code \"$remote\" HEAD");
   });
 
   it("surfaces SSH key issues as runtime config evidence", () => {

@@ -37,6 +37,8 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
     expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Test private Git host");
+    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Test repository remote");
+    expect(screen.getByRole("button", { name: "Test remote" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use config as draft" })).toBeNull();
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("GITHUB_TOKEN");
@@ -60,6 +62,13 @@ describe("AccountSettingsPanel", () => {
     expect(onVerifyGitAccess.mock.calls[0][0].command).toContain("BatchMode=yes");
     expect(onVerifyGitAccess.mock.calls[0][0].command).toContain("git@$host");
     expect(onVerifyGitAccess.mock.calls[0][0].command).not.toContain("team/repo");
+
+    await user.type(screen.getByPlaceholderText("git@github.com:owner/repo.git"), "git@github.com:team/private-repo.git");
+    await user.click(screen.getByRole("button", { name: "Test remote" }));
+    expect(onVerifyGitAccess).toHaveBeenCalledWith(expect.objectContaining({
+      command: expect.stringContaining("git ls-remote --exit-code"),
+    }));
+    expect(onVerifyGitAccess.mock.calls[1][0].command).toContain("remote='git@github.com:team/private-repo.git'");
   });
 
   it("saves and confirms deletion for environment variables without displaying the value", async () => {

@@ -93,6 +93,17 @@ export function accountGitAccessVerifyRequest(host: string): RunCommandExecution
   };
 }
 
+export function accountGitRemoteVerifyRequest(remote: string): RunCommandExecutionRequest {
+  const normalizedRemote = remote.trim() || "git@github.com:owner/repo.git";
+  const quotedRemote = shellSingleQuote(normalizedRemote);
+  return {
+    command: [
+      `remote=${quotedRemote}`,
+      `git ls-remote --exit-code "$remote" HEAD`,
+    ].join("; "),
+  };
+}
+
 export function accountEnvMatchesQuery(entry: AccountEnvSummary, query: string): boolean {
   return [
     entry.name,
