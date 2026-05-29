@@ -1587,6 +1587,41 @@ func TestBuiltinFileToolsRouteThroughFileOps(t *testing.T) {
 	}
 }
 
+func TestBuiltinFileOpsResultsUseWorkspaceRelativePaths(t *testing.T) {
+	fake := newFakeFileOpsExecutor()
+	ctx := context.Background()
+	ws := filepath.Join(t.TempDir(), "workspace")
+	target := filepath.Join(ws, "app", "main.py")
+	deps := BuiltinDeps{
+		Executor:         fake,
+		HostWorkspaceDir: ws,
+	}
+
+	write := writeFileTool(deps)
+	out, err := write.Execute(ctx, json.RawMessage(fmt.Sprintf(`{"path":%q,"content":"hello"}`, target)))
+	if err != nil {
+		t.Fatalf("write_file: %v", err)
+	}
+	if fake.lastWritePath != target {
+		t.Fatalf("write_file FileOps path = %q, want %q", fake.lastWritePath, target)
+	}
+	if strings.Contains(out, ws) || !strings.Contains(out, "app/main.py") {
+		t.Fatalf("write_file result should use workspace-relative path, got %q", out)
+	}
+
+	edit := editFileTool(deps)
+	out, err = edit.Execute(ctx, json.RawMessage(fmt.Sprintf(`{"path":%q,"old":"hello","new":"HELLO"}`, target)))
+	if err != nil {
+		t.Fatalf("edit_file: %v", err)
+	}
+	if fake.lastEditPath != target {
+		t.Fatalf("edit_file FileOps path = %q, want %q", fake.lastEditPath, target)
+	}
+	if strings.Contains(out, ws) || !strings.Contains(out, "app/main.py") {
+		t.Fatalf("edit_file result should use workspace-relative path, got %q", out)
+	}
+}
+
 func TestBuiltinFileToolsTrimPathBeforeFileOps(t *testing.T) {
 	fake := newFakeFileOpsExecutor()
 	ctx := context.Background()

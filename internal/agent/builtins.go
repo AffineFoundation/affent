@@ -1177,7 +1177,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 				if err := fo.WriteFile(ctx, p.Path, p.Content); err != nil {
 					return "", recoverableFileToolError("write_file", p.Path, err)
 				}
-				return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), p.Path), nil
+				return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), workspaceRelativeDisplayPath(deps, p.Path, p.Path)), nil
 			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
@@ -1232,7 +1232,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 				if err != nil {
 					return "", recoverableFileToolError("edit_file", p.Path, err)
 				}
-				return fmt.Sprintf("replaced %d occurrence(s) in %s", n, p.Path), nil
+				return fmt.Sprintf("replaced %d occurrence(s) in %s", n, workspaceRelativeDisplayPath(deps, p.Path, p.Path)), nil
 			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
