@@ -207,10 +207,16 @@ func updateLoopProtocolDraft(protocolPath string, p loopProtocolToolArgs) (strin
 	}
 	status := loopstate.ProtocolStatus(protocol)
 	if status == "running" {
-		return "", errors.New("update_draft cannot activate a loop protocol with status=running\n" + loopProtocolActivationStatusNext)
+		return "", loopProtocolFailure(
+			"update_draft cannot activate a loop protocol with status=running\n"+loopProtocolActivationStatusNext,
+			loopProtocolActivationStatusFailureKind,
+		)
 	}
 	if status == "" {
-		return "", errors.New("LOOP.md metadata must include a valid status before update_draft\nNext: keep metadata status: draft until the protocol is complete enough to activate")
+		return "", loopProtocolFailure(
+			"LOOP.md metadata must include a valid status before update_draft\nNext: use patch_draft for compact section changes, or keep metadata status=draft for a deliberate full draft rewrite; activate later with complete_activation.",
+			loopProtocolActivationStatusFailureKind,
+		)
 	}
 	if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
 		return "", err

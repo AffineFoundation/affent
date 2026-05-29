@@ -605,8 +605,20 @@ func TestLoopProtocolToolDraftUpdateDoesNotActivate(t *testing.T) {
 		t.Fatalf("update_draft running err = %v", err)
 	}
 	if !strings.Contains(err.Error(), "tool performs the draft-to-running transition") ||
-		!strings.Contains(err.Error(), "keep the saved draft status=draft") {
+		!strings.Contains(err.Error(), "keep the saved draft status=draft") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
 		t.Fatalf("update_draft running next step is ambiguous: %v", err)
+	}
+
+	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "update_draft",
+		"protocol": strings.Replace(protocol, "- status: draft\n", "", 1),
+	})))
+	if err == nil ||
+		!strings.Contains(err.Error(), "metadata must include a valid status") ||
+		!strings.Contains(err.Error(), "use patch_draft for compact section changes") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
+		t.Fatalf("update_draft missing status err = %v", err)
 	}
 }
 
