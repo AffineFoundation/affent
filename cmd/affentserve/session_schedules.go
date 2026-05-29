@@ -22,6 +22,7 @@ import (
 
 const (
 	sessionSchedulesFileName     = "schedules.json"
+	sessionSchedulesFileMode     = 0o644
 	maxSessionSchedulesFileBytes = 64 * 1024
 	maxSessionSchedules          = 128
 	maxSessionSchedulePrompt     = 8000
@@ -484,6 +485,10 @@ func writeSessionSchedulesFile(path string, file sessionSchedulesFile) error {
 	tmpName := tmp.Name()
 	defer func() { _ = os.Remove(tmpName) }()
 	if _, err := tmp.Write(append(raw, '\n')); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(sessionSchedulesFileMode); err != nil {
 		_ = tmp.Close()
 		return err
 	}

@@ -59,6 +59,69 @@ func TestSessionScheduleToolCreatesRecurringTimerWithoutLoopProtocol(t *testing.
 	}
 }
 
+func TestSessionScheduleToolCreatedTimerIsVisibleThroughSessionAPI(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	reg := agent.NewRegistry()
+	registerSessionScheduleTool(reg, pool, "timer-api")
+	tool, ok := reg.Get(sessionScheduleToolName)
+	if !ok {
+		t.Fatal("session_schedule tool not registered")
+	}
+	next := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{
+		"action":"create",
+		"kind":"custom",
+		"prompt":"Fetch the current BTC price and summarize the source.",
+		"display_text":"BTC price check",
+		"next_run_at":`+strconv.Quote(next)+`,
+		"repeat_interval_seconds":1800
+	}`)); err != nil {
+		t.Fatalf("session_schedule create: %v", err)
+	}
+	if activeSessionByID(pool, "timer-api") != nil {
+		t.Fatal("session_schedule tool must not reopen the session just to persist a timer")
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/timer-api/schedules", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("list schedules status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var listed sessionSchedulesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &listed); err != nil {
+		t.Fatalf("decode list schedules: %v", err)
+	}
+	if listed.SessionID != "timer-api" || len(listed.Schedules) != 1 {
+		t.Fatalf("listed schedules = %+v, want one persisted timer", listed)
+	}
+	if listed.Summary == nil || listed.Summary.Enabled != 1 || listed.Summary.NextRunAt != next || listed.Summary.NextPromptPreview != "BTC price check" {
+		t.Fatalf("schedule summary = %+v, want visible enabled timer", listed.Summary)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/timer-api", nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("session detail status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var detail sessionDetailResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &detail); err != nil {
+		t.Fatalf("decode session detail: %v", err)
+	}
+	if !detail.Session.HasSchedules || detail.Session.Schedules == nil || detail.Session.Schedules.NextRunAt != next {
+		t.Fatalf("session detail = %+v, want schedule summary from durable session state", detail.Session)
+	}
+
+	info, err := os.Stat(sessionSchedulesPath(pool, "timer-api"))
+	if err != nil {
+		t.Fatalf("stat schedules file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != sessionSchedulesFileMode {
+		t.Fatalf("schedules file mode = %v, want %v", got, os.FileMode(sessionSchedulesFileMode))
+	}
+}
+
 func TestSessionScheduleToolIsRegisteredForServeSessions(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	session, err := pool.GetOrCreate("schedule-tool-surface")
