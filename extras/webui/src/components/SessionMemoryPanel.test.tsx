@@ -368,12 +368,18 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Duplicate");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Capacity");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("access_token=[redacted]");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("access_token=[redacted] should not be stored");
+    expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("ghp_example");
 
     await user.click(within(screen.getByTestId("session-memory-review")).getByRole("button", { name: "Show buckets" }));
     expect(screen.getByTestId("session-memory-search-count")).toHaveTextContent("2 buckets");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("project");
     expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("research");
+
+    await user.click(within(screen.getByTestId("session-memory-list")).getByText("User"));
+    await user.click(within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Reveal" }));
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("access_token=ghp_example should not be stored");
   });
 
   it("shows an empty selected-chat state", () => {

@@ -6,8 +6,11 @@ import {
   memoryBucketEvidenceText,
   memoryBucketKey,
   memoryBucketLabel,
+  memoryBucketPreview,
   memoryBucketUsage,
   memoryBucketsNeedingReview,
+  memoryEntryIsSensitive,
+  memoryEntrySafePreview,
   buildSessionMemoryCandidates,
   memoryPressureLabel,
   memoryReviewFindings,
@@ -71,6 +74,19 @@ describe("sessionMemory view helpers", () => {
     expect(memoryBucketMatchesQuery(bucket, "TAOSTATS")).toBe(true);
     expect(memoryBucketMatchingEntries(bucket, "dynamic")).toEqual(["taostats pages are dynamic"]);
     expect(memoryBucketMatchingEntries(bucket, "research")).toEqual([]);
+  });
+
+  it("redacts sensitive memory in preview helpers", () => {
+    const secret = "access_token=ghp_example should not be stored";
+    expect(memoryEntryIsSensitive(secret)).toBe(true);
+    expect(memoryEntrySafePreview(secret)).toBe("access_token=[redacted] should not be stored");
+    expect(memoryBucketPreview({
+      target: "user",
+      topic: "user",
+      entries: [secret],
+      entry_count: 1,
+      chars_used: secret.length,
+    })).toBe("access_token=[redacted] should not be stored");
   });
 
   it("builds a complete memory snapshot", () => {

@@ -6782,6 +6782,29 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-memory-entry-text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: start;
+  min-width: 0;
+  color: var(--text);
+}
+
+.session-memory-entry-text > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.session-memory-entry-text[data-sensitive="true"] > span {
+  color: var(--text-muted);
+}
+
+.session-memory-entry-text[data-sensitive="true"]:not([data-revealed="true"]) > span {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
 .session-memory-entry-actions {
   display: inline-flex;
   flex-wrap: wrap;

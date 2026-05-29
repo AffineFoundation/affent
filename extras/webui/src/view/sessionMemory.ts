@@ -135,7 +135,7 @@ export function memoryBucketUsage(bucket: SessionMemoryBucket): string {
 
 export function memoryBucketPreview(bucket: SessionMemoryBucket): string {
   const first = bucket.entries?.find((entry) => entry.trim());
-  return first ?? "No entries in this bucket.";
+  return first ? memoryEntrySafePreview(first) : "No entries in this bucket.";
 }
 
 export function memoryUsageLabel(stats: SessionMemoryStats): string {
@@ -230,6 +230,14 @@ export function memoryBucketMatchingEntries(bucket: SessionMemoryBucket, query: 
   const search = query.trim().toLowerCase();
   if (!search) return bucket.entries ?? [];
   return (bucket.entries ?? []).filter((entry) => entry.toLowerCase().includes(search));
+}
+
+export function memoryEntryIsSensitive(entry: string): boolean {
+  return looksSensitive(entry);
+}
+
+export function memoryEntrySafePreview(entry: string): string {
+  return looksSensitive(entry) ? redactSensitivePreview(entry) : entryPreview(entry);
 }
 
 export function memoryActionLabel(action: string): string {

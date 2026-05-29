@@ -14,6 +14,8 @@ import {
   memoryBucketLabel,
   memoryBuckets,
   memoryBucketUsage,
+  memoryEntryIsSensitive,
+  memoryEntrySafePreview,
   memoryPressureLabel,
   memoryReviewFindings,
   memoryScopeLabel,
@@ -73,6 +75,7 @@ export function SessionMemoryPanel({
   const [scopeFilter, setScopeFilter] = useState<MemoryScopeFilter>("all");
   const [writeOpen, setWriteOpen] = useState(!memory?.has_memory);
   const [savingCandidateId, setSavingCandidateId] = useState<string | undefined>();
+  const [revealedEntryKeys, setRevealedEntryKeys] = useState<ReadonlySet<string>>(() => new Set());
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
   const reviewFindings = useMemo(() => memoryReviewFindings(memory), [memory]);
   const reviewBucketKeys = useMemo(() => memoryBucketsNeedingReview(memory), [memory]);
@@ -186,6 +189,18 @@ export function SessionMemoryPanel({
     }
   }
 
+  function toggleRevealedEntry(key: string) {
+    setRevealedEntryKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
   return (
     <details
       className="session-skills-panel session-memory-panel"
@@ -269,7 +284,14 @@ export function SessionMemoryPanel({
               />
             ) : null}
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
-            {focusedBucket ? <MemoryBucketFocus bucket={focusedBucket} onUseAsDraft={onUseAsDraft} /> : null}
+            {focusedBucket ? (
+              <MemoryBucketFocus
+                bucket={focusedBucket}
+                revealedEntryKeys={revealedEntryKeys}
+                onToggleReveal={toggleRevealedEntry}
+                onUseAsDraft={onUseAsDraft}
+              />
+            ) : null}
             {hasSearch ? (
               <div className="session-skills-controls">
                 <MemoryScopeFilters buckets={buckets} reviewBucketKeys={reviewBucketKeys} value={scopeFilter} onChange={setScopeFilter} />
@@ -378,7 +400,12 @@ export function SessionMemoryPanel({
                                         </div>
                                       </form>
                                     ) : (
-                                      <span>{entry}</span>
+                                      <MemoryEntryText
+                                        entry={entry}
+                                        entryKey={entryKey}
+                                        revealed={revealedEntryKeys.has(entryKey)}
+                                        onToggleReveal={toggleRevealedEntry}
+                                      />
                                     )}
                                     {!isEditing && (onRemoveMemory || onReplaceMemory) ? (
                                       confirmRemoveKey === entryKey ? (
@@ -578,7 +605,17 @@ function memoryFindingKindLabel(kind: string): string {
   return kind;
 }
 
-function MemoryBucketFocus({ bucket, onUseAsDraft }: { bucket: SessionMemoryBucket; onUseAsDraft?: UseAsDraft }) {
+function MemoryBucketFocus({
+  bucket,
+  revealedEntryKeys,
+  onToggleReveal,
+  onUseAsDraft,
+}: {
+  bucket: SessionMemoryBucket;
+  revealedEntryKeys: ReadonlySet<string>;
+  onToggleReveal: (key: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
   const entries = bucket.entries ?? [];
   const previewEntries = entries.slice(0, 4);
   return (
@@ -598,7 +635,19 @@ function MemoryBucketFocus({ bucket, onUseAsDraft }: { bucket: SessionMemoryBuck
         <span>Entries</span>
         {previewEntries.length > 0 ? (
           <ul>
-            {previewEntries.map((entry, index) => <li key={`${index}:${entry}`}>{entry}</li>)}
+            {previewEntries.map((entry, index) => {
+              const entryKey = memoryEntryKey(bucket.target, bucket.topic, entry);
+              return (
+                <li key={`${index}:${entry}`}>
+                  <MemoryEntryText
+                    entry={entry}
+                    entryKey={entryKey}
+                    revealed={revealedEntryKeys.has(entryKey)}
+                    onToggleReveal={onToggleReveal}
+                  />
+                </li>
+              );
+            })}
           </ul>
         ) : (
           <p>No entries in this bucket.</p>
@@ -615,6 +664,31 @@ function MemoryBucketFocus({ bucket, onUseAsDraft }: { bucket: SessionMemoryBuck
         ) : null}
       </div>
     </section>
+  );
+}
+
+function MemoryEntryText({
+  entry,
+  entryKey,
+  revealed,
+  onToggleReveal,
+}: {
+  entry: string;
+  entryKey: string;
+  revealed: boolean;
+  onToggleReveal: (key: string) => void;
+}) {
+  const sensitive = memoryEntryIsSensitive(entry);
+  const text = sensitive && !revealed ? memoryEntrySafePreview(entry) : entry;
+  return (
+    <span className="session-memory-entry-text" data-sensitive={sensitive ? "true" : undefined} data-revealed={revealed ? "true" : undefined}>
+      <span>{text}</span>
+      {sensitive ? (
+        <button type="button" className="ghost-action" onClick={() => onToggleReveal(entryKey)}>
+          {revealed ? "Hide" : "Reveal"}
+        </button>
+      ) : null}
+    </span>
   );
 }
 
