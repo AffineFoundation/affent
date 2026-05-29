@@ -95,6 +95,7 @@ type sessionSummary struct {
 	RuntimeSkillNames  []string                         `json:"runtime_skill_names,omitempty"`
 	Context            *sessionContextSummary           `json:"context,omitempty"`
 	ContextCompactions *sessionContextCompactionSummary `json:"context_compactions,omitempty"`
+	TaskState          *sessionTaskStateSummary         `json:"task_state,omitempty"`
 	Usage              *UsageSnapshot                   `json:"usage,omitempty"`
 	Tools              *ToolStatsSnapshot               `json:"tools,omitempty"`
 	Runtime            *RuntimeStatsSnapshot            `json:"runtime,omitempty"`
@@ -124,6 +125,49 @@ type sessionContextCompactionSummary struct {
 	LatestReactive     bool   `json:"latest_reactive,omitempty"`
 	LatestSummaryState string `json:"latest_summary_state,omitempty"`
 	TailOnly           bool   `json:"tail_only,omitempty"`
+}
+
+type sessionTaskStateSummary struct {
+	Objective         string                     `json:"objective,omitempty"`
+	Status            string                     `json:"status,omitempty"`
+	CurrentStep       string                     `json:"current_step,omitempty"`
+	Constraints       []string                   `json:"constraints,omitempty"`
+	KnownFacts        []string                   `json:"known_facts,omitempty"`
+	ChangedFiles      []sessionTaskStateFile     `json:"changed_files,omitempty"`
+	AttemptedActions  []sessionTaskStateAction   `json:"attempted_actions,omitempty"`
+	FailedActions     []sessionTaskStateFailure  `json:"failed_actions,omitempty"`
+	Evidence          []sessionTaskStateEvidence `json:"evidence,omitempty"`
+	VerificationState string                     `json:"verification_state,omitempty"`
+	OpenQuestions     []string                   `json:"open_questions,omitempty"`
+	NextStep          string                     `json:"next_step,omitempty"`
+	Sources           []string                   `json:"sources,omitempty"`
+}
+
+type sessionTaskStateFile struct {
+	Path   string `json:"path"`
+	Action string `json:"action,omitempty"`
+}
+
+type sessionTaskStateAction struct {
+	Tool    string `json:"tool"`
+	Summary string `json:"summary,omitempty"`
+	TurnID  string `json:"turn_id,omitempty"`
+	CallID  string `json:"call_id,omitempty"`
+}
+
+type sessionTaskStateFailure struct {
+	Tool    string   `json:"tool"`
+	Summary string   `json:"summary,omitempty"`
+	Kinds   []string `json:"kinds,omitempty"`
+	TurnID  string   `json:"turn_id,omitempty"`
+	CallID  string   `json:"call_id,omitempty"`
+}
+
+type sessionTaskStateEvidence struct {
+	Source  string `json:"source"`
+	Summary string `json:"summary,omitempty"`
+	TurnID  string `json:"turn_id,omitempty"`
+	CallID  string `json:"call_id,omitempty"`
 }
 
 type sessionArtifactsSummary struct {
@@ -573,6 +617,13 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			}
 		}
 	}
+	taskEventsPath := ""
+	if s.sessionDir != "" {
+		taskEventsPath = filepath.Join(s.sessionDir, "events.jsonl")
+	} else if s.loopProtocolPath != "" {
+		taskEventsPath = filepath.Join(filepath.Dir(s.loopProtocolPath), "events.jsonl")
+	}
+	_ = populateSessionTaskState(&summary, taskEventsPath)
 	populateSessionSummaryTitle(&summary)
 	return summary
 }
@@ -843,6 +894,9 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	summary.HasMemory = summary.HasMemory || summary.Memory != nil
 	if !sessionSummaryHasDurableState(summary) {
 		return sessionSummary{}, false, nil
+	}
+	if err := populateSessionTaskState(&summary, filepath.Join(dir, "events.jsonl")); err != nil {
+		return sessionSummary{}, false, err
 	}
 	if summary.HasArtifacts {
 		_, _ = mergeStat(artifactRoot)
@@ -1147,6 +1201,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if shouldReplaceRuntimeSummary(a.Runtime, b.Runtime, b.Active, aWasActive) {
 		a.Runtime = b.Runtime
 	}
+	if shouldReplaceTaskStateSummary(a.TaskState, b.TaskState, b.Active, aWasActive) {
+		a.TaskState = b.TaskState
+	}
 	if b.Browser != nil {
 		a.Browser = b.Browser
 	}
@@ -1194,6 +1251,47 @@ func shouldReplaceStatsSnapshot(existingEvidence, incomingEvidence int64, incomi
 		return false
 	}
 	return incomingActive && !existingWasActive && incomingEvidence > 0
+}
+
+func shouldReplaceTaskStateSummary(existing, incoming *sessionTaskStateSummary, incomingActive bool, existingWasActive bool) bool {
+	if incoming == nil {
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	return shouldReplaceStatsSnapshot(taskStateSummaryEvidence(existing), taskStateSummaryEvidence(incoming), incomingActive, existingWasActive)
+}
+
+func taskStateSummaryEvidence(s *sessionTaskStateSummary) int64 {
+	if s == nil {
+		return 0
+	}
+	var total int64
+	if s.Objective != "" {
+		total++
+	}
+	if s.Status != "" && s.Status != "unknown" {
+		total++
+	}
+	if s.CurrentStep != "" {
+		total++
+	}
+	if s.NextStep != "" {
+		total++
+	}
+	if s.VerificationState != "" && s.VerificationState != "unknown" {
+		total++
+	}
+	return total +
+		int64(len(s.Constraints)) +
+		int64(len(s.KnownFacts)) +
+		int64(len(s.ChangedFiles)) +
+		int64(len(s.AttemptedActions)) +
+		int64(len(s.FailedActions)) +
+		int64(len(s.Evidence)) +
+		int64(len(s.OpenQuestions)) +
+		int64(len(s.Sources))
 }
 
 func usageSnapshotEvidence(s *UsageSnapshot) int64 {

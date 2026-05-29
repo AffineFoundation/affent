@@ -1204,6 +1204,103 @@ func TestSummarizeDurableSessionRestoresLatestMemoryUpdateFromLoopState(t *testi
 	}
 }
 
+func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "task-state-events")
+	dir := pool.sessionDirPath("task-state-events")
+
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Fix clamp behavior, verify it, and push the code",
+	}) +
+		sessionEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
+			TurnID: "t1",
+			Workspace: &sse.RuntimeWorkspace{
+				DefaultCWD: "workspace_root",
+				PathMode:   "workspace_relative",
+				RootEntries: []sse.RuntimeWorkspaceEntry{
+					{Name: "remote.git", Kind: "dir"},
+					{Name: "README.md", Kind: "file"},
+				},
+			},
+		}) +
+		sessionEventLine(t, sse.TypeContextInjected, sse.ContextInjectedPayload{
+			TurnID:  "t1",
+			Source:  "runtime_workspace",
+			Summary: "Workspace tools resolve relative paths from the session workspace root.",
+		}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "read-1",
+			Tool:   "read_file",
+			Args:   map[string]any{"path": "app/mathutil/clamp.go"},
+		}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "edit-1",
+			Tool:   "edit_file",
+			Args:   map[string]any{"path": "app/mathutil/clamp.go"},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "edit-1",
+			ExitCode:      0,
+			ResultSummary: "replaced 1 occurrence",
+		}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "test-1",
+			Tool:   "shell",
+			Args:   map[string]any{"command": "go test ./..."},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "test-1",
+			ExitCode:      0,
+			ResultSummary: "ok",
+			Result:        "ok",
+		}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+		})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "task-state-events")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if task.Objective != "Fix clamp behavior, verify it, and push the code" || task.Status != "completed" {
+		t.Fatalf("task_state objective/status = %q/%q, want completed clamp task", task.Objective, task.Status)
+	}
+	if task.VerificationState != "last_shell_passed" {
+		t.Fatalf("verification_state = %q, want last_shell_passed", task.VerificationState)
+	}
+	if !stringSliceContains(task.Constraints, "workspace path mode: workspace_relative") {
+		t.Fatalf("constraints = %+v, want workspace path mode", task.Constraints)
+	}
+	if !stringSliceContains(task.Sources, "runtime_surface") || !stringSliceContains(task.Sources, "runtime_workspace") {
+		t.Fatalf("sources = %+v, want runtime workspace sources", task.Sources)
+	}
+	if len(task.ChangedFiles) != 1 || task.ChangedFiles[0].Path != "app/mathutil/clamp.go" || task.ChangedFiles[0].Action != "edit" {
+		t.Fatalf("changed_files = %+v, want edited clamp.go", task.ChangedFiles)
+	}
+	if !taskActionsContain(task.AttemptedActions, "shell", "go test ./...") {
+		t.Fatalf("attempted_actions = %+v, want shell verification", task.AttemptedActions)
+	}
+	if !taskEvidenceContains(task.Evidence, "shell", "go test ./...") ||
+		!taskEvidenceContains(task.Evidence, "runtime_workspace", "Workspace tools resolve relative paths") {
+		t.Fatalf("evidence = %+v, want workspace and shell evidence", task.Evidence)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
@@ -1771,6 +1868,24 @@ func sessionEventLine(t *testing.T, typ string, payload any) string {
 		t.Fatalf("marshal event %s: %v", typ, err)
 	}
 	return string(raw) + "\n"
+}
+
+func taskActionsContain(actions []sessionTaskStateAction, tool, summaryPart string) bool {
+	for _, action := range actions {
+		if action.Tool == tool && strings.Contains(action.Summary, summaryPart) {
+			return true
+		}
+	}
+	return false
+}
+
+func taskEvidenceContains(evidence []sessionTaskStateEvidence, source, summaryPart string) bool {
+	for _, item := range evidence {
+		if item.Source == source && strings.Contains(item.Summary, summaryPart) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestUserMessageSummariesPreferDisplayText(t *testing.T) {

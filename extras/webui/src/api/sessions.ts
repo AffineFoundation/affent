@@ -490,6 +490,49 @@ export interface SessionContextCompactionSummary {
   tail_only?: boolean;
 }
 
+export interface SessionTaskStateFile {
+  path: string;
+  action?: string;
+}
+
+export interface SessionTaskStateAction {
+  tool: string;
+  summary?: string;
+  turn_id?: string;
+  call_id?: string;
+}
+
+export interface SessionTaskStateFailure {
+  tool: string;
+  summary?: string;
+  kinds?: string[];
+  turn_id?: string;
+  call_id?: string;
+}
+
+export interface SessionTaskStateEvidence {
+  source?: string;
+  summary?: string;
+  turn_id?: string;
+  call_id?: string;
+}
+
+export interface SessionTaskStateSummary {
+  objective?: string;
+  status?: string;
+  current_step?: string;
+  constraints?: string[];
+  known_facts?: string[];
+  changed_files?: SessionTaskStateFile[];
+  attempted_actions?: SessionTaskStateAction[];
+  failed_actions?: SessionTaskStateFailure[];
+  evidence?: SessionTaskStateEvidence[];
+  verification_state?: string;
+  open_questions?: string[];
+  next_step?: string;
+  sources?: string[];
+}
+
 export interface SessionSummary {
   id: string;
   /** Human-readable summarized chat title, when the runtime provides one. */
@@ -530,6 +573,7 @@ export interface SessionSummary {
   has_runtime_skills: boolean;
   context?: SessionContextSummary;
   context_compactions?: SessionContextCompactionSummary;
+  task_state?: SessionTaskStateSummary;
   usage?: UsageSnapshot;
   tools?: ToolStatsSnapshot;
   browser?: BrowserStatsSnapshot;
