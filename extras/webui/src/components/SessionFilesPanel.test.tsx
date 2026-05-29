@@ -23,6 +23,10 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByLabelText("File review facts")).toHaveTextContent("Snapshots");
     expect(screen.getByLabelText("File review facts")).toHaveTextContent("1/2");
     expect(screen.getByLabelText("File review facts")).toHaveTextContent("Stale");
+    const reviewQueue = screen.getByTestId("session-files-review-queue");
+    expect(reviewQueue).toHaveTextContent("Review queue");
+    expect(reviewQueue).toHaveTextContent("Verify current file");
+    expect(reviewQueue).toHaveTextContent("A loaded snapshot exists");
     expect(screen.queryByTestId("session-workspace-browser")).toBeNull();
     expect(within(dashboard).getByText("All").closest("button")).toHaveTextContent("2");
     expect(within(within(dashboard).getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ })).toHaveTextContent("1");
@@ -40,6 +44,9 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("snapshot before latest change");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("export function checkout");
+    expect(screen.getByRole("button", { name: "Wrap" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "Wrap" }));
+    expect(screen.getByRole("button", { name: "Wrap" })).toHaveAttribute("aria-pressed", "false");
 
     await user.type(screen.getByLabelText("Search file snapshot"), "route");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("route");
@@ -92,7 +99,7 @@ describe("SessionFilesPanel", () => {
 
     await user.click(within(within(dashboard).getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ }));
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
-    expect(screen.queryByTitle("src")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("session-files-list")).queryByTitle("src")).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Search files"), "missing.ts");
     expect(screen.queryByTestId("session-files-list")).toBeNull();
@@ -150,6 +157,9 @@ describe("SessionFilesPanel", () => {
         onUseAsDraft={onUseAsDraft}
       />,
     );
+
+    await user.click(within(screen.getByTestId("session-files-review-queue")).getByRole("button", { name: /Verify current file/ }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
 
     const changedItem = within(screen.getByTestId("session-files-list")).getAllByRole("listitem")[0];
     await user.click(within(changedItem).getByRole("button", { name: "Open current" }));

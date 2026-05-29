@@ -47,6 +47,12 @@ export interface SessionFilesReview {
   tone?: "ok" | "attention" | "danger" | "neutral";
 }
 
+export interface SessionFilesReviewItem extends SessionFilesReview {
+  id: string;
+  item: SessionFileEvidence;
+  action: "open_current" | "view_snapshot" | "recover_path" | "wait";
+}
+
 export interface SessionFilesFact {
   label: string;
   value: string;
@@ -305,6 +311,73 @@ export function filesReviewFacts(items: readonly SessionFileEvidence[]): Session
       tone: stats.failed > 0 ? "danger" : stats.running > 0 ? "attention" : "neutral",
     },
   ];
+}
+
+export function filesReviewQueue(items: readonly SessionFileEvidence[]): SessionFilesReviewItem[] {
+  return items.flatMap((item) => fileReviewItem(item) ?? []);
+}
+
+function fileReviewItem(item: SessionFileEvidence): SessionFilesReviewItem | undefined {
+  if (item.status === "failed") {
+    return {
+      id: `${item.path}:failed`,
+      label: "Recover path",
+      title: item.path,
+      detail: item.next ?? item.detail ?? "The last file action failed; verify the path before retrying.",
+      tone: "danger",
+      item,
+      action: "recover_path",
+    };
+  }
+  if (item.status === "running") {
+    return {
+      id: `${item.path}:running`,
+      label: "Pending file action",
+      title: item.path,
+      detail: item.detail ?? "The file action has not returned yet.",
+      tone: "attention",
+      item,
+      action: "wait",
+    };
+  }
+  if (item.actions.includes("changed")) {
+    return {
+      id: `${item.path}:changed`,
+      label: item.contentStale ? "Verify current file" : "Review changed file",
+      title: item.path,
+      detail: item.contentStale
+        ? "A loaded snapshot exists, but it predates the latest write/edit."
+        : item.contentPreview
+          ? "A changed-file snapshot is loaded for line review."
+          : item.detail ?? "Agent wrote or edited this file.",
+      tone: item.contentPreview && !item.contentStale ? "ok" : "attention",
+      item,
+      action: item.contentPreview && !item.contentStale ? "view_snapshot" : "open_current",
+    };
+  }
+  if (item.contentPreview) {
+    return {
+      id: `${item.path}:snapshot`,
+      label: "Review snapshot",
+      title: item.path,
+      detail: item.contentTruncated ? "Partial read_file output is loaded." : "read_file output is loaded.",
+      tone: "ok",
+      item,
+      action: "view_snapshot",
+    };
+  }
+  if (item.actions.includes("listed")) {
+    return {
+      id: `${item.path}:listed`,
+      label: "Browse directory",
+      title: item.path,
+      detail: "Directory listing evidence exists; open current contents before relying on it.",
+      tone: "neutral",
+      item,
+      action: "open_current",
+    };
+  }
+  return undefined;
 }
 
 function filePriority(item: SessionFileEvidence): number {

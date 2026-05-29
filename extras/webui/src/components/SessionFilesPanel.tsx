@@ -8,7 +8,9 @@ import {
   fileRangeText,
   filesReviewFacts,
   filesReviewFocus,
+  filesReviewQueue,
   type SessionFileEvidence,
+  type SessionFilesReviewItem,
   type SessionFilesView,
 } from "../view/sessionFiles";
 import { parentWorkspacePath, workspaceFileDraft, type WorkspaceFileBrowserState, type WorkspaceFileEntryView, type WorkspaceFileView } from "../view/workspaceFile";
@@ -39,18 +41,37 @@ export function SessionFilesPanel({
   const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const [selectedRange, setSelectedRange] = useState<{ path: string; start: number; end: number } | undefined>();
   const [filter, setFilter] = useState<FileFilter>("all");
+  const [wrapLines, setWrapLines] = useState(true);
   const trimmedQuery = query.trim();
   const stats = fileStats(files);
   const review = filesReviewFocus(files.items);
   const reviewFacts = filesReviewFacts(files.items);
+  const reviewQueue = filesReviewQueue(files.items);
   const filteredItems = filter === "all" ? files.items : files.items.filter((item) => fileMatchesFilter(item, filter));
   const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
   const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
   const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
-  const focus = filesFocus(files.items);
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
+  function handleReviewQueueClick(entry: SessionFilesReviewItem) {
+    if (entry.action === "view_snapshot" && entry.item.contentPreview) {
+      setSelectedPath(entry.item.path);
+      return;
+    }
+    if (entry.action === "open_current" || entry.action === "recover_path") {
+      if (onOpenWorkspacePath) {
+        onOpenWorkspacePath(entry.item.path);
+        return;
+      }
+      if (entry.item.contentPreview) setSelectedPath(entry.item.path);
+      return;
+    }
+    if (entry.action === "wait") {
+      if (entry.item.contentPreview) setSelectedPath(entry.item.path);
+      else onOpenWorkspacePath?.(entry.item.path);
+    }
+  }
   function selectPreviewLine(lineNumber: number, scroll = false) {
     if (!selectedItem) return;
     setSelectedRange((current) => {
@@ -104,6 +125,24 @@ export function SessionFilesPanel({
               </span>
             ))}
           </div>
+          {reviewQueue.length > 0 ? (
+            <div className="session-files-review-queue" data-testid="session-files-review-queue" aria-label="File review queue">
+              <span>Review queue</span>
+              {reviewQueue.slice(0, 5).map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  data-tone={item.tone ?? "neutral"}
+                  disabled={reviewQueueItemDisabled(item, Boolean(onOpenWorkspacePath))}
+                  onClick={() => handleReviewQueueClick(item)}
+                >
+                  <small>{item.label}</small>
+                  <strong title={item.title}>{displayPath(item.title)}</strong>
+                  <b>{item.detail}</b>
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="session-files-filterbar" role="group" aria-label="File filters">
             <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
             <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
@@ -127,39 +166,6 @@ export function SessionFilesPanel({
             onOpenPath={onOpenWorkspacePath}
             onUseAsDraft={onUseAsDraft}
           />
-        ) : null}
-        {focus ? (
-          <div className="session-files-focus" data-tone={focus.tone}>
-            <div className="session-files-focus-main">
-              <span>{focus.label}</span>
-              <strong title={focus.item.path}>{displayPath(focus.item.path)}</strong>
-              <small>{focus.detail}</small>
-            </div>
-            {focus.item.contentPreview || (focus.item.artifactPath && onOpenArtifact) || onOpenWorkspacePath || onUseAsDraft ? (
-              <span className="session-files-focus-actions">
-                {onOpenWorkspacePath ? (
-                  <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(focus.item.path)}>
-                    Open current file
-                  </button>
-                ) : null}
-                {focus.item.contentPreview ? (
-                  <button type="button" className="ghost-action" onClick={() => setSelectedPath(focus.item.path)}>
-                    View snapshot
-                  </button>
-                ) : null}
-                {focus.item.artifactPath && onOpenArtifact ? (
-                  <button type="button" className="ghost-action" onClick={() => onOpenArtifact(focus.item.artifactPath ?? "")}>
-                    Open evidence
-                  </button>
-                ) : null}
-                {onUseAsDraft ? (
-                  <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(focus.item), "file_evidence")}>
-                    {fileDraftActionLabel(focus.item)}
-                  </button>
-                ) : null}
-              </span>
-            ) : null}
-          </div>
         ) : null}
         {selectedItem ? (
           <div className="session-file-preview" data-testid="session-file-preview">
@@ -196,6 +202,9 @@ export function SessionFilesPanel({
                 </button>
               </span>
               <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
+              <button type="button" className="ghost-action" aria-pressed={wrapLines} onClick={() => setWrapLines((value) => !value)}>
+                Wrap
+              </button>
             </div>
             {activeRange ? (
               <div className="session-file-range-actions" data-testid="session-file-range-actions">
@@ -223,7 +232,7 @@ export function SessionFilesPanel({
                 ) : null}
               </div>
             ) : null}
-            <div className="code session-file-preview-code" data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot" ref={previewCodeRef}>
+            <div className="code session-file-preview-code" data-wrap={wrapLines ? "true" : "false"} data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot" ref={previewCodeRef}>
               {snapshotLines.map((line, index) => {
                 const lineNumber = index + 1;
                 const selected = activeRange ? lineNumber >= activeRange.start && lineNumber <= activeRange.end : false;
@@ -315,6 +324,13 @@ export function SessionFilesPanel({
       </div>
     </details>
   );
+}
+
+function reviewQueueItemDisabled(item: SessionFilesReviewItem, canOpenWorkspace: boolean): boolean {
+  if (item.action === "view_snapshot") return !item.item.contentPreview;
+  if (item.action === "open_current" || item.action === "recover_path") return !canOpenWorkspace && !item.item.contentPreview;
+  if (item.action === "wait") return !canOpenWorkspace && !item.item.contentPreview;
+  return false;
 }
 
 function WorkspaceBrowser({
@@ -556,27 +572,6 @@ function fileStats(files: SessionFilesView) {
     snapshots: files.items.filter((item) => item.contentPreview).length,
     staleSnapshots: files.items.filter((item) => item.contentStale).length,
   };
-}
-
-function filesFocus(items: readonly SessionFileEvidence[]):
-  | { label: string; detail: string; tone: "error" | "warning" | "changed" | "snapshot"; item: SessionFileEvidence }
-  | undefined {
-  const failed = items.find((item) => item.status === "failed");
-  if (failed) {
-    return {
-      label: "Path issue",
-      detail: failed.next ? `Suggested recovery: ${failed.next}` : failed.detail ?? "A file action failed and needs path recovery.",
-      tone: "error",
-      item: failed,
-    };
-  }
-  const running = items.find((item) => item.status === "running");
-  if (running) return { label: "Pending file action", detail: running.detail ?? "A file action is still running.", tone: "warning", item: running };
-  const changed = items.find((item) => item.actions.includes("changed"));
-  if (changed) return { label: "Changed file", detail: changed.detail ?? "Agent wrote or edited this file.", tone: "changed", item: changed };
-  const snapshot = items.find((item) => item.contentPreview);
-  if (snapshot) return { label: "Loaded snapshot", detail: "read_file text is available for review.", tone: "snapshot", item: snapshot };
-  return undefined;
 }
 
 function fileMeta(item: SessionFileEvidence): string {

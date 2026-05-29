@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText, fileLines, fileRangeDraft, fileRangeText, filesEvidenceDraft, filesEvidenceText, filesReviewFacts, filesReviewFocus } from "./sessionFiles";
+import { buildSessionFiles, fileContentDraft, fileContentText, fileEvidenceDraft, fileEvidenceText, fileLines, fileRangeDraft, fileRangeText, filesEvidenceDraft, filesEvidenceText, filesReviewFacts, filesReviewFocus, filesReviewQueue } from "./sessionFiles";
 
 describe("buildSessionFiles", () => {
   it("summarizes read, list, and changed file evidence from reducer state", () => {
@@ -58,6 +58,19 @@ describe("buildSessionFiles", () => {
       expect.objectContaining({ label: "Stale", value: "1", detail: "verify current file", tone: "attention" }),
       expect.objectContaining({ label: "Issues", value: "0", detail: "none", tone: "neutral" }),
     ]));
+    expect(filesReviewQueue(files.items)).toEqual([
+      expect.objectContaining({
+        label: "Verify current file",
+        title: "src/payments.ts",
+        action: "open_current",
+        tone: "attention",
+      }),
+      expect.objectContaining({
+        label: "Browse directory",
+        title: "src",
+        action: "open_current",
+      }),
+    ]);
   });
 
   it("keeps path recovery evidence when a file action fails", () => {
@@ -94,6 +107,12 @@ describe("buildSessionFiles", () => {
     expect(filesReviewFacts(files.items)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Issues", value: "1", detail: "path failures", tone: "danger" }),
     ]));
+    expect(filesReviewQueue(files.items)[0]).toMatchObject({
+      label: "Recover path",
+      title: "docs/missing.md",
+      action: "recover_path",
+      tone: "danger",
+    });
   });
 
   it("merges workspace-absolute, workspace-relative, and relative evidence for the same file", () => {
