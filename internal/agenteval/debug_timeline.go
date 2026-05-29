@@ -735,7 +735,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- max_tool_arg: `%s.%s` contains `%s` max=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), max)
 		}
 	}
-	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
+	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || len(exp.RequiredContextCompactionReasons) > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		var parts []string
 		if exp.RequiredContextCompactions > 0 {
 			parts = append(parts, fmt.Sprintf("compactions>=%d", exp.RequiredContextCompactions))
@@ -752,6 +752,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		if len(parts) > 0 {
 			fmt.Fprintf(b, "- context_requirements: `%s`\n", strings.Join(parts, " "))
 		}
+		writeTimelineCountsLine(b, "required_context_compaction_reasons", exp.RequiredContextCompactionReasons)
 		writeTimelineStringList(b, "context_summary_contains", exp.RequiredContextSummaryText)
 		writeTimelineStringList(b, "context_loop_protocol_anchor_contains", exp.RequiredContextLoopProtocolAnchorText)
 	}
@@ -827,6 +828,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredResultArtifacts) > 0 ||
 		exp.RequiredContextCompactions > 0 ||
 		exp.RequiredReactiveCompactions > 0 ||
+		len(exp.RequiredContextCompactionReasons) > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
 		exp.RequiredCompactionReducedBytes > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||

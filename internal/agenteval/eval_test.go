@@ -1560,8 +1560,11 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
 			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "source review", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"},
 		},
-		RequiredContextCompactions:    1,
-		RequiredReactiveCompactions:   1,
+		RequiredContextCompactions:  1,
+		RequiredReactiveCompactions: 1,
+		RequiredContextCompactionReasons: map[string]int{
+			"context_overflow": 1,
+		},
 		RequiredCompactionRemovedMsgs: 20,
 		RequiredContextSummaryText:    []string{"HRO market marker"},
 		RequiredFocusedTaskCounts: map[string]int{
@@ -1630,6 +1633,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"context_injection_text_at_least:final_evidence_digest:verified source:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
+		"context_compaction_reason_at_least:context_overflow:1",
 		"context_compaction_removed_messages_at_least:20",
 		"context_compaction_summary_contains:HRO market marker",
 		"focused_task_called_at_least:explore:1",
@@ -3124,8 +3128,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if len(compactionRetention.Prompts) != 2 || !strings.Contains(compactionRetention.Prompts[1], "不要调用任何工具") {
 		t.Fatalf("compaction retention Prompts = %#v, want two-turn recovery prompt", compactionRetention.Prompts)
 	}
-	if compactionRetention.RequiredContextCompactions != 1 || compactionRetention.RequiredCompactionRemovedMsgs != 1 || compactionRetention.RequiredCompactionReducedBytes != 1 {
-		t.Fatalf("compaction retention requirements = compactions:%d removed:%d reduced:%d, want 1/1/1", compactionRetention.RequiredContextCompactions, compactionRetention.RequiredCompactionRemovedMsgs, compactionRetention.RequiredCompactionReducedBytes)
+	if compactionRetention.RequiredContextCompactions != 1 ||
+		compactionRetention.RequiredContextCompactionReasons["threshold"] != 1 ||
+		compactionRetention.RequiredCompactionRemovedMsgs != 1 ||
+		compactionRetention.RequiredCompactionReducedBytes != 1 {
+		t.Fatalf("compaction retention requirements = compactions:%d reasons:%#v removed:%d reduced:%d, want compactions/reason/removed/reduced",
+			compactionRetention.RequiredContextCompactions,
+			compactionRetention.RequiredContextCompactionReasons,
+			compactionRetention.RequiredCompactionRemovedMsgs,
+			compactionRetention.RequiredCompactionReducedBytes,
+		)
 	}
 	if compactionRetention.RequiredToolCounts["read_file"] != 5 || compactionRetention.MaxSuccessfulToolCallsByTool["read_file"] != 5 {
 		t.Fatalf("compaction retention read constraints = counts:%#v max:%#v", compactionRetention.RequiredToolCounts, compactionRetention.MaxSuccessfulToolCallsByTool)
@@ -4710,11 +4722,14 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
 			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "browser network evidence", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"},
 		},
-		RequiredFinalText:              []string{"0.06342 T"},
-		ForbiddenFinalText:             []string{"subnet price $277.32"},
-		RequiredTruncatedResults:       []string{"web_fetch"},
-		RequiredResultArtifacts:        []string{"web_fetch"},
-		RequiredContextCompactions:     1,
+		RequiredFinalText:          []string{"0.06342 T"},
+		ForbiddenFinalText:         []string{"subnet price $277.32"},
+		RequiredTruncatedResults:   []string{"web_fetch"},
+		RequiredResultArtifacts:    []string{"web_fetch"},
+		RequiredContextCompactions: 1,
+		RequiredContextCompactionReasons: map[string]int{
+			"context_overflow": 1,
+		},
 		RequiredCompactionRemovedMsgs:  12,
 		RequiredCompactionReducedBytes: 1,
 		RequiredContextSummaryText:     []string{"browser network evidence"},
@@ -4807,6 +4822,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_input_tokens:300000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_total_tokens:320000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_reason_at_least:context_overflow:1") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_reduced_bytes_at_least:1") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
@@ -4863,6 +4879,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(manifest.Expectations.RequiredTruncatedResults, []string{"web_fetch"}) ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredResultArtifacts, []string{"web_fetch"}) ||
 		manifest.Expectations.RequiredContextCompactions != 1 ||
+		manifest.Expectations.RequiredContextCompactionReasons["context_overflow"] != 1 ||
 		manifest.Expectations.RequiredCompactionRemovedMsgs != 12 ||
 		manifest.Expectations.RequiredCompactionReducedBytes != 1 ||
 		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") ||

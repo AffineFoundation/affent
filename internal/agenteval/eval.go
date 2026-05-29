@@ -199,6 +199,7 @@ type BatchScenario struct {
 	RequiredContextInjectionText                   map[string][]string
 	RequiredContextCompactions                     int
 	RequiredReactiveCompactions                    int
+	RequiredContextCompactionReasons               map[string]int
 	RequiredCompactionRemovedMsgs                  int
 	RequiredCompactionReducedBytes                 int
 	RequiredContextSummaryText                     []string
@@ -468,6 +469,7 @@ type DebugScenarioExpectations struct {
 	RequiredResultArtifacts                        []string                              `json:"required_result_artifacts,omitempty"`
 	RequiredContextCompactions                     int                                   `json:"required_context_compactions,omitempty"`
 	RequiredReactiveCompactions                    int                                   `json:"required_reactive_context_compactions,omitempty"`
+	RequiredContextCompactionReasons               map[string]int                        `json:"required_context_compaction_reasons,omitempty"`
 	RequiredCompactionRemovedMsgs                  int                                   `json:"required_compaction_removed_messages,omitempty"`
 	RequiredCompactionReducedBytes                 int                                   `json:"required_compaction_reduced_bytes,omitempty"`
 	RequiredContextSummaryText                     []string                              `json:"required_context_summary_text,omitempty"`
@@ -546,6 +548,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if exp.RequiredContextCompactions > 0 ||
 		exp.RequiredReactiveCompactions > 0 ||
+		len(exp.RequiredContextCompactionReasons) > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
 		exp.RequiredCompactionReducedBytes > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||
@@ -2198,6 +2201,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredResultArtifacts:                        append([]string(nil), s.RequiredResultArtifacts...),
 		RequiredContextCompactions:                     s.RequiredContextCompactions,
 		RequiredReactiveCompactions:                    s.RequiredReactiveCompactions,
+		RequiredContextCompactionReasons:               cloneStringIntMap(s.RequiredContextCompactionReasons),
 		RequiredCompactionRemovedMsgs:                  s.RequiredCompactionRemovedMsgs,
 		RequiredCompactionReducedBytes:                 s.RequiredCompactionReducedBytes,
 		RequiredContextSummaryText:                     append([]string(nil), s.RequiredContextSummaryText...),
@@ -3386,6 +3390,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredReactiveCompactions > 0 {
 		checks = append(checks, ReactiveContextCompactionsAtLeast(scenario.RequiredReactiveCompactions))
+	}
+	for _, reason := range sortedStringMapKeys(scenario.RequiredContextCompactionReasons) {
+		checks = append(checks, ContextCompactionReasonAtLeast(reason, scenario.RequiredContextCompactionReasons[reason]))
 	}
 	if scenario.RequiredCompactionRemovedMsgs > 0 {
 		checks = append(checks, ContextCompactionRemovedMessagesAtLeast(scenario.RequiredCompactionRemovedMsgs))

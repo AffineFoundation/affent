@@ -1116,6 +1116,12 @@ func TestContextCompactionChecks(t *testing.T) {
 	if res := ReactiveContextCompactionsAtLeast(1).Eval(trace); !res.Pass {
 		t.Fatalf("expected reactive compaction check to pass: %+v", res)
 	}
+	if res := ContextCompactionReasonAtLeast("threshold", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected threshold compaction reason check to pass: %+v", res)
+	}
+	if res := ContextCompactionReasonAtLeast("context_overflow", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected overflow compaction reason check to pass: %+v", res)
+	}
 	if res := ContextCompactionRemovedMessagesAtLeast(60).Eval(trace); !res.Pass {
 		t.Fatalf("expected removed-message compaction check to pass: %+v", res)
 	}
@@ -1134,6 +1140,13 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "reactive_context_compactions=1") || !strings.Contains(res.Detail, "proactive=1") {
 		t.Fatalf("failure detail should include reactive/proactive counts: %s", res.Detail)
+	}
+	res = ContextCompactionReasonAtLeast("estimated_context_pressure", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing compaction reason check to fail")
+	}
+	if !strings.Contains(res.Detail, "context_compaction_reason[estimated_context_pressure]=0") || !strings.Contains(res.Detail, "threshold") || !strings.Contains(res.Detail, "context_overflow") {
+		t.Fatalf("failure detail should include requested and observed reasons: %s", res.Detail)
 	}
 	res = ContextCompactionSummaryContains("missing marker").Eval(trace)
 	if res.Pass {

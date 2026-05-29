@@ -1330,6 +1330,33 @@ func ReactiveContextCompactionsAtLeast(min int) Check {
 	}
 }
 
+func ContextCompactionReasonAtLeast(reason string, min int) Check {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "unknown"
+	}
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_compaction_reason_at_least:%s:%d", reason, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.ContextCompactionStats(0)
+			got := 0
+			if stats.ByReason != nil {
+				got = stats.ByReason[reason]
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("context_compaction_reason[%s]=%d", reason, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("context_compaction_reason[%s]=%d, want >= %d; reasons=%v", reason, got, min, stats.ByReason),
+			}
+		},
+	}
+}
+
 func ContextCompactionRemovedMessagesAtLeast(min int) Check {
 	return Check{
 		Name: fmt.Sprintf("context_compaction_removed_messages_at_least:%d", min),

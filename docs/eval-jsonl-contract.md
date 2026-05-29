@@ -150,6 +150,8 @@ Scenario records describe one eval case:
   checkpoint/current-situation, and last-turn checkpoint requirements,
   context-compaction requirements, context-injection source requirements such as
   `required_context_injection_sources.final_evidence_digest`, optional
+  `required_context_compaction_reasons` checks for threshold, request-pressure,
+  input-budget, or overflow compaction paths, optional
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
@@ -490,7 +492,9 @@ Scenario records describe one eval case:
   `context_compaction_removed_messages`, `context_compaction_summary_bytes`,
   `context_compaction_summary_missing`, and
   `context_compaction_summary_empty`: optional context pressure counters
-  collected from context compaction trace events.
+  collected from context compaction trace events. Scenario expectations can use
+  `required_context_compaction_reasons` to require specific reason counts from
+  the same trace data.
 - `context_injections`: optional count of hidden system-context blocks injected
   into model context.
 - `context_injection_by_source`: optional map of injected context source to

@@ -1045,6 +1045,10 @@ Long-run eval scenarios can assert required anchor substrings through
 `required_context_loop_protocol_anchor_text`, which catches regressions where
 ordinary compaction still fires but loses the per-session `LOOP.md` recovery
 pointer.
+They can also require `required_context_compaction_reasons`, so suites can
+distinguish ordinary threshold compaction from request-input pressure,
+input-budget pressure, and provider context-overflow recovery instead of only
+counting that some compaction happened.
 They can also require `require_loop_protocol_full_after_compaction`, which
 uses trace event order to verify that a full protocol feed happened after a
 `context.compacted` event instead of merely occurring somewhere in the same
