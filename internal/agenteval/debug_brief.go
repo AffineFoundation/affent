@@ -491,8 +491,8 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}, tags...)
 	} else if counts, ok := missingExpectedMemoryUpdateCounts(res); ok {
 		add("memory_update_missing", "fail", "scenario expected a durable memory update but none was confirmed; inspect memory tool calls, args, and result metadata before trusting long-run recall", []string{"expectations", "tool_timeline", "memory_update_examples", "failures"}, counts, "memory_update", "memory_update:missing")
-	} else if counts, ok := absentLongRunMemoryUpdateCounts(res); ok {
-		add("memory_update_absent", "warn", "long-running session produced no durable memory updates; inspect whether stable verified lessons or preferences should have been written", []string{"tool_timeline", "loop_turn_checkpoint_examples", "loop_protocol_feed_examples", "memory_search_miss_examples"}, counts, "memory_update", "memory_update:absent_longrun")
+	} else if counts, tags, ok := absentLongRunMemoryUpdateCounts(res); ok {
+		add("memory_update_absent", "warn", "long-running session produced no durable memory updates; inspect whether stable verified lessons or preferences should have been written", []string{"runtime_surface", "tool_timeline", "loop_turn_checkpoint_examples", "loop_protocol_feed_examples", "memory_search_miss_examples"}, counts, tags...)
 	}
 	if res.ToolStats.MemorySearchMisses > 0 || len(res.MemorySearchMissExamples) > 0 {
 		topics := 0
@@ -677,6 +677,18 @@ func runtimeSurfaceHasCompletionGuard(surface *sse.RuntimeSurfacePayload, guard 
 	return false
 }
 
+func runtimeSurfaceHasTool(surface *sse.RuntimeSurfacePayload, tool string) bool {
+	if surface == nil {
+		return false
+	}
+	for _, got := range surface.Tools {
+		if got.Name == tool {
+			return true
+		}
+	}
+	return false
+}
+
 func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string, bool) {
 	if strings.TrimSpace(res.FinalText) == "" {
 		return nil, nil, false
@@ -823,9 +835,9 @@ func missingExpectedMemoryUpdateCounts(res BatchResult) (map[string]int, bool) {
 	}, true
 }
 
-func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, bool) {
+func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, []string, bool) {
 	if res.ToolStats.MemoryUpdates > 0 {
-		return nil, false
+		return nil, nil, false
 	}
 	toolRequests := res.ToolStats.ToolRequests
 	if toolRequests == 0 {
@@ -835,7 +847,7 @@ func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, bool) {
 	totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens
 	longRun := loopSignals > 0 && (toolRequests >= 10 || totalTokens >= 100000)
 	if !longRun {
-		return nil, false
+		return nil, nil, false
 	}
 	counts := map[string]int{
 		"tool_requests":         toolRequests,
@@ -843,10 +855,17 @@ func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, bool) {
 		"loop_protocol_feeds":   res.LoopProtocolFeeds.Count,
 		"memory_search_calls":   res.ToolStats.MemorySearchCalls,
 	}
+	tags := []string{"memory_update", "memory_update:absent_longrun"}
+	if res.RuntimeSurface != nil && (res.RuntimeSurface.Capabilities.Memory || runtimeSurfaceHasTool(res.RuntimeSurface, "memory")) {
+		counts["memory_available"] = 1
+		if res.ToolStats.MemorySearchCalls == 0 {
+			tags = append(tags, "memory_update:available_unused")
+		}
+	}
 	if totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens; totalTokens > 0 {
 		counts["total_tokens"] = totalTokens
 	}
-	return counts, true
+	return counts, tags, true
 }
 
 func researchCheckpointHasExternalEvidence(res BatchResult) bool {

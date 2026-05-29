@@ -1618,7 +1618,11 @@ func TestBuildDebugBriefClassifiesAbsentLongRunMemoryUpdate(t *testing.T) {
 		},
 		LoopTurnCheckpoints: LoopTurnCheckpointStats{Count: 2},
 		LoopProtocolFeeds:   LoopProtocolFeedStats{Count: 1},
-		Usage:               Usage{InputTokens: 120000, OutputTokens: 2000},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Capabilities: sse.RuntimeCapabilities{Memory: true},
+			Tools:        []sse.RuntimeSurfaceTool{{Name: "memory"}},
+		},
+		Usage: Usage{InputTokens: 120000, OutputTokens: 2000},
 	})
 	item := debugBriefItemByKind(brief, "memory_update_absent")
 	if item == nil ||
@@ -1627,8 +1631,30 @@ func TestBuildDebugBriefClassifiesAbsentLongRunMemoryUpdate(t *testing.T) {
 		item.Counts["loop_turn_checkpoints"] != 2 ||
 		item.Counts["loop_protocol_feeds"] != 1 ||
 		item.Counts["memory_search_calls"] != 1 ||
+		item.Counts["memory_available"] != 1 ||
+		!stringSliceContains(item.Inspect, "runtime_surface") ||
 		!stringSliceContains(brief.Tags, "memory_update:absent_longrun") {
 		t.Fatalf("absent long-run memory update item = %+v tags=%+v", item, brief.Tags)
+	}
+	if stringSliceContains(brief.Tags, "memory_update:available_unused") {
+		t.Fatalf("memory searches should not be tagged as fully unused, tags=%+v", brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			ToolRequests: 12,
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{Count: 1},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Capabilities: sse.RuntimeCapabilities{Memory: true},
+		},
+	})
+	item = debugBriefItemByKind(brief, "memory_update_absent")
+	if item == nil ||
+		item.Counts["memory_available"] != 1 ||
+		!stringSliceContains(brief.Tags, "memory_update:available_unused") {
+		t.Fatalf("available but unused memory should be tagged, item=%+v tags=%+v", item, brief.Tags)
 	}
 
 	if clean := BuildDebugBrief(BatchResult{
