@@ -317,6 +317,9 @@ export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInpu
   for (const file of input.taskState?.changed_files?.slice(-5) ?? []) {
     lines.push(`Changed file: ${[file.action, file.path].filter(Boolean).join(" ")}`);
   }
+  for (const action of input.taskState?.attempted_actions?.slice(-3) ?? []) {
+    lines.push(`Attempted action: ${[action.tool, action.summary].filter(Boolean).join(" · ")}`);
+  }
   for (const failure of input.taskState?.failed_actions?.slice(-3) ?? []) {
     lines.push(`Failed action: ${[failure.tool, failure.summary].filter(Boolean).join(" · ")}`);
   }

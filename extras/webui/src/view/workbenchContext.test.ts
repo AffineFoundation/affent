@@ -168,8 +168,12 @@ describe("workbenchContext", () => {
         status: "completed",
         verification_state: "last_shell_passed",
         changed_files: [{ path: "app/mathutil/clamp.go", action: "edit" }],
+        attempted_actions: [{ tool: "shell", summary: "git push origin main" }],
         failed_actions: [{ tool: "shell", summary: "FAIL ./...", kinds: ["test_failed"] }],
-        evidence: [{ source: "shell", summary: "go test ./..." }],
+        evidence: [
+          { source: "shell", summary: "go test ./..." },
+          { source: "git_push", summary: "git push origin main" },
+        ],
       },
     });
 
@@ -177,8 +181,10 @@ describe("workbenchContext", () => {
     expect(text).toContain("Task status: completed");
     expect(text).toContain("Verification: last_shell_passed");
     expect(text).toContain("Changed file: edit app/mathutil/clamp.go");
+    expect(text).toContain("Attempted action: shell · git push origin main");
     expect(text).toContain("Failed action: shell · FAIL ./...");
     expect(text).toContain("Task evidence: shell · go test ./...");
+    expect(text).toContain("Task evidence: git_push · git push origin main");
   });
 
   it("builds the attached chat summary from session truth", () => {

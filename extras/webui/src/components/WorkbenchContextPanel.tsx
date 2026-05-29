@@ -1,7 +1,7 @@
 import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
 import type { SessionChangesView } from "../view/sessionChanges";
 import { changesReviewFocus } from "../view/sessionChanges";
-import type { SessionContextSummary, SessionTaskStateEvidence, SessionTaskStateFailure, SessionTaskStateSummary } from "../api/sessions";
+import type { SessionContextSummary, SessionTaskStateAction, SessionTaskStateEvidence, SessionTaskStateFailure, SessionTaskStateSummary } from "../api/sessions";
 import { formatByteCount } from "../view/byteFormat";
 import type { SessionFilesView } from "../view/sessionFiles";
 import { filesReviewFocus } from "../view/sessionFiles";
@@ -440,6 +440,7 @@ function TaskStateCard({
   ]);
   const latestFailures = [...(taskState.failed_actions ?? [])].slice(-3).reverse();
   const latestEvidence = [...(taskState.evidence ?? [])].slice(-3).reverse();
+  const latestActions = [...(taskState.attempted_actions ?? [])].slice(-3).reverse();
   const changedFiles = [...(taskState.changed_files ?? [])].slice(-3).reverse();
 
   return (
@@ -468,6 +469,12 @@ function TaskStateCard({
           actionLabel="Open trace"
           onAction={() => onSelectSection?.("trace")}
           tone={taskStateHasCurrentFailure(taskState) ? "error" : undefined}
+        />
+      ) : null}
+      {latestActions.length > 0 ? (
+        <TaskStateList
+          title="Recent actions"
+          items={latestActions.map((item) => taskStateActionSummary(item))}
         />
       ) : null}
       {latestEvidence.length > 0 ? (
@@ -612,6 +619,10 @@ function taskStateFailureSummary(item?: SessionTaskStateFailure): string {
   if (!item) return "Failed action";
   const kind = item.kinds?.[0] ? failureKindLabel(item.kinds[0]) : undefined;
   return compact([toolNameLabel(item.tool), kind, summarizeTaskStateText(item.summary)]).join(" · ") || "Failed action";
+}
+
+function taskStateActionSummary(item: SessionTaskStateAction): string {
+  return compact([toolNameLabel(item.tool), summarizeTaskStateText(item.summary)]).join(" · ") || "Action attempted";
 }
 
 function taskStateEvidenceSummary(item: SessionTaskStateEvidence): string {

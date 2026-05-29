@@ -172,10 +172,15 @@ describe("WorkbenchContextPanel", () => {
           status: "completed",
           verification_state: "last_shell_passed",
           changed_files: [{ path: "app/mathutil/clamp.go", action: "edit" }],
+          attempted_actions: [
+            { tool: "shell", summary: "git push origin main" },
+            { tool: "shell", summary: "go test ./..." },
+          ],
           failed_actions: [{ tool: "shell", summary: "FAIL ./...", kinds: ["test_failed"] }],
           evidence: [
             { source: "runtime_workspace", summary: "Workspace tools resolve relative paths from the session workspace root." },
             { source: "shell", summary: "go test ./..." },
+            { source: "git_push", summary: "git push origin main" },
           ],
         }}
       />,
@@ -193,8 +198,11 @@ describe("WorkbenchContextPanel", () => {
     expect(taskState).toHaveTextContent("Recent failed actions");
     expect(taskState).toHaveTextContent("shell");
     expect(taskState).toHaveTextContent("test failed");
+    expect(taskState).toHaveTextContent("Recent actions");
+    expect(taskState).toHaveTextContent("git push origin main");
     expect(taskState).toHaveTextContent("Evidence");
     expect(taskState).toHaveTextContent("runtime workspace");
+    expect(taskState).toHaveTextContent("git push");
     expect(taskState).toHaveTextContent("go test ./...");
 
     await user.click(within(taskState).getByRole("button", { name: "Open trace" }));
@@ -264,6 +272,7 @@ describe("WorkbenchContextPanel", () => {
           current_step: "Wire task_state into Workbench Context",
           next_step: "Run WorkbenchContextPanel tests and screenshot the Context tab",
           changed_files: [{ path: "extras/webui/src/components/WorkbenchContextPanel.tsx", action: "edit" }],
+          attempted_actions: [{ tool: "shell", summary: "npm --prefix extras/webui test -- WorkbenchContextPanel.test.tsx" }],
           failed_actions: [{ tool: "shell", summary: "npm test -- WorkbenchContextPanel.test.tsx failed", kinds: ["command_failed"] }],
           evidence: [
             { source: "runtime_workspace", summary: "Workspace tools resolve relative paths from the session workspace root." },
@@ -292,6 +301,8 @@ describe("WorkbenchContextPanel", () => {
     expect(taskState).toHaveTextContent("Run WorkbenchContextPanel tests and screenshot the Context tab");
     expect(taskState).toHaveTextContent("Recent failed actions");
     expect(taskState).toHaveTextContent("shell · command failed");
+    expect(taskState).toHaveTextContent("Recent actions");
+    expect(taskState).toHaveTextContent("npm --prefix extras/webui test -- WorkbenchContextPanel.test.tsx");
     expect(taskState).toHaveTextContent("Evidence");
     expect(taskState).toHaveTextContent("runtime workspace");
     expect(taskState).toHaveTextContent("Changed files");
