@@ -248,6 +248,7 @@ type sessionWorkspaceToolResponse struct {
 	SessionID      string `json:"session_id"`
 	WorkspaceRoot  string `json:"workspace_root"`
 	WorkspacePath  string `json:"workspace_path"`
+	PathMode       string `json:"path_mode"`
 	WorkspaceLabel string `json:"workspace_label,omitempty"`
 	Changed        bool   `json:"changed,omitempty"`
 	Summary        string `json:"summary"`
@@ -344,13 +345,15 @@ func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 				)
 			}
 			current := state.Current()
+			relPath := activeWorkspaceRelativePath(state.Root(), current)
 			resp := sessionWorkspaceToolResponse{
 				SessionID:      state.sessionID,
-				WorkspaceRoot:  state.Root(),
-				WorkspacePath:  current,
-				WorkspaceLabel: activeWorkspaceLabel(current),
+				WorkspaceRoot:  ".",
+				WorkspacePath:  relPath,
+				PathMode:       "workspace_relative",
+				WorkspaceLabel: activeWorkspaceLabel(relPath),
 				Changed:        current != before,
-				Summary:        fmt.Sprintf("active workspace is %s", activeWorkspaceLabel(current)),
+				Summary:        fmt.Sprintf("active workspace is %s", activeWorkspaceLabel(relPath)),
 			}
 			raw, err := json.MarshalIndent(resp, "", "  ")
 			if err != nil {
@@ -362,10 +365,33 @@ func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 	}
 }
 
+func activeWorkspaceRelativePath(root, path string) string {
+	root = strings.TrimSpace(root)
+	path = strings.TrimSpace(path)
+	if root == "" || path == "" {
+		return activeWorkspaceLabel(path)
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return activeWorkspaceLabel(path)
+	}
+	rel = filepath.ToSlash(filepath.Clean(rel))
+	if rel == "" || rel == "." {
+		return "."
+	}
+	if strings.HasPrefix(rel, "../") || rel == ".." {
+		return activeWorkspaceLabel(path)
+	}
+	return rel
+}
+
 func activeWorkspaceLabel(path string) string {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return ""
+	}
+	if path == "." {
+		return "."
 	}
 	if base := filepath.Base(path); base != "." && base != string(filepath.Separator) {
 		return base

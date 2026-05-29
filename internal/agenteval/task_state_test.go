@@ -120,6 +120,38 @@ func TestDeriveTaskStateDefaultsBlankRequestModeToNormal(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStatePreservesDistinctActionAndEvidenceSourcesAtLimit(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Switch workspace, fix, commit, push, and leave clean status.",
+		TurnEndReason: "completed",
+		ContextInjections: []ContextInjection{{
+			TurnID: "turn-1",
+			Source: "runtime_workspace",
+		}},
+		Tools: []ToolCall{
+			{TurnID: "turn-1", CallID: "workspace", Tool: "session_workspace", Args: map[string]any{"action": "set", "path": "app"}},
+			{TurnID: "turn-1", CallID: "test-1", Tool: "shell", Args: map[string]any{"command": "go test ./..."}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "list", Tool: "list_files", Args: map[string]any{"path": "."}},
+			{TurnID: "turn-1", CallID: "read-1", Tool: "read_file", Args: map[string]any{"path": "greet/greet_test.go"}},
+			{TurnID: "turn-1", CallID: "read-2", Tool: "read_file", Args: map[string]any{"path": "greet/greet.go"}},
+			{TurnID: "turn-1", CallID: "edit", Tool: "edit_file", Args: map[string]any{"path": "greet/greet.go"}},
+			{TurnID: "turn-1", CallID: "test-2", Tool: "shell", Args: map[string]any{"command": "go test ./..."}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "commit", Tool: "shell", Args: map[string]any{"command": `git add greet/greet.go && git commit -m "fix"`}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "push", Tool: "shell", Args: map[string]any{"command": "git push origin main"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "status", Tool: "shell", Args: map[string]any{"command": "git status --short"}, ExitCode: 0},
+		},
+	}
+
+	got := DeriveTaskState(trace)
+	if !taskStateHasAttemptedAction(got, "session_workspace", "app") {
+		t.Fatalf("attempted actions = %+v, want session_workspace app preserved", got.AttemptedActions)
+	}
+	if !taskStateHasEvidenceSummary(got, "git_commit", "git commit") ||
+		!taskStateHasEvidenceSummary(got, "git_push", "git push") {
+		t.Fatalf("evidence = %+v, want git commit and push sources preserved", got.Evidence)
+	}
+}
+
 func TestDeriveTaskStateKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
 	got := DeriveTaskState(Trace{
 		Prompt:        "Build a release notes generator.",

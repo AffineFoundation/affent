@@ -207,12 +207,11 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 					CallID:  p.CallID,
 				}, opts.MaxItems)
 				addSource(state, source, opts.MaxItems)
+				var sources []string
 				if req.Tool == "shell" {
-					source = ShellHandoffEvidenceSource(action)
-				} else {
-					source = ""
+					sources = ShellHandoffEvidenceSources(action)
 				}
-				if source != "" {
+				for _, source := range sources {
 					state.Evidence = appendEvidence(state.Evidence, Evidence{
 						Source:  source,
 						Summary: summary,
@@ -419,9 +418,30 @@ func appendAction(items []Action, item Action, limit int) []Action {
 		return items
 	}
 	if limit > 0 && len(items) >= limit {
-		items = items[1:]
+		items = removeOldestRepeatedActionTool(items)
 	}
 	return append(items, item)
+}
+
+func removeOldestRepeatedActionTool(items []Action) []Action {
+	if len(items) == 0 {
+		return items
+	}
+	counts := map[string]int{}
+	for _, item := range items {
+		counts[strings.TrimSpace(item.Tool)]++
+	}
+	remove := 0
+	for i, item := range items {
+		if counts[strings.TrimSpace(item.Tool)] > 1 {
+			remove = i
+			break
+		}
+	}
+	out := make([]Action, 0, len(items)-1)
+	out = append(out, items[:remove]...)
+	out = append(out, items[remove+1:]...)
+	return out
 }
 
 func appendFailure(items []Failure, item Failure, limit int) []Failure {
@@ -439,9 +459,30 @@ func appendEvidence(items []Evidence, item Evidence, limit int) []Evidence {
 		return items
 	}
 	if limit > 0 && len(items) >= limit {
-		items = items[1:]
+		items = removeOldestRepeatedEvidenceSource(items)
 	}
 	return append(items, item)
+}
+
+func removeOldestRepeatedEvidenceSource(items []Evidence) []Evidence {
+	if len(items) == 0 {
+		return items
+	}
+	counts := map[string]int{}
+	for _, item := range items {
+		counts[strings.TrimSpace(item.Source)]++
+	}
+	remove := 0
+	for i, item := range items {
+		if counts[strings.TrimSpace(item.Source)] > 1 {
+			remove = i
+			break
+		}
+	}
+	out := make([]Evidence, 0, len(items)-1)
+	out = append(out, items[:remove]...)
+	out = append(out, items[remove+1:]...)
+	return out
 }
 
 func appendFile(items []File, item File, limit int) []File {

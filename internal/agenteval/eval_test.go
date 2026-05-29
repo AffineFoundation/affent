@@ -2625,8 +2625,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(sourceRepo.ProtectedFiles, "app/greet/greet_test.go") {
 		t.Fatalf("source repo ProtectedFiles = %#v, want cloned test protection", sourceRepo.ProtectedFiles)
 	}
-	if !taskStateChangedFileRequirementContains(sourceRepo.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "app/greet/greet.go", Action: "edit"}) {
-		t.Fatalf("source repo RequiredTaskStateChangedFiles = %#v, want app/greet/greet.go edit", sourceRepo.RequiredTaskStateChangedFiles)
+	if !taskStateChangedFileRequirementContains(sourceRepo.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "greet/greet.go", Action: "edit"}) {
+		t.Fatalf("source repo RequiredTaskStateChangedFiles = %#v, want greet/greet.go edit", sourceRepo.RequiredTaskStateChangedFiles)
 	}
 	sourceRepoCaps := ScenarioExpectationCapabilityNames(sourceRepo)
 	for _, want := range []string{"source_repo", "workspace", "verifier", "skill"} {

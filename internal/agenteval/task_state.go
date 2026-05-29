@@ -93,7 +93,7 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 				CallID:  tool.CallID,
 			})
 			task.Sources = appendUniqueTaskString(task.Sources, source, taskStateMaxItems)
-			if source := taskstate.ShellHandoffEvidenceSource(taskStateToolSummary(tool)); source != "" {
+			for _, source := range taskstate.ShellHandoffEvidenceSources(taskStateToolSummary(tool)) {
 				task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
 					Source:  source,
 					Summary: summary,
@@ -274,9 +274,30 @@ func appendTaskAction(items []TaskStateAction, item TaskStateAction) []TaskState
 	}
 	item.Summary = strings.TrimSpace(item.Summary)
 	if len(items) >= taskStateMaxItems {
-		items = items[1:]
+		items = removeOldestRepeatedTaskActionTool(items)
 	}
 	return append(items, item)
+}
+
+func removeOldestRepeatedTaskActionTool(items []TaskStateAction) []TaskStateAction {
+	if len(items) == 0 {
+		return items
+	}
+	counts := map[string]int{}
+	for _, item := range items {
+		counts[strings.TrimSpace(item.Tool)]++
+	}
+	remove := 0
+	for i, item := range items {
+		if counts[strings.TrimSpace(item.Tool)] > 1 {
+			remove = i
+			break
+		}
+	}
+	out := make([]TaskStateAction, 0, len(items)-1)
+	out = append(out, items[:remove]...)
+	out = append(out, items[remove+1:]...)
+	return out
 }
 
 func appendTaskFile(items []TaskStateFile, item TaskStateFile) []TaskStateFile {
@@ -313,9 +334,30 @@ func appendTaskEvidence(items []TaskStateEvidence, item TaskStateEvidence) []Tas
 		return items
 	}
 	if len(items) >= taskStateMaxItems {
-		items = items[1:]
+		items = removeOldestRepeatedTaskEvidenceSource(items)
 	}
 	return append(items, item)
+}
+
+func removeOldestRepeatedTaskEvidenceSource(items []TaskStateEvidence) []TaskStateEvidence {
+	if len(items) == 0 {
+		return items
+	}
+	counts := map[string]int{}
+	for _, item := range items {
+		counts[strings.TrimSpace(item.Source)]++
+	}
+	remove := 0
+	for i, item := range items {
+		if counts[strings.TrimSpace(item.Source)] > 1 {
+			remove = i
+			break
+		}
+	}
+	out := make([]TaskStateEvidence, 0, len(items)-1)
+	out = append(out, items[:remove]...)
+	out = append(out, items[remove+1:]...)
+	return out
 }
 
 func appendUniqueTaskString(items []string, item string, limit int) []string {

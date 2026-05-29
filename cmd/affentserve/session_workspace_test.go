@@ -47,6 +47,12 @@ func TestSessionWorkspaceToolSwitchesActiveWorkspaceForTools(t *testing.T) {
 	if !strings.Contains(out, `"changed": true`) || sess.Workspace() != project {
 		t.Fatalf("workspace set output=%s current=%q want %q", out, sess.Workspace(), project)
 	}
+	if strings.Contains(filepath.ToSlash(out), filepath.ToSlash(sess.workspaceRoot())) ||
+		!strings.Contains(out, `"workspace_root": "."`) ||
+		!strings.Contains(out, `"workspace_path": "project"`) ||
+		!strings.Contains(out, `"path_mode": "workspace_relative"`) {
+		t.Fatalf("session_workspace output should be workspace-relative:\n%s", out)
+	}
 
 	shell, ok := sess.registry.Get("shell")
 	if !ok {

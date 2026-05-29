@@ -32,6 +32,12 @@ func TestSessionWorkspaceToolSwitchesActiveWorkspace(t *testing.T) {
 	if !strings.Contains(out, `"workspace_label": "app"`) || !strings.Contains(out, `"changed": true`) {
 		t.Fatalf("tool output missing workspace details:\n%s", out)
 	}
+	if strings.Contains(filepath.ToSlash(out), filepath.ToSlash(root)) ||
+		!strings.Contains(out, `"workspace_root": "."`) ||
+		!strings.Contains(out, `"workspace_path": "app"`) ||
+		!strings.Contains(out, `"path_mode": "workspace_relative"`) {
+		t.Fatalf("tool output should expose only workspace-relative paths:\n%s", out)
+	}
 
 	out, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"reset"}`))
 	if err != nil {
@@ -40,8 +46,10 @@ func TestSessionWorkspaceToolSwitchesActiveWorkspace(t *testing.T) {
 	if state.Current() != root || persisted != root {
 		t.Fatalf("workspace current=%q persisted=%q want root %q", state.Current(), persisted, root)
 	}
-	if !strings.Contains(out, `"workspace_root": "`+root+`"`) {
-		t.Fatalf("reset output missing root:\n%s", out)
+	if strings.Contains(filepath.ToSlash(out), filepath.ToSlash(root)) ||
+		!strings.Contains(out, `"workspace_root": "."`) ||
+		!strings.Contains(out, `"workspace_path": "."`) {
+		t.Fatalf("reset output should expose workspace-relative root:\n%s", out)
 	}
 }
 

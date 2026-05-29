@@ -114,6 +114,88 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 }
 
+func TestScanEventsPreservesDistinctEvidenceSourcesAtLimit(t *testing.T) {
+	var input strings.Builder
+	input.WriteString(taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Fix and push.",
+	}))
+	for i, command := range []string{
+		"go test ./...",
+		"go test ./...",
+		"go test ./...",
+		"go test ./...",
+		"go test ./...",
+		"go test ./...",
+		`git commit -m "fix"`,
+		"git push origin main",
+	} {
+		callID := "shell-" + string(rune('a'+i))
+		input.WriteString(taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: callID,
+			Tool:   "shell",
+			Args:   map[string]any{"command": command},
+		}))
+		input.WriteString(taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   callID,
+			ExitCode: 0,
+			Result:   "ok",
+		}))
+	}
+
+	state, err := ScanEvents(strings.NewReader(input.String()), EventScanOptions{MaxItems: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !taskStateEvidenceContains(state.Evidence, GitCommitEvidenceSource, `git commit -m "fix"`) ||
+		!taskStateEvidenceContains(state.Evidence, GitPushEvidenceSource, "git push origin main") {
+		t.Fatalf("evidence = %+v, want commit and push sources preserved", state.Evidence)
+	}
+}
+
+func TestScanEventsPreservesDistinctAttemptedActionToolsAtLimit(t *testing.T) {
+	var input strings.Builder
+	input.WriteString(taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Switch workspace and fix.",
+	}))
+	for i, req := range []ToolRequest{
+		{Tool: "session_workspace", Args: map[string]any{"action": "set", "path": "app"}},
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+		{Tool: "list_files", Args: map[string]any{"path": "."}},
+		{Tool: "read_file", Args: map[string]any{"path": "a_test.go"}},
+		{Tool: "read_file", Args: map[string]any{"path": "a.go"}},
+		{Tool: "edit_file", Args: map[string]any{"path": "a.go"}},
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+		{Tool: "shell", Args: map[string]any{"command": `git commit -m "fix"`}},
+		{Tool: "shell", Args: map[string]any{"command": "git push origin main"}},
+		{Tool: "shell", Args: map[string]any{"command": "git status --short"}},
+	} {
+		callID := "tool-" + string(rune('a'+i))
+		input.WriteString(taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: callID,
+			Tool:   req.Tool,
+			Args:   req.Args,
+		}))
+		input.WriteString(taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   callID,
+			ExitCode: 0,
+		}))
+	}
+
+	state, err := ScanEvents(strings.NewReader(input.String()), EventScanOptions{MaxItems: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !taskStateActionContains(state.AttemptedActions, "session_workspace", "app") {
+		t.Fatalf("attempted actions = %+v, want session_workspace app preserved", state.AttemptedActions)
+	}
+}
+
 func TestToolSemanticsAreSharedTaskStateInputs(t *testing.T) {
 	req := ToolRequest{
 		Tool:   "web_fetch",
@@ -289,6 +371,15 @@ func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 func taskStateEvidenceContains(evidence []Evidence, source, summaryPart string) bool {
 	for _, item := range evidence {
 		if item.Source == source && strings.Contains(item.Summary, summaryPart) {
+			return true
+		}
+	}
+	return false
+}
+
+func taskStateActionContains(actions []Action, tool, summaryPart string) bool {
+	for _, item := range actions {
+		if item.Tool == tool && strings.Contains(item.Summary, summaryPart) {
 			return true
 		}
 	}

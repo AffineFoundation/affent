@@ -10,4 +10,5 @@ Use this procedure for code changes:
 - Do not import a third-party package just because it is installed in the current environment. If the manifest does not declare it, treat it as unavailable; prefer standard-library implementations.
 - If a build/test tool is not on PATH, do bounded discovery: command -v, repo-local toolchains such as ./.tmp/toolchains, and common user-local paths such as $HOME/.local. Do not run broad filesystem searches like find /.
 - After editing, run the same failing command again. If the language has a standard formatter and it is available, run it before the final test.
+- If the task asks you to commit, push, or leave a clean working tree in a git repository, run `git status --short` before the final answer.
 - In the final answer, state the files changed and the exact verification command/result.

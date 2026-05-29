@@ -992,6 +992,36 @@ func TestShellToolRelativizesWorkspacePathInOutput(t *testing.T) {
 	}
 }
 
+func TestShellToolRelativizesSessionRootWhenActiveWorkspaceMoved(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	active := filepath.Join(root, "app")
+	rec := &recordingExec{result: executor.ExecResult{
+		ExitCode: 0,
+		Stdout: strings.Join([]string{
+			filepath.Join(active, "greet", "greet.go"),
+			filepath.Join(root, "remote.git"),
+		}, "\n"),
+	}}
+	tool := shellTool(BuiltinDeps{
+		Executor:                 rec,
+		HostWorkspaceDir:         root,
+		HostWorkspaceDirProvider: func() string { return active },
+	})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"git push origin main"}`))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	out = filepath.ToSlash(out)
+	if strings.Contains(out, filepath.ToSlash(root)) || strings.Contains(out, filepath.ToSlash(active)) {
+		t.Fatalf("shell output leaked absolute workspace paths:\n%s", out)
+	}
+	for _, want := range []string{"./greet/greet.go", "./remote.git"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("shell output missing workspace-relative %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestShellToolNormalizesWorkspacePathAliasCWD(t *testing.T) {
 	ws := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
 	rec := &recordingExec{}
@@ -1003,6 +1033,70 @@ func TestShellToolNormalizesWorkspacePathAliasCWD(t *testing.T) {
 	}
 	if rec.gotOpts.WorkingDir != "subdir" {
 		t.Fatalf("cwd = %q, want subdir", rec.gotOpts.WorkingDir)
+	}
+}
+
+func TestShellToolNormalizesActiveWorkspaceRootRelativeCWD(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	active := filepath.Join(root, "app")
+	rec := &recordingExec{}
+	tool := shellTool(BuiltinDeps{
+		Executor:                 rec,
+		HostWorkspaceDir:         root,
+		HostWorkspaceDirProvider: func() string { return active },
+	})
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"go test ./...","cwd":"app"}`)); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if rec.gotOpts.WorkingDir != "." {
+		t.Fatalf("cwd = %q, want . for active workspace alias", rec.gotOpts.WorkingDir)
+	}
+}
+
+func TestFileToolsNormalizeActiveWorkspaceRootRelativePath(t *testing.T) {
+	root := t.TempDir()
+	active := filepath.Join(root, "app")
+	if err := os.MkdirAll(active, 0o755); err != nil {
+		t.Fatalf("mkdir active: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(active, "note.txt"), []byte("active note\n"), 0o644); err != nil {
+		t.Fatalf("write note: %v", err)
+	}
+	tool := readFileTool(BuiltinDeps{
+		HostWorkspaceDir:         root,
+		HostWorkspaceDirProvider: func() string { return active },
+	})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"path":"app/note.txt"}`))
+	if err != nil {
+		t.Fatalf("Execute: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "active note") {
+		t.Fatalf("read_file did not resolve active workspace alias:\n%s", out)
+	}
+}
+
+func TestShellToolRelativizesExecutorErrors(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "tmp", "affent-session", "sess_123")
+	active := filepath.Join(root, "app")
+	rec := &recordingExec{
+		result: executor.ExecResult{ExitCode: -1},
+		err:    fmt.Errorf("exec %q: chdir %s: no such file or directory", "sh", filepath.Join(active, "app")),
+	}
+	tool := shellTool(BuiltinDeps{
+		Executor:                 rec,
+		HostWorkspaceDir:         root,
+		HostWorkspaceDirProvider: func() string { return active },
+	})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"go test ./...","cwd":"missing"}`))
+	if err == nil {
+		t.Fatalf("expected executor error, got output %q", out)
+	}
+	msg := filepath.ToSlash(err.Error())
+	if strings.Contains(msg, filepath.ToSlash(root)) || strings.Contains(msg, filepath.ToSlash(active)) {
+		t.Fatalf("executor error leaked absolute workspace path: %v", err)
+	}
+	if !strings.Contains(msg, "./app") {
+		t.Fatalf("executor error missing relative path: %v", err)
 	}
 }
 

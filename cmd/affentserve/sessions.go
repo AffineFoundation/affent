@@ -612,7 +612,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		}
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 			Executor:                 localExec,
-			HostWorkspaceDir:         currentWorkspace,
+			HostWorkspaceDir:         workspace,
 			HostWorkspaceDirProvider: workspaceState.Current,
 			Memory:                   memStore,
 			SessionsDir:              p.sessionRootPath(),
@@ -687,7 +687,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
 			LLM:                      llm,
 			Executor:                 childExec,
-			HostWorkspaceDir:         currentWorkspace,
+			HostWorkspaceDir:         workspace,
 			HostWorkspaceDirProvider: workspaceState.Current,
 			Memory:                   memStore,
 			SessionsDir:              p.sessionRootPath(),
@@ -703,7 +703,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
 			LLM:                      llm,
 			Executor:                 childExec,
-			HostWorkspaceDir:         currentWorkspace,
+			HostWorkspaceDir:         workspace,
 			HostWorkspaceDirProvider: workspaceState.Current,
 			Memory:                   memStore,
 			SessionsDir:              p.sessionRootPath(),

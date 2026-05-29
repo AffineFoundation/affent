@@ -112,6 +112,13 @@ func (d BuiltinDeps) hostWorkspaceDir() string {
 	return strings.TrimSpace(d.HostWorkspaceDir)
 }
 
+func (d BuiltinDeps) workspacePresentationRoots() []string {
+	return uniqueNonEmptyStrings([]string{
+		d.hostWorkspaceDir(),
+		d.HostWorkspaceDir,
+	})
+}
+
 // defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
 // `sh -c` works in every shipping Linux container we've seen (alpine
 // has busybox sh, distroless usually doesn't get the shell tool at all).
@@ -571,7 +578,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 			}
 			workspace := deps.hostWorkspaceDir()
 			p.Command = normalizeShellCommandWorkspacePaths(p.Command, workspace)
-			p.Cwd = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Cwd))
+			p.Cwd = normalizeWorkspaceToolPathArg(deps, strings.TrimSpace(p.Cwd))
 			p.Cwd = normalizeWorkspaceAbsolutePathArg(deps, p.Cwd)
 			if len(p.Command) > maxShellCommandBytes {
 				return "", fmt.Errorf("command is %d bytes; shell command supports up to %d bytes. Put long scripts in a workspace file and run that file instead\nNext: write the script to a workspace file, then retry shell with a short command that runs it", len(p.Command), maxShellCommandBytes)
@@ -608,11 +615,11 @@ func shellTool(deps BuiltinDeps) *Tool {
 			// command. The Loop's dispatch wraps a non-nil err alongside
 			// res into "Error: <err>\n<res>" — exactly what we want.
 			out := redactSecretValues(formatShellOutput(res), deps.SecretValuesProvider)
-			out = relativizeWorkspacePathsInText(out, workspace)
+			out = relativizeWorkspacePathsInText(out, deps.workspacePresentationRoots()...)
 			if shellCommandNotFound(res) {
 				out += "\nNext: command not found. Check the executable name, run `which <command>` or inspect PATH, then retry with an installed tool."
 			}
-			return out, redactSecretError(err, deps.SecretValuesProvider)
+			return out, sanitizeToolError(err, deps)
 		},
 	}
 }
@@ -638,7 +645,7 @@ func normalizeShellWorkspaceArgs(deps BuiltinDeps) func(json.RawMessage) (json.R
 			}
 		}
 		if value, ok := obj["cwd"].(string); ok {
-			next := normalizeWorkspacePathAlias(deps, strings.TrimSpace(value))
+			next := normalizeWorkspaceToolPathArg(deps, strings.TrimSpace(value))
 			next = normalizeWorkspaceAbsolutePathArg(deps, next)
 			if next != value {
 				obj["cwd"] = next
@@ -812,12 +819,18 @@ func formatShellOutput(res executor.ExecResult) string {
 	return b.String()
 }
 
-func relativizeWorkspacePathsInText(text, workspace string) string {
-	workspace = strings.TrimSpace(workspace)
-	if text == "" || workspace == "" {
+func relativizeWorkspacePathsInText(text string, workspaces ...string) string {
+	if text == "" || len(workspaces) == 0 {
 		return text
 	}
-	candidates := []string{filepath.Clean(workspace), filepath.ToSlash(filepath.Clean(workspace))}
+	var candidates []string
+	for _, workspace := range workspaces {
+		workspace = strings.TrimSpace(workspace)
+		if workspace == "" {
+			continue
+		}
+		candidates = append(candidates, filepath.Clean(workspace), filepath.ToSlash(filepath.Clean(workspace)))
+	}
 	for _, candidate := range uniqueNonEmptyStrings(candidates) {
 		text = relativizeWorkspacePathCandidate(text, candidate)
 	}
@@ -927,6 +940,18 @@ func redactSecretError(err error, provider func() []string) error {
 	return errors.New(msg)
 }
 
+func sanitizeToolError(err error, deps BuiltinDeps) error {
+	if err == nil {
+		return nil
+	}
+	msg := redactSecretValues(err.Error(), deps.SecretValuesProvider)
+	msg = relativizeWorkspacePathsInText(msg, deps.workspacePresentationRoots()...)
+	if msg == err.Error() {
+		return err
+	}
+	return errors.New(msg)
+}
+
 // ---- file ops (operate on the host bind mount, never via docker exec --
 // way faster + we can preview/diff in the gateway) ----
 
@@ -960,7 +985,7 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	if workspace == "" {
 		return "", errors.New("workspace is not configured; file tools require HostWorkspaceDir or a container FileOps executor\nNext: restart affent with a workspace root or a docker/sandbox executor before retrying file tools")
 	}
-	p = normalizeWorkspacePathAlias(deps, p)
+	p = normalizeWorkspaceToolPathArg(deps, p)
 	if p == "" {
 		return workspace, nil
 	}
@@ -1037,6 +1062,47 @@ func normalizeWorkspaceAbsolutePathArg(deps BuiltinDeps, p string) string {
 		return "."
 	}
 	return filepath.ToSlash(rel)
+}
+
+func normalizeWorkspaceToolPathArg(deps BuiltinDeps, p string) string {
+	p = normalizeWorkspacePathAlias(deps, p)
+	p = normalizeActiveWorkspaceRootRelativePathArg(deps, p)
+	return p
+}
+
+func normalizeActiveWorkspaceRootRelativePathArg(deps BuiltinDeps, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" || filepath.IsAbs(p) {
+		return p
+	}
+	root := strings.TrimSpace(deps.HostWorkspaceDir)
+	current := deps.hostWorkspaceDir()
+	if root == "" || current == "" {
+		return p
+	}
+	root = filepath.Clean(root)
+	current = filepath.Clean(current)
+	if root == current {
+		return p
+	}
+	activeRel, err := filepath.Rel(root, current)
+	if err != nil || activeRel == "." || activeRel == ".." || strings.HasPrefix(activeRel, ".."+string(filepath.Separator)) {
+		return p
+	}
+	activeRel = filepath.ToSlash(filepath.Clean(activeRel))
+	clean := filepath.ToSlash(filepath.Clean(p))
+	if clean == activeRel {
+		return "."
+	}
+	prefix := activeRel + "/"
+	if strings.HasPrefix(clean, prefix) {
+		rest := strings.TrimPrefix(clean, prefix)
+		if rest == "" {
+			return "."
+		}
+		return filepath.FromSlash(rest)
+	}
+	return p
 }
 
 func pathComponents(p string) []string {
@@ -1200,7 +1266,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
+			p.Path = normalizeWorkspaceToolPathArg(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" {
 				return "", requiredFileToolPathError("read_file")
 			}
@@ -1454,7 +1520,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
+			p.Path = normalizeWorkspaceToolPathArg(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" {
 				return "", requiredFileToolPathError("write_file")
 			}
@@ -1515,7 +1581,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
+			p.Path = normalizeWorkspaceToolPathArg(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" || strings.TrimSpace(p.Old) == "" {
 				return "", structuredToolError("path and old are required", "invalid_args", "call read_file on the target file, copy the exact current text into old, then retry edit_file with a non-empty path")
 			}
@@ -1603,7 +1669,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			if err != nil {
 				return "", err
 			}
-			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
+			p.Path = normalizeWorkspaceToolPathArg(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" {
 				p.Path = "."
 			}

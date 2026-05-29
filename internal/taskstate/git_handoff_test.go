@@ -38,3 +38,16 @@ func TestGitSubcommandSkipsGlobalOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestShellHandoffEvidenceSourcesClassifiesChainedGitCommands(t *testing.T) {
+	got := ShellHandoffEvidenceSources(`git add greet/greet.go && git commit -m "fix guest" && git push origin main`)
+	want := []string{GitCommitEvidenceSource, GitPushEvidenceSource}
+	if len(got) != len(want) {
+		t.Fatalf("sources = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("sources = %#v, want %#v", got, want)
+		}
+	}
+}

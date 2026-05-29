@@ -3546,7 +3546,7 @@ func TestMessageUsesName(t *testing.T) {
 			{Tool: "shell", SummaryContains: "git push"},
 		},
 		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
-			{PathContains: "app/greet/greet.go", Action: "edit"},
+			{PathContains: "greet/greet.go", Action: "edit"},
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},
