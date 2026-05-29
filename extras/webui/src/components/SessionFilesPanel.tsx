@@ -6,6 +6,8 @@ import {
   fileLines,
   fileRangeDraft,
   fileRangeText,
+  filesReviewQueue,
+  type SessionFilesReviewItem,
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
@@ -62,6 +64,7 @@ export function SessionFilesPanel({
   const filteredItems = filter === "all" ? files.items : files.items.filter((item) => fileMatchesFilter(item, filter));
   const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
   const treeNodes = useMemo(() => buildFileTree(visibleItems), [visibleItems]);
+  const primaryFileAttention = fileAttentionItem(visibleItems);
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
   const selectedEvidenceCandidate = visibleItems.find((item) => item.path === selectedEvidencePath);
   const selectedItem = selectedEvidenceCandidate?.contentPreview
@@ -161,6 +164,15 @@ export function SessionFilesPanel({
         <span>{files.detail}</span>
       </summary>
       <div className="session-skills-body">
+        {primaryFileAttention ? (
+          <FileAttentionStrip
+            attention={primaryFileAttention}
+            onOpenWorkspacePath={onOpenWorkspacePath}
+            onOpenWorkspacePanel={onOpenWorkspacePanel}
+            onUseAsDraft={onUseAsDraft}
+            onViewEvidence={openEvidenceItem}
+          />
+        ) : null}
         <div className="session-files-ide" data-testid="session-files-ide">
           <aside className="session-files-explorer" aria-label="File explorer">
             <div className="session-files-explorer-head">
@@ -412,6 +424,61 @@ export function SessionFilesPanel({
       </div>
     </details>
   );
+}
+
+function FileAttentionStrip({
+  attention,
+  onOpenWorkspacePath,
+  onOpenWorkspacePanel,
+  onUseAsDraft,
+  onViewEvidence,
+}: {
+  attention: SessionFilesReviewItem;
+  onOpenWorkspacePath?: (path: string) => void;
+  onOpenWorkspacePanel?: () => void;
+  onUseAsDraft?: UseAsDraft;
+  onViewEvidence: (item: SessionFileEvidence) => void;
+}) {
+  const primary = fileAttentionPrimaryAction(attention, { onOpenWorkspacePath, onOpenWorkspacePanel, onViewEvidence });
+  return (
+    <section className="session-files-attention" data-testid="session-files-attention" data-tone={attention.tone ?? "neutral"} aria-label="File attention">
+      <div className="session-files-attention-copy">
+        <span>{attention.label}</span>
+        <strong title={attention.title}>{attention.title}</strong>
+        <small>{attention.detail}</small>
+      </div>
+      <div className="session-files-attention-actions">
+        {primary ? (
+          <button type="button" className="ghost-action primary-run-action" onClick={primary.onClick}>
+            {primary.label}
+          </button>
+        ) : null}
+        {onUseAsDraft && attention.action !== "wait" ? (
+          <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(attention.item), "file_evidence")}>
+            Ask Affent
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function fileAttentionPrimaryAction(
+  attention: SessionFilesReviewItem,
+  handlers: {
+    onOpenWorkspacePath?: (path: string) => void;
+    onOpenWorkspacePanel?: () => void;
+    onViewEvidence: (item: SessionFileEvidence) => void;
+  },
+): { label: string; onClick: () => void } | undefined {
+  if (attention.action === "view_snapshot") {
+    return { label: "View snapshot", onClick: () => handlers.onViewEvidence(attention.item) };
+  }
+  if (attention.action === "open_current" || attention.action === "recover_path") {
+    if (handlers.onOpenWorkspacePath) return { label: "Open current", onClick: () => handlers.onOpenWorkspacePath?.(attention.item.path) };
+    if (handlers.onOpenWorkspacePanel) return { label: "Open workspace", onClick: () => handlers.onOpenWorkspacePanel?.() };
+  }
+  return undefined;
 }
 
 function WorkspaceBreadcrumbs({ path, onOpenPath }: { path: string; onOpenPath?: (path: string) => void }) {
@@ -1097,6 +1164,14 @@ function preferredFileEvidence(items: readonly SessionFileEvidence[]): SessionFi
     ?? items.find((item) => item.status === "failed")
     ?? items.find((item) => item.path === ".")
     ?? items[0];
+}
+
+function fileAttentionItem(items: readonly SessionFileEvidence[]): SessionFilesReviewItem | undefined {
+  return filesReviewQueue(items).find((item) =>
+    item.item.status !== "available"
+    || item.item.actions.includes("changed")
+    || item.action === "open_current"
+  );
 }
 
 function compactFileMeta(item: SessionFileEvidence): string {

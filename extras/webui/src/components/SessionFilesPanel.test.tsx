@@ -93,6 +93,31 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-panel")).not.toHaveAttribute("open");
   });
 
+  it("surfaces the primary file attention without rebuilding a review queue", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspacePath = vi.fn();
+    const onUseAsDraft = vi.fn();
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={files}
+        onOpenWorkspacePath={onOpenWorkspacePath}
+        onUseAsDraft={onUseAsDraft}
+      />,
+    );
+
+    const attention = screen.getByTestId("session-files-attention");
+    expect(attention).toHaveTextContent("Verify current file");
+    expect(attention).toHaveTextContent("src/payments.ts");
+    expect(attention).toHaveTextContent("snapshot");
+    expect(screen.queryByText("Review queue")).toBeNull();
+
+    await user.click(within(attention).getByRole("button", { name: "Open current" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
+    await user.click(within(attention).getByRole("button", { name: "Ask Affent" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review this changed file in the next step"), "file_evidence");
+  });
+
   it("keeps idle workspace access inside the explorer", async () => {
     const user = userEvent.setup();
     const onOpenWorkspacePath = vi.fn();
