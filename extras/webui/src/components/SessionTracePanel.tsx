@@ -24,6 +24,7 @@ export function SessionTracePanel({
   const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
+  const dynamicSearches = useMemo(() => traceDynamicSearches(trace.toolIssues), [trace.toolIssues]);
   const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(
     () => {
@@ -96,6 +97,11 @@ export function SessionTracePanel({
                 <button type="button" onClick={() => applySearch("artifact:", "artifacts")}>artifact:</button>
                 <button type="button" onClick={() => applySearch("path:", "files")}>path:</button>
                 <button type="button" onClick={() => applySearch("unclassified", "unclassified")}>unclassified</button>
+                {dynamicSearches.map((shortcut) => (
+                  <button key={shortcut.label} type="button" onClick={() => applySearch(shortcut.query, shortcut.filter)}>
+                    {shortcut.label}
+                  </button>
+                ))}
               </div>
             ) : null}
             <div className="session-trace-resultbar" data-testid="session-trace-resultbar">
@@ -262,6 +268,12 @@ interface TraceToolIssueGroup {
   count: number;
 }
 
+interface TraceSearchShortcut {
+  label: string;
+  query: string;
+  filter: TraceFilter;
+}
+
 interface TraceSelectionSummary {
   eventSpan: string;
   requestSpan: string;
@@ -333,6 +345,21 @@ function traceIssueSearchTerms(query: string): string[] {
   return (query.toLowerCase().match(/"[^"]+"|\S+/g) ?? [])
     .map((term) => term.replace(/^"|"$/g, "").trim())
     .filter(Boolean);
+}
+
+function traceDynamicSearches(issues: SessionTraceView["toolIssues"]): TraceSearchShortcut[] {
+  const text = issues.map(traceIssueSearchText).join("\n");
+  const shortcuts: TraceSearchShortcut[] = [];
+  if (/permission denied|publickey/.test(text)) {
+    shortcuts.push({ label: "permission denied", query: "permission denied", filter: "commands" });
+  }
+  if (/load key|invalid format|bad permissions/.test(text)) {
+    shortcuts.push({ label: "invalid key", query: "invalid format", filter: "commands" });
+  }
+  if (/git@github\.com|github\.com/.test(text)) {
+    shortcuts.push({ label: "github", query: "github.com", filter: "commands" });
+  }
+  return shortcuts;
 }
 
 function TraceSelectionSummaryView({ summary }: { summary: TraceSelectionSummary }) {

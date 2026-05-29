@@ -323,4 +323,51 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · read_file");
     expect(screen.getByTestId("session-trace-issues")).not.toHaveTextContent("shell");
   });
+
+  it("adds issue-derived shortcuts for Git and SSH failures", async () => {
+    const user = userEvent.setup();
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "git",
+          tool: "shell",
+          args: { command: "git ls-remote git@github.com:team/private.git HEAD" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "git",
+          exit_code: 128,
+          failure_kind: "command_failed",
+          result_summary: "STDERR: Load key \"[REDACTED:account-secret]\": invalid format\ngit@github.com: Permission denied (publickey).\n[exit 128]",
+          result: "STDERR: Load key \"[REDACTED:account-secret]\": invalid format\ngit@github.com: Permission denied (publickey).\n[exit 128]",
+        },
+      },
+    ]);
+
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
+
+    const shortcuts = screen.getByLabelText("Trace search shortcuts");
+    expect(shortcuts).toHaveTextContent("permission denied");
+    expect(shortcuts).toHaveTextContent("invalid key");
+    expect(shortcuts).toHaveTextContent("github");
+
+    await user.click(within(shortcuts).getByRole("button", { name: "permission denied" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Commands");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: permission denied");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Permission denied");
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await user.click(within(shortcuts).getByRole("button", { name: "invalid key" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: invalid format");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("invalid format");
+  });
 });
