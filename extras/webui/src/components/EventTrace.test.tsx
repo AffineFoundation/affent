@@ -105,8 +105,8 @@ describe("EventTrace", () => {
           exit_code: 0,
           failure_kind: "dynamic_shell",
           failure_kinds: ["dynamic_shell", "no_verified_source"],
-          result_summary: "Only a dynamic shell was captured.",
-          result: "Failure: kind=dynamic_shell",
+          result_summary: "Only a dynamic shell was captured.\nNext: retry with browser network evidence\nFailure: kind=dynamic_shell",
+          result: "Only a dynamic shell was captured.\nNext: retry with browser network evidence\nFailure: kind=dynamic_shell",
           result_truncated: false,
         },
       },
@@ -114,7 +114,8 @@ describe("EventTrace", () => {
 
     render(<EventTrace events={events} />);
 
-    expect(screen.getByText("Action finished")).toBeInTheDocument();
+    expect(screen.getByText("Action failed")).toBeInTheDocument();
+    expect(screen.getByText(/next retry with browser network evidence/)).toBeInTheDocument();
     expect(screen.getByText("dynamic_shell")).toBeInTheDocument();
     expect(screen.getByText("no_verified_source")).toBeInTheDocument();
   });

@@ -322,6 +322,8 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · read_file");
     expect(screen.getByTestId("session-trace-issues")).not.toHaveTextContent("shell");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Action finished");
   });
 
   it("adds issue-derived shortcuts for Git and SSH failures", async () => {

@@ -408,10 +408,11 @@ function eventToolName(event: NormalizedEvent, context: DisplayContext): string 
 function eventStatusWords(event: NormalizedEvent, display: EventDisplay): string[] {
   const exitCode = readNumber(event.data, "exit_code");
   const failures = eventFailureKinds(event);
+  const failed = (typeof exitCode === "number" && exitCode !== 0) || failures.length > 0;
   return compact([
     display.label.toLowerCase(),
-    typeof exitCode === "number" && exitCode !== 0 ? "failed" : undefined,
-    typeof exitCode === "number" && exitCode === 0 ? "ok" : undefined,
+    failed ? "failed" : undefined,
+    typeof exitCode === "number" && exitCode === 0 && !failed ? "ok" : undefined,
     typeof exitCode === "number" ? `exit${exitCode}` : undefined,
     ...failures,
     ...display.badges,
@@ -702,14 +703,12 @@ function toolRequestBadges(event: NormalizedEvent): string[] {
 }
 
 function toolResultLabel(event: NormalizedEvent): string {
-  const exitCode = readNumber(event.data, "exit_code");
-  return typeof exitCode === "number" && exitCode !== 0 ? "Action failed" : "Action finished";
+  return toolResultFailed(event) ? "Action failed" : "Action finished";
 }
 
 function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string[] {
   const duration = readNumber(event.data, "duration_ms");
   const tool = context.callTools.get(readString(event.data, "call_id") ?? "");
-  const exitCode = readNumber(event.data, "exit_code");
   const artifactPath = readString(event.data, "result_artifact_path");
   const resultBytes = readNumber(event.data, "result_bytes");
   const omittedBytes = readNumber(event.data, "result_omitted_bytes");
@@ -723,7 +722,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
   const resultText = readString(event.data, "result_summary") ?? fullResultText;
-  const nextHint = shouldSurfaceToolResultNextHint(tool, exitCode, sourceAccess) ? toolResultNextHint(event) : undefined;
+  const nextHint = shouldSurfaceToolResultNextHint(event, tool, sourceAccess) ? toolResultNextHint(event) : undefined;
   const loopGuard = loopGuardMeta(event, fullResultText || resultText);
   const scrollTelemetry = tool === "browser_scroll" ? browserScrollTelemetryMeta(fullResultText) : undefined;
   const resultPreview = sessionSearchPayload
@@ -772,13 +771,18 @@ function toolResultNextHint(event: NormalizedEvent): string | undefined {
 }
 
 function shouldSurfaceToolResultNextHint(
+  event: NormalizedEvent,
   tool: string | undefined,
-  exitCode: number | undefined,
   sourceAccess: ReturnType<typeof describeSourceAccess>,
 ): boolean {
-  if (typeof exitCode === "number" && exitCode !== 0) return true;
+  if (toolResultFailed(event)) return true;
   if (tool === "browser_network" || tool === "browser_scroll") return true;
   return sourceAccess?.status === "dynamic_partial" || sourceAccess?.status === "discovery_only";
+}
+
+function toolResultFailed(event: NormalizedEvent): boolean {
+  const exitCode = readNumber(event.data, "exit_code");
+  return (typeof exitCode === "number" && exitCode !== 0) || eventFailureKinds(event).length > 0;
 }
 
 function loopGuardMeta(event: NormalizedEvent, resultText: string): string[] {
