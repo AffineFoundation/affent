@@ -486,9 +486,32 @@ func markdownSectionBody(section string) string {
 
 func (l *Loop) finishLoopProtocolCalibrationTurn(turnID string, opts TurnOptions) bool {
 	question := defaultLoopProtocolCalibrationQuestion()
-	if !l.recordLoopProtocolCalibrationQuestionIfReady(turnID, question, opts) {
+	if l.recordLoopProtocolCalibrationQuestionIfReady(turnID, question, opts) {
+		l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
+			TurnID:       turnID,
+			Text:         question,
+			FinishReason: "stop",
+		})
+		if err := l.Conv.Append(ChatMessage{Role: "assistant", Content: question}); err != nil {
+			l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append loop calibration question")
+		}
+		return true
+	}
+	state, pending := l.pendingLoopProtocolCalibrationQuestion()
+	if pending == "" {
 		return false
 	}
+	question = pending
+	l.publish(sse.TypeLoopCalibrationRequest, sse.LoopProtocolCalibrationPayload{
+		LoopID:                  state.LoopID,
+		Status:                  state.Status,
+		CalibrationQuestions:    state.CalibrationQuestions,
+		LastCalibrationQuestion: state.LastCalibrationQuestion,
+		CalibrationAnswers:      state.CalibrationAnswers,
+		LastCalibrationAnswer:   state.LastCalibrationAnswer,
+		ProtocolPath:            loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(strings.TrimSpace(l.LoopProtocolPath)))),
+		EventSeq:                state.EventCount,
+	})
 	l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
 		TurnID:       turnID,
 		Text:         question,
@@ -498,6 +521,24 @@ func (l *Loop) finishLoopProtocolCalibrationTurn(turnID string, opts TurnOptions
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append loop calibration question")
 	}
 	return true
+}
+
+func (l *Loop) pendingLoopProtocolCalibrationQuestion() (loopstate.State, string) {
+	if l == nil {
+		return loopstate.State{}, ""
+	}
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return loopstate.State{}, ""
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found || state.Status != "draft" {
+		return loopstate.State{}, ""
+	}
+	if state.CalibrationQuestions <= state.CalibrationAnswers {
+		return loopstate.State{}, ""
+	}
+	return state, strings.TrimSpace(state.LastCalibrationQuestion)
 }
 
 func defaultLoopProtocolCalibrationQuestion() string {
@@ -559,6 +600,19 @@ func (l *Loop) loopProtocolStartSetupCreatedDraft(toolName string, args json.Raw
 		state.Status == "draft" &&
 		state.LastEventType == "loop.protocol_init" &&
 		state.CalibrationQuestions == 0
+}
+
+func (l *Loop) loopProtocolDraftToolNeedsCalibrationQuestion(toolName string, args json.RawMessage, isErr bool) bool {
+	if l == nil || !isErr || toolName != LoopProtocolToolName || strings.TrimSpace(l.LoopProtocolPath) == "" {
+		return false
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(l.LoopProtocolPath), loopstate.StateFileName))
+	if err == nil && found && state.Status == "draft" {
+		return true
+	}
+	relPath := loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(l.LoopProtocolPath)))
+	summary, protocolFound, summaryErr := loopstate.SummarizeFile(l.LoopProtocolPath, relPath)
+	return summaryErr == nil && protocolFound && strings.TrimSpace(summary.Status) == "draft"
 }
 
 func (l *Loop) loopProtocolActivationCompleted(toolName string, args json.RawMessage, isErr bool) bool {

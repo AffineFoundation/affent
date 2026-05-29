@@ -152,6 +152,33 @@ func TestLoopProtocolStartSetupForcesCalibrationOnlyForFreshDraft(t *testing.T) 
 	}
 }
 
+func TestLoopProtocolDraftToolNeedsCalibrationQuestionFromState(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build a CLI puzzle game.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	loop := &Loop{LoopProtocolPath: protocolPath}
+	args := json.RawMessage(`{"action":"patch_draft","sections":{"## 3. Evolution Protocol":"Run one step."}}`)
+	if !loop.loopProtocolDraftToolNeedsCalibrationQuestion(LoopProtocolToolName, args, true) {
+		t.Fatal("failed draft patch with no pending calibration should request calibration")
+	}
+	if loop.loopProtocolDraftToolNeedsCalibrationQuestion(LoopProtocolToolName, args, false) {
+		t.Fatal("successful draft patch should not request calibration")
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if !loop.loopProtocolDraftToolNeedsCalibrationQuestion(LoopProtocolToolName, args, true) {
+		t.Fatal("draft protocol errors should keep the calibration turn authoritative")
+	}
+}
+
 func TestLoopProtocolActivationCompletedDetectedFromStateTransition(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "longrun")
@@ -709,7 +736,6 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	sawActivationError := false
-	sawCalibrationQuestion := false
 	for {
 		select {
 		case ev := <-events:
@@ -722,22 +748,9 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 				if p.ExitCode != 0 && strings.Contains(p.Result, "requires a recorded calibration question and user answer") {
 					sawActivationError = true
 				}
-			case sse.TypeLoopCalibrationRequest:
-				var p sse.LoopProtocolCalibrationPayload
-				if err := json.Unmarshal(ev.Data, &p); err != nil {
-					t.Fatalf("decode loop.protocol_calibration_request: %v", err)
-				}
-				if p.CalibrationQuestions == 1 &&
-					p.ProtocolPath == loopstate.ProtocolRelPath("uncalibrated") &&
-					strings.Contains(p.LastCalibrationQuestion, "stop condition") {
-					sawCalibrationQuestion = true
-				}
 			case sse.TypeTurnEnd:
 				if !sawActivationError {
 					t.Fatal("turn ended without uncalibrated activation tool error")
-				}
-				if !sawCalibrationQuestion {
-					t.Fatal("turn ended without loop calibration question event")
 				}
 				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 				if err != nil || !found {
@@ -752,6 +765,130 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 				}
 				if !strings.Contains(content, "- status: draft") {
 					t.Fatalf("uncalibrated activation overwrote LOOP.md:\n%s", content)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestRunTurnUsesRuntimeCalibrationQuestionAfterDraftPatchFailure(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "patch-needs-calibration")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "patch-needs-calibration",
+		OwnerSession: "patch-needs-calibration",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	args, err := json.Marshal(map[string]any{
+		"action": "patch_draft",
+		"sections": map[string]string{
+			"## 3. Evolution Protocol": "Fetch price evidence and append a compact record.",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if call == 1 {
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "lp1",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(args),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Loop protocol is activated and running.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(tmp, "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	RegisterLoopProtocolOnly(reg, protocolPath)
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		LoopProtocolPath: protocolPath, MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "Set up a loop for market analysis"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawPatchFailure := false
+	sawRuntimeQuestion := false
+	for {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.ExitCode != 0 {
+					sawPatchFailure = true
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == defaultLoopProtocolCalibrationQuestion() {
+					sawRuntimeQuestion = true
+				}
+				if strings.Contains(p.Text, "activated and running") {
+					t.Fatalf("accepted model success claim while draft needed calibration: %q", p.Text)
+				}
+			case sse.TypeTurnEnd:
+				if !sawPatchFailure {
+					t.Fatal("turn ended without draft patch calibration failure")
+				}
+				if !sawRuntimeQuestion {
+					t.Fatal("turn ended without runtime calibration question")
+				}
+				if got := atomic.LoadInt32(&calls); got != 1 {
+					t.Fatalf("LLM calls = %d, want runtime-generated calibration without final retry", got)
+				}
+				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+				if err != nil || !found {
+					t.Fatalf("ReadState found=%v err=%v", found, err)
+				}
+				if state.Status != "draft" || state.CalibrationQuestions != 1 || state.CalibrationAnswers != 0 {
+					t.Fatalf("draft calibration state = %+v", state)
 				}
 				return
 			}

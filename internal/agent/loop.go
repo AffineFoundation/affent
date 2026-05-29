@@ -1711,6 +1711,22 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				forceNoToolsPrompt = loopProtocolCalibrationNoToolsPrompt
 				stopToolBatchForCalibration = true
 			}
+			if l.loopProtocolDraftToolNeedsCalibrationQuestion(toolName, args, isErr) {
+				opts.ForceLoopCalibrationQuestion = true
+				opts.FinalNoToolsOnMaxTurns = true
+				loopProtocolCalibrationPending = true
+				if !forceNoToolsNext {
+					toolStats.ForcedNoTools++
+				}
+				forceNoToolsNext = true
+				forceNoToolsReason = skippedToolResultReason{
+					Message:     "(loop protocol draft is waiting for calibration; no more tools may run this turn)",
+					FailureKind: "loop_protocol_calibration_required",
+					Next:        "ask the required loop calibration question and wait for the user's answer before retrying protocol changes",
+				}
+				forceNoToolsPrompt = loopProtocolCalibrationNoToolsPrompt
+				stopToolBatchForCalibration = true
+			}
 			if l.loopProtocolActivationCompleted(toolName, args, isErr) {
 				opts.FinalNoToolsOnMaxTurns = true
 				if !forceNoToolsNext {
