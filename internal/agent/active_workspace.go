@@ -74,7 +74,11 @@ func (s *ActiveWorkspaceState) Owned() bool {
 
 func (s *ActiveWorkspaceState) Set(path string) (string, error) {
 	if s == nil {
-		return "", errors.New("workspace state is not configured")
+		return "", structuredToolError(
+			"workspace state is not configured",
+			"workspace_not_configured",
+			"restart the runtime with an active workspace state before retrying session_workspace",
+		)
 	}
 	s.mu.RLock()
 	root := s.root
@@ -91,7 +95,11 @@ func (s *ActiveWorkspaceState) Set(path string) (string, error) {
 
 func (s *ActiveWorkspaceState) Reset() (string, error) {
 	if s == nil {
-		return "", errors.New("workspace state is not configured")
+		return "", structuredToolError(
+			"workspace state is not configured",
+			"workspace_not_configured",
+			"restart the runtime with an active workspace state before retrying session_workspace",
+		)
 	}
 	s.mu.RLock()
 	root := s.root
@@ -105,14 +113,22 @@ func (s *ActiveWorkspaceState) Reset() (string, error) {
 func (s *ActiveWorkspaceState) updateCurrent(next string) error {
 	next = strings.TrimSpace(next)
 	if next == "" {
-		return errors.New("workspace path is required")
+		return structuredToolError(
+			"workspace path is required",
+			"workspace_path_required",
+			"retry session_workspace with action=set and a non-empty workspace-relative project directory",
+		)
 	}
 	s.mu.RLock()
 	onChange := s.onChange
 	s.mu.RUnlock()
 	if onChange != nil {
 		if err := onChange(next); err != nil {
-			return err
+			return structuredToolError(
+				fmt.Sprintf("persist active workspace %q: %v", next, err),
+				"workspace_update_failed",
+				"inspect the session state directory permissions, then retry session_workspace after the state store is writable",
+			)
 		}
 	}
 	s.mu.Lock()
@@ -124,11 +140,19 @@ func (s *ActiveWorkspaceState) updateCurrent(next string) error {
 func ResolveActiveWorkspacePath(root, raw string) (string, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
-		return "", errors.New("workspace root is not configured")
+		return "", structuredToolError(
+			"workspace root is not configured",
+			"workspace_not_configured",
+			"restart the runtime with a configured workspace root before retrying session_workspace",
+		)
 	}
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
-		return "", err
+		return "", structuredToolError(
+			fmt.Sprintf("resolve workspace root %q: %v", root, err),
+			"workspace_path_invalid",
+			"inspect the configured workspace root and restart the runtime with a valid directory",
+		)
 	}
 	raw = strings.TrimSpace(raw)
 	if raw == "" || raw == "." || raw == "/" {
@@ -142,24 +166,54 @@ func ResolveActiveWorkspacePath(root, raw string) (string, error) {
 	}
 	candidateAbs, err := filepath.Abs(candidate)
 	if err != nil {
-		return "", err
+		return "", structuredToolError(
+			fmt.Sprintf("resolve workspace path %q: %v", raw, err),
+			"workspace_path_invalid",
+			"retry session_workspace with a valid workspace-relative directory path",
+		)
 	}
 	inside, err := activeWorkspacePathWithin(rootAbs, candidateAbs)
 	if err != nil {
-		return "", err
+		return "", structuredToolError(
+			fmt.Sprintf("validate workspace path %q: %v", raw, err),
+			"workspace_path_invalid",
+			"retry session_workspace with a valid workspace-relative directory path",
+		)
 	}
 	if !inside {
-		return "", fmt.Errorf("workspace path %q escapes workspace root", raw)
+		return "", structuredToolError(
+			fmt.Sprintf("workspace path %q escapes workspace root", raw),
+			"workspace_path_escape",
+			"retry session_workspace with an existing directory under the configured workspace root",
+		)
 	}
 	info, err := os.Lstat(candidateAbs)
 	if err != nil {
-		return "", err
+		kind := "workspace_path_invalid"
+		next := "retry session_workspace with an existing directory under the configured workspace root"
+		if errors.Is(err, os.ErrNotExist) {
+			kind = "workspace_path_not_found"
+			next = "create or clone the project directory first, then retry session_workspace with that workspace-relative path"
+		}
+		return "", structuredToolError(
+			fmt.Sprintf("workspace path %q is not available: %v", raw, err),
+			kind,
+			next,
+		)
 	}
 	if !info.IsDir() {
-		return "", fmt.Errorf("workspace path %q is not a directory", raw)
+		return "", structuredToolError(
+			fmt.Sprintf("workspace path %q is not a directory", raw),
+			"workspace_path_not_directory",
+			"retry session_workspace with an existing project directory, not a file",
+		)
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("workspace path %q must not be a symlink", raw)
+		return "", structuredToolError(
+			fmt.Sprintf("workspace path %q must not be a symlink", raw),
+			"workspace_path_symlink",
+			"retry session_workspace with a real directory under the workspace root, not a symlink",
+		)
 	}
 	return candidateAbs, nil
 }
@@ -221,31 +275,59 @@ func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 			dec := json.NewDecoder(bytes.NewReader(args))
 			dec.DisallowUnknownFields()
 			if err := dec.Decode(&req); err != nil {
-				return "", err
+				return "", structuredToolError(
+					fmt.Sprintf("decode args for session_workspace: %v", err),
+					"invalid_args",
+					"retry session_workspace with a single JSON object using only documented fields: action and path",
+				)
 			}
 			var extra struct{}
 			if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-				return "", errors.New("arguments must contain a single JSON object")
+				return "", structuredToolError(
+					"arguments must contain a single JSON object",
+					"invalid_args",
+					"retry session_workspace with one JSON object using action=inspect, action=set, or action=reset",
+				)
 			}
 			action := strings.TrimSpace(req.Action)
 			if action == "" {
-				return "", errors.New("action is required\nNext: retry session_workspace with action=inspect, action=set, or action=reset")
+				return "", structuredToolError(
+					"action is required",
+					"invalid_args",
+					"retry session_workspace with action=inspect, action=set, or action=reset",
+				)
 			}
 			if len(action) > maxSessionWorkspaceActionBytes {
-				return "", fmt.Errorf("action is %d bytes; session_workspace action supports up to %d bytes", len(action), maxSessionWorkspaceActionBytes)
+				return "", structuredToolError(
+					fmt.Sprintf("action is %d bytes; session_workspace action supports up to %d bytes", len(action), maxSessionWorkspaceActionBytes),
+					"invalid_args",
+					"retry session_workspace with action=inspect, action=set, or action=reset",
+				)
 			}
 			if len(req.Path) > maxSessionWorkspacePathBytes {
-				return "", fmt.Errorf("path is %d bytes; session_workspace path supports up to %d bytes", len(req.Path), maxSessionWorkspacePathBytes)
+				return "", structuredToolError(
+					fmt.Sprintf("path is %d bytes; session_workspace path supports up to %d bytes", len(req.Path), maxSessionWorkspacePathBytes),
+					"invalid_args",
+					"retry session_workspace with a shorter workspace-relative project directory",
+				)
 			}
 			if state == nil {
-				return "", errors.New("workspace state is not configured")
+				return "", structuredToolError(
+					"workspace state is not configured",
+					"workspace_not_configured",
+					"restart the runtime with an active workspace state before retrying session_workspace",
+				)
 			}
 			before := state.Current()
 			switch action {
 			case "inspect":
 			case "set":
 				if strings.TrimSpace(req.Path) == "" {
-					return "", errors.New("path is required for action=set\nNext: retry session_workspace with action=set and a workspace-relative project directory")
+					return "", structuredToolError(
+						"path is required for action=set",
+						"workspace_path_required",
+						"retry session_workspace with action=set and a workspace-relative project directory",
+					)
 				}
 				if _, err := state.Set(req.Path); err != nil {
 					return "", err
@@ -255,7 +337,11 @@ func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 					return "", err
 				}
 			default:
-				return "", fmt.Errorf("unsupported action %q\nNext: retry session_workspace with action=inspect, action=set, or action=reset", action)
+				return "", structuredToolError(
+					fmt.Sprintf("unsupported action %q", action),
+					"invalid_args",
+					"retry session_workspace with action=inspect, action=set, or action=reset",
+				)
 			}
 			current := state.Current()
 			resp := sessionWorkspaceToolResponse{

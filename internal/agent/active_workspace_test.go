@@ -59,3 +59,88 @@ func TestResolveActiveWorkspacePathRejectsEscapesFilesAndSymlinks(t *testing.T) 
 		}
 	}
 }
+
+func TestSessionWorkspaceToolErrorsAreStructured(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	state := NewActiveWorkspaceState("sess-workspace", root, root, false, nil)
+	tool := SessionWorkspaceTool(state)
+
+	cases := []struct {
+		name string
+		args string
+		want string
+		next string
+	}{
+		{
+			name: "decode",
+			args: `{"action":`,
+			want: "Failure: kind=invalid_args",
+			next: "retry session_workspace",
+		},
+		{
+			name: "missing action",
+			args: `{}`,
+			want: "Failure: kind=invalid_args",
+			next: "action=inspect",
+		},
+		{
+			name: "missing set path",
+			args: `{"action":"set"}`,
+			want: "Failure: kind=workspace_path_required",
+			next: "workspace-relative project directory",
+		},
+		{
+			name: "escape",
+			args: `{"action":"set","path":"../outside"}`,
+			want: "Failure: kind=workspace_path_escape",
+			next: "under the configured workspace root",
+		},
+		{
+			name: "missing target",
+			args: `{"action":"set","path":"missing"}`,
+			want: "Failure: kind=workspace_path_not_found",
+			next: "create or clone the project directory first",
+		},
+		{
+			name: "file target",
+			args: `{"action":"set","path":"file.txt"}`,
+			want: "Failure: kind=workspace_path_not_directory",
+			next: "not a file",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := tool.Execute(context.Background(), json.RawMessage(tc.args))
+			if err == nil {
+				t.Fatalf("Execute succeeded unexpectedly: %s", out)
+			}
+			if !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), tc.next) {
+				t.Fatalf("error = %q, want %q and next %q", err.Error(), tc.want, tc.next)
+			}
+		})
+	}
+}
+
+func TestSessionWorkspaceToolPersisterFailureIsStructured(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "app")
+	if err := os.MkdirAll(project, 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	state := NewActiveWorkspaceState("sess-workspace", root, root, false, func(string) error {
+		return os.ErrPermission
+	})
+	tool := SessionWorkspaceTool(state)
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","path":"app"}`))
+	if err == nil {
+		t.Fatalf("Execute succeeded unexpectedly: %s", out)
+	}
+	for _, want := range []string{"Failure: kind=workspace_update_failed", "Next:", "state store is writable"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
+		}
+	}
+}
