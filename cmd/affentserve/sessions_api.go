@@ -103,15 +103,19 @@ type sessionSummary struct {
 }
 
 type sessionContextSummary struct {
-	MessageCount          int `json:"message_count"`
-	CompactTrigger        int `json:"compact_trigger"`
-	CompactPercent        int `json:"compact_percent"`
-	MessagesUntilCompact  int `json:"messages_until_compact"`
-	ContextBytes          int `json:"context_bytes,omitempty"`
-	CompactTriggerBytes   int `json:"compact_trigger_bytes,omitempty"`
-	ByteCompactPercent    int `json:"byte_compact_percent,omitempty"`
-	BytesUntilCompact     int `json:"bytes_until_compact,omitempty"`
-	MessageCompactPercent int `json:"message_compact_percent,omitempty"`
+	MessageCount                   int `json:"message_count"`
+	CompactTrigger                 int `json:"compact_trigger"`
+	CompactPercent                 int `json:"compact_percent"`
+	MessagesUntilCompact           int `json:"messages_until_compact"`
+	ContextBytes                   int `json:"context_bytes,omitempty"`
+	CompactTriggerBytes            int `json:"compact_trigger_bytes,omitempty"`
+	ByteCompactPercent             int `json:"byte_compact_percent,omitempty"`
+	BytesUntilCompact              int `json:"bytes_until_compact,omitempty"`
+	MessageCompactPercent          int `json:"message_compact_percent,omitempty"`
+	EstimatedRequestInputTokens    int `json:"estimated_request_input_tokens,omitempty"`
+	CompactTriggerInputTokens      int `json:"compact_trigger_input_tokens,omitempty"`
+	RequestInputCompactPercent     int `json:"request_input_compact_percent,omitempty"`
+	RequestInputTokensUntilCompact int `json:"request_input_tokens_until_compact,omitempty"`
 }
 
 type sessionContextCompactionSummary struct {
@@ -549,7 +553,11 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			}
 		}
 	}
-	context := sessionContextSnapshot(len(messages), agent.ApproximateConversationBytes(messages), cfg)
+	toolDefs := []agent.ToolDef(nil)
+	if s.registry != nil {
+		toolDefs = s.registry.Defs()
+	}
+	context := sessionContextSnapshot(len(messages), agent.ApproximateConversationBytes(messages), agent.EstimateRequestInputTokens(messages, toolDefs), cfg)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
 	runtime := s.RuntimeStatsSnapshot()
@@ -1402,7 +1410,7 @@ func workspaceLabel(path string) string {
 	return path
 }
 
-func sessionContextSnapshot(messageCount, contextBytes int, cfg Config) sessionContextSummary {
+func sessionContextSnapshot(messageCount, contextBytes, estimatedRequestInputTokens int, cfg Config) sessionContextSummary {
 	trigger := cfg.CompactTrigger
 	if trigger <= 0 {
 		trigger = agent.DefaultSummaryTriggerMsgs
@@ -1424,20 +1432,36 @@ func sessionContextSnapshot(messageCount, contextBytes int, cfg Config) sessionC
 	if byteTrigger > 0 && contextBytes > 0 {
 		bytePercent = (contextBytes*100 + byteTrigger/2) / byteTrigger
 	}
+	inputTrigger := agent.DefaultSummaryTriggerInputTokens
+	inputTokensUntilCompact := inputTrigger - estimatedRequestInputTokens
+	if inputTokensUntilCompact < 0 {
+		inputTokensUntilCompact = 0
+	}
+	inputPercent := 0
+	if inputTrigger > 0 && estimatedRequestInputTokens > 0 {
+		inputPercent = (estimatedRequestInputTokens*100 + inputTrigger/2) / inputTrigger
+	}
 	percent := messagePercent
 	if bytePercent > percent {
 		percent = bytePercent
 	}
+	if inputPercent > percent {
+		percent = inputPercent
+	}
 	return sessionContextSummary{
-		MessageCount:          messageCount,
-		CompactTrigger:        trigger,
-		CompactPercent:        percent,
-		MessagesUntilCompact:  remaining,
-		ContextBytes:          contextBytes,
-		CompactTriggerBytes:   byteTrigger,
-		ByteCompactPercent:    bytePercent,
-		BytesUntilCompact:     bytesUntilCompact,
-		MessageCompactPercent: messagePercent,
+		MessageCount:                   messageCount,
+		CompactTrigger:                 trigger,
+		CompactPercent:                 percent,
+		MessagesUntilCompact:           remaining,
+		ContextBytes:                   contextBytes,
+		CompactTriggerBytes:            byteTrigger,
+		ByteCompactPercent:             bytePercent,
+		BytesUntilCompact:              bytesUntilCompact,
+		MessageCompactPercent:          messagePercent,
+		EstimatedRequestInputTokens:    estimatedRequestInputTokens,
+		CompactTriggerInputTokens:      inputTrigger,
+		RequestInputCompactPercent:     inputPercent,
+		RequestInputTokensUntilCompact: inputTokensUntilCompact,
 	}
 }
 

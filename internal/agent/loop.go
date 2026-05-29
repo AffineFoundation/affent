@@ -2428,7 +2428,10 @@ func estimateContextTokens(text string) int {
 	return (len([]rune(text)) + 3) / 4
 }
 
-func estimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
+// EstimateRequestInputTokens estimates the next request's input pressure from
+// conversation history plus tool definitions. It is intentionally tokenizer-free
+// and should be treated as a conservative pressure signal, not billing data.
+func EstimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
 	msgBytes := ApproximateConversationBytes(msgs)
 	toolBytes := 0
 	if len(tools) > 0 {
@@ -2441,6 +2444,10 @@ func estimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
 		return 0
 	}
 	return (total + 3) / 4
+}
+
+func estimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
+	return EstimateRequestInputTokens(msgs, tools)
 }
 
 func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string, force bool) {

@@ -364,10 +364,11 @@ function contextBriefFact(context?: SessionContextSummary, usage?: WorkbenchCont
   }
   const percent = Math.max(0, Math.min(100, Math.round(context.compact_percent)));
   const tone = percent >= 95 ? "error" : percent >= 72 ? "attention" : "ready";
+  const pressure = dominantContextPressure(context);
   return {
     label: "Context",
     value: `${percent}% used`,
-    detail: tokens ? `${tokens} · ${formatContextCount(context.messages_until_compact)} messages before compaction` : `${formatContextCount(context.messages_until_compact)} messages before compaction`,
+    detail: tokens ? `${tokens} · ${pressure.remaining}` : pressure.remaining,
     tone,
   };
 }
@@ -759,33 +760,49 @@ function contextHealthView(context?: SessionContextSummary, tokenSummary?: strin
     };
   }
   const percent = Math.max(0, Math.min(100, Math.round(context.compact_percent)));
-  const bytePercent = Math.max(0, Math.round(context.byte_compact_percent ?? 0));
-  const messagePercent = Math.max(0, Math.round(context.message_compact_percent ?? context.compact_percent));
-  const byteDominant = bytePercent > messagePercent && (context.compact_trigger_bytes ?? 0) > 0 && (context.context_bytes ?? 0) > 0;
+  const pressure = dominantContextPressure(context);
   const tone = percent >= 95 ? "error" : percent >= 72 ? "attention" : "ready";
   const label = percent >= 95
     ? "Compaction likely"
     : percent >= 72
       ? "Context is getting tight"
       : "Context has room";
-  const remaining = byteDominant && context.bytes_until_compact != null
-    ? context.bytes_until_compact > 0
-      ? `${formatByteCount(context.bytes_until_compact)} before compaction`
-      : "Compaction byte threshold reached"
-    : context.messages_until_compact > 0
-    ? `${formatContextCount(context.messages_until_compact)} messages before compaction`
-    : "Compaction threshold reached";
-  const detail = byteDominant
-    ? `${formatByteCount(context.context_bytes ?? 0)} of ${formatByteCount(context.compact_trigger_bytes ?? 0)} context bytes are loaded.`
-    : `${formatContextCount(context.message_count)} of ${formatContextCount(context.compact_trigger)} context messages are loaded.`;
   return {
     percent,
     label,
-    detail,
-    remaining,
+    detail: pressure.detail,
+    remaining: pressure.remaining,
     tokenSummary,
     tone,
     estimated: Boolean((context as SessionContextSummary & { estimated?: boolean }).estimated),
+  };
+}
+
+function dominantContextPressure(context: SessionContextSummary): { detail: string; remaining: string } {
+  const messagePercent = Math.max(0, Math.round(context.message_compact_percent ?? context.compact_percent));
+  const bytePercent = Math.max(0, Math.round(context.byte_compact_percent ?? 0));
+  const requestPercent = Math.max(0, Math.round(context.request_input_compact_percent ?? 0));
+  if (requestPercent >= bytePercent && requestPercent > messagePercent && (context.compact_trigger_input_tokens ?? 0) > 0 && (context.estimated_request_input_tokens ?? 0) > 0) {
+    return {
+      detail: `${formatEstimatedTokenCount(context.estimated_request_input_tokens ?? 0)} estimated input tokens of ${formatEstimatedTokenCount(context.compact_trigger_input_tokens ?? 0)} before the next request.`,
+      remaining: (context.request_input_tokens_until_compact ?? 0) > 0
+        ? `${formatEstimatedTokenCount(context.request_input_tokens_until_compact ?? 0)} estimated input tokens before compaction`
+        : "Request input compaction threshold reached",
+    };
+  }
+  if (bytePercent > messagePercent && (context.compact_trigger_bytes ?? 0) > 0 && (context.context_bytes ?? 0) > 0) {
+    return {
+      detail: `${formatByteCount(context.context_bytes ?? 0)} of ${formatByteCount(context.compact_trigger_bytes ?? 0)} context bytes are loaded.`,
+      remaining: (context.bytes_until_compact ?? 0) > 0
+        ? `${formatByteCount(context.bytes_until_compact ?? 0)} before compaction`
+        : "Compaction byte threshold reached",
+    };
+  }
+  return {
+    detail: `${formatContextCount(context.message_count)} of ${formatContextCount(context.compact_trigger)} context messages are loaded.`,
+    remaining: context.messages_until_compact > 0
+      ? `${formatContextCount(context.messages_until_compact)} messages before compaction`
+      : "Compaction threshold reached",
   };
 }
 
@@ -832,6 +849,10 @@ function ContextHealthRing({ percent }: { percent?: number }) {
 function formatContextCount(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`;
   return String(value);
+}
+
+function formatEstimatedTokenCount(value: number): string {
+  return Math.max(0, Math.round(value)).toLocaleString("en-US");
 }
 
 function UsageSparkline({ points }: { points: WorkbenchContextUsageView["trend"] }) {

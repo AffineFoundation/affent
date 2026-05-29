@@ -478,6 +478,36 @@ describe("WorkbenchContextPanel", () => {
     expect(health).toHaveTextContent("640 KiB of 512 KiB context bytes are loaded.");
     expect(health).toHaveTextContent("Compaction byte threshold reached");
   });
+
+  it("shows request input pressure when tool schemas dominate the next call", () => {
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        overview={overview({ headline: "Long run", detail: "Tool surface is large." })}
+        contextSummary={{
+          message_count: 32,
+          compact_trigger: 240,
+          compact_percent: 92,
+          messages_until_compact: 208,
+          context_bytes: 32768,
+          compact_trigger_bytes: 196608,
+          byte_compact_percent: 17,
+          bytes_until_compact: 163840,
+          message_compact_percent: 13,
+          estimated_request_input_tokens: 44000,
+          compact_trigger_input_tokens: 48000,
+          request_input_compact_percent: 92,
+          request_input_tokens_until_compact: 4000,
+        }}
+      />,
+    );
+
+    const health = screen.getByTestId("workbench-context-health");
+    expect(health).toHaveTextContent("Context is getting tight");
+    expect(health).toHaveTextContent("44,000 estimated input tokens of 48,000 before the next request.");
+    expect(health).toHaveTextContent("4,000 estimated input tokens before compaction");
+  });
 });
 
 function overview(overrides: Partial<SessionOverview>): SessionOverview {

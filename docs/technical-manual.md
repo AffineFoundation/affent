@@ -1023,7 +1023,9 @@ the conversation plus currently registered tool schemas. If that estimate
 crosses the compaction input-token trigger, it performs proactive rolling
 compaction with reason `estimated_context_pressure`; this covers sessions where
 tool schemas or a few large messages would approach the model window before the
-message-count trigger fires.
+message-count trigger fires. Active session summaries expose the same estimated
+request-input pressure so Workbench can explain whether compaction risk is
+driven by message count, raw context bytes, or the next model request shape.
 Compacted plan tool results also include the same `plan:x/y:status` label so
 post-compaction recovery can identify current progress even if natural-language
 step text was shortened.

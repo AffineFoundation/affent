@@ -475,6 +475,10 @@ export interface SessionContextSummary {
   byte_compact_percent?: number;
   bytes_until_compact?: number;
   message_compact_percent?: number;
+  estimated_request_input_tokens?: number;
+  compact_trigger_input_tokens?: number;
+  request_input_compact_percent?: number;
+  request_input_tokens_until_compact?: number;
 }
 
 export interface SessionContextCompactionSummary {

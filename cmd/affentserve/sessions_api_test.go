@@ -321,26 +321,29 @@ func TestSummarizeActiveSessionUsesMainSessionEventsForRecoveryHintAndCWD(t *tes
 }
 
 func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
-	got := sessionContextSnapshot(96, 16*1024, Config{CompactTrigger: 120})
+	got := sessionContextSnapshot(96, 16*1024, 1024, Config{CompactTrigger: 120})
 	if got.MessageCount != 96 || got.CompactTrigger != 120 || got.CompactPercent != 80 || got.MessageCompactPercent != 80 || got.MessagesUntilCompact != 24 {
 		t.Fatalf("context snapshot = %+v, want 96/120 at 80%% with 24 remaining", got)
 	}
-	over := sessionContextSnapshot(130, 16*1024, Config{CompactTrigger: 120})
+	over := sessionContextSnapshot(130, 16*1024, 1024, Config{CompactTrigger: 120})
 	if over.CompactPercent != 108 || over.MessagesUntilCompact != 0 {
 		t.Fatalf("over-trigger snapshot = %+v, want 108%% and no remaining messages", over)
 	}
-	def := sessionContextSnapshot(1, 1024, Config{})
+	def := sessionContextSnapshot(1, 1024, 256, Config{})
 	if def.CompactTrigger != agent.DefaultSummaryTriggerMsgs {
 		t.Fatalf("default trigger = %d, want %d", def.CompactTrigger, agent.DefaultSummaryTriggerMsgs)
 	}
 	if def.CompactTriggerBytes != agent.DefaultSummaryTriggerBytes {
 		t.Fatalf("default byte trigger = %d, want %d", def.CompactTriggerBytes, agent.DefaultSummaryTriggerBytes)
 	}
+	if def.CompactTriggerInputTokens != agent.DefaultSummaryTriggerInputTokens {
+		t.Fatalf("default input-token trigger = %d, want %d", def.CompactTriggerInputTokens, agent.DefaultSummaryTriggerInputTokens)
+	}
 }
 
 func TestSessionContextSnapshotUsesBytePressure(t *testing.T) {
 	contextBytes := agent.DefaultSummaryTriggerBytes + agent.DefaultSummaryTriggerBytes/4
-	got := sessionContextSnapshot(12, contextBytes, Config{CompactTrigger: 240})
+	got := sessionContextSnapshot(12, contextBytes, 1024, Config{CompactTrigger: 240})
 	if got.CompactPercent != 125 || got.ByteCompactPercent != 125 || got.MessageCompactPercent != 5 {
 		t.Fatalf("context snapshot = %+v, want byte pressure to dominate at 125%%", got)
 	}
@@ -349,6 +352,20 @@ func TestSessionContextSnapshotUsesBytePressure(t *testing.T) {
 	}
 	if got.ContextBytes != contextBytes {
 		t.Fatalf("context_bytes = %d, want %d", got.ContextBytes, contextBytes)
+	}
+}
+
+func TestSessionContextSnapshotUsesRequestInputPressure(t *testing.T) {
+	inputTokens := agent.DefaultSummaryTriggerInputTokens + agent.DefaultSummaryTriggerInputTokens/2
+	got := sessionContextSnapshot(12, 16*1024, inputTokens, Config{CompactTrigger: 240})
+	if got.CompactPercent != 150 || got.RequestInputCompactPercent != 150 || got.MessageCompactPercent != 5 {
+		t.Fatalf("context snapshot = %+v, want request-input pressure to dominate at 150%%", got)
+	}
+	if got.RequestInputTokensUntilCompact != 0 {
+		t.Fatalf("request_input_tokens_until_compact = %d, want 0", got.RequestInputTokensUntilCompact)
+	}
+	if got.EstimatedRequestInputTokens != inputTokens {
+		t.Fatalf("estimated_request_input_tokens = %d, want %d", got.EstimatedRequestInputTokens, inputTokens)
 	}
 }
 
