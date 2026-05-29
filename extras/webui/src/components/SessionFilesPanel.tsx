@@ -500,7 +500,7 @@ function FileTreeBranch({
         onClick={() => (item ? onOpenItem(item) : onOpenDirectory(node.path))}
       >
         <span className="session-files-tree-icon" aria-hidden="true">
-          {isDirectory ? "D" : item?.actions.includes("changed") ? "M" : item?.contentPreview ? "R" : "F"}
+          <span data-icon={fileTreeIcon(item, isDirectory)} />
         </span>
         <strong title={node.path}>{displayTreeName(node)}</strong>
         {item ? <small>{compactFileMeta(item)}</small> : <small>{node.children.length}</small>}
@@ -687,6 +687,13 @@ function fileDraftActionLabel(item: SessionFileEvidence): string {
 
 function isDirectoryEvidence(item: SessionFileEvidence | undefined): boolean {
   return Boolean(item?.actions.includes("listed") && !item.contentPreview && !item.actions.includes("changed"));
+}
+
+function fileTreeIcon(item: SessionFileEvidence | undefined, isDirectory: boolean): "directory" | "changed" | "read" | "file" {
+  if (isDirectory) return "directory";
+  if (item?.actions.includes("changed")) return "changed";
+  if (item?.contentPreview) return "read";
+  return "file";
 }
 
 function displayTreeName(node: FileTreeNode): string {

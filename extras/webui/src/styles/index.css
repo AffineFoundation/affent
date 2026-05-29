@@ -2633,6 +2633,10 @@ button.workbench-context-runtime-item:focus-visible {
   font-size: 11.5px;
 }
 
+.session-files-panel {
+  container-type: inline-size;
+}
+
 .session-files-ide {
   display: grid;
   grid-template-columns: minmax(260px, 0.36fr) minmax(0, 1fr);
@@ -2867,8 +2871,8 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-files-tree-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  gap: 6px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 2px 7px;
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -2896,11 +2900,61 @@ button.workbench-context-runtime-item:focus-visible {
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  background: rgba(100, 116, 139, 0.1);
+  background: rgba(100, 116, 139, 0.08);
   color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 800;
+}
+
+.session-files-tree-icon > span {
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 13px;
+  border: 1.4px solid currentColor;
+  border-radius: 2px;
+}
+
+.session-files-tree-icon > span::before,
+.session-files-tree-icon > span::after {
+  content: "";
+  position: absolute;
+  display: block;
+}
+
+.session-files-tree-icon > span[data-icon="directory"] {
+  width: 14px;
+  height: 10px;
+  margin-top: 2px;
+  border-radius: 2px;
+}
+
+.session-files-tree-icon > span[data-icon="directory"]::before {
+  top: -4px;
+  left: -1.4px;
+  width: 7px;
+  height: 4px;
+  border: 1.4px solid currentColor;
+  border-bottom: 0;
+  border-radius: 2px 2px 0 0;
+}
+
+.session-files-tree-icon > span[data-icon="changed"]::after {
+  right: -3px;
+  bottom: -3px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(248, 250, 252, 0.96);
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+
+.session-files-tree-icon > span[data-icon="read"]::before {
+  right: 1px;
+  left: 1px;
+  bottom: 3px;
+  height: 1.2px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 -4px 0 currentColor;
 }
 
 .session-files-tree-node[data-kind="directory"] > .session-files-tree-row .session-files-tree-icon {
@@ -2914,6 +2968,7 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-files-tree-row strong {
+  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   color: var(--text);
@@ -2925,6 +2980,7 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-files-tree-row small {
+  grid-column: 2;
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);
@@ -2932,6 +2988,21 @@ button.workbench-context-runtime-item:focus-visible {
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@container (max-width: 680px) {
+  .session-files-ide {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+  }
+
+  .session-files-explorer {
+    max-height: min(42vh, 420px);
+  }
+
+  .session-files-editor {
+    min-height: 240px;
+  }
 }
 
 .session-files-tree-node > .session-files-actions {
