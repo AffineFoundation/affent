@@ -813,6 +813,7 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
   const trend = usage?.trend ?? [];
   const total = workbenchContextUsageSummary(usage);
   const contextHealth = contextHealthView(contextSummary, total);
+  const contextBreakdown = contextPressureBreakdownItems(contextSummary);
 
   return (
     <section className="workbench-usage-card" data-testid="workbench-usage-card" aria-label="Token usage">
@@ -825,6 +826,17 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
         <b>{total ?? "0.0000M tokens"}</b>
       </div>
       {trend.length > 0 ? <UsageSparkline points={trend} /> : <div className="workbench-usage-empty">Usage appears after a turn ends or when the session index reports totals.</div>}
+      {contextBreakdown.length > 0 ? (
+        <div className="workbench-usage-breakdown" aria-label="Context pressure breakdown">
+          {contextBreakdown.map((item) => (
+            <div key={item.label} className="workbench-usage-item">
+              <strong>{item.label}</strong>
+              <span>{item.value}</span>
+              {item.detail ? <small>{item.detail}</small> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {usageItems.length > 0 ? (
         <div className="workbench-usage-breakdown">
           {usageItems.slice(0, 3).map((item) => (
@@ -838,6 +850,26 @@ function WorkbenchUsageCard({ usage, contextSummary }: { usage?: WorkbenchContex
       ) : null}
     </section>
   );
+}
+
+function contextPressureBreakdownItems(context?: SessionContextSummary): Array<{ label: string; value: string; detail?: string }> {
+  if (!context) return [];
+  const items: Array<{ label: string; value: string; detail?: string }> = [];
+  if ((context.estimated_conversation_tokens ?? 0) > 0 || (context.conversation_bytes ?? context.context_bytes ?? 0) > 0) {
+    items.push({
+      label: "Conversation",
+      value: `${formatEstimatedTokenCount(context.estimated_conversation_tokens ?? Math.ceil((context.conversation_bytes ?? context.context_bytes ?? 0) / 4))} estimated tokens`,
+      detail: formatByteCount(context.conversation_bytes ?? context.context_bytes ?? 0),
+    });
+  }
+  if ((context.estimated_tool_schema_tokens ?? 0) > 0 || (context.tool_schema_bytes ?? 0) > 0) {
+    items.push({
+      label: "Tool schema",
+      value: `${formatEstimatedTokenCount(context.estimated_tool_schema_tokens ?? Math.ceil((context.tool_schema_bytes ?? 0) / 4))} estimated tokens`,
+      detail: formatByteCount(context.tool_schema_bytes ?? 0),
+    });
+  }
+  return items;
 }
 
 interface ContextHealthView {

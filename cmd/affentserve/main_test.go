@@ -416,8 +416,8 @@ func TestLogServeStartupIncludesDurablePathsWithoutSecrets(t *testing.T) {
 		APIKey:           "sk-secret-should-not-log",
 		Model:            "demo",
 		AuthToken:        "bearer-secret-should-not-log",
-		WorkspaceRoot:    "/workspace/sessions",
-		MemoryRoot:       "/workspace/session-state",
+		WorkspaceRoot:    "/workspace",
+		MemoryRoot:       "/workspace/.affent/session-state",
 		MaxSessions:      8,
 		SessionIdleTTL:   "5m",
 		EnableBuiltins:   true,
@@ -427,9 +427,9 @@ func TestLogServeStartupIncludesDurablePathsWithoutSecrets(t *testing.T) {
 	logServeStartup(zerolog.New(&buf), cfg, cfg.MemoryRoot)
 	logLine := buf.String()
 	for _, want := range []string{
-		`"workspace_root":"/workspace/sessions"`,
-		`"memory_root":"/workspace/session-state"`,
-		`"session_state_root":"/workspace/session-state"`,
+		`"workspace_root":"/workspace"`,
+		`"memory_root":"/workspace/.affent/session-state"`,
+		`"session_state_root":"/workspace/.affent/session-state"`,
 		`"auth":"on"`,
 		`"builtins":true`,
 		`"shared_user_memory":true`,

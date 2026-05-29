@@ -34,7 +34,7 @@ SERVE_EVAL_CONTAINER_NAME ?= affent-eval-serve
 SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve
 SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777
 SERVE_EVAL_PERMISSIONS ?=
-SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache
+SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/.affent/browser-cache
 SERVE_ARGS ?=
 SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))
 SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))
@@ -49,8 +49,8 @@ SERVE_HEALTH_URL ?= http://$(SERVE_HEALTH_HOST):$(SERVE_HEALTH_PORT)/healthz
 SERVE_HEALTH_ATTEMPTS ?= 30
 SERVE_HEALTH_INTERVAL ?= 1
 SERVE_CONTAINER_NAME ?= affent-serve
-SERVE_WORKSPACE_ROOT ?= /workspace/sessions
-SERVE_MEMORY_ROOT ?= /workspace/session-state
+SERVE_WORKSPACE_ROOT ?= /workspace
+SERVE_MEMORY_ROOT ?= /workspace/.affent/session-state
 SERVE_ACCOUNT_DIR ?= $(CURDIR)/.tmp/runtime-account
 SERVE_ACCOUNT_ROOT ?= /account
 WEBUI_DEV_PORT ?= 18789
@@ -347,7 +347,7 @@ image-serve-smoke:
 		echo "image-serve-smoke expected web_search to stay disabled by default" >&2; \
 		exit 1; \
 	fi; \
-	test -f "$(SMOKE_WORKSPACE)/session-state/$(SMOKE_SESSION_ID)/conversation.jsonl"; \
+	test -f "$(SMOKE_WORKSPACE)/.affent/session-state/$(SMOKE_SESSION_ID)/conversation.jsonl"; \
 	docker stop "$(SMOKE_CONTAINER_NAME)" >/dev/null; \
 	$(MAKE) image-serve-up \
 		SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)" \
@@ -377,7 +377,7 @@ image-serve-smoke:
 	test "$$browser_label" = "true"; \
 	test "$$web_label" = "true"; \
 	test "$$web_search_label" = "false"; \
-	test "$$browser_cache_label" = "/workspace/browser-cache"; \
+	test "$$browser_cache_label" = "/workspace/.affent/browser-cache"; \
 	test "$$build_revision_label" = "$(IMAGE_BUILD_REVISION)"; \
 	echo "image-serve-smoke ok: $(SMOKE_URL) session=$(SMOKE_SESSION_ID) revision=$$build_revision_label memory=$(CONTAINER_MEMORY) browser=$$browser_label web=$$web_label cache=$$browser_cache_label"
 

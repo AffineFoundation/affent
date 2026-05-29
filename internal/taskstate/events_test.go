@@ -20,7 +20,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		taskStateEventLine(t, sse.TypeContextInjected, sse.ContextInjectedPayload{
 			TurnID:  "t1",
 			Source:  "runtime_workspace",
-			Summary: "Workspace tools resolve relative paths from the session workspace root.",
+			Summary: "Workspace tools resolve relative paths from the active workspace root.",
 		}) +
 		taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID: "t1",

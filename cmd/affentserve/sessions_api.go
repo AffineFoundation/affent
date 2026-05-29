@@ -109,11 +109,15 @@ type sessionContextSummary struct {
 	CompactPercent                 int `json:"compact_percent"`
 	MessagesUntilCompact           int `json:"messages_until_compact"`
 	ContextBytes                   int `json:"context_bytes,omitempty"`
+	ConversationBytes              int `json:"conversation_bytes,omitempty"`
+	ToolSchemaBytes                int `json:"tool_schema_bytes,omitempty"`
 	CompactTriggerBytes            int `json:"compact_trigger_bytes,omitempty"`
 	ByteCompactPercent             int `json:"byte_compact_percent,omitempty"`
 	BytesUntilCompact              int `json:"bytes_until_compact,omitempty"`
 	MessageCompactPercent          int `json:"message_compact_percent,omitempty"`
 	EstimatedRequestInputTokens    int `json:"estimated_request_input_tokens,omitempty"`
+	EstimatedConversationTokens    int `json:"estimated_conversation_tokens,omitempty"`
+	EstimatedToolSchemaTokens      int `json:"estimated_tool_schema_tokens,omitempty"`
 	CompactTriggerInputTokens      int `json:"compact_trigger_input_tokens,omitempty"`
 	RequestInputCompactPercent     int `json:"request_input_compact_percent,omitempty"`
 	RequestInputTokensUntilCompact int `json:"request_input_tokens_until_compact,omitempty"`
@@ -524,7 +528,8 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	if s.registry != nil {
 		toolDefs = s.registry.Defs()
 	}
-	context := sessionContextSnapshot(len(messages), agent.ApproximateConversationBytes(messages), agent.EstimateRequestInputTokens(messages, toolDefs), cfg)
+	inputEstimate := agent.EstimateRequestInput(messages, toolDefs)
+	context := sessionContextSnapshot(len(messages), inputEstimate, cfg)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
 	runtime := s.RuntimeStatsSnapshot()
@@ -1405,7 +1410,7 @@ func workspaceLabel(path string) string {
 	return path
 }
 
-func sessionContextSnapshot(messageCount, contextBytes, estimatedRequestInputTokens int, cfg Config) sessionContextSummary {
+func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEstimate, cfg Config) sessionContextSummary {
 	trigger := cfg.CompactTrigger
 	if trigger <= 0 {
 		trigger = agent.DefaultSummaryTriggerMsgs
@@ -1418,6 +1423,8 @@ func sessionContextSnapshot(messageCount, contextBytes, estimatedRequestInputTok
 	if trigger > 0 {
 		messagePercent = (messageCount*100 + trigger/2) / trigger
 	}
+	contextBytes := inputEstimate.ConversationBytes
+	estimatedRequestInputTokens := inputEstimate.EstimatedInputTokens
 	byteTrigger := agent.DefaultSummaryTriggerBytes
 	bytesUntilCompact := byteTrigger - contextBytes
 	if bytesUntilCompact < 0 {
@@ -1449,11 +1456,15 @@ func sessionContextSnapshot(messageCount, contextBytes, estimatedRequestInputTok
 		CompactPercent:                 percent,
 		MessagesUntilCompact:           remaining,
 		ContextBytes:                   contextBytes,
+		ConversationBytes:              inputEstimate.ConversationBytes,
+		ToolSchemaBytes:                inputEstimate.ToolSchemaBytes,
 		CompactTriggerBytes:            byteTrigger,
 		ByteCompactPercent:             bytePercent,
 		BytesUntilCompact:              bytesUntilCompact,
 		MessageCompactPercent:          messagePercent,
 		EstimatedRequestInputTokens:    estimatedRequestInputTokens,
+		EstimatedConversationTokens:    inputEstimate.ConversationTokens,
+		EstimatedToolSchemaTokens:      inputEstimate.ToolSchemaTokens,
 		CompactTriggerInputTokens:      inputTrigger,
 		RequestInputCompactPercent:     inputPercent,
 		RequestInputTokensUntilCompact: inputTokensUntilCompact,

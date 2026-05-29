@@ -36,7 +36,7 @@ func TestHandleSessionCommandRunsShellAndPersistsTrace(t *testing.T) {
 		t.Fatalf("command result should expose a workspace-relative view, not the absolute workspace; workspace=%q result=%q", resp.Workspace, resp.Result)
 	}
 	if !strings.Contains(resp.Result, ".") {
-		t.Fatalf("command should default to the session workspace and render it as relative root; result=%q", resp.Result)
+		t.Fatalf("command should default to the active workspace root and render it as relative root; result=%q", resp.Result)
 	}
 	tracePath := filepath.Join(pool.sessionDirPath("workbench-command"), "events.jsonl")
 	waitForFileSubstring(t, tracePath, `"mode":"manual_command"`)

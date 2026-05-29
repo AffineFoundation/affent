@@ -79,4 +79,4 @@ WORKDIR /workspace
 EXPOSE 7777
 
 ENTRYPOINT ["affent-entrypoint"]
-CMD ["affentserve", "--listen", "0.0.0.0:7777", "--workspace-root", "/workspace/sessions", "--memory-root", "/workspace/session-state", "--builtins=true", "--web=true", "--browser=true", "--web-search=false", "--browser-cache-dir=/workspace/browser-cache"]
+CMD ["affentserve", "--listen", "0.0.0.0:7777", "--workspace-root", "/workspace", "--memory-root", "/workspace/.affent/session-state", "--builtins=true", "--web=true", "--browser=true", "--web-search=false", "--browser-cache-dir=/workspace/.affent/browser-cache"]

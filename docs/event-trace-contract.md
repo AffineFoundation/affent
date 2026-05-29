@@ -228,7 +228,8 @@ the model to answer without more tools.
   positive and artifact persistence is enabled.
   In `affentserve`, this path is resolved under the durable session state root
   and exposed via `GET /v1/sessions/{id}/artifacts/{result_artifact_path}` so
-  artifacts survive session workspace eviction and container restart.
+  artifacts survive session eviction and container restart without being mixed
+  into the user/project workspace.
 - `delegation`: optional metadata mirroring the matching `tool.request` so
   result-only consumers can classify delegated work without joining events.
 - `memory_update`: optional metadata on confirmed `memory` add/replace/remove

@@ -268,12 +268,7 @@ func TestSessionPool_allocSessionDir_StableAcrossCalls(t *testing.T) {
 	}
 }
 
-// TestSessionPool_allocSessionDir_OutsideWorkspace pins that memory
-// lives outside the per-session workspace, so Session.Close()'s
-// os.RemoveAll(workspace) doesn't blow it away. The cross-restart
-// persistence experiment that motivated this design only works if
-// the two paths don't overlap.
-func TestSessionPool_allocSessionDir_OutsideWorkspace(t *testing.T) {
+func TestSessionPool_allocWorkspaceUsesConfiguredRootWithoutOwningIt(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	memDir, err := pool.allocSessionDir("alpha")
 	if err != nil {
@@ -283,9 +278,21 @@ func TestSessionPool_allocSessionDir_OutsideWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(workspace) })
-	if strings.HasPrefix(memDir, workspace) {
-		t.Errorf("memory dir %q must not live inside the ephemeral workspace %q", memDir, workspace)
+	if workspace.Path != pool.cfg.WorkspaceRoot || workspace.Owned {
+		t.Fatalf("workspace allocation = %+v, want configured root %q without session ownership", workspace, pool.cfg.WorkspaceRoot)
+	}
+	if memDir != filepath.Join(pool.cfg.WorkspaceRoot, ".affent", "session-state", "alpha") {
+		t.Fatalf("session state dir = %q, want hidden state under workspace root", memDir)
+	}
+	s, err := pool.GetOrCreate("alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(workspace.Path); err != nil || !info.IsDir() {
+		t.Fatalf("closing a session must not remove configured workspace root %q: info=%v err=%v", workspace.Path, info, err)
 	}
 }
 
@@ -449,8 +456,8 @@ func TestSessionPool_SharedUserMemoryReservesUserFileSessionID(t *testing.T) {
 // Without this, the chat handler's design assumption — "we only
 // forward the last user message; the rest of the history lives in
 // the agent runtime's Conversation log keyed by session_id" — breaks
-// on every server restart or LRU revive: the new ephemeral workspace
-// holds no .jsonl, so the model wakes up with no prior context even
+// on every server restart or LRU revive if the conversation log is tied to
+// volatile workspace state, so the model wakes up with no prior context even
 // though memory is intact.
 func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
 	cfg := Config{
@@ -827,7 +834,7 @@ func TestSessionPool_RuntimeSkillsAreDurable(t *testing.T) {
 		t.Fatalf("runtime skill should be stored in durable account dir: %v", err)
 	}
 	if strings.HasPrefix(skillPath, s1.workspace) {
-		t.Fatalf("runtime skill path %q must not live under ephemeral workspace %q", skillPath, s1.workspace)
+		t.Fatalf("runtime skill path %q must not live under active workspace %q", skillPath, s1.workspace)
 	}
 	if err := s1.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -2428,21 +2435,18 @@ func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	}
 }
 
-func TestSessionPool_WorkspaceCleanupOnEvict(t *testing.T) {
+func TestSessionPool_DeleteDoesNotRemoveConfiguredWorkspaceRoot(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
-	s, _ := pool.GetOrCreate("ephemeral")
+	s, _ := pool.GetOrCreate("shared-workspace")
 	ws := s.Workspace()
 	if _, err := os.Stat(ws); err != nil {
 		t.Fatalf("workspace must exist while session is alive: %v", err)
 	}
-	pool.Delete("ephemeral")
-	// Delete spawns Close in a goroutine; wait for the workspace to disappear.
-	deadline := time.Now().Add(2 * time.Second)
-	for time.Now().Before(deadline) {
-		if _, err := os.Stat(ws); os.IsNotExist(err) {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
+	if ws != pool.cfg.WorkspaceRoot {
+		t.Fatalf("workspace = %q, want configured root %q", ws, pool.cfg.WorkspaceRoot)
 	}
-	t.Fatalf("workspace was not cleaned up: %s", ws)
+	pool.Delete("shared-workspace")
+	if info, err := os.Stat(ws); err != nil || !info.IsDir() {
+		t.Fatalf("configured workspace root should survive session delete: info=%v err=%v", info, err)
+	}
 }

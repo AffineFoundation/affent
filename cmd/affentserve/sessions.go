@@ -48,6 +48,7 @@ type Session struct {
 	browser          *affentbrowser.Session
 	sessionDir       string
 	workspace        string
+	workspaceOwned   bool
 	loopProtocolPath string
 	loopProtocolInit bool
 	planPath         string
@@ -322,7 +323,7 @@ func (p *SessionPool) newBrowserSession(workspace string) (*affentbrowser.Sessio
 	return affentbrowser.NewSession(affentbrowser.SessionConfig{
 		NoSandbox:      true,
 		DisableStealth: p.cfg.BrowserNoStealth,
-		// Sandbox screenshot save_path to the per-session workspace
+		// Sandbox screenshot save_path to the active workspace root
 		// so the model can't write PNGs to /etc/cron.d/ or similar.
 		// Mirrors the safeWorkspacePath guard the builtin file tools
 		// already apply.
@@ -500,9 +501,15 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if err := agent.ValidateSessionID(id); err != nil {
 		return nil, err
 	}
-	workspace, err := p.allocWorkspace(id)
+	workspaceAlloc, err := p.allocWorkspace(id)
 	if err != nil {
 		return nil, fmt.Errorf("alloc workspace: %w", err)
+	}
+	workspace := workspaceAlloc.Path
+	cleanupWorkspace := func() {
+		if workspaceAlloc.Owned {
+			_ = os.RemoveAll(workspace)
+		}
 	}
 	// Stable per-session-id dir for durable state. Holds the
 	// conversation log (so the chat handler's "we treat the rest of
@@ -512,19 +519,19 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// one session_id resolves to one durable identity on disk.
 	sessionDir, err := p.allocSessionDir(id)
 	if err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		return nil, fmt.Errorf("alloc session dir: %w", err)
 	}
 	if err := sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
 		SessionID:     id,
 		WorkspacePath: workspace,
 	}); err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		return nil, fmt.Errorf("session metadata: %w", err)
 	}
 	conv, err := agent.OpenConversationAt(filepath.Join(sessionDir, "conversation.jsonl"))
 	if err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		return nil, fmt.Errorf("conversation: %w", err)
 	}
 	llm := agent.NewLLMClient(p.cfg.BaseURL, p.cfg.APIKey, p.cfg.Model)
@@ -539,12 +546,10 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// snapshot source for Loop.EnsureSystemPrompt. Created once so
 	// builtins + standalone registration share the same on-disk state.
 	//
-	// Memory lives at a STABLE per-session path (not under the
-	// ephemeral workspace dir) so it survives LRU eviction and
-	// server restarts. The session workspace gets a random suffix
-	// every time it's allocated — using it for memory means "same
-	// client, same session_id" sees an empty memory after any
-	// restart, which defeats the long-running purpose.
+	// Memory lives at a STABLE per-session state path (not under the active
+	// project workspace) so it survives LRU eviction and server restarts.
+	// Keeping it out of normal file browsing also avoids mixing durable agent
+	// notes with user/project files.
 	var memStore memory.MemoryStore
 	if p.cfg.EnableMemory {
 		fms := memory.NewFileMemoryStore(workspace)
@@ -567,7 +572,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			var skillErr error
 			skillReg, skillErr = sessionRuntimeSkillRegistry(p, sessionSkillDir)
 			if skillErr != nil {
-				_ = os.RemoveAll(workspace)
+				cleanupWorkspace()
 				return nil, fmt.Errorf("skills: %w", skillErr)
 			}
 		}
@@ -620,7 +625,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if p.cfg.EnableBrowser {
 		bs, err := p.newBrowserSession(workspace)
 		if err != nil {
-			_ = os.RemoveAll(workspace)
+			cleanupWorkspace()
 			return nil, fmt.Errorf("browser session: %w", err)
 		}
 		affentbrowser.RegisterAll(reg, bs, affentbrowser.Options{
@@ -635,7 +640,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 				if browser != nil {
 					_ = browser.Close()
 				}
-				_ = os.RemoveAll(workspace)
+				cleanupWorkspace()
 				return nil, fmt.Errorf("web_search: %w", err)
 			}
 		} else {
@@ -684,14 +689,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		})
 	}
 	if err := filterServeEvalModeTools(reg, p.cfg); err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		if browser != nil {
 			_ = browser.Close()
 		}
 		return nil, err
 	}
 	if err := validateSessionRuntimeContract(reg, p.cfg); err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		if browser != nil {
 			_ = browser.Close()
 		}
@@ -706,7 +711,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// keep the error path for safety but it shouldn't fire.
 	perCallTimeout, err := p.cfg.PerCallTimeoutDuration()
 	if err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		if browser != nil {
 			_ = browser.Close()
 		}
@@ -714,7 +719,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	retryBackoff, err := p.cfg.RetryBackoffDuration()
 	if err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		if browser != nil {
 			_ = browser.Close()
 		}
@@ -820,10 +825,10 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	if serveRegistryHasWorkspaceTool(reg) {
-		systemPrompt += "\n\nWorkspace tools are bound to the active session workspace. Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...` and omit cwd unless a different directory is needed."
+		systemPrompt += "\n\nWorkspace tools are bound to the active workspace root. Commands and workspace tools start there by default; prefer relative paths such as `.` or `src/...`, and omit cwd unless a task needs a project subdirectory."
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		if browser != nil {
 			_ = browser.Close()
 		}
@@ -831,7 +836,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	trace, traceFile, nextEventLine, err := openSessionEventLog(sessionDir)
 	if err != nil {
-		_ = os.RemoveAll(workspace)
+		cleanupWorkspace()
 		if browser != nil {
 			_ = browser.Close()
 		}
@@ -849,6 +854,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		browser:          browser,
 		sessionDir:       sessionDir,
 		workspace:        workspace,
+		workspaceOwned:   workspaceAlloc.Owned,
 		loopProtocolPath: loopProtocolPath,
 		loopProtocolInit: p.cfg.EnableLoopProtocol && !p.cfg.EvalMode,
 		planPath:         planPath,
@@ -967,16 +973,63 @@ func countJSONLLines(path string) (int64, error) {
 	return lines, nil
 }
 
-func (p *SessionPool) allocWorkspace(id string) (string, error) {
-	root := p.cfg.WorkspaceRoot
+type sessionWorkspaceAllocation struct {
+	Path  string
+	Owned bool
+}
+
+func (p *SessionPool) allocWorkspace(id string) (sessionWorkspaceAllocation, error) {
+	root := strings.TrimSpace(p.cfg.WorkspaceRoot)
 	if root == "" {
-		// Per-session temp dir. Cleaned on session close.
-		return os.MkdirTemp("", "affentserve-"+id+"-")
+		if root, ok := defaultWorkspaceRootIfPresent(); ok {
+			return sessionWorkspaceAllocation{Path: root}, nil
+		}
+		// Fallback for local tests/dev boxes without the container workspace
+		// mount. This temp workspace is owned by the session and is removed on
+		// close; configured workspaces are never session-owned.
+		workspace, err := os.MkdirTemp("", "affentserve-"+id+"-")
+		if err != nil {
+			return sessionWorkspaceAllocation{}, err
+		}
+		return sessionWorkspaceAllocation{Path: workspace, Owned: true}, nil
+	}
+	root, err := resolveWorkspaceRoot(root)
+	if err != nil {
+		return sessionWorkspaceAllocation{}, err
+	}
+	return sessionWorkspaceAllocation{Path: root}, nil
+}
+
+func resolveWorkspaceRoot(root string) (string, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return "", fmt.Errorf("workspace root is empty")
 	}
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return "", err
 	}
-	return os.MkdirTemp(root, id+"-")
+	info, err := os.Lstat(root)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("workspace root is not a directory: %s", root)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("workspace root must not be a symlink: %s", root)
+	}
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
+	return root, nil
+}
+
+func defaultWorkspaceRootIfPresent() (string, bool) {
+	info, err := os.Lstat("/workspace")
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", false
+	}
+	return "/workspace", true
 }
 
 // sessionDirPath computes the durable per-session-id state dir path
@@ -995,7 +1048,9 @@ func (p *SessionPool) sessionRootPath() string {
 	root := p.cfg.MemoryRoot
 	if root == "" {
 		if p.cfg.WorkspaceRoot != "" {
-			root = filepath.Join(p.cfg.WorkspaceRoot, "memory")
+			root = filepath.Join(p.cfg.WorkspaceRoot, ".affent", "session-state")
+		} else if workspaceRoot, ok := defaultWorkspaceRootIfPresent(); ok {
+			root = filepath.Join(workspaceRoot, ".affent", "session-state")
 		} else {
 			root = filepath.Join(os.TempDir(), "affentserve-memory")
 		}
@@ -1018,15 +1073,13 @@ func (p *SessionPool) sessionIDConflictsSharedUserMemory(id string) bool {
 	return p != nil && p.cfg.SharedUserMemory && filepath.Clean(p.sessionDirPath(id)) == filepath.Clean(p.sharedUserMemoryPath())
 }
 
-// allocSessionDir returns the durable per-session-id state dir. Holds
-// the JSONL conversation log, runtime-installed skills, and (when
-// EnableMemory is on) the memory store files. Unlike allocWorkspace,
-// this is STABLE: same id → same path across server restarts and LRU
-// evictions, so the chat handler's "the rest of history lives in the
-// Conversation log keyed by session_id" contract actually holds — and
-// the long-running-memory / runtime-skill promise survives. Callers
-// must have already passed id through agent.ValidateSessionID;
-// buildSession enforces this at the top.
+// allocSessionDir returns the durable per-session-id state dir. Holds the JSONL
+// conversation log, runtime-installed skills, and (when EnableMemory is on) the
+// memory store files. This is distinct from the agent workspace root: same
+// session id maps to the same state path across server restarts and LRU
+// evictions, while the workspace remains user/project-owned. Callers must have
+// already passed id through agent.ValidateSessionID; buildSession enforces this
+// at the top.
 func (p *SessionPool) allocSessionDir(id string) (string, error) {
 	if p.sessionIDConflictsSharedUserMemory(id) {
 		return "", fmt.Errorf("session id %q is reserved when shared user memory is enabled", id)
@@ -1202,7 +1255,9 @@ func (s *Session) derivedLoopProtocolActivationEvent(ev sse.Event, toolByCallID 
 
 // Close releases all session resources. Idempotent and safe under
 // concurrent callers — sync.Once guarantees the close+cancel+remove
-// sequence runs at most once even if Delete races with Shutdown.
+// sequence runs at most once even if Delete races with Shutdown. Configured
+// workspace roots are user/project-owned and are not removed; only the temp
+// fallback workspace created when no root is available is session-owned.
 //
 // Lifecycle invariant: we never close `s.events`. affent's Loop
 // publishes events with a plain `send` (not `select` with `default`
@@ -1228,7 +1283,7 @@ func (s *Session) Close() error {
 				s.closeErr = err
 			}
 		}
-		if s.workspace != "" {
+		if s.workspace != "" && s.workspaceOwned {
 			_ = os.RemoveAll(s.workspace)
 		}
 	})

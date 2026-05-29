@@ -235,11 +235,12 @@ such as `AFFENTCTL_WORKSPACE` or `AFFENTSERVE_WORKSPACE_ROOT` unless passed
 explicitly with `--env`.
 
 `make image-serve-up` and `make image-serve-restart` run `affentserve` in the
-runtime image with durable session state under `/workspace/session-state`. They
-enable direct web fetch, the real browser toolset, and a persistent browser
-cache at `/workspace/browser-cache` by default, while keeping `web_search`
-disabled unless a search backend is explicitly configured. Those paths live
-inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long
+runtime image with agents starting from `/workspace` and durable session state
+under `/workspace/.affent/session-state`. They enable direct web fetch, the real
+browser toolset, and a persistent browser cache at `/workspace/.affent/browser-cache` by
+default, while keeping `web_search` disabled unless a search backend is
+explicitly configured. Those paths live inside `IMAGE_WORKSPACE`, so the server
+preserves conversation history as long
 as `IMAGE_WORKSPACE` is the same host path, and it preserves browser cache data
 under the same workspace. Account-level state, including WebUI-generated SSH
 keys, is mounted separately at `/account` from `SERVE_ACCOUNT_DIR` and wired via

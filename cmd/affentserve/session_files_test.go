@@ -89,6 +89,34 @@ func TestHandleSessionFilesUploadsWorkspaceFile(t *testing.T) {
 	}
 }
 
+func TestHandleWorkspaceFilesListsConfiguredWorkspaceRoot(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	if err := os.MkdirAll(filepath.Join(pool.cfg.WorkspaceRoot, "project"), 0o755); err != nil {
+		t.Fatalf("mkdir project: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pool.cfg.WorkspaceRoot, "README.md"), []byte("global workspace\n"), 0o644); err != nil {
+		t.Fatalf("write readme: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/workspace/files", nil)
+	w := httptest.NewRecorder()
+	handleWorkspaceFiles(pool, w, r)
+
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("list status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var list sessionFileResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v body=%s", err, w.Body.String())
+	}
+	if list.SessionID != "workspace" || list.Kind != "directory" || list.Path != "." {
+		t.Fatalf("list response = %+v, want global workspace root directory", list)
+	}
+	if !fileEntryExists(list.Entries, "project", "directory") || !fileEntryExists(list.Entries, "README.md", "file") {
+		t.Fatalf("entries = %+v, want project dir and README.md", list.Entries)
+	}
+}
+
 func TestHandleSessionFilesRejectsUnsafeUploads(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	sess, err := pool.GetOrCreate("files-upload-guard")

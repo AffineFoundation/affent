@@ -185,12 +185,14 @@ memory. Durable state is stored as ordinary files:
 This keeps local debugging simple and lets the HTTP server survive container
 restart when the state root is backed by a host volume.
 
-In server mode, each session also has an ephemeral workspace path and a stable
-session directory. The workspace is where shell and file tools operate. The
-session directory is where durable identity lives: conversation log, event log,
+In server mode, the configured workspace root is the user/project-owned file
+space where shell and file tools start. It is not owned by an individual
+session and is not removed when a session closes. Each session separately has a
+stable session directory for durable identity: conversation log, event log,
 memory, plan, loop protocol state, runtime skills, child transcripts, and
 artifacts. LRU eviction may drop an in-memory session, but the stable session
-directory lets the same session id be reopened.
+directory lets the same session id be reopened while the workspace remains the
+shared engineering surface.
 
 ## Event Model
 

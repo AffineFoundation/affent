@@ -2502,10 +2502,21 @@ func estimateContextTokens(text string) int {
 	return (len([]rune(text)) + 3) / 4
 }
 
-// EstimateRequestInputTokens estimates the next request's input pressure from
-// conversation history plus tool definitions. It is intentionally tokenizer-free
-// and should be treated as a conservative pressure signal, not billing data.
-func EstimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
+// RequestInputEstimate breaks down the next request's estimated input pressure.
+// It is intentionally tokenizer-free and should be treated as a conservative
+// pressure signal, not billing data.
+type RequestInputEstimate struct {
+	ConversationBytes    int
+	ToolSchemaBytes      int
+	TotalBytes           int
+	ConversationTokens   int
+	ToolSchemaTokens     int
+	EstimatedInputTokens int
+}
+
+// EstimateRequestInput estimates the next request's input pressure from
+// conversation history plus tool definitions.
+func EstimateRequestInput(msgs []ChatMessage, tools []ToolDef) RequestInputEstimate {
 	msgBytes := ApproximateConversationBytes(msgs)
 	toolBytes := 0
 	if len(tools) > 0 {
@@ -2514,14 +2525,32 @@ func EstimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
 		}
 	}
 	total := msgBytes + toolBytes
-	if total <= 0 {
-		return 0
+	return RequestInputEstimate{
+		ConversationBytes:    msgBytes,
+		ToolSchemaBytes:      toolBytes,
+		TotalBytes:           total,
+		ConversationTokens:   estimateBytesAsTokens(msgBytes),
+		ToolSchemaTokens:     estimateBytesAsTokens(toolBytes),
+		EstimatedInputTokens: estimateBytesAsTokens(total),
 	}
-	return (total + 3) / 4
+}
+
+// EstimateRequestInputTokens estimates the next request's input pressure from
+// conversation history plus tool definitions. It is intentionally tokenizer-free
+// and should be treated as a conservative pressure signal, not billing data.
+func EstimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
+	return EstimateRequestInput(msgs, tools).EstimatedInputTokens
 }
 
 func estimateRequestInputTokens(msgs []ChatMessage, tools []ToolDef) int {
 	return EstimateRequestInputTokens(msgs, tools)
+}
+
+func estimateBytesAsTokens(bytes int) int {
+	if bytes <= 0 {
+		return 0
+	}
+	return (bytes + 3) / 4
 }
 
 func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string, force bool) {

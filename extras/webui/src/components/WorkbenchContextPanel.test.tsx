@@ -529,11 +529,15 @@ describe("WorkbenchContextPanel", () => {
           compact_percent: 92,
           messages_until_compact: 208,
           context_bytes: 32768,
+          conversation_bytes: 32768,
+          tool_schema_bytes: 143232,
           compact_trigger_bytes: 196608,
           byte_compact_percent: 17,
           bytes_until_compact: 163840,
           message_compact_percent: 13,
           estimated_request_input_tokens: 44000,
+          estimated_conversation_tokens: 8192,
+          estimated_tool_schema_tokens: 35808,
           compact_trigger_input_tokens: 48000,
           request_input_compact_percent: 92,
           request_input_tokens_until_compact: 4000,
@@ -545,6 +549,13 @@ describe("WorkbenchContextPanel", () => {
     expect(health).toHaveTextContent("Context is getting tight");
     expect(health).toHaveTextContent("44,000 estimated input tokens of 48,000 before the next request.");
     expect(health).toHaveTextContent("4,000 estimated input tokens before compaction");
+    const usageCard = screen.getByTestId("workbench-usage-card");
+    expect(usageCard).toHaveTextContent("Conversation");
+    expect(usageCard).toHaveTextContent("8,192 estimated tokens");
+    expect(usageCard).toHaveTextContent("32 KiB");
+    expect(usageCard).toHaveTextContent("Tool schema");
+    expect(usageCard).toHaveTextContent("35,808 estimated tokens");
+    expect(usageCard).toHaveTextContent("140 KiB");
   });
 });
 

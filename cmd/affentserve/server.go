@@ -24,6 +24,8 @@ import (
 //	GET    /v1/skills/{name}
 //	POST   /v1/skills
 //	DELETE /v1/skills/{name}
+//	GET    /v1/workspace/files
+//	POST   /v1/workspace/files
 //	GET    /v1/sessions/{id}
 //	GET    /v1/sessions/{id}/events
 //	GET    /v1/sessions/{id}/history
@@ -65,6 +67,9 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 	mux.Handle("/v1/settings/", authed(http.HandlerFunc(handleAccountSettingsRoutes(pool))))
 	mux.Handle("/v1/skills", authed(http.HandlerFunc(handleAccountSkills(pool))))
 	mux.Handle("/v1/skills/", authed(http.HandlerFunc(handleAccountSkillRoutes(pool))))
+	mux.Handle("/v1/workspace/files", authed(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleWorkspaceFiles(pool, w, r)
+	})))
 	mux.Handle("/v1/sessions", authed(http.HandlerFunc(handleSessionsCollection(pool))))
 	mux.Handle("/v1/sessions/", authed(http.HandlerFunc(handleSessionRoutes(pool))))
 	mux.Handle("/v1/stats", authed(http.HandlerFunc(handleStats(cfg, pool))))
@@ -94,7 +99,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
-//	GET    /v1/sessions/{id}/files   → read/list active workspace files
+//	GET    /v1/sessions/{id}/files   → read/list that session's workspace files
 //	POST   /v1/sessions/{id}/messages → start async user turn
 //	POST   /v1/sessions/{id}/commands → run a workspace command from Workbench
 //	POST   /v1/sessions/{id}/cancel  → cancel active turn

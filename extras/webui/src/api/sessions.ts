@@ -479,11 +479,15 @@ export interface SessionContextSummary {
   compact_percent: number;
   messages_until_compact: number;
   context_bytes?: number;
+  conversation_bytes?: number;
+  tool_schema_bytes?: number;
   compact_trigger_bytes?: number;
   byte_compact_percent?: number;
   bytes_until_compact?: number;
   message_compact_percent?: number;
   estimated_request_input_tokens?: number;
+  estimated_conversation_tokens?: number;
+  estimated_tool_schema_tokens?: number;
   compact_trigger_input_tokens?: number;
   request_input_compact_percent?: number;
   request_input_tokens_until_compact?: number;

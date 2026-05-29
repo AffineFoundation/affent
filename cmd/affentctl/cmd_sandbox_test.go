@@ -235,7 +235,7 @@ func TestAffentDockerfilePackagesRuntimeBinaries(t *testing.T) {
 		"COPY docker/go-cgroup-env.sh /usr/local/bin/affent-go-cgroup-env",
 		"COPY docker/affent-entrypoint.sh /usr/local/bin/affent-entrypoint",
 		"ENTRYPOINT [\"affent-entrypoint\"]",
-		"\"--web=true\", \"--browser=true\", \"--web-search=false\", \"--browser-cache-dir=/workspace/browser-cache\"",
+		"\"--web=true\", \"--browser=true\", \"--web-search=false\", \"--browser-cache-dir=/workspace/.affent/browser-cache\"",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("affent Dockerfile missing %q", want)
@@ -285,7 +285,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve",
 		"SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777",
 		"SERVE_EVAL_PERMISSIONS ?=",
-		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache",
+		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/.affent/browser-cache",
 		"SERVE_PUBLISH_PARTS := $(subst :, ,$(SERVE_PUBLISH))",
 		"SERVE_PUBLISH_WORDS := $(words $(SERVE_PUBLISH_PARTS))",
 		"SERVE_HEALTH_HOST := $(if $(filter 3,$(SERVE_PUBLISH_WORDS)),$(word 1,$(SERVE_PUBLISH_PARTS)),127.0.0.1)",
@@ -293,7 +293,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SERVE_HEALTH_URL ?= http://$(SERVE_HEALTH_HOST):$(SERVE_HEALTH_PORT)/healthz",
 		"SERVE_HEALTH_ATTEMPTS ?= 30",
 		"SERVE_HEALTH_INTERVAL ?= 1",
-		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
+		"SERVE_MEMORY_ROOT ?= /workspace/.affent/session-state",
 		`--account-dir "$(SERVE_ACCOUNT_DIR)"`,
 		`--account-root "$(SERVE_ACCOUNT_ROOT)"`,
 		"image-run: image-build",
@@ -386,7 +386,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`echo "$$tools" | grep -q '"browser_navigate"'`,
 		`echo "$$tools" | grep -q '"web_fetch"'`,
 		`image-serve-smoke expected web_search to stay disabled by default`,
-		`test -f "$(SMOKE_WORKSPACE)/session-state/$(SMOKE_SESSION_ID)/conversation.jsonl"`,
+		`test -f "$(SMOKE_WORKSPACE)/.affent/session-state/$(SMOKE_SESSION_ID)/conversation.jsonl"`,
 		`docker stop "$(SMOKE_CONTAINER_NAME)"`,
 		`"$(SMOKE_URL)/v1/sessions/$(SMOKE_SESSION_ID)"`,
 		`memory_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.memory"}}')`,
@@ -395,7 +395,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`test "$$browser_label" = "true"`,
 		`test "$$web_label" = "true"`,
 		`test "$$web_search_label" = "false"`,
-		`test "$$browser_cache_label" = "/workspace/browser-cache"`,
+		`test "$$browser_cache_label" = "/workspace/.affent/browser-cache"`,
 		`test "$$build_revision_label" = "$(IMAGE_BUILD_REVISION)"`,
 		`image-serve-smoke ok`,
 		`$(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)")`,
@@ -440,7 +440,7 @@ func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 	body := string(raw)
 	for _, want := range []string{
 		"`make image-serve-up` and `make image-serve-restart`",
-		"`/workspace/session-state`",
+		"`/workspace/.affent/session-state`",
 		"`IMAGE_WORKSPACE`",
 		"preserves conversation history as long as `IMAGE_WORKSPACE` is the same host",
 		"`DELETE /v1/sessions/{id}`",
@@ -449,7 +449,7 @@ func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 		"verifies the default browser/web tool catalog",
 		"verifies the durable session is",
 		"still listed",
-		"`/workspace/browser-cache`",
+		"`/workspace/.affent/browser-cache`",
 		"enable direct web fetch, the real browser toolset",
 		"keeping `web_search`",
 		"`web_search` depends on the",
@@ -495,7 +495,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"CONTAINER_MEMORY ?= 2g",
 		"CONTAINER_CPUS ?= 2",
 		"CONTAINER_PIDS ?= 512",
-		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache",
+		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/.affent/browser-cache",
 		"EVAL_RUNTIME_EVAL_MODE ?= true",
 		"EVAL_RUNTIME_MEMORY ?= false",
 		"EVAL_RUNTIME_MCP_CONFIG ?=",
@@ -1172,13 +1172,13 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 		Command: []string{
 			"affentserve",
 			"--listen=0.0.0.0:7777",
-			"--workspace-root", "/workspace/sessions",
-			"--memory-root", "/workspace/session-state",
+			"--workspace-root", "/workspace",
+			"--memory-root", "/workspace/.affent/session-state",
 			"--account-root", "/custom-account",
 			"--builtins",
 			"--eval-mode",
 			"--browser=true",
-			"--browser-cache-dir=/workspace/browser-cache",
+			"--browser-cache-dir=/workspace/.affent/browser-cache",
 			"--web-search=false",
 			"--api-key", "secret-value",
 		},
@@ -1189,13 +1189,13 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 	args := runner.calls[0].args
 	for _, want := range []string{
 		"--label", runtimeLabelServeListen + "=0.0.0.0:7777",
-		"--label", runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
-		"--label", runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+		"--label", runtimeLabelServeWorkspaceRoot + "=/workspace",
+		"--label", runtimeLabelServeMemoryRoot + "=/workspace/.affent/session-state",
 		"--label", runtimeLabelServeAccountRoot + "=/custom-account",
 		"--label", runtimeLabelServeBuiltins + "=true",
 		"--label", runtimeLabelServeEvalMode + "=true",
 		"--label", runtimeLabelServeBrowser + "=true",
-		"--label", runtimeLabelServeBrowserCache + "=/workspace/browser-cache",
+		"--label", runtimeLabelServeBrowserCache + "=/workspace/.affent/browser-cache",
 		"--label", runtimeLabelServeWebSearch + "=false",
 	} {
 		if !contains(args, want) {
@@ -1228,11 +1228,11 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 		"--builtins",
 		"--eval-mode",
 		"--browser=true",
-		"--browser-cache-dir", "/workspace/browser-cache",
+		"--browser-cache-dir", "/workspace/.affent/browser-cache",
 		"--memory=false",
-		"--workspace-root", "/workspace/sessions",
+		"--workspace-root", "/workspace",
 		"--unknown-flag",
-		"--memory-root=/workspace/session-state",
+		"--memory-root=/workspace/.affent/session-state",
 		"--account-root=/account",
 		"--api-key", "secret-value",
 		"--listen", "0.0.0.0:7777",
@@ -1240,13 +1240,13 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 	joined := strings.Join(got, "\n")
 	for _, want := range []string{
 		runtimeLabelServeListen + "=0.0.0.0:7777",
-		runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
-		runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+		runtimeLabelServeWorkspaceRoot + "=/workspace",
+		runtimeLabelServeMemoryRoot + "=/workspace/.affent/session-state",
 		runtimeLabelServeAccountRoot + "=/account",
 		runtimeLabelServeBuiltins + "=true",
 		runtimeLabelServeEvalMode + "=true",
 		runtimeLabelServeBrowser + "=true",
-		runtimeLabelServeBrowserCache + "=/workspace/browser-cache",
+		runtimeLabelServeBrowserCache + "=/workspace/.affent/browser-cache",
 		runtimeLabelServeMemory + "=false",
 	} {
 		if !strings.Contains(joined, want) {
@@ -1262,7 +1262,7 @@ func TestRuntimeServeLabelsIncludeNonSecretServeEnv(t *testing.T) {
 	got := runtimeServeLabels([]string{
 		"affentserve",
 		"--browser=false",
-		"--workspace-root", "/workspace/sessions",
+		"--workspace-root", "/workspace",
 		"--api-key", "command-secret",
 	}, []string{
 		"AFFENTSERVE_EVAL_MODE=true",
@@ -1273,7 +1273,7 @@ func TestRuntimeServeLabelsIncludeNonSecretServeEnv(t *testing.T) {
 	})
 	joined := strings.Join(got, "\n")
 	for _, want := range []string{
-		runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
+		runtimeLabelServeWorkspaceRoot + "=/workspace",
 		runtimeLabelServeEvalMode + "=true",
 		runtimeLabelServeBrowser + "=false",
 		runtimeLabelServeWeb + "=true",

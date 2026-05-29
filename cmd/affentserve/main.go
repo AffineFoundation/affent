@@ -61,7 +61,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		apiKey                    = fs.String("api-key", "", "API key for --base-url (env: AFFENTSERVE_API_KEY, DASHSCOPE_API_KEY).")
 		model                     = fs.String("model", "", "Default model id reported by /v1/models and used when a request omits 'model' (env: AFFENTSERVE_MODEL).")
 		authToken                 = fs.String("auth-token", "", "Optional bearer token gating the server itself (env: AFFENTSERVE_AUTH_TOKEN).")
-		workspaceRoot             = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
+		workspaceRoot             = fs.String("workspace-root", "", "Workspace root where agents begin work. Empty uses /workspace when present, otherwise a session-owned temp dir.")
 		memoryRoot                = fs.String("memory-root", "", "Parent directory for durable per-session state: conversation log, event log, runtime skills, and memory. Empty defaults under --workspace-root. Env: AFFENTSERVE_MEMORY_ROOT.")
 		accountRoot               = fs.String("account-root", "", "Directory for durable account-level settings, SSH keys, and account skills. Env: AFFENTSERVE_ACCOUNT_ROOT.")
 		maxSessions               = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32). Env: AFFENTSERVE_MAX_SESSIONS.")

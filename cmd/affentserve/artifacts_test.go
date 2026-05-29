@@ -41,7 +41,7 @@ func TestSessionPool_ToolResultArtifactsUseDurableSessionDir(t *testing.T) {
 		t.Fatalf("ToolResultArtifactDir = %q, want durable session dir %q", s.loop.ToolResultArtifactDir, wantPrefix)
 	}
 	if strings.HasPrefix(s.loop.ToolResultArtifactDir, s.workspace) {
-		t.Fatalf("tool-result artifacts must not live under ephemeral workspace %q", s.workspace)
+		t.Fatalf("tool-result artifacts must not live under active workspace %q", s.workspace)
 	}
 }
 

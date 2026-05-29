@@ -361,8 +361,8 @@ func TestBuildDebugBriefClassifiesWorkspaceAbsolutePathFailures(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: false,
 		Failures: []string{
-			`shell call_id=call-1 used workspace absolute path in command: "ls -la /workspace/sessions/sess_123"`,
-			`read_file call_id=call-2 returned workspace absolute path in result: "/workspace/sessions/sess_123/app.go"`,
+			`shell call_id=call-1 used workspace absolute path in command: "ls -la /workspace/projects/demo"`,
+			`read_file call_id=call-2 returned workspace absolute path in result: "/workspace/projects/demo/app.go"`,
 		},
 	})
 	item := debugBriefItemByKind(brief, "workspace_path")

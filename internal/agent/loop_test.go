@@ -31,6 +31,35 @@ func newTestConv(t *testing.T) *Conversation {
 	return c
 }
 
+func TestEstimateRequestInputBreaksDownConversationAndTools(t *testing.T) {
+	var tool ToolDef
+	tool.Type = "function"
+	tool.Function.Name = "write_file"
+	tool.Function.Description = "write a workspace file"
+	tool.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}}}`)
+	msgs := []ChatMessage{
+		{Role: "system", Content: "base prompt"},
+		{Role: "user", Content: "write marker"},
+	}
+
+	got := EstimateRequestInput(msgs, []ToolDef{tool})
+	if got.ConversationBytes != ApproximateConversationBytes(msgs) {
+		t.Fatalf("ConversationBytes = %d, want %d", got.ConversationBytes, ApproximateConversationBytes(msgs))
+	}
+	if got.ToolSchemaBytes <= 0 {
+		t.Fatalf("ToolSchemaBytes = %d, want positive", got.ToolSchemaBytes)
+	}
+	if got.TotalBytes != got.ConversationBytes+got.ToolSchemaBytes {
+		t.Fatalf("TotalBytes = %d, want conversation + tool schema", got.TotalBytes)
+	}
+	if got.EstimatedInputTokens != EstimateRequestInputTokens(msgs, []ToolDef{tool}) {
+		t.Fatalf("EstimatedInputTokens = %d, wrapper mismatch", got.EstimatedInputTokens)
+	}
+	if got.ConversationTokens <= 0 || got.ToolSchemaTokens <= 0 {
+		t.Fatalf("token breakdown = conversation:%d tool_schema:%d, want positive components", got.ConversationTokens, got.ToolSchemaTokens)
+	}
+}
+
 // newTestStore returns a FileMemoryStore wired to a temp dir with
 // tight caps suitable for loop-side tests. The internal/memory
 // package has its own copy with more knobs; this is the minimal

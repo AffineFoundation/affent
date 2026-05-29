@@ -1007,7 +1007,7 @@ Output format (REQUIRED):
 }
 
 func focusedTaskUserPrompt(p FocusedTaskProfile, objective, _ string, maxTurns int) string {
-	return fmt.Sprintf("Task type: %s\nWorkspace: tools start in the session workspace; use relative paths and omit cwd unless a subdirectory is needed.\nTool budget: at most %d tool calls. Stop early when the objective is answered.\nObjective:\n%s",
+	return fmt.Sprintf("Task type: %s\nWorkspace: tools start in the active workspace root; use relative paths and omit cwd unless a subdirectory is needed.\nTool budget: at most %d tool calls. Stop early when the objective is answered.\nObjective:\n%s",
 		string(p.Kind), maxTurns, objective)
 }
 

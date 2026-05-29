@@ -1129,11 +1129,11 @@ func TestShellToolSchemaPublishesInputCaps(t *testing.T) {
 	if schema.Properties["cwd"].MaxLength != maxShellCwdBytes {
 		t.Fatalf("cwd maxLength = %d, want %d", schema.Properties["cwd"].MaxLength, maxShellCwdBytes)
 	}
-	if !strings.Contains(schema.Properties["cwd"].Description, "defaults to the session workspace") ||
+	if !strings.Contains(schema.Properties["cwd"].Description, "defaults to the active workspace root") ||
 		!strings.Contains(schema.Properties["cwd"].Description, "Prefer relative paths") {
 		t.Fatalf("cwd description should explain workspace-relative defaults: %q", schema.Properties["cwd"].Description)
 	}
-	if !strings.Contains(tool.Description, "from the session workspace by default") {
+	if !strings.Contains(tool.Description, "from the active workspace root by default") {
 		t.Fatalf("shell description should explain default cwd: %q", tool.Description)
 	}
 	if schema.Properties["timeout_sec"].Maximum != maxShellTimeoutSec {

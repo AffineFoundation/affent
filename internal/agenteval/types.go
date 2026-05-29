@@ -159,7 +159,7 @@ type Trace struct {
 	// ChildTranscriptRootDir is the filesystem root used to resolve
 	// ChildTranscripts. Empty means WorkspaceDir. Server-managed sessions
 	// keep child transcripts in durable session state while workspace
-	// hygiene checks still need the ephemeral workspace path.
+	// hygiene checks still need the active workspace path.
 	ChildTranscriptRootDir string
 	// UserMessages records user.message trace metadata, including product
 	// modes such as plan_only and execute_plan. This lets evals verify the

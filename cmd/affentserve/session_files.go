@@ -69,6 +69,27 @@ func handleSessionFiles(pool *SessionPool, sessionID string, w http.ResponseWrit
 		writeJSONError(w, http.StatusInternalServerError, "open workspace", err)
 		return
 	}
+	handleWorkspaceFilesAtRoot(sessionID, workspace, w, r)
+}
+
+func handleWorkspaceFiles(pool *SessionPool, w http.ResponseWriter, r *http.Request) {
+	if pool == nil {
+		writeJSONError(w, http.StatusNotFound, "workspace not available", nil)
+		return
+	}
+	workspace, err := workspaceRootForFiles(pool)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeJSONErrorTyped(w, http.StatusNotFound, "workspace not available", err, "workspace_unavailable")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "open workspace", err)
+		return
+	}
+	handleWorkspaceFilesAtRoot("workspace", workspace, w, r)
+}
+
+func handleWorkspaceFilesAtRoot(sessionID, workspace string, w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		handleSessionFileWrite(sessionID, workspace, w, r)
 		return
@@ -101,6 +122,18 @@ func handleSessionFiles(pool *SessionPool, sessionID string, w http.ResponseWrit
 		return
 	}
 	handleSessionFileRead(sessionID, full, rel, info, w, r)
+}
+
+func workspaceRootForFiles(pool *SessionPool) (string, error) {
+	root := strings.TrimSpace(pool.cfg.WorkspaceRoot)
+	if root == "" {
+		var ok bool
+		root, ok = defaultWorkspaceRootIfPresent()
+		if !ok {
+			return "", os.ErrNotExist
+		}
+	}
+	return resolveWorkspaceRoot(root)
 }
 
 func handleSessionFileWrite(sessionID, workspace string, w http.ResponseWriter, r *http.Request) {

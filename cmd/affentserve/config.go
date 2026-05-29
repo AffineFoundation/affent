@@ -38,17 +38,17 @@ type Config struct {
 	// Leave empty for trusted-network deployments.
 	AuthToken string `json:"auth_token"`
 
-	// WorkspaceRoot is the parent directory under which each session
-	// gets its own ephemeral workspace (for agent runtime's Conversation JSONL).
+	// WorkspaceRoot is the filesystem root where agents begin work. It is not
+	// owned by an individual session; session state is stored separately.
 	WorkspaceRoot string `json:"workspace_root"`
 
 	// MemoryRoot is the parent directory for DURABLE per-session state.
 	// Conversation logs, runtime-installed skills, and memory live
-	// separately from the session workspace so they survive LRU eviction
+	// separately from the active workspace so they survive LRU eviction
 	// and server restarts: same session_id → same state dir, regardless
 	// of how many times the workspace was recreated.
-	// Empty defaults to "<WorkspaceRoot>/memory" (or an OS temp dir
-	// when WorkspaceRoot itself is empty).
+	// Empty defaults to "<WorkspaceRoot>/.affent/session-state"; when WorkspaceRoot
+	// is empty, /workspace is used when present, otherwise an OS temp dir is used.
 	MemoryRoot string `json:"memory_root"`
 
 	// AccountRoot is durable account-level state shared by all sessions:

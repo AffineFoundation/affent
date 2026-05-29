@@ -1182,7 +1182,7 @@ Rendered web extraction:
 }
 
 func subagentUserPrompt(mode, task, _ string, maxTurns, depth, maxDepth int) string {
-	return fmt.Sprintf("Mode: %s\nWorkspace: tools start in the session workspace; use relative paths and omit cwd unless a subdirectory is needed.\nSubagent depth: %d of %d.\nTool budget: at most %d tool calls/rounds. Stop early when evidence is sufficient.\nTask:\n%s", mode, depth, maxDepth, maxTurns, task)
+	return fmt.Sprintf("Mode: %s\nWorkspace: tools start in the active workspace root; use relative paths and omit cwd unless a subdirectory is needed.\nSubagent depth: %d of %d.\nTool budget: at most %d tool calls/rounds. Stop early when evidence is sufficient.\nTask:\n%s", mode, depth, maxDepth, maxTurns, task)
 }
 
 type subagentToolCall struct {

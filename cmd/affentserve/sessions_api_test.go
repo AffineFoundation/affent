@@ -230,7 +230,7 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 func TestSummarizeDurableSessionReadsMetadataWorkspace(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	createDurableSessionDir(t, pool, "archived-workspace")
-	workspace := "/workspace/sessions/archived-workspace-123"
+	workspace := "/workspace/projects/archived-workspace"
 	if err := sessionstate.WriteMetadata(pool.sessionDirPath("archived-workspace"), sessionstate.Metadata{
 		SessionID:     "archived-workspace",
 		WorkspacePath: workspace,
@@ -323,15 +323,15 @@ func TestSummarizeActiveSessionUsesMainSessionEventsForRecoveryHintAndCWD(t *tes
 }
 
 func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
-	got := sessionContextSnapshot(96, 16*1024, 1024, Config{CompactTrigger: 120})
+	got := sessionContextSnapshot(96, testRequestInputEstimate(16*1024, 1024), Config{CompactTrigger: 120})
 	if got.MessageCount != 96 || got.CompactTrigger != 120 || got.CompactPercent != 80 || got.MessageCompactPercent != 80 || got.MessagesUntilCompact != 24 {
 		t.Fatalf("context snapshot = %+v, want 96/120 at 80%% with 24 remaining", got)
 	}
-	over := sessionContextSnapshot(130, 16*1024, 1024, Config{CompactTrigger: 120})
+	over := sessionContextSnapshot(130, testRequestInputEstimate(16*1024, 1024), Config{CompactTrigger: 120})
 	if over.CompactPercent != 108 || over.MessagesUntilCompact != 0 {
 		t.Fatalf("over-trigger snapshot = %+v, want 108%% and no remaining messages", over)
 	}
-	def := sessionContextSnapshot(1, 1024, 256, Config{})
+	def := sessionContextSnapshot(1, testRequestInputEstimate(1024, 256), Config{})
 	if def.CompactTrigger != agent.DefaultSummaryTriggerMsgs {
 		t.Fatalf("default trigger = %d, want %d", def.CompactTrigger, agent.DefaultSummaryTriggerMsgs)
 	}
@@ -345,7 +345,7 @@ func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
 
 func TestSessionContextSnapshotUsesBytePressure(t *testing.T) {
 	contextBytes := agent.DefaultSummaryTriggerBytes + agent.DefaultSummaryTriggerBytes/4
-	got := sessionContextSnapshot(12, contextBytes, 1024, Config{CompactTrigger: 240})
+	got := sessionContextSnapshot(12, testRequestInputEstimate(contextBytes, 1024), Config{CompactTrigger: 240})
 	if got.CompactPercent != 125 || got.ByteCompactPercent != 125 || got.MessageCompactPercent != 5 {
 		t.Fatalf("context snapshot = %+v, want byte pressure to dominate at 125%%", got)
 	}
@@ -355,11 +355,17 @@ func TestSessionContextSnapshotUsesBytePressure(t *testing.T) {
 	if got.ContextBytes != contextBytes {
 		t.Fatalf("context_bytes = %d, want %d", got.ContextBytes, contextBytes)
 	}
+	if got.ConversationBytes != contextBytes {
+		t.Fatalf("conversation_bytes = %d, want %d", got.ConversationBytes, contextBytes)
+	}
 }
 
 func TestSessionContextSnapshotUsesRequestInputPressure(t *testing.T) {
 	inputTokens := agent.DefaultSummaryTriggerInputTokens + agent.DefaultSummaryTriggerInputTokens/2
-	got := sessionContextSnapshot(12, 16*1024, inputTokens, Config{CompactTrigger: 240})
+	inputEstimate := testRequestInputEstimate(16*1024, inputTokens)
+	inputEstimate.ToolSchemaBytes = 2048
+	inputEstimate.ToolSchemaTokens = 512
+	got := sessionContextSnapshot(12, inputEstimate, Config{CompactTrigger: 240})
 	if got.CompactPercent != 150 || got.RequestInputCompactPercent != 150 || got.MessageCompactPercent != 5 {
 		t.Fatalf("context snapshot = %+v, want request-input pressure to dominate at 150%%", got)
 	}
@@ -369,21 +375,33 @@ func TestSessionContextSnapshotUsesRequestInputPressure(t *testing.T) {
 	if got.EstimatedRequestInputTokens != inputTokens {
 		t.Fatalf("estimated_request_input_tokens = %d, want %d", got.EstimatedRequestInputTokens, inputTokens)
 	}
+	if got.ToolSchemaBytes != 2048 || got.EstimatedToolSchemaTokens != 512 {
+		t.Fatalf("tool schema breakdown = %d/%d, want 2048/512", got.ToolSchemaBytes, got.EstimatedToolSchemaTokens)
+	}
 }
 
 func TestSessionContextSnapshotUsesConfiguredRequestInputTrigger(t *testing.T) {
-	got := sessionContextSnapshot(12, 16*1024, 750, Config{CompactTrigger: 240, CompactTriggerInputTokens: 1000})
+	got := sessionContextSnapshot(12, testRequestInputEstimate(16*1024, 750), Config{CompactTrigger: 240, CompactTriggerInputTokens: 1000})
 	if got.CompactTriggerInputTokens != 1000 ||
 		got.RequestInputCompactPercent != 75 ||
 		got.RequestInputTokensUntilCompact != 250 {
 		t.Fatalf("context snapshot = %+v, want configured request-input trigger at 75%% with 250 remaining", got)
 	}
 
-	disabled := sessionContextSnapshot(12, 16*1024, 750, Config{CompactTrigger: 240, CompactTriggerInputTokens: -1})
+	disabled := sessionContextSnapshot(12, testRequestInputEstimate(16*1024, 750), Config{CompactTrigger: 240, CompactTriggerInputTokens: -1})
 	if disabled.CompactTriggerInputTokens != 0 ||
 		disabled.RequestInputCompactPercent != 0 ||
 		disabled.RequestInputTokensUntilCompact != 0 {
 		t.Fatalf("disabled request-input snapshot = %+v, want no request-input pressure", disabled)
+	}
+}
+
+func testRequestInputEstimate(conversationBytes, estimatedInputTokens int) agent.RequestInputEstimate {
+	return agent.RequestInputEstimate{
+		ConversationBytes:    conversationBytes,
+		TotalBytes:           conversationBytes,
+		ConversationTokens:   (conversationBytes + 3) / 4,
+		EstimatedInputTokens: estimatedInputTokens,
 	}
 }
 
@@ -1279,7 +1297,7 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 		sessionEventLine(t, sse.TypeContextInjected, sse.ContextInjectedPayload{
 			TurnID:  "t1",
 			Source:  "runtime_workspace",
-			Summary: "Workspace tools resolve relative paths from the session workspace root.",
+			Summary: "Workspace tools resolve relative paths from the active workspace root.",
 		}) +
 		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID: "t1",
