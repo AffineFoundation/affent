@@ -3451,8 +3451,10 @@ func TestSelectLongRunSuite(t *testing.T) {
 			modelWindowPolicy.CompactKeepLast,
 		)
 	}
-	if modelWindowPolicy.RequiredContextCompactions != 1 ||
-		modelWindowPolicy.RequiredTraceEventCounts["context.compacted"] != 1 ||
+	if modelWindowPolicy.RequiredContextCompactions != 0 ||
+		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 0 ||
+		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 1 ||
+		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 1 ||
 		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-3") {
 		t.Fatalf("model-window policy requirements = compactions:%d trace:%#v final:%#v",
 			modelWindowPolicy.RequiredContextCompactions,
@@ -3464,14 +3466,14 @@ func TestSelectLongRunSuite(t *testing.T) {
 	for _, want := range []string{
 		"runtime_surface_model_context_window_tokens:200",
 		"runtime_surface_compact_trigger_matches_model_policy",
-		"context_compactions_at_least:1",
 	} {
 		if !stringSliceContains(modelWindowChecks, want) {
 			t.Fatalf("model-window policy checks missing %q: %#v", want, modelWindowChecks)
 		}
 	}
-	if !taskStateEvidenceRequirementContains(modelWindowPolicy.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
-		t.Fatalf("model-window policy RequiredTaskStateEvidence = %#v, want context_compaction estimated_context_pressure", modelWindowPolicy.RequiredTaskStateEvidence)
+	if stringSliceContains(modelWindowChecks, "context_compactions_at_least:1") ||
+		taskStateEvidenceRequirementContains(modelWindowPolicy.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
+		t.Fatalf("model-window policy should not require ineffective compaction: checks=%#v evidence=%#v", modelWindowChecks, modelWindowPolicy.RequiredTaskStateEvidence)
 	}
 
 	loopCalibration, ok := seen["longrun-loop-activation-calibration"]

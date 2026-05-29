@@ -3492,8 +3492,9 @@ func (l *Loop) compactForRequestPressure(ctx context.Context, turnID string, too
 		return result
 	}
 	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst, &contextCompactPolicy{
-		EstimatedInputTokens: estimated,
-		TriggerInputTokens:   limit,
+		EstimatedInputTokens:       estimated,
+		TriggerInputTokens:         limit,
+		RequireInputTokenReduction: true,
 	}, toolDefs)
 	result.Compacted = compacted
 	if compacted {
@@ -3566,9 +3567,10 @@ func (l *Loop) reservedOutputTokens() int {
 }
 
 type contextCompactPolicy struct {
-	EstimatedInputTokens      int
-	AfterEstimatedInputTokens int
-	TriggerInputTokens        int
+	EstimatedInputTokens       int
+	AfterEstimatedInputTokens  int
+	TriggerInputTokens         int
+	RequireInputTokenReduction bool
 }
 
 func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int, policy *contextCompactPolicy, toolDefs []ToolDef) bool {
@@ -3590,6 +3592,9 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		}
 		if policy.TriggerInputTokens > 0 {
 			effectivePolicy.TriggerInputTokens = policy.TriggerInputTokens
+		}
+		if policy.RequireInputTokenReduction {
+			effectivePolicy.RequireInputTokenReduction = true
 		}
 	}
 	compactor := l.Compactor
@@ -3617,6 +3622,18 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		return false
 	}
 	effectivePolicy.AfterEstimatedInputTokens = estimateRequestInputTokens(after, toolDefs)
+	if effectivePolicy.RequireInputTokenReduction &&
+		effectivePolicy.EstimatedInputTokens > 0 &&
+		effectivePolicy.AfterEstimatedInputTokens >= effectivePolicy.EstimatedInputTokens {
+		l.publishContextCompactSkipped(turnID, "request_pressure_not_reduced", len(before), len(after), beforeBytes, afterBytes, reason, effectivePolicy)
+		l.Log.Info().
+			Int("estimated_input_tokens", effectivePolicy.EstimatedInputTokens).
+			Int("after_estimated_input_tokens", effectivePolicy.AfterEstimatedInputTokens).
+			Int("trigger_input_tokens", effectivePolicy.TriggerInputTokens).
+			Str("reason", reason).
+			Msg("discarded compaction result without request-pressure reduction")
+		return false
+	}
 	if err := l.Conv.Replace(after); err != nil {
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
@@ -3694,6 +3711,32 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		SummaryBytes:               summaryBytes,
 		SummaryPreview:             summaryPreview,
 		LoopProtocolAnchor:         loopProtocolAnchor,
+	})
+}
+
+func (l *Loop) publishContextCompactSkipped(turnID, cause string, before, candidate, beforeBytes, candidateBytes int, reason string, policy contextCompactPolicy) {
+	cause = strings.TrimSpace(cause)
+	if cause == "" {
+		cause = "discarded_candidate"
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "threshold"
+	}
+	l.publish(sse.TypeContextCompactSkipped, sse.ContextCompactSkippedPayload{
+		TurnID:                     turnID,
+		Cause:                      cause,
+		Reason:                     reason,
+		BeforeMessages:             before,
+		CandidateMessages:          candidate,
+		BeforeBytes:                beforeBytes,
+		CandidateBytes:             candidateBytes,
+		EstimatedInputTokens:       policy.EstimatedInputTokens,
+		AfterEstimatedInputTokens:  policy.AfterEstimatedInputTokens,
+		TriggerInputTokens:         policy.TriggerInputTokens,
+		ModelContextWindowTokens:   l.ModelContextWindowTokens,
+		ReservedOutputTokens:       l.reservedOutputTokens(),
+		CompactTriggerInputPercent: l.compactTriggerInputPercent(),
 	})
 }
 

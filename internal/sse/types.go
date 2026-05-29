@@ -31,6 +31,7 @@ const (
 	TypeLoopDecision           = "loop.decision"
 	TypeLoopTurnCheckpoint     = "loop.turn_checkpoint"
 	TypeContextCompact         = "context.compacted"
+	TypeContextCompactSkipped  = "context.compaction_skipped"
 	TypeError                  = "error"
 )
 
@@ -496,6 +497,24 @@ type ContextCompactPayload struct {
 	SummaryBytes               int    `json:"summary_bytes,omitempty"`
 	SummaryPreview             string `json:"summary_preview,omitempty"`
 	LoopProtocolAnchor         string `json:"loop_protocol_anchor,omitempty"`
+}
+
+// ContextCompactSkippedPayload records a compaction candidate that was
+// intentionally discarded before replacing conversation state.
+type ContextCompactSkippedPayload struct {
+	TurnID                     string `json:"turn_id,omitempty"`
+	Cause                      string `json:"cause"`
+	Reason                     string `json:"reason,omitempty"`
+	BeforeMessages             int    `json:"before_messages,omitempty"`
+	CandidateMessages          int    `json:"candidate_messages,omitempty"`
+	BeforeBytes                int    `json:"before_bytes,omitempty"`
+	CandidateBytes             int    `json:"candidate_bytes,omitempty"`
+	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
+	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
+	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
 }
 
 type ToolRuntimeStats struct {

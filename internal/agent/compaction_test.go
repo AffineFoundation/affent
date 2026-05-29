@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1163,17 +1164,18 @@ func (c *worseningRequestPressureCompactor) Compact(context.Context, []ChatMessa
 	}, nil
 }
 
-func TestLoopCompactBeforeRequestStopsAfterDiminishingPressureReturn(t *testing.T) {
+func TestLoopCompactBeforeRequestRejectsNonImprovingPressureCompaction(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := conv.Replace([]ChatMessage{
+	original := []ChatMessage{
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: strings.Repeat("OLD_CONTEXT ", 256)},
 		{Role: "assistant", Content: "historical progress"},
 		{Role: "user", Content: "continue"},
-	}); err != nil {
+	}
+	if err := conv.Replace(original); err != nil {
 		t.Fatal(err)
 	}
 	var toolDef ToolDef
@@ -1195,25 +1197,26 @@ func TestLoopCompactBeforeRequestStopsAfterDiminishingPressureReturn(t *testing.
 	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
 		t.Fatalf("compaction calls = %d, want one call after diminishing return", got)
 	}
-	select {
-	case ev := <-events:
-		if ev.Type != sse.TypeContextCompact {
-			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompact)
-		}
-		var payload sse.ContextCompactPayload
-		if err := json.Unmarshal(ev.Data, &payload); err != nil {
-			t.Fatalf("decode context.compacted: %v", err)
-		}
-		if payload.AfterEstimatedInputTokens < payload.EstimatedInputTokens {
-			t.Fatalf("payload = %+v, want non-improving pressure for diminishing-return guard", payload)
-		}
-	default:
-		t.Fatal("missing context.compacted event")
+	if got := conv.Snapshot(); !reflect.DeepEqual(got, original) {
+		t.Fatalf("conversation changed after non-improving compaction: %+v", got)
 	}
 	select {
 	case ev := <-events:
-		t.Fatalf("unexpected second compaction event: %+v", ev)
+		if ev.Type != sse.TypeContextCompactSkipped {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompactSkipped)
+		}
+		var payload sse.ContextCompactSkippedPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode context.compaction_skipped: %v", err)
+		}
+		if payload.Cause != "request_pressure_not_reduced" ||
+			payload.Reason != "estimated_context_pressure" ||
+			payload.AfterEstimatedInputTokens < payload.EstimatedInputTokens ||
+			payload.TriggerInputTokens != 500 {
+			t.Fatalf("context.compaction_skipped payload = %+v", payload)
+		}
 	default:
+		t.Fatal("missing context.compaction_skipped event")
 	}
 }
 

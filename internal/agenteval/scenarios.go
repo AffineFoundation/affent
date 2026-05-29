@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 const (
@@ -2213,7 +2214,7 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-model-window-compaction-policy",
 		Suites:    []string{longRunSuite},
-		Domains:   []string{contextCompactionDomain, longRunRecoveryDomain},
+		Domains:   []string{longRunRecoveryDomain},
 		SessionID: "longrun-model-window-compaction-policy",
 		Prompt:    "Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-1",
 		Prompts: []string{
@@ -2221,14 +2222,10 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 			"Continue the same session. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-2",
 			"Continue after runtime context policy maintenance. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-3",
 		},
-		RequiredContextCompactions: 1,
-		RequiredFinalText:          []string{"MODEL-WINDOW-POLICY-OK-3"},
+		RequiredFinalText: []string{"MODEL-WINDOW-POLICY-OK-3"},
 		RequiredTraceEventCounts: map[string]int{
-			"context.compacted": 1,
-			"runtime.surface":   1,
-		},
-		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
-			{Source: "context_compaction", SummaryContains: "estimated_context_pressure"},
+			sse.TypeRuntimeSurface:        1,
+			sse.TypeContextCompactSkipped: 1,
 		},
 		ForbiddenTools:             []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
 		MaxParentToolCalls:         0,
