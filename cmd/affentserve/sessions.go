@@ -72,67 +72,68 @@ type Session struct {
 	outputTokens atomic.Int64
 	turns        atomic.Int64
 
-	toolRequests                      atomic.Int64
-	toolNameCanonicalized             atomic.Int64
-	toolArgsRepaired                  atomic.Int64
-	toolRepairCalls                   atomic.Int64
-	toolRepairSucceeded               atomic.Int64
-	toolRepairFailed                  atomic.Int64
-	toolRepairNotes                   atomic.Int64
-	toolErrors                        atomic.Int64
-	toolDurationMS                    atomic.Int64
-	loopGuardInterventions            atomic.Int64
-	forcedNoTools                     atomic.Int64
-	sourceAccessResults               atomic.Int64
-	sourceAccessVerified              atomic.Int64
-	sourceAccessDiscovery             atomic.Int64
-	sourceAccessNetwork               atomic.Int64
-	sourceAccessDynamic               atomic.Int64
-	memoryUpdates                     atomic.Int64
-	memoryUpdateAdd                   atomic.Int64
-	memoryUpdateReplace               atomic.Int64
-	memoryUpdateRemove                atomic.Int64
-	memorySearchCalls                 atomic.Int64
-	memorySearchMisses                atomic.Int64
-	sessionSearchCalls                atomic.Int64
-	sessionSearchResults              atomic.Int64
-	sessionSearchContext              atomic.Int64
-	sessionSearchTerms                atomic.Int64
-	sessionSearchRecent               atomic.Int64
-	toolContextTruncated              atomic.Int64
-	toolContextOmitted                atomic.Int64
-	toolRepairMu                      sync.Mutex
-	toolRepairByKind                  map[string]int64
-	toolFailureByKind                 map[string]int64
-	toolGovernanceMu                  sync.Mutex
-	toolGovernanceCallsByID           map[string]sessionToolGovernanceClass
-	planByAction                      map[string]int64
-	focusedTaskByType                 map[string]int64
-	subagentByMode                    map[string]int64
-	planCalls                         atomic.Int64
-	planErrors                        atomic.Int64
-	focusedTaskCalls                  atomic.Int64
-	focusedTaskErrors                 atomic.Int64
-	subagentCalls                     atomic.Int64
-	subagentErrors                    atomic.Int64
-	runtimeErrors                     atomic.Int64
-	contextCompactions                atomic.Int64
-	contextCompactionReact            atomic.Int64
-	contextCompactionRmMsg            atomic.Int64
-	contextCompactionBytes            atomic.Int64
-	contextCompactionMiss             atomic.Int64
-	contextCompactionEmpty            atomic.Int64
-	runtimeStatsMu                    sync.Mutex
-	turnEndByReason                   map[string]int64
-	runtimeErrorByKind                map[string]int64
-	contextCompactionLastReason       string
-	contextCompactionLastReactive     bool
-	contextCompactionLastSummaryState string
-	contextCompactionLastEstimated    int64
-	contextCompactionLastTrigger      int64
-	contextCompactionLastModelWindow  int64
-	contextCompactionLastReserve      int64
-	contextCompactionLastPercent      int64
+	toolRequests                        atomic.Int64
+	toolNameCanonicalized               atomic.Int64
+	toolArgsRepaired                    atomic.Int64
+	toolRepairCalls                     atomic.Int64
+	toolRepairSucceeded                 atomic.Int64
+	toolRepairFailed                    atomic.Int64
+	toolRepairNotes                     atomic.Int64
+	toolErrors                          atomic.Int64
+	toolDurationMS                      atomic.Int64
+	loopGuardInterventions              atomic.Int64
+	forcedNoTools                       atomic.Int64
+	sourceAccessResults                 atomic.Int64
+	sourceAccessVerified                atomic.Int64
+	sourceAccessDiscovery               atomic.Int64
+	sourceAccessNetwork                 atomic.Int64
+	sourceAccessDynamic                 atomic.Int64
+	memoryUpdates                       atomic.Int64
+	memoryUpdateAdd                     atomic.Int64
+	memoryUpdateReplace                 atomic.Int64
+	memoryUpdateRemove                  atomic.Int64
+	memorySearchCalls                   atomic.Int64
+	memorySearchMisses                  atomic.Int64
+	sessionSearchCalls                  atomic.Int64
+	sessionSearchResults                atomic.Int64
+	sessionSearchContext                atomic.Int64
+	sessionSearchTerms                  atomic.Int64
+	sessionSearchRecent                 atomic.Int64
+	toolContextTruncated                atomic.Int64
+	toolContextOmitted                  atomic.Int64
+	toolRepairMu                        sync.Mutex
+	toolRepairByKind                    map[string]int64
+	toolFailureByKind                   map[string]int64
+	toolGovernanceMu                    sync.Mutex
+	toolGovernanceCallsByID             map[string]sessionToolGovernanceClass
+	planByAction                        map[string]int64
+	focusedTaskByType                   map[string]int64
+	subagentByMode                      map[string]int64
+	planCalls                           atomic.Int64
+	planErrors                          atomic.Int64
+	focusedTaskCalls                    atomic.Int64
+	focusedTaskErrors                   atomic.Int64
+	subagentCalls                       atomic.Int64
+	subagentErrors                      atomic.Int64
+	runtimeErrors                       atomic.Int64
+	contextCompactions                  atomic.Int64
+	contextCompactionReact              atomic.Int64
+	contextCompactionRmMsg              atomic.Int64
+	contextCompactionBytes              atomic.Int64
+	contextCompactionMiss               atomic.Int64
+	contextCompactionEmpty              atomic.Int64
+	runtimeStatsMu                      sync.Mutex
+	turnEndByReason                     map[string]int64
+	runtimeErrorByKind                  map[string]int64
+	contextCompactionLastReason         string
+	contextCompactionLastReactive       bool
+	contextCompactionLastSummaryState   string
+	contextCompactionLastEstimated      int64
+	contextCompactionLastAfterEstimated int64
+	contextCompactionLastTrigger        int64
+	contextCompactionLastModelWindow    int64
+	contextCompactionLastReserve        int64
+	contextCompactionLastPercent        int64
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -1955,23 +1956,24 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 // a missing final answer can be a turn budget outcome, while LLM stream
 // failures are runtime errors, not browser/web_fetch failures.
 type RuntimeStatsSnapshot struct {
-	TurnEndByReason                                 map[string]int64 `json:"turn_end_by_reason,omitempty"`
-	RuntimeErrors                                   int64            `json:"runtime_errors"`
-	RuntimeErrorByKind                              map[string]int64 `json:"runtime_error_by_kind,omitempty"`
-	ContextCompactions                              int64            `json:"context_compactions,omitempty"`
-	ContextCompactionsReactive                      int64            `json:"context_compactions_reactive,omitempty"`
-	ContextCompactionRemovedMessages                int64            `json:"context_compaction_removed_messages,omitempty"`
-	ContextCompactionSummaryBytes                   int64            `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionSummaryMissing                 int64            `json:"context_compaction_summary_missing,omitempty"`
-	ContextCompactionSummaryEmpty                   int64            `json:"context_compaction_summary_empty,omitempty"`
-	ContextCompactionLatestReason                   string           `json:"context_compaction_latest_reason,omitempty"`
-	ContextCompactionLatestReactive                 bool             `json:"context_compaction_latest_reactive,omitempty"`
-	ContextCompactionLatestState                    string           `json:"context_compaction_latest_summary_state,omitempty"`
-	ContextCompactionLatestEstimatedInputTokens     int64            `json:"context_compaction_latest_estimated_input_tokens,omitempty"`
-	ContextCompactionLatestTriggerInputTokens       int64            `json:"context_compaction_latest_trigger_input_tokens,omitempty"`
-	ContextCompactionLatestModelContextWindowTokens int64            `json:"context_compaction_latest_model_context_window_tokens,omitempty"`
-	ContextCompactionLatestReservedOutputTokens     int64            `json:"context_compaction_latest_reserved_output_tokens,omitempty"`
-	ContextCompactionLatestTriggerInputPercent      int64            `json:"context_compaction_latest_trigger_input_percent,omitempty"`
+	TurnEndByReason                                  map[string]int64 `json:"turn_end_by_reason,omitempty"`
+	RuntimeErrors                                    int64            `json:"runtime_errors"`
+	RuntimeErrorByKind                               map[string]int64 `json:"runtime_error_by_kind,omitempty"`
+	ContextCompactions                               int64            `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive                       int64            `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemovedMessages                 int64            `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummaryBytes                    int64            `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing                  int64            `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty                    int64            `json:"context_compaction_summary_empty,omitempty"`
+	ContextCompactionLatestReason                    string           `json:"context_compaction_latest_reason,omitempty"`
+	ContextCompactionLatestReactive                  bool             `json:"context_compaction_latest_reactive,omitempty"`
+	ContextCompactionLatestState                     string           `json:"context_compaction_latest_summary_state,omitempty"`
+	ContextCompactionLatestEstimatedInputTokens      int64            `json:"context_compaction_latest_estimated_input_tokens,omitempty"`
+	ContextCompactionLatestAfterEstimatedInputTokens int64            `json:"context_compaction_latest_after_estimated_input_tokens,omitempty"`
+	ContextCompactionLatestTriggerInputTokens        int64            `json:"context_compaction_latest_trigger_input_tokens,omitempty"`
+	ContextCompactionLatestModelContextWindowTokens  int64            `json:"context_compaction_latest_model_context_window_tokens,omitempty"`
+	ContextCompactionLatestReservedOutputTokens      int64            `json:"context_compaction_latest_reserved_output_tokens,omitempty"`
+	ContextCompactionLatestTriggerInputPercent       int64            `json:"context_compaction_latest_trigger_input_percent,omitempty"`
 }
 
 func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
@@ -1985,29 +1987,31 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 	latestReactive := s.contextCompactionLastReactive
 	latestState := s.contextCompactionLastSummaryState
 	latestEstimated := s.contextCompactionLastEstimated
+	latestAfterEstimated := s.contextCompactionLastAfterEstimated
 	latestTrigger := s.contextCompactionLastTrigger
 	latestModelWindow := s.contextCompactionLastModelWindow
 	latestReserve := s.contextCompactionLastReserve
 	latestPercent := s.contextCompactionLastPercent
 	s.runtimeStatsMu.Unlock()
 	return RuntimeStatsSnapshot{
-		TurnEndByReason:                                 turnEndByReason,
-		RuntimeErrors:                                   s.runtimeErrors.Load(),
-		RuntimeErrorByKind:                              errorByKind,
-		ContextCompactions:                              s.contextCompactions.Load(),
-		ContextCompactionsReactive:                      s.contextCompactionReact.Load(),
-		ContextCompactionRemovedMessages:                s.contextCompactionRmMsg.Load(),
-		ContextCompactionSummaryBytes:                   s.contextCompactionBytes.Load(),
-		ContextCompactionSummaryMissing:                 s.contextCompactionMiss.Load(),
-		ContextCompactionSummaryEmpty:                   s.contextCompactionEmpty.Load(),
-		ContextCompactionLatestReason:                   latestReason,
-		ContextCompactionLatestReactive:                 latestReactive,
-		ContextCompactionLatestState:                    latestState,
-		ContextCompactionLatestEstimatedInputTokens:     latestEstimated,
-		ContextCompactionLatestTriggerInputTokens:       latestTrigger,
-		ContextCompactionLatestModelContextWindowTokens: latestModelWindow,
-		ContextCompactionLatestReservedOutputTokens:     latestReserve,
-		ContextCompactionLatestTriggerInputPercent:      latestPercent,
+		TurnEndByReason:                                  turnEndByReason,
+		RuntimeErrors:                                    s.runtimeErrors.Load(),
+		RuntimeErrorByKind:                               errorByKind,
+		ContextCompactions:                               s.contextCompactions.Load(),
+		ContextCompactionsReactive:                       s.contextCompactionReact.Load(),
+		ContextCompactionRemovedMessages:                 s.contextCompactionRmMsg.Load(),
+		ContextCompactionSummaryBytes:                    s.contextCompactionBytes.Load(),
+		ContextCompactionSummaryMissing:                  s.contextCompactionMiss.Load(),
+		ContextCompactionSummaryEmpty:                    s.contextCompactionEmpty.Load(),
+		ContextCompactionLatestReason:                    latestReason,
+		ContextCompactionLatestReactive:                  latestReactive,
+		ContextCompactionLatestState:                     latestState,
+		ContextCompactionLatestEstimatedInputTokens:      latestEstimated,
+		ContextCompactionLatestAfterEstimatedInputTokens: latestAfterEstimated,
+		ContextCompactionLatestTriggerInputTokens:        latestTrigger,
+		ContextCompactionLatestModelContextWindowTokens:  latestModelWindow,
+		ContextCompactionLatestReservedOutputTokens:      latestReserve,
+		ContextCompactionLatestTriggerInputPercent:       latestPercent,
 	}
 }
 
@@ -2152,6 +2156,7 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	s.contextCompactionLastReactive = p.Reactive
 	s.contextCompactionLastSummaryState = state
 	s.contextCompactionLastEstimated = int64(p.EstimatedInputTokens)
+	s.contextCompactionLastAfterEstimated = int64(p.AfterEstimatedInputTokens)
 	s.contextCompactionLastTrigger = int64(p.TriggerInputTokens)
 	s.contextCompactionLastModelWindow = int64(p.ModelContextWindowTokens)
 	s.contextCompactionLastReserve = int64(p.ReservedOutputTokens)
@@ -2187,6 +2192,7 @@ func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 		s.contextCompactionLastReactive = stats.ContextCompactionLatestReactive
 		s.contextCompactionLastSummaryState = stats.ContextCompactionLatestState
 		s.contextCompactionLastEstimated = stats.ContextCompactionLatestEstimatedInputTokens
+		s.contextCompactionLastAfterEstimated = stats.ContextCompactionLatestAfterEstimatedInputTokens
 		s.contextCompactionLastTrigger = stats.ContextCompactionLatestTriggerInputTokens
 		s.contextCompactionLastModelWindow = stats.ContextCompactionLatestModelContextWindowTokens
 		s.contextCompactionLastReserve = stats.ContextCompactionLatestReservedOutputTokens

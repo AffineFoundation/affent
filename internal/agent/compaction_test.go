@@ -1114,6 +1114,10 @@ func TestLoopMaybeCompactForRequestPressureIncludesToolSchemas(t *testing.T) {
 	if payload.EstimatedInputTokens < payload.TriggerInputTokens || payload.TriggerInputTokens != 32 {
 		t.Fatalf("payload = %+v, want request-pressure token policy metadata", payload)
 	}
+	if payload.AfterEstimatedInputTokens != EstimateRequestInputTokens(conv.Snapshot(), []ToolDef{toolDef}) ||
+		payload.AfterEstimatedInputTokens <= 0 {
+		t.Fatalf("payload = %+v, want post-compaction request pressure estimate", payload)
+	}
 	if got := conv.Snapshot(); len(got) != 3 || !strings.Contains(got[1].Content, "short summary") {
 		t.Fatalf("conversation was not compacted through request pressure: %+v", got)
 	}

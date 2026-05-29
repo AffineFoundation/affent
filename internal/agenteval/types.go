@@ -792,6 +792,7 @@ type ContextCompaction struct {
 	AfterBytes                 int    `json:"after_bytes,omitempty"`
 	ReducedBytes               int    `json:"reduced_bytes,omitempty"`
 	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
 	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
 	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
 	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
@@ -806,18 +807,21 @@ type ContextCompaction struct {
 }
 
 type ContextCompactionStats struct {
-	Count                    int
-	Reactive                 int
-	Proactive                int
-	RemovedMessages          int
-	ReducedBytes             int
-	SummaryBytes             int
-	SummaryMissing           int
-	SummaryEmpty             int
-	PolicyObserved           int
-	MaxPolicyPressurePercent int
-	ByReason                 map[string]int
-	Examples                 []ContextCompaction
+	Count                        int
+	Reactive                     int
+	Proactive                    int
+	RemovedMessages              int
+	ReducedBytes                 int
+	SummaryBytes                 int
+	SummaryMissing               int
+	SummaryEmpty                 int
+	PolicyObserved               int
+	MaxPolicyPressurePercent     int
+	PostPolicyObserved           int
+	PostPolicyStillOverTrigger   int
+	MaxPostPolicyPressurePercent int
+	ByReason                     map[string]int
+	Examples                     []ContextCompaction
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -2052,6 +2056,16 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 				stats.MaxPolicyPressurePercent = pressure
 			}
 		}
+		if compaction.AfterEstimatedInputTokens > 0 && compaction.TriggerInputTokens > 0 {
+			stats.PostPolicyObserved++
+			pressure := contextCompactionPolicyPressurePercent(compaction.AfterEstimatedInputTokens, compaction.TriggerInputTokens)
+			if pressure > stats.MaxPostPolicyPressurePercent {
+				stats.MaxPostPolicyPressurePercent = pressure
+			}
+			if compaction.AfterEstimatedInputTokens >= compaction.TriggerInputTokens {
+				stats.PostPolicyStillOverTrigger++
+			}
+		}
 		if contextCompactionSummaryMissing(compaction) {
 			stats.SummaryMissing++
 		}
@@ -2070,6 +2084,7 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			AfterBytes:                 compaction.AfterBytes,
 			ReducedBytes:               compaction.ReducedBytes,
 			EstimatedInputTokens:       compaction.EstimatedInputTokens,
+			AfterEstimatedInputTokens:  compaction.AfterEstimatedInputTokens,
 			TriggerInputTokens:         compaction.TriggerInputTokens,
 			ModelContextWindowTokens:   compaction.ModelContextWindowTokens,
 			ReservedOutputTokens:       compaction.ReservedOutputTokens,

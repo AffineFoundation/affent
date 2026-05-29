@@ -581,6 +581,7 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 			Reason:                     "context_overflow",
 			SummaryPresent:             false,
 			EstimatedInputTokens:       120000,
+			AfterEstimatedInputTokens:  68000,
 			TriggerInputTokens:         70000,
 			ModelContextWindowTokens:   100000,
 			ReservedOutputTokens:       30000,
@@ -615,6 +616,7 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 		runtime.ContextCompactionRemovedMessages != 40 ||
 		runtime.ContextCompactionLatestReason != "context_overflow" ||
 		runtime.ContextCompactionLatestEstimatedInputTokens != 120000 ||
+		runtime.ContextCompactionLatestAfterEstimatedInputTokens != 68000 ||
 		runtime.ContextCompactionLatestTriggerInputTokens != 70000 ||
 		runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
 		runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
@@ -996,9 +998,9 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		events = append(events, ev)
 	}
 	for _, p := range []sse.ContextCompactPayload{
-		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048, EstimatedInputTokens: 120000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
-		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024, EstimatedInputTokens: 64000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
-		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false, EstimatedInputTokens: 130000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
+		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048, EstimatedInputTokens: 120000, AfterEstimatedInputTokens: 65000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
+		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024, EstimatedInputTokens: 64000, AfterEstimatedInputTokens: 50000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
+		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false, EstimatedInputTokens: 130000, AfterEstimatedInputTokens: 72000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
 	} {
 		ev, err := sse.NewEvent(sse.TypeContextCompact, p)
 		if err != nil {
@@ -1026,6 +1028,7 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 			got.ContextCompactionLatestReason == "context_overflow" &&
 			got.ContextCompactionLatestReactive &&
 			got.ContextCompactionLatestEstimatedInputTokens == 130000 &&
+			got.ContextCompactionLatestAfterEstimatedInputTokens == 72000 &&
 			got.ContextCompactionLatestTriggerInputTokens == 70000 &&
 			got.ContextCompactionLatestModelContextWindowTokens == 100000 &&
 			got.ContextCompactionLatestReservedOutputTokens == 30000 &&

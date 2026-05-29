@@ -226,12 +226,13 @@ func TestApplyTraceEventTracksContextCompactionSummaryPresenceKnown(t *testing.T
 	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextCompact, json.RawMessage(`{"turn_id":"turn-1","before_messages":40,"after_messages":12,"removed_messages":28,"reactive":true,"reason":"legacy_trace"}`), "turn-1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextCompact, json.RawMessage(`{"turn_id":"turn-1","before_messages":42,"after_messages":10,"removed_messages":32,"before_bytes":10000,"after_bytes":3000,"reduced_bytes":7000,"reactive":true,"reason":"context_overflow","summary_present":false}`), "turn-1"); err != nil {
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextCompact, json.RawMessage(`{"turn_id":"turn-1","before_messages":42,"after_messages":10,"removed_messages":32,"before_bytes":10000,"after_bytes":3000,"reduced_bytes":7000,"estimated_input_tokens":120000,"after_estimated_input_tokens":68000,"trigger_input_tokens":70000,"reactive":true,"reason":"context_overflow","summary_present":false}`), "turn-1"); err != nil {
 		t.Fatal(err)
 	}
 
 	stats := trace.ContextCompactionStats(2)
-	if stats.Count != 2 || stats.SummaryMissing != 1 || stats.SummaryEmpty != 0 || stats.ReducedBytes != 7000 {
+	if stats.Count != 2 || stats.SummaryMissing != 1 || stats.SummaryEmpty != 0 || stats.ReducedBytes != 7000 ||
+		stats.PostPolicyObserved != 1 || stats.PostPolicyStillOverTrigger != 0 || stats.MaxPostPolicyPressurePercent != 98 {
 		t.Fatalf("ContextCompactionStats = %+v", stats)
 	}
 	if stats.ByReason["legacy_trace"] != 1 || stats.ByReason["context_overflow"] != 1 {
@@ -240,11 +241,12 @@ func TestApplyTraceEventTracksContextCompactionSummaryPresenceKnown(t *testing.T
 	if len(stats.Examples) != 2 ||
 		stats.Examples[0].SummaryPresentKnown ||
 		!stats.Examples[1].SummaryPresentKnown ||
-		stats.Examples[1].ReducedBytes != 7000 {
+		stats.Examples[1].ReducedBytes != 7000 ||
+		stats.Examples[1].AfterEstimatedInputTokens != 68000 {
 		t.Fatalf("ContextCompaction examples should preserve summary_present known state: %+v", stats.Examples)
 	}
 	timeline := renderDebugTimeline(BatchResult{BatchScenario: "compaction-known"}, BatchScenario{Prompt: "continue"}, &trace)
-	for _, want := range []string{"summary_state=unknown", "summary_state=missing", "bytes=10000->3000 reduced=7000"} {
+	for _, want := range []string{"summary_state=unknown", "summary_state=missing", "bytes=10000->3000 reduced=7000", "after_estimated_input_tokens=68000"} {
 		if !strings.Contains(timeline, want) {
 			t.Fatalf("timeline missing %q:\n%s", want, timeline)
 		}

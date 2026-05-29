@@ -3380,15 +3380,19 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 // is bypassed so we get an emergency-trim even on shorter logs whose
 // individual messages are unusually large. No-op if Compactor is nil.
 func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) bool {
+	return l.maybeCompactWithToolDefs(ctx, turnID, reactive, nil)
+}
+
+func (l *Loop) maybeCompactWithToolDefs(ctx context.Context, turnID string, reactive bool, toolDefs []ToolDef) bool {
 	reason := "threshold"
 	if reactive {
 		reason = "context_overflow"
 	}
-	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason, 0, nil)
+	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason, 0, nil, toolDefs)
 }
 
 func (l *Loop) maybeCompactForBudgetPressure(ctx context.Context, turnID string) bool {
-	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure", 0, nil)
+	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure", 0, nil, nil)
 }
 
 func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string, toolDefs []ToolDef) bool {
@@ -3407,7 +3411,7 @@ func (l *Loop) maybeCompactForRequestPressureWithKeepFirst(ctx context.Context, 
 	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst, &contextCompactPolicy{
 		EstimatedInputTokens: estimated,
 		TriggerInputTokens:   limit,
-	})
+	}, toolDefs)
 	if compacted {
 		l.Log.Info().
 			Int("estimated_input_tokens", estimated).
@@ -3423,7 +3427,7 @@ func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs
 	// (conversation + tool schemas). Run the request-pressure check
 	// even after a threshold compaction because the first pass may reduce
 	// old conversation while the next request is still too large.
-	thresholdCompacted := l.maybeCompact(ctx, turnID, false)
+	thresholdCompacted := l.maybeCompactWithToolDefs(ctx, turnID, false, toolDefs)
 
 	const maxRequestPressureCompactions = 2
 	emergencyKeepFirst := 0
@@ -3457,11 +3461,12 @@ func (l *Loop) reservedOutputTokens() int {
 }
 
 type contextCompactPolicy struct {
-	EstimatedInputTokens int
-	TriggerInputTokens   int
+	EstimatedInputTokens      int
+	AfterEstimatedInputTokens int
+	TriggerInputTokens        int
 }
 
-func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int, policy *contextCompactPolicy) bool {
+func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int, policy *contextCompactPolicy, toolDefs []ToolDef) bool {
 	if l.Compactor == nil {
 		return false
 	}
@@ -3474,6 +3479,9 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 	if policy != nil {
 		if policy.EstimatedInputTokens > 0 {
 			effectivePolicy.EstimatedInputTokens = policy.EstimatedInputTokens
+		}
+		if policy.AfterEstimatedInputTokens > 0 {
+			effectivePolicy.AfterEstimatedInputTokens = policy.AfterEstimatedInputTokens
 		}
 		if policy.TriggerInputTokens > 0 {
 			effectivePolicy.TriggerInputTokens = policy.TriggerInputTokens
@@ -3503,6 +3511,7 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 	if len(after) == 0 || (len(after) >= len(before) && afterBytes >= beforeBytes) {
 		return false
 	}
+	effectivePolicy.AfterEstimatedInputTokens = estimateRequestInputTokens(after, toolDefs)
 	if err := l.Conv.Replace(after); err != nil {
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
@@ -3569,6 +3578,7 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		AfterBytes:                 afterBytes,
 		ReducedBytes:               max(0, beforeBytes-afterBytes),
 		EstimatedInputTokens:       policy.EstimatedInputTokens,
+		AfterEstimatedInputTokens:  policy.AfterEstimatedInputTokens,
 		TriggerInputTokens:         policy.TriggerInputTokens,
 		ModelContextWindowTokens:   l.ModelContextWindowTokens,
 		ReservedOutputTokens:       l.reservedOutputTokens(),

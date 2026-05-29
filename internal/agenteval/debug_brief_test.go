@@ -1493,6 +1493,26 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 		!stringSliceContains(brief.Tags, "context_compaction:policy_missing") {
 		t.Fatalf("policy-missing compaction item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ContextCompactions: ContextCompactionStats{
+			Count:                        1,
+			PolicyObserved:               1,
+			PostPolicyObserved:           1,
+			PostPolicyStillOverTrigger:   1,
+			MaxPostPolicyPressurePercent: 112,
+		},
+	})
+	item = debugBriefItemByKind(brief, "context_compaction")
+	if item == nil ||
+		item.Message != "context compaction left estimated request input above the trigger; inspect tool-schema pressure and summary size before raising token limits" ||
+		item.Counts["post_policy_observed"] != 1 ||
+		item.Counts["post_policy_still_over_trigger"] != 1 ||
+		item.Counts["max_post_policy_pressure_percent"] != 112 ||
+		!stringSliceContains(brief.Tags, "context_compaction:post_pressure") {
+		t.Fatalf("post-pressure compaction item = %+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesTruncationArtifactQuality(t *testing.T) {

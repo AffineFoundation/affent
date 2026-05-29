@@ -560,6 +560,10 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "context_compaction:policy_missing")
 			message = "context compaction events lacked policy metadata; inspect runtime compaction telemetry before judging input-budget behavior"
 		}
+		if res.ContextCompactions.PostPolicyStillOverTrigger > 0 {
+			tags = append(tags, "context_compaction:post_pressure")
+			message = "context compaction left estimated request input above the trigger; inspect tool-schema pressure and summary size before raising token limits"
+		}
 		for _, reason := range sortedStringMapKeys(res.ContextCompactions.ByReason) {
 			tags = append(tags, "context_compaction:"+reason)
 		}
@@ -571,15 +575,18 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			message = "context compaction summary was empty; inspect examples before continuing"
 		}
 		add("context_compaction", "warn", message, []string{"context_compaction_examples", "context_compactions"}, map[string]int{
-			"count":            res.ContextCompactions.Count,
-			"reactive":         res.ContextCompactions.Reactive,
-			"removed_messages": res.ContextCompactions.RemovedMessages,
-			"reduced_bytes":    res.ContextCompactions.ReducedBytes,
-			"summary_bytes":    res.ContextCompactions.SummaryBytes,
-			"summary_missing":  res.ContextCompactions.SummaryMissing,
-			"summary_empty":    res.ContextCompactions.SummaryEmpty,
-			"policy_observed":  res.ContextCompactions.PolicyObserved,
-			"policy_missing":   policyMissing,
+			"count":                            res.ContextCompactions.Count,
+			"reactive":                         res.ContextCompactions.Reactive,
+			"removed_messages":                 res.ContextCompactions.RemovedMessages,
+			"reduced_bytes":                    res.ContextCompactions.ReducedBytes,
+			"summary_bytes":                    res.ContextCompactions.SummaryBytes,
+			"summary_missing":                  res.ContextCompactions.SummaryMissing,
+			"summary_empty":                    res.ContextCompactions.SummaryEmpty,
+			"policy_observed":                  res.ContextCompactions.PolicyObserved,
+			"policy_missing":                   policyMissing,
+			"post_policy_observed":             res.ContextCompactions.PostPolicyObserved,
+			"post_policy_still_over_trigger":   res.ContextCompactions.PostPolicyStillOverTrigger,
+			"max_post_policy_pressure_percent": res.ContextCompactions.MaxPostPolicyPressurePercent,
 		}, tags...)
 	}
 	if hasDebugBriefTruncation(res) {

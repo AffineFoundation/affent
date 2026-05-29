@@ -476,6 +476,7 @@ type ContextCompactPayload struct {
 	AfterBytes                 int    `json:"after_bytes,omitempty"`
 	ReducedBytes               int    `json:"reduced_bytes,omitempty"`
 	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
 	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
 	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
 	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`

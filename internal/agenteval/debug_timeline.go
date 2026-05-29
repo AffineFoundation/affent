@@ -1467,6 +1467,9 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 		if c.EstimatedInputTokens > 0 {
 			policy = append(policy, fmt.Sprintf("estimated_input_tokens=%d", c.EstimatedInputTokens))
 		}
+		if c.AfterEstimatedInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("after_estimated_input_tokens=%d", c.AfterEstimatedInputTokens))
+		}
 		if c.TriggerInputTokens > 0 {
 			policy = append(policy, fmt.Sprintf("trigger_input_tokens=%d", c.TriggerInputTokens))
 		}

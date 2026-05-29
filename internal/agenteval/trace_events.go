@@ -396,6 +396,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			AfterBytes:                 p.AfterBytes,
 			ReducedBytes:               p.ReducedBytes,
 			EstimatedInputTokens:       p.EstimatedInputTokens,
+			AfterEstimatedInputTokens:  p.AfterEstimatedInputTokens,
 			TriggerInputTokens:         p.TriggerInputTokens,
 			ModelContextWindowTokens:   p.ModelContextWindowTokens,
 			ReservedOutputTokens:       p.ReservedOutputTokens,

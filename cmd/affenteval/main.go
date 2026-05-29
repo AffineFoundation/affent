@@ -3248,7 +3248,7 @@ func printContextCompactionExampleLines(w io.Writer, examples []agenteval.Contex
 		if ex.BeforeBytes > 0 || ex.AfterBytes > 0 || ex.ReducedBytes > 0 {
 			fmt.Fprintf(w, " bytes=%d->%d reduced=%d", ex.BeforeBytes, ex.AfterBytes, ex.ReducedBytes)
 		}
-		if ex.EstimatedInputTokens > 0 || ex.TriggerInputTokens > 0 || ex.ModelContextWindowTokens > 0 || ex.ReservedOutputTokens > 0 || ex.CompactTriggerInputPercent > 0 {
+		if ex.EstimatedInputTokens > 0 || ex.AfterEstimatedInputTokens > 0 || ex.TriggerInputTokens > 0 || ex.ModelContextWindowTokens > 0 || ex.ReservedOutputTokens > 0 || ex.CompactTriggerInputPercent > 0 {
 			fmt.Fprintf(w, " policy=estimated:%d,trigger:%d,model_window:%d,reserved_output:%d,trigger_percent:%d,pressure:%d%%",
 				ex.EstimatedInputTokens,
 				ex.TriggerInputTokens,
@@ -3257,6 +3257,9 @@ func printContextCompactionExampleLines(w io.Writer, examples []agenteval.Contex
 				ex.CompactTriggerInputPercent,
 				contextCompactionPolicyPressurePercent(ex),
 			)
+			if ex.AfterEstimatedInputTokens > 0 {
+				fmt.Fprintf(w, ",after:%d,after_pressure:%d%%", ex.AfterEstimatedInputTokens, contextCompactionPostPolicyPressurePercent(ex))
+			}
 		}
 		fmt.Fprintf(w, " summary_state=%s summary_bytes=%d",
 			contextCompactionExampleSummaryState(ex),
@@ -3293,6 +3296,13 @@ func contextCompactionPolicyPressurePercent(ex agenteval.ContextCompaction) int 
 		return 0
 	}
 	return (ex.EstimatedInputTokens*100 + ex.TriggerInputTokens - 1) / ex.TriggerInputTokens
+}
+
+func contextCompactionPostPolicyPressurePercent(ex agenteval.ContextCompaction) int {
+	if ex.AfterEstimatedInputTokens <= 0 || ex.TriggerInputTokens <= 0 {
+		return 0
+	}
+	return (ex.AfterEstimatedInputTokens*100 + ex.TriggerInputTokens - 1) / ex.TriggerInputTokens
 }
 
 func printContextInjectionExampleLines(w io.Writer, examples []agenteval.ContextInjection, indent string) {
