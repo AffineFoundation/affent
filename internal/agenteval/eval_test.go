@@ -5298,6 +5298,43 @@ func TestBuildDebugRecoveryGuideAddsLoopProtocolCalibrationBacklogAction(t *test
 	}
 }
 
+func TestBuildDebugRecoveryGuideAddsDurableCompletionAction(t *testing.T) {
+	res := BatchResult{
+		OK:                true,
+		Workspace:         "/tmp/affent-eval/open-durable-state",
+		TimelinePath:      "/tmp/affent-eval/open-durable-state/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/open-durable-state/affenteval-debug.json",
+		FinalTextPath:     "/tmp/affent-eval/open-durable-state/affenteval-final.txt",
+		FinalText:         "Pushed commit b53cb8b.",
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count:  2,
+			Latest: LoopTurnCheckpoint{Status: "running"},
+		},
+		Plan: PlanStats{
+			Calls:          2,
+			TotalSteps:     4,
+			CompletedSteps: 3,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"durable_completion",
+		"final_text",
+		"runtime_surface",
+		"message_rejected_examples",
+		"loop_turn_checkpoint_examples",
+		"plan_calls",
+		"fix the completion guard or durable close/update path",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)
+		}
+	}
+}
+
 func TestBuildDebugRecoveryGuideAddsToolBudgetRunawayAction(t *testing.T) {
 	res := BatchResult{
 		Workspace:         "/tmp/affent-eval/tool-budget",

@@ -1795,6 +1795,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "verifier:output_truncated") {
 		add("For verifier:output_truncated, rerun the verifier in the retained workspace or raise --verifier-output-cap before inferring the exact failing assertion from the bounded preview.")
 	}
+	if containsString(tags, "durable_completion") {
+		add("For durable_completion, inspect final_text, runtime_surface, message_rejected_examples, loop_turn_checkpoint_examples, and plan_calls; fix the completion guard or durable close/update path before trusting the final answer.")
+	}
 	if containsString(tags, "loop_protocol:fixture") {
 		add("For loop_protocol:fixture, fix the per-session .affent/loops/<session_id>/LOOP.md fixture and state.json lifecycle status before rerunning; this is scenario setup, not model behavior.")
 	}
@@ -1861,6 +1864,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"verifier:not_run",
 		"verifier:abnormal",
 		"verifier:output_truncated",
+		"durable_completion",
 		"loop_protocol:fixture",
 		"loop_protocol:calibration_backlog",
 		"tool_budget:turn_overrun",

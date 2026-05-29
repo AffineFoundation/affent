@@ -714,6 +714,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxDebugBriefTagRates: map[string]float64{
 					"context_compaction:summary_empty":   0,
 					"context_compaction:summary_missing": 0,
+					"durable_completion":                 0,
 					"empty_recall:no_recent_sessions":    0,
 					"loop_protocol:calibration_backlog":  0,
 					"loop_protocol:fixture":              0,
