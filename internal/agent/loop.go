@@ -3438,7 +3438,14 @@ func (l *Loop) compactTriggerInputTokens() int {
 			fallback = max(1, (c.TriggerBytes+3)/4)
 		}
 	}
-	return CompactTriggerInputTokensForPolicy(l.CompactTriggerInputTokens, l.ModelContextWindowTokens, l.CompactTriggerInputPercent, fallback)
+	return CompactTriggerInputTokensForModelPolicy(l.CompactTriggerInputTokens, l.ModelContextWindowTokens, l.CompactTriggerInputPercent, l.reservedOutputTokens(), fallback)
+}
+
+func (l *Loop) reservedOutputTokens() int {
+	if l == nil || l.LLM == nil || l.LLM.Sampling.MaxTokens == nil || *l.LLM.Sampling.MaxTokens <= 0 {
+		return 0
+	}
+	return *l.LLM.Sampling.MaxTokens
 }
 
 func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int) bool {

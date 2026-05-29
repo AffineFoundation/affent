@@ -1138,6 +1138,15 @@ func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	if got := CompactTriggerInputTokensForPolicy(0, 0, 80, DefaultSummaryTriggerInputTokens); got != DefaultSummaryTriggerInputTokens {
 		t.Fatalf("fallback trigger = %d, want %d", got, DefaultSummaryTriggerInputTokens)
 	}
+	if got := CompactTriggerInputTokensForModelPolicy(0, 100_000, 80, 30_000, DefaultSummaryTriggerInputTokens); got != 70_000 {
+		t.Fatalf("output-reserved trigger = %d, want 70000", got)
+	}
+	if got := CompactTriggerInputTokensForModelPolicy(0, 100_000, 80, 4_000, DefaultSummaryTriggerInputTokens); got != 80_000 {
+		t.Fatalf("small output reserve should not lower 80%% trigger; got %d, want 80000", got)
+	}
+	if got := CompactTriggerInputTokensForModelPolicy(4096, 100_000, 80, 30_000, DefaultSummaryTriggerInputTokens); got != 4096 {
+		t.Fatalf("explicit output-reserved trigger = %d, want 4096", got)
+	}
 }
 
 // Rolling: a second compaction pass should detect the existing summary

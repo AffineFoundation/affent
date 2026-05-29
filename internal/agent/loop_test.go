@@ -1899,6 +1899,35 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	maxTokens := 30_000
+	loop := &Loop{
+		LLM: &LLMClient{
+			Model: "large-output-model",
+			Sampling: SamplingDefaults{
+				MaxTokens: &maxTokens,
+			},
+		},
+		Events:                     events,
+		ModelContextWindowTokens:   100_000,
+		CompactTriggerInputPercent: 80,
+	}
+	loop.publishRuntimeSurface("turn_surface", TurnOptions{})
+
+	ev := <-events
+	if ev.Type != sse.TypeRuntimeSurface {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeRuntimeSurface)
+	}
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if payload.CompactTriggerInputTokens != 70_000 {
+		t.Fatalf("compact trigger = %d, want output-reserved 70000", payload.CompactTriggerInputTokens)
+	}
+}
+
 func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	reg := NewRegistry()
