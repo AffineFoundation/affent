@@ -1112,6 +1112,18 @@ func TestLoopProtocolCalibrationCheck(t *testing.T) {
 	if res := LoopProtocolCalibrationRequestStatusAtLeast("draft", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected draft calibration request status check to pass: %+v", res)
 	}
+	if res := LoopProtocolCalibrationRequestTextContains("pause this loop").Eval(trace); !res.Pass {
+		t.Fatalf("expected calibration request text check to pass: %+v", res)
+	}
+	requestText := LoopProtocolCalibrationRequestTextContains("LOOP-CALIBRATION-Q17").Eval(trace)
+	if requestText.Pass {
+		t.Fatal("expected missing calibration request text check to fail")
+	}
+	for _, want := range []string{"no loop_protocol_calibration_request question contained", "LOOP-CALIBRATION-Q17", "What should pause"} {
+		if !strings.Contains(requestText.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", requestText.Detail, want)
+		}
+	}
 	requestStatus := LoopProtocolCalibrationRequestStatusAtLeast("running", 1).Eval(trace)
 	if requestStatus.Pass {
 		t.Fatal("expected running calibration request status check to fail")

@@ -200,8 +200,19 @@ func TestRunLoopProtocolInitialTurnRecordsLoopSetupMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read trace: %v", err)
 	}
+	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.Status != "draft" ||
+		state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 0 ||
+		!strings.Contains(state.LastCalibrationQuestion, "pause condition") {
+		t.Fatalf("loop setup calibration state = %+v", state)
+	}
 	for _, want := range []string{
 		`"type":"user.message"`,
+		`"type":"loop.protocol_calibration_request"`,
 		`"mode":"loop_setup"`,
 		`Start a long-running loop for repo reliability.`,
 	} {

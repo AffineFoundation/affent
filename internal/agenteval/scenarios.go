@@ -2274,6 +2274,9 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 		},
 		RequiredLoopProtocolCalibrationRequests: 1,
 		RequiredLoopProtocolCalibrations:        1,
+		RequiredLoopProtocolCalibrationRequestText: []string{
+			"LOOP-CALIBRATION-Q17",
+		},
 		RequiredLoopProtocolCalibrationRequestStatuses: map[string]int{
 			"draft": 1,
 		},
@@ -2285,7 +2288,6 @@ func longRunLoopActivationCalibrationScenario() BatchScenario {
 			"loop.protocol_calibration":         1,
 		},
 		RequiredFinalText: []string{
-			"LOOP-CALIBRATION-Q17",
 			"LOOP-CALIBRATION-A17",
 			"Pause if source evidence is unavailable",
 			"repeated tool failures",

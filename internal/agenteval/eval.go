@@ -192,6 +192,7 @@ type BatchScenario struct {
 	RequiredLoopProtocolFeeds                      int
 	RequiredLoopProtocolCalibrationRequests        int
 	RequiredLoopProtocolCalibrations               int
+	RequiredLoopProtocolCalibrationRequestText     []string
 	RequiredLoopProtocolCalibrationRequestStatuses map[string]int
 	RequiredLoopProtocolCalibrationStatuses        map[string]int
 	RequiredLoopProtocolFeedModes                  map[string]int
@@ -451,6 +452,7 @@ type DebugScenarioExpectations struct {
 	RequiredLoopProtocolFeeds                      int                                   `json:"required_loop_protocol_feeds,omitempty"`
 	RequiredLoopProtocolCalibrationRequests        int                                   `json:"required_loop_protocol_calibration_requests,omitempty"`
 	RequiredLoopProtocolCalibrations               int                                   `json:"required_loop_protocol_calibrations,omitempty"`
+	RequiredLoopProtocolCalibrationRequestText     []string                              `json:"required_loop_protocol_calibration_request_text,omitempty"`
 	RequiredLoopProtocolCalibrationRequestStatuses map[string]int                        `json:"required_loop_protocol_calibration_request_statuses,omitempty"`
 	RequiredLoopProtocolCalibrationStatuses        map[string]int                        `json:"required_loop_protocol_calibration_statuses,omitempty"`
 	RequiredLoopProtocolFeedModes                  map[string]int                        `json:"required_loop_protocol_feed_modes,omitempty"`
@@ -579,6 +581,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	if exp.RequiredLoopProtocolFeeds > 0 ||
 		exp.RequiredLoopProtocolCalibrationRequests > 0 ||
 		exp.RequiredLoopProtocolCalibrations > 0 ||
+		len(exp.RequiredLoopProtocolCalibrationRequestText) > 0 ||
 		len(exp.RequiredLoopProtocolCalibrationRequestStatuses) > 0 ||
 		len(exp.RequiredLoopProtocolCalibrationStatuses) > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
@@ -2199,6 +2202,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopProtocolFeeds:                      s.RequiredLoopProtocolFeeds,
 		RequiredLoopProtocolCalibrationRequests:        s.RequiredLoopProtocolCalibrationRequests,
 		RequiredLoopProtocolCalibrations:               s.RequiredLoopProtocolCalibrations,
+		RequiredLoopProtocolCalibrationRequestText:     append([]string(nil), s.RequiredLoopProtocolCalibrationRequestText...),
 		RequiredLoopProtocolCalibrationRequestStatuses: cloneStringIntMap(s.RequiredLoopProtocolCalibrationRequestStatuses),
 		RequiredLoopProtocolCalibrationStatuses:        cloneStringIntMap(s.RequiredLoopProtocolCalibrationStatuses),
 		RequiredLoopProtocolFeedModes:                  cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
@@ -3412,6 +3416,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredLoopProtocolCalibrations > 0 {
 		checks = append(checks, LoopProtocolCalibrationsAtLeast(scenario.RequiredLoopProtocolCalibrations))
+	}
+	for _, text := range scenario.RequiredLoopProtocolCalibrationRequestText {
+		checks = append(checks, LoopProtocolCalibrationRequestTextContains(text))
 	}
 	for _, status := range sortedStringMapKeys(scenario.RequiredLoopProtocolCalibrationRequestStatuses) {
 		checks = append(checks, LoopProtocolCalibrationRequestStatusAtLeast(status, scenario.RequiredLoopProtocolCalibrationRequestStatuses[status]))

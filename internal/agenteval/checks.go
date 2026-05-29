@@ -1087,6 +1087,24 @@ func LoopProtocolCalibrationRequestsAtLeast(min int) Check {
 	}
 }
 
+func LoopProtocolCalibrationRequestTextContains(substring string) Check {
+	want := strings.TrimSpace(substring)
+	return Check{
+		Name: "loop_protocol_calibration_request_text_contains:" + previewSubstr(want, 32),
+		Eval: func(t Trace) CheckResult {
+			for _, req := range t.LoopProtocolCalibrationRequests {
+				if strings.Contains(strings.ToLower(req.LastCalibrationQuestion), strings.ToLower(want)) {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("loop_protocol_calibration_request contained %q in %s", want, formatLoopProtocolCalibrationExample(req))}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("no loop_protocol_calibration_request question contained %q; observed=%v", want, loopProtocolCalibrationExamples(t.LoopProtocolCalibrationRequests, 5)),
+			}
+		},
+	}
+}
+
 func LoopProtocolCalibrationRequestStatusAtLeast(status string, min int) Check {
 	return loopProtocolCalibrationStatusAtLeast("request", status, min, func(t Trace) []LoopProtocolCalibration {
 		return t.LoopProtocolCalibrationRequests

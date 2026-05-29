@@ -88,6 +88,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		turnOpts = agent.ExecutePlanTurnOptionsForStep(executePlanStepIndex)
 	} else if b.loopProtocolInitialized {
 		turnOpts.UserMode = agent.UserModeLoopSetup
+		turnOpts.ForceLoopCalibrationQuestion = true
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
