@@ -2162,8 +2162,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 32 {
-		t.Fatalf("long-run suite size = %d, want 32", len(scenarios))
+	if len(scenarios) != 33 {
+		t.Fatalf("long-run suite size = %d, want 33", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -3297,12 +3297,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("normal loop text fields = enable:%v expose:%v session:%q", normalLoopText.EnableLoopProtocol, normalLoopText.ExposeLoopProtocolTool, normalLoopText.SessionID)
 	}
 	if normalLoopText.RequiredUserMessageModes["normal"] != 1 ||
+		normalLoopText.RequiredTaskStateRequestMode != "normal" ||
+		normalLoopText.RequiredTaskStateRequestSource != "user" ||
 		!stringSliceContains(normalLoopText.ForbiddenUserMessageModes, agent.UserModeLoopSetup) ||
 		normalLoopText.MaxSuccessfulToolCallsByTool[agent.LoopProtocolToolName] != 0 ||
 		!strings.Contains(normalLoopText.VerifyCommand, `test ! -e .affent/loops/loop-normal-text/LOOP.md`) ||
 		!stringSliceContains(normalLoopText.RequiredFinalText, "LOOP-NORMAL-TEXT-42") {
-		t.Fatalf("normal loop text expectations = modes:%#v forbidden_modes:%#v max_tools:%#v verify:%q final:%#v",
+		t.Fatalf("normal loop text expectations = modes:%#v task_mode:%q task_source:%q forbidden_modes:%#v max_tools:%#v verify:%q final:%#v",
 			normalLoopText.RequiredUserMessageModes,
+			normalLoopText.RequiredTaskStateRequestMode,
+			normalLoopText.RequiredTaskStateRequestSource,
 			normalLoopText.ForbiddenUserMessageModes,
 			normalLoopText.MaxSuccessfulToolCallsByTool,
 			normalLoopText.VerifyCommand,
@@ -3313,6 +3317,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	for _, want := range []string{
 		"user_message_mode_at_least:normal:1",
 		"user_message_mode_at_most:loop_setup:0",
+		"task_state_request_mode:normal",
+		"task_state_request_source:user",
 		"max_successful_tool_calls:loop_protocol:0",
 	} {
 		if !stringSliceContains(normalLoopTextChecks, want) {

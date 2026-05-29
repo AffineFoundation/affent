@@ -146,6 +146,56 @@ func UserMessageModeAtMost(mode string, max int) Check {
 	}
 }
 
+func TaskStateRequestModeIs(mode string) Check {
+	mode = normalizeTaskRequestMode(mode)
+	return Check{
+		Name: fmt.Sprintf("task_state_request_mode:%s", mode),
+		Eval: func(t Trace) CheckResult {
+			got := normalizeTaskRequestMode(t.TaskState.RequestMode)
+			if got == mode {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("request_mode=%s", got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected task_state request_mode %q, got %q", mode, got),
+			}
+		},
+	}
+}
+
+func TaskStateRequestSourceIs(source string) Check {
+	source = normalizeTaskRequestSource(source)
+	return Check{
+		Name: fmt.Sprintf("task_state_request_source:%s", source),
+		Eval: func(t Trace) CheckResult {
+			got := normalizeTaskRequestSource(t.TaskState.RequestSource)
+			if got == source {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("request_source=%s", got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected task_state request_source %q, got %q", source, got),
+			}
+		},
+	}
+}
+
+func normalizeTaskRequestMode(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return "normal"
+	}
+	return mode
+}
+
+func normalizeTaskRequestSource(source string) string {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return "user"
+	}
+	return source
+}
+
 func ContextInjectionSourceAtLeast(source string, min int) Check {
 	if min <= 0 {
 		min = 1

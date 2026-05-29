@@ -2330,6 +2330,8 @@ func longRunLoopSetupNormalTextScenario() BatchScenario {
 		RequiredUserMessageModes: map[string]int{
 			"normal": 1,
 		},
+		RequiredTaskStateRequestMode:   "normal",
+		RequiredTaskStateRequestSource: "user",
 		ForbiddenUserMessageModes: []string{
 			agent.UserModeLoopSetup,
 		},

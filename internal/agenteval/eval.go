@@ -178,6 +178,8 @@ type BatchScenario struct {
 	RequiredTraceEventCounts                       map[string]int
 	RequiredUserMessageModes                       map[string]int
 	ForbiddenUserMessageModes                      []string
+	RequiredTaskStateRequestMode                   string
+	RequiredTaskStateRequestSource                 string
 	RequiredConversationRepairStatsAtLeast         map[string]int
 	RequiredConversationRepairKinds                map[string]int
 	RequiredLoopDecisionKinds                      map[string]int
@@ -433,6 +435,8 @@ type DebugScenarioExpectations struct {
 	RequiredTraceEventCounts                       map[string]int                        `json:"required_trace_event_counts,omitempty"`
 	RequiredUserMessageModes                       map[string]int                        `json:"required_user_message_modes,omitempty"`
 	ForbiddenUserMessageModes                      []string                              `json:"forbidden_user_message_modes,omitempty"`
+	RequiredTaskStateRequestMode                   string                                `json:"required_task_state_request_mode,omitempty"`
+	RequiredTaskStateRequestSource                 string                                `json:"required_task_state_request_source,omitempty"`
 	RequiredConversationRepairStatsAtLeast         map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
 	RequiredConversationRepairKinds                map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
 	RequiredLoopDecisionKinds                      map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
@@ -512,6 +516,10 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 				caps["loop_protocol"] = true
 			}
 		}
+	}
+	if strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" {
+		caps["session"] = true
+		caps["trace"] = true
 	}
 	if exp.ExecutePlan || exp.RequireNoPlanErrors || exp.RequireFinalPlanCompleted {
 		caps["plan"] = true
@@ -631,7 +639,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	for stat := range exp.RequiredToolStatsAtLeast {
 		addExpectationStatCapabilities(caps, stat)
 	}
-	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 || len(exp.ForbiddenUserMessageModes) > 0 {
+	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 || len(exp.ForbiddenUserMessageModes) > 0 || strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" {
 		caps["trace"] = true
 	}
 	if len(exp.RequiredConversationRepairStatsAtLeast) > 0 || len(exp.RequiredConversationRepairKinds) > 0 {
@@ -2145,44 +2153,46 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		}
 	}
 	return DebugScenarioExpectations{
-		CheckNames:                              checkNames,
-		Suites:                                  append([]string(nil), s.Suites...),
-		Domains:                                 append([]string(nil), s.Domains...),
-		SessionID:                               strings.TrimSpace(s.SessionID),
-		ExecutePlan:                             s.ExecutePlan,
-		EnableMemory:                            s.EnableMemory,
-		EnableLoopProtocol:                      s.EnableLoopProtocol,
-		ExposeLoopProtocolTool:                  s.ExposeLoopProtocolTool,
-		RequiredTurnEndReason:                   strings.TrimSpace(s.RequiredTurnEndReason),
-		VerifyCommand:                           strings.TrimSpace(s.VerifyCommand),
-		SetupCommands:                           compactNonEmptyStrings(s.SetupCommands),
-		SourceRepoURL:                           strings.TrimSpace(s.SourceRepoURL),
-		SourceRepoRef:                           strings.TrimSpace(s.SourceRepoRef),
-		SourceRepoDir:                           strings.TrimSpace(s.SourceRepoDir),
-		ExpectedSkill:                           strings.TrimSpace(s.ExpectedSkill),
-		RequiredTools:                           append([]string(nil), s.RequiredTools...),
-		ForbiddenTools:                          append([]string(nil), s.ForbiddenTools...),
-		RequiredCommands:                        append([]string(nil), s.RequiredCommands...),
-		ForbiddenCommands:                       append([]string(nil), s.ForbiddenCommands...),
-		ForbidWorkspaceAbsolutePaths:            s.ForbidWorkspaceAbsolutePaths,
-		RequiredCommandCounts:                   cloneStringIntMap(s.RequiredCommandCounts),
-		RequiredToolCounts:                      cloneStringIntMap(s.RequiredToolCounts),
-		RequiredToolFailureKindCounts:           cloneStringIntMap(s.RequiredToolFailureKindCounts),
-		MaxToolFailureKindCounts:                cloneStringIntMap(s.MaxToolFailureKindCounts),
-		RequiredToolStatsAtLeast:                cloneStringIntMap(s.RequiredToolStatsAtLeast),
-		RequiredTraceEventCounts:                cloneStringIntMap(s.RequiredTraceEventCounts),
-		RequiredUserMessageModes:                cloneStringIntMap(s.RequiredUserMessageModes),
-		ForbiddenUserMessageModes:               append([]string(nil), s.ForbiddenUserMessageModes...),
-		RequiredConversationRepairStatsAtLeast:  cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
-		RequiredConversationRepairKinds:         cloneStringIntMap(s.RequiredConversationRepairKinds),
-		RequiredLoopDecisionKinds:               cloneStringIntMap(s.RequiredLoopDecisionKinds),
-		RequiredLoopDecisionResults:             cloneStringIntMap(s.RequiredLoopDecisionResults),
-		RequiredLoopDecisionMatches:             loopReqs,
-		RequiredMessageRejected:                 cloneStringIntMap(s.RequiredMessageRejected),
-		RequiredCompletionGuards:                append([]string(nil), s.RequiredCompletionGuards...),
-		RequiredLoopProtocolFeeds:               s.RequiredLoopProtocolFeeds,
-		RequiredLoopProtocolCalibrationRequests: s.RequiredLoopProtocolCalibrationRequests,
-		RequiredLoopProtocolCalibrations:        s.RequiredLoopProtocolCalibrations,
+		CheckNames:                                     checkNames,
+		Suites:                                         append([]string(nil), s.Suites...),
+		Domains:                                        append([]string(nil), s.Domains...),
+		SessionID:                                      strings.TrimSpace(s.SessionID),
+		ExecutePlan:                                    s.ExecutePlan,
+		EnableMemory:                                   s.EnableMemory,
+		EnableLoopProtocol:                             s.EnableLoopProtocol,
+		ExposeLoopProtocolTool:                         s.ExposeLoopProtocolTool,
+		RequiredTurnEndReason:                          strings.TrimSpace(s.RequiredTurnEndReason),
+		VerifyCommand:                                  strings.TrimSpace(s.VerifyCommand),
+		SetupCommands:                                  compactNonEmptyStrings(s.SetupCommands),
+		SourceRepoURL:                                  strings.TrimSpace(s.SourceRepoURL),
+		SourceRepoRef:                                  strings.TrimSpace(s.SourceRepoRef),
+		SourceRepoDir:                                  strings.TrimSpace(s.SourceRepoDir),
+		ExpectedSkill:                                  strings.TrimSpace(s.ExpectedSkill),
+		RequiredTools:                                  append([]string(nil), s.RequiredTools...),
+		ForbiddenTools:                                 append([]string(nil), s.ForbiddenTools...),
+		RequiredCommands:                               append([]string(nil), s.RequiredCommands...),
+		ForbiddenCommands:                              append([]string(nil), s.ForbiddenCommands...),
+		ForbidWorkspaceAbsolutePaths:                   s.ForbidWorkspaceAbsolutePaths,
+		RequiredCommandCounts:                          cloneStringIntMap(s.RequiredCommandCounts),
+		RequiredToolCounts:                             cloneStringIntMap(s.RequiredToolCounts),
+		RequiredToolFailureKindCounts:                  cloneStringIntMap(s.RequiredToolFailureKindCounts),
+		MaxToolFailureKindCounts:                       cloneStringIntMap(s.MaxToolFailureKindCounts),
+		RequiredToolStatsAtLeast:                       cloneStringIntMap(s.RequiredToolStatsAtLeast),
+		RequiredTraceEventCounts:                       cloneStringIntMap(s.RequiredTraceEventCounts),
+		RequiredUserMessageModes:                       cloneStringIntMap(s.RequiredUserMessageModes),
+		ForbiddenUserMessageModes:                      append([]string(nil), s.ForbiddenUserMessageModes...),
+		RequiredTaskStateRequestMode:                   strings.TrimSpace(s.RequiredTaskStateRequestMode),
+		RequiredTaskStateRequestSource:                 strings.TrimSpace(s.RequiredTaskStateRequestSource),
+		RequiredConversationRepairStatsAtLeast:         cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
+		RequiredConversationRepairKinds:                cloneStringIntMap(s.RequiredConversationRepairKinds),
+		RequiredLoopDecisionKinds:                      cloneStringIntMap(s.RequiredLoopDecisionKinds),
+		RequiredLoopDecisionResults:                    cloneStringIntMap(s.RequiredLoopDecisionResults),
+		RequiredLoopDecisionMatches:                    loopReqs,
+		RequiredMessageRejected:                        cloneStringIntMap(s.RequiredMessageRejected),
+		RequiredCompletionGuards:                       append([]string(nil), s.RequiredCompletionGuards...),
+		RequiredLoopProtocolFeeds:                      s.RequiredLoopProtocolFeeds,
+		RequiredLoopProtocolCalibrationRequests:        s.RequiredLoopProtocolCalibrationRequests,
+		RequiredLoopProtocolCalibrations:               s.RequiredLoopProtocolCalibrations,
 		RequiredLoopProtocolCalibrationRequestStatuses: cloneStringIntMap(s.RequiredLoopProtocolCalibrationRequestStatuses),
 		RequiredLoopProtocolCalibrationStatuses:        cloneStringIntMap(s.RequiredLoopProtocolCalibrationStatuses),
 		RequiredLoopProtocolFeedModes:                  cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
@@ -3360,6 +3370,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		if strings.TrimSpace(mode) != "" {
 			checks = append(checks, UserMessageModeAtMost(mode, 0))
 		}
+	}
+	if mode := strings.TrimSpace(scenario.RequiredTaskStateRequestMode); mode != "" {
+		checks = append(checks, TaskStateRequestModeIs(mode))
+	}
+	if source := strings.TrimSpace(scenario.RequiredTaskStateRequestSource); source != "" {
+		checks = append(checks, TaskStateRequestSourceIs(source))
 	}
 	for _, field := range sortedStringMapKeys(scenario.RequiredConversationRepairStatsAtLeast) {
 		checks = append(checks, ConversationRepairStatsAtLeast(field, scenario.RequiredConversationRepairStatsAtLeast[field]))

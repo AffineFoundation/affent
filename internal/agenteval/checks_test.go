@@ -716,6 +716,27 @@ func TestUserMessageModeAtMost(t *testing.T) {
 	}
 }
 
+func TestTaskStateRequestProvenanceChecks(t *testing.T) {
+	trace := Trace{TaskState: TaskStateSnapshot{RequestMode: "execute_plan", RequestSource: "schedule"}}
+	if res := TaskStateRequestModeIs("execute_plan").Eval(trace); !res.Pass {
+		t.Fatalf("expected task state request mode to pass: %+v", res)
+	}
+	if res := TaskStateRequestSourceIs("schedule").Eval(trace); !res.Pass {
+		t.Fatalf("expected task state request source to pass: %+v", res)
+	}
+	if res := TaskStateRequestModeIs("loop_setup").Eval(trace); res.Pass || !strings.Contains(res.Detail, "execute_plan") {
+		t.Fatalf("expected mismatched task state request mode to fail with observed mode: %+v", res)
+	}
+
+	legacy := Trace{}
+	if res := TaskStateRequestModeIs("normal").Eval(legacy); !res.Pass {
+		t.Fatalf("empty task state request mode should normalize to normal: %+v", res)
+	}
+	if res := TaskStateRequestSourceIs("user").Eval(legacy); !res.Pass {
+		t.Fatalf("empty task state request source should normalize to user: %+v", res)
+	}
+}
+
 func TestConversationRepairChecks(t *testing.T) {
 	trace := Trace{ConversationRepairs: []sse.ConversationRepairedPayload{
 		{
