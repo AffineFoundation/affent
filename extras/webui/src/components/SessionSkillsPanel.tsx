@@ -4,6 +4,7 @@ import type { UseAsDraft } from "../view/draftSource";
 import {
   activationCoverage,
   activationSummary,
+  matchingSkillsForPrompt,
   skillDraft,
   skillEvidenceText,
   skillKindLabel,
@@ -62,6 +63,7 @@ export function SessionSkillsPanel({
   const [deletingSkillName, setDeletingSkillName] = useState<string | undefined>();
   const [selectedSkillName, setSelectedSkillName] = useState<string | undefined>();
   const [skillFilter, setSkillFilter] = useState<SkillFilter>("all");
+  const [activationProbe, setActivationProbe] = useState("");
   const allSkills = skills ?? [];
   const hasSearch = allSkills.length > 0;
   const canInstall = installEnabled && !!onInstallSkill;
@@ -71,6 +73,7 @@ export function SessionSkillsPanel({
       .filter((skill) => skillMatchesFilter(skill, skillFilter))
       .filter((skill) => !trimmedQuery || skillMatchesQuery(skill, trimmedQuery));
   }, [allSkills, skillFilter, trimmedQuery]);
+  const activationMatches = useMemo(() => matchingSkillsForPrompt(allSkills, activationProbe), [activationProbe, allSkills]);
   const focusedSkill = useMemo(() => {
     if (filteredSkills.length === 0) return undefined;
     const selected = selectedSkillName ? filteredSkills.find((skill) => skill.name === selectedSkillName) : undefined;
@@ -260,6 +263,19 @@ export function SessionSkillsPanel({
         {!loading && !error ? (
           <>
             <SkillsDashboard skills={allSkills} installEnabled={installEnabled} />
+            {hasSearch ? (
+              <SkillActivationCheck
+                value={activationProbe}
+                matches={activationMatches}
+                onChange={setActivationProbe}
+                onFocusSkill={(name) => {
+                  setSelectedSkillName(name);
+                  setSkillFilter("all");
+                  setQuery("");
+                }}
+                onClear={() => setActivationProbe("")}
+              />
+            ) : null}
             {hasSkillMaintenanceSignal(allSkills) ? (
               <SkillCoverageMap
                 skills={allSkills}
@@ -565,6 +581,59 @@ function SkillCoverageChips({ title, empty, items }: { title: string; empty: str
         )) : <em>{empty}</em>}
       </div>
     </div>
+  );
+}
+
+function SkillActivationCheck({
+  value,
+  matches,
+  onChange,
+  onFocusSkill,
+  onClear,
+}: {
+  value: string;
+  matches: ReturnType<typeof matchingSkillsForPrompt>;
+  onChange: (value: string) => void;
+  onFocusSkill: (name: string) => void;
+  onClear: () => void;
+}) {
+  const trimmed = value.trim();
+  return (
+    <section className="session-skills-activation" data-testid="session-skills-activation" aria-label="Skill activation check">
+      <div className="session-skills-activation-head">
+        <div>
+          <span>Activation check</span>
+          <strong>{trimmed ? `${matches.length} ${matches.length === 1 ? "match" : "matches"}` : "Test a task"}</strong>
+        </div>
+        {trimmed ? (
+          <button type="button" className="ghost-action" onClick={onClear}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <label className="session-skills-activation-input">
+        <span>Task text</span>
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Paste a task to see which skills would activate"
+        />
+      </label>
+      {trimmed ? (
+        matches.length > 0 ? (
+          <div className="session-skills-activation-matches">
+            {matches.slice(0, 6).map((match) => (
+              <button key={match.skill.name} type="button" onClick={() => onFocusSkill(match.skill.name)} title={match.reason}>
+                <strong>{match.skill.name}</strong>
+                <span>{match.reason}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="session-skills-activation-empty">No automatic skill match for this task.</p>
+        )
+      ) : null}
+    </section>
   );
 }
 

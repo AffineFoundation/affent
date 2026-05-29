@@ -5,6 +5,7 @@ import {
   skillDraft,
   skillEvidenceText,
   skillKindLabel,
+  matchingSkillsForPrompt,
   skillMatchesQuery,
   skillSearchMatches,
   skillSizeLabel,
@@ -56,5 +57,17 @@ describe("sessionSkills view helpers", () => {
       { name: "one", runtime: true, body_bytes: 10, triggers: ["test"] },
       { name: "two", runtime: false, body_bytes: 20, required_tools: ["workspace"] },
     ])).toBe(" · 1 triggerable · 1 tool-bound");
+  });
+
+  it("matches skills against a task without sending anything to chat", () => {
+    const matches = matchingSkillsForPrompt([
+      { name: "browser_source_workflow", runtime: false, body_bytes: 20, auto_activation: { any: ["browser evidence"] } },
+      { name: "release_gate", runtime: true, body_bytes: 20, auto_activation: { all_any: [["release", "ship"], ["test", "gate"]] } },
+      { name: "manual", runtime: true, body_bytes: 20 },
+    ], "Run the release test gate before shipping");
+
+    expect(matches.map((match) => [match.skill.name, match.reason])).toEqual([
+      ["release_gate", "auto: release + test"],
+    ]);
   });
 });

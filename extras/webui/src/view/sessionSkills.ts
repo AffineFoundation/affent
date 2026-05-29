@@ -28,6 +28,35 @@ export function activationCoverage(skills: readonly SessionSkillInfo[]): string 
   return parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
 }
 
+export interface SkillActivationMatch {
+  skill: SessionSkillInfo;
+  reason: string;
+}
+
+export function matchingSkillsForPrompt(skills: readonly SessionSkillInfo[], prompt: string): SkillActivationMatch[] {
+  const lowerPrompt = prompt.trim().toLowerCase();
+  if (!lowerPrompt) return [];
+  return skills
+    .map((skill) => {
+      const reason = skillActivationReason(skill, lowerPrompt);
+      return reason ? { skill, reason } : undefined;
+    })
+    .filter((match): match is SkillActivationMatch => Boolean(match));
+}
+
+export function skillActivationReason(skill: SessionSkillInfo, lowerPrompt: string): string | undefined {
+  const anyRule = skill.auto_activation?.any?.find((phrase) => activationPhraseMatches(lowerPrompt, phrase));
+  if (anyRule) return `auto: ${anyRule}`;
+  const allAny = skill.auto_activation?.all_any ?? [];
+  if (allAny.length > 0) {
+    const matched = allAny.map((group) => group.find((phrase) => activationPhraseMatches(lowerPrompt, phrase)));
+    if (matched.every(Boolean)) return `auto: ${matched.filter(Boolean).join(" + ")}`;
+  }
+  const trigger = (skill.triggers ?? []).find((phrase) => activationPhraseMatches(lowerPrompt, phrase));
+  if (trigger) return `trigger: ${trigger}`;
+  return undefined;
+}
+
 export function skillSummaryTags(skill: SessionSkillInfo): string[] {
   const tags: string[] = [];
   const triggers = skillTriggers(skill);
@@ -108,4 +137,9 @@ function skillSearchText(skill: SessionSkillInfo): string {
     ...skillTriggers(skill),
     ...(skill.required_tools ?? []),
   ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function activationPhraseMatches(lowerPrompt: string, phrase: string | undefined): boolean {
+  const needle = phrase?.trim().toLowerCase();
+  return !!needle && lowerPrompt.includes(needle);
 }

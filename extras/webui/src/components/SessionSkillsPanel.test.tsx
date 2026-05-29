@@ -46,7 +46,13 @@ describe("SessionSkillsPanel", () => {
     expect(screen.queryByTestId("session-skills-coverage")).toBeNull();
     expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Review");
     expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("No review gaps");
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("Activation check");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
+    await user.type(screen.getByPlaceholderText("Paste a task to see which skills would activate"), "repair the failing workspace tests");
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("1 match");
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("trigger: repair");
+    await user.click(within(screen.getByTestId("session-skills-activation")).getByRole("button", { name: /coding_repair_workflow/ }));
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("coding_repair_workflow");
     expect(screen.getByTestId("skill-activation-coding_repair_workflow")).toHaveTextContent("Triggers: fix, repair");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
@@ -59,7 +65,7 @@ describe("SessionSkillsPanel", () => {
     await user.click(screen.getByRole("button", { name: /Tool-bound\s+1/ }));
     expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
-    await user.click(screen.getByRole("button", { name: "Clear" }));
+    await user.click(screen.getAllByRole("button", { name: "Clear" }).at(-1)!);
     await user.click(within(screen.getByRole("group", { name: "Filter skills" })).getByRole("button", { name: /Custom\s+0/ }));
     expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
 
