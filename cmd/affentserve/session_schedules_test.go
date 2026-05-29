@@ -212,6 +212,99 @@ func TestSessionPool_StartupScheduleRestoresActiveWorkspace(t *testing.T) {
 	}
 }
 
+func TestSessionPool_StartupSchedulePreservesRootWorkspaceFiles(t *testing.T) {
+	memRoot := t.TempDir()
+	workspaceRoot := t.TempDir()
+	sessionID := "startup-root-workspace"
+	now := time.Now().UTC()
+
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch calls.Add(1) {
+		case 1:
+			streamToolCall(t, w, "read_tracker", "read_file", `{"path":"btc_price_tracker.md"}`)
+		case 2:
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"role":"assistant","content":"Read existing tracker file."},"finish_reason":"stop"}]}`+"\n\n")
+		default:
+			t.Errorf("unexpected LLM call %d", calls.Load())
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"role":"assistant","content":"unexpected"},"finish_reason":"stop"}]}`+"\n\n")
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    8,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  workspaceRoot,
+		MemoryRoot:     memRoot,
+		BaseURL:        srv.URL,
+		APIKey:         "test",
+		Model:          "fake",
+		EnableBuiltins: true,
+		MaxTurnSteps:   4,
+		EvalMode:       true,
+	}
+	pool1, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatalf("NewSessionPool pool1: %v", err)
+	}
+	sess, err := pool1.GetOrCreate(sessionID)
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if sess.Workspace() != workspaceRoot {
+		t.Fatalf("initial workspace = %q, want root %q", sess.Workspace(), workspaceRoot)
+	}
+	if err := os.WriteFile(filepath.Join(sess.Workspace(), "btc_price_tracker.md"), []byte("first-run-price\n"), 0o644); err != nil {
+		t.Fatalf("write tracker: %v", err)
+	}
+	pool1.Shutdown()
+
+	if err := writeSessionSchedulesFile(filepath.Join(memRoot, sessionID, sessionSchedulesFileName), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{{
+			ID:          "sched_read_tracker",
+			Kind:        sessionScheduleKindCustom,
+			Prompt:      "Read the existing BTC tracker file from the current workspace.",
+			DisplayText: "Read tracker",
+			Enabled:     true,
+			NextRunAt:   now.Add(-time.Minute).Format(time.RFC3339),
+			CreatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+			UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+		}},
+	}); err != nil {
+		t.Fatalf("write startup schedule: %v", err)
+	}
+
+	cfg.EvalMode = false
+	pool2, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatalf("NewSessionPool pool2: %v", err)
+	}
+	t.Cleanup(pool2.Shutdown)
+
+	schedule := waitSchedule(t, pool2, sessionID, "sched_read_tracker", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
+	if schedule.Enabled || schedule.LastError != "" {
+		t.Fatalf("schedule = %+v, want one-shot root workspace schedule completed", schedule)
+	}
+	reopened := activeSessionByID(pool2, sessionID)
+	if reopened == nil {
+		t.Fatal("scheduled startup turn should reopen the durable session")
+	}
+	if reopened.Workspace() != workspaceRoot {
+		t.Fatalf("reopened workspace = %q, want root %q", reopened.Workspace(), workspaceRoot)
+	}
+	result := waitScheduleToolResult(t, pool2, sessionID, "read_tracker")
+	if result.ExitCode != 0 || !strings.Contains(result.Result, "first-run-price") {
+		t.Fatalf("scheduled read_file did not read existing workspace file:\n%s", result.Result)
+	}
+}
+
 func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)

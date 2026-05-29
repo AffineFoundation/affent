@@ -1704,6 +1704,47 @@ func TestBuiltinFileToolErrorsUseWorkspaceRelativePaths(t *testing.T) {
 	}
 }
 
+func TestReadFileNotFoundIncludesWorkspaceEvidence(t *testing.T) {
+	ctx := context.Background()
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "docs", "readme.md"), []byte("# Docs\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "notes.txt"), []byte("notes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read := readFileTool(BuiltinDeps{HostWorkspaceDir: ws})
+
+	_, err := read.Execute(ctx, json.RawMessage(`{"path":"docs/missing.md"}`))
+	if err == nil {
+		t.Fatal("expected read_file missing file error")
+	}
+	for _, want := range []string{"docs/missing.md not found", "Nearest existing entries in docs: readme.md", "Failure: kind=not_found", "Next:"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+	if strings.Contains(err.Error(), ws) {
+		t.Fatalf("not_found evidence should stay workspace-relative, got:\n%s", err.Error())
+	}
+
+	_, err = read.Execute(ctx, json.RawMessage(`{"path":"missing-dir/file.md"}`))
+	if err == nil {
+		t.Fatal("expected read_file missing parent error")
+	}
+	for _, want := range []string{"Parent directory missing-dir is missing or unreadable", "Workspace root entries:", "docs/", "notes.txt"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+	if strings.Contains(err.Error(), ws) {
+		t.Fatalf("not_found root evidence should stay workspace-relative, got:\n%s", err.Error())
+	}
+}
+
 func TestBuiltinFileOpsErrorsUseWorkspaceRelativePaths(t *testing.T) {
 	fake := newFakeFileOpsExecutor()
 	ctx := context.Background()

@@ -1317,6 +1317,10 @@ func structuredToolFailure(message, kind, next string) string {
 func fileNotFoundToolError(deps BuiltinDeps, tool, path string) error {
 	displayPath := displayFileToolPath(deps, path)
 	parent := parentForToolPath(deps, path)
+	message := fmt.Sprintf("%s not found", displayPath)
+	if hint := fileNotFoundWorkspaceHint(deps, parent); hint != "" {
+		message += "\n" + hint
+	}
 	var next string
 	switch tool {
 	case "read_file":
@@ -1330,7 +1334,56 @@ func fileNotFoundToolError(deps BuiltinDeps, tool, path string) error {
 	default:
 		next = fmt.Sprintf("call list_files on %s or the workspace root to find the correct path, then retry %s", parent, tool)
 	}
-	return structuredToolError(fmt.Sprintf("%s not found", displayPath), "not_found", next)
+	return structuredToolError(message, "not_found", next)
+}
+
+func fileNotFoundWorkspaceHint(deps BuiltinDeps, parent string) string {
+	if strings.TrimSpace(deps.hostWorkspaceDir()) == "" {
+		return ""
+	}
+	parent = strings.TrimSpace(parent)
+	if parent == "" {
+		parent = "."
+	}
+	if hint := workspaceDirectoryEntriesHint(deps, parent, "Nearest existing entries in "+parent); hint != "" {
+		return hint
+	}
+	if parent != "." {
+		if hint := workspaceDirectoryEntriesHint(deps, ".", "Workspace root entries"); hint != "" {
+			return fmt.Sprintf("Parent directory %s is missing or unreadable. %s", parent, hint)
+		}
+	}
+	return ""
+}
+
+func workspaceDirectoryEntriesHint(deps BuiltinDeps, relDir, label string) string {
+	full, err := safeWorkspacePath(deps, relDir)
+	if err != nil {
+		return ""
+	}
+	entries, err := os.ReadDir(full)
+	if err != nil {
+		return ""
+	}
+	const maxEntries = 12
+	names := make([]string, 0, min(len(entries), maxEntries))
+	for i, entry := range entries {
+		if i >= maxEntries {
+			break
+		}
+		name := entry.Name()
+		if entry.IsDir() {
+			name += "/"
+		}
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return label + ": (empty)"
+	}
+	if len(entries) > maxEntries {
+		names = append(names, "...")
+	}
+	return label + ": " + strings.Join(names, ", ")
 }
 
 func recoverableFileToolError(deps BuiltinDeps, tool, path string, err error) error {
