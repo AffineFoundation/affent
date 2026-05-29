@@ -2898,6 +2898,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		MaxToolCalls:                 l.maxToolCallsForTurn(opts),
 		MaxTurnInputTokens:           l.maxTurnInputTokensForTurn(opts),
 		ModelContextWindowTokens:     l.ModelContextWindowTokens,
+		ReservedOutputTokens:         l.reservedOutputTokens(),
 		CompactTriggerInputTokens:    l.compactTriggerInputTokens(),
 		CompactTriggerInputPercent:   l.compactTriggerInputPercent(),
 		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,

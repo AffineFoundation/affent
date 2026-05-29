@@ -81,6 +81,7 @@ type statsBoundaries struct {
 	MaxTurnSteps                int    `json:"max_turn_steps"`
 	MaxTurnInputTokens          int    `json:"max_turn_input_tokens"`
 	ModelContextWindowTokens    int    `json:"model_context_window_tokens,omitempty"`
+	ReservedOutputTokens        int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens   int    `json:"compact_trigger_input_tokens,omitempty"`
 	CompactTriggerInputPercent  int    `json:"compact_trigger_input_percent,omitempty"`
 	PerCallTimeout              string `json:"per_call_timeout"`
@@ -512,6 +513,7 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		MaxTurnSteps:                maxTurnSteps,
 		MaxTurnInputTokens:          maxTurnInputTokens,
 		ModelContextWindowTokens:    cfg.ModelContextWindowTokens,
+		ReservedOutputTokens:        reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputTokens:   compactTriggerInputTokensForConfig(cfg),
 		CompactTriggerInputPercent:  compactTriggerInputPercentForConfig(cfg),
 		PerCallTimeout:              perCallTimeout.String(),

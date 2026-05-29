@@ -119,6 +119,7 @@ type sessionContextSummary struct {
 	EstimatedConversationTokens    int `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens      int `json:"estimated_tool_schema_tokens,omitempty"`
 	ModelContextWindowTokens       int `json:"model_context_window_tokens,omitempty"`
+	ReservedOutputTokens           int `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent     int `json:"compact_trigger_input_percent,omitempty"`
 	CompactTriggerInputTokens      int `json:"compact_trigger_input_tokens,omitempty"`
 	RequestInputCompactPercent     int `json:"request_input_compact_percent,omitempty"`
@@ -1468,6 +1469,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		EstimatedConversationTokens:    inputEstimate.ConversationTokens,
 		EstimatedToolSchemaTokens:      inputEstimate.ToolSchemaTokens,
 		ModelContextWindowTokens:       cfg.ModelContextWindowTokens,
+		ReservedOutputTokens:           reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputPercent:     compactTriggerInputPercentForConfig(cfg),
 		CompactTriggerInputTokens:      inputTrigger,
 		RequestInputCompactPercent:     inputPercent,

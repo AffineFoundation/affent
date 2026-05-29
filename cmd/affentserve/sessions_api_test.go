@@ -423,6 +423,7 @@ func TestSessionContextSnapshotReservesOutputBudgetInModelContextPolicy(t *testi
 		CompactTriggerInputPercent: 80,
 	})
 	if got.CompactTriggerInputTokens != 70_000 ||
+		got.ReservedOutputTokens != 30_000 ||
 		got.RequestInputCompactPercent != 86 ||
 		got.RequestInputTokensUntilCompact != 10_000 {
 		t.Fatalf("context snapshot = %+v, want output-reserved request trigger at 86%% with 10000 remaining", got)

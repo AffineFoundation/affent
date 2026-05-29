@@ -1926,6 +1926,9 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 	if payload.CompactTriggerInputTokens != 70_000 {
 		t.Fatalf("compact trigger = %d, want output-reserved 70000", payload.CompactTriggerInputTokens)
 	}
+	if payload.ReservedOutputTokens != 30_000 {
+		t.Fatalf("reserved output tokens = %d, want 30000", payload.ReservedOutputTokens)
+	}
 }
 
 func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {

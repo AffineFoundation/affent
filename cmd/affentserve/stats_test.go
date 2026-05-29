@@ -109,6 +109,15 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.ToolResultContextBudget != agent.DefaultRuntimeBoundaries().ToolResultContextBudgetBytes {
 		t.Fatalf("Boundaries.ToolResultContextBudget = %d, want %d", resp.Boundaries.ToolResultContextBudget, agent.DefaultRuntimeBoundaries().ToolResultContextBudgetBytes)
 	}
+	maxTokens := 30_000
+	reserved := statsBoundarySnapshot(Config{
+		MaxTokens:                  &maxTokens,
+		ModelContextWindowTokens:   100_000,
+		CompactTriggerInputPercent: 80,
+	})
+	if reserved.ReservedOutputTokens != 30_000 || reserved.CompactTriggerInputTokens != 70_000 {
+		t.Fatalf("reserved compaction boundaries = %+v, want reserve=30000 trigger=70000", reserved)
+	}
 	if resp.Boundaries.MCPToolResultBytes <= 0 {
 		t.Fatalf("Boundaries.MCPToolResultBytes = %d, want positive", resp.Boundaries.MCPToolResultBytes)
 	}
