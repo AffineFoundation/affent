@@ -109,6 +109,7 @@ import {
   type AutomationSchedulePanelState,
 } from "./view/automationContext";
 import { conversationTopicFromTurns, isContinuationPrompt } from "./view/continuationPrompt";
+import { mergeLoopStateFromEvents } from "./view/loopState";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
 import { buildSessionMemoryCandidates } from "./view/sessionMemory";
 
@@ -293,7 +294,10 @@ export function App() {
     return selectedSessionDisplayTitle(selectedSession, session);
   }, [selectedSession, session]);
   const selectedSessionActive = selectedSession?.active === true;
-  const selectedLoopState = selectedSession?.loop_protocol?.state ?? selectedSession?.loop_state;
+  const selectedLoopState = useMemo(
+    () => mergeLoopStateFromEvents(selectedSession?.loop_protocol?.state ?? selectedSession?.loop_state, session.events),
+    [selectedSession?.loop_protocol?.state, selectedSession?.loop_state, session.events],
+  );
   const selectedLoopProtocolState = loopProtocolState.state !== "idle" && loopProtocolState.sessionId === selectedSessionId
     ? loopProtocolState
     : { state: "idle" as const };

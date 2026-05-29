@@ -1216,6 +1216,71 @@ describe("App", () => {
     expect(draft).not.toContain("Ask one concise calibration question before changing the protocol");
   });
 
+  it("uses live loop calibration events before the session index refreshes", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "loop-live-question",
+              active: true,
+              durable: true,
+              topic_user_message: "long running subnet analysis",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-live-question/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "loop-live-question",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "long running subnet analysis", display_text: "Set up loop: long running subnet analysis", mode: "loop_setup" } },
+            {
+              id: 3,
+              type: "loop.protocol_calibration_request",
+              data: {
+                loop_id: "loop-live-question",
+                status: "draft",
+                protocol_path: ".affent/loops/loop-live-question/LOOP.md",
+                calibration_questions: 1,
+                last_calibration_question_preview: "What evidence quality should pause this loop?",
+              },
+            },
+            { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+          ],
+          next_after: 4,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-live-question/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await user.click(await screen.findByLabelText("Workbench"));
+    await selectWorkbenchTab(user, "Automation");
+    const panel = await screen.findByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Waiting for your calibration answer");
+    expect(panel).toHaveTextContent("What evidence quality should pause this loop?");
+    await user.click(within(panel).getByRole("button", { name: "Open answer draft" }));
+
+    const draft = (screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value;
+    expect(draft).toContain("Loop calibration answer for: long running subnet analysis");
+    expect(draft).toContain("Pending question: What evidence quality should pause this loop?");
+  });
+
   it("shows and disables the selected session loop protocol", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
