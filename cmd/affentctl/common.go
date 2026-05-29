@@ -1702,11 +1702,18 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if c.modelContextWindowTokens > 0 && c.compactTriggerInputTokens == 0 {
 		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(llm.Sampling), agent.DefaultSummaryTriggerBytes)
 	}
+	maxSummaryPromptBytes := agent.SummaryPromptMaxBytesForModelPolicy(
+		c.modelContextWindowTokens,
+		c.compactTriggerPercent,
+		reservedOutputTokensFromSampling(llm.Sampling),
+		agent.DefaultSummaryPromptMaxBytes,
+	)
 	loop.Compactor = &agent.LLMSummaryCompactor{
-		LLM:          llm,
-		TriggerMsgs:  triggerMsgs,
-		TriggerBytes: triggerBytes,
-		KeepLast:     keepLast,
+		LLM:            llm,
+		TriggerMsgs:    triggerMsgs,
+		TriggerBytes:   triggerBytes,
+		KeepLast:       keepLast,
+		MaxPromptBytes: maxSummaryPromptBytes,
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		log.Error().Err(err).Msg("seed system prompt")

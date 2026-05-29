@@ -1328,6 +1328,9 @@ func TestSessionPool_CompactorDerivesByteTriggerFromModelContextWindow(t *testin
 	if got := lc.TriggerBytes; got != 320000 {
 		t.Fatalf("TriggerBytes = %d, want 320000", got)
 	}
+	if got := lc.MaxPromptBytes; got != agent.DefaultSummaryPromptMaxBytes {
+		t.Fatalf("MaxPromptBytes = %d, want default %d for large model window", got, agent.DefaultSummaryPromptMaxBytes)
+	}
 }
 
 func TestSessionPool_CompactorReservesOutputBudgetInModelWindowByteTrigger(t *testing.T) {
@@ -1363,6 +1366,43 @@ func TestSessionPool_CompactorReservesOutputBudgetInModelWindowByteTrigger(t *te
 	}
 	if got := s.loop.CompactTriggerInputTokens; got != 0 {
 		t.Fatalf("explicit CompactTriggerInputTokens = %d, want 0", got)
+	}
+	if got := lc.MaxPromptBytes; got != agent.DefaultSummaryPromptMaxBytes {
+		t.Fatalf("MaxPromptBytes = %d, want default %d for large model window", got, agent.DefaultSummaryPromptMaxBytes)
+	}
+}
+
+func TestSessionPool_CompactorShrinksSummaryPromptForSmallModelWindow(t *testing.T) {
+	cfg := Config{
+		Listen:                     "127.0.0.1:0",
+		MaxSessions:                4,
+		SessionIdleTTL:             "5m",
+		WorkspaceRoot:              t.TempDir(),
+		BaseURL:                    "http://127.0.0.1:0",
+		APIKey:                     "test",
+		Model:                      "fake",
+		ModelContextWindowTokens:   200,
+		CompactTriggerInputPercent: 80,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("compact-small-window")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lc, ok := s.loop.Compactor.(*agent.LLMSummaryCompactor)
+	if !ok {
+		t.Fatalf("compactor type = %T, want *agent.LLMSummaryCompactor", s.loop.Compactor)
+	}
+	if got := lc.TriggerBytes; got != 640 {
+		t.Fatalf("TriggerBytes = %d, want 640", got)
+	}
+	if got := lc.MaxPromptBytes; got != 640 {
+		t.Fatalf("MaxPromptBytes = %d, want 640", got)
 	}
 }
 

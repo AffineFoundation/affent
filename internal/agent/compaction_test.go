@@ -1317,6 +1317,15 @@ func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	if got := CompactTriggerBytesForModelPolicy(4096, 100_000, 80, 30_000, DefaultSummaryTriggerBytes); got != DefaultSummaryTriggerBytes {
 		t.Fatalf("explicit request-input threshold should leave byte trigger at fallback; got %d want %d", got, DefaultSummaryTriggerBytes)
 	}
+	if got := SummaryPromptMaxBytesForModelPolicy(100_000, 80, 30_000, DefaultSummaryPromptMaxBytes); got != DefaultSummaryPromptMaxBytes {
+		t.Fatalf("large-window summary prompt cap = %d, want conservative default %d", got, DefaultSummaryPromptMaxBytes)
+	}
+	if got := SummaryPromptMaxBytesForModelPolicy(200, 80, 30, DefaultSummaryPromptMaxBytes); got != 640 {
+		t.Fatalf("small-window summary prompt cap = %d, want 640", got)
+	}
+	if got := SummaryPromptMaxBytesForModelPolicy(0, 80, 30, DefaultSummaryPromptMaxBytes); got != DefaultSummaryPromptMaxBytes {
+		t.Fatalf("unknown-window summary prompt cap = %d, want default %d", got, DefaultSummaryPromptMaxBytes)
+	}
 }
 
 // Rolling: a second compaction pass should detect the existing summary

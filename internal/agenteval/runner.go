@@ -180,6 +180,12 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	if r.ModelContextWindowTokens > 0 && r.CompactTriggerInputTokens == 0 {
 		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, r.ModelContextWindowTokens, r.CompactTriggerInputPercent, runnerReservedOutputTokens(r.LLM), agent.DefaultSummaryTriggerBytes)
 	}
+	maxSummaryPromptBytes := agent.SummaryPromptMaxBytesForModelPolicy(
+		r.ModelContextWindowTokens,
+		r.CompactTriggerInputPercent,
+		runnerReservedOutputTokens(r.LLM),
+		agent.DefaultSummaryPromptMaxBytes,
+	)
 	loop := &agent.Loop{
 		LLM:                   r.LLM,
 		Tools:                 reg,
@@ -192,10 +198,11 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		WorkspaceRoot:         workspace,
 		WorkspaceRootProvider: workspaceProvider,
 		Compactor: &agent.LLMSummaryCompactor{
-			LLM:          r.LLM,
-			TriggerMsgs:  compactTriggerMsgs,
-			TriggerBytes: triggerBytes,
-			KeepLast:     compactKeepLast,
+			LLM:            r.LLM,
+			TriggerMsgs:    compactTriggerMsgs,
+			TriggerBytes:   triggerBytes,
+			KeepLast:       compactKeepLast,
+			MaxPromptBytes: maxSummaryPromptBytes,
 		},
 		CompactTriggerInputTokens:  r.CompactTriggerInputTokens,
 		ModelContextWindowTokens:   r.ModelContextWindowTokens,

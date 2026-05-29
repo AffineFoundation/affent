@@ -91,3 +91,19 @@ func CompactTriggerBytesForModelPolicy(explicitInputTokens, modelContextWindowTo
 	}
 	return tokens * 4
 }
+
+// SummaryPromptMaxBytesForModelPolicy caps the compactor's own summarization
+// request with the same model-window policy used for request-pressure
+// compaction. It never raises the caller's fallback; large-context models keep
+// the conservative default, while small-context models avoid spending a failed
+// compaction attempt on an oversized summary prompt.
+func SummaryPromptMaxBytesForModelPolicy(modelContextWindowTokens, percent, reservedOutputTokens, fallback int) int {
+	limit := CompactTriggerBytesForModelPolicy(0, modelContextWindowTokens, percent, reservedOutputTokens, fallback)
+	if limit <= 0 {
+		return fallback
+	}
+	if fallback > 0 && limit > fallback {
+		return fallback
+	}
+	return limit
+}

@@ -856,11 +856,18 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if p.cfg.ModelContextWindowTokens > 0 && p.cfg.CompactTriggerInputTokens == 0 {
 		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, p.cfg.ModelContextWindowTokens, p.cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(p.cfg), agent.DefaultSummaryTriggerBytes)
 	}
+	maxSummaryPromptBytes := agent.SummaryPromptMaxBytesForModelPolicy(
+		p.cfg.ModelContextWindowTokens,
+		p.cfg.CompactTriggerInputPercent,
+		reservedOutputTokensForConfig(p.cfg),
+		agent.DefaultSummaryPromptMaxBytes,
+	)
 	loop.Compactor = &agent.LLMSummaryCompactor{
-		LLM:          llm,
-		TriggerMsgs:  triggerMsgs,
-		TriggerBytes: triggerBytes,
-		KeepLast:     keepLast,
+		LLM:            llm,
+		TriggerMsgs:    triggerMsgs,
+		TriggerBytes:   triggerBytes,
+		KeepLast:       keepLast,
+		MaxPromptBytes: maxSummaryPromptBytes,
 	}
 	loop.CompactTriggerInputTokens = p.cfg.CompactTriggerInputTokens
 	systemPrompt := p.cfg.SystemPrompt
