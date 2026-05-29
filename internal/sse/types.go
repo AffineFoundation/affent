@@ -87,6 +87,11 @@ type RuntimeSurfacePayload struct {
 	ReservedOutputTokens         int                  `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens    int                  `json:"compact_trigger_input_tokens,omitempty"`
 	CompactTriggerInputPercent   int                  `json:"compact_trigger_input_percent,omitempty"`
+	ConversationBytes            int                  `json:"conversation_bytes,omitempty"`
+	ToolSchemaBytes              int                  `json:"tool_schema_bytes,omitempty"`
+	EstimatedConversationTokens  int                  `json:"estimated_conversation_tokens,omitempty"`
+	EstimatedToolSchemaTokens    int                  `json:"estimated_tool_schema_tokens,omitempty"`
+	EstimatedRequestInputTokens  int                  `json:"estimated_request_input_tokens,omitempty"`
 	ToolResultEventCapBytes      int                  `json:"tool_result_event_cap_bytes,omitempty"`
 	ToolResultContextMaxBytes    int                  `json:"tool_result_context_max_bytes,omitempty"`
 	ToolResultContextBudgetBytes int                  `json:"tool_result_context_budget_bytes,omitempty"`

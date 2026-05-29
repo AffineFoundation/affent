@@ -1186,6 +1186,25 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		}
 		fmt.Fprintf(b, "- context_policy: %s\n", strings.Join(parts, ", "))
 	}
+	if surface.EstimatedRequestInputTokens > 0 ||
+		surface.EstimatedConversationTokens > 0 ||
+		surface.EstimatedToolSchemaTokens > 0 ||
+		surface.ToolSchemaBytes > 0 {
+		var parts []string
+		if surface.EstimatedRequestInputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("estimated_request_input_tokens=`%d`", surface.EstimatedRequestInputTokens))
+		}
+		if surface.EstimatedConversationTokens > 0 {
+			parts = append(parts, fmt.Sprintf("estimated_conversation_tokens=`%d`", surface.EstimatedConversationTokens))
+		}
+		if surface.EstimatedToolSchemaTokens > 0 {
+			parts = append(parts, fmt.Sprintf("estimated_tool_schema_tokens=`%d`", surface.EstimatedToolSchemaTokens))
+		}
+		if surface.ToolSchemaBytes > 0 {
+			parts = append(parts, fmt.Sprintf("tool_schema_bytes=`%d`", surface.ToolSchemaBytes))
+		}
+		fmt.Fprintf(b, "- request_pressure: %s\n", strings.Join(parts, ", "))
+	}
 	if surface.ToolResultEventCapBytes > 0 || surface.ToolResultContextMaxBytes > 0 || surface.ToolResultContextBudgetBytes > 0 {
 		fmt.Fprintf(b, "- tool_result_limits: event_cap_bytes=`%d`, context_max_bytes=`%d`, context_budget_bytes=`%d`\n",
 			surface.ToolResultEventCapBytes,

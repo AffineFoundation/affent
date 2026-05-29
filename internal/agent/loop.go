@@ -2895,6 +2895,11 @@ func (l *Loop) publish(t string, payload any) {
 
 func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 	tools := l.toolsForTurn(opts)
+	var messages []ChatMessage
+	if l.Conv != nil {
+		messages = l.Conv.Snapshot()
+	}
+	inputEstimate := EstimateRequestInput(messages, l.toolDefs(opts))
 	payload := sse.RuntimeSurfacePayload{
 		TurnID:                       turnID,
 		MaxTurnSteps:                 l.maxTurnStepsForSurface(),
@@ -2905,6 +2910,11 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		ReservedOutputTokens:         l.reservedOutputTokens(),
 		CompactTriggerInputTokens:    l.compactTriggerInputTokens(),
 		CompactTriggerInputPercent:   l.compactTriggerInputPercent(),
+		ConversationBytes:            inputEstimate.ConversationBytes,
+		ToolSchemaBytes:              inputEstimate.ToolSchemaBytes,
+		EstimatedConversationTokens:  inputEstimate.ConversationTokens,
+		EstimatedToolSchemaTokens:    inputEstimate.ToolSchemaTokens,
+		EstimatedRequestInputTokens:  inputEstimate.EstimatedInputTokens,
 		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,
 		ToolResultContextMaxBytes:    l.toolResultMaxBytesInContext(),
 		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),

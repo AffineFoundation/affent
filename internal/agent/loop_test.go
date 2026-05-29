@@ -1878,6 +1878,9 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		!payload.ModelContextWindowAuto ||
 		payload.CompactTriggerInputTokens != 80000 ||
 		payload.CompactTriggerInputPercent != 80 ||
+		payload.ToolSchemaBytes <= 0 ||
+		payload.EstimatedToolSchemaTokens <= 0 ||
+		payload.EstimatedRequestInputTokens <= 0 ||
 		payload.ToolResultEventCapBytes != MaxToolResultBytesInEvent ||
 		payload.ToolResultContextMaxBytes != 1234 ||
 		payload.ToolResultContextBudgetBytes != 5678 ||
