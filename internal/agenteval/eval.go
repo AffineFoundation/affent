@@ -3629,6 +3629,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))
+		checks = append(checks, ContextCompactionPolicyObservedAtLeast(scenario.RequiredContextCompactions))
 	}
 	if scenario.RequiredReactiveCompactions > 0 {
 		checks = append(checks, ReactiveContextCompactionsAtLeast(scenario.RequiredReactiveCompactions))

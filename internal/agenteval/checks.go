@@ -1655,6 +1655,42 @@ func ContextCompactionsAtLeast(min int) Check {
 	}
 }
 
+func ContextCompactionPolicyObservedAtLeast(min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_compaction_policy_observed_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var observed []string
+			for _, c := range t.ContextCompactions {
+				if c.EstimatedInputTokens > 0 && c.TriggerInputTokens > 0 {
+					count++
+				}
+				if len(observed) < 4 {
+					observed = append(observed, fmt.Sprintf("turn=%s reason=%s estimated=%d trigger=%d model_window=%d reserved_output=%d percent=%d",
+						c.TurnID,
+						c.Reason,
+						c.EstimatedInputTokens,
+						c.TriggerInputTokens,
+						c.ModelContextWindowTokens,
+						c.ReservedOutputTokens,
+						c.CompactTriggerInputPercent,
+					))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("context_compaction_policy_observed=%d", count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("context_compaction_policy_observed=%d, want >= %d; observed=%v", count, min, observed),
+			}
+		},
+	}
+}
+
 func ReactiveContextCompactionsAtLeast(min int) Check {
 	return Check{
 		Name: fmt.Sprintf("reactive_context_compactions_at_least:%d", min),

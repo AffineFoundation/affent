@@ -1239,8 +1239,8 @@ func TestLoopProtocolCalibrationCheck(t *testing.T) {
 
 func TestContextCompactionChecks(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
-		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, BeforeBytes: 12000, AfterBytes: 5000, ReducedBytes: 7000, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs.", LoopProtocolAnchor: "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md loop_id=longrun mode=digest"},
-		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, BeforeBytes: 9000, AfterBytes: 3000, ReducedBytes: 6000, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
+		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, BeforeBytes: 12000, AfterBytes: 5000, ReducedBytes: 7000, EstimatedInputTokens: 48000, TriggerInputTokens: 40000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs.", LoopProtocolAnchor: "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md loop_id=longrun mode=digest"},
+		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, BeforeBytes: 9000, AfterBytes: 3000, ReducedBytes: 6000, EstimatedInputTokens: 90000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
 	}}
 	stats := trace.ContextCompactionStats(1)
 	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.ReducedBytes != 13000 || stats.SummaryBytes != 2100 {
@@ -1251,6 +1251,9 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 	if res := ContextCompactionsAtLeast(2).Eval(trace); !res.Pass {
 		t.Fatalf("expected total compaction check to pass: %+v", res)
+	}
+	if res := ContextCompactionPolicyObservedAtLeast(2).Eval(trace); !res.Pass {
+		t.Fatalf("expected compaction policy metadata check to pass: %+v", res)
 	}
 	if res := ReactiveContextCompactionsAtLeast(1).Eval(trace); !res.Pass {
 		t.Fatalf("expected reactive compaction check to pass: %+v", res)
@@ -1307,6 +1310,14 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "missing-loop") || !strings.Contains(res.Detail, ".affent/loops/longrun/LOOP.md") {
 		t.Fatalf("failure detail should include requested marker and observed anchors: %s", res.Detail)
+	}
+	trace.ContextCompactions[1].EstimatedInputTokens = 0
+	res = ContextCompactionPolicyObservedAtLeast(2).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing compaction policy metadata check to fail")
+	}
+	if !strings.Contains(res.Detail, "context_compaction_policy_observed=1") || !strings.Contains(res.Detail, "turn=t2") {
+		t.Fatalf("policy metadata failure detail = %q", res.Detail)
 	}
 }
 

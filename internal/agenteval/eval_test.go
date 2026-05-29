@@ -1722,6 +1722,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"context_injection_source_at_least:final_evidence_digest:1",
 		"context_injection_text_at_least:final_evidence_digest:verified source:1",
 		"context_compactions_at_least:1",
+		"context_compaction_policy_observed_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_reason_at_least:context_overflow:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -3420,6 +3421,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_reason_at_least:estimated_context_pressure:1") {
 		t.Fatalf("request pressure checks missing compaction reason assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
+	}
+	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_policy_observed_at_least:1") {
+		t.Fatalf("request pressure checks missing compaction policy metadata assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
 	}
 	if !taskStateEvidenceRequirementContains(requestPressure.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
 		t.Fatalf("request pressure RequiredTaskStateEvidence = %#v, want context_compaction estimated_context_pressure", requestPressure.RequiredTaskStateEvidence)
@@ -5313,6 +5317,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_input_tokens:300000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "max_loop_turn_total_tokens:320000") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_policy_observed_at_least:1") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_reason_at_least:context_overflow:1") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_reduced_bytes_at_least:1") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
