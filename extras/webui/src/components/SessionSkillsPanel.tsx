@@ -64,7 +64,11 @@ export function SessionSkillsPanel({
   const [selectedSkillName, setSelectedSkillName] = useState<string | undefined>();
   const [skillFilter, setSkillFilter] = useState<SkillFilter>("all");
   const [activationProbe, setActivationProbe] = useState("");
-  const allSkills = skills ?? [];
+  const [optimisticSkills, setOptimisticSkills] = useState<SessionSkillInfo[]>([]);
+  const allSkills = useMemo(() => {
+    const names = new Set(optimisticSkills.map((skill) => skill.name));
+    return [...optimisticSkills, ...(skills ?? []).filter((skill) => !names.has(skill.name))];
+  }, [optimisticSkills, skills]);
   const hasSearch = allSkills.length > 0;
   const canInstall = installEnabled && !!onInstallSkill;
   const trimmedQuery = query.trim();
@@ -137,6 +141,10 @@ export function SessionSkillsPanel({
         required_tools: splitList(form.requiredTools),
       });
       setBodyByName((current) => ({ ...current, [installed.name]: { body: installed.body ?? form.body } }));
+      setOptimisticSkills((current) => [installed, ...current.filter((skill) => skill.name !== installed.name)]);
+      setSelectedSkillName(installed.name);
+      setSkillFilter("all");
+      setQuery("");
       setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
       setEditingSkillName(undefined);
       setShowForm(false);
@@ -191,6 +199,8 @@ export function SessionSkillsPanel({
         delete next[name];
         return next;
       });
+      setOptimisticSkills((current) => current.filter((skill) => skill.name !== name));
+      setSelectedSkillName((current) => current === name ? undefined : current);
       setDeleteConfirmName(undefined);
       if (editingSkillName === name) {
         setEditingSkillName(undefined);

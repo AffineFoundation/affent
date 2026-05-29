@@ -115,7 +115,12 @@ describe("SessionSkillsPanel", () => {
       required_tools: ["workspace", "browser"],
     });
     expect(screen.getByRole("status")).toHaveTextContent("manual_demo saved.");
-    expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("1");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("manual_demo");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("Manual workflow.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_demo");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Manual workflow.");
+    expect(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Edit" })).toBeInTheDocument();
   });
 
   it("edits and deletes runtime skills directly from the panel", async () => {
