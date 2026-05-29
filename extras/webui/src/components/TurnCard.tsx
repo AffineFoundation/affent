@@ -5,7 +5,6 @@ import type { ToolCallState, TurnError, TurnState } from "../store/sessionState"
 import type { UseAsDraft } from "../view/draftSource";
 import { summarizeUserError } from "../view/errorSummary";
 import { buildExecutionTree, searchableExecutionNodeText } from "../view/executionTree";
-import { artifactEvidenceDraft } from "../view/sessionArtifacts";
 import { buildTurnActivity, type TurnActivityBriefRow, type TurnActivityEvidence, type TurnActivityNode, type TurnActivityView } from "../view/turnActivity";
 import { buildTurnBoundaryView } from "../view/turnBoundary";
 import { buildTurnWorkSummaryWithOptions, type WorkSummaryItem } from "../view/turnWorkSummary";
@@ -172,7 +171,7 @@ export function TurnCard({
           {fallbackAnswer ? (
             <FallbackAnswerBubble answer={fallbackAnswer} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} />
           ) : null}
-          {assistantResponseSegments.length === 0 ? <TurnArtifacts turn={turn} sessionId={sessionId} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} searchQuery={searchQuery} /> : null}
+          {assistantResponseSegments.length === 0 ? <TurnArtifacts turn={turn} sessionId={sessionId} onOpenArtifact={onOpenArtifact} searchQuery={searchQuery} /> : null}
           {showReasoningDisclosure ? (
             <ReasoningDisclosure turn={turn} searchQuery={searchQuery} />
           ) : null}
@@ -267,7 +266,6 @@ function AssistantResponseSegment({
         turn={segment.turn}
         sessionId={sessionId}
         onOpenArtifact={onOpenArtifact}
-        onUseAsDraft={onUseAsDraft}
         searchQuery={searchQuery}
       />
     </div>
@@ -283,13 +281,11 @@ function TurnArtifacts({
   turn,
   sessionId,
   onOpenArtifact,
-  onUseAsDraft,
   searchQuery,
 }: {
   turn: TurnState;
   sessionId?: string;
   onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
   searchQuery?: string;
 }) {
   const artifacts = chatVisibleTurnArtifacts(turn);
@@ -298,7 +294,6 @@ function TurnArtifacts({
       artifacts={artifacts}
       sessionId={sessionId}
       onOpenArtifact={onOpenArtifact}
-      onUseAsDraft={onUseAsDraft}
       searchQuery={searchQuery}
     />
   ) : null;
@@ -1384,13 +1379,11 @@ function ArtifactStrip({
   artifacts,
   sessionId,
   onOpenArtifact,
-  onUseAsDraft,
   searchQuery,
 }: {
   artifacts: readonly TurnArtifact[];
   sessionId?: string;
   onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
   searchQuery?: string;
 }) {
   return (
@@ -1408,11 +1401,6 @@ function ArtifactStrip({
             {artifact.bytes != null ? <small className="artifact-pill-size">{artifactSizeLabel(artifact)}</small> : null}
           </div>
           <div className="artifact-pill-actions">
-            {onUseAsDraft ? (
-              <button type="button" className="artifact-pill-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
-                Use artifact as draft
-              </button>
-            ) : null}
             {onOpenArtifact && sessionId ? (
               <button type="button" className="artifact-pill-action" onClick={() => onOpenArtifact(artifact.path)}>
                 Open artifact

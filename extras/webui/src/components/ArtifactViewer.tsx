@@ -1,7 +1,6 @@
 import { useState } from "react";
 import type { ArtifactChunk } from "../api/sessions";
 import {
-  artifactChunkEvidenceDraft,
   artifactChunkEvidenceText,
   artifactLoadedTextDraft,
   artifactMatchesDraft,
@@ -96,23 +95,14 @@ export function ArtifactViewer({
               </div>
             ) : null}
             {onUseAsDraft ? (
-              <>
-                <button
-                  type="button"
-                  className="node-action"
-                  onClick={() => onUseAsDraft(artifactChunkEvidenceDraft(artifact.chunk), "artifact")}
-                >
-                  Use artifact as draft
-                </button>
-                <button
-                  type="button"
-                  className="node-action"
-                  onClick={() => onUseAsDraft(artifactLoadedTextDraft(artifact.chunk.path, artifact.chunk.text), "artifact_text")}
-                  disabled={artifact.chunk.text.trim() === ""}
-                >
-                  Use text
-                </button>
-              </>
+              <button
+                type="button"
+                className="node-action"
+                onClick={() => onUseAsDraft(artifactLoadedTextDraft(artifact.chunk.path, artifact.chunk.text), "artifact_text")}
+                disabled={artifact.chunk.text.trim() === ""}
+              >
+                Use text
+              </button>
             ) : null}
             {artifactDownloadHref ? (
               <a className="node-action" href={artifactDownloadHref} download={displayName(artifact.chunk.path)}>

@@ -1906,7 +1906,6 @@ export function App() {
           artifacts={workbenchArtifacts}
           defaultOpen
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
-          onUseAsDraft={handleUseAsDraft}
         />
       );
     }

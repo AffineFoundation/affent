@@ -85,16 +85,7 @@ describe("ArtifactViewer", () => {
     expect(onSearch).toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Load more" }));
     expect(onLoadMore).toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Use artifact as draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(
-      [
-        "Use this artifact in the next step:",
-        "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
-        "Loaded: 20 B of 20 B",
-        "Status: partial load",
-      ].join("\n"),
-      "artifact",
-    );
+    expect(screen.queryByRole("button", { name: "Use artifact as draft" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Use text" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [

@@ -47,10 +47,6 @@ export function artifactChunkEvidenceText(chunk: ArtifactChunk): string {
   ].join("\n");
 }
 
-export function artifactChunkEvidenceDraft(chunk: ArtifactChunk): string {
-  return `Use this artifact in the next step:\n${artifactChunkEvidenceText(chunk)}`;
-}
-
 export function artifactLoadedTextDraft(path: string, text: string): string {
   return [
     "Use this loaded file text in the next step:",

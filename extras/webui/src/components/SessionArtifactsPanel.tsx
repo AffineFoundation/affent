@@ -1,8 +1,5 @@
 import { useState } from "react";
-import type { UseAsDraft } from "../view/draftSource";
 import {
-  artifactEvidenceDraft,
-  artifactEvidenceText,
   artifactKind,
   artifactKindLabel,
   artifactLineageLabel,
@@ -26,12 +23,10 @@ export function SessionArtifactsPanel({
   artifacts,
   defaultOpen = false,
   onOpenArtifact,
-  onUseAsDraft,
 }: {
   artifacts: readonly TurnArtifact[];
   defaultOpen?: boolean;
   onOpenArtifact?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ArtifactFilter>("all");
@@ -74,12 +69,6 @@ export function SessionArtifactsPanel({
                     </button>
                   ) : null}
                   <CopyButton label="Copy path" value={focus.path} className="ghost-action" />
-                  <CopyButton label="Copy details" value={artifactEvidenceText(focus)} className="ghost-action" />
-                  {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(focus), "artifact")}>
-                      Reference
-                    </button>
-                  ) : null}
                 </div>
               </div>
             ) : null}
@@ -198,8 +187,6 @@ function artifactStatLineItems(stats: SessionArtifactStats): string[] {
     stats.failedOutputs > 0 ? `${stats.failedOutputs} failed` : undefined,
     stats.partialOutputs > 0 ? `${stats.partialOutputs} partial` : undefined,
     stats.recordedBytes > 0 ? `${Math.ceil(stats.recordedBytes / 1024)} KiB recorded` : undefined,
-    stats.latestTurn != null ? `latest turn ${stats.latestTurn}` : undefined,
-    `${stats.sourceCount} ${stats.sourceCount === 1 ? "source" : "sources"}`,
   ].filter((item): item is string => Boolean(item));
   return items.length ? items : ["No recorded artifact evidence"];
 }
