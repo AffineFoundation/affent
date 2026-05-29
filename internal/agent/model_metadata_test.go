@@ -27,7 +27,7 @@ func TestParseModelMetadataContextWindow(t *testing.T) {
 func TestParseModelMetadataNestedAndStringFields(t *testing.T) {
 	raw := []byte(`{
 		"data": [
-			{"id": "target", "metadata": {"max_model_len": "32768"}}
+			{"id": "target", "metadata": {"max_model_len": "32768", "auto_compact_token_limit": "24000"}}
 		]
 	}`)
 	got, err := ParseModelMetadata(raw, "target")
@@ -36,6 +36,9 @@ func TestParseModelMetadataNestedAndStringFields(t *testing.T) {
 	}
 	if got.ContextWindowTokens != 32768 {
 		t.Fatalf("ContextWindowTokens = %d, want 32768", got.ContextWindowTokens)
+	}
+	if got.AutoCompactTokenLimit != 24000 {
+		t.Fatalf("AutoCompactTokenLimit = %d, want 24000", got.AutoCompactTokenLimit)
 	}
 }
 

@@ -591,7 +591,7 @@ func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
 		if r.URL.Path != "/v1/models" {
 			t.Fatalf("path = %q, want /v1/models", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":131072}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":131072,"auto_compact_token_limit":120000}]}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -604,6 +604,9 @@ func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
 	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
 	if got.modelContextWindowTokens != 131072 {
 		t.Fatalf("modelContextWindowTokens = %d, want 131072", got.modelContextWindowTokens)
+	}
+	if got.compactTriggerInputTokens != 117964 {
+		t.Fatalf("compactTriggerInputTokens = %d, want clamped provider limit 117964", got.compactTriggerInputTokens)
 	}
 }
 

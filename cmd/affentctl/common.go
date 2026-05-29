@@ -273,10 +273,18 @@ func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LL
 		return c
 	}
 	c.modelContextWindowTokens = meta.ContextWindowTokens
+	if c.compactTriggerInputTokens == 0 && meta.AutoCompactTokenLimit > 0 {
+		limit := meta.AutoCompactTokenLimit
+		if maxPolicy := agent.CompactTriggerInputTokensForModelPolicy(0, c.modelContextWindowTokens, 90, reservedOutputTokensFromSampling(llm.Sampling), 0); maxPolicy > 0 && limit > maxPolicy {
+			limit = maxPolicy
+		}
+		c.compactTriggerInputTokens = limit
+	}
 	log.Info().
 		Str("model", c.model).
 		Str("metadata_model", meta.ID).
 		Int("model_context_window_tokens", c.modelContextWindowTokens).
+		Int("auto_compact_token_limit", c.compactTriggerInputTokens).
 		Msg("model context window resolved from provider metadata")
 	return c
 }

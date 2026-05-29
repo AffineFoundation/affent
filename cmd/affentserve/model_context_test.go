@@ -15,7 +15,7 @@ func TestNewSessionPoolResolvesModelContextWindowFromProvider(t *testing.T) {
 			t.Fatalf("path = %q, want /v1/models", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data":[{"id":"ctx-model","context_window":131072}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"ctx-model","context_window":131072,"auto_compact_token_limit":120000}]}`))
 	}))
 	defer srv.Close()
 
@@ -36,6 +36,9 @@ func TestNewSessionPoolResolvesModelContextWindowFromProvider(t *testing.T) {
 	t.Cleanup(pool.Shutdown)
 	if pool.cfg.ModelContextWindowTokens != 131072 {
 		t.Fatalf("ModelContextWindowTokens = %d, want 131072", pool.cfg.ModelContextWindowTokens)
+	}
+	if pool.cfg.CompactTriggerInputTokens != 117964 {
+		t.Fatalf("CompactTriggerInputTokens = %d, want clamped provider limit 117964", pool.cfg.CompactTriggerInputTokens)
 	}
 }
 

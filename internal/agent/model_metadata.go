@@ -13,8 +13,9 @@ import (
 const maxModelMetadataBytes = 2 * 1024 * 1024
 
 type ModelMetadata struct {
-	ID                  string
-	ContextWindowTokens int
+	ID                    string
+	ContextWindowTokens   int
+	AutoCompactTokenLimit int
 }
 
 // FetchModelMetadata reads OpenAI-compatible /models metadata for c.Model.
@@ -76,8 +77,9 @@ func ParseModelMetadata(raw []byte, model string) (ModelMetadata, error) {
 			continue
 		}
 		return ModelMetadata{
-			ID:                  id,
-			ContextWindowTokens: modelContextWindowTokensFromMetadata(item),
+			ID:                    id,
+			ContextWindowTokens:   modelContextWindowTokensFromMetadata(item),
+			AutoCompactTokenLimit: modelAutoCompactTokenLimitFromMetadata(item),
 		}, nil
 	}
 	return ModelMetadata{}, fmt.Errorf("model %q not found in models response", model)
@@ -102,6 +104,14 @@ func modelContextWindowTokensFromMetadata(item map[string]any) int {
 		return maxWindow
 	}
 	return window
+}
+
+func modelAutoCompactTokenLimitFromMetadata(item map[string]any) int {
+	return firstPositiveModelMetadataInt(item,
+		"auto_compact_token_limit",
+		"model_auto_compact_token_limit",
+		"auto_compact_context_limit",
+	)
 }
 
 func firstPositiveModelMetadataInt(item map[string]any, keys ...string) int {
