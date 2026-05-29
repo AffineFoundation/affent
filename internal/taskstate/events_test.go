@@ -275,11 +275,11 @@ func TestScanEventsPreservesDistinctAttemptedActionToolsAtLimit(t *testing.T) {
 		Text:   "Switch workspace and fix.",
 	}))
 	for i, req := range []ToolRequest{
+		{Tool: "shell", Args: map[string]any{"command": "cp -r remote.git app"}},
+		{Tool: "shell", Args: map[string]any{"command": "rm -rf app && git clone remote.git app"}},
 		{Tool: "session_workspace", Args: map[string]any{"action": "set", "path": "app"}},
 		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
-		{Tool: "list_files", Args: map[string]any{"path": "."}},
 		{Tool: "read_file", Args: map[string]any{"path": "a_test.go"}},
-		{Tool: "read_file", Args: map[string]any{"path": "a.go"}},
 		{Tool: "edit_file", Args: map[string]any{"path": "a.go"}},
 		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
 		{Tool: "shell", Args: map[string]any{"command": `git commit -m "fix"`}},
@@ -306,6 +306,9 @@ func TestScanEventsPreservesDistinctAttemptedActionToolsAtLimit(t *testing.T) {
 	}
 	if !taskStateActionContains(state.AttemptedActions, "session_workspace", "app") {
 		t.Fatalf("attempted actions = %+v, want session_workspace app preserved", state.AttemptedActions)
+	}
+	if !taskStateActionContains(state.AttemptedActions, "shell", "git push") {
+		t.Fatalf("attempted actions = %+v, want git push preserved", state.AttemptedActions)
 	}
 }
 

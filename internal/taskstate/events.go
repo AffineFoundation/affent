@@ -582,14 +582,27 @@ func removeLowestValueAction(items []Action) []Action {
 func ActionRetentionRank(item Action) int {
 	tool := strings.TrimSpace(item.Tool)
 	summary := strings.TrimSpace(item.Summary)
-	if tool == "shell" && len(ShellHandoffEvidenceSources(summary)) > 0 {
-		return 100
+	if tool == "shell" {
+		if len(ShellHandoffEvidenceSources(summary)) > 0 {
+			return 100
+		}
+		for _, subcommand := range GitSubcommands(summary) {
+			if subcommand == "status" {
+				return 85
+			}
+		}
+		if ShellCommandLooksLikeVerification(summary) {
+			return 90
+		}
+		return 50
 	}
 	if ToolEvidenceSource(tool) != "" {
 		return 80
 	}
 	switch tool {
-	case "edit_file", "write_file", "session_workspace":
+	case "session_workspace":
+		return 85
+	case "edit_file", "write_file":
 		return 70
 	case "file_context", "repo_search", "symbol_context", "read_file":
 		return 40

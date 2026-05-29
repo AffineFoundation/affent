@@ -155,11 +155,11 @@ func TestDeriveTaskStatePreservesDistinctActionAndEvidenceSourcesAtLimit(t *test
 			Source: "runtime_workspace",
 		}},
 		Tools: []ToolCall{
+			{TurnID: "turn-1", CallID: "copy", Tool: "shell", Args: map[string]any{"command": "cp -r remote.git app"}, ExitCode: 0},
+			{TurnID: "turn-1", CallID: "clone", Tool: "shell", Args: map[string]any{"command": "rm -rf app && git clone remote.git app"}, ExitCode: 0},
 			{TurnID: "turn-1", CallID: "workspace", Tool: "session_workspace", Args: map[string]any{"action": "set", "path": "app"}},
 			{TurnID: "turn-1", CallID: "test-1", Tool: "shell", Args: map[string]any{"command": "go test ./..."}, ExitCode: 0},
-			{TurnID: "turn-1", CallID: "list", Tool: "list_files", Args: map[string]any{"path": "."}},
 			{TurnID: "turn-1", CallID: "read-1", Tool: "read_file", Args: map[string]any{"path": "greet/greet_test.go"}},
-			{TurnID: "turn-1", CallID: "read-2", Tool: "read_file", Args: map[string]any{"path": "greet/greet.go"}},
 			{TurnID: "turn-1", CallID: "edit", Tool: "edit_file", Args: map[string]any{"path": "greet/greet.go"}},
 			{TurnID: "turn-1", CallID: "test-2", Tool: "shell", Args: map[string]any{"command": "go test ./..."}, ExitCode: 0},
 			{TurnID: "turn-1", CallID: "commit", Tool: "shell", Args: map[string]any{"command": `git add greet/greet.go && git commit -m "fix"`}, ExitCode: 0},
