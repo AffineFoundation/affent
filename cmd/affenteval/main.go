@@ -306,6 +306,8 @@ func run(args []string) int {
 			MaxAvgContextSummaryEmpty:              fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
 			MinContextCompactionPolicyObservedRate: fs.Float64("min-context-compaction-policy-observed-rate", -1, "optional quality gate: minimum context compaction rate with policy metadata, 0..1"),
 			MaxContextCompactionPolicyPressure:     fs.Float64("max-context-compaction-policy-pressure-percent", -1, "optional quality gate: maximum observed context compaction estimated-input/trigger pressure percent"),
+			MaxContextCompactionPostPolicyPressure: fs.Float64("max-context-compaction-post-policy-pressure-percent", -1, "optional quality gate: maximum observed post-compaction estimated-input/trigger pressure percent"),
+			MaxContextCompactionPostPolicyOverRate: fs.Float64("max-context-compaction-post-policy-over-rate", -1, "optional quality gate: maximum rate of policy-observed compactions still over trigger after compaction, 0..1"),
 			MaxAvgContextInjections:                fs.Float64("max-avg-context-injections", -1, "optional quality gate: maximum average injected system-context blocks per scenario"),
 			MaxAvgContextInjectionBytes:            fs.Float64("max-avg-context-injection-bytes", -1, "optional quality gate: maximum average injected system-context bytes per scenario"),
 			MaxAvgContextInjectionEstimatedTokens:  fs.Float64("max-avg-context-injection-estimated-tokens", -1, "optional quality gate: maximum average estimated injected system-context tokens per scenario"),
@@ -647,6 +649,8 @@ type qualityGateConfig struct {
 	MaxAvgContextSummaryEmpty                      *float64
 	MinContextCompactionPolicyObservedRate         *float64
 	MaxContextCompactionPolicyPressure             *float64
+	MaxContextCompactionPostPolicyPressure         *float64
+	MaxContextCompactionPostPolicyOverRate         *float64
 	MaxAvgContextInjections                        *float64
 	MaxAvgContextInjectionBytes                    *float64
 	MaxAvgContextInjectionEstimatedTokens          *float64
@@ -872,6 +876,8 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty)
 	add("min-context-compaction-policy-observed-rate", g.MinContextCompactionPolicyObservedRate)
 	add("max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure)
+	add("max-context-compaction-post-policy-pressure-percent", g.MaxContextCompactionPostPolicyPressure)
+	add("max-context-compaction-post-policy-over-rate", g.MaxContextCompactionPostPolicyOverRate)
 	add("max-avg-context-injections", g.MaxAvgContextInjections)
 	add("max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes)
 	add("max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens)
@@ -967,6 +973,8 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-context-summary-empty", &g.MaxAvgContextSummaryEmpty, profileConfig.MaxAvgContextSummaryEmpty)
 	apply("min-context-compaction-policy-observed-rate", &g.MinContextCompactionPolicyObservedRate, profileConfig.MinContextCompactionPolicyObservedRate)
 	apply("max-context-compaction-policy-pressure-percent", &g.MaxContextCompactionPolicyPressure, profileConfig.MaxContextCompactionPolicyPressure)
+	apply("max-context-compaction-post-policy-pressure-percent", &g.MaxContextCompactionPostPolicyPressure, profileConfig.MaxContextCompactionPostPolicyPressure)
+	apply("max-context-compaction-post-policy-over-rate", &g.MaxContextCompactionPostPolicyOverRate, profileConfig.MaxContextCompactionPostPolicyOverRate)
 	apply("max-avg-context-injections", &g.MaxAvgContextInjections, profileConfig.MaxAvgContextInjections)
 	apply("max-avg-context-injection-bytes", &g.MaxAvgContextInjectionBytes, profileConfig.MaxAvgContextInjectionBytes)
 	apply("max-avg-context-injection-estimated-tokens", &g.MaxAvgContextInjectionEstimatedTokens, profileConfig.MaxAvgContextInjectionEstimatedTokens)
@@ -2499,6 +2507,8 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty, false},
 		{"--min-context-compaction-policy-observed-rate", g.MinContextCompactionPolicyObservedRate, true},
 		{"--max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure, false},
+		{"--max-context-compaction-post-policy-pressure-percent", g.MaxContextCompactionPostPolicyPressure, false},
+		{"--max-context-compaction-post-policy-over-rate", g.MaxContextCompactionPostPolicyOverRate, true},
 		{"--max-avg-context-injections", g.MaxAvgContextInjections, false},
 		{"--max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes, false},
 		{"--max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens, false},
@@ -2670,6 +2680,8 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_context_summary_empty", batchAverage(s.ContextCompactionSummaryEmpty, s.Total), g.MaxAvgContextSummaryEmpty, s.Total > 0)
 	checkMin("context_compaction_policy_observed_rate", batchRatio(s.ContextCompactionPolicyObserved, s.ContextCompactions), g.MinContextCompactionPolicyObservedRate, s.ContextCompactions > 0)
 	checkMax("context_compaction_policy_pressure_percent", float64(s.ContextCompactionMaxPolicyPressure), g.MaxContextCompactionPolicyPressure, s.ContextCompactionPolicyObserved > 0)
+	checkMax("context_compaction_post_policy_pressure_percent", float64(s.ContextCompactionMaxPostPolicyPressure), g.MaxContextCompactionPostPolicyPressure, s.ContextCompactionPostPolicyObserved > 0)
+	checkMax("context_compaction_post_policy_over_rate", batchRatio(s.ContextCompactionPostPolicyStillOver, s.ContextCompactionPostPolicyObserved), g.MaxContextCompactionPostPolicyOverRate, s.ContextCompactionPostPolicyObserved > 0)
 	checkMax("avg_context_injections", batchAverage(s.ContextInjections, s.Total), g.MaxAvgContextInjections, s.Total > 0)
 	checkMax("avg_context_injection_bytes", batchAverage(s.ContextInjectionBytes, s.Total), g.MaxAvgContextInjectionBytes, s.Total > 0)
 	checkMax("avg_context_injection_estimated_tokens", batchAverage(s.ContextInjectionEstimatedTokens, s.Total), g.MaxAvgContextInjectionEstimatedTokens, s.Total > 0)
@@ -3749,6 +3761,8 @@ type evalJSONLMetadata struct {
 	MaxAvgContextSummaryEmpty                      *float64           `json:"max_avg_context_summary_empty,omitempty"`
 	MinContextCompactionPolicyObservedRate         *float64           `json:"min_context_compaction_policy_observed_rate,omitempty"`
 	MaxContextCompactionPolicyPressure             *float64           `json:"max_context_compaction_policy_pressure_percent,omitempty"`
+	MaxContextCompactionPostPolicyPressure         *float64           `json:"max_context_compaction_post_policy_pressure_percent,omitempty"`
+	MaxContextCompactionPostPolicyOverRate         *float64           `json:"max_context_compaction_post_policy_over_rate,omitempty"`
 	MaxAvgContextInjections                        *float64           `json:"max_avg_context_injections,omitempty"`
 	MaxAvgContextInjectionBytes                    *float64           `json:"max_avg_context_injection_bytes,omitempty"`
 	MaxAvgContextInjectionEstimatedTokens          *float64           `json:"max_avg_context_injection_estimated_tokens,omitempty"`
@@ -3835,6 +3849,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgContextSummaryEmpty:                      enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
 		MinContextCompactionPolicyObservedRate:         enabledQualityGateValue(gates.MinContextCompactionPolicyObservedRate),
 		MaxContextCompactionPolicyPressure:             enabledQualityGateValue(gates.MaxContextCompactionPolicyPressure),
+		MaxContextCompactionPostPolicyPressure:         enabledQualityGateValue(gates.MaxContextCompactionPostPolicyPressure),
+		MaxContextCompactionPostPolicyOverRate:         enabledQualityGateValue(gates.MaxContextCompactionPostPolicyOverRate),
 		MaxAvgContextInjections:                        enabledQualityGateValue(gates.MaxAvgContextInjections),
 		MaxAvgContextInjectionBytes:                    enabledQualityGateValue(gates.MaxAvgContextInjectionBytes),
 		MaxAvgContextInjectionEstimatedTokens:          enabledQualityGateValue(gates.MaxAvgContextInjectionEstimatedTokens),
@@ -4855,6 +4871,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgContextSummaryEmpty != nil ||
 		meta.MinContextCompactionPolicyObservedRate != nil ||
 		meta.MaxContextCompactionPolicyPressure != nil ||
+		meta.MaxContextCompactionPostPolicyPressure != nil ||
+		meta.MaxContextCompactionPostPolicyOverRate != nil ||
 		meta.MaxAvgContextInjections != nil ||
 		meta.MaxAvgContextInjectionBytes != nil ||
 		meta.MaxAvgContextInjectionEstimatedTokens != nil ||
