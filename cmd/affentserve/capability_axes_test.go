@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestValidateSessionRuntimeContractRequiresControlTools(t *testing.T) {
@@ -36,5 +37,32 @@ func TestSessionRuntimeContractSurfacesMissingExpectedCapabilities(t *testing.T)
 	}
 	if !stringSliceContains(contract.Available, "schedules") || !stringSliceContains(contract.Available, "schedule runner") {
 		t.Fatalf("available = %+v, want schedules and schedule runner", contract.Available)
+	}
+}
+
+func TestRuntimeSurfaceCapabilityLabelsDistinguishScheduleRunner(t *testing.T) {
+	surface := &sse.RuntimeSurfacePayload{
+		Capabilities: sse.RuntimeCapabilities{
+			SessionSchedule: true,
+		},
+	}
+	available, unavailable := runtimeSurfaceCapabilityLabels(surface)
+	if !stringSliceContains(available, "schedules") {
+		t.Fatalf("available = %+v, want schedules", available)
+	}
+	if stringSliceContains(available, "schedule runner") {
+		t.Fatalf("available = %+v, must not infer schedule runner from schedule tool", available)
+	}
+	if !stringSliceContains(unavailable, "schedule runner") {
+		t.Fatalf("unavailable = %+v, want schedule runner", unavailable)
+	}
+
+	surface.Capabilities.SessionScheduleRunner = true
+	available, unavailable = runtimeSurfaceCapabilityLabels(surface)
+	if !stringSliceContains(available, "schedules") || !stringSliceContains(available, "schedule runner") {
+		t.Fatalf("available = %+v, want schedules and schedule runner", available)
+	}
+	if stringSliceContains(unavailable, "schedule runner") {
+		t.Fatalf("unavailable = %+v, want schedule runner removed", unavailable)
 	}
 }
