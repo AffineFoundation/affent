@@ -3272,12 +3272,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 			return nil, sse.TurnEndCancelled, ctx.Err()
 		}
 
-		// Proactive compaction: shrink before the call when the log is
-		// long enough. The Compactor decides if it actually does work
-		// (LLMSummaryCompactor short-circuits below TriggerMsgs).
-		if !l.maybeCompact(ctx, turnID, false) {
-			l.maybeCompactForRequestPressure(ctx, turnID, toolDefs)
-		}
+		l.compactBeforeRequest(ctx, turnID, toolDefs)
 
 		callCtx, callCancel := context.WithTimeout(ctx, timeout)
 		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), toolDefs)
@@ -3408,6 +3403,22 @@ func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string
 			Msg("conversation compacted before request input pressure")
 	}
 	return compacted
+}
+
+func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs []ToolDef) {
+	// Proactive compaction is one pre-call phase with two inputs:
+	// persisted conversation pressure and whole-request pressure
+	// (conversation + tool schemas). Run the request-pressure check
+	// even after a threshold compaction because the first pass may reduce
+	// old conversation while the next request is still too large.
+	l.maybeCompact(ctx, turnID, false)
+
+	const maxRequestPressureCompactions = 2
+	for i := 0; i < maxRequestPressureCompactions; i++ {
+		if !l.maybeCompactForRequestPressure(ctx, turnID, toolDefs) {
+			return
+		}
+	}
 }
 
 func (l *Loop) compactTriggerInputTokens() int {
