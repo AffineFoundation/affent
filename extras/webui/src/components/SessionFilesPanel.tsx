@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   fileContentText,
@@ -6,11 +6,7 @@ import {
   fileLines,
   fileRangeDraft,
   fileRangeText,
-  filesReviewFacts,
-  filesReviewFocus,
-  filesReviewQueue,
   type SessionFileEvidence,
-  type SessionFilesReviewItem,
   type SessionFilesView,
 } from "../view/sessionFiles";
 import { parentWorkspacePath, workspaceFileDraft, type WorkspaceFileBrowserState, type WorkspaceFileEntryView, type WorkspaceFileView } from "../view/workspaceFile";
@@ -18,6 +14,13 @@ import { CopyButton } from "./CopyButton";
 import { HighlightText } from "./HighlightText";
 
 type FileFilter = "all" | "changed" | "snapshots" | "issues" | "listed";
+
+interface FileTreeNode {
+  name: string;
+  path: string;
+  children: FileTreeNode[];
+  item?: SessionFileEvidence;
+}
 
 export function SessionFilesPanel({
   files,
@@ -46,39 +49,34 @@ export function SessionFilesPanel({
   const [wrapLines, setWrapLines] = useState(true);
   const trimmedQuery = query.trim();
   const stats = fileStats(files);
-  const review = filesReviewFocus(files.items);
-  const reviewFacts = filesReviewFacts(files.items);
-  const reviewQueue = filesReviewQueue(files.items);
   const filteredItems = filter === "all" ? files.items : files.items.filter((item) => fileMatchesFilter(item, filter));
   const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
+  const treeNodes = useMemo(() => buildFileTree(visibleItems), [visibleItems]);
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
   const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
   const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
+  const workspaceReady = workspaceBrowser?.state === "ready" ? workspaceBrowser.file : undefined;
+  const workspaceCurrentPath = workspaceBrowser?.state === "ready"
+    ? workspaceBrowser.file.path
+    : workspaceBrowser?.state === "loading" || workspaceBrowser?.state === "error"
+      ? workspaceBrowser.path ?? "."
+      : ".";
+  const workspaceParent = workspaceReady ? parentWorkspacePath(workspaceReady.path) : undefined;
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
-  function handleReviewQueueClick(entry: SessionFilesReviewItem) {
-    if (entry.action === "view_snapshot" && entry.item.contentPreview) {
-      setSelectedPath(entry.item.path);
+
+  function openEvidenceItem(item: SessionFileEvidence) {
+    if (item.contentPreview) {
+      setSelectedPath(item.path);
       return;
     }
-    if (entry.action === "open_current" || entry.action === "recover_path") {
-      if (onOpenWorkspacePath) {
-        onOpenWorkspacePath(entry.item.path);
-        return;
-      }
-      if (onOpenWorkspacePanel) {
-        onOpenWorkspacePanel();
-        return;
-      }
-      if (entry.item.contentPreview) setSelectedPath(entry.item.path);
+    if (onOpenWorkspacePath) {
+      onOpenWorkspacePath(item.path);
       return;
     }
-    if (entry.action === "wait") {
-      if (entry.item.contentPreview) setSelectedPath(entry.item.path);
-      else onOpenWorkspacePath?.(entry.item.path);
-      if (!entry.item.contentPreview && !onOpenWorkspacePath) onOpenWorkspacePanel?.();
-    }
+    onOpenWorkspacePanel?.();
   }
+
   function selectPreviewLine(lineNumber: number, scroll = false) {
     if (!selectedItem) return;
     setSelectedRange((current) => {
@@ -98,12 +96,23 @@ export function SessionFilesPanel({
       });
     }
   }
+
   function jumpToPreviewLine() {
     if (!selectedItem || snapshotLines.length === 0) return;
     const lineNumber = Number.parseInt(lineJump, 10);
     if (!Number.isFinite(lineNumber)) return;
     selectPreviewLine(Math.max(1, Math.min(snapshotLines.length, lineNumber)), true);
   }
+
+  function openTypedWorkspacePath() {
+    const path = workspaceQuery.trim() || workspaceCurrentPath || ".";
+    if (onOpenWorkspacePath) {
+      onOpenWorkspacePath(path);
+      return;
+    }
+    onOpenWorkspacePanel?.();
+  }
+
   return (
     <details className="session-skills-panel session-files-panel" data-testid="session-files-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -112,298 +121,199 @@ export function SessionFilesPanel({
         <span>{files.detail}</span>
       </summary>
       <div className="session-skills-body">
-        <div className="session-files-overview" aria-label="File work summary">
-          <div className="session-files-review" data-tone={review.tone ?? "neutral"} data-testid="session-files-review">
-            <span>{review.label}</span>
-            <strong title={review.title}>{displayPath(review.title)}</strong>
-            <small>{review.detail}</small>
-          </div>
-          <div className="session-files-facts" aria-label="File review facts">
-            {reviewFacts.map((fact) => (
-              <span key={fact.label} data-tone={fact.tone ?? "neutral"} title={fact.detail}>
-                <small>{fact.label}</small>
-                <strong>{fact.value}</strong>
-                {fileFactVisibleDetail(fact) ? <b>{fileFactVisibleDetail(fact)}</b> : null}
-              </span>
-            ))}
-          </div>
-          {reviewQueue.length > 0 ? (
-            <div className="session-files-review-queue" data-testid="session-files-review-queue" aria-label="File review queue">
-              <span>Review queue</span>
-              {reviewQueue.slice(0, 5).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  data-tone={item.tone ?? "neutral"}
-                  disabled={reviewQueueItemDisabled(item, Boolean(onOpenWorkspacePath), Boolean(onOpenWorkspacePanel))}
-                  onClick={() => handleReviewQueueClick(item)}
-                >
-                  <small>{item.label}</small>
-                  <strong title={item.title}>{displayPath(item.title)}</strong>
-                  <b>{item.detail}</b>
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div className="session-files-filterbar" role="group" aria-label="File filters">
-            <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
-            <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
-            <FileFilterButton label="Snapshot" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
-            <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
-            <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
-          </div>
-          {onOpenWorkspacePath ? (
-            <span className="session-files-overview-actions">
-              <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(".")}>
-                Browse workspace
-              </button>
-            </span>
-          ) : onOpenWorkspacePanel && files.items.length > 0 ? (
-            <span className="session-files-overview-actions">
-              <button type="button" className="ghost-action primary-run-action" onClick={onOpenWorkspacePanel}>
-                Open Workspace
-              </button>
-            </span>
-          ) : null}
-        </div>
-        {workspaceBrowser && workspaceBrowser.state !== "idle" ? (
-          <WorkspaceBrowser
-            browser={workspaceBrowser}
-            query={workspaceQuery}
-            onQueryChange={setWorkspaceQuery}
-            onOpenPath={onOpenWorkspacePath}
-            onUseAsDraft={onUseAsDraft}
-          />
-        ) : null}
-        {selectedItem ? (
-          <div className="session-file-preview" data-testid="session-file-preview">
-            <div className="session-file-preview-head">
+        <div className="session-files-ide" data-testid="session-files-ide">
+          <aside className="session-files-explorer" aria-label="File explorer">
+            <div className="session-files-explorer-head">
               <div>
-                <span>File snapshot</span>
-                <strong title={selectedItem.path}>{selectedItem.path}</strong>
+                <span>Explorer</span>
+                <strong>{workspaceBrowserTitle(workspaceBrowser ?? { state: "idle" })}</strong>
+                <small>{workspaceBrowserDetail(workspaceBrowser ?? { state: "idle" })}</small>
               </div>
-              <small>{selectedItem.contentStale ? "snapshot before latest change" : selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
-            </div>
-            <div className="session-file-preview-toolbar">
-              <label className="session-skills-search">
-                <span>Search snapshot</span>
-                <input
-                  aria-label="Search file snapshot"
-                  value={previewQuery}
-                  onChange={(event) => setPreviewQuery(event.target.value)}
-                  placeholder="text in loaded file"
-                />
-              </label>
-              <span className="session-file-line-jump">
-                <input
-                  aria-label="Go to line"
-                  inputMode="numeric"
-                  value={lineJump}
-                  onChange={(event) => setLineJump(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") jumpToPreviewLine();
-                  }}
-                  placeholder="line"
-                />
-                <button type="button" className="ghost-action" onClick={jumpToPreviewLine}>
-                  Go
+              {onOpenWorkspacePath || onOpenWorkspacePanel ? (
+                <button
+                  type="button"
+                  className="ghost-action"
+                  disabled={workspaceBrowser?.state === "loading"}
+                  onClick={() => (onOpenWorkspacePath ? onOpenWorkspacePath(".") : onOpenWorkspacePanel?.())}
+                >
+                  Root
                 </button>
-              </span>
-              <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
-              <button type="button" className="ghost-action" aria-pressed={wrapLines} onClick={() => setWrapLines((value) => !value)}>
-                Wrap
+              ) : null}
+            </div>
+            <div className="session-workspace-browser-path">
+              <input
+                aria-label="Workspace path"
+                value={workspaceQuery}
+                onChange={(event) => setWorkspaceQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") openTypedWorkspacePath();
+                }}
+                placeholder={workspaceCurrentPath === "." ? "src/main.go" : workspaceCurrentPath}
+              />
+              <button
+                type="button"
+                className="ghost-action"
+                disabled={workspaceBrowser?.state === "loading" || (!onOpenWorkspacePath && !onOpenWorkspacePanel)}
+                onClick={openTypedWorkspacePath}
+              >
+                Open
               </button>
             </div>
-            {activeRange ? (
-              <div className="session-file-range-actions" data-testid="session-file-range-actions">
-                <span>
-                  Lines {activeRange.start}-{activeRange.end}
-                </span>
-                <CopyButton label="Copy range" value={fileRangeText(selectedItem, activeRange.start, activeRange.end)} className="ghost-action" />
-                {onUseAsDraft ? (
-                  <>
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "ask"), "file_range")}
-                    >
-                      Ask about range
+            {workspaceBrowser?.state === "loading" ? <div className="session-skills-empty">Loading {workspaceBrowser.path}...</div> : null}
+            {workspaceBrowser?.state === "error" ? <div className="session-skills-empty">Could not open {workspaceBrowser.path ?? "workspace"}: {workspaceBrowser.error}</div> : null}
+            {workspaceReady?.kind === "directory" ? (
+              <WorkspaceDirectory
+                file={workspaceReady}
+                parent={workspaceParent}
+                onOpenPath={onOpenWorkspacePath}
+                onUseAsDraft={onUseAsDraft}
+              />
+            ) : null}
+            <div className="session-files-explorer-tools">
+              <label className="session-skills-search">
+                <span>Search files</span>
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="path, action, or note" />
+              </label>
+              {trimmedQuery ? (
+                <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+                  Clear
+                </button>
+              ) : null}
+            </div>
+            <div className="session-files-filterbar" role="group" aria-label="File filters">
+              <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
+              <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
+              <FileFilterButton label="Snapshot" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
+              <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
+              <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
+            </div>
+            <FileEvidenceTree
+              nodes={treeNodes}
+              selectedPath={selectedItem?.path}
+              onOpenDirectory={(path) => onOpenWorkspacePath?.(path)}
+              onOpenItem={openEvidenceItem}
+              onOpenWorkspacePath={onOpenWorkspacePath}
+              onOpenArtifact={onOpenArtifact}
+              onUseAsDraft={onUseAsDraft}
+            />
+            {visibleItems.length === 0 ? (
+              files.items.length > 0 ? (
+                <div className="session-skills-empty">No {filter === "all" ? "file evidence" : filter} result matching "{trimmedQuery}".</div>
+              ) : (
+                <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
+              )
+            ) : null}
+          </aside>
+          <section className="session-files-editor" aria-label="File editor preview">
+            {workspaceReady?.kind === "file" ? (
+              <WorkspaceFilePreview
+                file={workspaceReady}
+                parent={workspaceParent}
+                onOpenPath={onOpenWorkspacePath}
+                onUseAsDraft={onUseAsDraft}
+              />
+            ) : selectedItem ? (
+              <div className="session-file-preview" data-testid="session-file-preview">
+                <div className="session-file-preview-head">
+                  <div>
+                    <span>Snapshot</span>
+                    <strong title={selectedItem.path}>{selectedItem.path}</strong>
+                  </div>
+                  <small>{selectedItem.contentStale ? "snapshot before latest change" : selectedItem.contentTruncated ? "partial read_file output" : "read_file output"}</small>
+                </div>
+                <div className="session-file-preview-toolbar">
+                  <label className="session-skills-search">
+                    <span>Search snapshot</span>
+                    <input
+                      aria-label="Search file snapshot"
+                      value={previewQuery}
+                      onChange={(event) => setPreviewQuery(event.target.value)}
+                      placeholder="text in loaded file"
+                    />
+                  </label>
+                  <span className="session-file-line-jump">
+                    <input
+                      aria-label="Go to line"
+                      inputMode="numeric"
+                      value={lineJump}
+                      onChange={(event) => setLineJump(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") jumpToPreviewLine();
+                      }}
+                      placeholder="line"
+                    />
+                    <button type="button" className="ghost-action" onClick={jumpToPreviewLine}>
+                      Go
                     </button>
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "edit"), "file_range")}
-                    >
-                      Edit range
-                    </button>
-                  </>
+                  </span>
+                  <CopyButton label="Copy snapshot" value={fileContentText(selectedItem)} className="ghost-action" />
+                  <button type="button" className="ghost-action" aria-pressed={wrapLines} onClick={() => setWrapLines((value) => !value)}>
+                    Wrap
+                  </button>
+                </div>
+                {activeRange ? (
+                  <div className="session-file-range-actions" data-testid="session-file-range-actions">
+                    <span>
+                      Lines {activeRange.start}-{activeRange.end}
+                    </span>
+                    <CopyButton label="Copy range" value={fileRangeText(selectedItem, activeRange.start, activeRange.end)} className="ghost-action" />
+                    {onUseAsDraft ? (
+                      <>
+                        <button
+                          type="button"
+                          className="ghost-action"
+                          onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "ask"), "file_range")}
+                        >
+                          Ask about range
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-action"
+                          onClick={() => onUseAsDraft(fileRangeDraft(selectedItem, activeRange.start, activeRange.end, "edit"), "file_range")}
+                        >
+                          Edit range
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="code session-file-preview-code" data-wrap={wrapLines ? "true" : "false"} data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot" ref={previewCodeRef}>
+                  {snapshotLines.map((line, index) => {
+                    const lineNumber = index + 1;
+                    const selected = activeRange ? lineNumber >= activeRange.start && lineNumber <= activeRange.end : false;
+                    return (
+                      <button
+                        key={lineNumber}
+                        type="button"
+                        className="session-file-code-line"
+                        data-line-number={lineNumber}
+                        data-selected={selected ? "true" : "false"}
+                        onClick={() => selectPreviewLine(lineNumber)}
+                      >
+                        <span className="session-file-code-line-number">{lineNumber}</span>
+                        <span className="session-file-code-line-text">
+                          <HighlightText text={line || " "} query={previewQuery} />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="session-files-editor-empty" data-testid="session-files-editor-empty">
+                <strong>No file open</strong>
+                <span>Open a workspace path or select a loaded snapshot from Explorer.</span>
+                {onOpenWorkspacePath || onOpenWorkspacePanel ? (
+                  <button type="button" className="ghost-action primary-run-action" onClick={() => (onOpenWorkspacePath ? onOpenWorkspacePath(".") : onOpenWorkspacePanel?.())}>
+                    Open root
+                  </button>
                 ) : null}
               </div>
-            ) : null}
-            <div className="code session-file-preview-code" data-wrap={wrapLines ? "true" : "false"} data-testid="session-file-preview-content" role="list" aria-label="Loaded file snapshot" ref={previewCodeRef}>
-              {snapshotLines.map((line, index) => {
-                const lineNumber = index + 1;
-                const selected = activeRange ? lineNumber >= activeRange.start && lineNumber <= activeRange.end : false;
-                return (
-                  <button
-                    key={lineNumber}
-                    type="button"
-                    className="session-file-code-line"
-                    data-line-number={lineNumber}
-                    data-selected={selected ? "true" : "false"}
-                    onClick={() => selectPreviewLine(lineNumber)}
-                  >
-                    <span className="session-file-code-line-number">{lineNumber}</span>
-                    <span className="session-file-code-line-text">
-                      <HighlightText text={line || " "} query={previewQuery} />
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ) : files.items.some((item) => item.contentPreview) && visibleItems.length > 0 ? (
-          <div className="session-skills-empty">No loaded file snapshot in the visible results.</div>
-        ) : null}
-        {files.items.length > 1 ? (
-          <div className="session-skills-controls">
-            <label className="session-skills-search">
-              <span>Search files</span>
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="path, action, or note" />
-            </label>
-            {trimmedQuery ? (
-              <button type="button" className="ghost-action" onClick={() => setQuery("")}>
-                Clear
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-        {visibleItems.length > 0 ? (
-          <ol className="session-files-list" data-testid="session-files-list">
-            {visibleItems.map((item) => (
-              <li key={item.path} className="session-files-item" data-status={item.status}>
-                <div className="session-files-main">
-                  <strong title={item.path}>{displayPath(item.path)}</strong>
-                  <span>{fileMeta(item)}</span>
-                  {displayPath(item.path) !== item.path ? <small title={item.path}>{item.path}</small> : null}
-                  {item.detail ? <small>{item.detail}</small> : null}
-                  {item.next ? <small>Next: {item.next}</small> : null}
-                  {item.artifactPath ? <small>Evidence: {artifactLabel(item.artifactPath)}</small> : null}
-                  {item.contentPreview ? (
-                    <small>{item.contentStale ? "Snapshot may predate latest change" : item.contentTruncated ? "Partial read_file snapshot available" : "read_file snapshot available"}</small>
-                  ) : null}
-                </div>
-                <span className="session-files-actions">
-                  {onOpenWorkspacePath ? (
-                    <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(item.path)}>
-                      Open current
-                    </button>
-                  ) : null}
-                  {item.contentPreview ? (
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      aria-pressed={selectedItem?.path === item.path}
-                      onClick={() => setSelectedPath(item.path)}
-                    >
-                      View snapshot
-                    </button>
-                  ) : null}
-                  {item.artifactPath && onOpenArtifact ? (
-                    <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
-                      Open evidence
-                    </button>
-                  ) : null}
-                  {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
-                      {fileDraftActionLabel(item)}
-                    </button>
-                  ) : null}
-                  <CopyButton label="Copy path" value={item.path} className="ghost-action" />
-                </span>
-              </li>
-            ))}
-          </ol>
-        ) : files.items.length > 0 ? (
-          <div className="session-skills-empty">No {filter === "all" ? "file evidence" : filter} result matching "{trimmedQuery}".</div>
-        ) : (
-          <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
-        )}
+            )}
+          </section>
+        </div>
       </div>
     </details>
-  );
-}
-
-function reviewQueueItemDisabled(item: SessionFilesReviewItem, canOpenWorkspace: boolean, canOpenWorkspacePanel: boolean): boolean {
-  if (item.action === "view_snapshot") return !item.item.contentPreview;
-  if (item.action === "open_current" || item.action === "recover_path") return !canOpenWorkspace && !canOpenWorkspacePanel && !item.item.contentPreview;
-  if (item.action === "wait") return !canOpenWorkspace && !canOpenWorkspacePanel && !item.item.contentPreview;
-  return false;
-}
-
-function WorkspaceBrowser({
-  browser,
-  query,
-  onQueryChange,
-  onOpenPath,
-  onUseAsDraft,
-}: {
-  browser: WorkspaceFileBrowserState;
-  query: string;
-  onQueryChange: (value: string) => void;
-  onOpenPath?: (path: string) => void;
-  onUseAsDraft?: UseAsDraft;
-}) {
-  const ready = browser.state === "ready" ? browser.file : undefined;
-  const currentPath = browser.state === "ready" ? browser.file.path : browser.state === "loading" || browser.state === "error" ? browser.path ?? "." : ".";
-  const parent = ready ? parentWorkspacePath(ready.path) : undefined;
-
-  function openTypedPath() {
-    onOpenPath?.(query.trim() || currentPath || ".");
-  }
-
-  return (
-    <section className="session-workspace-browser" data-testid="session-workspace-browser" aria-label="Workspace file browser">
-      <div className="session-workspace-browser-head">
-        <div>
-          <span>Workspace browser</span>
-          <strong>{workspaceBrowserTitle(browser)}</strong>
-          <small>{workspaceBrowserDetail(browser)}</small>
-        </div>
-        <div className="session-workspace-browser-path">
-          <input
-            aria-label="Workspace path"
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") openTypedPath();
-            }}
-            placeholder={currentPath === "." ? "src/main.go" : currentPath}
-          />
-          <button type="button" className="ghost-action" disabled={!onOpenPath || browser.state === "loading"} onClick={openTypedPath}>
-            Open
-          </button>
-        </div>
-      </div>
-      {browser.state === "loading" ? <div className="session-skills-empty">Loading {browser.path}...</div> : null}
-      {browser.state === "error" ? <div className="session-skills-empty">Could not open {browser.path ?? "workspace"}: {browser.error}</div> : null}
-      {ready?.kind === "directory" ? (
-        <WorkspaceDirectory
-          file={ready}
-          parent={parent}
-          onOpenPath={onOpenPath}
-          onUseAsDraft={onUseAsDraft}
-        />
-      ) : null}
-      {ready?.kind === "file" ? (
-        <WorkspaceFilePreview
-          file={ready}
-          parent={parent}
-          onOpenPath={onOpenPath}
-          onUseAsDraft={onUseAsDraft}
-        />
-      ) : null}
-    </section>
   );
 }
 
@@ -418,6 +328,7 @@ function WorkspaceDirectory({
   onOpenPath?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
+  const entries = [...file.entries].sort(compareWorkspaceEntries);
   return (
     <div className="session-workspace-browser-body">
       <span className="session-evidence-actions">
@@ -433,9 +344,9 @@ function WorkspaceDirectory({
           </button>
         ) : null}
       </span>
-      {file.entries.length > 0 ? (
-        <ol className="session-workspace-browser-list" data-testid="session-workspace-browser-list">
-          {file.entries.map((entry) => (
+      {entries.length > 0 ? (
+        <ol className="session-workspace-browser-list" data-testid="session-workspace-browser-list" aria-label="Workspace directory tree">
+          {entries.map((entry) => (
             <WorkspaceEntry key={entry.path} entry={entry} onOpenPath={onOpenPath} />
           ))}
         </ol>
@@ -505,6 +416,156 @@ function WorkspaceFilePreview({
   );
 }
 
+function FileEvidenceTree({
+  nodes,
+  selectedPath,
+  onOpenDirectory,
+  onOpenItem,
+  onOpenWorkspacePath,
+  onOpenArtifact,
+  onUseAsDraft,
+}: {
+  nodes: FileTreeNode[];
+  selectedPath?: string;
+  onOpenDirectory: (path: string) => void;
+  onOpenItem: (item: SessionFileEvidence) => void;
+  onOpenWorkspacePath?: (path: string) => void;
+  onOpenArtifact?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  if (nodes.length === 0) return null;
+  return (
+    <ol className="session-files-tree" data-testid="session-files-list" aria-label="Agent file tree">
+      {nodes.map((node) => (
+        <FileTreeBranch
+          key={node.path}
+          node={node}
+          depth={0}
+          selectedPath={selectedPath}
+          onOpenDirectory={onOpenDirectory}
+          onOpenItem={onOpenItem}
+          onOpenWorkspacePath={onOpenWorkspacePath}
+          onOpenArtifact={onOpenArtifact}
+          onUseAsDraft={onUseAsDraft}
+        />
+      ))}
+    </ol>
+  );
+}
+
+function FileTreeBranch({
+  node,
+  depth,
+  selectedPath,
+  onOpenDirectory,
+  onOpenItem,
+  onOpenWorkspacePath,
+  onOpenArtifact,
+  onUseAsDraft,
+}: {
+  node: FileTreeNode;
+  depth: number;
+  selectedPath?: string;
+  onOpenDirectory: (path: string) => void;
+  onOpenItem: (item: SessionFileEvidence) => void;
+  onOpenWorkspacePath?: (path: string) => void;
+  onOpenArtifact?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  const isDirectory = node.children.length > 0;
+  const item = node.item;
+  return (
+    <li className="session-files-tree-node" data-kind={isDirectory ? "directory" : "file"} data-status={item?.status} data-selected={selectedPath === item?.path ? "true" : "false"}>
+      <button
+        type="button"
+        className="session-files-tree-row"
+        style={{ "--depth": depth } as CSSProperties}
+        onClick={() => (item ? onOpenItem(item) : onOpenDirectory(node.path))}
+      >
+        <span className="session-files-tree-icon" aria-hidden="true">
+          {isDirectory ? "▸" : item?.actions.includes("changed") ? "M" : item?.contentPreview ? "R" : "F"}
+        </span>
+        <strong title={node.path}>{node.name}</strong>
+        {item ? <small>{compactFileMeta(item)}</small> : <small>{node.children.length}</small>}
+      </button>
+      {item ? (
+        <span className="session-files-actions" style={{ "--depth": depth } as CSSProperties}>
+          {onOpenWorkspacePath ? (
+            <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(item.path)}>
+              Current
+            </button>
+          ) : null}
+          {item.artifactPath && onOpenArtifact ? (
+            <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
+              Evidence
+            </button>
+          ) : null}
+          {onUseAsDraft ? (
+            <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(item), "file_evidence")}>
+              {fileDraftActionLabel(item)}
+            </button>
+          ) : null}
+          <CopyButton label="Copy path" value={item.path} className="ghost-action" />
+        </span>
+      ) : null}
+      {node.children.length > 0 ? (
+        <ol>
+          {node.children.map((child) => (
+            <FileTreeBranch
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              selectedPath={selectedPath}
+              onOpenDirectory={onOpenDirectory}
+              onOpenItem={onOpenItem}
+              onOpenWorkspacePath={onOpenWorkspacePath}
+              onOpenArtifact={onOpenArtifact}
+              onUseAsDraft={onUseAsDraft}
+            />
+          ))}
+        </ol>
+      ) : null}
+    </li>
+  );
+}
+
+function buildFileTree(items: readonly SessionFileEvidence[]): FileTreeNode[] {
+  const root: FileTreeNode[] = [];
+  for (const item of items) {
+    const parts = normalizedPathParts(item.path);
+    let siblings = root;
+    let currentPath = "";
+    parts.forEach((part, index) => {
+      currentPath = currentPath ? `${currentPath}/${part}` : part;
+      let node = siblings.find((candidate) => candidate.name === part);
+      if (!node) {
+        node = { name: part, path: currentPath, children: [] };
+        siblings.push(node);
+      }
+      if (index === parts.length - 1) node.item = item;
+      siblings = node.children;
+    });
+  }
+  return sortTree(root);
+}
+
+function sortTree(nodes: FileTreeNode[]): FileTreeNode[] {
+  nodes.sort((a, b) => {
+    const aDir = a.children.length > 0 && !a.item;
+    const bDir = b.children.length > 0 && !b.item;
+    if (aDir !== bDir) return aDir ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  nodes.forEach((node) => sortTree(node.children));
+  return nodes;
+}
+
+function normalizedPathParts(path: string): string[] {
+  const clean = path.replace(/\\/g, "/").replace(/^\/+/, "").trim();
+  if (!clean || clean === ".") return ["."];
+  return clean.split("/").filter(Boolean);
+}
+
 function workspaceBrowserTitle(browser: WorkspaceFileBrowserState): string {
   if (browser.state === "idle") return "Workspace file access";
   if (browser.state === "loading") return browser.path;
@@ -537,17 +598,6 @@ function FileFilterButton({
       <strong>{value}</strong>
     </button>
   );
-}
-
-function fileFactVisibleDetail(fact: { detail: string }): string | undefined {
-  const detail = fact.detail.trim();
-  if (!detail) return undefined;
-  if (detail === "referenced path" || detail === "referenced paths") return undefined;
-  if (detail === "file snapshots") return "snapshots";
-  if (detail === "write/edit paths") return "changed";
-  if (detail === "loaded content") return "loaded";
-  if (detail === "none") return undefined;
-  return detail;
 }
 
 function fileMatchesQuery(item: SessionFileEvidence, query: string): boolean {
@@ -593,12 +643,12 @@ function fileStats(files: SessionFilesView) {
   };
 }
 
-function fileMeta(item: SessionFileEvidence): string {
+function compactFileMeta(item: SessionFileEvidence): string {
   const parts = [
     actionLabel(item.actions),
+    item.contentPreview ? "snapshot" : undefined,
+    item.contentStale ? "stale" : undefined,
     statusLabel(item.status),
-    `turn ${item.turnNumber}`,
-    item.actionCount > 1 ? `${item.actionCount} actions` : undefined,
   ].filter(Boolean);
   return parts.join(" · ");
 }
@@ -618,26 +668,7 @@ function statusLabel(status: SessionFileEvidence["status"]): string {
   return "available";
 }
 
-function displayPath(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  const parts = normalized.split("/").filter(Boolean);
-  if (path.length <= 48) return path;
-  if (parts.length >= 2) {
-    const file = parts.at(-1) ?? path;
-    const parent = shortenPathSegment(parts.at(-2) ?? "");
-    return parent ? `.../${parent}/${file}` : `.../${file}`;
-  }
-  if (parts.length <= 3) return path;
-  return parts.slice(-3).join("/");
-}
-
-function shortenPathSegment(segment: string): string {
-  if (segment.length <= 22) return segment;
-  if (segment.startsWith("sess_")) return `${segment.slice(0, 13)}...${segment.slice(-6)}`;
-  return `${segment.slice(0, 10)}...${segment.slice(-6)}`;
-}
-
-function artifactLabel(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  return normalized.split("/").filter(Boolean).at(-1) ?? path;
+function compareWorkspaceEntries(a: WorkspaceFileEntryView, b: WorkspaceFileEntryView): number {
+  if (a.kind !== b.kind) return a.kind === "directory" ? -1 : 1;
+  return a.name.localeCompare(b.name);
 }
