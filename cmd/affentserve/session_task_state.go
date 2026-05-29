@@ -203,6 +203,7 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 					Tool:    firstNonEmpty(req.Tool, "tool"),
 					Summary: compactTaskSummary(firstNonEmpty(p.ResultSummary, p.Result)),
 					Kinds:   kinds,
+					Next:    taskstate.NextHint(p.ResultSummary, p.Result),
 					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
 					CallID:  p.CallID,
 				})
@@ -401,6 +402,9 @@ func sessionTaskRequestSourceFact(eventState sessionTaskEventState) string {
 func sessionTaskNextStep(task sessionTaskStateSummary, summary sessionSummary) string {
 	if len(task.OpenQuestions) > 0 {
 		return task.OpenQuestions[len(task.OpenQuestions)-1]
+	}
+	if task.Status == "completed" && task.VerificationState == "last_shell_passed" {
+		return ""
 	}
 	if len(task.FailedActions) > 0 && task.VerificationState != "last_shell_passed" && task.Status != "completed" {
 		return "latest failed action is unresolved"

@@ -618,7 +618,8 @@ function verificationStateLabel(status: string): string {
 function taskStateFailureSummary(item?: SessionTaskStateFailure): string {
   if (!item) return "Failed action";
   const kind = item.kinds?.[0] ? failureKindLabel(item.kinds[0]) : undefined;
-  return compact([toolNameLabel(item.tool), kind, summarizeTaskStateText(item.summary)]).join(" · ") || "Failed action";
+  const next = item.next ? `Next: ${summarizeTaskStateText(item.next)}` : undefined;
+  return compact([toolNameLabel(item.tool), kind, summarizeTaskStateText(item.summary), next]).join(" · ") || "Failed action";
 }
 
 function taskStateActionSummary(item: SessionTaskStateAction): string {

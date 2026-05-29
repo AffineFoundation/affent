@@ -321,7 +321,7 @@ export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInpu
     lines.push(`Attempted action: ${[action.tool, action.summary].filter(Boolean).join(" · ")}`);
   }
   for (const failure of input.taskState?.failed_actions?.slice(-3) ?? []) {
-    lines.push(`Failed action: ${[failure.tool, failure.summary].filter(Boolean).join(" · ")}`);
+    lines.push(`Failed action: ${[failure.tool, failure.summary, failure.next ? `Next: ${failure.next}` : undefined].filter(Boolean).join(" · ")}`);
   }
   for (const evidence of input.taskState?.evidence?.slice(-3) ?? []) {
     lines.push(`Task evidence: ${[evidence.source, evidence.summary].filter(Boolean).join(" · ")}`);

@@ -167,6 +167,7 @@ type sessionTaskStateFailure struct {
 	Tool    string   `json:"tool"`
 	Summary string   `json:"summary,omitempty"`
 	Kinds   []string `json:"kinds,omitempty"`
+	Next    string   `json:"next,omitempty"`
 	TurnID  string   `json:"turn_id,omitempty"`
 	CallID  string   `json:"call_id,omitempty"`
 }

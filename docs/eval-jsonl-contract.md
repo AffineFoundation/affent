@@ -203,10 +203,10 @@ Scenario records describe one eval case:
   group/source metadata.
 - `task_state`: optional derived snapshot of the scenario's objective, status,
   current step, next step, verification state, changed files, attempted
-  actions, failed actions, evidence, and runtime/context sources. Successful
-  shell evidence may include structured handoff sources such as `git_commit`
-  and `git_push`. It is derived from trace facts for audit/debug output and is
-  not fed back into the agent runtime.
+  actions, failed actions with structured recovery hints, evidence, and
+  runtime/context sources. Successful shell evidence may include structured
+  handoff sources such as `git_commit` and `git_push`. It is derived from trace
+  facts for audit/debug output and is not fed back into the agent runtime.
 - `task_state_status`, `task_state_verification`,
   `task_state_changed_files`, `task_state_attempted_actions`,
   `task_state_failed_actions`, and `task_state_evidence`: compact task-state

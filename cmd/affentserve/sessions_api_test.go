@@ -1311,7 +1311,7 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 			ExitCode:      1,
 			FailureKind:   "test_failed",
 			ResultSummary: "FAIL ./...",
-			Result:        "FAIL ./...",
+			Result:        "FAIL ./...\nNext: inspect clamp bounds then rerun go test\nFailure: kind=test_failed",
 		}) +
 		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID: "t1",
@@ -1356,6 +1356,9 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	}
 	if len(task.FailedActions) != 1 || task.FailedActions[0].Tool != "shell" || !stringSliceContains(task.FailedActions[0].Kinds, "test_failed") {
 		t.Fatalf("failed_actions = %+v, want historical failed shell evidence", task.FailedActions)
+	}
+	if task.FailedActions[0].Next != "inspect clamp bounds then rerun go test" {
+		t.Fatalf("failed_actions[0].next = %q, want recovery hint", task.FailedActions[0].Next)
 	}
 	if !stringSliceContains(task.Constraints, "workspace path mode: workspace_relative") {
 		t.Fatalf("constraints = %+v, want workspace path mode", task.Constraints)

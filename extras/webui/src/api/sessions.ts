@@ -513,6 +513,7 @@ export interface SessionTaskStateFailure {
   tool: string;
   summary?: string;
   kinds?: string[];
+  next?: string;
   turn_id?: string;
   call_id?: string;
 }

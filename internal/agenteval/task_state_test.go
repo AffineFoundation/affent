@@ -41,6 +41,7 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 				ExitCode:      1,
 				FailureKinds:  []string{"test_failed"},
 				ResultSummary: "FAIL ./app/mathutil",
+				Result:        "FAIL ./app/mathutil\nNext: inspect clamp edge cases then rerun go test\nFailure: kind=test_failed",
 			},
 			{
 				TurnID:   "turn-1",
@@ -80,6 +81,7 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	if len(got.FailedActions) != 1 ||
 		got.FailedActions[0].Tool != "shell" ||
 		got.FailedActions[0].Summary != "FAIL ./app/mathutil" ||
+		got.FailedActions[0].Next != "inspect clamp edge cases then rerun go test" ||
 		!reflect.DeepEqual(got.FailedActions[0].Kinds, []string{"test_failed"}) {
 		t.Fatalf("failed actions = %+v", got.FailedActions)
 	}

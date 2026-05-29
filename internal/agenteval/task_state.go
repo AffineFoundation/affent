@@ -44,6 +44,7 @@ type TaskStateFailure struct {
 	Tool    string   `json:"tool"`
 	Summary string   `json:"summary,omitempty"`
 	Kinds   []string `json:"kinds,omitempty"`
+	Next    string   `json:"next,omitempty"`
 	TurnID  string   `json:"turn_id,omitempty"`
 	CallID  string   `json:"call_id,omitempty"`
 }
@@ -98,6 +99,7 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 				Tool:    firstNonEmpty(tool.Tool, "tool"),
 				Summary: compactTaskStateSummary(firstNonEmpty(tool.ResultSummary, tool.Result, taskStateToolSummary(tool))),
 				Kinds:   append([]string(nil), tool.FailureKinds...),
+				Next:    taskstate.NextHint(tool.ResultSummary, tool.Result),
 				TurnID:  tool.TurnID,
 				CallID:  tool.CallID,
 			})

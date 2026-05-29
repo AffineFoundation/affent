@@ -176,7 +176,7 @@ describe("WorkbenchContextPanel", () => {
             { tool: "shell", summary: "git push origin main" },
             { tool: "shell", summary: "go test ./..." },
           ],
-          failed_actions: [{ tool: "shell", summary: "FAIL ./...", kinds: ["test_failed"] }],
+          failed_actions: [{ tool: "shell", summary: "FAIL ./...", kinds: ["test_failed"], next: "Inspect clamp bounds then rerun go test" }],
           evidence: [
             { source: "runtime_workspace", summary: "Workspace tools resolve relative paths from the session workspace root." },
             { source: "shell", summary: "go test ./..." },
@@ -198,6 +198,7 @@ describe("WorkbenchContextPanel", () => {
     expect(taskState).toHaveTextContent("Recent failed actions");
     expect(taskState).toHaveTextContent("shell");
     expect(taskState).toHaveTextContent("test failed");
+    expect(taskState).toHaveTextContent("Next: Inspect clamp bounds then rerun go test");
     expect(taskState).toHaveTextContent("Recent actions");
     expect(taskState).toHaveTextContent("git push origin main");
     expect(taskState).toHaveTextContent("Evidence");
@@ -273,7 +274,12 @@ describe("WorkbenchContextPanel", () => {
           next_step: "Run WorkbenchContextPanel tests and screenshot the Context tab",
           changed_files: [{ path: "extras/webui/src/components/WorkbenchContextPanel.tsx", action: "edit" }],
           attempted_actions: [{ tool: "shell", summary: "npm --prefix extras/webui test -- WorkbenchContextPanel.test.tsx" }],
-          failed_actions: [{ tool: "shell", summary: "npm test -- WorkbenchContextPanel.test.tsx failed", kinds: ["command_failed"] }],
+          failed_actions: [{
+            tool: "shell",
+            summary: "npm test -- WorkbenchContextPanel.test.tsx failed",
+            kinds: ["command_failed"],
+            next: "Run the focused test after checking the Context panel state",
+          }],
           evidence: [
             { source: "runtime_workspace", summary: "Workspace tools resolve relative paths from the session workspace root." },
             { source: "shell", summary: "npm --prefix extras/webui test -- WorkbenchContextPanel.test.tsx" },
