@@ -28,5 +28,10 @@ function toolNames(source: ToolResultSource): string[] {
 }
 
 const rawSourceCaptureTools = new Set([
+  "browser_find",
+  "browser_navigate",
+  "browser_network",
+  "browser_network_read",
+  "browser_snapshot",
   "web_fetch",
 ]);

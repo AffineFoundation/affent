@@ -3,12 +3,14 @@ import { showsChatArtifact, showsResultStorageChrome, showsToolContextChrome, sh
 
 describe("tool result display policy", () => {
   it("keeps raw source capture storage out of the chat scan path", () => {
-    const source = { tool: "web_fetch" };
+    for (const tool of ["web_fetch", "browser_navigate", "browser_snapshot", "browser_network_read"]) {
+      const source = { tool };
 
-    expect(showsChatArtifact(source)).toBe(false);
-    expect(showsWorkbenchArtifact(source)).toBe(false);
-    expect(showsResultStorageChrome(source)).toBe(false);
-    expect(showsToolContextChrome(source)).toBe(false);
+      expect(showsChatArtifact(source)).toBe(false);
+      expect(showsWorkbenchArtifact(source)).toBe(false);
+      expect(showsResultStorageChrome(source)).toBe(false);
+      expect(showsToolContextChrome(source)).toBe(false);
+    }
   });
 
   it("keeps normal tool output chrome visible", () => {

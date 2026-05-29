@@ -125,7 +125,7 @@ describe("sessionArtifacts", () => {
     expect(artifactEvidenceDraft(artifacts[0])).toContain("Reference this artifact in the next step:\nArtifact evidence");
   });
 
-  it("keeps raw web fetch capture files out of artifact summaries", () => {
+  it("keeps raw source capture files out of artifact summaries", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       {
@@ -160,6 +160,33 @@ describe("sessionArtifacts", () => {
         },
       },
       { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 5, type: "turn.start", data: { turn_id: "t2" } },
+      {
+        id: 6,
+        type: "tool.request",
+        data: {
+          turn_id: "t2",
+          call_id: "c2",
+          tool: "browser_navigate",
+          args: { url: "https://example.invalid" },
+        },
+      },
+      {
+        id: 7,
+        type: "tool.result",
+        data: {
+          turn_id: "t2",
+          call_id: "c2",
+          exit_code: 0,
+          duration_ms: 10,
+          result_summary: "saved browser capture",
+          result: "saved browser capture",
+          result_bytes: 22000,
+          result_cap_bytes: 262144,
+          result_artifact_path: ".affent/artifacts/tool-results/000002-c2.txt",
+        },
+      },
+      { id: 8, type: "turn.end", data: { turn_id: "t2", reason: "completed" } },
     ]);
 
     expect(buildSessionArtifacts(session)).toEqual([]);

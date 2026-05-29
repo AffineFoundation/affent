@@ -64,4 +64,28 @@ describe("buildTurnArtifacts", () => {
     expect(buildTurnArtifacts(turn)).toHaveLength(1);
     expect(chatVisibleTurnArtifacts(turn)).toEqual([]);
   });
+
+  it("keeps browser navigation capture files out of the default chat artifact strip", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "browser", tool: "browser_navigate", args: { url: "https://example.test" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "browser",
+          exit_code: 0,
+          result_summary: "PAGE TEXT: Example",
+          result: "PAGE TEXT: Example",
+          result_artifact_path: ".affent/artifacts/tool-results/000001-browser.txt",
+          result_bytes: 22000,
+          result_cap_bytes: 262144,
+        },
+      },
+    ]).turns[0];
+
+    expect(buildTurnArtifacts(turn)).toHaveLength(1);
+    expect(chatVisibleTurnArtifacts(turn)).toEqual([]);
+  });
 });
