@@ -823,9 +823,10 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
 		!strings.Contains(prompt, "ordinary chat") ||
+		!strings.Contains(prompt, "explicit runtime mode") ||
 		!strings.Contains(prompt, "action=start_setup") ||
+		!strings.Contains(prompt, "action=read") ||
 		!strings.Contains(prompt, "patch_draft") ||
-		!strings.Contains(prompt, "Do not tell the user to press the UI button") ||
 		!strings.Contains(prompt, "exactly one concise calibration question") ||
 		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "Do not complete activation in the same turn") ||
