@@ -1573,6 +1573,72 @@ func TestBuildDebugBriefClassifiesMemorySearchMissAnchors(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesMissingExpectedMemoryUpdate(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		Expectations: &DebugScenarioExpectations{
+			RequiredToolStatsAtLeast: map[string]int{
+				"memory_updates":    1,
+				"memory_update_add": 1,
+			},
+		},
+	})
+	item := debugBriefItemByKind(brief, "memory_update_missing")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["required"] != 1 ||
+		item.Counts["observed"] != 0 ||
+		!stringSliceContains(item.Inspect, "memory_update_examples") ||
+		!stringSliceContains(brief.Tags, "memory_update:missing") {
+		t.Fatalf("missing memory update item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			MemoryUpdates:   1,
+			MemoryUpdateAdd: 1,
+		},
+		Expectations: &DebugScenarioExpectations{
+			RequiredToolStatsAtLeast: map[string]int{"memory_updates": 1},
+		},
+	})
+	if item := debugBriefItemByKind(clean, "memory_update_missing"); item != nil {
+		t.Fatalf("confirmed memory update should not be missing: %+v", item)
+	}
+}
+
+func TestBuildDebugBriefClassifiesAbsentLongRunMemoryUpdate(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK:        true,
+		ToolCalls: 14,
+		ToolStats: ToolRuntimeStats{
+			ToolRequests:      14,
+			MemorySearchCalls: 1,
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{Count: 2},
+		LoopProtocolFeeds:   LoopProtocolFeedStats{Count: 1},
+		Usage:               Usage{InputTokens: 120000, OutputTokens: 2000},
+	})
+	item := debugBriefItemByKind(brief, "memory_update_absent")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["tool_requests"] != 14 ||
+		item.Counts["loop_turn_checkpoints"] != 2 ||
+		item.Counts["loop_protocol_feeds"] != 1 ||
+		item.Counts["memory_search_calls"] != 1 ||
+		!stringSliceContains(brief.Tags, "memory_update:absent_longrun") {
+		t.Fatalf("absent long-run memory update item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK:        true,
+		ToolCalls: 2,
+	}); clean != nil {
+		t.Fatalf("short no-memory scenario should not emit debug brief: %+v", clean)
+	}
+}
+
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {
 	if brief == nil {
 		return nil

@@ -489,6 +489,10 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"replace": res.ToolStats.MemoryUpdateReplace,
 			"remove":  res.ToolStats.MemoryUpdateRemove,
 		}, tags...)
+	} else if counts, ok := missingExpectedMemoryUpdateCounts(res); ok {
+		add("memory_update_missing", "fail", "scenario expected a durable memory update but none was confirmed; inspect memory tool calls, args, and result metadata before trusting long-run recall", []string{"expectations", "tool_timeline", "memory_update_examples", "failures"}, counts, "memory_update", "memory_update:missing")
+	} else if counts, ok := absentLongRunMemoryUpdateCounts(res); ok {
+		add("memory_update_absent", "warn", "long-running session produced no durable memory updates; inspect whether stable verified lessons or preferences should have been written", []string{"tool_timeline", "loop_turn_checkpoint_examples", "loop_protocol_feed_examples", "memory_search_miss_examples"}, counts, "memory_update", "memory_update:absent_longrun")
 	}
 	if res.ToolStats.MemorySearchMisses > 0 || len(res.MemorySearchMissExamples) > 0 {
 		topics := 0
@@ -798,6 +802,51 @@ func loopProtocolSetupOverrunCounts(res BatchResult) (map[string]int, bool) {
 		"non_skipped_tools":     stats.NonSkippedToolCalls,
 		"runtime_skipped_tools": stats.SkippedToolCalls,
 	}, true
+}
+
+func missingExpectedMemoryUpdateCounts(res BatchResult) (map[string]int, bool) {
+	if res.ToolStats.MemoryUpdates > 0 || res.Expectations == nil {
+		return nil, false
+	}
+	required := max(
+		res.Expectations.RequiredToolStatsAtLeast["memory_updates"],
+		res.Expectations.RequiredToolStatsAtLeast["memory_update_add"],
+		res.Expectations.RequiredToolStatsAtLeast["memory_update_replace"],
+		res.Expectations.RequiredToolStatsAtLeast["memory_update_remove"],
+	)
+	if required <= 0 {
+		return nil, false
+	}
+	return map[string]int{
+		"required": required,
+		"observed": res.ToolStats.MemoryUpdates,
+	}, true
+}
+
+func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, bool) {
+	if res.ToolStats.MemoryUpdates > 0 {
+		return nil, false
+	}
+	toolRequests := res.ToolStats.ToolRequests
+	if toolRequests == 0 {
+		toolRequests = res.ToolCalls
+	}
+	loopSignals := res.LoopTurnCheckpoints.Count + res.LoopProtocolFeeds.Count
+	totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens
+	longRun := loopSignals > 0 && (toolRequests >= 10 || totalTokens >= 100000)
+	if !longRun {
+		return nil, false
+	}
+	counts := map[string]int{
+		"tool_requests":         toolRequests,
+		"loop_turn_checkpoints": res.LoopTurnCheckpoints.Count,
+		"loop_protocol_feeds":   res.LoopProtocolFeeds.Count,
+		"memory_search_calls":   res.ToolStats.MemorySearchCalls,
+	}
+	if totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens; totalTokens > 0 {
+		counts["total_tokens"] = totalTokens
+	}
+	return counts, true
 }
 
 func researchCheckpointHasExternalEvidence(res BatchResult) bool {
