@@ -3451,7 +3451,7 @@ func longRunCodeSourceRepoCommitPushScenario() BatchScenario {
 		Name:          "longrun-code-source-repo-modify-push-local-remote",
 		Suites:        []string{longRunSuite},
 		Domains:       []string{codePRDomain},
-		Prompt:        "The eval runner has already checked out the source repository in app from a fixed local remote. Enter app, run go test ./... to reproduce the failure, fix only greet/greet.go, and do not modify tests. After the fix, run go test ./... again, create a git commit, push it to origin main, and leave app with a clean git status. The final answer must include the source checkout directory, the test command, the changed file, the commit hash, and the push result.",
+		Prompt:        "The eval runner has already checked out the source repository in app from a fixed local remote. Use session_workspace to make app the active workspace, then run go test ./... to reproduce the failure. Fix only greet/greet.go using paths relative to app, and do not modify tests. After the fix, run go test ./... again, create a git commit, push it to origin main, and leave app with a clean git status. The final answer must include the source checkout directory, the active workspace, the test command, the changed file, the commit hash, and the push result.",
 		SourceRepoURL: "remote.git",
 		SourceRepoRef: "main",
 		SourceRepoDir: "app",
@@ -3513,15 +3513,18 @@ func TestMessageUsesName(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
-		RequiredTools: []string{"read_file", "edit_file"},
+		RequiredTools: []string{"session_workspace", "read_file", "edit_file"},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
-			{Tool: "read_file", Arg: "path", Substring: "app/greet/greet.go"},
-			{Tool: "edit_file", Arg: "path", Substring: "app/greet/greet.go"},
+			{Tool: "session_workspace", Arg: "action", Substring: "set"},
+			{Tool: "session_workspace", Arg: "path", Substring: "app"},
+			{Tool: "read_file", Arg: "path", Substring: "greet/greet.go"},
+			{Tool: "edit_file", Arg: "path", Substring: "greet/greet.go"},
 		},
 		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "session_workspace"},
 			{Command: `go test`, Tool: "edit_file"},
 			{Command: `git status`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
@@ -3531,6 +3534,7 @@ func TestMessageUsesName(t *testing.T) {
 			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "session_workspace", SummaryContains: "app"},
 			{Tool: "shell", SummaryContains: "git push"},
 		},
 		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
@@ -3550,6 +3554,7 @@ func TestMessageUsesName(t *testing.T) {
 		},
 		RequiredFinalText: []string{
 			"app",
+			"active workspace",
 			"go test ./...",
 			"greet/greet.go",
 			"clean",

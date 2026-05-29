@@ -2561,18 +2561,29 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("source repo RequiredCommandOrder = %#v, want git commit before git push", sourceRepo.RequiredCommandOrder)
 	}
 	for _, want := range []ToolArgContainsRequirement{
-		{Tool: "read_file", Arg: "path", Substring: "app/greet/greet.go"},
-		{Tool: "edit_file", Arg: "path", Substring: "app/greet/greet.go"},
+		{Tool: "session_workspace", Arg: "action", Substring: "set"},
+		{Tool: "session_workspace", Arg: "path", Substring: "app"},
+		{Tool: "read_file", Arg: "path", Substring: "greet/greet.go"},
+		{Tool: "edit_file", Arg: "path", Substring: "greet/greet.go"},
 	} {
 		if !toolArgRequirementContains(sourceRepo.RequiredToolArgContains, want) {
 			t.Fatalf("source repo RequiredToolArgContains = %#v, want %#v", sourceRepo.RequiredToolArgContains, want)
 		}
 	}
+	if !stringSliceContains(sourceRepo.RequiredTools, "session_workspace") {
+		t.Fatalf("source repo RequiredTools = %#v, want session_workspace", sourceRepo.RequiredTools)
+	}
+	if !commandToolOrderContains(sourceRepo.RequiredCommandAfterTool, CommandToolOrderRequirement{Command: `go test`, Tool: "session_workspace"}) {
+		t.Fatalf("source repo RequiredCommandAfterTool = %#v, want go test after session_workspace", sourceRepo.RequiredCommandAfterTool)
+	}
 	if got := sourceRepo.RequiredFileSubstrings["app/greet/greet.go"]; !stringSliceContains(got, "hello, guest") {
 		t.Fatalf("source repo RequiredFileSubstrings = %#v, want fixed greeting", sourceRepo.RequiredFileSubstrings)
 	}
-	if !stringSliceContains(sourceRepo.RequiredFinalText, "clean") || !stringSliceContains(sourceRepo.RequiredFinalText, "hash") {
-		t.Fatalf("source repo RequiredFinalText = %#v, want clean status evidence and commit hash evidence", sourceRepo.RequiredFinalText)
+	if !taskStateAttemptedActionRequirementContains(sourceRepo.RequiredTaskStateAttemptedActions, TaskStateAttemptedActionRequirement{Tool: "session_workspace", SummaryContains: "app"}) {
+		t.Fatalf("source repo RequiredTaskStateAttemptedActions = %#v, want session_workspace app evidence", sourceRepo.RequiredTaskStateAttemptedActions)
+	}
+	if !stringSliceContains(sourceRepo.RequiredFinalText, "active workspace") || !stringSliceContains(sourceRepo.RequiredFinalText, "clean") || !stringSliceContains(sourceRepo.RequiredFinalText, "hash") {
+		t.Fatalf("source repo RequiredFinalText = %#v, want active workspace, clean status evidence, and commit hash evidence", sourceRepo.RequiredFinalText)
 	}
 	if !stringSliceContains(sourceRepo.ProtectedFiles, "app/greet/greet_test.go") {
 		t.Fatalf("source repo ProtectedFiles = %#v, want cloned test protection", sourceRepo.ProtectedFiles)
