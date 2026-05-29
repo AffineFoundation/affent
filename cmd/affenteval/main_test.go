@@ -2529,6 +2529,31 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 				SummaryPreview:             "USER_CONTEXT: preserve the market evidence trail.",
 			}},
 		},
+		ContextCompactionSkips: agenteval.ContextCompactionSkipStats{
+			Count:                        1,
+			PolicyObserved:               1,
+			PostPolicyObserved:           1,
+			PostPolicyStillOverTrigger:   1,
+			MaxPolicyPressurePercent:     125,
+			MaxPostPolicyPressurePercent: 130,
+			ByCause:                      map[string]int{"request_pressure_not_reduced": 1},
+			ByReason:                     map[string]int{"estimated_context_pressure": 1},
+			Examples: []agenteval.ContextCompactionSkip{{
+				TurnID:                     "turn-summary",
+				Cause:                      "request_pressure_not_reduced",
+				Reason:                     "estimated_context_pressure",
+				BeforeMessages:             22,
+				CandidateMessages:          8,
+				BeforeBytes:                24000,
+				CandidateBytes:             26000,
+				EstimatedInputTokens:       50000,
+				AfterEstimatedInputTokens:  52000,
+				TriggerInputTokens:         40000,
+				ModelContextWindowTokens:   70000,
+				ReservedOutputTokens:       30000,
+				CompactTriggerInputPercent: 80,
+			}},
+		},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          3,
 			SucceededCalls: 2,
@@ -2601,7 +2626,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_turn_checkpoint:50.0%,loop_protocol_feed:50.0%,loop_protocol_calibration_request:50.0%,loop_protocol_calibration:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,policy_observed:1,max_policy_pressure:120%,post_policy_observed:1,post_policy_over:0,max_post_policy_pressure:95%,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,policy_observed:1,max_policy_pressure:120%,post_policy_observed:1,post_policy_over:0,max_post_policy_pressure:95%,avg_skips:0.50,skip_policy_observed:1,skip_post_policy_observed:1,skip_post_policy_over:1,skip_max_policy_pressure:125%,skip_max_post_policy_pressure:130%,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
 		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -2610,7 +2635,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "loop_protocol_calibration=scenarios:1/1,requests:1,answers:1") {
 		t.Fatalf("summary output missing loop calibration rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,memory_search_miss:1,memory_update:1,memory_update:missing:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:memory_topic_anchors:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:command_failed:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_failure:tool_failed:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:estimated_context_pressure:1,context_compaction:reactive:1,context_compaction:skipped:1,context_compaction_skip:request_pressure_not_reduced:1,loop_guard:2,loop_guard:forced_no_tools:1,memory_search_miss:1,memory_update:1,memory_update:missing:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:memory_topic_anchors:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:command_failed:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_failure:tool_failed:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
@@ -2672,8 +2697,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,reduced_bytes=0,summary_bytes=2048,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=120%,post_policy_observed=1,post_policy_over=0,max_post_policy_pressure=95%") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "compaction_skips=1,policy_observed=1,post_policy_observed=1,post_policy_over=1,max_policy_pressure=125%,max_post_policy_pressure=130% compaction_skip_causes=request_pressure_not_reduced:1 compaction_skip_reasons=estimated_context_pressure:1") {
+		t.Fatalf("summary output missing context compaction skip rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120%,after:38000,after_pressure:95% summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
 		t.Fatalf("summary output missing context compaction example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `context_compaction_skip_example: scenario=taostats-rendered turn=turn-summary cause=request_pressure_not_reduced reason=estimated_context_pressure messages=22->8 bytes=24000->26000 policy=estimated:50000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:125%,candidate:52000,candidate_pressure:130%`) {
+		t.Fatalf("summary output missing context compaction skip example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
 		t.Fatalf("summary output missing trace event rollup:\n%s", out.String())
@@ -3302,6 +3333,24 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				SummaryPreview:             "USER_CONTEXT: keep browser network evidence in summary.",
 			}},
 		},
+		ContextCompactionSkips: agenteval.ContextCompactionSkipStats{
+			Count:                        1,
+			PolicyObserved:               1,
+			PostPolicyObserved:           1,
+			PostPolicyStillOverTrigger:   1,
+			MaxPolicyPressurePercent:     125,
+			MaxPostPolicyPressurePercent: 130,
+			ByCause:                      map[string]int{"request_pressure_not_reduced": 1},
+			ByReason:                     map[string]int{"estimated_context_pressure": 1},
+			Examples: []agenteval.ContextCompactionSkip{{
+				TurnID:                    "turn-jsonl",
+				Cause:                     "request_pressure_not_reduced",
+				Reason:                    "estimated_context_pressure",
+				EstimatedInputTokens:      50000,
+				AfterEstimatedInputTokens: 52000,
+				TriggerInputTokens:        40000,
+			}},
+		},
 		ContextInjections: agenteval.ContextInjectionStats{
 			Count:           2,
 			BySource:        map[string]int{"account_access": 1, "loop_protocol": 1},
@@ -3772,6 +3821,21 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		contextCompactionExample["reason"] != "context_overflow" ||
 		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "browser network evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
+	}
+	contextSkipCauses, ok := got["context_compaction_skip_by_cause"].(map[string]any)
+	if !ok || contextSkipCauses["request_pressure_not_reduced"] != float64(1) {
+		t.Fatalf("context_compaction_skip_by_cause = %#v\njson=%s", got["context_compaction_skip_by_cause"], out.String())
+	}
+	contextSkipExamples, ok := got["context_compaction_skip_examples"].([]any)
+	if !ok || len(contextSkipExamples) != 1 {
+		t.Fatalf("context_compaction_skip_examples = %#v\njson=%s", got["context_compaction_skip_examples"], out.String())
+	}
+	contextSkipExample, ok := contextSkipExamples[0].(map[string]any)
+	if !ok ||
+		contextSkipExample["turn_id"] != "turn-jsonl" ||
+		contextSkipExample["cause"] != "request_pressure_not_reduced" ||
+		contextSkipExample["after_estimated_input_tokens"] != float64(52000) {
+		t.Fatalf("context_compaction_skip_example = %#v\njson=%s", contextSkipExamples[0], out.String())
 	}
 	contextInjectionBySource, ok := got["context_injection_by_source"].(map[string]any)
 	if !ok || contextInjectionBySource["account_access"] != float64(1) || contextInjectionBySource["loop_protocol"] != float64(1) {

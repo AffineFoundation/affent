@@ -1173,6 +1173,15 @@ type batchSummary struct {
 	ContextCompactionPostPolicyStillOver    int
 	ContextCompactionMaxPostPolicyPressure  int
 	ContextCompactionExamples               []agenteval.ContextCompaction
+	ContextCompactionSkips                  int
+	ContextSkipPolicyObserved               int
+	ContextSkipPostPolicyObserved           int
+	ContextSkipPostPolicyStillOver          int
+	ContextSkipMaxPolicyPressure            int
+	ContextSkipMaxPostPolicyPressure        int
+	ContextSkipByCause                      map[string]int
+	ContextSkipByReason                     map[string]int
+	ContextSkipExamples                     []agenteval.ContextCompactionSkip
 	ContextInjections                       int
 	ContextInjectionBySource                map[string]int
 	ContextInjectionBytes                   int
@@ -1471,6 +1480,29 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.ContextCompactionMaxPostPolicyPressure = res.ContextCompactions.MaxPostPolicyPressurePercent
 	}
 	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.ContextCompactionSkips += res.ContextCompactionSkips.Count
+	s.ContextSkipPolicyObserved += res.ContextCompactionSkips.PolicyObserved
+	s.ContextSkipPostPolicyObserved += res.ContextCompactionSkips.PostPolicyObserved
+	s.ContextSkipPostPolicyStillOver += res.ContextCompactionSkips.PostPolicyStillOverTrigger
+	if res.ContextCompactionSkips.MaxPolicyPressurePercent > s.ContextSkipMaxPolicyPressure {
+		s.ContextSkipMaxPolicyPressure = res.ContextCompactionSkips.MaxPolicyPressurePercent
+	}
+	if res.ContextCompactionSkips.MaxPostPolicyPressurePercent > s.ContextSkipMaxPostPolicyPressure {
+		s.ContextSkipMaxPostPolicyPressure = res.ContextCompactionSkips.MaxPostPolicyPressurePercent
+	}
+	for k, v := range res.ContextCompactionSkips.ByCause {
+		if s.ContextSkipByCause == nil {
+			s.ContextSkipByCause = map[string]int{}
+		}
+		s.ContextSkipByCause[k] += v
+	}
+	for k, v := range res.ContextCompactionSkips.ByReason {
+		if s.ContextSkipByReason == nil {
+			s.ContextSkipByReason = map[string]int{}
+		}
+		s.ContextSkipByReason[k] += v
+	}
+	s.ContextSkipExamples = appendContextSkipExamples(s.ContextSkipExamples, res.ContextCompactionSkips.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ContextInjections += res.ContextInjections.Count
 	for k, v := range res.ContextInjections.BySource {
 		if s.ContextInjectionBySource == nil {
@@ -1974,7 +2006,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
 	)
-	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_reduced_bytes:%.0f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,policy_observed:%d,max_policy_pressure:%d%%,post_policy_observed:%d,post_policy_over:%d,max_post_policy_pressure:%d%%,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
+	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_reduced_bytes:%.0f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,policy_observed:%d,max_policy_pressure:%d%%,post_policy_observed:%d,post_policy_over:%d,max_post_policy_pressure:%d%%,avg_skips:%.2f,skip_policy_observed:%d,skip_post_policy_observed:%d,skip_post_policy_over:%d,skip_max_policy_pressure:%d%%,skip_max_post_policy_pressure:%d%%,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
 		batchAverage(s.ContextCompactions, s.Total),
 		batchAverage(s.ContextCompactionsReactive, s.Total),
 		batchAverage(s.ContextCompactionRemoved, s.Total),
@@ -1987,6 +2019,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ContextCompactionPostPolicyObserved,
 		s.ContextCompactionPostPolicyStillOver,
 		s.ContextCompactionMaxPostPolicyPressure,
+		batchAverage(s.ContextCompactionSkips, s.Total),
+		s.ContextSkipPolicyObserved,
+		s.ContextSkipPostPolicyObserved,
+		s.ContextSkipPostPolicyStillOver,
+		s.ContextSkipMaxPolicyPressure,
+		s.ContextSkipMaxPostPolicyPressure,
 		batchAverage(s.ContextInjections, s.Total),
 		batchAverage(s.ContextInjectionBytes, s.Total),
 		batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
@@ -2141,6 +2179,22 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.ContextCompactionMaxPostPolicyPressure,
 		)
 	}
+	if s.ContextCompactionSkips > 0 {
+		fmt.Fprintf(w, " compaction_skips=%d,policy_observed=%d,post_policy_observed=%d,post_policy_over=%d,max_policy_pressure=%d%%,max_post_policy_pressure=%d%%",
+			s.ContextCompactionSkips,
+			s.ContextSkipPolicyObserved,
+			s.ContextSkipPostPolicyObserved,
+			s.ContextSkipPostPolicyStillOver,
+			s.ContextSkipMaxPolicyPressure,
+			s.ContextSkipMaxPostPolicyPressure,
+		)
+		if len(s.ContextSkipByCause) > 0 {
+			fmt.Fprintf(w, " compaction_skip_causes=%s", formatStringIntCounts(s.ContextSkipByCause))
+		}
+		if len(s.ContextSkipByReason) > 0 {
+			fmt.Fprintf(w, " compaction_skip_reasons=%s", formatStringIntCounts(s.ContextSkipByReason))
+		}
+	}
 	if s.ContextInjections > 0 {
 		fmt.Fprintf(w, " context_injections=%d,bytes=%d,est_tokens=%d",
 			s.ContextInjections,
@@ -2212,6 +2266,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_request_example", s.LoopProtocolCalibrationRequestExamples, "")
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_example", s.LoopProtocolCalibrationExamples, "")
 	printContextCompactionExampleLines(w, s.ContextCompactionExamples, "")
+	printContextCompactionSkipExampleLines(w, s.ContextSkipExamples, "")
 	printContextInjectionExampleLines(w, s.ContextInjectionExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printPlanExampleLines(w, s.PlanExamples, "")
@@ -3329,6 +3384,44 @@ func printContextCompactionExampleLines(w io.Writer, examples []agenteval.Contex
 	}
 }
 
+func printContextCompactionSkipExampleLines(w io.Writer, examples []agenteval.ContextCompactionSkip, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%scontext_compaction_skip_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.TurnID != "" {
+			fmt.Fprintf(w, " turn=%s", ex.TurnID)
+		}
+		if ex.Cause != "" {
+			fmt.Fprintf(w, " cause=%s", ex.Cause)
+		}
+		if ex.Reason != "" {
+			fmt.Fprintf(w, " reason=%s", ex.Reason)
+		}
+		if ex.BeforeMessages > 0 || ex.CandidateMessages > 0 {
+			fmt.Fprintf(w, " messages=%d->%d", ex.BeforeMessages, ex.CandidateMessages)
+		}
+		if ex.BeforeBytes > 0 || ex.CandidateBytes > 0 {
+			fmt.Fprintf(w, " bytes=%d->%d", ex.BeforeBytes, ex.CandidateBytes)
+		}
+		if ex.EstimatedInputTokens > 0 || ex.AfterEstimatedInputTokens > 0 || ex.TriggerInputTokens > 0 || ex.ModelContextWindowTokens > 0 || ex.ReservedOutputTokens > 0 || ex.CompactTriggerInputPercent > 0 {
+			fmt.Fprintf(w, " policy=estimated:%d,trigger:%d,model_window:%d,reserved_output:%d,trigger_percent:%d,pressure:%d%%",
+				ex.EstimatedInputTokens,
+				ex.TriggerInputTokens,
+				ex.ModelContextWindowTokens,
+				ex.ReservedOutputTokens,
+				ex.CompactTriggerInputPercent,
+				contextCompactionSkipPolicyPressurePercent(ex),
+			)
+			if ex.AfterEstimatedInputTokens > 0 {
+				fmt.Fprintf(w, ",candidate:%d,candidate_pressure:%d%%", ex.AfterEstimatedInputTokens, contextCompactionSkipPostPolicyPressurePercent(ex))
+			}
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func contextCompactionExampleSummaryState(ex agenteval.ContextCompaction) string {
 	if ex.SummaryBytes > 0 || strings.TrimSpace(ex.SummaryPreview) != "" {
 		return "present"
@@ -3350,6 +3443,20 @@ func contextCompactionPolicyPressurePercent(ex agenteval.ContextCompaction) int 
 }
 
 func contextCompactionPostPolicyPressurePercent(ex agenteval.ContextCompaction) int {
+	if ex.AfterEstimatedInputTokens <= 0 || ex.TriggerInputTokens <= 0 {
+		return 0
+	}
+	return (ex.AfterEstimatedInputTokens*100 + ex.TriggerInputTokens - 1) / ex.TriggerInputTokens
+}
+
+func contextCompactionSkipPolicyPressurePercent(ex agenteval.ContextCompactionSkip) int {
+	if ex.EstimatedInputTokens <= 0 || ex.TriggerInputTokens <= 0 {
+		return 0
+	}
+	return (ex.EstimatedInputTokens*100 + ex.TriggerInputTokens - 1) / ex.TriggerInputTokens
+}
+
+func contextCompactionSkipPostPolicyPressurePercent(ex agenteval.ContextCompactionSkip) int {
 	if ex.AfterEstimatedInputTokens <= 0 || ex.TriggerInputTokens <= 0 {
 		return 0
 	}
@@ -4004,6 +4111,15 @@ type batchResultRecord struct {
 	ContextCompactionPostPolicyStillOver   int                                        `json:"context_compaction_post_policy_still_over_trigger,omitempty"`
 	ContextCompactionMaxPostPolicyPressure int                                        `json:"context_compaction_max_post_policy_pressure_percent,omitempty"`
 	ContextCompactionExamples              []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
+	ContextCompactionSkips                 int                                        `json:"context_compaction_skips,omitempty"`
+	ContextSkipPolicyObserved              int                                        `json:"context_compaction_skip_policy_observed,omitempty"`
+	ContextSkipPostPolicyObserved          int                                        `json:"context_compaction_skip_post_policy_observed,omitempty"`
+	ContextSkipPostPolicyStillOver         int                                        `json:"context_compaction_skip_post_policy_still_over_trigger,omitempty"`
+	ContextSkipMaxPolicyPressure           int                                        `json:"context_compaction_skip_max_policy_pressure_percent,omitempty"`
+	ContextSkipMaxPostPolicyPressure       int                                        `json:"context_compaction_skip_max_post_policy_pressure_percent,omitempty"`
+	ContextSkipByCause                     map[string]int                             `json:"context_compaction_skip_by_cause,omitempty"`
+	ContextSkipByReason                    map[string]int                             `json:"context_compaction_skip_by_reason,omitempty"`
+	ContextSkipExamples                    []agenteval.ContextCompactionSkip          `json:"context_compaction_skip_examples,omitempty"`
 	ContextInjections                      int                                        `json:"context_injections,omitempty"`
 	ContextInjectionBySource               map[string]int                             `json:"context_injection_by_source,omitempty"`
 	ContextInjectionBytes                  int                                        `json:"context_injection_bytes,omitempty"`
@@ -4130,6 +4246,7 @@ type batchSummaryRecord struct {
 	ContextCompactionPostPolicyObserved     int                                              `json:"context_compaction_post_policy_observed,omitempty"`
 	ContextCompactionPostPolicyStillOver    int                                              `json:"context_compaction_post_policy_still_over_trigger,omitempty"`
 	ContextCompactionMaxPostPolicyPressure  int                                              `json:"context_compaction_max_post_policy_pressure_percent,omitempty"`
+	AvgContextCompactionSkips               float64                                          `json:"avg_context_compaction_skips"`
 	AvgContextInjections                    float64                                          `json:"avg_context_injections"`
 	AvgContextInjectionBytes                float64                                          `json:"avg_context_injection_bytes"`
 	AvgContextInjectionEstimatedTokens      float64                                          `json:"avg_context_injection_estimated_tokens"`
@@ -4203,6 +4320,15 @@ type batchSummaryRecord struct {
 	ContextCompactionSummaryMissing         int                                              `json:"context_compaction_summary_missing,omitempty"`
 	ContextCompactionSummaryEmpty           int                                              `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionExamples               []agenteval.ContextCompaction                    `json:"context_compaction_examples,omitempty"`
+	ContextCompactionSkips                  int                                              `json:"context_compaction_skips,omitempty"`
+	ContextSkipPolicyObserved               int                                              `json:"context_compaction_skip_policy_observed,omitempty"`
+	ContextSkipPostPolicyObserved           int                                              `json:"context_compaction_skip_post_policy_observed,omitempty"`
+	ContextSkipPostPolicyStillOver          int                                              `json:"context_compaction_skip_post_policy_still_over_trigger,omitempty"`
+	ContextSkipMaxPolicyPressure            int                                              `json:"context_compaction_skip_max_policy_pressure_percent,omitempty"`
+	ContextSkipMaxPostPolicyPressure        int                                              `json:"context_compaction_skip_max_post_policy_pressure_percent,omitempty"`
+	ContextSkipByCause                      map[string]int                                   `json:"context_compaction_skip_by_cause,omitempty"`
+	ContextSkipByReason                     map[string]int                                   `json:"context_compaction_skip_by_reason,omitempty"`
+	ContextSkipExamples                     []agenteval.ContextCompactionSkip                `json:"context_compaction_skip_examples,omitempty"`
 	ContextInjections                       int                                              `json:"context_injections,omitempty"`
 	ContextInjectionBySource                map[string]int                                   `json:"context_injection_by_source,omitempty"`
 	ContextInjectionBytes                   int                                              `json:"context_injection_bytes,omitempty"`
@@ -4433,6 +4559,15 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextCompactionPostPolicyStillOver:   res.ContextCompactions.PostPolicyStillOverTrigger,
 		ContextCompactionMaxPostPolicyPressure: res.ContextCompactions.MaxPostPolicyPressurePercent,
 		ContextCompactionExamples:              cloneContextCompactionExamples(res.ContextCompactions.Examples),
+		ContextCompactionSkips:                 res.ContextCompactionSkips.Count,
+		ContextSkipPolicyObserved:              res.ContextCompactionSkips.PolicyObserved,
+		ContextSkipPostPolicyObserved:          res.ContextCompactionSkips.PostPolicyObserved,
+		ContextSkipPostPolicyStillOver:         res.ContextCompactionSkips.PostPolicyStillOverTrigger,
+		ContextSkipMaxPolicyPressure:           res.ContextCompactionSkips.MaxPolicyPressurePercent,
+		ContextSkipMaxPostPolicyPressure:       res.ContextCompactionSkips.MaxPostPolicyPressurePercent,
+		ContextSkipByCause:                     cloneStringIntMap(res.ContextCompactionSkips.ByCause),
+		ContextSkipByReason:                    cloneStringIntMap(res.ContextCompactionSkips.ByReason),
+		ContextSkipExamples:                    cloneContextSkipExamples(res.ContextCompactionSkips.Examples),
 		ContextInjections:                      res.ContextInjections.Count,
 		ContextInjectionBySource:               cloneStringIntMap(res.ContextInjections.BySource),
 		ContextInjectionBytes:                  res.ContextInjections.Bytes,
@@ -4708,6 +4843,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextCompactionPostPolicyObserved:     s.ContextCompactionPostPolicyObserved,
 		ContextCompactionPostPolicyStillOver:    s.ContextCompactionPostPolicyStillOver,
 		ContextCompactionMaxPostPolicyPressure:  s.ContextCompactionMaxPostPolicyPressure,
+		AvgContextCompactionSkips:               batchAverage(s.ContextCompactionSkips, s.Total),
 		AvgContextInjections:                    batchAverage(s.ContextInjections, s.Total),
 		AvgContextInjectionBytes:                batchAverage(s.ContextInjectionBytes, s.Total),
 		AvgContextInjectionEstimatedTokens:      batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
@@ -4781,6 +4917,15 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextCompactionSummaryMissing:         s.ContextCompactionSummaryMissing,
 		ContextCompactionSummaryEmpty:           s.ContextCompactionSummaryEmpty,
 		ContextCompactionExamples:               cloneContextCompactionExamples(s.ContextCompactionExamples),
+		ContextCompactionSkips:                  s.ContextCompactionSkips,
+		ContextSkipPolicyObserved:               s.ContextSkipPolicyObserved,
+		ContextSkipPostPolicyObserved:           s.ContextSkipPostPolicyObserved,
+		ContextSkipPostPolicyStillOver:          s.ContextSkipPostPolicyStillOver,
+		ContextSkipMaxPolicyPressure:            s.ContextSkipMaxPolicyPressure,
+		ContextSkipMaxPostPolicyPressure:        s.ContextSkipMaxPostPolicyPressure,
+		ContextSkipByCause:                      cloneStringIntMap(s.ContextSkipByCause),
+		ContextSkipByReason:                     cloneStringIntMap(s.ContextSkipByReason),
+		ContextSkipExamples:                     cloneContextSkipExamples(s.ContextSkipExamples),
 		ContextInjections:                       s.ContextInjections,
 		ContextInjectionBySource:                cloneStringIntMap(s.ContextInjectionBySource),
 		ContextInjectionBytes:                   s.ContextInjectionBytes,
@@ -5572,6 +5717,13 @@ func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteva
 	return append([]agenteval.ContextCompaction(nil), in...)
 }
 
+func cloneContextSkipExamples(in []agenteval.ContextCompactionSkip) []agenteval.ContextCompactionSkip {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.ContextCompactionSkip(nil), in...)
+}
+
 func cloneContextInjectionExamples(in []agenteval.ContextInjection) []agenteval.ContextInjection {
 	if len(in) == 0 {
 		return nil
@@ -5861,6 +6013,22 @@ func appendContextCompactionExamples(dst, src []agenteval.ContextCompaction, sce
 	return dst
 }
 
+func appendContextSkipExamples(dst, src []agenteval.ContextCompactionSkip, scenario string, limit int) []agenteval.ContextCompactionSkip {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
 func appendContextInjectionExamples(dst, src []agenteval.ContextInjection, scenario string, limit int) []agenteval.ContextInjection {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
@@ -6095,6 +6263,22 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ContextCompactions.MaxPostPolicyPressurePercent,
 		)
 	}
+	if res.ContextCompactionSkips.Count > 0 {
+		fmt.Fprintf(w, " compaction_skips=%d,policy_observed=%d,post_policy_observed=%d,post_policy_over=%d,max_policy_pressure=%d%%,max_post_policy_pressure=%d%%",
+			res.ContextCompactionSkips.Count,
+			res.ContextCompactionSkips.PolicyObserved,
+			res.ContextCompactionSkips.PostPolicyObserved,
+			res.ContextCompactionSkips.PostPolicyStillOverTrigger,
+			res.ContextCompactionSkips.MaxPolicyPressurePercent,
+			res.ContextCompactionSkips.MaxPostPolicyPressurePercent,
+		)
+		if len(res.ContextCompactionSkips.ByCause) > 0 {
+			fmt.Fprintf(w, " compaction_skip_causes=%s", formatStringIntCounts(res.ContextCompactionSkips.ByCause))
+		}
+		if len(res.ContextCompactionSkips.ByReason) > 0 {
+			fmt.Fprintf(w, " compaction_skip_reasons=%s", formatStringIntCounts(res.ContextCompactionSkips.ByReason))
+		}
+	}
 	if res.ContextInjections.Count > 0 {
 		fmt.Fprintf(w, " context_injections=%d,bytes=%d,est_tokens=%d",
 			res.ContextInjections.Count,
@@ -6155,6 +6339,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_request_example", res.LoopProtocolCalibrationRequests.Examples, "  ")
 	printLoopProtocolCalibrationExampleLines(w, "loop_protocol_calibration_example", res.LoopProtocolCalibrations.Examples, "  ")
 	printContextCompactionExampleLines(w, res.ContextCompactions.Examples, "  ")
+	printContextCompactionSkipExampleLines(w, res.ContextCompactionSkips.Examples, "  ")
 	printContextInjectionExampleLines(w, res.ContextInjections.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
 	printPlanExampleLines(w, res.PlanExamples, "  ")
