@@ -15,6 +15,7 @@ export function showsWorkbenchArtifact(source: ToolResultSource): boolean {
 }
 
 export function showsResultStorageChrome(source: ToolResultSource): boolean {
+  if (isToolResultStoragePath(source.path)) return false;
   return !isRawSourceCapture(source);
 }
 
@@ -27,7 +28,10 @@ function isRawSourceCapture(source: ToolResultSource): boolean {
 }
 
 function isToolResultStoragePath(path: string | undefined): boolean {
-  return typeof path === "string" && /(?:^|\/)\.affent\/artifacts\/tool-results\//.test(path.replace(/\\/g, "/"));
+  if (typeof path !== "string") return false;
+  const normalized = path.replace(/\\/g, "/");
+  if (/(?:^|\/)\.affent\/artifacts\/tool-results\//.test(normalized)) return true;
+  return /(?:^|\/)\d{6}-call_[A-Za-z0-9_-]+\.txt$/.test(normalized);
 }
 
 function toolNames(source: ToolResultSource): string[] {

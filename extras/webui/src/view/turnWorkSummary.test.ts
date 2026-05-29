@@ -11,12 +11,11 @@ describe("buildTurnWorkSummary", () => {
     expect(summary.actionLabel).toBe("cat big.log");
     expect(summary.items).toEqual([
       { label: "1 truncated", tone: "info" },
-      { label: "1 file (8 KiB, 1 MiB omitted)", tone: "artifact" },
       { label: "88ms", tone: "muted" },
     ]);
   });
 
-  it("keeps artifact items visible in headline summaries when other chips crowd them out", () => {
+  it("keeps tool-result storage files out of headline summaries", () => {
     const summary = buildTurnWorkSummary(reduceRawEvents([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },
       {
@@ -84,13 +83,11 @@ describe("buildTurnWorkSummary", () => {
     expect(summary.items).toEqual([
       { label: "1 failed", tone: "error" },
       { label: "1 truncated", tone: "info" },
-      { label: "1 file (8 KiB, 1 MiB omitted)", tone: "artifact" },
       { label: "128ms", tone: "muted" },
     ]);
     expect(summary.headlineItems).toEqual([
       { label: "1 failed", tone: "error" },
       { label: "1 truncated", tone: "info" },
-      { label: "1 file (8 KiB, 1 MiB omitted)", tone: "artifact" },
     ]);
   });
 

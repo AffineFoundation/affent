@@ -27,7 +27,7 @@ describe("ExecutionTree", () => {
     expect(screen.queryByTestId("tool-details")).toBeNull();
   });
 
-  it("shows artifact file and size in the overview when a tool result was saved", async () => {
+  it("keeps generated tool-result storage out of the action overview", async () => {
     const user = userEvent.setup();
     const turn = artifactTurn();
 
@@ -35,9 +35,12 @@ describe("ExecutionTree", () => {
 
     await user.click(screen.getByRole("button", { name: /Command cat report\.txt/ }));
 
-    expect(screen.getByText("000001-c2.txt (8 KiB, 1 MiB omitted)")).toBeInTheDocument();
-    expect(screen.getByText("output file")).toBeInTheDocument();
-    expect(screen.getByText("Status done · Exit 0 · File 000001-c2.txt (8 KiB, 1 MiB omitted) · Limit truncated")).toBeInTheDocument();
+    expect(screen.queryByText("000001-c2.txt (8 KiB, 1 MiB omitted)")).toBeNull();
+    expect(screen.queryByText("output file")).toBeNull();
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Status done");
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Exit 0");
+    expect(screen.getByTestId("action-inspector-summary")).not.toHaveTextContent("File 000001-c2.txt");
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Limit truncated");
   });
 
   it("opens artifact files from nested raw trace rows", async () => {
@@ -68,7 +71,7 @@ describe("ExecutionTree", () => {
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c2.txt");
   });
 
-  it("keeps the output file visible in the action summary when duration would otherwise crowd it out", async () => {
+  it("keeps generated output files out of the action summary when duration is present", async () => {
     const user = userEvent.setup();
     const turn = artifactTurn();
     turn.toolCalls[0] = {
@@ -80,7 +83,8 @@ describe("ExecutionTree", () => {
 
     await user.click(screen.getByRole("button", { name: /Command cat report\.txt/ }));
 
-    expect(screen.getByText(/Status done · Duration 1\.25s · Exit 0 · File 000001-c2\.txt \(8 KiB, 1 MiB omitted\) · Limit truncated/)).toBeInTheDocument();
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Duration 1.25s");
+    expect(screen.getByTestId("action-inspector-summary")).not.toHaveTextContent("000001-c2.txt");
   });
 
   it("shows delegated result size merged into the parent context", async () => {

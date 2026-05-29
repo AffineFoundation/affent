@@ -22,8 +22,21 @@ describe("tool result display policy", () => {
     expect(showsToolContextChrome(source)).toBe(false);
   });
 
+  it("keeps generated tool result storage files out of chat and inline action chrome", () => {
+    for (const path of [
+      ".affent/artifacts/tool-results/000004-call_15ee13c011734458a7200ded.txt",
+      "000004-call_15ee13c011734458a7200ded.txt",
+    ]) {
+      const source = { path, tool: "shell" };
+
+      expect(showsChatArtifact(source)).toBe(false);
+      expect(showsResultStorageChrome(source)).toBe(false);
+      expect(showsWorkbenchArtifact(source)).toBe(true);
+    }
+  });
+
   it("keeps normal tool output chrome visible", () => {
-    const source = { tool: "shell" };
+    const source = { path: ".affent/artifacts/reports/report.md", tool: "shell" };
 
     expect(showsChatArtifact(source)).toBe(true);
     expect(showsWorkbenchArtifact(source)).toBe(true);

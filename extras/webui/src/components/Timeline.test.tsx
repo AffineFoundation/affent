@@ -860,7 +860,7 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("work-summary")).toBeNull();
   });
 
-  it("badges a truncated result with an artifact", () => {
+  it("keeps truncated result storage out of inline chat chrome", () => {
     renderTimeline(resultTruncated);
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Action output was truncated");
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("line 1");
@@ -872,11 +872,13 @@ describe("Timeline", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /cat big.log/ })[0]);
     const card = screen.getByTestId("execution-node");
     expect(within(card).getByText("truncated")).toBeInTheDocument();
-    expect(within(card).getByText("artifact")).toBeInTheDocument();
+    expect(within(card).queryByText("artifact")).toBeNull();
+    expect(within(card).queryByText("000001-c1.txt")).toBeNull();
     expect(within(card).getByText("(8 KiB, 1 MiB omitted)")).toBeInTheDocument();
     expect(screen.getByTestId("work-thread")).not.toHaveTextContent("Run summary");
     expect(screen.queryByTestId("work-summary")).toBeNull();
-    expect(screen.getAllByTestId("action-inspector-summary")[0]).toHaveTextContent("Duration, Tool context · 1 other fact");
+    expect(screen.getAllByTestId("action-inspector-summary")[0]).toHaveTextContent("Tool context");
+    expect(screen.getAllByTestId("action-inspector-summary")[0]).not.toHaveTextContent("File");
   });
 
   it("copies fallback results and turns them into follow-up drafts", async () => {

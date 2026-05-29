@@ -1245,7 +1245,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("session-list")).not.toContainText("s1");
   await expect(page.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
   await expect(page.getByTestId("chat-context-bar")).toContainText("large result preview");
-  await expect(page.getByTestId("chat-context-bar")).toContainText("Artifact 1 file");
+  await expect(page.getByTestId("chat-context-bar")).not.toContainText("Artifact 1 file");
   await expect(page.getByTestId("timeline")).toBeVisible();
   await expect(page.getByTestId("composer")).toBeVisible();
   const viewport = page.viewportSize();
@@ -1280,63 +1280,46 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("Result");
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("2 delegated tasks");
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("4 evidence");
-  await page.getByTestId("agent-activity-digest-evidence").first().getByRole("button", { name: "Use sources" }).click();
-  await expect(page.getByTestId("composer-context")).toContainText("Using evidence");
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Use this evidence in the next step:/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Read docs\/webui-product-design\.md/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Read docs\/focused-tasks\.md/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/MCP webui trace/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Listed docs/);
-  await page.getByRole("button", { name: "Remove" }).click();
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
+  await expect(page.getByTestId("agent-activity-digest-evidence").first()).toContainText("Read docs/webui-product-design.md");
   await page.getByTestId("agent-activity").first().getByRole("button", { name: /What Affent did/ }).click();
   await expect(page.getByTestId("agent-activity").first()).toContainText("Read");
   await expect(page.getByTestId("agent-activity").first()).toContainText("docs/webui-product-design.md");
   await expect(page.getByTestId("agent-activity").first()).toContainText("392 tokens");
   await expect(page.getByTestId("agent-activity").first()).toContainText("MCP");
   await expect(page.getByTestId("agent-activity").first()).toContainText("webui trace");
-  await page.getByTestId("agent-activity").first().getByRole("button", { name: "Use sources" }).click();
-  await expect(page.getByTestId("composer-context")).toContainText("Using evidence");
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Use this evidence in the next step:/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Read docs\/webui-product-design\.md/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Read docs\/focused-tasks\.md/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/MCP webui trace/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Listed docs/);
-  await page.getByRole("button", { name: "Remove" }).click();
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
   await expect(page.getByTestId("msg-assistant").first()).toContainText("The delegated checks found");
-  await expect(page.getByTestId("turn-artifacts")).toContainText("Full output");
-  await expect(page.getByTestId("turn-artifacts")).toContainText("000001-artifact-call.txt");
-  await expect(page.getByTestId("turn-artifacts")).toContainText("cat big.log");
+  await expect(page.getByTestId("turn-artifacts")).toHaveCount(0);
   await expect(page.getByTestId("fallback-answer")).toContainText("Action output was truncated");
   await expect(page.getByTestId("fallback-answer")).toContainText("large result preview");
   await page.getByTestId("fallback-answer").getByRole("button", { name: "Ask follow-up" }).click();
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(
-    "Continue from this output: large result preview Full output is available below.",
+    "Continue from this output: large result preview Full output is available in Workbench.",
   );
-  await page.getByTestId("turn-artifacts").getByRole("button", { name: "Use artifact as draft" }).click();
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Artifact evidence for \.affent\/artifacts\/tool-results\/000001-artifact-call\.txt/);
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Source: cat big\.log/);
+  await page.getByRole("button", { name: "Workbench" }).click();
+  await page.locator(".workbench-nav").getByRole("button", { name: /Artifacts/ }).click();
+  await page.getByTestId("session-artifacts-focus").getByRole("button", { name: "Open artifact" }).click();
+  await expect(page.getByTestId("artifact-viewer")).toContainText("artifact payload");
+  await page.getByTestId("artifact-viewer").getByRole("button", { name: "Use text" }).click();
+  await expect(page.getByTestId("composer-context")).toContainText("Using file text");
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/File: \.affent\/artifacts\/tool-results\/000001-artifact-call\.txt/);
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/artifact payload/);
+  await page.getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
+  await page.getByRole("button", { name: "Close Workbench" }).click();
   await expect(page.locator(".raw-disclosure")).toHaveCount(0);
 
   await expect(page.getByTestId("tool-details")).toHaveCount(0);
-  await expect(page.getByTestId("agent-activity").first()).toContainText("What Affent did");
+  await expect(page.getByTestId("agent-activity").first()).toContainText("Work");
   await expect(page.getByTestId("agent-activity-tree").first().getByRole("button", { name: /Find the WebUI trace requirements/ })).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("execution-tree")).toHaveCount(0);
   await page.screenshot({
     path: testInfo.outputPath(`workflow-closed-${testInfo.project.name}.png`),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Copy activity" }).first().click();
-  await page.getByRole("menu").getByRole("button", { name: "Copy summary" }).click();
-  await page.getByTestId("agent-activity-tree").first().getByRole("button", { name: "Use next step as draft" }).click();
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Continue: Replace result parsing with explicit child trace events/);
-
-  await page.getByTestId("turn-artifacts").getByRole("button", { name: "Open artifact" }).click();
+  await page.getByRole("button", { name: "Workbench" }).click();
+  await page.locator(".workbench-nav").getByRole("button", { name: /Artifacts/ }).click();
+  await page.getByTestId("session-artifacts-focus").getByRole("button", { name: "Open artifact" }).click();
   await expect(page.getByTestId("artifact-viewer")).toContainText("artifact payload");
-  await page.getByTestId("artifact-viewer").getByRole("button", { name: "Use artifact as draft" }).click();
-  await expect(page.getByTestId("composer-context")).toContainText("Artifact added to message");
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Loaded: 39 B of 58 B/);
   await page.getByRole("button", { name: "Load more" }).click();
   await expect(page.getByTestId("artifact-viewer")).toContainText("trailing chunk");
   await page.getByTestId("artifact-search").fill("MCP_search");

@@ -42,6 +42,30 @@ describe("buildTurnArtifacts", () => {
     expect(chatVisibleTurnArtifacts(turn)).toEqual([]);
   });
 
+  it("keeps basename-only generated tool-result files out of the chat artifact strip", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "shell", tool: "shell", args: { command: "sed -n '1,300p' game2048.py" } } },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "shell",
+          exit_code: 0,
+          result_summary: "class Game2048:",
+          result: "class Game2048:",
+          result_artifact_path: "000004-call_15ee13c011734458a7200ded.txt",
+          result_bytes: 9600,
+          result_cap_bytes: 262144,
+        },
+      },
+    ]).turns[0];
+
+    expect(buildTurnArtifacts(turn)).toHaveLength(1);
+    expect(chatVisibleTurnArtifacts(turn)).toEqual([]);
+  });
+
   it("summarizes artifact groups compactly", () => {
     const turn = reduceRawEvents(resultTruncated).turns[0];
     const artifact = buildTurnArtifacts(turn)[0];

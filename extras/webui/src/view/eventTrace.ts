@@ -747,7 +747,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
     sourceAccess?.resultPreview ? `preview ${sourceAccess.resultPreview}` : undefined,
     toolContextMeta(contextBytes, contextOmittedBytes),
-    artifactPath && showsResultStorageChrome({ tool })
+    artifactPath && showsResultStorageChrome({ path: artifactPath, tool })
       ? `artifact ${artifactDisplayLabel({
           path: artifactPath,
           name: artifactName(artifactPath),

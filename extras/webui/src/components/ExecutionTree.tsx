@@ -391,7 +391,7 @@ function actionSummaryPreview(node: ExecutionTreeNode): string {
   const parts: string[] = [];
   if (node.objective) parts.push("Goal set");
   if (node.mcpServer || node.mcpTool) parts.push("External action");
-  if (node.resultArtifactPath) parts.push("Output file");
+  if (shouldShowArtifactChrome(node)) parts.push("Output file");
   if (node.childSessionId) parts.push("Continued in child session");
   if (node.turnEndReason) parts.push(node.turnEndReason === "completed" ? "Completed" : `Finished: ${summarize(node.turnEndReason, 28)}`);
   if (parts.length === 0) return "No extra details";
@@ -434,7 +434,11 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
 }
 
 function shouldShowArtifactChrome(node: ExecutionTreeNode): boolean {
-  return Boolean(node.resultArtifactPath) && showsResultStorageChrome(node);
+  return Boolean(node.resultArtifactPath) && showsResultStorageChrome({
+    path: node.resultArtifactPath,
+    tool: node.tool,
+    originalTool: node.originalTool,
+  });
 }
 
 function formatCost(value: number): string {
