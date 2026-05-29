@@ -165,6 +165,49 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShotLoopTickWithoutProtoc
 	}
 }
 
+func TestSessionPool_ClaimScheduleDoesNotAdvanceBeforeTurnEnd(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "claim-recovery")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	nextRunAt := now.Add(-time.Minute).Format(time.RFC3339)
+	writeScheduleFixture(t, pool, "claim-recovery", sessionSchedule{
+		ID:          "sched_claim",
+		Prompt:      "Run later.",
+		DisplayText: "Claim recovery",
+		Enabled:     true,
+		NextRunAt:   nextRunAt,
+		CreatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	run, ok, err := pool.claimNextDueSessionSchedule("claim-recovery", now)
+	if err != nil || !ok {
+		t.Fatalf("claimNextDueSessionSchedule ok=%v err=%v", ok, err)
+	}
+	if run.ScheduleID != "sched_claim" || run.DisplayText != "Claim recovery" {
+		t.Fatalf("run = %+v, want claimed schedule metadata", run)
+	}
+	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "claim-recovery"))
+	if err != nil || !found {
+		t.Fatalf("read schedules found=%v err=%v", found, err)
+	}
+	claimed := file.Schedules[0]
+	if !claimed.Enabled || claimed.NextRunAt != nextRunAt || claimed.LastRunAt != "" || claimed.LastTurnID != "" || claimed.RunCount != 0 {
+		t.Fatalf("schedule after claim = %+v, want unchanged durable schedule until turn.end", claimed)
+	}
+
+	if err := pool.recordSessionScheduleSuccess(run, now, "turn_claim"); err != nil {
+		t.Fatalf("record success: %v", err)
+	}
+	completed := waitSchedule(t, pool, "claim-recovery", "sched_claim", func(schedule sessionSchedule) bool {
+		return schedule.LastTurnID == "turn_claim"
+	})
+	if completed.Enabled || completed.NextRunAt != nextRunAt || completed.RunCount != 1 || completed.LastRunAt == "" || completed.LastError != "" {
+		t.Fatalf("schedule after success = %+v, want one-shot disabled only after turn.end", completed)
+	}
+}
+
 func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
 	schedules := []sessionSchedule{
 		{ID: "loop", Kind: sessionScheduleKindLoopTick, Enabled: true, NextRunAt: "2026-05-27T10:00:00Z"},

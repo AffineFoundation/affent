@@ -165,6 +165,10 @@ type SessionPool struct {
 	scheduleStop chan struct{}
 	scheduleDone chan struct{}
 	schedulesMu  sync.Mutex
+	// scheduleClaims keeps in-flight claim timestamps out of durable
+	// schedules until the scheduled turn reaches turn.end.
+	scheduleClaimsMu sync.Mutex
+	scheduleClaims   map[string]time.Time
 
 	// settingsMu serializes account-level settings writes such as
 	// environment variables and generated SSH keys.
@@ -205,15 +209,16 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 		return nil, err
 	}
 	pool := &SessionPool{
-		cfg:          cfg,
-		logger:       logger,
-		idleTTL:      ttl,
-		sessions:     map[string]*Session{},
-		gcStop:       make(chan struct{}),
-		gcDone:       make(chan struct{}),
-		scheduleStop: make(chan struct{}),
-		scheduleDone: make(chan struct{}),
-		retention:    retention,
+		cfg:            cfg,
+		logger:         logger,
+		idleTTL:        ttl,
+		sessions:       map[string]*Session{},
+		gcStop:         make(chan struct{}),
+		gcDone:         make(chan struct{}),
+		scheduleStop:   make(chan struct{}),
+		scheduleDone:   make(chan struct{}),
+		scheduleClaims: map[string]time.Time{},
+		retention:      retention,
 	}
 	if cfg.BrowserCacheDir != "" {
 		cacheTTL, err := cfg.BrowserCacheTTLDuration()

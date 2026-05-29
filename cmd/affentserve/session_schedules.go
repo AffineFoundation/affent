@@ -107,6 +107,7 @@ type sessionScheduleRun struct {
 	ScheduleKind string
 	Prompt       string
 	DisplayText  string
+	ClaimedAt    time.Time
 }
 
 func handleSessionSchedules(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
@@ -793,30 +794,19 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 	if err != nil || !found {
 		return sessionScheduleRun{}, false, err
 	}
-	nowStr := now.UTC().Format(time.RFC3339)
 	for i := range file.Schedules {
 		schedule := &file.Schedules[i]
 		if !schedule.Enabled || !sessionScheduleDue(*schedule, now) {
 			continue
 		}
-		run := sessionScheduleRun{
+		return sessionScheduleRun{
 			SessionID:    sessionID,
 			ScheduleID:   schedule.ID,
 			ScheduleKind: schedule.Kind,
 			Prompt:       schedule.Prompt,
 			DisplayText:  strings.TrimSpace(schedule.DisplayText),
-		}
-		schedule.LastError = ""
-		schedule.UpdatedAt = nowStr
-		if schedule.RepeatIntervalSeconds > 0 {
-			schedule.NextRunAt = nextSessionScheduleRunAt(schedule.NextRunAt, schedule.RepeatIntervalSeconds, now).Format(time.RFC3339)
-		} else {
-			schedule.Enabled = false
-		}
-		if err := writeSessionSchedulesFile(path, file); err != nil {
-			return sessionScheduleRun{}, false, err
-		}
-		return run, true, nil
+			ClaimedAt:    now.UTC(),
+		}, true, nil
 	}
 	return sessionScheduleRun{}, false, nil
 }
@@ -853,6 +843,7 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		_ = p.recordSessionScheduleFailure(run, now, err)
 		return err
 	}
+	p.rememberSessionScheduleClaim(run)
 	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{
 		UserSource:      "schedule",
 		UserDisplayText: run.DisplayText,
@@ -860,6 +851,7 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		ScheduleKind:    run.ScheduleKind,
 	})
 	if err != nil {
+		p.forgetSessionScheduleClaim(run.SessionID, run.ScheduleID)
 		_ = p.recordSessionScheduleFailure(run, now, err)
 		return err
 	}
@@ -885,6 +877,7 @@ func (s *Session) observeScheduledTurn(ev sse.Event) {
 		ScheduleKind: payload.ScheduleKind,
 		Prompt:       payload.Text,
 		DisplayText:  payload.DisplayText,
+		ClaimedAt:    s.pool.sessionScheduleClaimedAt(s.ID, payload.ScheduleID),
 	}
 	s.scheduleTurnsMu.Lock()
 	s.scheduleTurns[payload.TurnID] = run
@@ -912,6 +905,7 @@ func (s *Session) completeScheduledTurn(ev sse.Event) {
 	if !ok {
 		return
 	}
+	s.pool.forgetSessionScheduleClaim(run.SessionID, run.ScheduleID)
 	if payload.Reason == sse.TurnEndCompleted {
 		if err := s.pool.recordSessionScheduleSuccess(run, time.Now().UTC(), payload.TurnID); err != nil {
 			s.pool.logger.Warn().Err(err).Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Msg("record session schedule success")
@@ -941,6 +935,16 @@ func (p *SessionPool) recordSessionScheduleSuccess(run sessionScheduleRun, now t
 		if schedule.ID != run.ScheduleID {
 			continue
 		}
+		advanceAt := now
+		if !run.ClaimedAt.IsZero() {
+			advanceAt = run.ClaimedAt
+		}
+		if schedule.RepeatIntervalSeconds > 0 {
+			schedule.NextRunAt = nextSessionScheduleRunAt(schedule.NextRunAt, schedule.RepeatIntervalSeconds, advanceAt).Format(time.RFC3339)
+			schedule.Enabled = true
+		} else {
+			schedule.Enabled = false
+		}
 		schedule.LastRunAt = nowStr
 		schedule.LastTurnID = turnID
 		schedule.LastError = ""
@@ -949,6 +953,38 @@ func (p *SessionPool) recordSessionScheduleSuccess(run sessionScheduleRun, now t
 		return writeSessionSchedulesFile(path, file)
 	}
 	return nil
+}
+
+func (p *SessionPool) rememberSessionScheduleClaim(run sessionScheduleRun) {
+	if p == nil || run.ClaimedAt.IsZero() {
+		return
+	}
+	p.scheduleClaimsMu.Lock()
+	p.scheduleClaims[sessionScheduleClaimKey(run.SessionID, run.ScheduleID)] = run.ClaimedAt.UTC()
+	p.scheduleClaimsMu.Unlock()
+}
+
+func (p *SessionPool) sessionScheduleClaimedAt(sessionID, scheduleID string) time.Time {
+	if p == nil {
+		return time.Time{}
+	}
+	p.scheduleClaimsMu.Lock()
+	claimedAt := p.scheduleClaims[sessionScheduleClaimKey(sessionID, scheduleID)]
+	p.scheduleClaimsMu.Unlock()
+	return claimedAt
+}
+
+func (p *SessionPool) forgetSessionScheduleClaim(sessionID, scheduleID string) {
+	if p == nil {
+		return
+	}
+	p.scheduleClaimsMu.Lock()
+	delete(p.scheduleClaims, sessionScheduleClaimKey(sessionID, scheduleID))
+	p.scheduleClaimsMu.Unlock()
+}
+
+func sessionScheduleClaimKey(sessionID, scheduleID string) string {
+	return sessionID + "\x00" + scheduleID
 }
 
 func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now time.Time, cause error) error {
