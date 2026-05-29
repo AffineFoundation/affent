@@ -204,7 +204,7 @@ export function SessionRunPanel({
                     {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
                     {command.detail ? <small>{command.detail}</small> : null}
                     {command.next ? <small>Next: {command.next}</small> : null}
-                    {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
+                    {command.artifactPath ? <small title="Open command output to inspect stdout/stderr.">{outputCapturedLabel(command)}</small> : null}
                   </div>
                   {(command.artifactPath && onOpenArtifact) || (onRunCommand && command.status !== "passed") ? (
                     <span className="session-evidence-actions">
@@ -297,7 +297,7 @@ function runMatchesQuery(command: SessionRunCommand, query: string): boolean {
     runCommandMeta(command),
     command.detail,
     command.next,
-    command.artifactPath,
+    command.artifactPath ? "output full command output captured" : undefined,
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
 }
@@ -366,7 +366,7 @@ function RunFocus({
         {command.cwd ? <small title={command.cwd}>Cwd: {displayPath(command.cwd)}</small> : null}
         {command.detail && command.detail !== focus.detail ? <p>{command.detail}</p> : null}
         {command.next ? <p>Next: {command.next}</p> : null}
-        {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
+        {command.artifactPath ? <small title="Open command output to inspect stdout/stderr.">{outputCapturedLabel(command)}</small> : null}
       </div>
       <div className="session-evidence-actions">
         {command.artifactPath && onOpenArtifact ? (
@@ -419,7 +419,8 @@ function displayPath(path: string): string {
   return parts.slice(-3).join("/");
 }
 
-function artifactLabel(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  return normalized.split("/").filter(Boolean).at(-1) ?? path;
+function outputCapturedLabel(command: SessionRunCommand): string {
+  if (command.status === "failed") return "Full failure output captured";
+  if (command.status === "running") return "Live output captured";
+  return "Full command output captured";
 }

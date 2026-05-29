@@ -37,6 +37,8 @@ describe("SessionRunPanel", () => {
     expect(focus).toHaveTextContent("Duration");
     expect(focus).toHaveTextContent("Cwd: extras/webui");
     expect(focus).toHaveTextContent("Next: update payment route then rerun");
+    expect(focus).toHaveTextContent("Full failure output captured");
+    expect(focus).not.toHaveTextContent("test.txt");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
     expect(screen.getByTestId("session-run-list")).not.toHaveTextContent("npm test -- checkout.spec.ts");
 
@@ -88,6 +90,10 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-list")).not.toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm run build");
 
+    await user.type(screen.getByLabelText("Search commands"), "output");
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Full failure output captured");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
     await user.click(within(screen.getByLabelText("Run filters")).getByRole("button", { name: /Passed/ }));
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm run build");
@@ -136,7 +142,7 @@ describe("SessionRunPanel", () => {
 
   it("surfaces the latest passed command as verification focus", () => {
     const onUseAsDraft = vi.fn();
-    render(<SessionRunPanel defaultOpen run={{ ...run, summary: "1 passed command", detail: "1 passed", tone: undefined, commands: [run.commands[1]] }} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionRunPanel defaultOpen run={{ ...run, summary: "1 passed command", detail: "1 passed", tone: undefined, commands: [{ ...run.commands[1], artifactPath: ".affent/artifacts/tool-results/build.txt" }] }} onUseAsDraft={onUseAsDraft} />);
 
     const focus = screen.getByTestId("session-run-focus");
     expect(focus).toHaveTextContent("Latest verification");
@@ -145,6 +151,8 @@ describe("SessionRunPanel", () => {
     expect(focus).toHaveTextContent("passed");
     expect(focus).toHaveTextContent("Exit");
     expect(focus).toHaveTextContent("0");
+    expect(focus).toHaveTextContent("Full command output captured");
+    expect(focus).not.toHaveTextContent("build.txt");
     expect(within(focus).queryByRole("button", { name: "Rerun as draft" })).toBeNull();
     expect(screen.queryByTestId("session-run-list")).toBeNull();
   });
