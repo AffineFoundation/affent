@@ -3446,7 +3446,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	modelWindowChecks := checkNamesFor(BatchScenarioChecks(modelWindowPolicy))
 	for _, want := range []string{
 		"runtime_surface_model_context_window_tokens:200",
-		"runtime_surface_compact_trigger_input_tokens:160",
+		"runtime_surface_compact_trigger_matches_model_policy",
 		"context_compactions_at_least:1",
 	} {
 		if !stringSliceContains(modelWindowChecks, want) {

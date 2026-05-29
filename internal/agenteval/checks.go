@@ -1186,6 +1186,41 @@ func RuntimeSurfaceCompactTriggerInputTokens(expected int) Check {
 	}
 }
 
+func RuntimeSurfaceCompactTriggerMatchesModelPolicy() Check {
+	return Check{
+		Name: "runtime_surface_compact_trigger_matches_model_policy",
+		Eval: func(t Trace) CheckResult {
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.ModelContextWindowTokens <= 0 {
+					continue
+				}
+				expected := agent.CompactTriggerInputTokensForModelPolicy(
+					0,
+					surface.ModelContextWindowTokens,
+					surface.CompactTriggerInputPercent,
+					surface.ReservedOutputTokens,
+					agent.DefaultSummaryTriggerInputTokens,
+				)
+				observed = append(observed, fmt.Sprintf("window=%d reserve=%d percent=%d trigger=%d expected=%d",
+					surface.ModelContextWindowTokens,
+					surface.ReservedOutputTokens,
+					surface.CompactTriggerInputPercent,
+					surface.CompactTriggerInputTokens,
+					expected,
+				))
+				if expected > 0 && surface.CompactTriggerInputTokens == expected {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_trigger_input_tokens=%d", expected)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface compact trigger to match model policy; observed=%v", observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceReservedOutputTokens(expected int) Check {
 	return Check{
 		Name: fmt.Sprintf("runtime_surface_reserved_output_tokens:%d", expected),

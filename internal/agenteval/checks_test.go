@@ -1039,6 +1039,9 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceCompactTriggerInputTokens(70000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface compact trigger check to pass: %+v", res)
 	}
+	if res := RuntimeSurfaceCompactTriggerMatchesModelPolicy().Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface model policy check to pass: %+v", res)
+	}
 	if res := RuntimeSurfaceReservedOutputTokens(30000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface reserved output check to pass: %+v", res)
 	}
@@ -1058,6 +1061,20 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	for _, want := range []string{"compact_trigger_input_tokens=1", "observed=[70000]"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", res.Detail, want)
+		}
+	}
+	badPolicy := RuntimeSurfaceCompactTriggerMatchesModelPolicy().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+		ModelContextWindowTokens:   100000,
+		ReservedOutputTokens:       30000,
+		CompactTriggerInputTokens:  80000,
+		CompactTriggerInputPercent: 80,
+	}}})
+	if badPolicy.Pass {
+		t.Fatal("expected mismatched runtime surface model policy check to fail")
+	}
+	for _, want := range []string{"expected=70000", "trigger=80000", "reserve=30000"} {
+		if !strings.Contains(badPolicy.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", badPolicy.Detail, want)
 		}
 	}
 	res = RuntimeSurfaceCompletionGuard("missing_guard").Eval(trace)
