@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { SessionFilesView } from "../view/sessionFiles";
@@ -24,11 +24,12 @@ describe("SessionFilesPanel", () => {
     expect(tree).toHaveTextContent("src");
     expect(tree).toHaveTextContent("payments.ts");
     expect(tree).toHaveTextContent("Read + Changed");
-    expect(screen.getByTestId("session-files-selected")).toHaveTextContent("src/payments.ts");
+    expect(screen.queryByTestId("session-files-selected")).toBeNull();
     expect(within(tree).queryByRole("button", { name: "Copy path" })).not.toBeInTheDocument();
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("snapshot before latest change");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("export function checkout");
+    expect(screen.getByTestId("session-file-preview")).toHaveTextContent("Review file");
     expect(screen.getByRole("button", { name: "Wrap" })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "Wrap" }));
     expect(screen.getByRole("button", { name: "Wrap" })).toHaveAttribute("aria-pressed", "false");
@@ -55,19 +56,20 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-file-range-actions")).toHaveTextContent("Lines 2-2");
 
     await user.click(within(tree).getByRole("button", { name: /src Listed/ }));
-    expect(screen.getByTestId("session-files-selected")).toHaveTextContent("src");
-    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Copy path" }));
+    expect(screen.getByTestId("session-file-inspector")).toHaveTextContent("src");
+    await user.click(within(screen.getByTestId("session-file-inspector")).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith("src");
+    await user.click(within(screen.getByTestId("session-file-inspector")).getByRole("button", { name: "Use listing" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this listed directory in the next step"), "file_evidence");
+    expect(screen.getByTestId("session-file-inspector")).toHaveTextContent("Turn");
+    await user.click(within(tree).getByRole("button", { name: /payments.ts Read/ }));
+    await waitFor(() => expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts"));
     await user.click(screen.getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("File snapshot for src/payments.ts"));
-    await user.click(within(tree).getByRole("button", { name: /payments.ts Read/ }));
-    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Evidence" }));
+    await user.click(within(screen.getByTestId("session-file-preview")).getByRole("button", { name: "Evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");
-    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Review file" }));
+    await user.click(within(screen.getByTestId("session-file-preview")).getByRole("button", { name: "Review file" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review this changed file in the next step"), "file_evidence");
-    await user.click(within(tree).getByRole("button", { name: /src Listed/ }));
-    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Use listing" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this listed directory in the next step"), "file_evidence");
 
     await user.clear(screen.getByLabelText("Search file snapshot"));
     await user.type(screen.getByLabelText("Search files"), "listed");
@@ -78,7 +80,7 @@ describe("SessionFilesPanel", () => {
 
     await user.click(within(screen.getByRole("group", { name: "File filters" })).getByRole("button", { name: /Changed/ }));
     expect(tree).toHaveTextContent("payments.ts");
-    expect(screen.getByTestId("session-files-selected")).toHaveTextContent("payments.ts");
+    expect(screen.getByTestId("session-file-preview")).toHaveTextContent("payments.ts");
 
     await user.type(screen.getByLabelText("Search files"), "missing.ts");
     expect(screen.queryByTestId("session-files-list")).toBeNull();
@@ -108,7 +110,7 @@ describe("SessionFilesPanel", () => {
     expect(onOpenWorkspacePath).toHaveBeenCalledWith(".");
   });
 
-  it("routes file browser actions to Workspace when no workspace binding can open paths", async () => {
+  it("keeps file evidence selectable when no workspace binding can open paths", async () => {
     const user = userEvent.setup();
     const onOpenWorkspacePanel = vi.fn();
     render(
@@ -119,9 +121,15 @@ describe("SessionFilesPanel", () => {
       />,
     );
 
-    await user.click(screen.getByRole("button", { name: "Root" }));
+    expect(screen.queryByLabelText("Workspace path")).toBeNull();
+    expect(screen.getByLabelText("File explorer")).toHaveTextContent("Agent file evidence");
+    expect(screen.getByText("Workspace path unavailable")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
     expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(1);
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: /src Listed/ }));
+    expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("session-file-inspector")).toHaveTextContent("src");
+    await user.click(within(screen.getByTestId("session-file-inspector")).getByRole("button", { name: "Open Workspace" }));
     expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(2);
   });
 
@@ -157,7 +165,7 @@ describe("SessionFilesPanel", () => {
       />,
     );
 
-    await user.click(within(screen.getByTestId("session-files-selected")).getByRole("button", { name: "Open current" }));
+    await user.click(within(screen.getByTestId("session-file-preview")).getByRole("button", { name: "Open current" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
 
     expect(screen.getByLabelText("File explorer")).toHaveTextContent("Workspace root");

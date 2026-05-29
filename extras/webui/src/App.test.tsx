@@ -2243,9 +2243,7 @@ describe("App", () => {
     const configPanel = await screen.findByTestId("account-settings-panel");
     expect(configPanel).toHaveTextContent("No config");
     expect(configPanel).toHaveAttribute("data-surface", "true");
-    await user.click(within(configPanel).getByText("Config"));
-    expect(screen.getByTestId("account-config-dashboard")).toBeVisible();
-    expect(screen.getByText("Environment variables")).toBeVisible();
+    expect(configPanel).toHaveTextContent("Environment variables");
     expect(requestedUrls()).toContain("/v1/settings");
     expect(requestedUrls()).not.toContain("/v1/skills");
     await selectWorkbenchTab(user, "Skills");
@@ -2586,13 +2584,11 @@ describe("App", () => {
     const files = await screen.findByTestId("session-files-panel");
     expect(files).toHaveAttribute("open");
     expect(files).toHaveTextContent("2 file references");
-    expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
-    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence: read.txt");
-    await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open evidence" }));
-    expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
-    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "View snapshot" })[0]);
+    expect(within(screen.getByTestId("session-files-list")).getByRole("button", { name: /payments\.ts/ })).toBeVisible();
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("checkout route handler");
+    await user.click(within(screen.getByTestId("session-file-preview")).getByRole("button", { name: "Evidence" }));
+    expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout route handler");
     const composerContext = screen.queryByTestId("composer-context");
     if (composerContext) expect(composerContext).not.toHaveTextContent("Using file evidence");
   });

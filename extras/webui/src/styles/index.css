@@ -2719,28 +2719,51 @@ button.workbench-context-runtime-item:focus-visible {
   justify-content: flex-start;
 }
 
-.session-files-selected {
+.session-workspace-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid rgba(189, 199, 211, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--text-muted);
+  padding: 7px 8px;
+}
+
+.session-workspace-unavailable strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-file-inspector {
   display: grid;
-  gap: 7px;
+  align-content: start;
+  gap: 10px;
   min-width: 0;
   border: 1px solid rgba(20, 184, 166, 0.22);
   border-radius: var(--radius-sm);
   background: rgba(240, 253, 250, 0.62);
-  padding: 8px;
+  padding: 10px;
 }
 
-.session-files-selected[data-status="failed"] {
+.session-file-inspector[data-status="failed"] {
   border-color: rgba(248, 113, 113, 0.28);
   background: rgba(254, 242, 242, 0.66);
 }
 
-.session-files-selected > div {
+.session-file-inspector-head {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
 
-.session-files-selected span:first-child {
+.session-file-inspector-head span {
   color: var(--accent-strong);
   font-size: 10.5px;
   font-weight: 800;
@@ -2748,18 +2771,22 @@ button.workbench-context-runtime-item:focus-visible {
   text-transform: uppercase;
 }
 
-.session-files-selected strong {
+.session-file-inspector[data-status="failed"] .session-file-inspector-head span {
+  color: var(--c-error);
+}
+
+.session-file-inspector-head strong {
   min-width: 0;
   overflow: hidden;
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.session-files-selected small {
+.session-file-inspector-head small {
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);
@@ -2769,14 +2796,50 @@ button.workbench-context-runtime-item:focus-visible {
   white-space: nowrap;
 }
 
-.session-files-selected-actions {
+.session-file-inspector-facts {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+}
+
+.session-file-inspector-facts > div {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+  border-top: 1px solid rgba(20, 184, 166, 0.16);
+  padding-top: 6px;
+}
+
+.session-file-inspector-facts dt,
+.session-file-inspector-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-file-inspector-facts dt {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 760;
+}
+
+.session-file-inspector-facts dd {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.session-file-inspector-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
 }
 
-.session-files-selected-actions .ghost-action {
+.session-file-inspector-actions .ghost-action {
   min-height: 28px;
   padding: 5px 8px;
 }
@@ -4091,10 +4154,24 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-file-preview-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: end;
+  min-width: 0;
+}
+
+.session-file-preview-toolbar .session-skills-search {
+  flex: 1 1 220px;
+  min-width: min(220px, 100%);
+}
+
+.session-file-preview-actions {
+  display: inline-flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -14897,9 +14974,10 @@ html[data-theme="dark"] .session-run-focus-facts > span {
 html[data-theme="dark"] .session-files-item,
 html[data-theme="dark"] .session-files-overview,
 html[data-theme="dark"] .session-files-explorer,
-html[data-theme="dark"] .session-files-selected,
+html[data-theme="dark"] .session-file-inspector,
 html[data-theme="dark"] .session-files-editor,
 html[data-theme="dark"] .session-workspace-browser,
+html[data-theme="dark"] .session-workspace-unavailable,
 html[data-theme="dark"] .session-workspace-browser-entry button,
 html[data-theme="dark"] .session-changes-overview,
 html[data-theme="dark"] .session-changes-item,
@@ -14916,12 +14994,12 @@ html[data-theme="dark"] .session-schedule-item {
   background: rgba(17, 20, 24, 0.68);
 }
 
-html[data-theme="dark"] .session-files-selected {
+html[data-theme="dark"] .session-file-inspector {
   border-color: rgba(45, 212, 191, 0.24);
   background: rgba(13, 40, 38, 0.28);
 }
 
-html[data-theme="dark"] .session-files-selected[data-status="failed"] {
+html[data-theme="dark"] .session-file-inspector[data-status="failed"] {
   border-color: rgba(248, 113, 113, 0.3);
   background: rgba(127, 29, 29, 0.18);
 }

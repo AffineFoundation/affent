@@ -54,8 +54,11 @@ export function SessionFilesPanel({
   const visibleItems = trimmedQuery ? filteredItems.filter((item) => fileMatchesQuery(item, trimmedQuery)) : filteredItems;
   const treeNodes = useMemo(() => buildFileTree(visibleItems), [visibleItems]);
   const snapshotItems = visibleItems.filter((item) => item.contentPreview);
-  const selectedItem = snapshotItems.find((item) => item.path === selectedPath) ?? snapshotItems[0];
-  const selectedEvidence = visibleItems.find((item) => item.path === selectedEvidencePath)
+  const selectedEvidenceCandidate = visibleItems.find((item) => item.path === selectedEvidencePath);
+  const selectedItem = selectedEvidenceCandidate?.contentPreview
+    ? selectedEvidenceCandidate
+    : snapshotItems.find((item) => item.path === selectedPath) ?? (selectedEvidenceCandidate ? undefined : snapshotItems[0]);
+  const selectedEvidence = selectedEvidenceCandidate
     ?? selectedItem
     ?? visibleItems[0];
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
@@ -67,19 +70,14 @@ export function SessionFilesPanel({
       ? workspaceBrowser.path ?? "."
       : ".";
   const workspaceParent = workspaceReady ? parentWorkspacePath(workspaceReady.path) : undefined;
+  const canOpenWorkspacePath = Boolean(onOpenWorkspacePath);
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
 
   function openEvidenceItem(item: SessionFileEvidence) {
     setSelectedEvidencePath(item.path);
     if (item.contentPreview) {
       setSelectedPath(item.path);
-      return;
     }
-    if (onOpenWorkspacePath) {
-      onOpenWorkspacePath(item.path);
-      return;
-    }
-    onOpenWorkspacePanel?.();
   }
 
   function selectPreviewLine(lineNumber: number, scroll = false) {
@@ -131,39 +129,46 @@ export function SessionFilesPanel({
             <div className="session-files-explorer-head">
               <div>
                 <span>Explorer</span>
-                <strong>{workspaceBrowserTitle(workspaceBrowser ?? { state: "idle" })}</strong>
-                <small>{workspaceBrowserDetail(workspaceBrowser ?? { state: "idle" })}</small>
+                <strong>{canOpenWorkspacePath ? workspaceBrowserTitle(workspaceBrowser ?? { state: "idle" }) : "Agent file evidence"}</strong>
+                <small>{canOpenWorkspacePath ? workspaceBrowserDetail(workspaceBrowser ?? { state: "idle" }) : "Workspace not bound; showing recorded file actions."}</small>
               </div>
-              {onOpenWorkspacePath || onOpenWorkspacePanel ? (
+              {canOpenWorkspacePath ? (
                 <button
                   type="button"
                   className="ghost-action"
                   disabled={workspaceBrowser?.state === "loading"}
-                  onClick={() => (onOpenWorkspacePath ? onOpenWorkspacePath(".") : onOpenWorkspacePanel?.())}
+                  onClick={() => onOpenWorkspacePath?.(".")}
                 >
                   Root
                 </button>
               ) : null}
             </div>
-            <div className="session-workspace-browser-path">
-              <input
-                aria-label="Workspace path"
-                value={workspaceQuery}
-                onChange={(event) => setWorkspaceQuery(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") openTypedWorkspacePath();
-                }}
-                placeholder={workspaceCurrentPath === "." ? "src/main.go" : workspaceCurrentPath}
-              />
-              <button
-                type="button"
-                className="ghost-action"
-                disabled={workspaceBrowser?.state === "loading" || (!onOpenWorkspacePath && !onOpenWorkspacePanel)}
-                onClick={openTypedWorkspacePath}
-              >
-                Open
-              </button>
-            </div>
+            {canOpenWorkspacePath ? (
+              <div className="session-workspace-browser-path">
+                <input
+                  aria-label="Workspace path"
+                  value={workspaceQuery}
+                  onChange={(event) => setWorkspaceQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") openTypedWorkspacePath();
+                  }}
+                  placeholder={workspaceCurrentPath === "." ? "src/main.go" : workspaceCurrentPath}
+                />
+                <button
+                  type="button"
+                  className="ghost-action"
+                  disabled={workspaceBrowser?.state === "loading"}
+                  onClick={openTypedWorkspacePath}
+                >
+                  Open
+                </button>
+              </div>
+            ) : (
+              <div className="session-workspace-unavailable">
+                <strong>Workspace path unavailable</strong>
+                {onOpenWorkspacePanel ? <button type="button" className="ghost-action" onClick={onOpenWorkspacePanel}>Open Workspace</button> : null}
+              </div>
+            )}
             {workspaceBrowser?.state === "loading" ? <div className="session-skills-empty">Loading {workspaceBrowser.path}...</div> : null}
             {workspaceBrowser?.state === "error" ? <div className="session-skills-empty">Could not open {workspaceBrowser.path ?? "workspace"}: {workspaceBrowser.error}</div> : null}
             {workspaceReady?.kind === "directory" ? (
@@ -192,14 +197,6 @@ export function SessionFilesPanel({
               <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
               <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
             </div>
-            {selectedEvidence ? (
-              <SelectedFileEvidence
-                item={selectedEvidence}
-                onOpenWorkspacePath={onOpenWorkspacePath}
-                onOpenArtifact={onOpenArtifact}
-                onUseAsDraft={onUseAsDraft}
-              />
-            ) : null}
             <FileEvidenceTree
               nodes={treeNodes}
               selectedPath={selectedEvidence?.path}
@@ -260,6 +257,23 @@ export function SessionFilesPanel({
                   <button type="button" className="ghost-action" aria-pressed={wrapLines} onClick={() => setWrapLines((value) => !value)}>
                     Wrap
                   </button>
+                  <span className="session-file-preview-actions">
+                    {onOpenWorkspacePath ? (
+                      <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(selectedItem.path)}>
+                        Open current
+                      </button>
+                    ) : null}
+                    {selectedItem.artifactPath && onOpenArtifact ? (
+                      <button type="button" className="ghost-action" onClick={() => onOpenArtifact(selectedItem.artifactPath ?? "")}>
+                        Evidence
+                      </button>
+                    ) : null}
+                    {onUseAsDraft ? (
+                      <button type="button" className="ghost-action" onClick={() => onUseAsDraft(fileEvidenceDraft(selectedItem), "file_evidence")}>
+                        {fileDraftActionLabel(selectedItem)}
+                      </button>
+                    ) : null}
+                  </span>
                 </div>
                 {activeRange ? (
                   <div className="session-file-range-actions" data-testid="session-file-range-actions">
@@ -309,13 +323,21 @@ export function SessionFilesPanel({
                   })}
                 </div>
               </div>
+            ) : selectedEvidence ? (
+              <FileEvidenceInspector
+                item={selectedEvidence}
+                onOpenWorkspacePath={onOpenWorkspacePath}
+                onOpenWorkspacePanel={onOpenWorkspacePanel}
+                onOpenArtifact={onOpenArtifact}
+                onUseAsDraft={onUseAsDraft}
+              />
             ) : (
               <div className="session-files-editor-empty" data-testid="session-files-editor-empty">
                 <strong>No file open</strong>
-                <span>Open a workspace path or select a loaded snapshot from Explorer.</span>
-                {onOpenWorkspacePath || onOpenWorkspacePanel ? (
-                  <button type="button" className="ghost-action primary-run-action" onClick={() => (onOpenWorkspacePath ? onOpenWorkspacePath(".") : onOpenWorkspacePanel?.())}>
-                    Open root
+                <span>Select a file reference or open a workspace path.</span>
+                {canOpenWorkspacePath || onOpenWorkspacePanel ? (
+                  <button type="button" className="ghost-action primary-run-action" onClick={() => (canOpenWorkspacePath ? onOpenWorkspacePath?.(".") : onOpenWorkspacePanel?.())}>
+                    {canOpenWorkspacePath ? "Open root" : "Open Workspace"}
                   </button>
                 ) : null}
               </div>
@@ -501,28 +523,50 @@ function FileTreeBranch({
   );
 }
 
-function SelectedFileEvidence({
+function FileEvidenceInspector({
   item,
   onOpenWorkspacePath,
+  onOpenWorkspacePanel,
   onOpenArtifact,
   onUseAsDraft,
 }: {
   item: SessionFileEvidence;
   onOpenWorkspacePath?: (path: string) => void;
+  onOpenWorkspacePanel?: () => void;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
+  const facts = [
+    item.detail ? { label: "Latest result", value: item.detail } : undefined,
+    item.next ? { label: "Next check", value: item.next } : undefined,
+    { label: "Turn", value: `turn ${item.turnNumber} · ${item.actionCount} ${item.actionCount === 1 ? "action" : "actions"}` },
+    item.artifactPath ? { label: "Evidence", value: item.artifactPath } : undefined,
+  ].filter(Boolean) as Array<{ label: string; value: string }>;
   return (
-    <div className="session-files-selected" data-testid="session-files-selected" data-status={item.status}>
-      <div>
-        <span>Selected</span>
+    <div className="session-file-inspector" data-testid="session-file-inspector" data-status={item.status}>
+      <div className="session-file-inspector-head">
+        <span>{item.status === "failed" ? "Path issue" : item.actions.includes("changed") ? "Changed file" : item.contentPreview ? "Loaded snapshot" : "File evidence"}</span>
         <strong title={item.path}>{item.path === "." ? "workspace root" : item.path}</strong>
         <small>{compactFileMeta(item)}</small>
       </div>
-      <span className="session-files-selected-actions">
+      {facts.length > 0 ? (
+        <dl className="session-file-inspector-facts">
+          {facts.map((fact) => (
+            <div key={fact.label}>
+              <dt>{fact.label}</dt>
+              <dd title={fact.value}>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+      <span className="session-file-inspector-actions">
         {onOpenWorkspacePath ? (
           <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(item.path)}>
             Open current
+          </button>
+        ) : onOpenWorkspacePanel ? (
+          <button type="button" className="ghost-action" onClick={onOpenWorkspacePanel}>
+            Open Workspace
           </button>
         ) : null}
         {item.artifactPath && onOpenArtifact ? (
