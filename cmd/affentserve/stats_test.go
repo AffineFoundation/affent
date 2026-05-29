@@ -91,7 +91,7 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	}
 	if resp.ScheduleRunner.SessionsWithSchedules != 0 || resp.ScheduleRunner.Schedules != 0 ||
 		resp.ScheduleRunner.EnabledSchedules != 0 || resp.ScheduleRunner.DueSchedules != 0 ||
-		resp.ScheduleRunner.ErrorSchedules != 0 {
+		resp.ScheduleRunner.InFlightSchedules != 0 || resp.ScheduleRunner.ErrorSchedules != 0 {
 		t.Fatalf("ScheduleRunner = %+v, want empty durable queue summary", resp.ScheduleRunner)
 	}
 	if resp.Boundaries.MaxTurnSteps != agent.DefaultMaxTurnSteps {
@@ -166,8 +166,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := &SessionPool{
-		cfg:      Config{MemoryRoot: memRoot},
-		sessions: map[string]*Session{},
+		cfg:            Config{MemoryRoot: memRoot},
+		sessions:       map[string]*Session{},
+		scheduleClaims: map[string]time.Time{},
 	}
 	now := time.Now().UTC()
 	createDurableSessionDir(t, pool, "timers-a")
@@ -213,6 +214,17 @@ func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("write timers-b schedules: %v", err)
 	}
+	oldestClaimedAt := now.Add(-2 * time.Minute).UTC()
+	pool.rememberSessionScheduleClaim(sessionScheduleRun{
+		SessionID:  "timers-b",
+		ScheduleID: "sched_later",
+		ClaimedAt:  oldestClaimedAt,
+	})
+	pool.rememberSessionScheduleClaim(sessionScheduleRun{
+		SessionID:  "timers-a",
+		ScheduleID: "sched_due",
+		ClaimedAt:  now.Add(-time.Minute),
+	})
 
 	h := handleStats(pool.cfg, pool)
 	r := httptest.NewRequest("GET", "/v1/stats", nil)
@@ -225,8 +237,12 @@ func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 	}
 	got := resp.ScheduleRunner
 	if got.SessionsWithSchedules != 2 || got.Schedules != 3 || got.EnabledSchedules != 2 ||
-		got.DueSchedules != 1 || got.ErrorSchedules != 1 {
+		got.DueSchedules != 1 || got.InFlightSchedules != 2 || got.ErrorSchedules != 1 {
 		t.Fatalf("ScheduleRunner = %+v, want aggregate queue counts", got)
+	}
+	if got.OldestInFlightSessionID != "timers-b" || got.OldestInFlightScheduleID != "sched_later" ||
+		got.OldestInFlightAt != oldestClaimedAt.Format(time.RFC3339) {
+		t.Fatalf("ScheduleRunner = %+v, want oldest in-flight schedule identity", got)
 	}
 	if got.NextSessionID != "timers-a" || got.NextScheduleID != "sched_due" ||
 		got.NextScheduleKind != sessionScheduleKindCheckIn ||

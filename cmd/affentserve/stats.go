@@ -52,25 +52,29 @@ type statsResponse struct {
 }
 
 type scheduleRunnerStats struct {
-	Enabled                bool   `json:"enabled"`
-	Active                 bool   `json:"active"`
-	FrontendIndependent    bool   `json:"frontend_independent"`
-	SweepInterval          string `json:"sweep_interval,omitempty"`
-	DurableSessionStateDir string `json:"durable_session_state_dir,omitempty"`
-	SessionsWithSchedules  int    `json:"sessions_with_schedules,omitempty"`
-	Schedules              int    `json:"schedules,omitempty"`
-	EnabledSchedules       int    `json:"enabled_schedules,omitempty"`
-	DueSchedules           int    `json:"due_schedules,omitempty"`
-	ErrorSchedules         int    `json:"error_schedules,omitempty"`
-	NextRunAt              string `json:"next_run_at,omitempty"`
-	NextSessionID          string `json:"next_session_id,omitempty"`
-	NextScheduleID         string `json:"next_schedule_id,omitempty"`
-	NextScheduleKind       string `json:"next_schedule_kind,omitempty"`
-	NextPromptPreview      string `json:"next_prompt_preview,omitempty"`
-	LastErrorSessionID     string `json:"last_error_session_id,omitempty"`
-	LastErrorScheduleID    string `json:"last_error_schedule_id,omitempty"`
-	LastError              string `json:"last_error,omitempty"`
-	DisabledReason         string `json:"disabled_reason,omitempty"`
+	Enabled                  bool   `json:"enabled"`
+	Active                   bool   `json:"active"`
+	FrontendIndependent      bool   `json:"frontend_independent"`
+	SweepInterval            string `json:"sweep_interval,omitempty"`
+	DurableSessionStateDir   string `json:"durable_session_state_dir,omitempty"`
+	SessionsWithSchedules    int    `json:"sessions_with_schedules,omitempty"`
+	Schedules                int    `json:"schedules,omitempty"`
+	EnabledSchedules         int    `json:"enabled_schedules,omitempty"`
+	DueSchedules             int    `json:"due_schedules,omitempty"`
+	InFlightSchedules        int    `json:"in_flight_schedules,omitempty"`
+	ErrorSchedules           int    `json:"error_schedules,omitempty"`
+	NextRunAt                string `json:"next_run_at,omitempty"`
+	NextSessionID            string `json:"next_session_id,omitempty"`
+	NextScheduleID           string `json:"next_schedule_id,omitempty"`
+	NextScheduleKind         string `json:"next_schedule_kind,omitempty"`
+	NextPromptPreview        string `json:"next_prompt_preview,omitempty"`
+	OldestInFlightAt         string `json:"oldest_in_flight_at,omitempty"`
+	OldestInFlightSessionID  string `json:"oldest_in_flight_session_id,omitempty"`
+	OldestInFlightScheduleID string `json:"oldest_in_flight_schedule_id,omitempty"`
+	LastErrorSessionID       string `json:"last_error_session_id,omitempty"`
+	LastErrorScheduleID      string `json:"last_error_schedule_id,omitempty"`
+	LastError                string `json:"last_error,omitempty"`
+	DisabledReason           string `json:"disabled_reason,omitempty"`
 }
 
 type statsBoundaries struct {
@@ -297,6 +301,13 @@ func scheduleRunnerStatsForPool(cfg Config, pool *SessionPool) scheduleRunnerSta
 func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now time.Time) {
 	if stats == nil || pool == nil {
 		return
+	}
+	claims := pool.sessionScheduleClaimsSnapshot()
+	stats.InFlightSchedules = len(claims)
+	if len(claims) > 0 {
+		stats.OldestInFlightAt = claims[0].ClaimedAt.UTC().Format(time.RFC3339)
+		stats.OldestInFlightSessionID = claims[0].SessionID
+		stats.OldestInFlightScheduleID = claims[0].ScheduleID
 	}
 	ids, err := pool.sessionIDsWithSchedules()
 	if err != nil {

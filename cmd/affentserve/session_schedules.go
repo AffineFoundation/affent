@@ -110,6 +110,12 @@ type sessionScheduleRun struct {
 	ClaimedAt    time.Time
 }
 
+type sessionScheduleClaimSnapshot struct {
+	SessionID  string
+	ScheduleID string
+	ClaimedAt  time.Time
+}
+
 func handleSessionSchedules(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
 	if pool == nil {
 		writeJSONError(w, http.StatusNotFound, "session not found", nil)
@@ -966,6 +972,9 @@ func (p *SessionPool) rememberSessionScheduleClaim(run sessionScheduleRun) {
 		return
 	}
 	p.scheduleClaimsMu.Lock()
+	if p.scheduleClaims == nil {
+		p.scheduleClaims = map[string]time.Time{}
+	}
 	p.scheduleClaims[sessionScheduleClaimKey(run.SessionID, run.ScheduleID)] = run.ClaimedAt.UTC()
 	p.scheduleClaimsMu.Unlock()
 }
@@ -978,6 +987,36 @@ func (p *SessionPool) sessionScheduleClaimedAt(sessionID, scheduleID string) tim
 	claimedAt := p.scheduleClaims[sessionScheduleClaimKey(sessionID, scheduleID)]
 	p.scheduleClaimsMu.Unlock()
 	return claimedAt
+}
+
+func (p *SessionPool) sessionScheduleClaimsSnapshot() []sessionScheduleClaimSnapshot {
+	if p == nil {
+		return nil
+	}
+	p.scheduleClaimsMu.Lock()
+	claims := make([]sessionScheduleClaimSnapshot, 0, len(p.scheduleClaims))
+	for key, claimedAt := range p.scheduleClaims {
+		sessionID, scheduleID, ok := strings.Cut(key, "\x00")
+		if !ok || claimedAt.IsZero() {
+			continue
+		}
+		claims = append(claims, sessionScheduleClaimSnapshot{
+			SessionID:  sessionID,
+			ScheduleID: scheduleID,
+			ClaimedAt:  claimedAt.UTC(),
+		})
+	}
+	p.scheduleClaimsMu.Unlock()
+	sort.SliceStable(claims, func(i, j int) bool {
+		if !claims[i].ClaimedAt.Equal(claims[j].ClaimedAt) {
+			return claims[i].ClaimedAt.Before(claims[j].ClaimedAt)
+		}
+		if claims[i].SessionID != claims[j].SessionID {
+			return claims[i].SessionID < claims[j].SessionID
+		}
+		return claims[i].ScheduleID < claims[j].ScheduleID
+	})
+	return claims
 }
 
 func (p *SessionPool) forgetSessionScheduleClaim(sessionID, scheduleID string) {
