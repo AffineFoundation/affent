@@ -120,7 +120,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 	}
 	return &Tool{
 		Name:        MemoryToolName,
-		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. Save verified conventions when the task asks to preserve them for future sessions; do not save transient task progress, raw dumps, or routine facts easily re-read from files.",
+		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. Save verified conventions when the task asks to preserve them for future sessions; store the positive reusable rule, not excluded transient examples. Do not save transient task progress, raw dumps, or routine facts easily re-read from files.",
 		Schema:      json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, present, err := decodeMemoryToolArgs(args)

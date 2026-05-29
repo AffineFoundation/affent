@@ -1399,7 +1399,7 @@ func scoreSearchableMessage(cur, prev searchableMessage, terms []string) (float6
 	combined := prev.content + "\n" + cur.content
 	combinedScore, combinedTerms := scoreContentDetails(combined, terms)
 	if combinedScore <= score {
-		return score, cur.content, matchedTerms, false
+		return score, "user: " + prev.content + "\nassistant: " + cur.content, matchedTerms, true
 	}
 	return combinedScore, "user: " + prev.content + "\nassistant: " + cur.content, combinedTerms, true
 }

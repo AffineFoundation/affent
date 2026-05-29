@@ -514,7 +514,7 @@ const MemorySystemGuidance = `Memory retrieval:
 - Use the memory tool when the user asks what you remember, references prior work, or when durable project/user facts may constrain the answer.
 - To recall facts, call action=list when you need topic discovery, then action=search with 2-6 concrete keywords. If search returns no results but includes topics, retry once against the most relevant topic with fewer terms. Use target=user for stable user preferences/details and target=memory for workspace/project facts.
 - Search before replace/remove so old_text is a unique substring from the current entry. Do not guess old_text.
-- Save only durable facts, conventions, preferences, environment details, and lessons likely to matter in future sessions. If the task explicitly asks to preserve a verified convention for future sessions, save a compact entry even when the source also exists in project files. Do not save transient task progress, raw dumps, secrets, or facts that are easy to re-read from project files.
+- Save only durable facts, conventions, preferences, environment details, and lessons likely to matter in future sessions. If the task explicitly asks to preserve a verified convention for future sessions, save a compact entry even when the source also exists in project files. For conventions, store only the positive reusable rule; omit lists of excluded transient examples. Do not save transient task progress, raw dumps, secrets, or facts that are easy to re-read from project files.
 - Use topic=core sparingly for facts needed every turn. Prefer semantic topics such as stack, deploy, auth, conventions, or the default general topic.`
 
 func WithMemorySystemGuidance(prompt string) string {

@@ -1065,6 +1065,33 @@ func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	}
 }
 
+func TestSearchAssistantDirectHitStillCarriesAdjacentUserContext(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "integrated-prior", []testMessage{
+		{Role: "user", Content: "Integrated CLI follow-up handoff"},
+		{Role: "assistant", Content: "Prior handoff marker INTEGRATED-HANDOFF-26: preserve the CLI JSON marker AUTO-MEM-64 for summary output."},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "INTEGRATED-HANDOFF-26 AUTO-MEM-64", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected direct assistant hit")
+	}
+	if hits[0].SessionID != "integrated-prior" || hits[0].Role != "assistant" {
+		t.Fatalf("top hit = %+v, want integrated-prior assistant hit", hits[0])
+	}
+	if !hits[0].ContextIncluded {
+		t.Fatalf("direct assistant hit should still include adjacent user context: %+v", hits[0])
+	}
+	for _, want := range []string{"user: Integrated CLI follow-up handoff", "assistant: Prior handoff marker", "INTEGRATED-HANDOFF-26", "AUTO-MEM-64"} {
+		if !strings.Contains(hits[0].Snippet, want) {
+			t.Fatalf("direct contextual snippet missing %q:\n%+v", want, hits[0])
+		}
+	}
+}
+
 func TestSearchUserHitCarriesAdjacentAssistantAnswer(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "subnet-120", []testMessage{
