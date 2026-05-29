@@ -109,6 +109,31 @@ func TestDeriveTaskStateDefaultsBlankRequestModeToNormal(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
+	got := DeriveTaskState(Trace{
+		Prompt:        "Build a release notes generator.",
+		TurnEndReason: "completed",
+		UserMessages: []UserMessage{
+			{
+				Text: "Build a release notes generator and keep iterating until tests pass.",
+			},
+			{
+				Text:         "Scheduled loop tick for release notes generator",
+				DisplayText:  "Loop tick: continue release notes generator",
+				Source:       "schedule",
+				ScheduleID:   "sched_release_notes",
+				ScheduleKind: "loop_tick",
+			},
+		},
+	})
+	if got.Objective != "Build a release notes generator and keep iterating until tests pass." {
+		t.Fatalf("objective = %q, want first durable task request", got.Objective)
+	}
+	if got.RequestSource != "schedule" || got.ScheduleKind != "loop_tick" || got.ScheduleID != "sched_release_notes" {
+		t.Fatalf("request provenance = source:%q kind:%q id:%q, want latest scheduled tick", got.RequestSource, got.ScheduleKind, got.ScheduleID)
+	}
+}
+
 func TestDeriveTaskStateDefaultsBlankRequestSourceToUser(t *testing.T) {
 	got := DeriveTaskState(Trace{
 		Prompt:        "Inspect the repo.",
