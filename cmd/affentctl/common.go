@@ -46,6 +46,8 @@ const (
 	mcpStartupPerServerOverrun = 5 * time.Second
 )
 
+const affentctlModelContextMetadataTimeout = 2 * time.Second
+
 // trimUTF8 returns the UTF-8-safe prefix of s clipped to at most n
 // bytes, so multi-byte sequences (CJK / Cyrillic / accented Latin /
 // emoji) aren't split across the cut.
@@ -104,6 +106,7 @@ type commonFlags struct {
 	compactTrigger            int // <=0 falls back to agent.DefaultSummaryTriggerMsgs
 	compactTriggerInputTokens int // 0 derives from byte trigger, <0 disables request-pressure compaction
 	modelContextWindowTokens  int // 0 means unknown; derives compaction trigger when set
+	modelContextWindowAuto    bool
 	compactTriggerPercent     int // 0 uses agent default
 	compactKeepLast           int
 
@@ -191,6 +194,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected. (env: AFFENTCTL_COMPACT_TRIGGER)")
 	fs.IntVar(&c.compactTriggerInputTokens, "compact-trigger-input-tokens", 0, "compact before a model call when estimated request input tokens reach this value. 0 derives from the byte trigger; negative disables request-pressure compaction. (env: AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS)")
 	fs.IntVar(&c.modelContextWindowTokens, "model-context-window-tokens", 0, "effective model context window in tokens; 0 = unknown. When set, proactive compaction derives from this window. (env: AFFENTCTL_MODEL_CONTEXT_WINDOW_TOKENS)")
+	fs.BoolVar(&c.modelContextWindowAuto, "model-context-window-auto", false, "best-effort discovery of the model context window from the upstream /models endpoint when explicit window is unset. (env: AFFENTCTL_MODEL_CONTEXT_WINDOW_AUTO)")
 	fs.IntVar(&c.compactTriggerPercent, "compact-trigger-input-percent", 0, "percent of --model-context-window-tokens used for proactive compaction when --compact-trigger-input-tokens is unset. 0 = runtime default. (env: AFFENTCTL_COMPACT_TRIGGER_INPUT_PERCENT)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting (env: AFFENTCTL_COMPACT_KEEP_LAST)")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
@@ -251,6 +255,30 @@ func reservedOutputTokensFromSampling(s agent.SamplingDefaults) int {
 		return 0
 	}
 	return *s.MaxTokens
+}
+
+func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LLMClient, log zerolog.Logger) commonFlags {
+	if !c.modelContextWindowAuto || c.modelContextWindowTokens > 0 {
+		return c
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), affentctlModelContextMetadataTimeout)
+	defer cancel()
+	meta, err := llm.FetchModelMetadata(ctx)
+	if err != nil {
+		log.Debug().Err(err).Str("model", c.model).Msg("model context window metadata unavailable")
+		return c
+	}
+	if meta.ContextWindowTokens <= 0 {
+		log.Debug().Str("model", c.model).Str("metadata_model", meta.ID).Msg("model context window metadata missing")
+		return c
+	}
+	c.modelContextWindowTokens = meta.ContextWindowTokens
+	log.Info().
+		Str("model", c.model).
+		Str("metadata_model", meta.ID).
+		Int("model_context_window_tokens", c.modelContextWindowTokens).
+		Msg("model context window resolved from provider metadata")
+	return c
 }
 
 func samplingFlagError(err error) error {
@@ -344,6 +372,7 @@ func configPrecedenceEnvSources() map[string]string {
 		"compact-trigger":               "AFFENTCTL_COMPACT_TRIGGER",
 		"compact-trigger-input-tokens":  "AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS",
 		"model-context-window-tokens":   "AFFENTCTL_MODEL_CONTEXT_WINDOW_TOKENS",
+		"model-context-window-auto":     "AFFENTCTL_MODEL_CONTEXT_WINDOW_AUTO",
 		"compact-trigger-input-percent": "AFFENTCTL_COMPACT_TRIGGER_INPUT_PERCENT",
 		"compact-keep-last":             "AFFENTCTL_COMPACT_KEEP_LAST",
 	} {
@@ -381,11 +410,12 @@ type fileConfig struct {
 	} `json:"memory"`
 	ProjectContext *bool `json:"project_context"`
 	Compact        *struct {
-		Trigger                  *int `json:"trigger"`
-		TriggerInputTokens       *int `json:"trigger_input_tokens"`
-		ModelContextWindowTokens *int `json:"model_context_window_tokens"`
-		TriggerInputPercent      *int `json:"trigger_input_percent"`
-		KeepLast                 *int `json:"keep_last"`
+		Trigger                  *int  `json:"trigger"`
+		TriggerInputTokens       *int  `json:"trigger_input_tokens"`
+		ModelContextWindowTokens *int  `json:"model_context_window_tokens"`
+		ModelContextWindowAuto   *bool `json:"model_context_window_auto"`
+		TriggerInputPercent      *int  `json:"trigger_input_percent"`
+		KeepLast                 *int  `json:"keep_last"`
 	} `json:"compact"`
 	SessionID    *string `json:"session_id"`
 	Continue     *bool   `json:"continue"`
@@ -611,6 +641,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 		setInt("compact-trigger", &c.compactTrigger, cfg.Compact.Trigger)
 		setInt("compact-trigger-input-tokens", &c.compactTriggerInputTokens, cfg.Compact.TriggerInputTokens)
 		setInt("model-context-window-tokens", &c.modelContextWindowTokens, cfg.Compact.ModelContextWindowTokens)
+		setBool("model-context-window-auto", &c.modelContextWindowAuto, cfg.Compact.ModelContextWindowAuto)
 		setInt("compact-trigger-input-percent", &c.compactTriggerPercent, cfg.Compact.TriggerInputPercent)
 		setInt("compact-keep-last", &c.compactKeepLast, cfg.Compact.KeepLast)
 	}
@@ -744,6 +775,9 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setBoolStrict("project-context", "AFFENTCTL_PROJECT_CONTEXT", &c.projectContext); err != nil {
+		return err
+	}
+	if err := setBoolStrict("model-context-window-auto", "AFFENTCTL_MODEL_CONTEXT_WINDOW_AUTO", &c.modelContextWindowAuto); err != nil {
 		return err
 	}
 	if err := setBoolStrict("loop-protocol", "AFFENTCTL_LOOP_PROTOCOL", &c.loopProtocol); err != nil {
@@ -1512,6 +1546,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	} else {
 		llm.Sampling = sampling
 	}
+	c = resolveAffentctlModelContextWindowFromProvider(c, llm, log)
 	projectContextDir := ""
 	if caps.ProjectContext {
 		projectContextDir = workspace

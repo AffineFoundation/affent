@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -16,6 +18,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/mcp"
+	"github.com/rs/zerolog"
 )
 
 // TestReadMaybeStdin_AtMissingFileIsError pins the @-prefix contract.
@@ -125,7 +128,7 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 		"workspace": "./from-config",
 		"model": "config-model",
 		"max_call_timeout": "9s",
-		"compact": {"trigger": 10, "trigger_input_tokens": 1234, "keep_last": 4}
+		"compact": {"trigger": 10, "trigger_input_tokens": 1234, "model_context_window_auto": true, "keep_last": 4}
 	}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -158,6 +161,9 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 	}
 	if cf.compactTriggerInputTokens != 1234 {
 		t.Fatalf("compact.trigger_input_tokens not loaded from config: %d", cf.compactTriggerInputTokens)
+	}
+	if !cf.modelContextWindowAuto {
+		t.Fatal("compact.model_context_window_auto not loaded from config")
 	}
 	if cf.compactKeepLast != 7 {
 		t.Fatalf("CLI compact-keep-last did not override config: %d", cf.compactKeepLast)
@@ -552,6 +558,7 @@ func TestPortableEnvConfigOverridesConfig(t *testing.T) {
 	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "false")
 	t.Setenv("AFFENTCTL_COMPACT_TRIGGER", "240")
 	t.Setenv("AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS", "48000")
+	t.Setenv("AFFENTCTL_MODEL_CONTEXT_WINDOW_AUTO", "true")
 	t.Setenv("AFFENTCTL_COMPACT_KEEP_LAST", "10")
 
 	var cf commonFlags
@@ -574,8 +581,54 @@ func TestPortableEnvConfigOverridesConfig(t *testing.T) {
 	if cf.projectContext {
 		t.Fatal("project context env should disable project context")
 	}
-	if cf.compactTrigger != 240 || cf.compactTriggerInputTokens != 48000 || cf.compactKeepLast != 10 {
-		t.Fatalf("compact env not applied: trigger=%d trigger_input_tokens=%d keep_last=%d", cf.compactTrigger, cf.compactTriggerInputTokens, cf.compactKeepLast)
+	if cf.compactTrigger != 240 || cf.compactTriggerInputTokens != 48000 || !cf.modelContextWindowAuto || cf.compactKeepLast != 10 {
+		t.Fatalf("compact env not applied: trigger=%d trigger_input_tokens=%d model_context_window_auto=%t keep_last=%d", cf.compactTrigger, cf.compactTriggerInputTokens, cf.modelContextWindowAuto, cf.compactKeepLast)
+	}
+}
+
+func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %q, want /v1/models", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":131072}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cf := commonFlags{
+		baseURL:                srv.URL + "/v1",
+		model:                  "auto-model",
+		modelContextWindowAuto: true,
+	}
+	llm := agent.NewLLMClient(cf.baseURL, "", cf.model)
+	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
+	if got.modelContextWindowTokens != 131072 {
+		t.Fatalf("modelContextWindowTokens = %d, want 131072", got.modelContextWindowTokens)
+	}
+}
+
+func TestResolveAffentctlModelContextWindowExplicitSkipsProvider(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":131072}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cf := commonFlags{
+		baseURL:                   srv.URL + "/v1",
+		model:                     "auto-model",
+		modelContextWindowTokens:  65536,
+		modelContextWindowAuto:    true,
+		compactTriggerInputTokens: 0,
+	}
+	llm := agent.NewLLMClient(cf.baseURL, "", cf.model)
+	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
+	if got.modelContextWindowTokens != 65536 {
+		t.Fatalf("modelContextWindowTokens = %d, want explicit 65536", got.modelContextWindowTokens)
+	}
+	if called {
+		t.Fatal("explicit model context window should skip provider metadata lookup")
 	}
 }
 
