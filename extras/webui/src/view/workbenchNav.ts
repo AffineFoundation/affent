@@ -114,12 +114,12 @@ export function buildWorkbenchNavItems({
       badge: artifactBadge(artifacts),
     });
   }
-  if (files.items.length > 0 || workspaceBrowserActive || attention?.target === "files") {
+  if (files.items.length > 0 || workspaceBrowserActive || workspace.hasData || attention?.target === "files") {
     currentItems.push({
       key: "files",
       label: "Files",
       scope: "current",
-      detail: files.items.length > 0 ? files.detail : workspaceBrowserActive ? "Workspace browser" : "Task file evidence",
+      detail: files.items.length > 0 ? files.detail : workspace.hasData || workspaceBrowserActive ? "Workspace browser" : "Task file evidence",
       badge: files.items.length > 0 ? String(files.items.length) : undefined,
       tone: toneForAttention(attention?.target === "files" ? attention.tone : files.tone),
     });

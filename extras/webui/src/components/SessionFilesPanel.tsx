@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import {
   fileContentText,
@@ -73,6 +73,7 @@ export function SessionFilesPanel({
   const workspaceParent = workspaceReady ? parentWorkspacePath(workspaceReady.path) : undefined;
   const canOpenWorkspacePath = Boolean(onOpenWorkspacePath);
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
+  const autoOpenedWorkspaceRef = useRef<string | undefined>(undefined);
   const editorTitle = workspaceReady?.kind === "file"
     ? workspaceReady.path
     : selectedItem?.path ?? selectedEvidence?.path ?? "No file selected";
@@ -83,6 +84,14 @@ export function SessionFilesPanel({
       : selectedEvidence
         ? `${fileEvidenceKindLabel(selectedEvidence)} · ${compactFileMeta(selectedEvidence)}`
         : "Open a workspace path or select recorded file evidence.";
+
+  useEffect(() => {
+    if (!defaultOpen || !onOpenWorkspacePath) return;
+    if (workspaceBrowser?.state !== "idle" || !workspaceBrowser.workspacePath) return;
+    if (autoOpenedWorkspaceRef.current === workspaceBrowser.workspacePath) return;
+    autoOpenedWorkspaceRef.current = workspaceBrowser.workspacePath;
+    onOpenWorkspacePath(".");
+  }, [defaultOpen, onOpenWorkspacePath, workspaceBrowser]);
 
   function openEvidenceItem(item: SessionFileEvidence) {
     setSelectedEvidencePath(item.path);
@@ -191,7 +200,7 @@ export function SessionFilesPanel({
               </div>
             )}
             {workspaceBrowser?.state === "loading" ? <div className="session-skills-empty">Loading {workspaceBrowser.path}...</div> : null}
-            {workspaceBrowser?.state === "error" ? <div className="session-skills-empty">Could not open {workspaceBrowser.path ?? "workspace"}: {workspaceBrowser.error}</div> : null}
+            {workspaceBrowser?.state === "error" ? <div className="session-skills-empty">{workspaceBrowserErrorMessage(workspaceBrowser)}</div> : null}
             {workspaceReady?.kind === "directory" ? (
               <WorkspaceDirectory
                 file={workspaceReady}
@@ -720,15 +729,39 @@ function normalizedPathParts(path: string): string[] {
 function workspaceBrowserTitle(browser: WorkspaceFileBrowserState): string {
   if (browser.state === "idle") return "Workspace file access";
   if (browser.state === "loading") return browser.path;
-  if (browser.state === "error") return browser.path ?? "Workspace unavailable";
+  if (browser.state === "error") return workspaceErrorTitle(browser.error, browser.path);
   return browser.file.title;
 }
 
 function workspaceBrowserDetail(browser: WorkspaceFileBrowserState): string {
   if (browser.state === "idle") return browser.workspacePath ? "Open root or enter a workspace-relative path." : "Workspace binding required.";
   if (browser.state === "loading") return "Reading from the session workspace.";
-  if (browser.state === "error") return browser.error;
+  if (browser.state === "error") return workspaceErrorDetail(browser.error);
   return browser.file.detail;
+}
+
+function workspaceBrowserErrorMessage(browser: Extract<WorkspaceFileBrowserState, { state: "error" }>): string {
+  return `${workspaceErrorTitle(browser.error, browser.path)}: ${workspaceErrorDetail(browser.error)}`;
+}
+
+function workspaceErrorTitle(error: string, path?: string): string {
+  if (isMissingWorkspaceError(error)) return "Workspace missing";
+  return path ? `Could not open ${path}` : "Workspace unavailable";
+}
+
+function workspaceErrorDetail(error: string): string {
+  if (isMissingWorkspaceError(error)) return "The saved workspace path no longer exists in this container.";
+  return compactError(error);
+}
+
+function isMissingWorkspaceError(error: string): boolean {
+  return /workspace_unavailable|no such file or directory|lstat .*workspace/i.test(error);
+}
+
+function compactError(error: string): string {
+  const clean = error.replace(/\s+/g, " ").trim();
+  if (clean.length <= 180) return clean;
+  return `${clean.slice(0, 177)}...`;
 }
 
 function FileFilterButton({

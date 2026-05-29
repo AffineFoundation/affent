@@ -105,9 +105,11 @@ describe("SessionFilesPanel", () => {
       />,
     );
 
+    await waitFor(() => expect(onOpenWorkspacePath).toHaveBeenCalledWith("."));
+    expect(onOpenWorkspacePath).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("session-workspace-browser")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Root" }));
-    expect(onOpenWorkspacePath).toHaveBeenCalledWith(".");
+    expect(onOpenWorkspacePath).toHaveBeenCalledTimes(2);
   });
 
   it("keeps file evidence selectable when no workspace binding can open paths", async () => {
@@ -131,6 +133,26 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-file-inspector")).toHaveTextContent("src");
     await user.click(within(screen.getByTestId("session-file-inspector")).getByRole("button", { name: "Open Workspace" }));
     expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(2);
+  });
+
+  it("summarizes stale workspace paths without raw filesystem noise", () => {
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={{ summary: "No files", detail: "No file evidence", items: [] }}
+        workspaceBrowser={{
+          state: "error",
+          path: ".",
+          workspacePath: "/workspace/sessions/missing",
+          error: "workspace_unavailable: workspace not available: lstat /workspace/sessions/missing: no such file or directory",
+        }}
+        onOpenWorkspacePath={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("File explorer")).toHaveTextContent("Workspace missing");
+    expect(screen.getByLabelText("File explorer")).toHaveTextContent("The saved workspace path no longer exists in this container.");
+    expect(screen.getByLabelText("File explorer")).not.toHaveTextContent("lstat /workspace");
   });
 
   it("browses workspace directories and file snapshots", async () => {

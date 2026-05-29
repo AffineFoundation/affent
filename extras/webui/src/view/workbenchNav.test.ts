@@ -194,6 +194,34 @@ describe("buildWorkbenchNavItems", () => {
     });
   });
 
+  it("keeps Files reachable for bound workspaces before the browser opens", () => {
+    const items = buildWorkbenchNavItems({
+      overview,
+      changes: { summary: "No changed files", detail: "No changes", files: [] },
+      run: { summary: "No commands", detail: "No commands", commands: [] },
+      files: { summary: "No files", detail: "No files", items: [] },
+      workspaceBrowserActive: false,
+      workspace: {
+        hasData: true,
+        summary: "affent bound",
+        shortStatus: "affent",
+        detail: "/repo/affent",
+        verification: "bound",
+        path: "/repo/affent",
+      },
+      runtimeState: { state: "idle" },
+      configState: { state: "idle" },
+      memoryState: { state: "idle" },
+      skillsState: { state: "idle" },
+    });
+
+    expect(items.find((item) => item.key === "files")).toMatchObject({
+      label: "Files",
+      detail: "Workspace browser",
+      scope: "current",
+    });
+  });
+
   it("keeps Workspace reachable when current work exists but no binding was recorded", () => {
     const items = buildWorkbenchNavItems({
       overview,
