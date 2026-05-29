@@ -898,6 +898,60 @@ describe("App", () => {
     });
   });
 
+  it("keeps the intro loop starter structured through composer submit", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({ sessions: [], has_more: false });
+      }
+      if (url === "/v1/sessions" && init?.method === "POST") {
+        return jsonResponse({
+          session: {
+            id: "starter-loop",
+            active: true,
+            durable: true,
+            has_conversation: false,
+            has_events: false,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        });
+      }
+      if (url === "/v1/sessions/starter-loop/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "starter-loop", turn_id: "t1" });
+      }
+      if (url === "/v1/sessions/starter-loop/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "starter-loop", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/starter-loop/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const input = await screen.findByPlaceholderText("Message Affent...");
+    await user.click(await screen.findByRole("button", { name: "Use starter draft" }));
+
+    expect((input as HTMLTextAreaElement).value).toBe("Improve checkout reliability until the release checklist is green.");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Loop setup");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Loop setup ready");
+
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter", charCode: 13 });
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith(
+      "/v1/sessions/starter-loop/messages",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    const messageCall = fetchImpl.mock.calls.find(([url, init]) => String(url) === "/v1/sessions/starter-loop/messages" && init?.method === "POST");
+    expect(JSON.parse(String(messageCall?.[1]?.body))).toMatchObject({
+      content: "Improve checkout reliability until the release checklist is green.",
+      display_text: "Set up loop: Improve checkout reliability until the release checklist is green.",
+      mode: "loop_setup",
+    });
+  });
+
   it("keeps empty loop setup out of the selected session surface", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
