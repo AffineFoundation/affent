@@ -92,7 +92,7 @@ export function SessionWorkspacePanel({
                   onUseAsDraft?.(workspaceVerifyDraft(workspace), "run_command");
                 }}
               >
-                {onVerifyWorkspace ? "Verify workspace" : "Draft verification"}
+                {onVerifyWorkspace ? workspaceVerifyActionLabel(workspace) : "Draft verification"}
               </button>
             ) : null}
             {onUseAsDraft ? (
@@ -203,4 +203,9 @@ function workspaceActionLabel(workspace: SessionWorkspaceView): string {
   if (workspace.verification === "mismatch") return "Ask to verify";
   if (workspace.verification === "missing_binding") return "Use cwd in chat";
   return "Use workspace in chat";
+}
+
+function workspaceVerifyActionLabel(workspace: SessionWorkspaceView): string {
+  if (workspace.verification === "missing_binding") return "Verify cwd";
+  return "Verify workspace";
 }

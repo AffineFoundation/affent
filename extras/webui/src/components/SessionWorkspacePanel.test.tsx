@@ -87,6 +87,27 @@ describe("SessionWorkspacePanel", () => {
     );
   });
 
+  it("labels command-cwd verification honestly when no workspace binding exists", async () => {
+    const user = userEvent.setup();
+    const onVerifyWorkspace = vi.fn();
+    render(<SessionWorkspacePanel defaultOpen workspace={{
+      hasData: true,
+      summary: "Workspace binding missing",
+      shortStatus: "Workspace binding missing",
+      detail: "cwd /workspace/sessions/sess_123",
+      verification: "missing_binding",
+      latestCommandCwd: "/workspace/sessions/sess_123",
+    }} onVerifyWorkspace={onVerifyWorkspace} />);
+
+    const panel = screen.getByTestId("session-workspace-panel");
+    expect(within(panel).queryByRole("button", { name: "Verify workspace" })).toBeNull();
+    await user.click(within(panel).getByRole("button", { name: "Verify cwd" }));
+    expect(onVerifyWorkspace).toHaveBeenCalledWith({
+      command: "pwd; git status --short --branch 2>/dev/null || true",
+      cwd: "/workspace/sessions/sess_123",
+    });
+  });
+
   it("labels missing bindings with latest command cwd evidence as command cwd only", () => {
     render(<SessionWorkspacePanel defaultOpen workspace={{
       hasData: true,
