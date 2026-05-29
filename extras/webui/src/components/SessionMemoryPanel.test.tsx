@@ -65,6 +65,9 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Review");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Clean");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Maintenance");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Verify latest write");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Replaced · memory:research");
     expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Searchable durable memory");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
@@ -191,6 +194,8 @@ describe("SessionMemoryPanel", () => {
     const candidates = screen.getByTestId("session-memory-candidates");
     expect(candidates).toHaveTextContent("Candidate facts");
     expect(candidates).toHaveTextContent("Project goal: Build a Python CLI 2048 game.");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Save candidates");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("1 candidate fact");
     await user.click(within(candidates).getByRole("button", { name: "Use in form" }));
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic")).toHaveValue("project");
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("Project goal: Build a Python CLI 2048 game.");
@@ -363,6 +368,9 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Sensitive 1");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Duplicate 2");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Capacity 1");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Remove secrets");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Deduplicate");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Reduce pressure");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("4 findings");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Sensitive");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Duplicate");

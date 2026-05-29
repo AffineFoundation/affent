@@ -262,6 +262,15 @@ export function SessionMemoryPanel({
               canWrite={Boolean(onAddMemory)}
               canDraft={Boolean(onUseAsDraft)}
             />
+            <MemoryMaintenanceBoard
+              reviewFindings={reviewFindings}
+              candidateCount={candidates.length}
+              latestUpdate={latestUpdate}
+              canWrite={Boolean(onAddMemory)}
+              onShowReview={() => setScopeFilter("review")}
+              onOpenWrite={() => setWriteOpen(true)}
+              onUseAsDraft={onUseAsDraft}
+            />
             {memory?.has_memory && reviewFindings.length > 0 ? (
               <MemoryReviewQueue
                 findings={reviewFindings}
@@ -603,6 +612,127 @@ function memoryFindingKindLabel(kind: string): string {
   if (kind === "capacity") return "Capacity";
   if (kind === "large") return "Large";
   return kind;
+}
+
+function MemoryMaintenanceBoard({
+  reviewFindings,
+  candidateCount,
+  latestUpdate,
+  canWrite,
+  onShowReview,
+  onOpenWrite,
+  onUseAsDraft,
+}: {
+  reviewFindings: ReturnType<typeof memoryReviewFindings>;
+  candidateCount: number;
+  latestUpdate?: MemoryUpdateMeta;
+  canWrite: boolean;
+  onShowReview: () => void;
+  onOpenWrite: () => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  const counts = reviewFindings.reduce<Record<string, number>>((acc, finding) => {
+    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+  const actions: Array<{
+    id: string;
+    label: string;
+    detail: string;
+    meta: string;
+    tone?: "danger" | "action" | "muted";
+    onClick?: () => void;
+    button?: string;
+  }> = [];
+  if ((counts.sensitive ?? 0) > 0) {
+    actions.push({
+      id: "sensitive",
+      label: "Remove secrets",
+      detail: "Sensitive-looking memory is redacted in previews. Inspect and remove or replace it before it is reused.",
+      meta: `${counts.sensitive} ${counts.sensitive === 1 ? "entry" : "entries"}`,
+      tone: "danger",
+      onClick: onShowReview,
+      button: "Review",
+    });
+  }
+  if ((counts.duplicate ?? 0) > 0) {
+    actions.push({
+      id: "duplicate",
+      label: "Deduplicate",
+      detail: "Duplicate facts increase prompt noise and can hide the authoritative wording.",
+      meta: `${counts.duplicate} duplicate ${counts.duplicate === 1 ? "entry" : "entries"}`,
+      tone: "action",
+      onClick: onShowReview,
+      button: "Review",
+    });
+  }
+  const pressureCount = (counts.capacity ?? 0) + (counts.large ?? 0);
+  if (pressureCount > 0) {
+    actions.push({
+      id: "pressure",
+      label: "Reduce pressure",
+      detail: "Large or nearly full buckets should be split, shortened, or moved out of durable memory.",
+      meta: `${pressureCount} ${pressureCount === 1 ? "bucket" : "items"}`,
+      tone: "action",
+      onClick: onShowReview,
+      button: "Review",
+    });
+  }
+  if (candidateCount > 0) {
+    actions.push({
+      id: "candidates",
+      label: canWrite ? "Save candidates" : "Prepare candidates",
+      detail: "Stable facts were derived from this session. Review them before adding to durable memory.",
+      meta: `${candidateCount} candidate ${candidateCount === 1 ? "fact" : "facts"}`,
+      tone: "action",
+      onClick: onOpenWrite,
+      button: canWrite ? "Open form" : "Prepare",
+    });
+  }
+  if (latestUpdate) {
+    actions.push({
+      id: "latest",
+      label: "Verify latest write",
+      detail: "A memory write happened in this chat. Use the latest-update card below for the exact preview and evidence.",
+      meta: [memoryActionLabel(latestUpdate.action), memoryUpdateLocation(latestUpdate)].filter(Boolean).join(" · "),
+      tone: "muted",
+      onClick: onUseAsDraft ? () => onUseAsDraft(memoryUpdateDraft(latestUpdate), "memory") : undefined,
+      button: onUseAsDraft ? "Review" : undefined,
+    });
+  }
+  if (actions.length === 0) {
+    actions.push({
+      id: "clean",
+      label: "No maintenance queued",
+      detail: "No duplicate, sensitive, oversized, or candidate memory items are visible for this session.",
+      meta: "Clean",
+      tone: "muted",
+    });
+  }
+  return (
+    <section className="session-memory-maintenance" data-testid="session-memory-maintenance" aria-label="Memory maintenance queue">
+      <div className="session-memory-maintenance-head">
+        <span>Maintenance</span>
+        <strong>{actions.length === 1 && actions[0].id === "clean" ? "Nothing to fix" : `${actions.length} active ${actions.length === 1 ? "item" : "items"}`}</strong>
+      </div>
+      <div className="session-memory-maintenance-list">
+        {actions.map((action) => (
+          <article key={action.id} data-tone={action.tone}>
+            <div>
+              <span>{action.meta}</span>
+              <strong>{action.label}</strong>
+              <p>{action.detail}</p>
+            </div>
+            {action.onClick && action.button ? (
+              <button type="button" className="ghost-action" onClick={action.onClick}>
+                {action.button}
+              </button>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function MemoryBucketFocus({
