@@ -62,7 +62,8 @@ describe("SessionArtifactsPanel", () => {
     expect(sourceIndex).toHaveTextContent("shell: npm test -- checkout.spec.ts");
     expect(sourceIndex).toHaveTextContent("1 file · Full output · turn 3 · 8 KiB");
     expect(sourceIndex).toHaveTextContent("write_file");
-    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Failed shell output");
+    expect(screen.getByLabelText("Artifact evidence summary")).not.toHaveTextContent("000001-test.txt");
     const focus = screen.getByTestId("session-artifacts-focus");
     expect(focus).toHaveTextContent("turn 3 · shell · call 2");
     expect(focus).toHaveTextContent("npm test -- checkout.spec.ts");
@@ -78,29 +79,33 @@ describe("SessionArtifactsPanel", () => {
     expect(within(filters).getByText("Full output").closest("button")).toHaveTextContent("1");
     expect(screen.getByLabelText("Search artifacts")).toBeInTheDocument();
     const list = screen.getByTestId("session-artifacts-list");
-    expect(list).toHaveTextContent("000001-test.txt");
+    expect(list).toHaveTextContent("Failed shell output");
+    expect(list).not.toHaveTextContent("000001-test.txt");
     expect(list).toHaveTextContent("checkout-report.md");
+    expect(list).toHaveTextContent("Stored full output");
+    expect(list).not.toHaveTextContent(".affent/artifacts/tool-results/000001-test.txt");
     expect(list).toHaveTextContent("Full output · turn 3 · shell · call 2 · failed · exit 1 · 1.5 s · npm test -- checkout.spec.ts");
     expect(list).not.toHaveTextContent("unreachable tail marker");
     const firstArtifact = within(list).getAllByRole("listitem")[0];
     expect(within(firstArtifact).queryByRole("link", { name: "Download" })).toBeNull();
     expect(within(firstArtifact).queryByRole("button", { name: "Copy details" })).toBeNull();
     expect(within(firstArtifact).queryByRole("button", { name: "Reference" })).toBeNull();
+    expect(within(firstArtifact).queryByRole("button", { name: "Copy path" })).toBeNull();
 
     await user.click(within(firstArtifact).getByRole("button", { name: "Open" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    await user.click(within(firstArtifact).getByRole("button", { name: "Copy path" }));
-    expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
 
     await user.click(within(filters).getByText("Deliverables").closest("button")!);
-    expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("Failed shell output");
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
+    await user.click(within(screen.getByTestId("session-artifacts-list")).getByRole("button", { name: "Copy path" }));
+    expect(writeText).toHaveBeenCalledWith(".affent/artifacts/reports/checkout-report.md");
     await user.click(within(filters).getByText("All").closest("button")!);
-    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("Failed shell output");
     await user.click(within(sourceIndex).getByRole("button", { name: /shell: npm test/ }));
     expect(screen.getByLabelText("Search artifacts")).toHaveValue("");
     expect(sourceIndex).toHaveTextContent("Clear source");
-    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("Failed shell output");
     expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("checkout-report.md");
     await user.click(within(sourceIndex).getByRole("button", { name: "Clear source" }));
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
@@ -108,7 +113,7 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByTestId("session-artifacts-list")).not.toHaveTextContent("000001-test.txt");
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
     await user.click(screen.getByRole("button", { name: "Clear" }));
-    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("000001-test.txt");
+    expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("Failed shell output");
     expect(screen.getByTestId("session-artifacts-list")).toHaveTextContent("checkout-report.md");
 
     await user.type(screen.getByLabelText("Search artifacts"), "missing.log");
@@ -148,6 +153,8 @@ describe("SessionArtifactsPanel", () => {
     );
 
     const list = screen.getByTestId("session-artifacts-list");
+    expect(list).toHaveTextContent("Full shell output");
+    expect(list).not.toHaveTextContent("000009-long.txt");
     expect(list).toHaveTextContent("python3 -c");
     expect(list).not.toHaveTextContent("complete smoke test suite with all scenarios");
   });

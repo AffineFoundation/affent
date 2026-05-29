@@ -4,6 +4,7 @@ import {
   artifactKindLabel,
   artifactLineageLabel,
   artifactOutcomeLabel,
+  artifactFailed,
   artifactReviewDetail,
   artifactReviewFocus,
   artifactReviewStats,
@@ -55,7 +56,7 @@ export function SessionArtifactsPanel({
               <div className="session-artifacts-focus" data-testid="session-artifacts-focus">
                 <div className="session-artifacts-focus-main">
                   <small>{[artifactKindLabel(focus), artifactLineageLabel(focus)].filter(Boolean).join(" · ")}</small>
-                  <strong title={focus.path}>{focus.name}</strong>
+                  <strong title={artifactTitleTooltip(focus)}>{artifactDisplayTitle(focus)}</strong>
                   <span className="session-artifacts-focus-source" title={focus.source}>{focus.source}</span>
                   {artifactSummaryPreview(focus, 120) ? (
                     <span className="session-artifacts-focus-summary">{artifactSummaryPreview(focus, 120)}</span>
@@ -68,7 +69,7 @@ export function SessionArtifactsPanel({
                       Open artifact
                     </button>
                   ) : null}
-                  <CopyButton label="Copy path" value={focus.path} className="ghost-action" />
+                  {artifactKind(focus) === "deliverable" ? <CopyButton label="Copy path" value={focus.path} className="ghost-action" /> : null}
                 </div>
               </div>
             ) : null}
@@ -130,10 +131,10 @@ export function SessionArtifactsPanel({
               return (
                 <li key={artifact.path} className="session-artifacts-item">
                   <div className="session-artifacts-main">
-                    <strong title={artifact.path}>{artifact.name}</strong>
+                    <strong title={artifactTitleTooltip(artifact)}>{artifactDisplayTitle(artifact)}</strong>
                     <span title={artifact.source}>{artifactMeta(artifact)}</span>
                     {summaryPreview ? <small className="session-artifacts-summary">{summaryPreview}</small> : null}
-                    <small className="session-artifacts-path" title={artifact.path}>{artifact.path}</small>
+                    <small className="session-artifacts-path" title={artifactPathDetail(artifact)}>{artifactPathLabel(artifact)}</small>
                   </div>
                   <span className="session-evidence-actions">
                     {onOpenArtifact ? (
@@ -141,7 +142,7 @@ export function SessionArtifactsPanel({
                         Open
                       </button>
                     ) : null}
-                    <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
+                    {artifactKind(artifact) === "deliverable" ? <CopyButton label="Copy path" value={artifact.path} className="ghost-action" /> : null}
                   </span>
                 </li>
               );
@@ -193,8 +194,9 @@ function artifactStatLineItems(stats: SessionArtifactStats): string[] {
 
 function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
   const haystack = [
-    artifact.name,
-    artifact.path,
+    artifactDisplayTitle(artifact),
+    artifactKind(artifact) === "deliverable" ? artifact.name : undefined,
+    artifactKind(artifact) === "deliverable" ? artifact.path : "stored full output",
     artifact.source,
     artifact.tool,
     artifactLineageLabel(artifact),
@@ -203,6 +205,24 @@ function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
     artifactSizeLabel(artifact),
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
+}
+
+function artifactDisplayTitle(artifact: TurnArtifact): string {
+  if (artifactKind(artifact) === "deliverable") return artifact.name;
+  const tool = artifact.tool ? `${artifact.tool.replace(/_/g, " ")} output` : "Tool output";
+  return artifactFailed(artifact) ? `Failed ${tool}` : `Full ${tool}`;
+}
+
+function artifactTitleTooltip(artifact: TurnArtifact): string {
+  return artifactKind(artifact) === "deliverable" ? artifact.path : "Saved full tool output";
+}
+
+function artifactPathLabel(artifact: TurnArtifact): string {
+  return artifactKind(artifact) === "deliverable" ? artifact.path : "Stored full output";
+}
+
+function artifactPathDetail(artifact: TurnArtifact): string {
+  return artifactKind(artifact) === "deliverable" ? artifact.path : "Open artifact to inspect stdout/stderr.";
 }
 
 function artifactMeta(artifact: TurnArtifact): string {
