@@ -152,6 +152,29 @@ func TestDeriveTaskStateClassifiesGitHandoffEvidence(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateIncludesRuntimeOwnedToolEvidence(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Schedule recurring BTC price checks.",
+		TurnEndReason: "completed",
+		Tools: []ToolCall{{
+			TurnID:        "turn-1",
+			CallID:        "schedule-1",
+			Tool:          "session_schedule",
+			Args:          map[string]any{"action": "create"},
+			ExitCode:      0,
+			ResultSummary: "created schedule sched_btc",
+		}},
+	}
+
+	got := DeriveTaskState(trace)
+	if !taskStateHasEvidence(got, "session_schedule") {
+		t.Fatalf("evidence = %+v, want session_schedule", got.Evidence)
+	}
+	if !taskStateHasSource(got, "session_schedule") {
+		t.Fatalf("sources = %+v, want session_schedule", got.Sources)
+	}
+}
+
 func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 	original := TaskStateSnapshot{
 		Objective:    "ship task",

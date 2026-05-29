@@ -87,15 +87,15 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 			})
 			continue
 		}
-		if tool.Tool == "shell" && tool.ExitCode == 0 {
+		if source := taskStateToolEvidenceSource(tool); source != "" {
 			summary := compactTaskStateSummary(taskStateToolSummary(tool))
 			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
-				Source:  "shell",
+				Source:  source,
 				Summary: summary,
 				TurnID:  tool.TurnID,
 				CallID:  tool.CallID,
 			})
-			task.Sources = appendUniqueTaskString(task.Sources, "shell", taskStateMaxItems)
+			task.Sources = appendUniqueTaskString(task.Sources, source, taskStateMaxItems)
 			if source := taskStateShellEvidenceSource(taskStateToolSummary(tool)); source != "" {
 				task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
 					Source:  source,
@@ -239,7 +239,7 @@ func taskStateToolSummary(tool ToolCall) string {
 		return stringArg(tool.Args, "command")
 	case "read_file", "write_file", "edit_file", "list_files", "file_context", "symbol_context", "repo_search":
 		return stringArg(tool.Args, "path")
-	case "plan", "memory", "skill", "loop_protocol":
+	case "plan", "memory", "skill", "loop_protocol", "session_schedule":
 		return stringArg(tool.Args, "action")
 	case "run_task":
 		return stringArg(tool.Args, "task_type")
@@ -253,6 +253,15 @@ func taskStateToolSummary(tool ToolCall) string {
 		}
 	}
 	return ""
+}
+
+func taskStateToolEvidenceSource(tool ToolCall) string {
+	switch tool.Tool {
+	case "shell", "plan", "memory", "loop_protocol", "session_schedule":
+		return tool.Tool
+	default:
+		return ""
+	}
 }
 
 func taskStateShellEvidenceSource(command string) string {

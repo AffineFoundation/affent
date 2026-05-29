@@ -206,14 +206,17 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 					CallID:  p.CallID,
 				})
 				state.VerificationState = "failed"
-			} else if req.Tool == "shell" && p.ExitCode == 0 {
-				state.VerificationState = "last_shell_passed"
+			} else if source := taskToolEvidenceSource(req.Tool); source != "" {
+				if req.Tool == "shell" {
+					state.VerificationState = "last_shell_passed"
+				}
 				state.Evidence = appendTaskEvidence(state.Evidence, sessionTaskStateEvidence{
-					Source:  "shell",
+					Source:  source,
 					Summary: compactTaskSummary(taskActionSummary(req)),
 					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
 					CallID:  p.CallID,
 				})
+				addTaskStateSource(state, source)
 			}
 			seen = true
 		case sse.TypeMessageRejected:
@@ -400,7 +403,7 @@ func taskActionSummary(req sessionTaskRequest) string {
 		return argString(req.Args, "command")
 	case "read_file", "write_file", "edit_file", "list_files", "file_context", "symbol_context", "repo_search":
 		return argString(req.Args, "path")
-	case "plan", "memory", "skill", "loop_protocol":
+	case "plan", "memory", "skill", "loop_protocol", "session_schedule":
 		return argString(req.Args, "action")
 	case "run_task":
 		return argString(req.Args, "task_type")
@@ -414,6 +417,15 @@ func taskActionSummary(req sessionTaskRequest) string {
 		}
 	}
 	return ""
+}
+
+func taskToolEvidenceSource(tool string) string {
+	switch tool {
+	case "shell", "plan", "memory", "loop_protocol", "session_schedule":
+		return tool
+	default:
+		return ""
+	}
 }
 
 func changedFileFromTaskRequest(req sessionTaskRequest) sessionTaskStateFile {

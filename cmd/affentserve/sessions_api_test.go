@@ -1420,6 +1420,54 @@ func TestSummarizeDurableSessionDefaultsTaskRequestSourceToUser(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRuntimeOwnedToolEvidence(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "task-state-schedule-evidence")
+	dir := pool.sessionDirPath("task-state-schedule-evidence")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Schedule recurring BTC price checks.",
+	}) + sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t1",
+		CallID: "schedule-1",
+		Tool:   sessionScheduleToolName,
+		Args:   map[string]any{"action": "create"},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:        "t1",
+		CallID:        "schedule-1",
+		ExitCode:      0,
+		ResultSummary: "created schedule sched_btc",
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t1",
+		Reason: sse.TurnEndCompleted,
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "task-state-schedule-evidence")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if !taskActionsContain(task.AttemptedActions, sessionScheduleToolName, "create") {
+		t.Fatalf("attempted_actions = %+v, want session_schedule create", task.AttemptedActions)
+	}
+	if !taskEvidenceContains(task.Evidence, sessionScheduleToolName, "create") {
+		t.Fatalf("evidence = %+v, want session_schedule evidence", task.Evidence)
+	}
+	if !stringSliceContains(task.Sources, sessionScheduleToolName) {
+		t.Fatalf("sources = %+v, want session_schedule", task.Sources)
+	}
+	if task.VerificationState != "unknown" {
+		t.Fatalf("verification_state = %q, want unknown for non-shell state update", task.VerificationState)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
