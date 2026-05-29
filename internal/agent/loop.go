@@ -1110,7 +1110,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	l.publish(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
 	// Mirror the user's text into the event stream so SSE replays show
 	// the full conversation, not just assistant output.
-	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText, DisplayText: opts.UserDisplayText, Mode: opts.UserMode, Source: opts.UserSource, ScheduleID: opts.ScheduleID, ScheduleKind: opts.ScheduleKind})
+	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText, DisplayText: opts.UserDisplayText, Mode: normalizedTurnUserMode(opts.UserMode), Source: opts.UserSource, ScheduleID: opts.ScheduleID, ScheduleKind: opts.ScheduleKind})
 	l.publishRuntimeSurface(turnID, opts)
 	if payload, ok := l.researchCheckpointDecision(userText, opts); ok {
 		payload.TurnID = turnID
@@ -2964,6 +2964,14 @@ func (l *Loop) maxToolCallsForTurn(opts TurnOptions) int {
 		return l.MaxToolCalls
 	}
 	return l.maxTurnStepsForSurface()
+}
+
+func normalizedTurnUserMode(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return UserModeNormal
+	}
+	return mode
 }
 
 func (l *Loop) maxTurnInputTokensForTurn(opts TurnOptions) int {

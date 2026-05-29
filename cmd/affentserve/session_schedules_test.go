@@ -53,6 +53,23 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.ScheduleKind != sessionScheduleKindLoopTick || userMessage.Text != "Scheduled check-in for session: due-one" || userMessage.DisplayText != "Loop tick: due-one" {
 		t.Fatalf("user.message = %+v, want schedule metadata", userMessage)
 	}
+	summary, found, err := summarizeDurableSession(pool, "due-one")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing after scheduled turn: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if task.RequestMode != "normal" || task.RequestSource != "schedule" || task.ScheduleID != "sched_due" || task.ScheduleKind != sessionScheduleKindLoopTick {
+		t.Fatalf("task request provenance = mode:%q source:%q schedule:%q kind:%q, want scheduled loop tick", task.RequestMode, task.RequestSource, task.ScheduleID, task.ScheduleKind)
+	}
+	if !stringSliceContains(task.KnownFacts, "latest request source: schedule "+sessionScheduleKindLoopTick+" sched_due") {
+		t.Fatalf("known_facts = %+v, want scheduled request provenance", task.KnownFacts)
+	}
+	if !stringSliceContains(task.Sources, "schedule") {
+		t.Fatalf("sources = %+v, want schedule source", task.Sources)
+	}
 }
 
 func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProtocol(t *testing.T) {

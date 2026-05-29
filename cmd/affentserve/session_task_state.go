@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -136,7 +137,7 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 				continue
 			}
 			state.LatestRequestText = compactTaskSummary(p.Text)
-			state.RequestMode = strings.TrimSpace(p.Mode)
+			state.RequestMode = normalizeTaskRequestMode(p.Mode)
 			state.RequestSource = strings.TrimSpace(p.Source)
 			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
 			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
@@ -289,6 +290,14 @@ func sessionTaskStatus(summary sessionSummary, eventState sessionTaskEventState)
 		return "running"
 	}
 	return "unknown"
+}
+
+func normalizeTaskRequestMode(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return agent.UserModeNormal
+	}
+	return mode
 }
 
 func sessionTaskConstraints(summary sessionSummary, eventState sessionTaskEventState) []string {

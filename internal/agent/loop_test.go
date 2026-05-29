@@ -1883,6 +1883,15 @@ func TestPublishRuntimeSurfaceMarksUnlabeledCompletionGuards(t *testing.T) {
 	}
 }
 
+func TestNormalizedTurnUserModeDefaultsToNormal(t *testing.T) {
+	if got := normalizedTurnUserMode(""); got != UserModeNormal {
+		t.Fatalf("empty user mode = %q, want %q", got, UserModeNormal)
+	}
+	if got := normalizedTurnUserMode("  " + UserModeLoopSetup + "  "); got != UserModeLoopSetup {
+		t.Fatalf("explicit user mode = %q, want %q", got, UserModeLoopSetup)
+	}
+}
+
 // TestPreviewN_UTF8Safe covers the event-bus preview path the same way.
 func TestPreviewN_UTF8Safe(t *testing.T) {
 	in := "héllo wörld" // 'é' and 'ö' are each 2 bytes
