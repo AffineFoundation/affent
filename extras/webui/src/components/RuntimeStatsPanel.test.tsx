@@ -185,7 +185,10 @@ describe("RuntimeStatsPanel", () => {
             schedules: 3,
             enabled_schedules: 2,
             due_schedules: 1,
+            in_flight_schedules: 2,
             error_schedules: 1,
+            oldest_in_flight_session_id: "timers-b",
+            oldest_in_flight_schedule_id: "sched_running",
             next_session_id: "timers-a",
             next_schedule_id: "sched_due",
             next_schedule_kind: "checkin",
@@ -199,8 +202,36 @@ describe("RuntimeStatsPanel", () => {
     );
 
     const grid = screen.getByTestId("runtime-stats-grid");
-    expect(grid).toHaveTextContent("Schedules2/3 enabled · 2 sessions · 1 due · next timers-a/sched_due · checkin · Due timer · 1 errors · error timers-a/sched_paused_error · previous scheduled turn failed");
+    expect(grid).toHaveTextContent("Schedules2/3 enabled · 2 sessions · 2 running · running timers-b/sched_running · 1 due · next timers-a/sched_due · checkin · Due timer · 1 errors · error timers-a/sched_paused_error · previous scheduled turn failed");
     expect(within(grid).getByText("Schedules").closest(".session-tools-runtime-chip")).toHaveAttribute("data-tone", "warning");
+  });
+
+  it("treats in-flight scheduled turns as normal background work", () => {
+    render(
+      <RuntimeStatsPanel
+        defaultOpen
+        stats={{
+          model: "qwen-small",
+          active_sessions: 0,
+          running_turns: 0,
+          schedule_runner: {
+            enabled: true,
+            active: true,
+            frontend_independent: true,
+            sessions_with_schedules: 1,
+            schedules: 1,
+            enabled_schedules: 1,
+            in_flight_schedules: 1,
+            oldest_in_flight_session_id: "timer-session",
+            oldest_in_flight_schedule_id: "sched_active",
+          },
+        }}
+      />,
+    );
+
+    const chip = within(screen.getByTestId("runtime-stats-grid")).getByText("Schedules").closest(".session-tools-runtime-chip");
+    expect(chip).toHaveTextContent("1/1 enabled · 1 sessions · 1 running · running timer-session/sched_active");
+    expect(chip).toHaveAttribute("data-tone", "ready");
   });
 
   it("shows browser policy blocks that promote Runtime into Workbench", () => {

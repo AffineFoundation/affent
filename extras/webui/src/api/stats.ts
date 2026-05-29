@@ -83,12 +83,16 @@ export interface ScheduleRunnerStats {
   schedules?: number;
   enabled_schedules?: number;
   due_schedules?: number;
+  in_flight_schedules?: number;
   error_schedules?: number;
   next_run_at?: string;
   next_session_id?: string;
   next_schedule_id?: string;
   next_schedule_kind?: string;
   next_prompt_preview?: string;
+  oldest_in_flight_at?: string;
+  oldest_in_flight_session_id?: string;
+  oldest_in_flight_schedule_id?: string;
   last_error_session_id?: string;
   last_error_schedule_id?: string;
   last_error?: string;

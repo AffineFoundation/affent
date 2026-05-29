@@ -220,10 +220,11 @@ function scheduleRunnerMetric(runner?: ScheduleRunnerStats): RuntimeMetric | und
   const total = runner.schedules ?? 0;
   const enabled = runner.enabled_schedules ?? 0;
   const due = runner.due_schedules ?? 0;
+  const inFlight = runner.in_flight_schedules ?? 0;
   const errors = runner.error_schedules ?? 0;
   const disabledReason = runner.disabled_reason?.trim();
   const lastError = runner.last_error?.trim();
-  if (total <= 0 && due <= 0 && errors <= 0 && !lastError && !disabledReason) return undefined;
+  if (total <= 0 && due <= 0 && inFlight <= 0 && errors <= 0 && !lastError && !disabledReason) return undefined;
   const parts: string[] = [];
   if (runner.enabled === false) {
     parts.push("disabled");
@@ -232,6 +233,10 @@ function scheduleRunnerMetric(runner?: ScheduleRunnerStats): RuntimeMetric | und
   }
   if (total > 0) parts.push(`${enabled}/${total} enabled`);
   if ((runner.sessions_with_schedules ?? 0) > 0) parts.push(`${runner.sessions_with_schedules} sessions`);
+  if (inFlight > 0) parts.push(`${inFlight} running`);
+  if (runner.oldest_in_flight_session_id && runner.oldest_in_flight_schedule_id) {
+    parts.push(`running ${runner.oldest_in_flight_session_id}/${runner.oldest_in_flight_schedule_id}`);
+  }
   if (due > 0) parts.push(`${due} due`);
   if (runner.next_session_id && runner.next_schedule_id) parts.push(`next ${runner.next_session_id}/${runner.next_schedule_id}`);
   if (runner.next_schedule_kind) parts.push(runner.next_schedule_kind);
