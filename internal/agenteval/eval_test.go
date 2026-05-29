@@ -1684,6 +1684,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			"context_overflow": 1,
 		},
 		RequiredCompactionRemovedMsgs: 20,
+		RequiredCompactScopeActive:    1,
 		RequiredContextSummaryText:    []string{"HRO market marker"},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
@@ -1761,6 +1762,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_reason_at_least:context_overflow:1",
 		"context_compaction_removed_messages_at_least:20",
+		"context_maintenance_compact_scope_active_at_least:1",
 		"context_compaction_summary_contains:HRO market marker",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
@@ -3493,12 +3495,14 @@ func TestSelectLongRunSuite(t *testing.T) {
 		)
 	}
 	if modelWindowPolicy.RequiredContextCompactions != 0 ||
+		modelWindowPolicy.RequiredCompactScopeActive != 1 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 1 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 1 ||
 		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-3") {
-		t.Fatalf("model-window policy requirements = compactions:%d trace:%#v final:%#v",
+		t.Fatalf("model-window policy requirements = compactions:%d compact_scope:%d trace:%#v final:%#v",
 			modelWindowPolicy.RequiredContextCompactions,
+			modelWindowPolicy.RequiredCompactScopeActive,
 			modelWindowPolicy.RequiredTraceEventCounts,
 			modelWindowPolicy.RequiredFinalText,
 		)
@@ -3509,6 +3513,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		"runtime_surface_compact_trigger_matches_model_policy",
 		"runtime_surface_compact_summary_prompt_matches_model_policy",
 		"runtime_surface_tool_schema_within_budget",
+		"context_maintenance_compact_scope_active_at_least:1",
 	} {
 		if !stringSliceContains(modelWindowChecks, want) {
 			t.Fatalf("model-window policy checks missing %q: %#v", want, modelWindowChecks)

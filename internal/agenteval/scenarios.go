@@ -2218,6 +2218,7 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 			sse.TypeRuntimeSurface:        1,
 			sse.TypeContextCompactSkipped: 1,
 		},
+		RequiredCompactScopeActive: 1,
 		ForbiddenTools:             []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
 		MaxParentToolCalls:         0,
 		MaxTurns:                   2,

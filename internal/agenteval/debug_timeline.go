@@ -775,7 +775,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- max_tool_arg: `%s.%s` contains `%s` max=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), max)
 		}
 	}
-	if exp.RequiredContextMaintenance > 0 || len(exp.RequiredContextMaintenanceReasons) > 0 || exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || len(exp.RequiredContextCompactionReasons) > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
+	if exp.RequiredContextMaintenance > 0 || len(exp.RequiredContextMaintenanceReasons) > 0 || exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || len(exp.RequiredContextCompactionReasons) > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || exp.RequiredCompactScopeActive > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		var parts []string
 		if exp.RequiredContextMaintenance > 0 {
 			parts = append(parts, fmt.Sprintf("maintenance>=%d", exp.RequiredContextMaintenance))
@@ -791,6 +791,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if exp.RequiredCompactionReducedBytes > 0 {
 			parts = append(parts, fmt.Sprintf("reduced_bytes>=%d", exp.RequiredCompactionReducedBytes))
+		}
+		if exp.RequiredCompactScopeActive > 0 {
+			parts = append(parts, fmt.Sprintf("compact_scope_active>=%d", exp.RequiredCompactScopeActive))
 		}
 		if len(parts) > 0 {
 			fmt.Fprintf(b, "- context_requirements: `%s`\n", strings.Join(parts, " "))
@@ -884,6 +887,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredContextCompactionReasons) > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
 		exp.RequiredCompactionReducedBytes > 0 ||
+		exp.RequiredCompactScopeActive > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||
 		len(exp.RequiredContextLoopProtocolAnchorText) > 0 ||
 		len(exp.ProtectedFiles) > 0 ||

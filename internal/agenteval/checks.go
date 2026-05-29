@@ -1235,6 +1235,53 @@ func RuntimeSurfaceCompactScopeActive() Check {
 	}
 }
 
+func ContextMaintenanceCompactScopeActiveAtLeast(min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_maintenance_compact_scope_active_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var observed []string
+			for _, compaction := range t.ContextCompactions {
+				if compaction.CompactScopeActive {
+					count++
+				}
+				observed = append(observed, fmt.Sprintf("compaction turn=%s active=%t ordinal=%d prefill=%d scoped=%d hard_limit=%d",
+					compaction.TurnID,
+					compaction.CompactScopeActive,
+					compaction.CompactWindowOrdinal,
+					compaction.CompactWindowPrefillInputTokens,
+					compaction.CompactScopedInputTokens,
+					compaction.CompactHardInputLimitTokens,
+				))
+			}
+			for _, skipped := range t.ContextCompactionSkips {
+				if skipped.CompactScopeActive {
+					count++
+				}
+				observed = append(observed, fmt.Sprintf("skip turn=%s cause=%s active=%t ordinal=%d prefill=%d scoped=%d hard_limit=%d",
+					skipped.TurnID,
+					skipped.Cause,
+					skipped.CompactScopeActive,
+					skipped.CompactWindowOrdinal,
+					skipped.CompactWindowPrefillInputTokens,
+					skipped.CompactScopedInputTokens,
+					skipped.CompactHardInputLimitTokens,
+				))
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_scope_active=%d", count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("compact_scope_active=%d, want >= %d; observed=%v", count, min, observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceCompactTriggerMatchesModelPolicy() Check {
 	return Check{
 		Name: "runtime_surface_compact_trigger_matches_model_policy",

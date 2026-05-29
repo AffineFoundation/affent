@@ -320,6 +320,7 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 			RuntimeSurfaceModelContextWindowTokens(200),
 			RuntimeSurfaceModelContextWindowEffectivePercent(95),
 			RuntimeSurfaceCompactTriggerInputTokens(160),
+			ContextMaintenanceCompactScopeActiveAtLeast(1),
 		},
 	}
 
@@ -353,6 +354,12 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 	}
 	if out.Trace.RawTypes["context.compacted"] != 1 {
 		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
+	}
+	if len(out.Trace.ContextCompactions) != 1 ||
+		!out.Trace.ContextCompactions[0].CompactScopeActive ||
+		out.Trace.ContextCompactions[0].CompactWindowPrefillInputTokens <= 0 ||
+		out.Trace.ContextCompactions[0].CompactHardInputLimitTokens != 200 {
+		t.Fatalf("context compaction compact scope = %+v", out.Trace.ContextCompactions)
 	}
 }
 

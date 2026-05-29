@@ -1046,6 +1046,17 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceCompactScopeActive().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface compact scope check to pass: %+v", res)
 	}
+	scopeTrace := Trace{ContextCompactionSkips: []ContextCompactionSkip{{
+		Cause:                           "request_pressure_not_reduced",
+		CompactScopeActive:              true,
+		CompactWindowOrdinal:            2,
+		CompactWindowPrefillInputTokens: 45000,
+		CompactScopedInputTokens:        12000,
+		CompactHardInputLimitTokens:     70000,
+	}}}
+	if res := ContextMaintenanceCompactScopeActiveAtLeast(1).Eval(scopeTrace); !res.Pass {
+		t.Fatalf("expected context maintenance compact scope check to pass: %+v", res)
+	}
 	if res := RuntimeSurfaceCompactTriggerMatchesModelPolicy().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface model policy check to pass: %+v", res)
 	}
