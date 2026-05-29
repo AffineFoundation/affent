@@ -66,9 +66,9 @@ describe("SessionAutomationPanel", () => {
     expect(screen.getByRole("button", { name: "Answer setup" })).toBeInTheDocument();
     const queue = screen.getByTestId("session-automation-queue");
     expect(queue).toHaveTextContent("Execution queue");
-    expect(queue).toHaveTextContent("2 items");
-    expect(queue).toHaveTextContent("Answer loop calibration");
-    expect(queue).toHaveTextContent(".affent/loops/demo/LOOP.md");
+    expect(queue).toHaveTextContent("1 item");
+    expect(queue).not.toHaveTextContent("Answer loop calibration");
+    expect(queue).not.toHaveTextContent(".affent/loops/demo/LOOP.md");
     expect(queue).toHaveTextContent("Next May 27, 02:00 PM");
     const dashboard = screen.getByTestId("session-automation-dashboard");
     expect(dashboard).toHaveTextContent("Loop");
@@ -77,5 +77,47 @@ describe("SessionAutomationPanel", () => {
     expect(dashboard).toHaveTextContent("Off");
     expect(dashboard).toHaveTextContent("Next");
     expect(dashboard).toHaveTextContent("Loop waiting");
+  });
+
+  it("does not repeat the focused loop action in the execution queue", () => {
+    render(
+      <SessionAutomationPanel
+        title="Loop waiting"
+        detail="Answer setup question before LOOP.md can run."
+        focus={{
+          label: "Required action",
+          title: "Answer setup question",
+          detail: "Before LOOP.md can run.",
+          tone: "attention",
+          action: "answer",
+        }}
+        queue={[
+          {
+            id: "loop-calibration",
+            label: "Required",
+            title: "Answer loop calibration",
+            detail: "LOOP.md is still a draft.",
+            tone: "attention",
+            meta: ".affent/loops/demo/LOOP.md",
+          },
+          {
+            id: "timer-next",
+            label: "Check-in",
+            title: "Next May 27, 02:00 PM",
+            detail: "Repeats every 1h.",
+            tone: "ok",
+            meta: "sched_1",
+          },
+        ]}
+        defaultOpen
+      >
+        <section>Loop section</section>
+      </SessionAutomationPanel>,
+    );
+
+    const queue = screen.getByTestId("session-automation-queue");
+    expect(queue).toHaveTextContent("1 item");
+    expect(queue).not.toHaveTextContent("Answer loop calibration");
+    expect(queue).toHaveTextContent("Next May 27, 02:00 PM");
   });
 });

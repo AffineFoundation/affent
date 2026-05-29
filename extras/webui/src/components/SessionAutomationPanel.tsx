@@ -45,6 +45,7 @@ export function SessionAutomationPanel({
   testId?: string;
   children: ReactNode;
 }) {
+  const visibleQueue = queue.filter((item) => !automationQueueItemCoveredByFocus(item, focus));
   return (
     <details className="session-plan-panel session-automation-panel" data-testid={testId} {...(defaultOpen ? { open: true } : {})}>
       <summary className="session-plan-summary">
@@ -65,14 +66,14 @@ export function SessionAutomationPanel({
             {actions ? <div className="session-automation-focus-actions">{actions}</div> : null}
           </section>
         ) : null}
-        {queue.length > 0 ? (
+        {visibleQueue.length > 0 ? (
           <section className="session-automation-queue" data-testid="session-automation-queue" aria-label="Automation execution queue">
             <header>
               <span>Execution queue</span>
-              <strong>{queue.length} {queue.length === 1 ? "item" : "items"}</strong>
+              <strong>{visibleQueue.length} {visibleQueue.length === 1 ? "item" : "items"}</strong>
             </header>
             <ol>
-              {queue.map((item) => (
+              {visibleQueue.map((item) => (
                 <li key={item.id} data-tone={item.tone ?? "neutral"}>
                   <div className="session-automation-queue-main">
                     <span>{item.label}</span>
@@ -100,4 +101,11 @@ export function SessionAutomationPanel({
       </div>
     </details>
   );
+}
+
+function automationQueueItemCoveredByFocus(item: SessionAutomationQueueItem, focus?: SessionAutomationFocus): boolean {
+  if (!focus) return false;
+  if (focus.action === "answer" && item.id === "loop-calibration") return true;
+  if (focus.action === "review" && item.id === "loop-review") return true;
+  return item.title === focus.title && item.detail === focus.detail;
 }
