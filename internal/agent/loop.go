@@ -1095,6 +1095,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	toolBudgetExhausted := false
 	forceNoToolsNext := false
 	forceNoToolsReason := "(loop_guard requested a final answer; tools disabled for this step)"
+	forceNoToolsPrompt := forceNoToolsFinalPrompt
 	guardInterventions := 0
 	budgetExhaustedOmissions := 0
 	processFinalRecovered := false
@@ -1107,7 +1108,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		nextPrompt := prompt
 		nextSkippedReason := skippedReason
 		for attempt := 0; attempt < 3; attempt++ {
-			final, reason, err := l.runFinalNoToolsStep(ctx, turnID, nextPrompt)
+			final, reason, err := l.runFinalNoToolsStep(ctx, turnID, nextPrompt, opts)
 			if err != nil {
 				return false, reason, err
 			}
@@ -1158,6 +1159,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		forceNoToolsNext = true
 		forceNoToolsReason = "(tool result context budget exhausted; final no-tool answer requested)"
+		forceNoToolsPrompt = forceNoToolsFinalPrompt
 	}
 	forceNoToolsForInputBudget := func() bool {
 		budget := l.maxTurnInputTokensForTurn(opts)
@@ -1170,6 +1172,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		forceNoToolsNext = true
 		forceNoToolsReason = "(turn input token budget exhausted; final no-tool answer requested)"
+		forceNoToolsPrompt = forceNoToolsFinalPrompt
 		return true
 	}
 	forceNoToolsForProjectedInputBudget := func(toolDefs []ToolDef) bool {
@@ -1193,6 +1196,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		forceNoToolsNext = true
 		forceNoToolsReason = "(projected turn input token budget would be exhausted; final no-tool answer requested)"
+		forceNoToolsPrompt = forceNoToolsFinalPrompt
 		return true
 	}
 	for {
@@ -1244,7 +1248,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			if !processFinalRecovered && finalAnswerNeedsEvidenceRecovery(final.Final.Content, toolCallsUsed) {
 				processFinalRecovered = true
-				recovered, reason, err := l.runFinalNoToolsStep(ctx, turnID, processNarrationRecoveryPrompt)
+				recovered, reason, err := l.runFinalNoToolsStep(ctx, turnID, processNarrationRecoveryPrompt, opts)
 				if err != nil {
 					endReason = reason
 					break
@@ -1289,7 +1293,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStats.ToolErrors += skipped
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
 				l.maybeCompactForBudgetPressure(ctx, turnID)
-				done, reason, err := runBudgetFinal(forceNoToolsFinalPrompt, "(tools are disabled; final no-tool answer requested)")
+				done, reason, err := runBudgetFinal(forceNoToolsPrompt, "(tools are disabled; final no-tool answer requested)")
 				if err != nil {
 					endReason = reason
 					break
@@ -1544,6 +1548,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 							toolStats.ForcedNoTools++
 						}
 						forceNoToolsNext = true
+						forceNoToolsPrompt = forceNoToolsFinalPrompt
 					}
 				}
 				continue
@@ -1560,6 +1565,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			result, isErr := tools.dispatch(ctx, toolName, args)
 			toolDuration := time.Since(toolStart)
+			stopToolBatchForCalibration := false
 			toolStats.ToolDurationMS += toolDuration.Milliseconds()
 			recordSourceAccessStats(&toolStats, result)
 			recordMemoryUpdateStats(&toolStats, toolName, args, result, isErr)
@@ -1582,6 +1588,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 							toolStats.ForcedNoTools++
 						}
 						forceNoToolsNext = true
+						forceNoToolsPrompt = forceNoToolsFinalPrompt
 					}
 				}
 			}
@@ -1589,6 +1596,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			recordContextOmission(omitted)
 			if l.loopProtocolStartSetupCreatedDraft(toolName, args, isErr) {
 				opts.ForceLoopCalibrationQuestion = true
+				opts.FinalNoToolsOnMaxTurns = true
+				if !forceNoToolsNext {
+					toolStats.ForcedNoTools++
+				}
+				forceNoToolsNext = true
+				forceNoToolsReason = "(loop protocol draft initialized; calibration question required before more tools)"
+				forceNoToolsPrompt = loopProtocolCalibrationNoToolsPrompt
+				stopToolBatchForCalibration = true
 			}
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
@@ -1605,6 +1620,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolStats.ToolErrors++
 			}
 			recordToolFailureKind(&toolStats, toolName, result, !outcomeOK)
+			if stopToolBatchForCalibration {
+				if skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i+1:], forceNoToolsReason); skipped > 0 {
+					toolStats.ToolRequests += skipped
+					toolStats.ToolErrors += skipped
+				}
+				break
+			}
 		}
 		if toolBudgetExhausted {
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
@@ -2779,7 +2801,7 @@ var processNarrationRecoveryPrompt = `The previous assistant response after tool
 Do not call tools. ` + finalEvidenceDiscipline + ` Produce the best final answer from the evidence already gathered. If the evidence is incomplete, say exactly what was verified and what remains unverified; do not say you will continue searching.`
 
 func (l *Loop) runLengthRecoveryStep(ctx context.Context, turnID string) (*FinishInfo, string, error) {
-	return l.runFinalNoToolsStep(ctx, turnID, lengthRecoveryPrompt)
+	return l.runFinalNoToolsStep(ctx, turnID, lengthRecoveryPrompt, TurnOptions{})
 }
 
 var maxTurnsFinalPrompt = `The tool-step budget for this turn is exhausted.
@@ -2794,7 +2816,11 @@ var forceNoToolsFinalPrompt = `Tools are disabled for the rest of this turn, but
 
 Do not call tools again. ` + finalEvidenceDiscipline + ` Start the final answer now. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
 
-func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (*FinishInfo, string, error) {
+var loopProtocolCalibrationNoToolsPrompt = `Loop protocol draft setup is complete and the active loop is waiting for user calibration.
+
+Do not call tools. Ask exactly one concise calibration question about stop conditions, pause conditions, or missing intent, then stop.`
+
+func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string, opts TurnOptions) (*FinishInfo, string, error) {
 	if digest := finalEvidenceDigest(l.Conv.Snapshot()); digest != "" {
 		digest = strings.TrimSpace(redactSecretValues(digest, l.SecretValuesProvider))
 		prompt = prompt + "\n\n" + digest
@@ -2804,7 +2830,7 @@ func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append final no-tools prompt")
 		return nil, sse.TurnEndError, err
 	}
-	return l.runStep(ctx, turnID, nil, TurnOptions{})
+	return l.runStep(ctx, turnID, nil, opts)
 }
 
 func (l *Loop) publishFinalEvidenceDigestInjected(turnID, digest string) {

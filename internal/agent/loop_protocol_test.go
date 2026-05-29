@@ -231,6 +231,143 @@ done:
 	}
 }
 
+func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "setup-gate")
+	startSetupArgs, err := json.Marshal(map[string]any{
+		"action": "start_setup",
+		"goal":   "Build a CLI puzzle game.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readArgs, err := json.Marshal(map[string]any{
+		"action": "read",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch call {
+		case 1:
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "lp_start",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(startSetupArgs),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+		case 2:
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "lp_read_after_setup",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(readArgs),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+		default:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"What stop condition should pause this loop?\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(tmp, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	RegisterLoopProtocolOnly(reg, protocolPath)
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv,
+		Events: events, LoopProtocolPath: protocolPath,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUserWithOptions(context.Background(), "Set up a loop for a CLI puzzle game", TurnOptions{
+		UserMode: UserModeLoopSetup,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawSkippedTool := false
+	sawCalibrationQuestion := false
+	for {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.CallID == "lp_read_after_setup" &&
+					p.ExitCode != 0 &&
+					strings.Contains(p.Result, "calibration question required before more tools") {
+					sawSkippedTool = true
+				}
+			case sse.TypeLoopCalibrationRequest:
+				var p sse.LoopProtocolCalibrationPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop calibration request: %v", err)
+				}
+				if p.CalibrationQuestions == 1 && strings.Contains(p.LastCalibrationQuestion, "stop condition") {
+					sawCalibrationQuestion = true
+				}
+			case sse.TypeTurnEnd:
+				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+				if err != nil || !found {
+					t.Fatalf("ReadState found=%v err=%v", found, err)
+				}
+				if !sawSkippedTool {
+					t.Fatal("expected tool request after start_setup to be skipped until calibration")
+				}
+				if !sawCalibrationQuestion || state.CalibrationQuestions != 1 {
+					t.Fatalf("expected start_setup to force one calibration question, state=%+v", state)
+				}
+				if got := atomic.LoadInt32(&calls); got != 3 {
+					t.Fatalf("LLM calls = %d, want 3", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "uncalibrated")
