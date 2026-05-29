@@ -513,6 +513,43 @@ func TestValidateProtocolActivationReadyRequiresAllCalibrationAnswers(t *testing
 	}
 }
 
+func TestPrepareProtocolActivationUsesSavedDraftWhenPayloadHasNoMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "longrun")
+	if _, _, _, err := EnsureProtocolTemplate(path, ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "session-a",
+		Goal:         "Run a durable loop setup.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+
+	protocol, ignored, err := PrepareProtocolActivation(path, "# Loop Protocol\n\n## Goal\nWrong task")
+	if err != nil {
+		t.Fatalf("PrepareProtocolActivation: %v", err)
+	}
+	if !ignored {
+		t.Fatal("PrepareProtocolActivation ignored=false, want true for payload without metadata")
+	}
+	if ProtocolStatus(protocol) != "running" {
+		t.Fatalf("prepared protocol status = %q\n%s", ProtocolStatus(protocol), protocol)
+	}
+	if strings.Contains(protocol, "Wrong task") || !strings.Contains(protocol, "Run a durable loop setup.") {
+		t.Fatalf("prepared protocol should come from saved draft:\n%s", protocol)
+	}
+}
+
+func TestPrepareProtocolActivationRejectsMissingSavedDraft(t *testing.T) {
+	dir := t.TempDir()
+	path := ProtocolPath(dir, "missing")
+
+	_, _, err := PrepareProtocolActivation(path, "# Loop Protocol\n\n## Goal\nWrong task")
+	if err == nil || !strings.Contains(err.Error(), "LOOP.md is not initialized") {
+		t.Fatalf("PrepareProtocolActivation missing draft err = %v", err)
+	}
+}
+
 func TestRepairRecordedCalibrationFromProtocol(t *testing.T) {
 	dir := t.TempDir()
 	path := ProtocolPath(dir, "longrun")

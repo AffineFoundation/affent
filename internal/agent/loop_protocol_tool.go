@@ -279,26 +279,6 @@ func closeLoopProtocol(protocolPath string, p loopProtocolToolArgs) (string, err
 	return fmt.Sprintf("closed LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol feed is disabled unless reopened deliberately", state.Status, event.Seq, state.ProtocolUpdates), nil
 }
 
-func savedLoopProtocolForActivation(protocolPath string) (string, bool, error) {
-	saved, found, err := loopstate.ReadProtocol(protocolPath)
-	if err != nil || !found {
-		return "", false, err
-	}
-	status := loopstate.ProtocolStatus(saved)
-	switch status {
-	case "draft":
-		var ok bool
-		saved, ok = loopstate.ProtocolWithStatus(saved, "running")
-		if !ok {
-			return "", false, nil
-		}
-	case "running":
-	default:
-		return "", false, nil
-	}
-	return saved, true, nil
-}
-
 func loopProtocolFailure(message, kind string) error {
 	message = strings.TrimSpace(message)
 	if message == "" {
