@@ -840,7 +840,7 @@ func sessionLoopProtocolRunningAtPath(protocolPath string) bool {
 func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionScheduleRun) error {
 	sess, err := p.GetOrCreate(run.SessionID)
 	if err != nil {
-		_ = p.recordSessionScheduleFailure(run, now, err)
+		_ = p.recordSessionScheduleFailure(run, now, "", err)
 		return err
 	}
 	p.rememberSessionScheduleClaim(run)
@@ -852,7 +852,7 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 	})
 	if err != nil {
 		p.forgetSessionScheduleClaim(run.SessionID, run.ScheduleID)
-		_ = p.recordSessionScheduleFailure(run, now, err)
+		_ = p.recordSessionScheduleFailure(run, now, "", err)
 		return err
 	}
 	p.logger.Info().Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Str("turn_id", turnID).Msg("session schedule fired")
@@ -916,7 +916,7 @@ func (s *Session) completeScheduledTurn(ev sse.Event) {
 	if reason == "" {
 		reason = sse.TurnEndError
 	}
-	if err := s.pool.recordSessionScheduleFailure(run, time.Now().UTC(), fmt.Errorf("scheduled turn ended with %s", reason)); err != nil {
+	if err := s.pool.recordSessionScheduleFailure(run, time.Now().UTC(), payload.TurnID, fmt.Errorf("scheduled turn ended with %s", reason)); err != nil {
 		s.pool.logger.Warn().Err(err).Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Msg("record session schedule failure")
 	}
 }
@@ -987,7 +987,7 @@ func sessionScheduleClaimKey(sessionID, scheduleID string) string {
 	return sessionID + "\x00" + scheduleID
 }
 
-func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now time.Time, cause error) error {
+func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now time.Time, turnID string, cause error) error {
 	p.schedulesMu.Lock()
 	defer p.schedulesMu.Unlock()
 	path := sessionSchedulesPath(p, run.SessionID)
@@ -1004,6 +1004,9 @@ func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now t
 		}
 		schedule.Enabled = true
 		schedule.NextRunAt = retryAt
+		if strings.TrimSpace(turnID) != "" {
+			schedule.LastTurnID = strings.TrimSpace(turnID)
+		}
 		schedule.LastError = previewSessionScheduleError(cause)
 		schedule.UpdatedAt = nowStr
 		return writeSessionSchedulesFile(path, file)

@@ -44,8 +44,8 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	if !schedule.Enabled {
 		t.Fatalf("schedule = %+v, want failed one-shot re-enabled for retry", schedule)
 	}
-	if schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) {
-		t.Fatalf("schedule = %+v, want turn-end failure metadata instead of false success", schedule)
+	if schedule.RunCount != 0 || schedule.LastTurnID == "" || !strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) {
+		t.Fatalf("schedule = %+v, want failed turn id and turn-end failure metadata instead of false success", schedule)
 	}
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
 	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.ScheduleKind != sessionScheduleKindLoopTick || userMessage.Text != "Scheduled check-in for session: due-one" || userMessage.DisplayText != "Loop tick: due-one" {
