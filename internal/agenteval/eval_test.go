@@ -3354,31 +3354,34 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("compaction retention RequiredContextSummaryText = %#v, want %q", compactionRetention.RequiredContextSummaryText, want)
 		}
 	}
-	for _, want := range []string{".affent/loops/longrun-compaction-retention/LOOP.md", "loop_id=longrun-compaction-retention"} {
-		if !stringSliceContains(compactionRetention.RequiredContextLoopProtocolAnchorText, want) {
-			t.Fatalf("compaction retention RequiredContextLoopProtocolAnchorText = %#v, want %q", compactionRetention.RequiredContextLoopProtocolAnchorText, want)
-		}
+	if len(compactionRetention.RequiredContextLoopProtocolAnchorText) != 0 {
+		t.Fatalf("compaction retention should not require a loop feed after completed-loop compaction: %#v", compactionRetention.RequiredContextLoopProtocolAnchorText)
 	}
 	for _, want := range []TaskStateEvidenceRequirement{
 		{Source: "context_compaction", SummaryContains: "threshold"},
-		{Source: "context_compaction", SummaryContains: ".affent/loops/longrun-compaction-retention/LOOP.md"},
-		{Source: "context_compaction", SummaryContains: "loop_id=longrun-compaction-retention"},
 	} {
 		if !taskStateEvidenceRequirementContains(compactionRetention.RequiredTaskStateEvidence, want) {
 			t.Fatalf("compaction retention RequiredTaskStateEvidence = %#v, want %#v", compactionRetention.RequiredTaskStateEvidence, want)
 		}
 	}
-	if compactionRetention.RequiredLoopProtocolFeeds != 2 ||
-		compactionRetention.RequiredLoopProtocolFeedModes["full"] != 2 ||
-		!compactionRetention.RequireLoopProtocolFullAfterCompact ||
-		len(compactionRetention.RequiredLoopProtocolFeedMatches) != 1 ||
-		!strings.Contains(compactionRetention.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "current/*.md handoff files") ||
-		compactionRetention.RequiredLoopProtocolFeedMatches[0].LastTurnEndReason != "completed" ||
-		compactionRetention.RequiredLoopProtocolFeedMatches[0].MinLastTurnToolRequests != 5 {
-		t.Fatalf("compaction retention loop protocol constraints = feeds:%d modes:%#v", compactionRetention.RequiredLoopProtocolFeeds, compactionRetention.RequiredLoopProtocolFeedModes)
+	if compactionRetention.RequiredLoopProtocolFeeds != 1 ||
+		compactionRetention.RequiredLoopProtocolFeedModes["full"] != 1 ||
+		compactionRetention.RequireLoopProtocolFullAfterCompact ||
+		len(compactionRetention.RequiredLoopProtocolFeedMatches) != 0 ||
+		compactionRetention.RequiredLoopProtocolFinalStatus != "completed" {
+		t.Fatalf("compaction retention loop protocol constraints = feeds:%d modes:%#v full_after:%v matches:%#v final:%q",
+			compactionRetention.RequiredLoopProtocolFeeds,
+			compactionRetention.RequiredLoopProtocolFeedModes,
+			compactionRetention.RequireLoopProtocolFullAfterCompact,
+			compactionRetention.RequiredLoopProtocolFeedMatches,
+			compactionRetention.RequiredLoopProtocolFinalStatus,
+		)
 	}
 	if _, ok := compactionRetention.Files[".affent/loops/longrun-compaction-retention/LOOP.md"]; !ok {
 		t.Fatalf("compaction retention missing seeded LOOP.md")
+	}
+	if !strings.Contains(compactionRetention.Files[".affent/loops/longrun-compaction-retention/LOOP.md"], "- status: running") {
+		t.Fatalf("compaction retention seeded LOOP.md must include running metadata")
 	}
 	if !stringSliceContains(compactionRetention.ProtectedFiles, ".affent/loops/longrun-compaction-retention/LOOP.md") {
 		t.Fatalf("compaction retention ProtectedFiles = %#v, want LOOP.md", compactionRetention.ProtectedFiles)
@@ -3430,25 +3433,33 @@ func TestSelectLongRunSuite(t *testing.T) {
 			requestPressure.CompactKeepLast,
 		)
 	}
-	if requestPressure.RequiredContextCompactions != 1 ||
-		requestPressure.RequiredContextCompactionReasons["estimated_context_pressure"] != 1 ||
+	if requestPressure.RequiredContextMaintenance != 1 ||
+		requestPressure.RequiredContextMaintenanceReasons["estimated_context_pressure"] != 1 ||
+		requestPressure.RequiredContextCompactions != 0 ||
+		len(requestPressure.RequiredContextCompactionReasons) != 0 ||
 		requestPressure.MaxParentToolCalls != 0 ||
 		!stringSliceContains(requestPressure.RequiredFinalText, "REQUEST-PRESSURE-OK-3") {
-		t.Fatalf("request pressure requirements = compactions:%d reasons:%#v max_tools:%d final:%#v",
+		t.Fatalf("request pressure requirements = maintenance:%d maintenance_reasons:%#v compactions:%d reasons:%#v trace:%#v max_tools:%d final:%#v",
+			requestPressure.RequiredContextMaintenance,
+			requestPressure.RequiredContextMaintenanceReasons,
 			requestPressure.RequiredContextCompactions,
 			requestPressure.RequiredContextCompactionReasons,
+			requestPressure.RequiredTraceEventCounts,
 			requestPressure.MaxParentToolCalls,
 			requestPressure.RequiredFinalText,
 		)
 	}
-	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_reason_at_least:estimated_context_pressure:1") {
-		t.Fatalf("request pressure checks missing compaction reason assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
+	if stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_reason_at_least:estimated_context_pressure:1") ||
+		stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_policy_observed_at_least:1") {
+		t.Fatalf("request pressure checks should not require ineffective compaction: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
 	}
-	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_policy_observed_at_least:1") {
-		t.Fatalf("request pressure checks missing compaction policy metadata assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
+	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_maintenance_at_least:1") ||
+		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_maintenance_policy_observed_at_least:1") ||
+		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_maintenance_reason_at_least:estimated_context_pressure:1") {
+		t.Fatalf("request pressure checks missing context maintenance assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
 	}
-	if !taskStateEvidenceRequirementContains(requestPressure.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
-		t.Fatalf("request pressure RequiredTaskStateEvidence = %#v, want context_compaction estimated_context_pressure", requestPressure.RequiredTaskStateEvidence)
+	if !taskStateEvidenceRequirementContains(requestPressure.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{SummaryContains: "estimated_context_pressure"}) {
+		t.Fatalf("request pressure RequiredTaskStateEvidence = %#v, want context maintenance evidence", requestPressure.RequiredTaskStateEvidence)
 	}
 
 	modelWindowPolicy, ok := seen["longrun-model-window-compaction-policy"]
@@ -4302,20 +4313,29 @@ func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t
 
 func TestBuiltinContextCompactionScenariosRequireTaskStateEvidence(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
-		if scenario.RequiredContextCompactions <= 0 {
-			continue
-		}
-		if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", "") {
-			t.Fatalf("%s requires context compaction but lacks task_state context_compaction evidence requirement: %#v", scenario.Name, scenario.RequiredTaskStateEvidence)
-		}
-		for reason := range scenario.RequiredContextCompactionReasons {
-			if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", reason) {
-				t.Fatalf("%s requires context compaction reason %q but lacks matching task_state evidence requirement: %#v", scenario.Name, reason, scenario.RequiredTaskStateEvidence)
+		if scenario.RequiredContextMaintenance > 0 {
+			if !scenarioRequiresTaskStateEvidence(scenario, "", "") {
+				t.Fatalf("%s requires context maintenance but lacks task_state evidence requirement: %#v", scenario.Name, scenario.RequiredTaskStateEvidence)
+			}
+			for reason := range scenario.RequiredContextMaintenanceReasons {
+				if !scenarioRequiresTaskStateEvidence(scenario, "", reason) {
+					t.Fatalf("%s requires context maintenance reason %q but lacks matching task_state evidence requirement: %#v", scenario.Name, reason, scenario.RequiredTaskStateEvidence)
+				}
 			}
 		}
-		for _, anchor := range scenario.RequiredContextLoopProtocolAnchorText {
-			if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", anchor) {
-				t.Fatalf("%s requires context compaction loop anchor %q but lacks matching task_state evidence requirement: %#v", scenario.Name, anchor, scenario.RequiredTaskStateEvidence)
+		if scenario.RequiredContextCompactions > 0 {
+			if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", "") {
+				t.Fatalf("%s requires context compaction but lacks task_state context_compaction evidence requirement: %#v", scenario.Name, scenario.RequiredTaskStateEvidence)
+			}
+			for reason := range scenario.RequiredContextCompactionReasons {
+				if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", reason) {
+					t.Fatalf("%s requires context compaction reason %q but lacks matching task_state evidence requirement: %#v", scenario.Name, reason, scenario.RequiredTaskStateEvidence)
+				}
+			}
+			for _, anchor := range scenario.RequiredContextLoopProtocolAnchorText {
+				if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", anchor) {
+					t.Fatalf("%s requires context compaction loop anchor %q but lacks matching task_state evidence requirement: %#v", scenario.Name, anchor, scenario.RequiredTaskStateEvidence)
+				}
 			}
 		}
 	}

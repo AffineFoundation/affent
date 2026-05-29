@@ -1655,6 +1655,79 @@ func ContextCompactionsAtLeast(min int) Check {
 	}
 }
 
+func ContextMaintenanceAtLeast(min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_maintenance_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			compactions := t.ContextCompactionStats(0)
+			skips := t.ContextCompactionSkipStats(0)
+			got := compactions.Count + skips.Count
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("context_maintenance=%d compactions=%d skipped=%d", got, compactions.Count, skips.Count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("context_maintenance=%d, want >= %d; compactions=%d skipped=%d", got, min, compactions.Count, skips.Count),
+			}
+		},
+	}
+}
+
+func ContextMaintenancePolicyObservedAtLeast(min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_maintenance_policy_observed_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			compactions := t.ContextCompactionStats(0)
+			skips := t.ContextCompactionSkipStats(0)
+			got := compactions.PolicyObserved + skips.PolicyObserved
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("context_maintenance_policy_observed=%d compactions=%d skipped=%d", got, compactions.PolicyObserved, skips.PolicyObserved)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("context_maintenance_policy_observed=%d, want >= %d; compactions=%d skipped=%d", got, min, compactions.PolicyObserved, skips.PolicyObserved),
+			}
+		},
+	}
+}
+
+func ContextMaintenanceReasonAtLeast(reason string, min int) Check {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "unknown"
+	}
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("context_maintenance_reason_at_least:%s:%d", reason, min),
+		Eval: func(t Trace) CheckResult {
+			compactions := t.ContextCompactionStats(0)
+			skips := t.ContextCompactionSkipStats(0)
+			got := 0
+			if compactions.ByReason != nil {
+				got += compactions.ByReason[reason]
+			}
+			if skips.ByReason != nil {
+				got += skips.ByReason[reason]
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("context_maintenance_reason[%s]=%d", reason, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("context_maintenance_reason[%s]=%d, want >= %d; compaction_reasons=%v skipped_reasons=%v", reason, got, min, compactions.ByReason, skips.ByReason),
+			}
+		},
+	}
+}
+
 func ContextCompactionPolicyObservedAtLeast(min int) Check {
 	if min <= 0 {
 		min = 1

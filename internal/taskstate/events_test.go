@@ -355,6 +355,41 @@ func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
 	}
 }
 
+func TestScanEventsRecordsContextCompactionSkippedEvidence(t *testing.T) {
+	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Continue under context pressure.",
+	}) +
+		taskStateEventLine(t, sse.TypeContextCompactSkipped, sse.ContextCompactSkippedPayload{
+			TurnID:                    "t1",
+			Cause:                     "request_pressure_not_reduced",
+			Reason:                    "estimated_context_pressure",
+			BeforeMessages:            6,
+			CandidateMessages:         5,
+			BeforeBytes:               25396,
+			CandidateBytes:            25535,
+			EstimatedInputTokens:      6732,
+			AfterEstimatedInputTokens: 6766,
+			TriggerInputTokens:        1,
+		})
+
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("ScanEvents returned nil")
+	}
+	if !taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "request_pressure_not_reduced") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "estimated_context_pressure") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "after_estimated_input_tokens=6766") {
+		t.Fatalf("evidence = %+v, want compaction skipped policy evidence", state.Evidence)
+	}
+	if !stringSliceContains(state.Sources, "context_compaction_skipped") {
+		t.Fatalf("sources = %+v, want context_compaction_skipped", state.Sources)
+	}
+}
+
 func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 	t.Helper()
 	ev, err := sse.NewEvent(eventType, payload)

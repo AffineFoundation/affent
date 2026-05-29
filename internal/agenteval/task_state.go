@@ -63,6 +63,15 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		})
 		task.Sources = appendUniqueTaskString(task.Sources, "context_compaction", taskStateMaxItems)
 	}
+	for _, skipped := range trace.ContextCompactionSkips {
+		summary := traceContextCompactionSkippedSummary(skipped)
+		task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+			Source:  "context_compaction_skipped",
+			Summary: compactTaskStateSummary(summary),
+			TurnID:  skipped.TurnID,
+		})
+		task.Sources = appendUniqueTaskString(task.Sources, "context_compaction_skipped", taskStateMaxItems)
+	}
 	for _, tool := range trace.Tools {
 		task.AttemptedActions = appendTaskAction(task.AttemptedActions, TaskStateAction{
 			Tool:    tool.Tool,
@@ -207,6 +216,45 @@ func traceContextCompactionSummary(c ContextCompaction) string {
 	}
 	if c.SummaryPresent {
 		fields = append(fields, "summary_present=true")
+	}
+	return strings.Join(fields, " ")
+}
+
+func traceContextCompactionSkippedSummary(c ContextCompactionSkip) string {
+	var fields []string
+	cause := strings.TrimSpace(c.Cause)
+	if cause == "" {
+		cause = "discarded_candidate"
+	}
+	fields = append(fields, "cause="+cause)
+	reason := strings.TrimSpace(c.Reason)
+	if reason == "" {
+		reason = "threshold"
+	}
+	fields = append(fields, "reason="+reason)
+	if c.BeforeMessages > 0 || c.CandidateMessages > 0 {
+		fields = append(fields, fmt.Sprintf("messages=%d->%d", c.BeforeMessages, c.CandidateMessages))
+	}
+	if c.BeforeBytes > 0 || c.CandidateBytes > 0 {
+		fields = append(fields, fmt.Sprintf("bytes=%d->%d", c.BeforeBytes, c.CandidateBytes))
+	}
+	if c.EstimatedInputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("estimated_input_tokens=%d", c.EstimatedInputTokens))
+	}
+	if c.AfterEstimatedInputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("after_estimated_input_tokens=%d", c.AfterEstimatedInputTokens))
+	}
+	if c.TriggerInputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("trigger_input_tokens=%d", c.TriggerInputTokens))
+	}
+	if c.ModelContextWindowTokens > 0 {
+		fields = append(fields, fmt.Sprintf("model_context_window_tokens=%d", c.ModelContextWindowTokens))
+	}
+	if c.ReservedOutputTokens > 0 {
+		fields = append(fields, fmt.Sprintf("reserved_output_tokens=%d", c.ReservedOutputTokens))
+	}
+	if c.CompactTriggerInputPercent > 0 {
+		fields = append(fields, fmt.Sprintf("compact_trigger_input_percent=%d", c.CompactTriggerInputPercent))
 	}
 	return strings.Join(fields, " ")
 }

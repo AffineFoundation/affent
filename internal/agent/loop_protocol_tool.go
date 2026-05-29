@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
@@ -171,6 +172,11 @@ func readLoopProtocolToolResult(protocolPath string) (string, error) {
 		return "", errors.New("LOOP.md is not initialized for this session\nNext: ask the runtime or user to start loop activation before reading the loop protocol")
 	}
 	status := loopstate.ProtocolStatus(content)
+	if status == "" {
+		if state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName)); err == nil && found {
+			status = strings.TrimSpace(state.Status)
+		}
+	}
 	if status == "" {
 		status = "unknown"
 	}

@@ -712,6 +712,59 @@ func TestProtocolWithStatusUpdatesMetadataLine(t *testing.T) {
 	}
 }
 
+func TestProtocolWithStatusAddsMissingMetadataStatus(t *testing.T) {
+	protocol := "# Loop\n\n## North Star\n\nRecover after compaction."
+	got, ok := ProtocolWithStatus(protocol, "completed")
+	if !ok {
+		t.Fatal("ProtocolWithStatus ok=false")
+	}
+	if !strings.Contains(got, "## 0. Metadata") || !strings.Contains(got, "- status: completed") {
+		t.Fatalf("updated protocol missing metadata status:\n%s", got)
+	}
+	if ProtocolStatus(got) != "completed" {
+		t.Fatalf("ProtocolStatus = %q\n%s", ProtocolStatus(got), got)
+	}
+	if !strings.Contains(got, "## North Star") {
+		t.Fatalf("updated protocol lost body:\n%s", got)
+	}
+}
+
+func TestRecordProtocolStatusRepairsMissingMetadataStatus(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := ProtocolPath(dir, "metadata-repair")
+	if err := WriteProtocol(protocolPath, "# Loop Protocol\n\n## North Star\n\nRecover after compaction."); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteState(StatePath(dir, "metadata-repair"), State{
+		Version:       1,
+		LoopID:        "metadata-repair",
+		OwnerSession:  "metadata-repair",
+		Status:        "running",
+		ProtocolPath:  ProtocolRelPath("metadata-repair"),
+		CreatedAt:     "2026-05-29T00:00:00Z",
+		UpdatedAt:     "2026-05-29T00:00:00Z",
+		EventCount:    1,
+		LastEventType: "loop.protocol_feed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	state, event, err := RecordProtocolStatus(protocolPath, "completed", "objective complete")
+	if err != nil {
+		t.Fatalf("RecordProtocolStatus: %v", err)
+	}
+	if state.Status != "completed" || event.Type != "loop.protocol_status" {
+		t.Fatalf("state/event = %+v %+v", state, event)
+	}
+	got, found, err := ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if ProtocolStatus(got) != "completed" {
+		t.Fatalf("protocol status = %q\n%s", ProtocolStatus(got), got)
+	}
+}
+
 func TestRecordContextCompactionForcesNextFullProtocolFeed(t *testing.T) {
 	dir := t.TempDir()
 	protocolPath := ProtocolPath(dir, "market-run")

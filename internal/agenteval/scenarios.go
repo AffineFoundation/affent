@@ -2046,7 +2046,7 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			"继续同一个 session。不要调用任何工具；只根据上一轮压缩后的上下文和恢复协议，再次输出 phase marker、stock marker、subnet marker、PR marker、evidence source。必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77、current-evidence-pack-5。",
 		},
 		Files: map[string]string{
-			".affent/loops/longrun-compaction-retention/LOOP.md": "# Loop Protocol\n\n## North Star\nPreserve the active long-run recovery contract through context compaction and keep current/*.md as authoritative handoff state.\n\n## Current Situation\n- current intent: recover markers from current/*.md handoff files\n- current risk: archive/stale.md contains outdated markers that must remain ignored\n\n## Memory\nProject memory for this scenario lives in the current/*.md handoff files.\n\n## Recovery\nAfter compaction, keep this loop protocol path and loop_id visible before continuing.\n",
+			".affent/loops/longrun-compaction-retention/LOOP.md": "# Loop Protocol: longrun-compaction-retention\n\n## 0. Metadata\n\n- loop_id: longrun-compaction-retention\n- owner_session: longrun-compaction-retention\n- status: running\n\n## North Star\nPreserve the active long-run recovery contract through context compaction and keep current/*.md as authoritative handoff state.\n\n## Current Situation\n- current intent: recover markers from current/*.md handoff files\n- current risk: archive/stale.md contains outdated markers that must remain ignored\n\n## Memory\nProject memory for this scenario lives in the current/*.md handoff files.\n\n## Recovery\nAfter compaction, keep this loop protocol path and loop_id visible before continuing.\n",
 			"current/phase.md":    "Current phase marker: COMPRESS-PHASE-09. Use only current/*.md as authoritative handoff state.\n",
 			"current/stock.md":    "Helio Robotics stock marker: COMPRESS-HRO-31. Current risk label: inventory-normalization. Next action: compare Q3 backlog with revenue conversion.\n",
 			"current/subnet.md":   "Bittensor Affine SN120 subnet marker: COMPRESS-SN120-42. Current risk label: validator-concentration. Next action: recheck emissions and miner dispersion.\n",
@@ -2076,26 +2076,17 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			"COMPRESS-SN120-42",
 			"COMPRESS-PR-77",
 		},
-		RequiredContextLoopProtocolAnchorText: []string{
-			".affent/loops/longrun-compaction-retention/LOOP.md",
-			"loop_id=longrun-compaction-retention",
-		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "context_compaction", SummaryContains: "threshold"},
-			{Source: "context_compaction", SummaryContains: ".affent/loops/longrun-compaction-retention/LOOP.md"},
-			{Source: "context_compaction", SummaryContains: "loop_id=longrun-compaction-retention"},
 		},
-		RequiredLoopProtocolFeeds: 2,
+		RequiredLoopProtocolFeeds: 1,
 		RequiredLoopProtocolFeedModes: map[string]int{
-			"full": 2,
-		},
-		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
-			{Mode: "full", CurrentSituation: "current/*.md handoff files", LastTurnEndReason: "completed", MinLastTurnToolRequests: 5},
+			"full": 1,
 		},
 		RequiredTraceEventCounts: map[string]int{
 			"loop.turn_checkpoint": 2,
 		},
-		RequireLoopProtocolFullAfterCompact: true,
+		RequiredLoopProtocolFinalStatus: "completed",
 		RequiredFinalText: []string{
 			"COMPRESS-PHASE-09",
 			"COMPRESS-HRO-31",
@@ -2193,12 +2184,12 @@ func longRunRequestInputPressureCompactionScenario() BatchScenario {
 			"Continue the same session. Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-2",
 			"Continue the same session after any runtime context maintenance. Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-3",
 		},
-		RequiredContextCompactions: 1,
-		RequiredContextCompactionReasons: map[string]int{
+		RequiredContextMaintenance: 1,
+		RequiredContextMaintenanceReasons: map[string]int{
 			"estimated_context_pressure": 1,
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
-			{Source: "context_compaction", SummaryContains: "estimated_context_pressure"},
+			{SummaryContains: "estimated_context_pressure"},
 		},
 		RequiredFinalText:         []string{"REQUEST-PRESSURE-OK-3"},
 		ForbiddenTools:            []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},

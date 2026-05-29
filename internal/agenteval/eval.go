@@ -233,6 +233,8 @@ type BatchScenario struct {
 	RequiredRecentSessionSearch                    []RecentSessionSearchRequirement
 	RequiredContextInjectionSources                map[string]int
 	RequiredContextInjectionText                   map[string][]string
+	RequiredContextMaintenance                     int
+	RequiredContextMaintenanceReasons              map[string]int
 	RequiredContextCompactions                     int
 	RequiredReactiveCompactions                    int
 	RequiredContextCompactionReasons               map[string]int
@@ -506,6 +508,8 @@ type DebugScenarioExpectations struct {
 	RequiredRecentSessionSearch                    []DebugRecentSessionSearchRequirement  `json:"required_recent_session_search,omitempty"`
 	RequiredContextInjectionSources                map[string]int                         `json:"required_context_injection_sources,omitempty"`
 	RequiredContextInjectionText                   map[string][]string                    `json:"required_context_injection_text,omitempty"`
+	RequiredContextMaintenance                     int                                    `json:"required_context_maintenance,omitempty"`
+	RequiredContextMaintenanceReasons              map[string]int                         `json:"required_context_maintenance_reasons,omitempty"`
 	RequiredCommandBeforeTool                      []DebugCommandToolOrderRequirement     `json:"required_command_before_tool,omitempty"`
 	RequiredCommandAfterTool                       []DebugCommandToolOrderRequirement     `json:"required_command_after_tool,omitempty"`
 	RequiredToolOrder                              []DebugToolOrderRequirement            `json:"required_tool_order,omitempty"`
@@ -2348,6 +2352,8 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredRecentSessionSearch:                    recentSessionSearchReqs,
 		RequiredContextInjectionSources:                cloneStringIntMap(s.RequiredContextInjectionSources),
 		RequiredContextInjectionText:                   cloneStringSliceMap(s.RequiredContextInjectionText),
+		RequiredContextMaintenance:                     s.RequiredContextMaintenance,
+		RequiredContextMaintenanceReasons:              cloneStringIntMap(s.RequiredContextMaintenanceReasons),
 		RequiredCommandBeforeTool:                      commandBeforeTool,
 		RequiredCommandAfterTool:                       commandAfterTool,
 		RequiredCommandOrder:                           commandOrders,
@@ -3637,6 +3643,13 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		for _, substr := range scenario.RequiredContextInjectionText[source] {
 			checks = append(checks, ContextInjectionTextAtLeast(source, substr, 1))
 		}
+	}
+	if scenario.RequiredContextMaintenance > 0 {
+		checks = append(checks, ContextMaintenanceAtLeast(scenario.RequiredContextMaintenance))
+		checks = append(checks, ContextMaintenancePolicyObservedAtLeast(scenario.RequiredContextMaintenance))
+	}
+	for _, reason := range sortedStringMapKeys(scenario.RequiredContextMaintenanceReasons) {
+		checks = append(checks, ContextMaintenanceReasonAtLeast(reason, scenario.RequiredContextMaintenanceReasons[reason]))
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))

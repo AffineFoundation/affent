@@ -1072,8 +1072,12 @@ func ProtocolWithStatus(content, status string) (string, bool) {
 		return content, false
 	}
 	lines := strings.Split(content, "\n")
+	metadataLine := -1
 	for i, line := range lines {
 		key, _, ok := parseMetadataLine(line)
+		if strings.EqualFold(strings.TrimSpace(line), "## 0. Metadata") {
+			metadataLine = i
+		}
 		if !ok || key != "status" {
 			continue
 		}
@@ -1086,7 +1090,23 @@ func ProtocolWithStatus(content, status string) (string, bool) {
 		lines[i] = prefix + "status: " + status
 		return strings.Join(lines, "\n"), true
 	}
-	return content, false
+	if metadataLine >= 0 {
+		insertAt := metadataLine + 1
+		for insertAt < len(lines) && strings.TrimSpace(lines[insertAt]) == "" {
+			insertAt++
+		}
+		lines = insertLines(lines, insertAt, []string{"- status: " + status, ""})
+		return strings.Join(lines, "\n"), true
+	}
+	insertAt := 0
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			insertAt = i + 1
+			break
+		}
+	}
+	lines = insertLines(lines, insertAt, []string{"", "## 0. Metadata", "", "- status: " + status})
+	return strings.Join(lines, "\n"), true
 }
 
 func ProtocolStatusFromFile(path string) string {
@@ -1095,6 +1115,20 @@ func ProtocolStatusFromFile(path string) string {
 		return ""
 	}
 	return ProtocolStatus(content)
+}
+
+func insertLines(lines []string, index int, values []string) []string {
+	if index < 0 {
+		index = 0
+	}
+	if index > len(lines) {
+		index = len(lines)
+	}
+	out := make([]string, 0, len(lines)+len(values))
+	out = append(out, lines[:index]...)
+	out = append(out, values...)
+	out = append(out, lines[index:]...)
+	return out
 }
 
 func parseMetadataLine(line string) (string, string, bool) {

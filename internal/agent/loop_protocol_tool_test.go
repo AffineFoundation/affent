@@ -302,6 +302,46 @@ func TestLoopProtocolToolClosesCompletedLoopAndDisablesFeed(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolToolRepairsMissingMetadataStatusOnClose(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if err := loopstate.WriteProtocol(path, "# Loop Protocol\n\n## North Star\n\nRecover after compaction."); err != nil {
+		t.Fatal(err)
+	}
+	if err := loopstate.WriteState(filepath.Join(filepath.Dir(path), loopstate.StateFileName), loopstate.State{
+		Version:      1,
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Status:       "running",
+		ProtocolPath: loopstate.ProtocolRelPath("longrun"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := loopProtocolTool(path)
+	read, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read"}`))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(read, "loop_protocol status=running") {
+		t.Fatalf("read output should fall back to state status: %q", read)
+	}
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"close","status":"completed","reason":"objective complete"}`))
+	if err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if !strings.Contains(out, "closed LOOP.md status=completed") {
+		t.Fatalf("close output = %q", out)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "completed" {
+		t.Fatalf("protocol status = %q\n%s", loopstate.ProtocolStatus(protocol), protocol)
+	}
+}
+
 func TestLoopProtocolToolCompletesActivationFromSavedDraft(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")

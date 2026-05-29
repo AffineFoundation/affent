@@ -281,6 +281,39 @@ func TestDeriveTaskStateIncludesContextCompactionEvidence(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateIncludesContextCompactionSkippedEvidence(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Continue after request pressure.",
+		TurnEndReason: "completed",
+		ContextCompactionSkips: []ContextCompactionSkip{{
+			TurnID:                    "turn-skip",
+			Cause:                     "request_pressure_not_reduced",
+			Reason:                    "estimated_context_pressure",
+			BeforeMessages:            6,
+			CandidateMessages:         5,
+			BeforeBytes:               25396,
+			CandidateBytes:            25535,
+			EstimatedInputTokens:      6732,
+			AfterEstimatedInputTokens: 6766,
+			TriggerInputTokens:        1,
+		}},
+	}
+
+	got := DeriveTaskState(trace)
+	if !taskStateHasEvidence(got, "context_compaction_skipped") {
+		t.Fatalf("evidence = %+v, want context_compaction_skipped", got.Evidence)
+	}
+	if !taskStateHasSource(got, "context_compaction_skipped") {
+		t.Fatalf("sources = %+v, want context_compaction_skipped", got.Sources)
+	}
+	evidence := taskStateEvidence(got, "context_compaction_skipped")
+	for _, want := range []string{"request_pressure_not_reduced", "estimated_context_pressure", "after_estimated_input_tokens=6766"} {
+		if !strings.Contains(evidence.Summary, want) {
+			t.Fatalf("context compaction skipped summary missing %q: %+v", want, evidence)
+		}
+	}
+}
+
 func TestDeriveTaskStateUsesCanonicalPrimaryFailureKind(t *testing.T) {
 	trace := Trace{
 		Prompt:        "Fetch current evidence.",
