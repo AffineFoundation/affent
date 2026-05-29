@@ -133,86 +133,25 @@ type LLMSummaryCompactor struct {
 	MaxPromptBytes int
 }
 
-// defaultSummaryPrompt keeps the OpenHands V1 LLMSummarizingCondenser
-// shape (modulo Jinja {% for %} which we render in Go), then adds
-// Affent recovery fields for long-running web, memory, loop, and
-// artifact-heavy sessions.
-//
-// Source: github.com/OpenHands/software-agent-sdk
-//
-//	openhands-sdk/openhands/sdk/context/condenser/prompts/summarizing_prompt.j2
-//
-// V1 differs from the older monolithic prompt in two ways:
-//  1. Adds a TASK_TRACKING field with hard MUST-include semantics, to
-//     preserve task IDs across condensations.
-//  2. Treats the previous summary as just another event in the list
-//     (no separate <PREVIOUS SUMMARY> block); we surface it as the
-//     first <EVENT> in the rendered list.
-const defaultSummaryPrompt = `You are maintaining a context-aware state summary for an interactive agent.
-You will be given a list of events corresponding to actions taken by the agent, which will include previous summaries.
-If the events being summarized contain ANY task-tracking, you MUST include a TASK_TRACKING section to maintain continuity.
-When referencing tasks make sure to preserve exact task IDs and statuses.
+// defaultSummaryPrompt follows Codex's compact checkpoint posture: use a short
+// handoff instruction and let durable runtime events carry the detail. Affent
+// adds stable section names so long-running loop, memory, source-evidence, and
+// verification state survive compaction without turning the compactor prompt
+// into a second system prompt.
+const defaultSummaryPrompt = `You are performing a CONTEXT CHECKPOINT COMPACTION for an autonomous software agent.
+Create a concise structured handoff summary for another model that will continue the same task.
 
-Track:
+Include relevant sections only:
+USER_CONTEXT, TASK_TRACKING, COMPLETED, PENDING, CURRENT_STATE, SOURCE_EVIDENCE, RECOVERY_STATE, MEMORY_AND_RECALL, ARTIFACT_TRACE, NEXT_ACTION.
+For code tasks also include CODE_STATE, TESTS, CHANGES, DEPS, VERSION_CONTROL_STATUS.
 
-USER_CONTEXT: (Preserve essential user requirements, goals, and clarifications in concise form)
-
-TASK_TRACKING: {Active tasks, their IDs and statuses - PRESERVE TASK IDs}
-
-COMPLETED: (Tasks completed so far, with brief results)
-PENDING: (Tasks that still need to be done)
-CURRENT_STATE: (Current variables, data structures, or relevant state)
-SOURCE_EVIDENCE: (Verified sources, exact URLs/refs/json paths, evidence status, and explicit gaps; do not upgrade discovery-only or partial dynamic evidence into verified facts)
-RECOVERY_STATE: (Tool failures, loop guards, blocked/partial sources, the latest actionable Next guidance, and what approach should change)
-MEMORY_AND_RECALL: (Durable memory writes/reads, session_search hits, prior-session markers, and when they should be consulted again)
-ARTIFACT_TRACE: (Important artifact paths, trace/session IDs, screenshots, network refs, or files needed to audit or resume)
-NEXT_ACTION: (The single best next action, required verification, and stop/pause condition)
-
-For code-specific tasks, also include:
-CODE_STATE: {File paths, function signatures, data structures}
-TESTS: {Failing cases, error messages, outputs}
-CHANGES: {Code edits, variable updates}
-DEPS: {Dependencies, imports, external calls}
-VERSION_CONTROL_STATUS: {Repository state, current branch, PR status, commit history}
-
-PRIORITIZE:
-1. Adapt tracking format to match the actual task type
-2. Capture key user requirements and goals
-3. Distinguish between completed and pending tasks
-4. Keep all sections concise and relevant
-5. Preserve source quality and recovery instructions over narrative detail
-6. Preserve long-run loop protocol anchors, active plan step, memory/session recall markers, artifact paths, and verification commands when present
-7. Treat AFFENT REJECTED FINAL DRAFT blocks and rejected assistant final answers as non-authoritative until a later tool result or durable state update proves the same claim
-
-SKIP: Tracking irrelevant details for the current task type
-
-Example formats:
-
-For code tasks:
-USER_CONTEXT: Fix FITS card float representation issue
-COMPLETED: Modified mod_float() in card.py, all tests passing
-PENDING: Create PR, update documentation
-SOURCE_EVIDENCE: tests/test_card.py::test_format verified by pytest
-RECOVERY_STATE: none
-MEMORY_AND_RECALL: none
-ARTIFACT_TRACE: trace session current; no external artifacts
-NEXT_ACTION: prepare PR summary and stop after user review
-CODE_STATE: mod_float() in card.py updated
-TESTS: test_format() passed
-CHANGES: str(val) replaces f"{val:.16G}"
-DEPS: None modified
-VERSION_CONTROL_STATUS: Branch: fix-float-precision, Latest commit: a1b2c3d
-
-For other tasks:
-USER_CONTEXT: Write 20 haikus based on coin flip results
-COMPLETED: 15 haikus written for results [T,H,T,H,T,H,T,T,H,T,H,T,H,T,H]
-PENDING: 5 more haikus needed
-CURRENT_STATE: Last flip: Heads, Haiku count: 15/20
-SOURCE_EVIDENCE: user-provided coin flip sequence
-RECOVERY_STATE: no blocker
-MEMORY_AND_RECALL: none
-ARTIFACT_TRACE: none
-NEXT_ACTION: write 5 remaining haikus, then report completion`
+Rules:
+- Preserve exact task, plan, loop IDs, statuses, file paths, commands, URLs, refs, markers, commit hashes, and verification results.
+- If events contain task tracking, include TASK_TRACKING and PRESERVE TASK IDs and statuses.
+- Distinguish verified evidence from discovery-only, partial, ambiguous, or failed evidence; do not upgrade unsupported claims.
+- Preserve the latest actionable Next guidance, recovery blockers, memory/session recall markers, artifacts, and verification commands.
+- Treat AFFENT REJECTED FINAL DRAFT blocks and rejected assistant final answers as non-authoritative unless later durable state or tool evidence proves the same claim.
+- Be compact. Omit irrelevant sections and narrative detail.`
 
 // Compact implements Compactor.
 func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {

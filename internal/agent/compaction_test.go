@@ -1531,7 +1531,7 @@ func TestIsContextOverflow(t *testing.T) {
 	}
 }
 
-// Defensive: prompt body keeps the OpenHands V1 base fields plus
+// Defensive: prompt body keeps the checkpoint contract compact while preserving
 // Affent recovery fields for long-running sessions.
 func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 	required := []string{
@@ -1539,20 +1539,18 @@ func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 		"CURRENT_STATE", "SOURCE_EVIDENCE", "RECOVERY_STATE",
 		"MEMORY_AND_RECALL", "ARTIFACT_TRACE", "NEXT_ACTION",
 		"CODE_STATE", "TESTS", "CHANGES", "DEPS",
-		"VERSION_CONTROL_STATUS", "PRIORITIZE", "SKIP", "Example formats",
+		"VERSION_CONTROL_STATUS",
 	}
 	for _, kw := range required {
 		if !strings.Contains(defaultSummaryPrompt, kw) {
 			t.Errorf("default prompt missing standard field %q", kw)
 		}
 	}
-	// PRESERVE TASK IDs is the V1-specific instruction; guard against
-	// accidental drop.
 	if !strings.Contains(defaultSummaryPrompt, "PRESERVE TASK IDs") {
-		t.Error("default prompt missing 'PRESERVE TASK IDs' V1 instruction")
+		t.Error("default prompt missing 'PRESERVE TASK IDs' instruction")
 	}
 	for _, phrase := range []string{
-		"do not upgrade discovery-only or partial dynamic evidence into verified facts",
+		"do not upgrade unsupported claims",
 		"latest actionable Next guidance",
 		"memory/session recall markers",
 		"verification commands",
@@ -1561,5 +1559,8 @@ func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 		if !strings.Contains(defaultSummaryPrompt, phrase) {
 			t.Fatalf("default prompt missing Affent recovery phrase %q", phrase)
 		}
+	}
+	if len(defaultSummaryPrompt) > 1600 {
+		t.Fatalf("default prompt is %d bytes, want <= 1600 to keep compaction cheap", len(defaultSummaryPrompt))
 	}
 }
