@@ -1225,6 +1225,45 @@ func TestSetupLoop_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *test
 	}
 }
 
+func TestSetupLoop_EvalModeAllowsLoopProtocolTool(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	workspace := t.TempDir()
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--session-id", "loop-eval",
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--eval-tools=loop_protocol",
+		"--loop-protocol",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	cf.loopProtocolGoal = "Evaluate loop protocol activation."
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if _, ok := b.loop.Tools.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol should be registered when requested by --eval-tools")
+	}
+	for _, name := range []string{"shell", "read_file", agent.PlanToolName, agent.MemoryToolName, agent.SessionSearchToolName} {
+		if _, ok := b.loop.Tools.Get(name); ok {
+			t.Fatalf("%s should not be registered for loop_protocol-only eval", name)
+		}
+	}
+	if want := loopstate.ProtocolPath(workspace, "loop-eval"); b.loop.LoopProtocolPath != want {
+		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, want)
+	}
+}
+
 func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
 	workspace := t.TempDir()
 	sessionID := "plan-loop"

@@ -1012,7 +1012,7 @@ func evalBrowserToolNames() []string {
 
 func evalKnownToolNames() []string {
 	out := append([]string{}, evalWorkspaceToolNames()...)
-	out = append(out, agent.SkillToolName, agent.MemoryToolName, agent.SessionSearchToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "web_search", "mcp")
+	out = append(out, agent.SkillToolName, agent.MemoryToolName, agent.SessionSearchToolName, agent.PlanToolName, agent.LoopProtocolToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "web_search", "mcp")
 	out = append(out, evalBrowserToolNames()...)
 	return out
 }
@@ -1036,7 +1036,7 @@ func evalAllowlistHasUnknown(allowed map[string]bool) bool {
 }
 
 func evalAllowlistHasBuiltin(allowed map[string]bool) bool {
-	for _, name := range append(evalWorkspaceToolNames(), agent.SkillToolName, agent.PlanToolName) {
+	for _, name := range append(evalWorkspaceToolNames(), agent.SkillToolName, agent.PlanToolName, agent.LoopProtocolToolName) {
 		if allowed[name] {
 			return true
 		}
