@@ -1250,6 +1250,20 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 		}) +
 		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID: "t1",
+			CallID: "test-fail-1",
+			Tool:   "shell",
+			Args:   map[string]any{"command": "go test ./..."},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "test-fail-1",
+			ExitCode:      1,
+			FailureKind:   "test_failed",
+			ResultSummary: "FAIL ./...",
+			Result:        "FAIL ./...",
+		}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
 			CallID: "test-1",
 			Tool:   "shell",
 			Args:   map[string]any{"command": "go test ./..."},
@@ -1282,6 +1296,12 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	}
 	if task.VerificationState != "last_shell_passed" {
 		t.Fatalf("verification_state = %q, want last_shell_passed", task.VerificationState)
+	}
+	if task.NextStep != "" {
+		t.Fatalf("next_step = %q, want empty after completed task with passing verification", task.NextStep)
+	}
+	if len(task.FailedActions) != 1 || task.FailedActions[0].Tool != "shell" || !stringSliceContains(task.FailedActions[0].Kinds, "test_failed") {
+		t.Fatalf("failed_actions = %+v, want historical failed shell evidence", task.FailedActions)
 	}
 	if !stringSliceContains(task.Constraints, "workspace path mode: workspace_relative") {
 		t.Fatalf("constraints = %+v, want workspace path mode", task.Constraints)

@@ -311,7 +311,7 @@ func sessionTaskNextStep(task sessionTaskStateSummary, summary sessionSummary) s
 	if len(task.OpenQuestions) > 0 {
 		return task.OpenQuestions[len(task.OpenQuestions)-1]
 	}
-	if len(task.FailedActions) > 0 {
+	if len(task.FailedActions) > 0 && task.VerificationState != "last_shell_passed" && task.Status != "completed" {
 		return "latest failed action is unresolved"
 	}
 	if summary.PlanSummary != nil && summary.PlanSummary.CurrentStep != "" {

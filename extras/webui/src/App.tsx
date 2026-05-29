@@ -1963,6 +1963,7 @@ export function App() {
             session={session}
             usage={workbenchContextUsage}
             contextSummary={conversationContext}
+            taskState={selectedSession?.task_state}
             automationTitle={automationContext?.title}
             automationDetail={automationContext?.detail}
             onSelectSection={handleSelectWorkbenchTab}

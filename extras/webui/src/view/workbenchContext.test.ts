@@ -147,6 +147,28 @@ describe("workbenchContext", () => {
     expect(latestWorkbenchRequestMode(normalSession)).toBeUndefined();
   });
 
+  it("includes derived task state in exported Workbench context evidence", () => {
+    const text = workbenchContextEvidenceText({
+      overview: sessionOverview({ headline: "Fix clamp behavior" }),
+      hasSelectedSession: true,
+      taskState: {
+        objective: "Fix clamp behavior, verify it, and push the code",
+        status: "completed",
+        verification_state: "last_shell_passed",
+        changed_files: [{ path: "app/mathutil/clamp.go", action: "edit" }],
+        failed_actions: [{ tool: "shell", summary: "FAIL ./...", kinds: ["test_failed"] }],
+        evidence: [{ source: "shell", summary: "go test ./..." }],
+      },
+    });
+
+    expect(text).toContain("Task objective: Fix clamp behavior, verify it, and push the code");
+    expect(text).toContain("Task status: completed");
+    expect(text).toContain("Verification: last_shell_passed");
+    expect(text).toContain("Changed file: edit app/mathutil/clamp.go");
+    expect(text).toContain("Failed action: shell · FAIL ./...");
+    expect(text).toContain("Task evidence: shell · go test ./...");
+  });
+
   it("builds the attached chat summary from session truth", () => {
     const usage = {
       totalTokens: 2500,

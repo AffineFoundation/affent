@@ -1,7 +1,7 @@
 import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
 import type { SessionChangesView } from "../view/sessionChanges";
 import { changesReviewFocus } from "../view/sessionChanges";
-import type { SessionContextSummary } from "../api/sessions";
+import type { SessionContextSummary, SessionTaskStateEvidence, SessionTaskStateFailure, SessionTaskStateSummary } from "../api/sessions";
 import { formatByteCount } from "../view/byteFormat";
 import type { SessionFilesView } from "../view/sessionFiles";
 import { filesReviewFocus } from "../view/sessionFiles";
@@ -34,6 +34,7 @@ export function WorkbenchContextPanel({
   session,
   usage,
   contextSummary,
+  taskState,
   automationTitle,
   automationDetail,
   onSelectSection,
@@ -50,13 +51,14 @@ export function WorkbenchContextPanel({
   session?: SessionState;
   usage?: WorkbenchContextUsageView;
   contextSummary?: SessionContextSummary;
+  taskState?: SessionTaskStateSummary;
   automationTitle?: string;
   automationDetail?: string;
   onSelectSection?: (tab: WorkbenchTab) => void;
   defaultOpen?: boolean;
 }) {
   const requestMode = latestWorkbenchRequestMode(session);
-  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, requestMode, automationTitle, automationDetail };
+  const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, requestMode, taskState, automationTitle, automationDetail };
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
   const hasEvidence = evidence.length > 0;
@@ -70,6 +72,7 @@ export function WorkbenchContextPanel({
     run,
     usage,
     contextSummary,
+    taskState,
   }) : undefined;
   const snapshot = hasSelectedSession ? contextSnapshotCards({
     metrics: displaySessionOverviewMetrics(overview.metrics),
@@ -97,6 +100,7 @@ export function WorkbenchContextPanel({
           </div>
         ) : null}
         {brief ? <ContextBriefCard brief={brief} onSelectSection={onSelectSection} /> : null}
+        {hasTaskState(taskState) ? <TaskStateCard taskState={taskState} onSelectSection={onSelectSection} /> : null}
         {snapshot.length > 0 ? (
           <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Runtime signals">
             <div className="workbench-context-snapshot-head">
@@ -251,6 +255,7 @@ function buildContextBrief({
   run,
   usage,
   contextSummary,
+  taskState,
 }: {
   overview: SessionOverview;
   statusDetail: string;
@@ -261,8 +266,10 @@ function buildContextBrief({
   run?: SessionRunView;
   usage?: WorkbenchContextUsageView;
   contextSummary?: SessionContextSummary;
+  taskState?: SessionTaskStateSummary;
 }): ContextBriefView {
   const facts = compact([
+    taskStateBriefFact(taskState),
     workspaceBriefFact(workspace),
     runBriefFact(run),
     changesBriefFact(changes),
@@ -275,7 +282,19 @@ function buildContextBrief({
     title: overview.headline || "Chat ready",
     detail: statusDetail && statusDetail !== overview.headline ? statusDetail : undefined,
     facts,
-    drilldown: bestContextDrilldown({ workspace, run, changes, files, artifacts, contextSummary }),
+    drilldown: bestContextDrilldown({ workspace, run, changes, files, artifacts, contextSummary, taskState }),
+  };
+}
+
+function taskStateBriefFact(taskState?: SessionTaskStateSummary): ContextBriefFact | undefined {
+  if (!hasTaskState(taskState)) return undefined;
+  const status = taskStatusLabel(taskState.status);
+  return {
+    label: "Task state",
+    value: status,
+    detail: taskState.current_step || taskState.next_step || taskState.objective,
+    tone: taskStateTone(taskState),
+    target: "context",
   };
 }
 
@@ -360,6 +379,7 @@ function bestContextDrilldown({
   files,
   artifacts,
   contextSummary,
+  taskState,
 }: {
   workspace?: SessionWorkspaceView;
   run?: SessionRunView;
@@ -367,7 +387,11 @@ function bestContextDrilldown({
   files?: SessionFilesView;
   artifacts?: readonly TurnArtifact[];
   contextSummary?: SessionContextSummary;
+  taskState?: SessionTaskStateSummary;
 }): (ContextBriefFact & { target: WorkbenchTab }) | undefined {
+  if (taskState?.open_questions?.length) {
+    return { label: "Best drilldown", value: "Task state", detail: taskState.open_questions.at(-1), tone: "attention", target: "context" };
+  }
   if (workspace?.hasData && (workspace.verification === "mismatch" || workspace.verification === "missing_binding")) {
     return { label: "Best drilldown", value: "Workspace", detail: workspace.issue ?? "Confirm the real working directory before trusting file operations.", tone: "attention", target: "workspace" };
   }
@@ -386,10 +410,192 @@ function bestContextDrilldown({
   if (contextSummary && contextSummary.compact_trigger > 0 && contextSummary.compact_percent >= 72) {
     return { label: "Best drilldown", value: "Context", detail: "Context pressure is high; keep future turns concise or expect compaction.", tone: contextSummary.compact_percent >= 95 ? "error" : "attention", target: "context" };
   }
+  if (taskStateHasCurrentFailure(taskState)) {
+    const latest = taskState?.failed_actions?.at(-1);
+    return { label: "Best drilldown", value: "Trace", detail: taskStateFailureSummary(latest), tone: "error", target: "trace" };
+  }
   if (files?.items.length) return { label: "Best drilldown", value: "Files", detail: files.summary, tone: "ready", target: "files" };
   if (artifacts?.length) return { label: "Best drilldown", value: "Artifacts", detail: `${artifacts.length} captured`, tone: "ready", target: "artifacts" };
   if (run?.commands.length) return { label: "Best drilldown", value: "Run", detail: run.summary, tone: "ready", target: "run" };
   return undefined;
+}
+
+function TaskStateCard({
+  taskState,
+  onSelectSection,
+}: {
+  taskState?: SessionTaskStateSummary;
+  onSelectSection?: (tab: WorkbenchTab) => void;
+}) {
+  if (!hasTaskState(taskState)) return null;
+  const tone = taskStateTone(taskState);
+  const rows = compact([
+    taskState.current_step ? { label: "Current step", value: taskState.current_step } : undefined,
+    taskState.next_step ? { label: "Next step", value: taskState.next_step } : undefined,
+    taskState.verification_state && taskState.verification_state !== "unknown" ? { label: "Verification", value: verificationStateLabel(taskState.verification_state) } : undefined,
+    taskState.changed_files?.length ? { label: "Changed files", value: `${taskState.changed_files.length} ${taskState.changed_files.length === 1 ? "file" : "files"}` } : undefined,
+  ]);
+  const latestFailures = [...(taskState.failed_actions ?? [])].slice(-3).reverse();
+  const latestEvidence = [...(taskState.evidence ?? [])].slice(-3).reverse();
+  const changedFiles = [...(taskState.changed_files ?? [])].slice(-3).reverse();
+
+  return (
+    <section className="workbench-task-state" data-tone={tone} data-testid="workbench-task-state" aria-label="Task state">
+      <header className="workbench-task-state-head">
+        <div>
+          <span>Task state</span>
+          <strong>{taskState.objective || taskStatusLabel(taskState.status)}</strong>
+        </div>
+        <b data-tone={tone}>{taskStatusLabel(taskState.status)}</b>
+      </header>
+      {rows.length > 0 ? (
+        <div className="workbench-task-state-grid">
+          {rows.map((row) => (
+            <div key={`${row.label}:${row.value}`} className="workbench-task-state-fact">
+              <small>{row.label}</small>
+              <strong>{row.value}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {latestFailures.length > 0 ? (
+        <TaskStateList
+          title="Recent failed actions"
+          items={latestFailures.map((item) => taskStateFailureSummary(item))}
+          actionLabel="Open trace"
+          onAction={() => onSelectSection?.("trace")}
+          tone={taskStateHasCurrentFailure(taskState) ? "error" : "attention"}
+        />
+      ) : null}
+      {latestEvidence.length > 0 ? (
+        <TaskStateList
+          title="Evidence"
+          items={latestEvidence.map((item) => taskStateEvidenceSummary(item))}
+        />
+      ) : null}
+      {changedFiles.length > 0 ? (
+        <TaskStateList
+          title="Changed files"
+          items={changedFiles.map((item) => [item.action, item.path].filter(Boolean).join(" "))}
+          actionLabel="Open changes"
+          onAction={() => onSelectSection?.("changes")}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function TaskStateList({
+  title,
+  items,
+  actionLabel,
+  onAction,
+  tone,
+}: {
+  title: string;
+  items: string[];
+  actionLabel?: string;
+  onAction?: () => void;
+  tone?: "attention" | "error";
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="workbench-task-state-list" data-tone={tone}>
+      <div className="workbench-task-state-list-head">
+        <strong>{title}</strong>
+        {actionLabel && onAction ? (
+          <button type="button" onClick={onAction}>
+            {actionLabel}
+          </button>
+        ) : null}
+      </div>
+      <ul>
+        {items.map((item, index) => (
+          <li key={`${index}:${item}`}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function hasTaskState(taskState?: SessionTaskStateSummary): taskState is SessionTaskStateSummary {
+  if (!taskState) return false;
+  return Boolean(
+    taskState.objective?.trim()
+      || taskState.current_step?.trim()
+      || taskState.next_step?.trim()
+      || (taskState.status && taskState.status !== "unknown")
+      || taskState.constraints?.length
+      || taskState.known_facts?.length
+      || taskState.changed_files?.length
+      || taskState.attempted_actions?.length
+      || taskState.failed_actions?.length
+      || taskState.evidence?.length
+      || taskState.open_questions?.length
+      || taskState.sources?.length,
+  );
+}
+
+function taskStateTone(taskState: SessionTaskStateSummary): "ready" | "attention" | "error" {
+  const status = taskState.status?.trim().toLowerCase();
+  const verification = taskState.verification_state?.trim().toLowerCase();
+  if (status === "failed" || verification === "failed") return "error";
+  if ((taskState.open_questions ?? []).length > 0 || status === "blocked" || status === "cancelled") return "attention";
+  return "ready";
+}
+
+function taskStateHasCurrentFailure(taskState?: SessionTaskStateSummary): boolean {
+  if (!taskState) return false;
+  const status = taskState.status?.trim().toLowerCase();
+  const verification = taskState.verification_state?.trim().toLowerCase();
+  return status === "failed" || verification === "failed";
+}
+
+function taskStatusLabel(status?: string): string {
+  const normalized = status?.trim().toLowerCase();
+  if (!normalized || normalized === "unknown") return "Observed";
+  if (normalized === "completed") return "Completed";
+  if (normalized === "running") return "Running";
+  if (normalized === "blocked") return "Blocked";
+  if (normalized === "failed") return "Failed";
+  if (normalized === "cancelled") return "Cancelled";
+  return normalized.replace(/_/g, " ");
+}
+
+function verificationStateLabel(status: string): string {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "last_shell_passed") return "Last shell check passed";
+  if (normalized === "failed") return "Latest verification failed";
+  return normalized.replace(/_/g, " ");
+}
+
+function taskStateFailureSummary(item?: SessionTaskStateFailure): string {
+  if (!item) return "Failed action";
+  const kind = item.kinds?.[0] ? failureKindLabel(item.kinds[0]) : undefined;
+  return compact([toolNameLabel(item.tool), kind, summarizeTaskStateText(item.summary)]).join(" · ") || "Failed action";
+}
+
+function taskStateEvidenceSummary(item: SessionTaskStateEvidence): string {
+  return compact([sourceLabel(item.source), summarizeTaskStateText(item.summary)]).join(" · ") || "Evidence captured";
+}
+
+function summarizeTaskStateText(text?: string): string | undefined {
+  const cleaned = text?.replace(/\s+/g, " ").trim();
+  if (!cleaned) return undefined;
+  return cleaned.length > 120 ? `${cleaned.slice(0, 119).trimEnd()}...` : cleaned;
+}
+
+function toolNameLabel(tool?: string): string | undefined {
+  const cleaned = tool?.trim();
+  return cleaned || undefined;
+}
+
+function sourceLabel(source?: string): string | undefined {
+  const cleaned = source?.trim();
+  if (!cleaned) return undefined;
+  if (cleaned === "runtime_workspace") return "runtime workspace";
+  if (cleaned === "runtime_surface") return "runtime surface";
+  return cleaned.replace(/_/g, " ");
 }
 
 function contextSnapshotCards({

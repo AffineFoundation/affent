@@ -157,6 +157,52 @@ describe("WorkbenchContextPanel", () => {
     expect(onSelectSection).toHaveBeenCalledWith("workspace");
   });
 
+  it("shows derived task state without treating recovered failures as current errors", async () => {
+    const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        onSelectSection={onSelectSection}
+        overview={overview({ headline: "Fix clamp behavior", detail: "The task finished after rerunning tests." })}
+        taskState={{
+          objective: "Fix clamp behavior, verify it, and push the code",
+          status: "completed",
+          verification_state: "last_shell_passed",
+          changed_files: [{ path: "app/mathutil/clamp.go", action: "edit" }],
+          failed_actions: [{ tool: "shell", summary: "FAIL ./...", kinds: ["test_failed"] }],
+          evidence: [
+            { source: "runtime_workspace", summary: "Workspace tools resolve relative paths from the session workspace root." },
+            { source: "shell", summary: "go test ./..." },
+          ],
+        }}
+      />,
+    );
+
+    const brief = screen.getByTestId("workbench-context-brief");
+    expect(brief).toHaveTextContent("Task state");
+    expect(brief).toHaveTextContent("Completed");
+    expect(brief).not.toHaveTextContent("Failed");
+
+    const taskState = screen.getByTestId("workbench-task-state");
+    expect(taskState).toHaveAttribute("data-tone", "ready");
+    expect(taskState).toHaveTextContent("Fix clamp behavior, verify it, and push the code");
+    expect(taskState).toHaveTextContent("Last shell check passed");
+    expect(taskState).toHaveTextContent("Recent failed actions");
+    expect(taskState).toHaveTextContent("shell");
+    expect(taskState).toHaveTextContent("test failed");
+    expect(taskState).toHaveTextContent("Evidence");
+    expect(taskState).toHaveTextContent("runtime workspace");
+    expect(taskState).toHaveTextContent("go test ./...");
+
+    await user.click(within(taskState).getByRole("button", { name: "Open trace" }));
+    expect(onSelectSection).toHaveBeenCalledWith("trace");
+    await user.click(within(taskState).getByRole("button", { name: "Open changes" }));
+    expect(onSelectSection).toHaveBeenCalledWith("changes");
+  });
+
   it("links tool issue cards to concrete run evidence and suppresses generic next-step templates", async () => {
     const user = userEvent.setup();
     const onSelectSection = vi.fn();
@@ -193,6 +239,57 @@ describe("WorkbenchContextPanel", () => {
 
     await user.click(within(statusCards).getByRole("button", { name: "Open Tool issue" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
+  });
+
+  it("uses task state as concrete Context evidence instead of generic next-step text", async () => {
+    const user = userEvent.setup();
+    const onSelectSection = vi.fn();
+
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        onSelectSection={onSelectSection}
+        overview={overview({
+          headline: "Harden inline message editing",
+          detail: "Workbench should expose the real task state.",
+        })}
+        taskState={{
+          objective: "Harden inline message editing",
+          status: "running",
+          current_step: "Wire task_state into Workbench Context",
+          next_step: "Run WorkbenchContextPanel tests and screenshot the Context tab",
+          changed_files: [{ path: "extras/webui/src/components/WorkbenchContextPanel.tsx", action: "edit" }],
+          failed_actions: [{ tool: "shell", summary: "npm test -- WorkbenchContextPanel.test.tsx failed", kinds: ["command_failed"] }],
+          evidence: [
+            { source: "runtime_workspace", summary: "Workspace tools resolve relative paths from the session workspace root." },
+            { source: "shell", summary: "npm --prefix extras/webui test -- WorkbenchContextPanel.test.tsx" },
+          ],
+          verification_state: "failed",
+        }}
+      />,
+    );
+
+    const brief = screen.getByTestId("workbench-context-brief");
+    expect(brief).toHaveTextContent("Task state");
+    expect(brief).toHaveTextContent("Running");
+    expect(brief).toHaveTextContent("Wire task_state into Workbench Context");
+
+    const taskState = screen.getByTestId("workbench-task-state");
+    expect(taskState).toHaveTextContent("Harden inline message editing");
+    expect(taskState).toHaveTextContent("Current step");
+    expect(taskState).toHaveTextContent("Wire task_state into Workbench Context");
+    expect(taskState).toHaveTextContent("Next step");
+    expect(taskState).toHaveTextContent("Run WorkbenchContextPanel tests and screenshot the Context tab");
+    expect(taskState).toHaveTextContent("Recent failed actions");
+    expect(taskState).toHaveTextContent("shell · command failed");
+    expect(taskState).toHaveTextContent("Evidence");
+    expect(taskState).toHaveTextContent("runtime workspace");
+    expect(taskState).toHaveTextContent("Changed files");
+    expect(taskState).not.toHaveTextContent("continue from the current plan state");
+
+    await user.click(within(taskState).getByRole("button", { name: "Open trace" }));
+    expect(onSelectSection).toHaveBeenCalledWith("trace");
   });
 
   it("keeps low-value work and tool-context metrics out of Context actions", () => {

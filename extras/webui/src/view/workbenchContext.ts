@@ -1,4 +1,4 @@
-import type { SessionContextSummary, SessionSummary } from "../api/sessions";
+import type { SessionContextSummary, SessionSummary, SessionTaskStateSummary } from "../api/sessions";
 import { EventType } from "../api/events";
 import type { SessionState, TurnState } from "../store/sessionState";
 import { buildExecutionTree, type ExecutionTokenUsage, type ExecutionTreeNode } from "./executionTree";
@@ -77,6 +77,7 @@ export interface WorkbenchContextEvidenceInput {
   run?: SessionRunView;
   usage?: WorkbenchContextUsageView;
   requestMode?: WorkbenchRequestModeView;
+  taskState?: SessionTaskStateSummary;
   automationTitle?: string;
   automationDetail?: string;
 }
@@ -299,6 +300,23 @@ export function workbenchContextEvidenceText(input: WorkbenchContextEvidenceInpu
     lines.push(`${item.label}: ${item.value}${item.detail ? ` · ${item.detail}` : ""}`);
   }
   if (input.requestMode) lines.push(`Request mode: ${input.requestMode.label}${input.requestMode.detail ? ` · ${input.requestMode.detail}` : ""}`);
+  if (input.taskState?.objective) lines.push(`Task objective: ${input.taskState.objective}`);
+  if (input.taskState?.status && input.taskState.status !== "unknown") lines.push(`Task status: ${input.taskState.status}`);
+  if (input.taskState?.current_step) lines.push(`Current step: ${input.taskState.current_step}`);
+  if (input.taskState?.next_step) lines.push(`Next step: ${input.taskState.next_step}`);
+  if (input.taskState?.verification_state && input.taskState.verification_state !== "unknown") lines.push(`Verification: ${input.taskState.verification_state}`);
+  for (const question of input.taskState?.open_questions?.slice(-3) ?? []) {
+    lines.push(`Open question: ${question}`);
+  }
+  for (const file of input.taskState?.changed_files?.slice(-5) ?? []) {
+    lines.push(`Changed file: ${[file.action, file.path].filter(Boolean).join(" ")}`);
+  }
+  for (const failure of input.taskState?.failed_actions?.slice(-3) ?? []) {
+    lines.push(`Failed action: ${[failure.tool, failure.summary].filter(Boolean).join(" · ")}`);
+  }
+  for (const evidence of input.taskState?.evidence?.slice(-3) ?? []) {
+    lines.push(`Task evidence: ${[evidence.source, evidence.summary].filter(Boolean).join(" · ")}`);
+  }
   for (const item of buildWorkbenchContextEvidence(input)) lines.push(`${item.label}: ${item.summary} · ${item.detail}`);
   return lines.filter((line) => line.trim()).join("\n");
 }
