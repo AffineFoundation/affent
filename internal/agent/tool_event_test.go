@@ -198,6 +198,9 @@ func TestToolFailureKindForOutcome(t *testing.T) {
 	if got := toolFailureKindForOutcome("browser_network", "BROWSER NETWORK EVIDENCE\nMATCHES: none\nFailure: kind=no_matches", false); got != "no_matches" {
 		t.Fatalf("browser-network no-match failure kind = %q, want no_matches", got)
 	}
+	if got := toolFailureKindForOutcome("shell", "go test ./...\n[exit 1]", true); got != "command_failed" {
+		t.Fatalf("unguided shell failure kind = %q, want command_failed", got)
+	}
 	if got := toolFailureKindForOutcome("read_file", "Failure: kind=blocked", false); got != "" {
 		t.Fatalf("successful read_file content should not set FailureKind, got %q", got)
 	}

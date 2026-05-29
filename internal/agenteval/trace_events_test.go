@@ -52,9 +52,13 @@ func TestApplyTraceEventKeepsLegacyToolResultsWithoutTurnID(t *testing.T) {
 
 func TestTraceUnclassifiedToolErrorCount(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
-		Tool:     "read_file",
+		Tool:     "",
 		ExitCode: 1,
-		Result:   "file not found",
+		Result:   "legacy trace did not include a tool name",
+	}, {
+		Tool:     "shell",
+		ExitCode: 1,
+		Result:   "go test ./...\n[exit 1]",
 	}, {
 		Tool:         "plan",
 		ExitCode:     1,

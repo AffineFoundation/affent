@@ -61,6 +61,11 @@ func KindsForResult(tool, result string, failed bool) []string {
 		if kind := skippedToolBudgetKind(result); kind != "" && !containsString(kinds, kind) {
 			kinds = append(kinds, kind)
 		}
+		if len(kinds) == 0 {
+			if kind := fallbackFailedToolKind(tool); kind != "" {
+				kinds = append(kinds, kind)
+			}
+		}
 	}
 	return kinds
 }
@@ -124,6 +129,17 @@ func skippedToolBudgetKind(result string) string {
 	default:
 		return ""
 	}
+}
+
+func fallbackFailedToolKind(tool string) string {
+	tool = strings.TrimSpace(tool)
+	if tool == "" {
+		return ""
+	}
+	if tool == "shell" {
+		return "command_failed"
+	}
+	return "tool_failed"
 }
 
 func containsString(values []string, want string) bool {

@@ -147,6 +147,13 @@ func TestSessionCommandToolResultPayloadClassifiesFailure(t *testing.T) {
 	}
 }
 
+func TestSessionCommandToolResultPayloadClassifiesUnguidedFailure(t *testing.T) {
+	payload := sessionCommandToolResultPayload("turn", "call", 1, "npm test\n[exit 1]", 0)
+	if payload.FailureKind != "command_failed" || len(payload.FailureKinds) != 1 || payload.FailureKinds[0] != "command_failed" {
+		t.Fatalf("unguided shell failure kind = %+v, want command_failed", payload)
+	}
+}
+
 func TestHandleSessionCommandRejectsInvalidSessionID(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 

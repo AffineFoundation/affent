@@ -216,8 +216,8 @@ func sessionCommandToolResultPayload(turnID, callID string, exitCode int, result
 		payload.DurationMS = duration.Milliseconds()
 	}
 	if exitCode != 0 {
-		payload.FailureKind = toolfailure.Kind(result)
-		payload.FailureKinds = toolfailure.Kinds(result)
+		payload.FailureKind = toolfailure.KindForResult("shell", result, true)
+		payload.FailureKinds = toolfailure.KindsForResult("shell", result, true)
 	}
 	return payload
 }

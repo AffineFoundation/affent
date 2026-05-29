@@ -516,6 +516,9 @@ session when ordinary transcript terms do not match. Each
 `failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
 useful recovery path from a run that simply accumulated failed retrievals,
 discovery-only pages, empty recall, or policy violations.
+Failed shell commands that do not emit a more specific structured
+`Failure: kind=...` line are classified as `command_failed`; other failed
+tools without structured metadata fall back to `tool_failed`.
 Successful-but-no-evidence web results and browser results, such as
 `dynamic_shell`, `empty_response`, `non_text`, `no_results`, or browser-network
 `no_matches`, contribute to

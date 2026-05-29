@@ -56,6 +56,15 @@ func TestKindForResult(t *testing.T) {
 	if got := KindForResult("web_fetch", "(tool call budget reached before this tool ran)", true); got != "loop_guard_no_budget" {
 		t.Fatalf("skipped tool-budget kind = %q, want loop_guard_no_budget", got)
 	}
+	if got := KindForResult("shell", "go test ./...\n[exit 1]", true); got != "command_failed" {
+		t.Fatalf("unguided shell failure kind = %q, want command_failed", got)
+	}
+	if got := KindForResult("external_tool", "request failed", true); got != "tool_failed" {
+		t.Fatalf("unguided tool failure kind = %q, want tool_failed", got)
+	}
+	if got := KindForResult("", "request failed", true); got != "" {
+		t.Fatalf("missing tool name failure kind = %q, want empty", got)
+	}
 
 	got := KindsForResult("web_fetch", "[empty response: URL=https://example]\nFailure: kind=empty_response\n\nloop_guard\nFailure: kind=loop_guard_repeated_failures", false)
 	want := []string{"empty_response", "loop_guard_repeated_failures"}

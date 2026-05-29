@@ -207,7 +207,9 @@ the model to answer without more tools.
   `stale_ref` when a previously visible element ref no longer matches the
   current page, or
   `not_interactable` when the element exists but is hidden, disabled, or
-  covered. Runtime loop guards may emit `loop_guard_repeated_call`,
+  covered. Shell command exits without a more specific structured failure use
+  `command_failed`, and other failed tools without structured failure metadata
+  use `tool_failed`. Runtime loop guards may emit `loop_guard_repeated_call`,
   `loop_guard_repeated_failed_input`, `loop_guard_repeated_failures`,
   `loop_guard_halted_tool`, `loop_guard_call_cap`, or
   `loop_guard_direct_reader_warning`, or `loop_guard_no_new_evidence`.
