@@ -1468,6 +1468,59 @@ func TestSummarizeDurableSessionRestoresRuntimeOwnedToolEvidence(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionClassifiesGitHandoffEvidence(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "task-state-git-handoff")
+	dir := pool.sessionDirPath("task-state-git-handoff")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Fix the code, commit, and push.",
+	}) + sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t1",
+		CallID: "commit-1",
+		Tool:   "shell",
+		Args:   map[string]any{"command": "git -C app commit -m fix"},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:        "t1",
+		CallID:        "commit-1",
+		ExitCode:      0,
+		ResultSummary: "[main abc1234] fix",
+	}) + sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+		TurnID: "t1",
+		CallID: "push-1",
+		Tool:   "shell",
+		Args:   map[string]any{"command": "git push origin main"},
+	}) + sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+		TurnID:        "t1",
+		CallID:        "push-1",
+		ExitCode:      0,
+		ResultSummary: "main -> main",
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t1",
+		Reason: sse.TurnEndCompleted,
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "task-state-git-handoff")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if !taskEvidenceContains(task.Evidence, "git_commit", "git -C app commit") ||
+		!taskEvidenceContains(task.Evidence, "git_push", "git push origin main") {
+		t.Fatalf("evidence = %+v, want git commit and push handoff evidence", task.Evidence)
+	}
+	if !stringSliceContains(task.Sources, "git_commit") || !stringSliceContains(task.Sources, "git_push") {
+		t.Fatalf("sources = %+v, want git commit and push handoff sources", task.Sources)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

@@ -210,13 +210,29 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 				if req.Tool == "shell" {
 					state.VerificationState = "last_shell_passed"
 				}
+				actionSummary := taskActionSummary(req)
+				summary := compactTaskSummary(actionSummary)
 				state.Evidence = appendTaskEvidence(state.Evidence, sessionTaskStateEvidence{
 					Source:  source,
-					Summary: compactTaskSummary(taskActionSummary(req)),
+					Summary: summary,
 					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
 					CallID:  p.CallID,
 				})
 				addTaskStateSource(state, source)
+				if req.Tool == "shell" {
+					source = taskShellEvidenceSource(actionSummary)
+				} else {
+					source = ""
+				}
+				if source != "" {
+					state.Evidence = appendTaskEvidence(state.Evidence, sessionTaskStateEvidence{
+						Source:  source,
+						Summary: summary,
+						TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
+						CallID:  p.CallID,
+					})
+					addTaskStateSource(state, source)
+				}
 			}
 			seen = true
 		case sse.TypeMessageRejected:
@@ -426,6 +442,43 @@ func taskToolEvidenceSource(tool string) string {
 	default:
 		return ""
 	}
+}
+
+func taskShellEvidenceSource(command string) string {
+	switch taskGitSubcommand(command) {
+	case "commit":
+		return "git_commit"
+	case "push":
+		return "git_push"
+	default:
+		return ""
+	}
+}
+
+func taskGitSubcommand(command string) string {
+	fields := strings.Fields(command)
+	if len(fields) == 0 || strings.Trim(fields[0], " \t\r\n()") != "git" {
+		return ""
+	}
+	for i := 1; i < len(fields); i++ {
+		token := strings.Trim(fields[i], " \t\r\n;()")
+		switch {
+		case token == "-C" || token == "-c" || token == "--git-dir" || token == "--work-tree" || token == "--namespace":
+			i++
+			continue
+		case strings.HasPrefix(token, "--git-dir=") || strings.HasPrefix(token, "--work-tree=") || strings.HasPrefix(token, "--namespace="):
+			continue
+		case strings.HasPrefix(token, "-C") && token != "-C":
+			continue
+		case strings.HasPrefix(token, "-c") && token != "-c":
+			continue
+		case strings.HasPrefix(token, "-"):
+			continue
+		default:
+			return token
+		}
+	}
+	return ""
 }
 
 func changedFileFromTaskRequest(req sessionTaskRequest) sessionTaskStateFile {

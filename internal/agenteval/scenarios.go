@@ -3167,6 +3167,13 @@ func TestRemoveMissingValueIsFalseAndKeepsSet(t *testing.T) {
 		RequiredCommandOrder: []CommandOrderRequirement{
 			{Earlier: `git commit`, Later: `git push`},
 		},
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_commit"},
+			{Source: "git_push"},
+		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},
@@ -3271,6 +3278,13 @@ func TestClampAboveRange(t *testing.T) {
 		},
 		RequiredCommandOrder: []CommandOrderRequirement{
 			{Earlier: `git commit`, Later: `git push`},
+		},
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_commit"},
+			{Source: "git_push"},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
@@ -3379,6 +3393,13 @@ func TestMessageUsesName(t *testing.T) {
 		},
 		RequiredCommandOrder: []CommandOrderRequirement{
 			{Earlier: `git commit`, Later: `git push`},
+		},
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_commit"},
+			{Source: "git_push"},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
@@ -3492,6 +3513,15 @@ This repository starts almost empty. The agent must create the project, tests, d
 		},
 		RequiredCommandOrder: []CommandOrderRequirement{
 			{Earlier: `git commit`, Later: `git push`},
+		},
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+			{Tool: "loop_protocol", SummaryContains: "close"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_commit"},
+			{Source: "git_push"},
+			{Source: "loop_protocol"},
 		},
 		RequiredLoopProtocolFeeds: 1,
 		RequiredLoopProtocolFeedModes: map[string]int{

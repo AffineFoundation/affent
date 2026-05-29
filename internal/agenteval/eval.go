@@ -66,6 +66,22 @@ type ToolArgContainsRequirement struct {
 	Max int
 }
 
+type TaskStateAttemptedActionRequirement struct {
+	Tool            string
+	SummaryContains string
+	// Min is the required number of matching task-state attempted actions.
+	// Values <=0 default to one so scenarios can spell the common case tersely.
+	Min int
+}
+
+type TaskStateEvidenceRequirement struct {
+	Source          string
+	SummaryContains string
+	// Min is the required number of matching task-state evidence entries.
+	// Values <=0 default to one so scenarios can spell the common case tersely.
+	Min int
+}
+
 type LoopDecisionRequirement struct {
 	Kind                    string
 	Decision                string
@@ -182,6 +198,8 @@ type BatchScenario struct {
 	RequiredTaskStateRequestSource                 string
 	RequiredTaskStateScheduleID                    string
 	RequiredTaskStateScheduleKind                  string
+	RequiredTaskStateAttemptedActions              []TaskStateAttemptedActionRequirement
+	RequiredTaskStateEvidence                      []TaskStateEvidenceRequirement
 	RequiredConversationRepairStatsAtLeast         map[string]int
 	RequiredConversationRepairKinds                map[string]int
 	RequiredLoopDecisionKinds                      map[string]int
@@ -442,6 +460,8 @@ type DebugScenarioExpectations struct {
 	RequiredTaskStateRequestSource                 string                                `json:"required_task_state_request_source,omitempty"`
 	RequiredTaskStateScheduleID                    string                                `json:"required_task_state_schedule_id,omitempty"`
 	RequiredTaskStateScheduleKind                  string                                `json:"required_task_state_schedule_kind,omitempty"`
+	RequiredTaskStateAttemptedActions              []DebugTaskStateActionRequirement     `json:"required_task_state_attempted_actions,omitempty"`
+	RequiredTaskStateEvidence                      []DebugTaskStateEvidenceRequirement   `json:"required_task_state_evidence,omitempty"`
 	RequiredConversationRepairStatsAtLeast         map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
 	RequiredConversationRepairKinds                map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
 	RequiredLoopDecisionKinds                      map[string]int                        `json:"required_loop_decision_kinds,omitempty"`
@@ -523,7 +543,12 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 			}
 		}
 	}
-	if strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleID) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
+	if strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateScheduleID) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" ||
+		len(exp.RequiredTaskStateAttemptedActions) > 0 ||
+		len(exp.RequiredTaskStateEvidence) > 0 {
 		caps["session"] = true
 		caps["trace"] = true
 	}
@@ -646,7 +671,15 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	for stat := range exp.RequiredToolStatsAtLeast {
 		addExpectationStatCapabilities(caps, stat)
 	}
-	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 || len(exp.ForbiddenUserMessageModes) > 0 || strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleID) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
+	if len(exp.RequiredTraceEventCounts) > 0 ||
+		len(exp.RequiredUserMessageModes) > 0 ||
+		len(exp.ForbiddenUserMessageModes) > 0 ||
+		strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateScheduleID) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" ||
+		len(exp.RequiredTaskStateAttemptedActions) > 0 ||
+		len(exp.RequiredTaskStateEvidence) > 0 {
 		caps["trace"] = true
 	}
 	if len(exp.RequiredConversationRepairStatsAtLeast) > 0 || len(exp.RequiredConversationRepairKinds) > 0 {
@@ -909,6 +942,18 @@ type DebugToolArgContainsRequirement struct {
 	Substring string `json:"substring"`
 	Min       int    `json:"min,omitempty"`
 	Max       int    `json:"max,omitempty"`
+}
+
+type DebugTaskStateActionRequirement struct {
+	Tool            string `json:"tool,omitempty"`
+	SummaryContains string `json:"summary_contains,omitempty"`
+	Min             int    `json:"min,omitempty"`
+}
+
+type DebugTaskStateEvidenceRequirement struct {
+	Source          string `json:"source,omitempty"`
+	SummaryContains string `json:"summary_contains,omitempty"`
+	Min             int    `json:"min,omitempty"`
 }
 
 type DebugToolOrderRequirement struct {
@@ -2126,6 +2171,22 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Min:                           req.Min,
 		})
 	}
+	taskStateActionReqs := make([]DebugTaskStateActionRequirement, 0, len(s.RequiredTaskStateAttemptedActions))
+	for _, req := range s.RequiredTaskStateAttemptedActions {
+		taskStateActionReqs = append(taskStateActionReqs, DebugTaskStateActionRequirement{
+			Tool:            req.Tool,
+			SummaryContains: req.SummaryContains,
+			Min:             req.Min,
+		})
+	}
+	taskStateEvidenceReqs := make([]DebugTaskStateEvidenceRequirement, 0, len(s.RequiredTaskStateEvidence))
+	for _, req := range s.RequiredTaskStateEvidence {
+		taskStateEvidenceReqs = append(taskStateEvidenceReqs, DebugTaskStateEvidenceRequirement{
+			Source:          req.Source,
+			SummaryContains: req.SummaryContains,
+			Min:             req.Min,
+		})
+	}
 	toolOrders := make([]DebugToolOrderRequirement, 0, len(s.RequiredToolOrder))
 	for _, req := range s.RequiredToolOrder {
 		toolOrders = append(toolOrders, DebugToolOrderRequirement{
@@ -2194,6 +2255,8 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredTaskStateRequestSource:                 strings.TrimSpace(s.RequiredTaskStateRequestSource),
 		RequiredTaskStateScheduleID:                    strings.TrimSpace(s.RequiredTaskStateScheduleID),
 		RequiredTaskStateScheduleKind:                  strings.TrimSpace(s.RequiredTaskStateScheduleKind),
+		RequiredTaskStateAttemptedActions:              taskStateActionReqs,
+		RequiredTaskStateEvidence:                      taskStateEvidenceReqs,
 		RequiredConversationRepairStatsAtLeast:         cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
 		RequiredConversationRepairKinds:                cloneStringIntMap(s.RequiredConversationRepairKinds),
 		RequiredLoopDecisionKinds:                      cloneStringIntMap(s.RequiredLoopDecisionKinds),
@@ -3394,6 +3457,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if kind := strings.TrimSpace(scenario.RequiredTaskStateScheduleKind); kind != "" {
 		checks = append(checks, TaskStateScheduleKindIs(kind))
+	}
+	for _, req := range scenario.RequiredTaskStateAttemptedActions {
+		checks = append(checks, TaskStateAttemptedActionAtLeast(req.Tool, req.SummaryContains, req.Min))
+	}
+	for _, req := range scenario.RequiredTaskStateEvidence {
+		checks = append(checks, TaskStateEvidenceAtLeast(req.Source, req.SummaryContains, req.Min))
 	}
 	for _, field := range sortedStringMapKeys(scenario.RequiredConversationRepairStatsAtLeast) {
 		checks = append(checks, ConversationRepairStatsAtLeast(field, scenario.RequiredConversationRepairStatsAtLeast[field]))

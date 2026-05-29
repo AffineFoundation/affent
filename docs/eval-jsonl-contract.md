@@ -155,6 +155,9 @@ Scenario records describe one eval case:
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
+  task-state request provenance plus optional
+  `required_task_state_attempted_actions` and `required_task_state_evidence`
+  checks for canonical TaskState reviewability,
   plan/delegation constraints, protected files, optional
   `required_turn_end_reason` for intentional non-completed endings, optional
   `setup_commands` that prepared the workspace before the agent ran, and related
@@ -199,11 +202,11 @@ Scenario records describe one eval case:
   manifests include the fuller `runtime_surface` block with per-tool
   group/source metadata.
 - `task_state`: optional derived snapshot of the scenario's objective, status,
-  current step, next step, verification state, changed files, failed actions,
-  evidence, and runtime/context sources. Successful shell evidence may include
-  structured handoff sources such as `git_commit` and `git_push`. It is derived
-  from trace facts for audit/debug output and is not fed back into the agent
-  runtime.
+  current step, next step, verification state, changed files, attempted
+  actions, failed actions, evidence, and runtime/context sources. Successful
+  shell evidence may include structured handoff sources such as `git_commit`
+  and `git_push`. It is derived from trace facts for audit/debug output and is
+  not fed back into the agent runtime.
 - `task_state_status`, `task_state_verification`,
   `task_state_changed_files`, `task_state_attempted_actions`,
   `task_state_failed_actions`, and `task_state_evidence`: compact task-state

@@ -749,6 +749,31 @@ func TestTaskStateRequestProvenanceChecks(t *testing.T) {
 	}
 }
 
+func TestTaskStateActionAndEvidenceChecks(t *testing.T) {
+	trace := Trace{TaskState: TaskStateSnapshot{
+		AttemptedActions: []TaskStateAction{
+			{Tool: "shell", Summary: "git push origin main"},
+			{Tool: "loop_protocol", Summary: "close completed"},
+		},
+		Evidence: []TaskStateEvidence{
+			{Source: "git_push", Summary: "git push origin main"},
+			{Source: "loop_protocol", Summary: "close completed"},
+		},
+	}}
+	if res := TaskStateAttemptedActionAtLeast("shell", "git push", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected attempted action check to pass: %+v", res)
+	}
+	if res := TaskStateEvidenceAtLeast("git_push", "git push", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected evidence check to pass: %+v", res)
+	}
+	if res := TaskStateAttemptedActionAtLeast("shell", "git commit", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "git push origin main") {
+		t.Fatalf("expected attempted action mismatch to show observed actions: %+v", res)
+	}
+	if res := TaskStateEvidenceAtLeast("git_commit", "", 1).Eval(trace); res.Pass || !strings.Contains(res.Detail, "git_push") {
+		t.Fatalf("expected evidence mismatch to show observed evidence: %+v", res)
+	}
+}
+
 func TestConversationRepairChecks(t *testing.T) {
 	trace := Trace{ConversationRepairs: []sse.ConversationRepairedPayload{
 		{

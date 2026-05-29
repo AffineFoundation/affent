@@ -214,6 +214,86 @@ func TaskStateScheduleIDIs(id string) Check {
 	}
 }
 
+func TaskStateAttemptedActionAtLeast(tool, summaryContains string, min int) Check {
+	tool = strings.TrimSpace(tool)
+	summaryContains = strings.TrimSpace(summaryContains)
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("task_state_attempted_action_at_least:%s:%s:%d", checkNamePart(tool), checkNamePart(summaryContains), min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var observed []string
+			for _, action := range t.TaskState.AttemptedActions {
+				if len(observed) < 5 {
+					observed = append(observed, taskStateActionExample(action.Tool, action.Summary))
+				}
+				if tool != "" && strings.TrimSpace(action.Tool) != tool {
+					continue
+				}
+				if summaryContains != "" && !strings.Contains(action.Summary, summaryContains) {
+					continue
+				}
+				count++
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched=%d", count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("matched=%d, want >= %d; observed=%v", count, min, observed),
+			}
+		},
+	}
+}
+
+func TaskStateEvidenceAtLeast(source, summaryContains string, min int) Check {
+	source = strings.TrimSpace(source)
+	summaryContains = strings.TrimSpace(summaryContains)
+	if min <= 0 {
+		min = 1
+	}
+	return Check{
+		Name: fmt.Sprintf("task_state_evidence_at_least:%s:%s:%d", checkNamePart(source), checkNamePart(summaryContains), min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var observed []string
+			for _, evidence := range t.TaskState.Evidence {
+				if len(observed) < 5 {
+					observed = append(observed, taskStateActionExample(evidence.Source, evidence.Summary))
+				}
+				if source != "" && strings.TrimSpace(evidence.Source) != source {
+					continue
+				}
+				if summaryContains != "" && !strings.Contains(evidence.Summary, summaryContains) {
+					continue
+				}
+				count++
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched=%d", count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("matched=%d, want >= %d; observed=%v", count, min, observed),
+			}
+		},
+	}
+}
+
+func taskStateActionExample(kind, summary string) string {
+	kind = strings.TrimSpace(kind)
+	summary = strings.TrimSpace(summary)
+	if summary == "" {
+		return kind
+	}
+	if kind == "" {
+		return compactOneLine(summary, 120)
+	}
+	return kind + ":" + compactOneLine(summary, 120)
+}
+
 func normalizeTaskRequestMode(mode string) string {
 	mode = strings.TrimSpace(mode)
 	if mode == "" {

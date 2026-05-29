@@ -1541,6 +1541,12 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredTaskStateRequestSource: "schedule",
 		RequiredTaskStateScheduleID:    "sched_clamp",
 		RequiredTaskStateScheduleKind:  "checkin",
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_push", SummaryContains: "git push"},
+		},
 		RequiredContextInjectionSources: map[string]int{
 			"final_evidence_digest": 1,
 		},
@@ -1637,6 +1643,8 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"task_state_request_source:schedule",
 		"task_state_schedule_id:sched_clamp",
 		"task_state_schedule_kind:checkin",
+		"task_state_attempted_action_at_least:shell:git push:1",
+		"task_state_evidence_at_least:git_push:git push:1",
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
@@ -1712,6 +1720,29 @@ func TestDebugScenarioExpectationsCopiesCompletionGuards(t *testing.T) {
 		if !stringSliceContains(caps, want) {
 			t.Fatalf("caps = %#v, want %q", caps, want)
 		}
+	}
+}
+
+func TestDebugScenarioExpectationsCopiesTaskStateRequirements(t *testing.T) {
+	scenario := BatchScenario{
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{{Tool: "shell", SummaryContains: "git push", Min: 1}},
+		RequiredTaskStateEvidence:         []TaskStateEvidenceRequirement{{Source: "git_push", SummaryContains: "git push", Min: 1}},
+	}
+	exp := debugScenarioExpectations(scenario)
+	if !reflect.DeepEqual(exp.RequiredTaskStateAttemptedActions, []DebugTaskStateActionRequirement{{Tool: "shell", SummaryContains: "git push", Min: 1}}) {
+		t.Fatalf("RequiredTaskStateAttemptedActions = %#v", exp.RequiredTaskStateAttemptedActions)
+	}
+	if !reflect.DeepEqual(exp.RequiredTaskStateEvidence, []DebugTaskStateEvidenceRequirement{{Source: "git_push", SummaryContains: "git push", Min: 1}}) {
+		t.Fatalf("RequiredTaskStateEvidence = %#v", exp.RequiredTaskStateEvidence)
+	}
+	for _, want := range []string{"task_state_attempted_action_at_least:shell:git push:1", "task_state_evidence_at_least:git_push:git push:1"} {
+		if !stringSliceContains(exp.CheckNames, want) {
+			t.Fatalf("CheckNames = %#v, want %q", exp.CheckNames, want)
+		}
+	}
+	caps := ExpectationCapabilityNames(exp)
+	if !stringSliceContains(caps, "trace") || !stringSliceContains(caps, "session") {
+		t.Fatalf("caps = %#v, want trace/session", caps)
 	}
 }
 
