@@ -18,14 +18,14 @@ ARG AFFENT_BUILD_REVISION=unknown
 ARG AFFENT_BUILD_DATE=unknown
 
 COPY go.mod go.sum ./
+COPY extras/web/go.mod extras/web/go.sum ./extras/web/
+COPY extras/browser/go.mod extras/browser/go.sum ./extras/browser/
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-COPY extras/web/go.mod extras/web/go.sum ./extras/web/
 RUN --mount=type=cache,target=/go/pkg/mod \
     cd extras/web && go mod download
 
-COPY extras/browser/go.mod extras/browser/go.sum ./extras/browser/
 RUN --mount=type=cache,target=/go/pkg/mod \
     cd extras/browser && go mod download
 

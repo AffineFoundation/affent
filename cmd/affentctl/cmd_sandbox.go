@@ -540,6 +540,27 @@ func defaultSandboxUser() string {
 	return uid + ":" + gid
 }
 
+func shouldPreflightRuntimeMountWriteAccess(runtimeUser string) bool {
+	runtimeUser = strings.TrimSpace(runtimeUser)
+	return runtimeUser != "" && runtimeUser == defaultSandboxUser()
+}
+
+func ensureRuntimeMountWriteAccess(label, dir string) error {
+	f, err := os.CreateTemp(dir, ".affent-write-test-")
+	if err != nil {
+		return fmt.Errorf("%s %s is not writable by the runtime user; fix ownership/permissions or pass --user matching the directory owner: %w", label, dir, err)
+	}
+	name := f.Name()
+	if closeErr := f.Close(); closeErr != nil {
+		_ = os.Remove(name)
+		return fmt.Errorf("%s %s write check: %w", label, dir, closeErr)
+	}
+	if err := os.Remove(name); err != nil {
+		return fmt.Errorf("%s %s cleanup write check: %w", label, dir, err)
+	}
+	return nil
+}
+
 func buildDockerImage(opts dockerBuildOptions, runner commandRunner) error {
 	if runner == nil {
 		return errors.New("docker runner is nil")
@@ -699,6 +720,14 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	opts.AccountDir = accountDir
 	if err := os.MkdirAll(opts.AccountDir, 0o700); err != nil {
 		return fmt.Errorf("mkdir account dir %s: %w", opts.AccountDir, err)
+	}
+	if shouldPreflightRuntimeMountWriteAccess(opts.User) {
+		if err := ensureRuntimeMountWriteAccess("workspace", opts.Workspace); err != nil {
+			return err
+		}
+		if err := ensureRuntimeMountWriteAccess("account dir", opts.AccountDir); err != nil {
+			return err
+		}
 	}
 	for _, dir := range runtimePersistentDirs(opts.Workspace) {
 		if err := os.MkdirAll(dir, 0o755); err != nil {

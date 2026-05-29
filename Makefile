@@ -59,6 +59,7 @@ WEBUI_API_TARGET ?= http://127.0.0.1:$(WEBUI_API_PORT)
 DOCTOR_ARGS ?=
 SMOKE_CONTAINER_NAME ?= affent-serve-smoke
 SMOKE_WORKSPACE ?= $(CURDIR)/.tmp/image-serve-smoke
+SMOKE_ACCOUNT_DIR ?= $(SMOKE_WORKSPACE)/account
 SMOKE_PUBLISH ?= 127.0.0.1:7787:7777
 SMOKE_PUBLISH_PARTS := $(subst :, ,$(SMOKE_PUBLISH))
 SMOKE_PUBLISH_WORDS := $(words $(SMOKE_PUBLISH_PARTS))
@@ -302,13 +303,19 @@ image-serve-smoke:
 		echo "SMOKE_WORKSPACE must be a non-root path" >&2; \
 		exit 2; \
 	fi; \
+	if test -z "$(SMOKE_ACCOUNT_DIR)" || test "$(SMOKE_ACCOUNT_DIR)" = "/"; then \
+		echo "SMOKE_ACCOUNT_DIR must be a non-root path" >&2; \
+		exit 2; \
+	fi; \
 	docker rm -f "$(SMOKE_CONTAINER_NAME)" >/dev/null 2>&1 || true; \
-	mkdir -p "$(SMOKE_WORKSPACE)"; \
+	rm -rf "$(SMOKE_WORKSPACE)" "$(SMOKE_ACCOUNT_DIR)"; \
+	mkdir -p "$(SMOKE_WORKSPACE)" "$(SMOKE_ACCOUNT_DIR)"; \
 	cleanup() { docker rm -f "$(SMOKE_CONTAINER_NAME)" >/dev/null 2>&1 || true; }; \
 	trap cleanup EXIT; \
 	$(MAKE) image-serve-up \
 		SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)" \
 		IMAGE_WORKSPACE="$(SMOKE_WORKSPACE)" \
+		SERVE_ACCOUNT_DIR="$(SMOKE_ACCOUNT_DIR)" \
 		SERVE_PUBLISH="$(SMOKE_PUBLISH)" \
 		SERVE_BASE_URL="$(SMOKE_BASE_URL)" \
 		SERVE_API_KEY="$(SMOKE_API_KEY)" \
@@ -321,10 +328,19 @@ image-serve-smoke:
 	echo "$$health" | grep -q '"build_revision":"$(IMAGE_BUILD_REVISION)"'; \
 	stats=$$(curl -fsS "$(SMOKE_URL)/v1/stats"); \
 	echo "$$stats" | grep -q '"build":{"build_revision":"$(IMAGE_BUILD_REVISION)"'; \
-	curl -fsS -X POST "$(SMOKE_URL)/v1/sessions" \
+	echo "$$stats" | grep -q '"enable_loop_protocol":true'; \
+	echo "$$stats" | grep -q '"runtime_contract":{"status":"configured"'; \
+	echo "$$stats" | grep -q '"loop protocol"'; \
+	echo "$$stats" | grep -q '"schedules"'; \
+	created=$$(curl -fsS -X POST "$(SMOKE_URL)/v1/sessions" \
 		-H 'Content-Type: application/json' \
-		--data '{"session_id":"$(SMOKE_SESSION_ID)"}' | grep -q '"durable":true'; \
+		--data '{"session_id":"$(SMOKE_SESSION_ID)"}'); \
+	echo "$$created" | grep -q '"durable":true'; \
+	echo "$$created" | grep -q '"loop_protocol":true'; \
+	echo "$$created" | grep -q '"session_schedule":true'; \
 	tools=$$(curl -fsS "$(SMOKE_URL)/v1/sessions/$(SMOKE_SESSION_ID)/tools"); \
+	echo "$$tools" | grep -q '"name":"loop_protocol"'; \
+	echo "$$tools" | grep -q '"name":"session_schedule"'; \
 	echo "$$tools" | grep -q '"browser_navigate"'; \
 	echo "$$tools" | grep -q '"web_fetch"'; \
 	if echo "$$tools" | grep -q '"web_search"'; then \
@@ -336,6 +352,7 @@ image-serve-smoke:
 	$(MAKE) image-serve-up \
 		SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)" \
 		IMAGE_WORKSPACE="$(SMOKE_WORKSPACE)" \
+		SERVE_ACCOUNT_DIR="$(SMOKE_ACCOUNT_DIR)" \
 		SERVE_PUBLISH="$(SMOKE_PUBLISH)" \
 		SERVE_BASE_URL="$(SMOKE_BASE_URL)" \
 		SERVE_API_KEY="$(SMOKE_API_KEY)" \
@@ -344,6 +361,10 @@ image-serve-smoke:
 		CONTAINER_CPUS="$(CONTAINER_CPUS)" \
 		CONTAINER_PIDS="$(CONTAINER_PIDS)"; \
 	detail=$$(curl -fsS "$(SMOKE_URL)/v1/sessions/$(SMOKE_SESSION_ID)"); \
+	stats_after_restart=$$(curl -fsS "$(SMOKE_URL)/v1/stats"); \
+	echo "$$stats_after_restart" | grep -q '"runtime_contract":{"status":"configured"'; \
+	echo "$$stats_after_restart" | grep -q '"loop protocol"'; \
+	echo "$$stats_after_restart" | grep -q '"schedules"'; \
 	echo "$$detail" | grep -q '"durable":true'; \
 	echo "$$detail" | grep -q '"active":false'; \
 	memory_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.memory"}}'); \

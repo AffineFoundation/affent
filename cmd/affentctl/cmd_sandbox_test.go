@@ -217,6 +217,8 @@ func TestAffentDockerfilePackagesRuntimeBinaries(t *testing.T) {
 		"FROM node:22-bookworm AS webui",
 		"npm ci",
 		"npm run build",
+		"COPY extras/web/go.mod extras/web/go.sum ./extras/web/",
+		"COPY extras/browser/go.mod extras/browser/go.sum ./extras/browser/",
 		"COPY docker/go-cgroup-env.sh /tmp/affent-go-cgroup-env",
 		"COPY --from=webui /src/extras/webui/dist ./cmd/affentserve/webui/dist",
 		". /tmp/affent-go-cgroup-env",
@@ -272,6 +274,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SERVE_MODEL ?= $(or $(AFFENTSERVE_MODEL),$(AFFENTCTL_MODEL))",
 		"SMOKE_CONTAINER_NAME ?= affent-serve-smoke",
 		"SMOKE_WORKSPACE ?= $(CURDIR)/.tmp/image-serve-smoke",
+		"SMOKE_ACCOUNT_DIR ?= $(SMOKE_WORKSPACE)/account",
 		"SMOKE_PUBLISH ?= 127.0.0.1:7787:7777",
 		"SMOKE_URL ?= http://$(SMOKE_HOST):$(SMOKE_PORT)",
 		"SMOKE_BASE_URL ?= http://127.0.0.1:9",
@@ -536,6 +539,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"image-serve-smoke": {
 			`SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)"`,
 			`IMAGE_WORKSPACE="$(SMOKE_WORKSPACE)"`,
+			`SERVE_ACCOUNT_DIR="$(SMOKE_ACCOUNT_DIR)"`,
 			`SERVE_PUBLISH="$(SMOKE_PUBLISH)"`,
 			`CONTAINER_MEMORY="$(CONTAINER_MEMORY)"`,
 			`CONTAINER_CPUS="$(CONTAINER_CPUS)"`,
@@ -1083,6 +1087,42 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 	}
 	if st, err := os.Stat(accountDir); err != nil || !st.IsDir() {
 		t.Fatalf("account dir %s not created; stat=%v err=%v", accountDir, st, err)
+	}
+}
+
+func TestRunRuntimeImagePreflightsDefaultUserMountWriteAccess(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can write through mode bits that fail for normal runtime users")
+	}
+	runtimeUser := defaultSandboxUser()
+	if runtimeUser == "" {
+		t.Skip("current user has no stable uid:gid")
+	}
+	workspace := t.TempDir()
+	accountDir := filepath.Join(t.TempDir(), "account")
+	if err := os.Mkdir(accountDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Chmod(accountDir, 0o700)
+	}()
+	runner := &fakeCommandRunner{}
+	opts := runtimeRunOptions{
+		Image:      "example/affent:local",
+		Workspace:  workspace,
+		AccountDir: accountDir,
+		Memory:     "768m",
+		CPUs:       "1.5",
+		PIDsLimit:  "256",
+		User:       runtimeUser,
+		Command:    []string{"affentserve", "--listen", "0.0.0.0:7777"},
+	}
+	err := runRuntimeImage(opts, runner)
+	if err == nil || !strings.Contains(err.Error(), "account dir") || !strings.Contains(err.Error(), "not writable by the runtime user") {
+		t.Fatalf("error = %v, want account dir write preflight", err)
+	}
+	if len(runner.calls) != 0 {
+		t.Fatalf("preflight failure must not call docker, calls=%+v", runner.calls)
 	}
 }
 
