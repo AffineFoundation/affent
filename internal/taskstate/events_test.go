@@ -100,6 +100,33 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 }
 
+func TestToolSemanticsAreSharedTaskStateInputs(t *testing.T) {
+	req := ToolRequest{
+		Tool:   "web_fetch",
+		TurnID: "turn-1",
+		CallID: "fetch-1",
+		Args:   map[string]any{"url": "https://example.test/report"},
+	}
+	if got := ToolActionSummary(req); got != "url: https://example.test/report" {
+		t.Fatalf("ToolActionSummary = %q", got)
+	}
+	if file := ToolChangedFile(ToolRequest{Tool: "edit_file", Args: map[string]any{"path": "app/main.go"}}); file.Path != "app/main.go" || file.Action != "edit" {
+		t.Fatalf("ToolChangedFile = %+v", file)
+	}
+	kinds := ToolFailureKinds(ToolResult{
+		Tool:         "web_fetch",
+		FailureKind:  "empty_response",
+		FailureKinds: []string{"empty_response", "blocked"},
+		Result:       "[empty response: URL=https://example.test/report]\nFailure: kind=no_results",
+	}, DefaultMaxItems)
+	if strings.Join(kinds, ",") != "empty_response,blocked,no_results" {
+		t.Fatalf("ToolFailureKinds = %+v", kinds)
+	}
+	if !ToolFailed(ToolResult{Tool: "shell", ExitCode: 1}, DefaultMaxItems) {
+		t.Fatal("ToolFailed returned false for non-zero exit")
+	}
+}
+
 func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 	t.Helper()
 	ev, err := sse.NewEvent(eventType, payload)

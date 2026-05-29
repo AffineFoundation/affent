@@ -12,8 +12,8 @@ import (
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/taskstate"
 	"github.com/affinefoundation/affent/internal/textutil"
-	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/affinefoundation/affent/internal/toolrepair"
 )
 
@@ -1607,21 +1607,16 @@ func firstNonEmptyMemoryUpdateValue(values ...string) string {
 }
 
 func toolFailureKindsForCall(c ToolCall) []string {
-	var kinds []string
-	if c.FailureKind != "" {
-		kinds = append(kinds, c.FailureKind)
-	}
-	for _, kind := range c.FailureKinds {
-		if !containsString(kinds, kind) {
-			kinds = append(kinds, kind)
-		}
-	}
-	for _, kind := range toolfailure.KindsForResult(c.Tool, c.Result, c.ExitCode != 0) {
-		if !containsString(kinds, kind) {
-			kinds = append(kinds, kind)
-		}
-	}
-	return kinds
+	return taskstate.ToolFailureKinds(taskstate.ToolResult{
+		Tool:          c.Tool,
+		TurnID:        c.TurnID,
+		CallID:        c.CallID,
+		Result:        c.Result,
+		ResultSummary: c.ResultSummary,
+		FailureKind:   c.FailureKind,
+		FailureKinds:  c.FailureKinds,
+		ExitCode:      c.ExitCode,
+	}, taskstate.DefaultMaxItems)
 }
 
 func summarizeToolCallArgs(args map[string]any) string {

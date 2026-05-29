@@ -181,6 +181,30 @@ func TestDeriveTaskStateIncludesRuntimeOwnedToolEvidence(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateUsesCanonicalPrimaryFailureKind(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Fetch current evidence.",
+		TurnEndReason: "error",
+		Tools: []ToolCall{{
+			TurnID:        "turn-1",
+			CallID:        "fetch-1",
+			Tool:          "web_fetch",
+			Args:          map[string]any{"url": "https://example.test/report"},
+			FailureKind:   "empty_response",
+			ResultSummary: "empty response from source",
+		}},
+	}
+
+	got := DeriveTaskState(trace)
+	if len(got.FailedActions) != 1 {
+		t.Fatalf("failed actions = %+v, want one web_fetch failure", got.FailedActions)
+	}
+	failure := got.FailedActions[0]
+	if failure.Tool != "web_fetch" || failure.Summary != "empty response from source" || !reflect.DeepEqual(failure.Kinds, []string{"empty_response"}) {
+		t.Fatalf("failed action = %+v, want canonical primary failure kind", failure)
+	}
+}
+
 func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 	original := TaskStateSnapshot{
 		Objective:        "ship task",

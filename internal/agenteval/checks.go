@@ -10,6 +10,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/taskstate"
 )
 
 // ToolCalled passes when the agent invoked the named tool at least
@@ -147,11 +148,11 @@ func UserMessageModeAtMost(mode string, max int) Check {
 }
 
 func TaskStateRequestModeIs(mode string) Check {
-	mode = normalizeTaskRequestMode(mode)
+	mode = taskstate.NormalizeRequestMode(mode)
 	return Check{
 		Name: fmt.Sprintf("task_state_request_mode:%s", mode),
 		Eval: func(t Trace) CheckResult {
-			got := normalizeTaskRequestMode(t.TaskState.RequestMode)
+			got := taskstate.NormalizeRequestMode(t.TaskState.RequestMode)
 			if got == mode {
 				return CheckResult{Pass: true, Detail: fmt.Sprintf("request_mode=%s", got)}
 			}
@@ -164,11 +165,11 @@ func TaskStateRequestModeIs(mode string) Check {
 }
 
 func TaskStateRequestSourceIs(source string) Check {
-	source = normalizeTaskRequestSource(source)
+	source = taskstate.NormalizeRequestSource(source)
 	return Check{
 		Name: fmt.Sprintf("task_state_request_source:%s", source),
 		Eval: func(t Trace) CheckResult {
-			got := normalizeTaskRequestSource(t.TaskState.RequestSource)
+			got := taskstate.NormalizeRequestSource(t.TaskState.RequestSource)
 			if got == source {
 				return CheckResult{Pass: true, Detail: fmt.Sprintf("request_source=%s", got)}
 			}
@@ -292,22 +293,6 @@ func taskStateActionExample(kind, summary string) string {
 		return compactOneLine(summary, 120)
 	}
 	return kind + ":" + compactOneLine(summary, 120)
-}
-
-func normalizeTaskRequestMode(mode string) string {
-	mode = strings.TrimSpace(mode)
-	if mode == "" {
-		return "normal"
-	}
-	return mode
-}
-
-func normalizeTaskRequestSource(source string) string {
-	source = strings.TrimSpace(source)
-	if source == "" {
-		return "user"
-	}
-	return source
 }
 
 func ContextInjectionSourceAtLeast(source string, min int) Check {

@@ -25,8 +25,8 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		VerificationState: traceTaskVerificationState(trace),
 	}
 	if latest := latestTaskRequest(trace); latest != nil {
-		task.RequestMode = normalizeTaskRequestMode(latest.Mode)
-		task.RequestSource = normalizeTaskRequestSource(latest.Source)
+		task.RequestMode = taskstate.NormalizeRequestMode(latest.Mode)
+		task.RequestSource = taskstate.NormalizeRequestSource(latest.Source)
 		task.ScheduleID = strings.TrimSpace(latest.ScheduleID)
 		task.ScheduleKind = strings.TrimSpace(latest.ScheduleKind)
 		task.Sources = appendUniqueTaskString(task.Sources, task.RequestSource, taskStateMaxItems)
@@ -59,7 +59,7 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 			task.FailedActions = appendTaskFailure(task.FailedActions, TaskStateFailure{
 				Tool:    firstNonEmpty(tool.Tool, "tool"),
 				Summary: compactTaskStateSummary(firstNonEmpty(tool.ResultSummary, tool.Result, taskStateToolSummary(tool))),
-				Kinds:   append([]string(nil), tool.FailureKinds...),
+				Kinds:   taskstate.ToolFailureKinds(taskStateToolResult(tool), taskStateMaxItems),
 				Next:    taskstate.NextHint(tool.ResultSummary, tool.Result),
 				TurnID:  tool.TurnID,
 				CallID:  tool.CallID,
@@ -187,48 +187,40 @@ func traceTaskNextStep(trace Trace, task TaskStateSnapshot) string {
 }
 
 func taskStateChangedFile(tool ToolCall) TaskStateFile {
-	switch tool.Tool {
-	case "write_file":
-		return TaskStateFile{Path: stringArg(tool.Args, "path"), Action: "write"}
-	case "edit_file":
-		return TaskStateFile{Path: stringArg(tool.Args, "path"), Action: "edit"}
-	default:
-		return TaskStateFile{}
-	}
+	return taskstate.ToolChangedFile(taskStateToolRequest(tool))
 }
 
 func taskStateToolFailed(tool ToolCall) bool {
-	return tool.ExitCode != 0 || len(tool.FailureKinds) > 0 || tool.FailureKind != ""
+	return taskstate.ToolFailed(taskStateToolResult(tool), taskStateMaxItems)
 }
 
 func taskStateToolSummary(tool ToolCall) string {
-	switch tool.Tool {
-	case "shell":
-		return stringArg(tool.Args, "command")
-	case "read_file", "write_file", "edit_file", "list_files", "file_context", "symbol_context", "repo_search":
-		return stringArg(tool.Args, "path")
-	case "plan", "memory", "skill", "loop_protocol", "session_schedule":
-		return stringArg(tool.Args, "action")
-	case "run_task":
-		return stringArg(tool.Args, "task_type")
-	case "subagent_run":
-		return stringArg(tool.Args, "mode")
-	default:
-		for _, key := range []string{"path", "query", "url", "action", "task", "objective"} {
-			if value := stringArg(tool.Args, key); value != "" {
-				return key + ": " + value
-			}
-		}
-	}
-	return ""
+	return taskstate.ToolActionSummary(taskStateToolRequest(tool))
 }
 
 func taskStateToolEvidenceSource(tool ToolCall) string {
-	switch tool.Tool {
-	case "shell", "plan", "memory", "loop_protocol", "session_schedule":
-		return tool.Tool
-	default:
-		return ""
+	return taskstate.ToolEvidenceSource(tool.Tool)
+}
+
+func taskStateToolRequest(tool ToolCall) taskstate.ToolRequest {
+	return taskstate.ToolRequest{
+		Tool:   tool.Tool,
+		TurnID: tool.TurnID,
+		CallID: tool.CallID,
+		Args:   tool.Args,
+	}
+}
+
+func taskStateToolResult(tool ToolCall) taskstate.ToolResult {
+	return taskstate.ToolResult{
+		Tool:          tool.Tool,
+		TurnID:        tool.TurnID,
+		CallID:        tool.CallID,
+		Result:        tool.Result,
+		ResultSummary: tool.ResultSummary,
+		FailureKind:   tool.FailureKind,
+		FailureKinds:  tool.FailureKinds,
+		ExitCode:      tool.ExitCode,
 	}
 }
 

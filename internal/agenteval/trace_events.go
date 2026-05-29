@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/affinefoundation/affent/internal/sse"
-	"github.com/affinefoundation/affent/internal/toolfailure"
+	"github.com/affinefoundation/affent/internal/taskstate"
 )
 
 func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.RawMessage, turnID string) (bool, error) {
@@ -476,21 +476,16 @@ func traceEventRefFromPayload(typ string, data json.RawMessage, turnID string) (
 }
 
 func toolResultFailureKinds(tool string, p sse.ToolResultPayload) []string {
-	var kinds []string
-	if p.FailureKind != "" {
-		kinds = append(kinds, p.FailureKind)
-	}
-	for _, kind := range p.FailureKinds {
-		if !containsString(kinds, kind) {
-			kinds = append(kinds, kind)
-		}
-	}
-	for _, kind := range toolfailure.KindsForResult(tool, p.Result, p.ExitCode != 0) {
-		if !containsString(kinds, kind) {
-			kinds = append(kinds, kind)
-		}
-	}
-	return kinds
+	return taskstate.ToolFailureKinds(taskstate.ToolResult{
+		Tool:          tool,
+		TurnID:        p.TurnID,
+		CallID:        p.CallID,
+		Result:        p.Result,
+		ResultSummary: p.ResultSummary,
+		FailureKind:   p.FailureKind,
+		FailureKinds:  p.FailureKinds,
+		ExitCode:      p.ExitCode,
+	}, taskstate.DefaultMaxItems)
 }
 
 func firstString(values []string) string {

@@ -34,11 +34,22 @@ type EventScanOptions struct {
 	MaxLineBytes   int
 }
 
-type eventTaskRequest struct {
+type ToolRequest struct {
 	Tool   string
 	TurnID string
 	CallID string
 	Args   map[string]any
+}
+
+type ToolResult struct {
+	Tool          string
+	TurnID        string
+	CallID        string
+	Result        string
+	ResultSummary string
+	FailureKind   string
+	FailureKinds  []string
+	ExitCode      int
 }
 
 func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
@@ -54,7 +65,7 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 		reader = bufio.NewReaderSize(r, 64*1024)
 	}
 	state := &EventState{}
-	requests := map[string]eventTaskRequest{}
+	requests := map[string]ToolRequest{}
 	seen := false
 	for {
 		line, tooLong, err := jsonl.ReadBoundedLine(reader, maxLineBytes)
@@ -80,8 +91,8 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 			}
 			state.LatestRequestText = compactSummary(p.Text, opts.SummaryMaxChar)
 			state.Objective = compactSummary(firstNonEmpty(p.DisplayText, p.Text), opts.SummaryMaxChar)
-			state.RequestMode = normalizeRequestMode(p.Mode)
-			state.RequestSource = normalizeRequestSource(p.Source)
+			state.RequestMode = NormalizeRequestMode(p.Mode)
+			state.RequestSource = NormalizeRequestSource(p.Source)
 			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
 			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
 			addSource(state, state.RequestSource, opts.MaxItems)
@@ -121,15 +132,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 			if err := json.Unmarshal(ev.Data, &p); err != nil || p.CallID == "" {
 				continue
 			}
-			req := eventTaskRequest{Tool: p.Tool, TurnID: p.TurnID, CallID: p.CallID, Args: p.Args}
+			req := ToolRequest{Tool: p.Tool, TurnID: p.TurnID, CallID: p.CallID, Args: p.Args}
 			requests[p.CallID] = req
 			state.AttemptedActions = appendAction(state.AttemptedActions, Action{
 				Tool:    p.Tool,
-				Summary: compactSummary(actionSummary(req), opts.SummaryMaxChar),
+				Summary: compactSummary(ToolActionSummary(req), opts.SummaryMaxChar),
 				TurnID:  p.TurnID,
 				CallID:  p.CallID,
 			}, opts.MaxItems)
-			if file := changedFile(req); file.Path != "" {
+			if file := ToolChangedFile(req); file.Path != "" {
 				state.ChangedFiles = appendFile(state.ChangedFiles, file, opts.MaxItems)
 			}
 			seen = true
@@ -139,7 +150,16 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				continue
 			}
 			req := requests[p.CallID]
-			kinds := failureKinds(req.Tool, p, opts.MaxItems)
+			kinds := ToolFailureKinds(ToolResult{
+				Tool:          req.Tool,
+				TurnID:        firstNonEmpty(p.TurnID, req.TurnID),
+				CallID:        p.CallID,
+				Result:        p.Result,
+				ResultSummary: p.ResultSummary,
+				FailureKind:   p.FailureKind,
+				FailureKinds:  p.FailureKinds,
+				ExitCode:      p.ExitCode,
+			}, opts.MaxItems)
 			if p.ExitCode != 0 || len(kinds) > 0 {
 				state.FailedActions = appendFailure(state.FailedActions, Failure{
 					Tool:    firstNonEmpty(req.Tool, "tool"),
@@ -150,11 +170,11 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 					CallID:  p.CallID,
 				}, opts.MaxItems)
 				state.VerificationState = "failed"
-			} else if source := toolEvidenceSource(req.Tool); source != "" {
+			} else if source := ToolEvidenceSource(req.Tool); source != "" {
 				if req.Tool == "shell" {
 					state.VerificationState = "last_shell_passed"
 				}
-				action := actionSummary(req)
+				action := ToolActionSummary(req)
 				summary := compactSummary(action, opts.SummaryMaxChar)
 				state.Evidence = appendEvidence(state.Evidence, Evidence{
 					Source:  source,
@@ -250,7 +270,7 @@ func SearchText(task Snapshot) string {
 	return strings.TrimSpace(b.String())
 }
 
-func actionSummary(req eventTaskRequest) string {
+func ToolActionSummary(req ToolRequest) string {
 	switch req.Tool {
 	case "shell":
 		return argString(req.Args, "command")
@@ -272,7 +292,7 @@ func actionSummary(req eventTaskRequest) string {
 	return ""
 }
 
-func changedFile(req eventTaskRequest) File {
+func ToolChangedFile(req ToolRequest) File {
 	switch req.Tool {
 	case "write_file":
 		return File{Path: argString(req.Args, "path"), Action: "write"}
@@ -283,7 +303,7 @@ func changedFile(req eventTaskRequest) File {
 	}
 }
 
-func toolEvidenceSource(tool string) string {
+func ToolEvidenceSource(tool string) string {
 	switch tool {
 	case "shell", "plan", "memory", "loop_protocol", "session_schedule":
 		return tool
@@ -292,18 +312,22 @@ func toolEvidenceSource(tool string) string {
 	}
 }
 
-func failureKinds(tool string, p sse.ToolResultPayload, limit int) []string {
+func ToolFailureKinds(result ToolResult, limit int) []string {
 	var out []string
-	for _, kind := range p.FailureKinds {
+	if result.FailureKind != "" {
+		out = appendUnique(out, result.FailureKind, limit)
+	}
+	for _, kind := range result.FailureKinds {
 		out = appendUnique(out, kind, limit)
 	}
-	if p.FailureKind != "" {
-		out = appendUnique(out, p.FailureKind, limit)
-	}
-	for _, kind := range toolfailure.KindsForResult(tool, p.Result, p.ExitCode != 0) {
+	for _, kind := range toolfailure.KindsForResult(result.Tool, result.Result, result.ExitCode != 0) {
 		out = appendUnique(out, kind, limit)
 	}
 	return out
+}
+
+func ToolFailed(result ToolResult, limit int) bool {
+	return result.ExitCode != 0 || len(ToolFailureKinds(result, limit)) > 0
 }
 
 func appendAction(items []Action, item Action, limit int) []Action {
@@ -414,7 +438,7 @@ func argString(args map[string]any, key string) string {
 	}
 }
 
-func normalizeRequestMode(mode string) string {
+func NormalizeRequestMode(mode string) string {
 	mode = strings.TrimSpace(mode)
 	if mode == "" {
 		return "normal"
@@ -422,7 +446,7 @@ func normalizeRequestMode(mode string) string {
 	return mode
 }
 
-func normalizeRequestSource(source string) string {
+func NormalizeRequestSource(source string) string {
 	source = strings.TrimSpace(source)
 	if source == "" {
 		return "user"
