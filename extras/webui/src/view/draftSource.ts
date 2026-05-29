@@ -49,7 +49,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   skill: "Using skill evidence",
   starter: "Starting from draft",
   retry_reply: "Retrying from reply",
-  tool_guidance: "Using suggested next step",
+  tool_guidance: "Guidance added",
   tool_result: "Using action output",
   trace: "Using trace evidence",
   workspace: "Using workspace evidence",

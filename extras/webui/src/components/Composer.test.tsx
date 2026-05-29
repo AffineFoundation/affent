@@ -329,7 +329,7 @@ describe("Composer", () => {
     expect(input).toHaveValue("Guidance for current run:");
     expect(input).toHaveFocus();
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Guidance ready");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Guidance added");
     expect(screen.queryByRole("button", { name: "Send guidance" })).toBeNull();
   });
 
@@ -385,7 +385,7 @@ describe("Composer", () => {
     );
 
     expect(input).toHaveValue("old draft\n\nContinue: check the Makefile path");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Guidance added");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Added");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Continue: check the Makefile path");
     expect(screen.queryByRole("button", { name: "Send follow-up" })).toBeNull();

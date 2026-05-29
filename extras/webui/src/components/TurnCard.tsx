@@ -997,7 +997,6 @@ function AgentActivityNode({
 }) {
   const hasChildren = node.children.length > 0;
   const open = openOverrides[node.id] ?? node.autoOpen;
-  const nextAction = nodeNextAction(node);
 
   function toggleOpen() {
     if (!hasChildren) return;
@@ -1052,15 +1051,6 @@ function AgentActivityNode({
           {hasChildren ? (
             <CopyButton label="Copy branch" value={activityNodeBranchCopyText(node)} className="agent-activity-node-action" />
           ) : null}
-          {nextAction && onUseAsDraft ? (
-            <button
-              type="button"
-              className="agent-activity-node-action"
-              onClick={() => onUseAsDraft(nextAction.draft, "tool_guidance")}
-            >
-              Use next step as draft
-            </button>
-          ) : null}
         </span>
         {node.meta ? <span className="agent-activity-meta">{node.meta}</span> : null}
       </div>
@@ -1081,12 +1071,6 @@ function AgentActivityNode({
       ) : null}
     </div>
   );
-}
-
-function nodeNextAction(node: TurnActivityNode): { draft: string } | undefined {
-  const next = node.suggestedNext[0] ?? node.nextHint;
-  if (!next?.trim()) return undefined;
-  return { draft: `Continue: ${summarize(next, 160)}` };
 }
 
 interface FallbackAnswer {
