@@ -1952,7 +1952,13 @@ func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
 	if !stringSliceContains(s.loop.CompletionGuardLabels, "active_plan_unfinished") {
 		t.Fatalf("completion guard labels = %#v, want active_plan_unfinished", s.loop.CompletionGuardLabels)
 	}
-	guard := s.loop.CompletionGuards[0]()
+	var guard agent.CompletionGuardResult
+	for _, completionGuard := range s.loop.CompletionGuards {
+		if result := completionGuard(); result.Trigger == "active_plan_unfinished" {
+			guard = result
+			break
+		}
+	}
 	if !guard.Blocked ||
 		guard.Trigger != "active_plan_unfinished" ||
 		!strings.Contains(guard.Reason, "plan:0/1:active") ||

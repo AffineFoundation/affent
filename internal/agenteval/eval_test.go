@@ -2705,11 +2705,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !scratchProject.RequireNoPlanErrors || !scratchProject.RequireFinalPlanCompleted {
 		t.Fatalf("scratch project plan closure flags = no_errors:%v final_completed:%v, want both true", scratchProject.RequireNoPlanErrors, scratchProject.RequireFinalPlanCompleted)
 	}
-	if !reflect.DeepEqual(scratchProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+	if !reflect.DeepEqual(scratchProject.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running", agent.WorkspaceVerificationFreshnessGuardLabel}) {
 		t.Fatalf("scratch project RequiredCompletionGuards = %#v", scratchProject.RequiredCompletionGuards)
 	}
 	checkNames := checkNamesFor(BatchScenarioChecks(scratchProject))
-	for _, want := range []string{"no_plan_errors", "final_plan_completed", "runtime_surface_completion_guard:active_plan_unfinished", "runtime_surface_completion_guard:loop_protocol_running"} {
+	for _, want := range []string{"no_plan_errors", "final_plan_completed", "runtime_surface_completion_guard:active_plan_unfinished", "runtime_surface_completion_guard:loop_protocol_running", "runtime_surface_completion_guard:workspace_verification_stale"} {
 		if !stringSliceContains(checkNames, want) {
 			t.Fatalf("scratch project checks = %#v, want %q", checkNames, want)
 		}
@@ -2878,7 +2878,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if len(iterativeProject.Prompts) != 2 || iterativeProject.Prompt != "" {
 		t.Fatalf("iterative scratch project prompts = prompt:%q prompts:%d", iterativeProject.Prompt, len(iterativeProject.Prompts))
 	}
-	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished"}) {
+	if !reflect.DeepEqual(iterativeProject.RequiredCompletionGuards, []string{"active_plan_unfinished", agent.WorkspaceVerificationFreshnessGuardLabel}) {
 		t.Fatalf("iterative scratch project RequiredCompletionGuards = %#v", iterativeProject.RequiredCompletionGuards)
 	}
 	for _, prompt := range iterativeProject.Prompts {
@@ -2924,8 +2924,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("iterative scratch project RequiredFinalText = %#v, want %q", iterativeProject.RequiredFinalText, want)
 		}
 	}
-	if !stringSliceContains(iterativeProject.ProtectedFiles, ".affent/loops/scratch-project-iterative-loop/LOOP.md") {
-		t.Fatalf("iterative scratch project ProtectedFiles = %#v, want LOOP.md", iterativeProject.ProtectedFiles)
+	if stringSliceContains(iterativeProject.ProtectedFiles, ".affent/loops/scratch-project-iterative-loop/LOOP.md") {
+		t.Fatalf("iterative scratch project should allow loop_protocol status updates, ProtectedFiles = %#v", iterativeProject.ProtectedFiles)
 	}
 	iterativeProjectCaps := ScenarioExpectationCapabilityNames(iterativeProject)
 	for _, want := range []string{"loop_protocol", "session", "skill", "trace", "verifier"} {

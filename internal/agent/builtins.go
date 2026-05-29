@@ -760,6 +760,8 @@ func rejectBroadShellScan(command string, indicators []string) error {
 
 var verificationCommandIndicators = []string{
 	"pytest",
+	"python -m unittest",
+	"python3 -m unittest",
 	"go test",
 	"go build",
 	"go vet",
@@ -773,6 +775,22 @@ var verificationCommandIndicators = []string{
 	"gradle test",
 	"make test",
 	"tsc",
+}
+
+func shellCommandLooksLikeVerification(command string, indicators []string) bool {
+	lower := strings.ToLower(command)
+	for _, indicator := range indicators {
+		if strings.Contains(lower, indicator) {
+			return true
+		}
+	}
+	return false
+}
+
+// ShellCommandLooksLikeVerification reports whether a shell command is a
+// test/build-style verification command known to the runtime.
+func ShellCommandLooksLikeVerification(command string) bool {
+	return shellCommandLooksLikeVerification(command, verificationCommandIndicators)
 }
 
 func rejectMaskedVerificationCommand(command string, indicators []string) error {
@@ -797,12 +815,7 @@ func shellCommandMasksVerification(command string, indicators []string) bool {
 	if !masksExit {
 		return false
 	}
-	for _, indicator := range indicators {
-		if strings.Contains(lower, indicator) {
-			return true
-		}
-	}
-	return false
+	return shellCommandLooksLikeVerification(lower, indicators)
 }
 
 func formatShellOutput(res executor.ExecResult) string {

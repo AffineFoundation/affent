@@ -1638,6 +1638,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		Memory:                       memStore,
 		ProjectContextDir:            projectContextDir,
 	}
+	if agent.RegistrySupportsWorkspaceVerificationFreshnessGuard(tools) {
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.WorkspaceVerificationFreshnessCompletionGuard(conv))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, agent.WorkspaceVerificationFreshnessGuardLabel)
+	}
 	if caps.BuiltinSkillProvider {
 		loop.SkillProvider = agent.SkillProviderForTools(nil, tools)
 	}

@@ -3576,7 +3576,7 @@ func longRunScratchProjectLoopPushScenario() BatchScenario {
 		Domains:            []string{codePRDomain, longRunRecoveryDomain},
 		SessionID:          "scratch-project-loop",
 		EnableLoopProtocol: true,
-		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state and the plan tool to track the work through completion. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items. Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, complete every plan step, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
+		Prompt:             "Build a small Python project from this nearly empty repository. Use the active loop protocol as the durable task state and the plan tool to track the work through completion. Create stdlib unittest coverage in tests/test_store.py before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark them done, list all items, and list only open items through open_items(). Run the test command once after creating tests, fix any failures, run it again after implementation, then update README.md with the usage summary and the loop marker SCRATCH-LOOP-31. Commit the finished project, push it to origin main, leave git status clean, complete every plan step, and close the loop protocol with status completed. The final answer must include SCRATCH-LOOP-31, the test command, the created files, the commit hash, and the push result.",
 		Files: map[string]string{
 			".affent/loops/scratch-project-loop/LOOP.md": `# Loop Protocol: scratch-project-loop
 
@@ -3600,7 +3600,7 @@ Build a tiny but complete software project from a nearly empty repository, keep 
 ## 3. Rules
 
 - Use Python stdlib unittest; do not add third-party dependencies.
-- Keep generated files focused: todo_core/, tests/, and README.md are enough.
+- Keep generated files focused: todo_core/, tests/test_store.py, and README.md are enough.
 - Do not modify this LOOP.md except by closing it through the loop_protocol tool after the project is complete.
 
 ## 4. Plan/Step Pointer
@@ -3688,6 +3688,7 @@ This repository starts almost empty. The agent must create the project, tests, d
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
 			"loop_protocol_running",
+			agent.WorkspaceVerificationFreshnessGuardLabel,
 		},
 		RequiredTraceEventCounts: map[string]int{
 			"loop.turn_checkpoint": 1,
@@ -3955,8 +3956,8 @@ func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 		SessionID:          "scratch-project-iterative-loop",
 		EnableLoopProtocol: true,
 		Prompts: []string{
-			"Iteration 1: build the initial Python project from this nearly empty repository. Use the active loop protocol as durable task state. Create stdlib unittest coverage under tests/ before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark items done, list all items, and list open items. Run " + pythonUnittestDiscoverCommand + " once after creating tests and again after implementation. Update README.md with the usage summary and marker ITER-LOOP-57. Commit iteration 1, push it to origin main, and leave git status clean. The final answer for this turn must include ITER-LOOP-57, iteration 1, the test command, created files, commit hash, and push result.",
-			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence, update README.md with the persistence usage, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
+			"Iteration 1: build the initial Python project from this nearly empty repository. Use the active loop protocol as durable task state. Create stdlib unittest coverage in tests/test_store.py before the implementation, then create a todo_core package with an in-memory TodoStore that can add items, mark items done, list all items, and list open items through open_items(). Run " + pythonUnittestDiscoverCommand + " once after creating tests and again after implementation. Update README.md with the usage summary and marker ITER-LOOP-57. Commit iteration 1, push it to origin main, and leave git status clean. The final answer for this turn must include ITER-LOOP-57, iteration 1, the test command, created files, commit hash, and push result.",
+			"Iteration 2: continue the same loop and do not restart the project. Extend TodoStore with JSON persistence helpers save_json(path) and load_json(path), add or update stdlib unittest coverage for persistence in tests/test_store.py, update README.md with the persistence usage, run " + pythonUnittestDiscoverCommand + " before and after the change, then create a second commit and push it to origin main. Leave git status clean. The final answer must include ITER-LOOP-57, iteration 2, save_json, load_json, the test command, the second commit hash, the push result, and clean status.",
 		},
 		Files: map[string]string{
 			".affent/loops/scratch-project-iterative-loop/LOOP.md": `# Loop Protocol: scratch-project-iterative-loop
@@ -3981,8 +3982,8 @@ Build a tiny software project across multiple verified iterations without losing
 ## 3. Rules
 
 - Use Python stdlib unittest and json only; do not add third-party dependencies.
-- Keep generated files focused: todo_core/, tests/, and README.md are enough.
-- Do not modify this LOOP.md.
+- Keep generated files focused: todo_core/, tests/test_store.py, and README.md are enough.
+- Do not rewrite this LOOP.md by hand; use the loop_protocol tool if the loop status changes.
 - Each iteration must leave git status clean after push.
 
 ## 4. Plan/Step Pointer
@@ -4046,9 +4047,9 @@ This repository starts almost empty. The agent must create the project over two 
 			{Tool: "shell", SummaryContains: "git push"},
 		},
 		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
-			{PathContains: "todo_core/store.py", Action: "write"},
-			{PathContains: "tests/test_store.py", Action: "write"},
-			{PathContains: "README.md", Action: "write"},
+			{PathContains: "todo_core/store.py"},
+			{PathContains: "tests/test_store.py"},
+			{PathContains: "README.md"},
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},
@@ -4057,6 +4058,7 @@ This repository starts almost empty. The agent must create the project over two 
 		RequiredLoopProtocolFeeds: 2,
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
+			agent.WorkspaceVerificationFreshnessGuardLabel,
 		},
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full":   1,
@@ -4103,10 +4105,7 @@ This repository starts almost empty. The agent must create the project over two 
 				"JSON",
 			},
 		},
-		ForbiddenCommands: defaultForbiddenCommands,
-		ProtectedFiles: []string{
-			".affent/loops/scratch-project-iterative-loop/LOOP.md",
-		},
+		ForbiddenCommands:            defaultForbiddenCommands,
 		ForbidWorkspaceAbsolutePaths: true,
 		MaxLoopTurnInputTokens:       300000,
 		MaxLoopTurnTotalTokens:       320000,

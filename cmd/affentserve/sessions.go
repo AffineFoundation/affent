@@ -789,6 +789,10 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		Memory:            memStore,
 		TaskStateProvider: sessionTaskStateContextProvider(filepath.Join(sessionDir, "events.jsonl")),
 	}
+	if agent.RegistrySupportsWorkspaceVerificationFreshnessGuard(reg) {
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.WorkspaceVerificationFreshnessCompletionGuard(conv))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, agent.WorkspaceVerificationFreshnessGuardLabel)
+	}
 	if workflowToolsEnabled(p.cfg) {
 		loop.SkillProvider = agent.SkillProviderForTools(nil, reg)
 	}
