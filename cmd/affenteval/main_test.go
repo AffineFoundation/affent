@@ -3927,6 +3927,10 @@ func TestPrintBatchResultJSONLIncludesTaskState(t *testing.T) {
 		TaskState: agenteval.TaskStateSnapshot{
 			Objective:         "Fix clamp and verify tests.",
 			Status:            "completed",
+			RequestMode:       "execute_plan",
+			RequestSource:     "schedule",
+			ScheduleID:        "sched_clamp",
+			ScheduleKind:      "checkin",
 			VerificationState: "last_shell_passed",
 			ChangedFiles:      []agenteval.TaskStateFile{{Path: "app/mathutil/clamp.go", Action: "edit"}},
 			FailedActions: []agenteval.TaskStateFailure{{
@@ -3956,6 +3960,10 @@ func TestPrintBatchResultJSONLIncludesTaskState(t *testing.T) {
 	}
 	if taskState["objective"] != "Fix clamp and verify tests." ||
 		taskState["status"] != "completed" ||
+		taskState["request_mode"] != "execute_plan" ||
+		taskState["request_source"] != "schedule" ||
+		taskState["schedule_id"] != "sched_clamp" ||
+		taskState["schedule_kind"] != "checkin" ||
 		taskState["verification_state"] != "last_shell_passed" {
 		t.Fatalf("task_state summary = %#v\njson=%s", taskState, out.String())
 	}

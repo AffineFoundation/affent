@@ -12,7 +12,11 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 		Prompt:        "Improve the clamp helper and verify it.",
 		TurnEndReason: "completed",
 		UserMessages: []UserMessage{{
-			DisplayText: "Update clamp behavior, keep the public contract, and run tests.",
+			DisplayText:  "Update clamp behavior, keep the public contract, and run tests.",
+			Mode:         "execute_plan",
+			Source:       "schedule",
+			ScheduleID:   "sched_clamp",
+			ScheduleKind: "checkin",
 		}},
 		RuntimeSurfaces: []sse.RuntimeSurfacePayload{{ToolCount: 3}},
 		ContextInjections: []ContextInjection{{
@@ -57,6 +61,9 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	if got.CurrentStep != "fix clamp edge cases" {
 		t.Fatalf("current step = %q", got.CurrentStep)
 	}
+	if got.RequestMode != "execute_plan" || got.RequestSource != "schedule" || got.ScheduleID != "sched_clamp" || got.ScheduleKind != "checkin" {
+		t.Fatalf("request provenance = mode:%q source:%q schedule:%q kind:%q", got.RequestMode, got.RequestSource, got.ScheduleID, got.ScheduleKind)
+	}
 	if got.VerificationState != "last_shell_passed" {
 		t.Fatalf("verification state = %q", got.VerificationState)
 	}
@@ -75,7 +82,7 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	if !taskStateHasEvidence(got, "runtime_workspace") || !taskStateHasEvidence(got, "shell") {
 		t.Fatalf("evidence = %+v", got.Evidence)
 	}
-	if !taskStateHasSource(got, "runtime_workspace") || !taskStateHasSource(got, "runtime_surface") {
+	if !taskStateHasSource(got, "runtime_workspace") || !taskStateHasSource(got, "runtime_surface") || !taskStateHasSource(got, "schedule") {
 		t.Fatalf("sources = %+v", got.Sources)
 	}
 }

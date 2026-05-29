@@ -13,6 +13,10 @@ type TaskStateSnapshot struct {
 	Objective         string              `json:"objective,omitempty"`
 	Status            string              `json:"status,omitempty"`
 	CurrentStep       string              `json:"current_step,omitempty"`
+	RequestMode       string              `json:"request_mode,omitempty"`
+	RequestSource     string              `json:"request_source,omitempty"`
+	ScheduleID        string              `json:"schedule_id,omitempty"`
+	ScheduleKind      string              `json:"schedule_kind,omitempty"`
 	NextStep          string              `json:"next_step,omitempty"`
 	VerificationState string              `json:"verification_state,omitempty"`
 	ChangedFiles      []TaskStateFile     `json:"changed_files,omitempty"`
@@ -47,6 +51,13 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		Status:            traceTaskStatus(trace),
 		CurrentStep:       traceTaskCurrentStep(trace),
 		VerificationState: traceTaskVerificationState(trace),
+	}
+	if latest := latestTaskRequest(trace); latest != nil {
+		task.RequestMode = strings.TrimSpace(latest.Mode)
+		task.RequestSource = strings.TrimSpace(latest.Source)
+		task.ScheduleID = strings.TrimSpace(latest.ScheduleID)
+		task.ScheduleKind = strings.TrimSpace(latest.ScheduleKind)
+		task.Sources = appendUniqueTaskString(task.Sources, latest.Source, taskStateMaxItems)
 	}
 	for _, injection := range trace.ContextInjections {
 		task.Sources = appendUniqueTaskString(task.Sources, injection.Source, taskStateMaxItems)
@@ -93,6 +104,21 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		return TaskStateSnapshot{}
 	}
 	return task
+}
+
+func latestTaskRequest(trace Trace) *UserMessage {
+	for i := len(trace.UserMessages) - 1; i >= 0; i-- {
+		msg := trace.UserMessages[i]
+		if strings.TrimSpace(msg.Text) != "" ||
+			strings.TrimSpace(msg.DisplayText) != "" ||
+			strings.TrimSpace(msg.Mode) != "" ||
+			strings.TrimSpace(msg.Source) != "" ||
+			strings.TrimSpace(msg.ScheduleID) != "" ||
+			strings.TrimSpace(msg.ScheduleKind) != "" {
+			return &trace.UserMessages[i]
+		}
+	}
+	return nil
 }
 
 func CloneTaskStateSnapshotPtr(in TaskStateSnapshot) *TaskStateSnapshot {
@@ -285,6 +311,10 @@ func taskStateEmpty(task TaskStateSnapshot) bool {
 	return task.Objective == "" &&
 		(task.Status == "" || task.Status == "unknown") &&
 		task.CurrentStep == "" &&
+		task.RequestMode == "" &&
+		task.RequestSource == "" &&
+		task.ScheduleID == "" &&
+		task.ScheduleKind == "" &&
 		task.NextStep == "" &&
 		(task.VerificationState == "" || task.VerificationState == "unknown") &&
 		len(task.ChangedFiles) == 0 &&
