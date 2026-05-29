@@ -100,13 +100,16 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 		add("ok", "api-key", "set")
 	}
 
-	if _, err := parseSampling(c.temperature, c.topP, c.maxTokens, c.seed); err != nil {
+	sampling, err := parseSampling(c.temperature, c.topP, c.maxTokens, c.seed)
+	if err != nil {
 		add("error", "sampling", err.Error())
 	} else {
 		add("ok", "sampling", "valid")
 	}
 	trigger, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
-	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d trigger_input_tokens=%d keep_last=%d", trigger, agent.DefaultSummaryTriggerBytes, c.compactTriggerInputTokens, keepLast))
+	triggerBytes := agent.CompactTriggerBytesForModelPolicy(c.compactTriggerInputTokens, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(sampling), agent.DefaultSummaryTriggerBytes)
+	triggerInputTokens := agent.CompactTriggerInputTokensForModelPolicy(c.compactTriggerInputTokens, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(sampling), agent.DefaultSummaryTriggerInputTokens)
+	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d trigger_input_tokens=%d keep_last=%d", trigger, triggerBytes, triggerInputTokens, keepLast))
 	add("ok", "boundaries", doctorBoundarySummary(c))
 	add("ok", "capabilities", doctorCapabilitySummary(c))
 	if status, msg := doctorSystemPrompt(c.systemPromptPath); status != "" {

@@ -414,6 +414,24 @@ func TestSessionContextSnapshotDerivesRequestInputTriggerFromModelContext(t *tes
 	}
 }
 
+func TestSessionContextSnapshotReservesOutputBudgetInModelContextPolicy(t *testing.T) {
+	maxTokens := 30_000
+	got := sessionContextSnapshot(12, testRequestInputEstimate(16*1024, 60_000), Config{
+		CompactTrigger:             240,
+		MaxTokens:                  &maxTokens,
+		ModelContextWindowTokens:   100_000,
+		CompactTriggerInputPercent: 80,
+	})
+	if got.CompactTriggerInputTokens != 70_000 ||
+		got.RequestInputCompactPercent != 86 ||
+		got.RequestInputTokensUntilCompact != 10_000 {
+		t.Fatalf("context snapshot = %+v, want output-reserved request trigger at 86%% with 10000 remaining", got)
+	}
+	if got.CompactTriggerBytes != 280_000 {
+		t.Fatalf("byte trigger = %d, want 280000 aligned with output-reserved model-window policy", got.CompactTriggerBytes)
+	}
+}
+
 func testRequestInputEstimate(conversationBytes, estimatedInputTokens int) agent.RequestInputEstimate {
 	return agent.RequestInputEstimate{
 		ConversationBytes:    conversationBytes,

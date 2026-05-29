@@ -174,7 +174,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	}
 	triggerBytes := agent.DefaultSummaryTriggerBytes
 	if r.ModelContextWindowTokens > 0 && r.CompactTriggerInputTokens == 0 {
-		triggerBytes = agent.CompactTriggerBytesForPolicy(0, r.ModelContextWindowTokens, r.CompactTriggerInputPercent, agent.DefaultSummaryTriggerBytes)
+		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, r.ModelContextWindowTokens, r.CompactTriggerInputPercent, runnerReservedOutputTokens(r.LLM), agent.DefaultSummaryTriggerBytes)
 	}
 	loop := &agent.Loop{
 		LLM:                   r.LLM,
@@ -230,6 +230,13 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		Results:  results,
 		Pass:     allPass(results),
 	}, nil
+}
+
+func runnerReservedOutputTokens(llm *agent.LLMClient) int {
+	if llm == nil || llm.Sampling.MaxTokens == nil || *llm.Sampling.MaxTokens <= 0 {
+		return 0
+	}
+	return *llm.Sampling.MaxTokens
 }
 
 func runnerScenarioPrompts(s Scenario) []string {

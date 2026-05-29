@@ -841,7 +841,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	triggerBytes := agent.DefaultSummaryTriggerBytes
 	if p.cfg.ModelContextWindowTokens > 0 && p.cfg.CompactTriggerInputTokens == 0 {
-		triggerBytes = agent.CompactTriggerBytesForPolicy(0, p.cfg.ModelContextWindowTokens, p.cfg.CompactTriggerInputPercent, agent.DefaultSummaryTriggerBytes)
+		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, p.cfg.ModelContextWindowTokens, p.cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(p.cfg), agent.DefaultSummaryTriggerBytes)
 	}
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:          llm,

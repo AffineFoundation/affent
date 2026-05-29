@@ -186,6 +186,28 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 	}
 }
 
+func TestDoctorCmdReportsOutputReservedCompactionPolicy(t *testing.T) {
+	var stdout, stderr strings.Builder
+	code := doctorCmdWithRunner([]string{
+		"--workspace", t.TempDir(),
+		"--model", "gpt-4o-mini",
+		"--api-key", "key",
+		"--executor", "local",
+		"--max-tokens", "30000",
+		"--model-context-window-tokens", "100000",
+		"--compact-trigger-input-percent", "80",
+	}, &fakeCommandRunner{}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit = %d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "ok compaction:") ||
+		!strings.Contains(got, "trigger_bytes=280000") ||
+		!strings.Contains(got, "trigger_input_tokens=70000") {
+		t.Fatalf("doctor output missing output-reserved compaction policy:\n%s", got)
+	}
+}
+
 // TestDoctorCapabilitySummary_FocusedTaskProfiles_Default pins the
 // per-profile breakdown doctor exposes under affentctl's default
 // configuration. The breakdown matters because the model only sees

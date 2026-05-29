@@ -246,6 +246,13 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 	return s, nil
 }
 
+func reservedOutputTokensFromSampling(s agent.SamplingDefaults) int {
+	if s.MaxTokens == nil || *s.MaxTokens <= 0 {
+		return 0
+	}
+	return *s.MaxTokens
+}
+
 func samplingFlagError(err error) error {
 	if err == nil {
 		return nil
@@ -1647,7 +1654,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	triggerBytes := agent.DefaultSummaryTriggerBytes
 	if c.modelContextWindowTokens > 0 && c.compactTriggerInputTokens == 0 {
-		triggerBytes = agent.CompactTriggerBytesForPolicy(0, c.modelContextWindowTokens, c.compactTriggerPercent, agent.DefaultSummaryTriggerBytes)
+		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(llm.Sampling), agent.DefaultSummaryTriggerBytes)
 	}
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:          llm,

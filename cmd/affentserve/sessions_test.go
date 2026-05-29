@@ -1326,6 +1326,42 @@ func TestSessionPool_CompactorDerivesByteTriggerFromModelContextWindow(t *testin
 	}
 }
 
+func TestSessionPool_CompactorReservesOutputBudgetInModelWindowByteTrigger(t *testing.T) {
+	maxTokens := 30_000
+	cfg := Config{
+		Listen:                     "127.0.0.1:0",
+		MaxSessions:                4,
+		SessionIdleTTL:             "5m",
+		WorkspaceRoot:              t.TempDir(),
+		BaseURL:                    "http://127.0.0.1:0",
+		APIKey:                     "test",
+		Model:                      "fake",
+		MaxTokens:                  &maxTokens,
+		ModelContextWindowTokens:   100000,
+		CompactTriggerInputPercent: 80,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("compact-window-output-reserve")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lc, ok := s.loop.Compactor.(*agent.LLMSummaryCompactor)
+	if !ok {
+		t.Fatalf("compactor type = %T, want *agent.LLMSummaryCompactor", s.loop.Compactor)
+	}
+	if got := lc.TriggerBytes; got != 280000 {
+		t.Fatalf("TriggerBytes = %d, want 280000", got)
+	}
+	if got := s.loop.CompactTriggerInputTokens; got != 0 {
+		t.Fatalf("explicit CompactTriggerInputTokens = %d, want 0", got)
+	}
+}
+
 // TestSessionPool_CompactorFallsBackToDefaults pins the zero-value
 // behavior: leaving the knobs at 0 means "use the agent defaults",
 // matching the precedent set by affentctl.

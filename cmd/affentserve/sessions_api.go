@@ -1476,14 +1476,21 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 }
 
 func compactTriggerInputTokensForConfig(cfg Config) int {
-	return agent.CompactTriggerInputTokensForPolicy(cfg.CompactTriggerInputTokens, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, agent.DefaultSummaryTriggerInputTokens)
+	return agent.CompactTriggerInputTokensForModelPolicy(cfg.CompactTriggerInputTokens, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryTriggerInputTokens)
 }
 
 func compactTriggerBytesForConfig(cfg Config) int {
 	if cfg.ModelContextWindowTokens > 0 && cfg.CompactTriggerInputTokens == 0 {
-		return agent.CompactTriggerBytesForPolicy(0, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, agent.DefaultSummaryTriggerBytes)
+		return agent.CompactTriggerBytesForModelPolicy(0, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryTriggerBytes)
 	}
 	return agent.DefaultSummaryTriggerBytes
+}
+
+func reservedOutputTokensForConfig(cfg Config) int {
+	if cfg.MaxTokens == nil || *cfg.MaxTokens <= 0 {
+		return 0
+	}
+	return *cfg.MaxTokens
 }
 
 func compactTriggerInputPercentForConfig(cfg Config) int {

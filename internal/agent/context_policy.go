@@ -60,3 +60,19 @@ func CompactTriggerBytesForPolicy(explicit, modelContextWindowTokens, percent, f
 	}
 	return tokens * 4
 }
+
+// CompactTriggerBytesForModelPolicy is the byte-side companion to
+// CompactTriggerInputTokensForModelPolicy for callers wiring an
+// LLMSummaryCompactor from model metadata. Explicit request-input thresholds do
+// not change the byte compactor's meaning; the output reserve only applies when
+// Affent derives context pressure from the model window.
+func CompactTriggerBytesForModelPolicy(explicitInputTokens, modelContextWindowTokens, percent, reservedOutputTokens, fallback int) int {
+	if explicitInputTokens != 0 {
+		return fallback
+	}
+	tokens := CompactTriggerInputTokensForModelPolicy(0, modelContextWindowTokens, percent, reservedOutputTokens, 0)
+	if tokens <= 0 {
+		return fallback
+	}
+	return tokens * 4
+}

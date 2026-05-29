@@ -1147,6 +1147,12 @@ func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	if got := CompactTriggerInputTokensForModelPolicy(4096, 100_000, 80, 30_000, DefaultSummaryTriggerInputTokens); got != 4096 {
 		t.Fatalf("explicit output-reserved trigger = %d, want 4096", got)
 	}
+	if got := CompactTriggerBytesForModelPolicy(0, 100_000, 80, 30_000, DefaultSummaryTriggerBytes); got != 280_000 {
+		t.Fatalf("output-reserved byte trigger = %d, want 280000", got)
+	}
+	if got := CompactTriggerBytesForModelPolicy(4096, 100_000, 80, 30_000, DefaultSummaryTriggerBytes); got != DefaultSummaryTriggerBytes {
+		t.Fatalf("explicit request-input threshold should leave byte trigger at fallback; got %d want %d", got, DefaultSummaryTriggerBytes)
+	}
 }
 
 // Rolling: a second compaction pass should detect the existing summary
