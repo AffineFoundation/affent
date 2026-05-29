@@ -152,6 +152,32 @@ func TestLoopProtocolStartSetupForcesCalibrationOnlyForFreshDraft(t *testing.T) 
 	}
 }
 
+func TestLoopProtocolStartSetupModePolicy(t *testing.T) {
+	policy := LoopProtocolStartSetupRequiresLoopSetupModePolicy()
+	args := json.RawMessage(`{"action":"start_setup","goal":"Run durable research."}`)
+	if got, reject := policy.Reject(ToolCallPolicyContext{
+		ToolName: LoopProtocolToolName,
+		Args:     args,
+	}); !reject ||
+		!strings.Contains(got, "explicit loop_setup mode") ||
+		!strings.Contains(got, "session_schedule") {
+		t.Fatalf("normal-mode start_setup policy = reject:%v result:%q", reject, got)
+	}
+	if got, reject := policy.Reject(ToolCallPolicyContext{
+		ToolName: LoopProtocolToolName,
+		Args:     args,
+		UserMode: UserModeLoopSetup,
+	}); reject {
+		t.Fatalf("loop_setup start_setup rejected: %q", got)
+	}
+	if got, reject := policy.Reject(ToolCallPolicyContext{
+		ToolName: LoopProtocolToolName,
+		Args:     json.RawMessage(`{"action":"read"}`),
+	}); reject {
+		t.Fatalf("non-start_setup action rejected: %q", got)
+	}
+}
+
 func TestLoopProtocolDraftToolNeedsCalibrationQuestionFromState(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "longrun")

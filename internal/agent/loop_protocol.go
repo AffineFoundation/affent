@@ -602,6 +602,27 @@ func (l *Loop) loopProtocolStartSetupCreatedDraft(toolName string, args json.Raw
 		state.CalibrationQuestions == 0
 }
 
+func LoopProtocolStartSetupRequiresLoopSetupModePolicy() *ToolCallPolicy {
+	return &ToolCallPolicy{
+		ToolName: LoopProtocolToolName,
+		Reject: func(ctx ToolCallPolicyContext) (string, bool) {
+			if strings.TrimSpace(ctx.UserMode) == UserModeLoopSetup {
+				return "", false
+			}
+			var parsed loopProtocolToolArgs
+			if err := json.Unmarshal(ctx.Args, &parsed); err != nil {
+				return "", false
+			}
+			if strings.ToLower(strings.TrimSpace(parsed.Action)) != "start_setup" {
+				return "", false
+			}
+			return "loop_protocol start_setup requires explicit loop_setup mode in this runtime. " +
+				"Use session_schedule for timers, reminders, recurring checks, and future follow-ups. " +
+				"If the user is intentionally starting durable long-running task state, ask them to start loop_setup mode and retry there.", true
+		},
+	}
+}
+
 func (l *Loop) loopProtocolDraftToolNeedsCalibrationQuestion(toolName string, args json.RawMessage, isErr bool) bool {
 	if l == nil || !isErr || toolName != LoopProtocolToolName || strings.TrimSpace(l.LoopProtocolPath) == "" {
 		return false

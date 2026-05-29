@@ -345,6 +345,7 @@ type ToolCallPolicyContext struct {
 	ToolName      string
 	Args          json.RawMessage
 	ToolCallsUsed int
+	UserMode      string
 }
 
 const (
@@ -2265,6 +2266,7 @@ func (l *Loop) toolCallPolicyRejection(userText, toolName string, args json.RawM
 			ToolName:      toolName,
 			Args:          args,
 			ToolCallsUsed: toolCallsUsed,
+			UserMode:      opts.UserMode,
 		})
 		if !reject {
 			continue

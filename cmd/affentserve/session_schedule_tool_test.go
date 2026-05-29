@@ -197,6 +197,114 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 	}
 }
 
+func TestSessionChatRecurringTimerRejectsLoopSetupAndUsesSchedule(t *testing.T) {
+	nextRunAt := time.Now().UTC().Add(time.Hour).Truncate(time.Second).Format(time.RFC3339)
+	loopArgs := `{"action":"start_setup","goal":"Every 30 minutes query BTC price and update a file."}`
+	createArgs := fmt.Sprintf(`{
+		"action":"create",
+		"kind":"custom",
+		"prompt":"Fetch current BTC USD price, compare with the previous recorded price, append the result to btc_price_log.csv, and report the delta.",
+		"display_text":"BTC price every 30m",
+		"next_run_at":%s,
+		"repeat_interval_seconds":1800
+	}`, jsonStringLiteral(nextRunAt))
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch calls.Add(1) {
+		case 1:
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"bad_loop\",\"type\":\"function\",\"function\":{\"name\":\"loop_protocol\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(loopArgs))
+		case 2:
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"schedule_btc\",\"type\":\"function\",\"function\":{\"name\":\"session_schedule\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(createArgs))
+		case 3:
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Scheduled BTC price checks every 30 minutes.\"},\"finish_reason\":\"stop\"}]}\n\n")
+		default:
+			t.Errorf("unexpected LLM call %d", calls.Load())
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"unexpected\"},\"finish_reason\":\"stop\"}]}\n\n")
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := Config{
+		Listen:             "127.0.0.1:0",
+		MaxSessions:        4,
+		SessionIdleTTL:     "5m",
+		WorkspaceRoot:      t.TempDir(),
+		MemoryRoot:         t.TempDir(),
+		BaseURL:            srv.URL,
+		APIKey:             "test",
+		Model:              "fake",
+		EnableLoopProtocol: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	session, err := pool.GetOrCreate("btc-timer-loop-rejected")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	subID, ch := session.Subscribe(32)
+	defer session.Unsubscribe(subID)
+	turnID, err := session.SendUser(context.Background(), "Every 30 minutes, query BTC price and update a file.")
+	if err != nil {
+		t.Fatalf("SendUser: %v", err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawLoopPolicyReject := false
+	sawScheduleTool := false
+	for {
+		select {
+		case ev := <-ch:
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.CallID == "bad_loop" &&
+					p.ExitCode != 0 &&
+					strings.Contains(p.Result, "Failure: kind=tool_policy_rejected") &&
+					strings.Contains(p.Result, "session_schedule") {
+					sawLoopPolicyReject = true
+				}
+			case sse.TypeToolRequest:
+				var p sse.ToolRequestPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.request: %v", err)
+				}
+				if p.Tool == sessionScheduleToolName {
+					sawScheduleTool = true
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.TurnID != turnID {
+					continue
+				}
+				if !sawLoopPolicyReject {
+					t.Fatal("turn ended without rejecting normal-mode loop setup")
+				}
+				if !sawScheduleTool {
+					t.Fatal("turn ended without session_schedule recovery")
+				}
+				assertBTCTimerScheduleWithoutLoopProtocol(t, pool, "btc-timer-loop-rejected", nextRunAt)
+				if got := calls.Load(); got != 3 {
+					t.Fatalf("LLM calls = %d, want loop rejection, schedule, final", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for BTC timer loop rejection turn.end")
+		}
+	}
+}
+
 func assertBTCTimerScheduleWithoutLoopProtocol(t *testing.T, pool *SessionPool, sessionID, nextRunAt string) {
 	t.Helper()
 	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, sessionID))

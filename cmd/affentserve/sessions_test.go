@@ -2030,7 +2030,7 @@ func TestSessionSendUserDoesNotImplicitlyCreateLoopProtocol(t *testing.T) {
 		t.Fatalf("ordinary SendUser created loop state found=%v err=%v", found, err)
 	}
 	if _, ok := s.registry.Get(agent.LoopProtocolToolName); !ok {
-		t.Fatal("loop_protocol tool should remain available for chat-driven start_setup")
+		t.Fatal("loop_protocol tool should remain available for explicit loop_setup mode")
 	}
 }
 
@@ -2070,7 +2070,10 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 	}
 	subID, ch := s.Subscribe(16)
 	defer s.Unsubscribe(subID)
-	turnID, err := s.SendUser(context.Background(), "请开启 loop，长期分析 Bittensor 子网并保持恢复上下文。")
+	turnID, err := s.SendUserWithOptions(context.Background(), "请开启 loop，长期分析 Bittensor 子网并保持恢复上下文。", agent.TurnOptions{
+		UserMode:                     agent.UserModeLoopSetup,
+		ForceLoopCalibrationQuestion: true,
+	})
 	if err != nil {
 		t.Fatalf("SendUser: %v", err)
 	}
