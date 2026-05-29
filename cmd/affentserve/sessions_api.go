@@ -559,7 +559,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			summary.LoopState = &state
 		}
 	}
-	if schedules := summarizeSessionSchedulesFileForDir(filepath.Dir(s.loopProtocolPath), s.ID); schedules != nil {
+	if schedules := summarizeSessionSchedulesFileForDir(activeSessionStateDir(s), s.ID); schedules != nil {
 		summary.HasSchedules = true
 		summary.Schedules = schedules
 	}
@@ -601,6 +601,19 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	_ = populateSessionTaskState(&summary, taskEventsPath)
 	populateSessionSummaryTitle(&summary)
 	return summary
+}
+
+func activeSessionStateDir(s *Session) string {
+	if s == nil {
+		return ""
+	}
+	if strings.TrimSpace(s.sessionDir) != "" {
+		return s.sessionDir
+	}
+	if strings.TrimSpace(s.loopProtocolPath) != "" {
+		return filepath.Dir(s.loopProtocolPath)
+	}
+	return ""
 }
 
 func contextCompactionSummaryFromRuntimeStats(stats RuntimeStatsSnapshot) *sessionContextCompactionSummary {

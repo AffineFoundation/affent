@@ -2215,6 +2215,55 @@ func TestSummarizeActiveSessionPrefersEventDisplayText(t *testing.T) {
 	}
 }
 
+func TestSummarizeActiveSessionReportsSchedulesWithoutLoopProtocol(t *testing.T) {
+	dir := t.TempDir()
+	conv, err := agent.OpenConversationAt(filepath.Join(dir, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Append(agent.ChatMessage{Role: "user", Content: "check BTC every 30 minutes"}); err != nil {
+		t.Fatal(err)
+	}
+	nextRunAt := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC).Format(time.RFC3339)
+	if err := writeSessionSchedulesFile(filepath.Join(dir, sessionSchedulesFileName), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{
+			{
+				ID:                    "sched_active_timer",
+				Kind:                  sessionScheduleKindCustom,
+				Prompt:                "Check the BTC price.",
+				DisplayText:           "BTC price check",
+				Enabled:               true,
+				NextRunAt:             nextRunAt,
+				RepeatIntervalSeconds: 1800,
+				CreatedAt:             "2026-05-29T11:29:04Z",
+				UpdatedAt:             "2026-05-29T11:29:04Z",
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	summary := summarizeActiveSession(&Session{
+		ID:         "active-scheduled",
+		conv:       conv,
+		registry:   agent.NewRegistry(),
+		sessionDir: dir,
+		workspace:  "/tmp/workspace",
+		createdAt:  time.Now(),
+		lastUsed:   time.Now(),
+	}, Config{})
+	if !summary.HasSchedules || summary.Schedules == nil {
+		t.Fatalf("active session summary = %+v, want schedule summary without LOOP.md", summary)
+	}
+	if summary.Schedules.NextRunAt != nextRunAt || summary.Schedules.NextScheduleID != "sched_active_timer" || summary.Schedules.NextPromptPreview != "BTC price check" {
+		t.Fatalf("schedule summary = %+v, want active timer from sessionDir", summary.Schedules)
+	}
+	if summary.HasLoopProtocol || summary.HasLoopState {
+		t.Fatalf("summary = %+v, timer visibility must not imply loop state", summary)
+	}
+}
+
 func TestSummarizeSessionTitleFromUserMessage(t *testing.T) {
 	for _, tc := range []struct {
 		name string
