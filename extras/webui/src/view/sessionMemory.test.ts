@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   memoryBucketMatchesQuery,
   memoryBucketMatchingEntries,
-  memoryBucketDraft,
   memoryBucketEvidenceText,
   memoryBucketKey,
   memoryBucketLabel,
@@ -16,36 +15,12 @@ import {
   memoryReviewFindings,
   memoryScopeLabel,
   memoryStats,
-  memorySnapshotDraft,
   memorySnapshotEvidenceText,
-  memorySuggestionDraft,
   memoryUsageLabel,
   manualMemoryDraft,
-  memoryUpdateDraft,
-  memoryUpdateEvidenceText,
 } from "./sessionMemory";
 
 describe("sessionMemory view helpers", () => {
-  it("builds evidence for memory updates", () => {
-    const update = {
-      action: "replace",
-      target: "memory",
-      topic: "research",
-      location: "memory:research",
-      preview: "taostats pages require browser network evidence",
-    } as const;
-
-    expect(memoryUpdateEvidenceText(update)).toBe([
-      "Memory update evidence",
-      "Action: Replaced",
-      "Location: memory:research",
-      "Target: memory",
-      "Topic: research",
-      "Preview: taostats pages require browser network evidence",
-    ].join("\n"));
-    expect(memoryUpdateDraft(update)).toContain("kept, corrected, or used in the next step");
-  });
-
   it("builds evidence for memory buckets", () => {
     const bucket = {
       target: "memory",
@@ -70,7 +45,6 @@ describe("sessionMemory view helpers", () => {
       "Content:",
       "- taostats pages are dynamic",
     ].join("\n"));
-    expect(memoryBucketDraft(bucket)).toContain("relevant, stale, or needs correction");
     expect(memoryBucketMatchesQuery(bucket, "TAOSTATS")).toBe(true);
     expect(memoryBucketMatchingEntries(bucket, "dynamic")).toEqual(["taostats pages are dynamic"]);
     expect(memoryBucketMatchingEntries(bucket, "research")).toEqual([]);
@@ -121,7 +95,6 @@ describe("sessionMemory view helpers", () => {
     expect(memorySnapshotEvidenceText(snapshot)).toContain("Scope: Shared user + session");
     expect(memorySnapshotEvidenceText(snapshot)).toContain("Memory bucket evidence for User");
     expect(memorySnapshotEvidenceText(snapshot)).toContain("Memory bucket evidence for research");
-    expect(memorySnapshotDraft(snapshot)).toContain("durable memory snapshot");
   });
 
   it("builds a manual memory draft", () => {
@@ -136,27 +109,6 @@ describe("sessionMemory view helpers", () => {
       "Content:",
       "CoinGecko pages require a browser fallback.",
     ].join("\n"));
-  });
-
-  it("builds a current-chat memory suggestion prompt without saving directly", () => {
-    const draft = memorySuggestionDraft({
-      session_id: "s1",
-      has_memory: true,
-      topics: [{
-        target: "memory",
-        topic: "project",
-        entries: ["Use Vite for WebUI development."],
-        entry_count: 1,
-        chars_used: 31,
-        chars_limit: 4400,
-        percent: 1,
-      }],
-    });
-
-    expect(draft).toContain("Find durable memory candidates");
-    expect(draft).toContain("non-secret");
-    expect(draft).toContain("Do not save memory yet");
-    expect(draft).toContain("Current memory: 1 entry");
   });
 
   it("keeps transient task file evidence out of durable memory candidates", () => {

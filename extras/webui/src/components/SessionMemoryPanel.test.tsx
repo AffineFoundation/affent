@@ -67,11 +67,8 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("4 entries · 104/7975 chars · Shared user + session");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
-    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Find candidates" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Find durable memory candidates"), "memory");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Current memory: 4 entries"), "memory");
-    await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Review snapshot" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("durable memory snapshot"), "memory");
+    expect(within(screen.getByTestId("session-memory-toolbar")).queryByRole("button", { name: "Find candidates" })).toBeNull();
+    expect(within(screen.getByTestId("session-memory-toolbar")).queryByRole("button", { name: "Review snapshot" })).toBeNull();
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:research");
@@ -80,10 +77,8 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("Topic memory");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("taostats pages are dynamic");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("CoinGecko has API fallback");
-    await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Copy update evidence" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory update evidence"));
-    await user.click(within(screen.getByTestId("session-memory-latest")).getByRole("button", { name: "Review update" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review this memory update"), "memory");
+    expect(within(screen.getByTestId("session-memory-latest")).queryByRole("button", { name: "Copy update evidence" })).toBeNull();
+    expect(within(screen.getByTestId("session-memory-latest")).queryByRole("button", { name: "Review update" })).toBeNull();
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("research");
@@ -100,10 +95,10 @@ describe("SessionMemoryPanel", () => {
     expect(list).not.toHaveTextContent("CoinGecko has API fallback");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("taostats pages are dynamic");
 
-    await user.click(within(list).getByRole("button", { name: "Copy details" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory bucket evidence for research"));
-    await user.click(within(list).getByRole("button", { name: "Start from memory" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Use this memory evidence"), "memory");
+    expect(within(list).queryByRole("button", { name: "Copy details" })).toBeNull();
+    expect(within(list).queryByRole("button", { name: "Start from memory" })).toBeNull();
+    await user.click(within(list).getByRole("button", { name: "Copy entries" }));
+    expect(writeText).toHaveBeenCalledWith("taostats pages are dynamic\n\nCoinGecko has API fallback");
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.queryByTestId("session-memory-search-count")).toBeNull();
@@ -401,12 +396,11 @@ describe("SessionMemoryPanel", () => {
     expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No durable memory saved");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Save only stable, non-secret facts");
-    expect(within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Find candidates" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("session-memory-list")).queryByRole("button", { name: "Find candidates" })).toBeNull();
     expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
     expect(screen.getByTestId("session-memory-form")).toBeInTheDocument();
     expect(screen.getByTestId("session-memory-toolbar")).not.toHaveTextContent("Find candidates");
-    within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Find candidates" }).click();
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Do not save memory yet"), "memory");
+    expect(onUseAsDraft).not.toHaveBeenCalled();
     expect(panel).not.toHaveTextContent("No matching memory.");
   });
 

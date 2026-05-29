@@ -8,8 +8,6 @@ import {
   memoryBucketMatchesQuery,
   memoryBucketMatchingEntries,
   memoryBucketPreview,
-  memoryBucketDraft,
-  memoryBucketEvidenceText,
   memoryBucketKey,
   memoryBucketLabel,
   memoryBuckets,
@@ -18,13 +16,9 @@ import {
   memoryEntrySafePreview,
   memoryReviewFindings,
   memoryScopeLabel,
-  memorySuggestionDraft,
   memoryStats,
-  memorySnapshotDraft,
   memorySnapshotEvidenceText,
   memoryUsageLabel,
-  memoryUpdateDraft,
-  memoryUpdateEvidenceText,
   memoryUpdateLocation,
   memoryUpdatePreview,
   manualMemoryDraft,
@@ -260,7 +254,6 @@ export function SessionMemoryPanel({
               latestUpdate={latestUpdate}
               canWrite={Boolean(onAddMemory)}
               onShowReview={() => setScopeFilter("review")}
-              onUseAsDraft={onUseAsDraft}
             />
             {memory?.has_memory && reviewFindings.length > 0 ? (
               <MemoryReviewQueue
@@ -273,7 +266,6 @@ export function SessionMemoryPanel({
               stats={stats}
               hasSearch={hasSearch}
               onRefresh={onRefresh}
-              onUseAsDraft={onUseAsDraft}
             />
             {candidates.length > 0 && memorySaveState.message && !writeOpen ? (
               <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"} role="status" aria-live="polite">
@@ -289,13 +281,12 @@ export function SessionMemoryPanel({
                 onSaveCandidate={(candidate) => void handleSaveCandidate(candidate)}
               />
             ) : null}
-            {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} onUseAsDraft={onUseAsDraft} /> : null}
+            {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
             {focusedBucket ? (
               <MemoryBucketFocus
                 bucket={focusedBucket}
                 revealedEntryKeys={revealedEntryKeys}
                 onToggleReveal={toggleRevealedEntry}
-                onUseAsDraft={onUseAsDraft}
               />
             ) : null}
             {hasSearch ? (
@@ -361,12 +352,6 @@ export function SessionMemoryPanel({
                           <>
                             <div className="session-memory-actions">
                               <CopyButton label="Copy entries" value={bucket.entries.join("\n\n")} className="node-action" />
-                              <CopyButton label="Copy details" value={memoryBucketEvidenceText(bucket)} className="node-action" />
-                              {onUseAsDraft ? (
-                                <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
-                                  Start from memory
-                                </button>
-                              ) : null}
                             </div>
                             <ul className="session-memory-entries" data-filtered={matchingEntries.length > 0 ? "true" : "false"}>
                               {(entriesToShow ?? []).map((entry, index) => {
@@ -475,11 +460,6 @@ export function SessionMemoryPanel({
                 <div className="session-memory-empty-state">
                   <strong>{buckets.length > 0 ? "No matching memory" : "No durable memory saved"}</strong>
                   <span>{buckets.length > 0 ? "Clear the filters or search to inspect another bucket." : "Save only stable, non-secret facts that will help future turns."}</span>
-                  {buckets.length === 0 && onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySuggestionDraft(memory), "memory")}>
-                      Find candidates
-                    </button>
-                  ) : null}
                 </div>
               )}
             </div>
@@ -617,14 +597,12 @@ function MemoryMaintenanceBoard({
   latestUpdate,
   canWrite,
   onShowReview,
-  onUseAsDraft,
 }: {
   reviewFindings: ReturnType<typeof memoryReviewFindings>;
   candidateCount: number;
   latestUpdate?: MemoryUpdateMeta;
   canWrite: boolean;
   onShowReview: () => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   const counts = reviewFindings.reduce<Record<string, number>>((acc, finding) => {
     acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
@@ -689,8 +667,6 @@ function MemoryMaintenanceBoard({
       detail: "A memory write happened in this chat. Use the latest-update card below for the exact preview and evidence.",
       meta: [memoryActionLabel(latestUpdate.action), memoryUpdateLocation(latestUpdate)].filter(Boolean).join(" · "),
       tone: "muted",
-      onClick: onUseAsDraft ? () => onUseAsDraft(memoryUpdateDraft(latestUpdate), "memory") : undefined,
-      button: onUseAsDraft ? "Review" : undefined,
     });
   }
   if (actions.length === 0) {
@@ -732,12 +708,10 @@ function MemoryBucketFocus({
   bucket,
   revealedEntryKeys,
   onToggleReveal,
-  onUseAsDraft,
 }: {
   bucket: SessionMemoryBucket;
   revealedEntryKeys: ReadonlySet<string>;
   onToggleReveal: (key: string) => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   const entries = bucket.entries ?? [];
   const previewEntries = entries.slice(0, 4);
@@ -778,13 +752,7 @@ function MemoryBucketFocus({
         {entries.length > previewEntries.length ? <small>{entries.length - previewEntries.length} more entries in the bucket list.</small> : null}
       </div>
       <div className="session-memory-actions">
-        <CopyButton label="Copy details" value={memoryBucketEvidenceText(bucket)} className="node-action" />
         <CopyButton label="Copy entries" value={entries.join("\n\n")} className="node-action" />
-        {onUseAsDraft ? (
-          <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryBucketDraft(bucket), "memory")}>
-            Start from memory
-          </button>
-        ) : null}
       </div>
     </section>
   );
@@ -829,34 +797,21 @@ function MemoryPanelActions({
   stats,
   hasSearch,
   onRefresh,
-  onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
   stats: ReturnType<typeof memoryStats>;
   hasSearch: boolean;
   onRefresh?: () => Promise<void> | void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   if (!memory && !onRefresh) return null;
   const hasSavedMemory = Boolean(memory?.has_memory);
   const minimal = !hasSavedMemory && !hasSearch;
-  const candidateDraftHandler = !minimal ? onUseAsDraft : undefined;
   const status = memory && hasSavedMemory
     ? `${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} · ${memoryUsageLabel(stats)} · ${memoryScopeLabel(memory)}`
     : undefined;
   return (
     <div className="session-memory-toolbar" data-mode={minimal ? "minimal" : undefined} data-testid="session-memory-toolbar">
       {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="ghost-action" /> : null}
-      {candidateDraftHandler ? (
-        <button type="button" className="ghost-action" onClick={() => candidateDraftHandler(memorySuggestionDraft(memory), "memory")}>
-          Find candidates
-        </button>
-      ) : null}
-      {memory && hasSavedMemory && onUseAsDraft ? (
-        <button type="button" className="ghost-action" onClick={() => onUseAsDraft(memorySnapshotDraft(memory), "memory")}>
-          Review snapshot
-        </button>
-      ) : null}
       {status ? <span>{status}</span> : hasSearch ? <span>Searchable durable memory</span> : null}
       {onRefresh ? (
         <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
@@ -981,7 +936,7 @@ function MemoryDraftForm({
   );
 }
 
-function LatestMemoryUpdate({ update, onUseAsDraft }: { update: MemoryUpdateMeta; onUseAsDraft?: UseAsDraft }) {
+function LatestMemoryUpdate({ update }: { update: MemoryUpdateMeta }) {
   const location = memoryUpdateLocation(update);
   const preview = memoryUpdatePreview(update);
   return (
@@ -992,14 +947,6 @@ function LatestMemoryUpdate({ update, onUseAsDraft }: { update: MemoryUpdateMeta
         {location ? <code>{location}</code> : null}
       </div>
       {preview ? <p>{preview}</p> : null}
-      <div className="session-memory-actions">
-        <CopyButton label="Copy update evidence" value={memoryUpdateEvidenceText(update)} className="node-action" />
-        {onUseAsDraft ? (
-          <button type="button" className="node-action" onClick={() => onUseAsDraft(memoryUpdateDraft(update), "memory")}>
-            Review update
-          </button>
-        ) : null}
-      </div>
     </div>
   );
 }

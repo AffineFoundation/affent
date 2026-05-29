@@ -225,28 +225,6 @@ export function memoryUpdatePreview(update: MemoryUpdateMeta): string {
   return update.preview || update.next_preview || update.previous_preview || "";
 }
 
-export function memoryUpdateEvidenceText(update: MemoryUpdateMeta): string {
-  const location = memoryUpdateLocation(update);
-  const preview = memoryUpdatePreview(update);
-  const lines = [
-    "Memory update evidence",
-    `Action: ${memoryActionLabel(update.action)}`,
-  ];
-  if (location) lines.push(`Location: ${location}`);
-  if (update.target) lines.push(`Target: ${update.target}`);
-  if (update.topic) lines.push(`Topic: ${update.topic}`);
-  if (preview) lines.push(`Preview: ${preview}`);
-  return lines.join("\n");
-}
-
-export function memoryUpdateDraft(update: MemoryUpdateMeta): string {
-  return [
-    "Review this memory update and decide whether it should be kept, corrected, or used in the next step:",
-    "",
-    memoryUpdateEvidenceText(update),
-  ].join("\n");
-}
-
 export function memoryBucketEvidenceText(bucket: SessionMemoryBucket): string {
   const lines = [
     `Memory bucket evidence for ${memoryBucketLabel(bucket)}`,
@@ -283,38 +261,6 @@ export function memorySnapshotEvidenceText(memory: SessionMemoryResponse): strin
   lines.push("");
   lines.push(...buckets.map(memoryBucketEvidenceText).join("\n\n").split("\n"));
   return lines.join("\n");
-}
-
-export function memorySnapshotDraft(memory: SessionMemoryResponse): string {
-  return [
-    "Use this durable memory snapshot as context for the next step. Treat stale or irrelevant entries as candidates to correct:",
-    "",
-    memorySnapshotEvidenceText(memory),
-  ].join("\n");
-}
-
-export function memorySuggestionDraft(memory?: SessionMemoryResponse): string {
-  const lines = [
-    "Find durable memory candidates from the current chat.",
-    "",
-    "Only propose facts that are stable, useful in future sessions, and non-secret.",
-    "For each candidate include target, topic, content, and why it should or should not be saved.",
-    "Do not save memory yet unless I explicitly confirm.",
-  ];
-  if (memory) {
-    const stats = memoryStats(memory);
-    lines.push("");
-    lines.push(`Current memory: ${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} · ${memoryUsageLabel(stats)}`);
-  }
-  return lines.join("\n");
-}
-
-export function memoryBucketDraft(bucket: SessionMemoryBucket): string {
-  return [
-    "Use this memory evidence to continue the chat. Verify whether it is relevant, stale, or needs correction:",
-    "",
-    memoryBucketEvidenceText(bucket),
-  ].join("\n");
 }
 
 export function manualMemoryDraft({
