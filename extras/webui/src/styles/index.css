@@ -7060,6 +7060,11 @@ button.workbench-context-runtime-item:focus-visible {
   padding: 8px 9px;
 }
 
+.session-skills-stat[data-tone="action"] {
+  border-color: rgba(20, 184, 166, 0.28);
+  background: rgba(240, 253, 250, 0.72);
+}
+
 .session-skills-stat span,
 .session-skills-stat small {
   min-width: 0;
@@ -13779,6 +13784,11 @@ html[data-theme="dark"] .workbench-panel {
 html[data-theme="dark"] .session-skills-focus {
   border-color: rgba(45, 212, 191, 0.28);
   background: rgba(13, 40, 38, 0.42);
+}
+
+html[data-theme="dark"] .session-skills-stat[data-tone="action"] {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(20, 83, 80, 0.28);
 }
 
 html[data-theme="dark"] .account-config-focus {

@@ -677,8 +677,9 @@ function SkillsDashboard({ skills, installEnabled }: { skills: readonly SessionS
   const runtime = skills.filter((skill) => skill.runtime).length;
   const builtIn = skills.length - runtime;
   const triggerable = skills.filter((skill) => (skill.triggers?.length ?? skill.auto_activation?.any?.length ?? 0) > 0).length;
-  const toolBound = skills.filter((skill) => (skill.required_tools?.length ?? 0) > 0).length;
-  const tools = new Set(skills.flatMap((skill) => skill.required_tools ?? []));
+  const manualOnly = skills.filter((skill) => skillTriggers(skill).length === 0).length;
+  const missingSummary = skills.filter((skill) => !skill.description?.trim()).length;
+  const reviewCount = manualOnly + missingSummary;
   return (
     <div className="session-skills-dashboard" data-testid="session-skills-dashboard">
       <div className="session-skills-stat">
@@ -691,10 +692,10 @@ function SkillsDashboard({ skills, installEnabled }: { skills: readonly SessionS
         <strong>{triggerable}</strong>
         <small>{triggerable === 1 ? "triggerable skill" : "triggerable skills"}</small>
       </div>
-      <div className="session-skills-stat">
-        <span>Tool-bound</span>
-        <strong>{toolBound}</strong>
-        <small>{tools.size} {tools.size === 1 ? "unique tool" : "unique tools"}</small>
+      <div className="session-skills-stat" data-tone={reviewCount > 0 ? "action" : "normal"}>
+        <span>Review</span>
+        <strong>{reviewCount}</strong>
+        <small>{skillsReviewSummary(manualOnly, missingSummary)}</small>
       </div>
       <div className="session-skills-stat">
         <span>Install</span>
@@ -703,6 +704,14 @@ function SkillsDashboard({ skills, installEnabled }: { skills: readonly SessionS
       </div>
     </div>
   );
+}
+
+function skillsReviewSummary(manualOnly: number, missingSummary: number): string {
+  if (manualOnly === 0 && missingSummary === 0) return "No review gaps";
+  return [
+    manualOnly > 0 ? `Manual-only ${manualOnly}` : undefined,
+    missingSummary > 0 ? `No summary ${missingSummary}` : undefined,
+  ].filter((item): item is string => Boolean(item)).join(" · ");
 }
 
 type SkillFormState = { name: string; description: string; triggers: string; requiredTools: string; body: string };

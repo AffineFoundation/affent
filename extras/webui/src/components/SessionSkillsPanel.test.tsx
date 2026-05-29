@@ -46,6 +46,8 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Activation coverage");
     expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("fix");
     expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("workspace");
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Review");
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("No review gaps");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
     expect(screen.getByTestId("skill-activation-coding_repair_workflow")).toHaveTextContent("Triggers: fix, repair");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
@@ -329,6 +331,10 @@ describe("SessionSkillsPanel", () => {
     );
 
     const filterGroup = screen.getByRole("group", { name: "Filter skills" });
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Review");
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("2");
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Manual-only 1");
+    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("No summary 1");
     await user.click(within(filterGroup).getByRole("button", { name: /Manual-only\s+1/ }));
     expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_workflow");
