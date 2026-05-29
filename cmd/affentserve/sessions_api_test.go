@@ -1468,6 +1468,65 @@ func TestSummarizeDurableSessionKeepsFailureRecoveryAfterCompletedTurn(t *testin
 	}
 }
 
+func TestSessionTaskStateContextProviderInjectsRecoveryOnly(t *testing.T) {
+	dir := t.TempDir()
+	eventsPath := filepath.Join(dir, "events.jsonl")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Append the latest BTC price.",
+	}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "read-tracker",
+			Tool:   "read_file",
+			Args:   map[string]any{"path": "btc_price_tracker.md"},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "read-tracker",
+			ExitCode:      1,
+			FailureKind:   "not_found",
+			ResultSummary: "Error: btc_price_tracker.md not found",
+			Result:        "Error: btc_price_tracker.md not found\nFailure: kind=not_found\nNext: call list_files on . or the workspace root to find the correct path, then retry read_file",
+		}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+		})
+	if err := os.WriteFile(eventsPath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := sessionTaskStateContextProvider(eventsPath)
+	block := provider("continue")
+	for _, want := range []string{
+		"AFFENT TASK STATE:",
+		"status=completed",
+		"verification=failed",
+		"next_step: call list_files on . or the workspace root to find the correct path, then retry read_file",
+		"failed_action: tool=read_file",
+	} {
+		if !strings.Contains(block, want) {
+			t.Fatalf("task state context missing %q:\n%s", want, block)
+		}
+	}
+
+	cleanPath := filepath.Join(dir, "clean-events.jsonl")
+	clean := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t2",
+		Text:   "Report repository status.",
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t2",
+		Reason: sse.TurnEndCompleted,
+	})
+	if err := os.WriteFile(cleanPath, []byte(clean), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if block := sessionTaskStateContextProvider(cleanPath)("continue"); block != "" {
+		t.Fatalf("clean completed turn should not inject task state context:\n%s", block)
+	}
+}
+
 func TestSummarizeDurableSessionDefaultsTaskRequestSourceToUser(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

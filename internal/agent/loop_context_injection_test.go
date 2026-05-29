@@ -162,6 +162,51 @@ func TestAppendUserMessageInjectsScheduledTurnContext(t *testing.T) {
 	}
 }
 
+func TestAppendUserMessageInjectsTaskStateContext(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 2)
+	loop := &Loop{
+		Conv:   conv,
+		Events: events,
+		TaskStateProvider: func(string) string {
+			return "AFFENT TASK STATE:\n" +
+				"task_state: status=completed verification=failed\n" +
+				"next_step: call list_files on . then retry read_file\n" +
+				"failed_action: tool=read_file kinds=not_found summary=btc_price_tracker.md not found"
+		},
+	}
+
+	if err := loop.appendUserMessage("turn_task_state", "continue tracker", TurnOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	ev := <-events
+	if ev.Type != sse.TypeContextInjected {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextInjected)
+	}
+	var payload sse.ContextInjectedPayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+	if payload.Source != "task_state" ||
+		payload.Title != "Task state context injected" ||
+		!strings.Contains(payload.Summary, "next_step: call list_files") {
+		t.Fatalf("task state payload = %+v", payload)
+	}
+	msgs := conv.Snapshot()
+	if len(msgs) != 2 ||
+		msgs[0].Role != "system" ||
+		!msgs[0].TransientContext ||
+		!strings.Contains(msgs[0].Content, "AFFENT TASK STATE:") ||
+		msgs[1].Role != "user" ||
+		msgs[1].Content != "continue tracker" {
+		t.Fatalf("task state context should be transient before user message: %+v", msgs)
+	}
+}
+
 func TestAppendUserMessagePublishesLoopDraftActivationContext(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
 	if err != nil {

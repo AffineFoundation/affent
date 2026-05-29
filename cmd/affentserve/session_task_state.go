@@ -207,18 +207,8 @@ func sessionTaskRequestSourceFact(eventState sessionTaskEventState) string {
 }
 
 func sessionTaskNextStep(task sessionTaskStateSummary, summary sessionSummary) string {
-	if len(task.OpenQuestions) > 0 {
-		return task.OpenQuestions[len(task.OpenQuestions)-1]
-	}
-	if task.Status == "completed" && task.VerificationState == "last_shell_passed" {
-		return ""
-	}
-	if len(task.FailedActions) > 0 && task.VerificationState != "last_shell_passed" {
-		latest := task.FailedActions[len(task.FailedActions)-1]
-		if next := strings.TrimSpace(latest.Next); next != "" {
-			return next
-		}
-		return "latest failed action is unresolved"
+	if next := taskstate.NextStep(task); next != "" || task.Status == "completed" && task.VerificationState == "last_shell_passed" {
+		return next
 	}
 	if summary.PlanSummary != nil && summary.PlanSummary.CurrentStep != "" {
 		return summary.PlanSummary.CurrentStep
@@ -247,4 +237,38 @@ func appendUniqueLimited(items []string, item string, limit int) []string {
 
 func sessionTaskStateEmpty(task sessionTaskStateSummary) bool {
 	return taskstate.IsEmpty(task)
+}
+
+func sessionTaskStateContextProvider(eventsPath string) func(string) string {
+	eventsPath = strings.TrimSpace(eventsPath)
+	if eventsPath == "" {
+		return nil
+	}
+	return func(string) string {
+		state, err := sessionTaskStateFromEventsFile(eventsPath)
+		if err != nil || state == nil || !sessionTaskStateNeedsContext(state.Snapshot) {
+			return ""
+		}
+		text := taskstate.SearchText(state.Snapshot)
+		if text == "" {
+			return ""
+		}
+		return "AFFENT TASK STATE:\n" + text
+	}
+}
+
+func sessionTaskStateNeedsContext(task sessionTaskStateSummary) bool {
+	if strings.TrimSpace(task.NextStep) != "" || len(task.OpenQuestions) > 0 {
+		return true
+	}
+	switch strings.TrimSpace(task.VerificationState) {
+	case "failed":
+		return true
+	}
+	switch strings.TrimSpace(task.Status) {
+	case "failed", "blocked", "cancelled":
+		return true
+	default:
+		return false
+	}
 }

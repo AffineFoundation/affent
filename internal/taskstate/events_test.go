@@ -167,6 +167,45 @@ func TestScanEventsKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
 	}
 }
 
+func TestScanEventsKeepsRecoveryNextStepAfterCompletedFailedTurn(t *testing.T) {
+	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Append the latest BTC price.",
+	}) +
+		taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "read-1",
+			Tool:   "read_file",
+			Args:   map[string]any{"path": "btc_price_tracker.md"},
+		}) +
+		taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "read-1",
+			ExitCode:      1,
+			FailureKind:   "not_found",
+			ResultSummary: "Error: btc_price_tracker.md not found",
+			Result:        "Error: btc_price_tracker.md not found\nFailure: kind=not_found\nNext: call list_files on . before retrying read_file",
+		}) +
+		taskStateEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+		})
+
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("ScanEvents returned nil")
+	}
+	if state.Status != "completed" || state.VerificationState != "failed" {
+		t.Fatalf("status/verification = %q/%q, want completed/failed", state.Status, state.VerificationState)
+	}
+	if state.NextStep != "call list_files on . before retrying read_file" {
+		t.Fatalf("next_step = %q, want failed tool recovery hint", state.NextStep)
+	}
+}
+
 func taskStateEventLine(t *testing.T, eventType string, payload any) string {
 	t.Helper()
 	ev, err := sse.NewEvent(eventType, payload)

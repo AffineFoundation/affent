@@ -776,7 +776,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// Snapshot source for EnsureSystemPrompt — when nil, the
 		// memory block is just omitted from the system prompt and
 		// the tool isn't registered above anyway.
-		Memory: memStore,
+		Memory:            memStore,
+		TaskStateProvider: sessionTaskStateContextProvider(filepath.Join(sessionDir, "events.jsonl")),
 	}
 	if workflowToolsEnabled(p.cfg) {
 		loop.SkillProvider = agent.SkillProviderForTools(nil, reg)
