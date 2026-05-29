@@ -106,6 +106,23 @@ describe("ExecutionTree", () => {
     expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Tool context 4 KiB · 2 KiB omitted");
     expect(screen.getByText(/Status done · Exit 0 · Tool context 4 KiB · 2 KiB omitted/)).toBeInTheDocument();
   });
+
+  it("keeps web fetch raw artifact storage out of the chat action details", async () => {
+    const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
+
+    render(<ExecutionTree turn={webFetchArtifactTurn()} events={[]} sessionId="s1" onOpenArtifact={onOpenArtifact} />);
+
+    await user.click(screen.getByRole("button", { name: /Web action Fetch example\.test/ }));
+
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Status done");
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Duration 131ms");
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Exit 0");
+    expect(screen.getByTestId("action-inspector-summary")).not.toHaveTextContent("000001-call_a4fe2c62e5714c3b9140cf43.txt");
+    expect(screen.getByTestId("action-inspector-summary")).not.toHaveTextContent("Tool context");
+    expect(screen.queryByRole("button", { name: "Open artifact" })).toBeNull();
+    expect(screen.queryByText("output file")).toBeNull();
+  });
 });
 
 function runningTurn(): TurnState {
@@ -218,6 +235,41 @@ function contextTrimmedTurn(): TurnState {
         contextBytes: 4096,
         contextOmittedBytes: 2048,
         contextEstimatedTokens: 1024,
+      },
+    ],
+  };
+}
+
+function webFetchArtifactTurn(): TurnState {
+  return {
+    id: "t5",
+    status: "completed",
+    userText: "fetch page",
+    thinkingText: "",
+    thinkingStreaming: false,
+    assistantText: "",
+    messageStreaming: false,
+    toolCalls: [
+      {
+        callId: "fetch",
+        tool: "web_fetch",
+        args: { url: "https://example.test" },
+        argsTruncated: false,
+        argsRepaired: false,
+        canonicalized: false,
+        status: "success",
+        exitCode: 0,
+        durationMs: 131,
+        result: "Example Domain",
+        resultSummary: "Example Domain",
+        resultTruncated: false,
+        resultBytes: 8192,
+        resultOmittedBytes: 0,
+        resultCapBytes: 262144,
+        resultArtifactPath: ".affent/artifacts/tool-results/000001-call_a4fe2c62e5714c3b9140cf43.txt",
+        contextBytes: 5632,
+        contextOmittedBytes: 3174,
+        contextEstimatedTokens: 1408,
       },
     ],
   };

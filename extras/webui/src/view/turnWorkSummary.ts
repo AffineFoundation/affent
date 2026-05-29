@@ -1,6 +1,6 @@
 import type { ToolCallState, TurnState } from "../store/sessionState";
 import { detectConstraintDeviations } from "./constraintDeviation";
-import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
+import { artifactCountLabel, chatVisibleTurnArtifacts } from "./turnArtifacts";
 
 export type WorkSummaryTone = "muted" | "running" | "error" | "warning" | "info" | "artifact";
 
@@ -31,7 +31,7 @@ export function buildTurnWorkSummaryWithOptions(
   const running = calls.filter((call) => call.status === "running").length;
   const repaired = calls.filter(hasRepair).length;
   const truncated = calls.filter((call) => call.argsTruncated || call.resultTruncated).length;
-  const artifacts = buildTurnArtifacts(turn);
+  const artifacts = chatVisibleTurnArtifacts(turn);
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(calls);
   const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
   const networkSources = turn.toolStats?.source_access_network ?? 0;

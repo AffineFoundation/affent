@@ -5,6 +5,7 @@ import type { UseAsDraft } from "../view/draftSource";
 import { buildExecutionTree, formatTokenUsageCompact, formatTokenUsageDetail, type ExecutionTreeNode } from "../view/executionTree";
 import { formatByteCount, formatBytes } from "../view/byteFormat";
 import { artifactDisplayLabel, artifactName } from "../view/turnArtifacts";
+import { showsResultStorageChrome, showsToolContextChrome } from "../view/toolResultDisplay";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
 import { fmtDuration } from "./format";
@@ -142,9 +143,9 @@ function ExecutionNodeView({
           ))}
           {!node.failureKinds?.length && node.failureKind ? <span className="badge" data-kind="error">{node.failureKind}</span> : null}
           {node.argsTruncated || node.resultTruncated ? <span className="badge" data-kind="truncation">truncated</span> : null}
-          {node.contextOmittedBytes && node.contextOmittedBytes > 0 ? <span className="badge" data-kind="truncation">context trimmed</span> : null}
+          {showsToolContextChrome(node) && node.contextOmittedBytes && node.contextOmittedBytes > 0 ? <span className="badge" data-kind="truncation">context trimmed</span> : null}
           {node.repairNotes?.length || node.originalTool ? <span className="badge" data-kind="repair">repaired</span> : null}
-          {node.resultArtifactPath ? <span className="badge" data-kind="artifact">artifact</span> : null}
+          {shouldShowArtifactChrome(node) ? <span className="badge" data-kind="artifact">artifact</span> : null}
           {node.contextEstimatedTokens && (node.kind === "subagent" || node.kind === "focused_task") ? (
             <span className="tool-meta">merged ~{node.contextEstimatedTokens} tokens</span>
           ) : null}
@@ -240,6 +241,7 @@ function NodeDetails({
     node.warnings.length > 0 ||
     node.notFound.length > 0 ||
     node.suggestedNext.length > 0;
+  const showArtifactChrome = shouldShowArtifactChrome(node);
   const hasMetadata =
     !!node.objective ||
     !!node.tool ||
@@ -250,7 +252,7 @@ function NodeDetails({
     !!node.originalTool ||
     !!node.originalArgsSummary ||
     !!node.repairNotes?.length ||
-    !!node.resultArtifactPath;
+    showArtifactChrome;
   const hasPayload = !!node.args || events.length > 0;
   const hasRepairComparison = !!(node.originalTool || node.originalArgsSummary || node.repairNotes?.length);
   return (
@@ -273,7 +275,7 @@ function NodeDetails({
             Retry action
           </button>
         ) : null}
-        {node.resultArtifactPath && sessionId ? (
+        {showArtifactChrome && sessionId ? (
           <button type="button" className="node-action" onClick={() => onOpenArtifact?.(node.resultArtifactPath ?? "")}>
             Open artifact
           </button>
@@ -347,7 +349,7 @@ function NodeDetails({
               mono
             />
           ) : null}
-          {node.resultArtifactPath ? (
+          {showArtifactChrome ? (
             <DetailLine
               label="output file"
               value={artifactSummary(node)}
@@ -398,6 +400,8 @@ function actionSummaryPreview(node: ExecutionTreeNode): string {
 }
 
 function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode; searchQuery?: string }) {
+  const showArtifactChrome = shouldShowArtifactChrome(node);
+  const showToolContext = showsToolContextChrome(node);
   const items = compactSummaryItems([
     { label: "Status", value: statusLabel(node), tone: node.status },
     node.durationMs != null ? { label: "Duration", value: fmtDuration(node.durationMs) } : undefined,
@@ -405,8 +409,8 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
     node.contextEstimatedTokens && (node.kind === "subagent" || node.kind === "focused_task") ? { label: "Merged", value: `~${node.contextEstimatedTokens} tokens` } : undefined,
     node.tokenUsage ? { label: "Usage", value: formatTokenUsageDetail(node.tokenUsage) } : undefined,
     node.tokenUsage?.costUsd != null ? { label: "Cost", value: formatCost(node.tokenUsage.costUsd) } : undefined,
-    node.resultArtifactPath ? { label: "File", value: artifactSummary(node), tone: "artifact" } : undefined,
-    toolContextSummary(node),
+    showArtifactChrome ? { label: "File", value: artifactSummary(node), tone: "artifact" } : undefined,
+    showToolContext ? toolContextSummary(node) : undefined,
     node.repairNotes?.length || node.originalTool ? { label: "Repair", value: `${node.repairNotes?.length || 1} note${(node.repairNotes?.length || 1) === 1 ? "" : "s"}`, tone: "warning" } : undefined,
     node.resultTruncated || node.argsTruncated ? { label: "Limit", value: "truncated", tone: "warning" } : undefined,
   ]);
@@ -427,6 +431,10 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
       </div>
     </section>
   );
+}
+
+function shouldShowArtifactChrome(node: ExecutionTreeNode): boolean {
+  return Boolean(node.resultArtifactPath) && showsResultStorageChrome(node);
 }
 
 function formatCost(value: number): string {

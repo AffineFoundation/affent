@@ -11673,7 +11673,7 @@ a.agent-activity-evidence-chip:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: center;
+  align-items: start;
   border: 1px solid rgba(217, 224, 232, 0.72);
   border-radius: var(--radius-sm);
   background:
@@ -11718,7 +11718,8 @@ a.agent-activity-evidence-chip:focus-visible {
 .action-inspector-facts {
   display: flex;
   justify-content: flex-end;
-  min-width: min(310px, 42%);
+  min-width: 0;
+  max-width: min(420px, 100%);
 }
 
 .action-inspector-facts-line {
@@ -11735,6 +11736,7 @@ a.agent-activity-evidence-chip:focus-visible {
   padding: 2px 7px;
   white-space: normal;
   text-align: right;
+  overflow-wrap: anywhere;
 }
 
 .action-inspector-facts-line[data-tone="success"] {

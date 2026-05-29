@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { EventType, type MessageDonePayload, type ToolRequestPayload, type ToolResultPayload } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnError, TurnState } from "../store/sessionState";
@@ -8,8 +8,8 @@ import { buildExecutionTree, searchableExecutionNodeText } from "../view/executi
 import { artifactEvidenceDraft } from "../view/sessionArtifacts";
 import { buildTurnActivity, type TurnActivityBriefRow, type TurnActivityEvidence, type TurnActivityNode, type TurnActivityView } from "../view/turnActivity";
 import { buildTurnBoundaryView } from "../view/turnBoundary";
-import { buildTurnWorkSummaryWithOptions, selectHeadlineWorkSummaryItems, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
-import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, type TurnArtifact } from "../view/turnArtifacts";
+import { buildTurnWorkSummaryWithOptions, type WorkSummaryItem } from "../view/turnWorkSummary";
+import { artifactCountLabel, artifactSizeLabel, chatVisibleTurnArtifacts, type TurnArtifact } from "../view/turnArtifacts";
 import { memoryUpdatesForTurn, type MemoryUpdateSummary } from "../view/memoryUpdate";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
@@ -54,7 +54,7 @@ export function TurnCard({
   const continuedAfterLimit = !isLatest && turn.status === "max_turns";
   const continuedIntoTurnNumber = continuedAfterLimit ? turnNumber + 1 : undefined;
   const workSummary = buildTurnWorkSummaryWithOptions(turn, { continuedAfterLimit });
-  const artifacts = buildTurnArtifacts(turn);
+  const artifacts = chatVisibleTurnArtifacts(turn);
   const activity = buildTurnActivity(turn, { continuedAfterLimit, continuedIntoTurnNumber });
   const fallbackAnswer = buildFallbackAnswer(turn, { continuedAfterLimit });
   const assistantResponseSegments = turnAssistantResponseSegments(turn, relatedEvents);
@@ -83,6 +83,16 @@ export function TurnCard({
     isLatest,
     searchQuery,
   });
+  const workDetails = showWorkDetails ? (
+    <WorkExecutionDetails
+      turn={turn}
+      events={relatedEvents}
+      searchQuery={searchQuery}
+      sessionId={sessionId}
+      onOpenArtifact={onOpenArtifact}
+      onUseAsDraft={onUseAsDraft}
+    />
+  ) : null;
 
   return (
     <section id={anchorId} className="flow-turn" data-testid="turn-card" data-status={turn.status}>
@@ -144,7 +154,15 @@ export function TurnCard({
           {turn.status === "running" && !turn.assistantText ? (
             <RunningAnswerBubble turn={turn} summary={workSummary} />
           ) : null}
-          {assistantResponseSegments.length === 0 && activity ? <AgentActivity activity={activity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
+          {assistantResponseSegments.length === 0 && activity ? (
+            <AgentActivity
+              activity={activity}
+              isLatest={isLatest}
+              searchQuery={searchQuery}
+              onUseAsDraft={onUseAsDraft}
+              executionDetails={workDetails}
+            />
+          ) : null}
           {assistantResponseSegments.length === 0 ? <TurnMemoryUpdates turn={turn} searchQuery={searchQuery} /> : null}
           {fallbackAnswer ? (
             <FallbackAnswerBubble answer={fallbackAnswer} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} />
@@ -153,20 +171,7 @@ export function TurnCard({
           {showReasoningDisclosure ? (
             <ReasoningDisclosure turn={turn} searchQuery={searchQuery} />
           ) : null}
-          {assistantResponseSegments.length === 0 && showWorkDetails ? (
-            <WorkDetails
-              turn={turn}
-              summary={workSummary}
-              events={relatedEvents}
-              searchQuery={searchQuery}
-              searchMatch={workSearchMatch}
-              sessionId={sessionId}
-              onOpenArtifact={onOpenArtifact}
-              onUseAsDraft={onUseAsDraft}
-              continuedAfterLimit={continuedAfterLimit}
-              continuedIntoTurnNumber={continuedIntoTurnNumber}
-            />
-          ) : null}
+          {assistantResponseSegments.length === 0 && !activity ? workDetails : null}
           {turn.status === "max_turns" && !continuedAfterLimit ? <ContinuationPrompt turn={turn} onUseAsDraft={onUseAsDraft} /> : null}
           {turn.error ? <ErrorBlock error={turn.error} onUseAsDraft={onUseAsDraft} /> : null}
         </div>
@@ -212,7 +217,6 @@ function AssistantResponseSegment({
   forceWorkDetails?: boolean;
 }) {
   const segmentActivity = buildTurnActivity(segment.turn, { continuedAfterLimit, continuedIntoTurnNumber });
-  const segmentWorkSummary = buildTurnWorkSummaryWithOptions(segment.turn, { continuedAfterLimit });
   const segmentWorkSearchMatch = workSearchMatches(segment.turn, segment.events, searchQuery);
   const showSegmentWorkDetails = shouldShowWorkDetails(segment.turn, {
     isLatest,
@@ -220,6 +224,16 @@ function AssistantResponseSegment({
     searchMatch: segmentWorkSearchMatch,
     force: forceWorkDetails,
   });
+  const segmentWorkDetails = showSegmentWorkDetails ? (
+    <WorkExecutionDetails
+      turn={segment.turn}
+      events={segment.events}
+      searchQuery={searchQuery}
+      sessionId={sessionId}
+      onOpenArtifact={onOpenArtifact}
+      onUseAsDraft={onUseAsDraft}
+    />
+  ) : null;
 
   return (
     <div className="assistant-response-segment" data-testid="assistant-response-segment">
@@ -234,7 +248,15 @@ function AssistantResponseSegment({
           onRetry={onUseAsDraft}
         />
       ) : null}
-      {segmentActivity ? <AgentActivity activity={segmentActivity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
+      {segmentActivity ? (
+        <AgentActivity
+          activity={segmentActivity}
+          isLatest={isLatest}
+          searchQuery={searchQuery}
+          onUseAsDraft={onUseAsDraft}
+          executionDetails={segmentWorkDetails}
+        />
+      ) : segmentWorkDetails}
       <TurnMemoryUpdates turn={segment.turn} searchQuery={searchQuery} />
       <TurnArtifacts
         turn={segment.turn}
@@ -243,20 +265,6 @@ function AssistantResponseSegment({
         onUseAsDraft={onUseAsDraft}
         searchQuery={searchQuery}
       />
-      {showSegmentWorkDetails ? (
-        <WorkDetails
-          turn={segment.turn}
-          summary={segmentWorkSummary}
-          events={segment.events}
-          searchQuery={searchQuery}
-          searchMatch={segmentWorkSearchMatch}
-          sessionId={sessionId}
-          onOpenArtifact={onOpenArtifact}
-          onUseAsDraft={onUseAsDraft}
-          continuedAfterLimit={continuedAfterLimit}
-          continuedIntoTurnNumber={continuedIntoTurnNumber}
-        />
-      ) : null}
     </div>
   );
 }
@@ -279,7 +287,7 @@ function TurnArtifacts({
   onUseAsDraft?: UseAsDraft;
   searchQuery?: string;
 }) {
-  const artifacts = buildTurnArtifacts(turn);
+  const artifacts = chatVisibleTurnArtifacts(turn);
   return artifacts.length > 0 ? (
     <ArtifactStrip
       artifacts={artifacts}
@@ -482,11 +490,13 @@ function AgentActivity({
   isLatest,
   searchQuery,
   onUseAsDraft,
+  executionDetails,
 }: {
   activity: TurnActivityView;
   isLatest: boolean;
   searchQuery?: string;
   onUseAsDraft?: UseAsDraft;
+  executionDetails?: ReactNode;
 }) {
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
   const autoOpen = activity.live || (isLatest && activity.tone === "error") || Boolean(searchQuery?.trim());
@@ -608,7 +618,7 @@ function AgentActivity({
               ))}
             </div>
           ) : null}
-          {activity.items.length > 0 ? (
+          {!executionDetails && activity.items.length > 0 ? (
             <div className="agent-activity-flow">
               {activity.items.map((item) => (
                 <div
@@ -635,7 +645,12 @@ function AgentActivity({
               ))}
             </div>
           ) : null}
-          {activity.nodes.length > 0 ? (
+          {executionDetails ? (
+            <div className="agent-activity-execution" data-testid="agent-activity-execution">
+              {executionDetails}
+            </div>
+          ) : null}
+          {!executionDetails && activity.nodes.length > 0 ? (
             <div className="agent-activity-tree" data-testid="agent-activity-tree">
               {activity.nodes.map((node) => (
                 <AgentActivityNode
@@ -1178,7 +1193,7 @@ function RunningAnswerBubble({
   summary,
 }: {
   turn: TurnState;
-  summary: TurnWorkSummary;
+  summary: { items: WorkSummaryItem[] };
 }) {
   return (
     <div className="running-answer" data-testid="running-answer" role="status" aria-live="polite">
@@ -1241,104 +1256,43 @@ function stringArg(tool: ToolCallState, key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function WorkDetails({
+function WorkExecutionDetails({
   turn,
-  summary,
   events,
   searchQuery,
-  searchMatch,
   sessionId,
   onOpenArtifact,
   onUseAsDraft,
-  continuedAfterLimit,
-  continuedIntoTurnNumber,
 }: {
   turn: TurnState;
-  summary: TurnWorkSummary;
   events: readonly NormalizedEvent[];
   searchQuery?: string;
-  searchMatch?: boolean;
   sessionId?: string;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
-  continuedAfterLimit?: boolean;
-  continuedIntoTurnNumber?: number;
 }) {
-  const autoOpen = shouldAutoOpenWorkDetails(Boolean(searchMatch));
-  const heading = workThreadHeading(turn, { continuedAfterLimit, continuedIntoTurnNumber });
-  const displaySummary = workSummaryDisplay(heading, summary);
-  const label = workThreadLabel(heading, displaySummary);
   const threadStatus = workThreadStatus(turn);
-  const [open, toggle] = useDisclosure(autoOpen);
 
   return (
-    <section className="work-thread" aria-label={label} data-testid="work-thread" data-open={open} data-status={threadStatus}>
-      <button type="button" className="work-thread-head" aria-expanded={open} aria-label={label} onClick={toggle}>
-        <span className="work-thread-copy">
-          <span>{heading.title}</span>
-          {heading.detail ? (
-            <>
-              {" "}
-              <small>{heading.detail}</small>
-            </>
-          ) : null}
-        </span>
-        <WorkSummary summary={displaySummary} />
-        <span className="work-chevron" aria-hidden="true" />
-      </button>
-      {open ? (
-        <div className="work-thread-body">
-          <ExecutionTree
-            turn={turn}
-            events={events}
-            searchQuery={searchQuery}
-            sessionId={sessionId}
-            onOpenArtifact={onOpenArtifact}
-            onUseAsDraft={onUseAsDraft}
-          />
-        </div>
-      ) : null}
+    <section
+      className="work-thread work-thread-inline"
+      aria-label="Action trace"
+      data-testid="work-thread"
+      data-open="true"
+      data-status={threadStatus}
+    >
+      <div className="work-thread-body">
+        <ExecutionTree
+          turn={turn}
+          events={events}
+          searchQuery={searchQuery}
+          sessionId={sessionId}
+          onOpenArtifact={onOpenArtifact}
+          onUseAsDraft={onUseAsDraft}
+        />
+      </div>
     </section>
   );
-}
-
-interface WorkSummaryDisplay {
-  actionLabel?: string;
-  items: WorkSummaryItem[];
-}
-
-function workSummaryDisplay(heading: { detail?: string }, summary: TurnWorkSummary): WorkSummaryDisplay {
-  const detail = heading.detail ?? "";
-  const actionLabel = isGenericActionCount(summary.actionLabel) && hasCallCount(detail)
-    ? undefined
-    : toolDetailActionLabel(summary.actionLabel);
-  const items = summary.items.filter((item) => !detailAlreadyCoversItem(detail, item));
-  return { actionLabel, items };
-}
-
-function isGenericActionCount(label: string): boolean {
-  return /^\d+ actions?$/.test(label);
-}
-
-function toolDetailActionLabel(label: string): string {
-  const match = label.match(/^(\d+) actions?$/);
-  if (!match) return label;
-  const count = Number(match[1]);
-  return `${count} ${count === 1 ? "call" : "calls"}`;
-}
-
-function hasCallCount(detail: string): boolean {
-  return /\b\d+\s+(?:completed\s+)?calls?\b/.test(detail);
-}
-
-function detailAlreadyCoversItem(detail: string, item: WorkSummaryItem): boolean {
-  const escaped = item.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?:^|\\b)${escaped}(?:\\b|$)`).test(detail);
-}
-
-function workThreadLabel(heading: { title: string; detail?: string }, summary: WorkSummaryDisplay): string {
-  const parts = [heading.title, heading.detail, summary.actionLabel, ...summary.items.map((item) => item.label)];
-  return parts.filter(Boolean).join(" · ");
 }
 
 function workThreadStatus(turn: TurnState): TurnState["status"] {
@@ -1346,48 +1300,11 @@ function workThreadStatus(turn: TurnState): TurnState["status"] {
   return turn.status;
 }
 
-function workThreadHeading(turn: TurnState, opts: { continuedAfterLimit?: boolean; continuedIntoTurnNumber?: number } = {}): { title: string; detail?: string } {
-  if (opts.continuedAfterLimit) {
-    const detail = opts.continuedIntoTurnNumber ? `continued in message ${opts.continuedIntoTurnNumber}` : "continued later in this chat";
-    return { title: "Action details", detail };
-  }
-  const failed = latestFailedTool(turn);
-  if (failed || turn.status === "error" || turn.error) {
-    const errorSummary = turn.error ? summarizeUserError(turn.error.code, turn.error.message) : undefined;
-    return { title: "Action details", detail: failed ? `Issue: ${summarize(currentToolFocus(failed), 88)}` : errorSummary?.detail };
-  }
-  if (turn.status === "running") {
-    return { title: "Action details", detail: runningAnswerDetail(turn) };
-  }
-  if (turn.status === "max_turns") {
-    return { title: "Action details", detail: "Action limit reached" };
-  }
-  if (turn.status === "cancelled") {
-    return { title: "Action details", detail: "Cancelled before a final answer" };
-  }
-  return { title: "Run summary", detail: completedWorkDetail(turn) };
-}
-
-function completedWorkDetail(turn: TurnState): string | undefined {
-  const count = turn.toolCalls.length;
-  if (count === 0) return undefined;
-  const failed = turn.toolCalls.filter((call) => call.status === "error").length;
-  const actions = `${count} ${count === 1 ? "action" : "actions"}`;
-  if (failed && turn.assistantText.trim()) return `${actions} · ${failed} tool issue${failed === 1 ? "" : "s"}`;
-  if (failed) return `${failed} failed of ${actions}`;
-  return undefined;
-}
-
 function latestFailedTool(turn: TurnState): ToolCallState | undefined {
   for (let index = turn.toolCalls.length - 1; index >= 0; index -= 1) {
     if (turn.toolCalls[index].status === "error") return turn.toolCalls[index];
   }
   return undefined;
-}
-
-function shouldAutoOpenWorkDetails(searchMatch: boolean): boolean {
-  if (searchMatch) return true;
-  return false;
 }
 
 function workSearchMatches(
@@ -1423,23 +1340,6 @@ function normalizeSearch(value?: string): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function WorkSummary({ summary }: { summary: WorkSummaryDisplay }) {
-  if (!summary.actionLabel && summary.items.length === 0) return null;
-  const text = summarizeWorkSummary(summary);
-  if (!text) return null;
-  return (
-    <div
-      className="work-summary"
-      data-testid="work-summary"
-      aria-label={[summary.actionLabel, ...summary.items.map((item) => item.label)].filter(Boolean).join(" · ")}
-    >
-      <span className="work-summary-line" data-tone={workSummaryTone(summary.items)}>
-        {text}
-      </span>
-    </div>
-  );
-}
-
 function summarizeHeaderMetrics(
   actionLabel: string,
   meta: readonly string[],
@@ -1473,18 +1373,6 @@ function summarizeBoundaryMeta(meta: readonly string[], visibleCount: number): s
   const visible = meta.slice(0, visibleCount);
   const remaining = meta.length - visible.length;
   return remaining > 0 ? `${visible.join(" · ")} · +${remaining} more` : visible.join(" · ");
-}
-
-function summarizeWorkSummary(summary: WorkSummaryDisplay, visibleCount = 3): string {
-  const parts: string[] = [];
-  if (summary.actionLabel) parts.push(summary.actionLabel);
-  const visibleItems = selectHeadlineWorkSummaryItems(summary.items, visibleCount);
-  parts.push(...visibleItems.map((item) => item.label));
-  const displayableItems = summary.items.filter((item) => item.tone !== "muted");
-  const visibleSet = new Set(visibleItems);
-  const hiddenItems = displayableItems.filter((item) => !visibleSet.has(item));
-  if (hiddenItems.length > 0) parts.push(summarizeWorkItemOverflow(hiddenItems));
-  return parts.join(" · ");
 }
 
 function summarizeWorkItemOverflow(items: readonly WorkSummaryItem[]): string {

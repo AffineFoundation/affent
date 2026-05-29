@@ -1,5 +1,6 @@
 import { formatBytes } from "./byteFormat";
 import type { ToolCallState, TurnState } from "../store/sessionState";
+import { showsChatArtifact } from "./toolResultDisplay";
 
 export interface TurnArtifact {
   path: string;
@@ -48,6 +49,14 @@ export function buildTurnArtifacts(turn: TurnState, context: { turnNumber?: numb
   }
 
   return artifacts;
+}
+
+export function chatVisibleTurnArtifacts(turn: TurnState, context: { turnNumber?: number } = {}): TurnArtifact[] {
+  return buildTurnArtifacts(turn, context).filter(isChatVisibleArtifact);
+}
+
+export function isChatVisibleArtifact(artifact: TurnArtifact): boolean {
+  return showsChatArtifact(artifact);
 }
 
 export function artifactSizeLabel(artifact: TurnArtifact): string {
