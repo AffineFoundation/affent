@@ -12,6 +12,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/taskstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
 )
@@ -220,7 +221,7 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 				})
 				addTaskStateSource(state, source)
 				if req.Tool == "shell" {
-					source = taskShellEvidenceSource(actionSummary)
+					source = taskstate.ShellHandoffEvidenceSource(actionSummary)
 				} else {
 					source = ""
 				}
@@ -442,43 +443,6 @@ func taskToolEvidenceSource(tool string) string {
 	default:
 		return ""
 	}
-}
-
-func taskShellEvidenceSource(command string) string {
-	switch taskGitSubcommand(command) {
-	case "commit":
-		return "git_commit"
-	case "push":
-		return "git_push"
-	default:
-		return ""
-	}
-}
-
-func taskGitSubcommand(command string) string {
-	fields := strings.Fields(command)
-	if len(fields) == 0 || strings.Trim(fields[0], " \t\r\n()") != "git" {
-		return ""
-	}
-	for i := 1; i < len(fields); i++ {
-		token := strings.Trim(fields[i], " \t\r\n;()")
-		switch {
-		case token == "-C" || token == "-c" || token == "--git-dir" || token == "--work-tree" || token == "--namespace":
-			i++
-			continue
-		case strings.HasPrefix(token, "--git-dir=") || strings.HasPrefix(token, "--work-tree=") || strings.HasPrefix(token, "--namespace="):
-			continue
-		case strings.HasPrefix(token, "-C") && token != "-C":
-			continue
-		case strings.HasPrefix(token, "-c") && token != "-c":
-			continue
-		case strings.HasPrefix(token, "-"):
-			continue
-		default:
-			return token
-		}
-	}
-	return ""
 }
 
 func changedFileFromTaskRequest(req sessionTaskRequest) sessionTaskStateFile {
