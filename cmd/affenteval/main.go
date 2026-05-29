@@ -1157,6 +1157,9 @@ type batchSummary struct {
 	ContextCompactionSummaryEmpty           int
 	ContextCompactionPolicyObserved         int
 	ContextCompactionMaxPolicyPressure      int
+	ContextCompactionPostPolicyObserved     int
+	ContextCompactionPostPolicyStillOver    int
+	ContextCompactionMaxPostPolicyPressure  int
 	ContextCompactionExamples               []agenteval.ContextCompaction
 	ContextInjections                       int
 	ContextInjectionBySource                map[string]int
@@ -1437,6 +1440,11 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ContextCompactionPolicyObserved += res.ContextCompactions.PolicyObserved
 	if res.ContextCompactions.MaxPolicyPressurePercent > s.ContextCompactionMaxPolicyPressure {
 		s.ContextCompactionMaxPolicyPressure = res.ContextCompactions.MaxPolicyPressurePercent
+	}
+	s.ContextCompactionPostPolicyObserved += res.ContextCompactions.PostPolicyObserved
+	s.ContextCompactionPostPolicyStillOver += res.ContextCompactions.PostPolicyStillOverTrigger
+	if res.ContextCompactions.MaxPostPolicyPressurePercent > s.ContextCompactionMaxPostPolicyPressure {
+		s.ContextCompactionMaxPostPolicyPressure = res.ContextCompactions.MaxPostPolicyPressurePercent
 	}
 	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ContextInjections += res.ContextInjections.Count
@@ -1942,7 +1950,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
 	)
-	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_reduced_bytes:%.0f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,policy_observed:%d,max_policy_pressure:%d%%,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
+	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_reduced_bytes:%.0f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,policy_observed:%d,max_policy_pressure:%d%%,post_policy_observed:%d,post_policy_over:%d,max_post_policy_pressure:%d%%,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
 		batchAverage(s.ContextCompactions, s.Total),
 		batchAverage(s.ContextCompactionsReactive, s.Total),
 		batchAverage(s.ContextCompactionRemoved, s.Total),
@@ -1952,6 +1960,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
 		s.ContextCompactionPolicyObserved,
 		s.ContextCompactionMaxPolicyPressure,
+		s.ContextCompactionPostPolicyObserved,
+		s.ContextCompactionPostPolicyStillOver,
+		s.ContextCompactionMaxPostPolicyPressure,
 		batchAverage(s.ContextInjections, s.Total),
 		batchAverage(s.ContextInjectionBytes, s.Total),
 		batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
@@ -2082,7 +2093,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		)
 	}
 	if s.ContextCompactions > 0 {
-		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d,policy_observed=%d,max_policy_pressure=%d%%",
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d,policy_observed=%d,max_policy_pressure=%d%%,post_policy_observed=%d,post_policy_over=%d,max_post_policy_pressure=%d%%",
 			s.ContextCompactions,
 			s.ContextCompactionsReactive,
 			s.ContextCompactionRemoved,
@@ -2092,6 +2103,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.ContextCompactionSummaryEmpty,
 			s.ContextCompactionPolicyObserved,
 			s.ContextCompactionMaxPolicyPressure,
+			s.ContextCompactionPostPolicyObserved,
+			s.ContextCompactionPostPolicyStillOver,
+			s.ContextCompactionMaxPostPolicyPressure,
 		)
 	}
 	if s.ContextInjections > 0 {
@@ -3945,6 +3959,9 @@ type batchResultRecord struct {
 	ContextCompactionSummaryEmpty          int                                        `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionPolicyObserved        int                                        `json:"context_compaction_policy_observed,omitempty"`
 	ContextCompactionMaxPolicyPressure     int                                        `json:"context_compaction_max_policy_pressure_percent,omitempty"`
+	ContextCompactionPostPolicyObserved    int                                        `json:"context_compaction_post_policy_observed,omitempty"`
+	ContextCompactionPostPolicyStillOver   int                                        `json:"context_compaction_post_policy_still_over_trigger,omitempty"`
+	ContextCompactionMaxPostPolicyPressure int                                        `json:"context_compaction_max_post_policy_pressure_percent,omitempty"`
 	ContextCompactionExamples              []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
 	ContextInjections                      int                                        `json:"context_injections,omitempty"`
 	ContextInjectionBySource               map[string]int                             `json:"context_injection_by_source,omitempty"`
@@ -4069,6 +4086,9 @@ type batchSummaryRecord struct {
 	AvgContextSummaryEmpty                  float64                                          `json:"avg_context_summary_empty"`
 	ContextCompactionPolicyObserved         int                                              `json:"context_compaction_policy_observed,omitempty"`
 	ContextCompactionMaxPolicyPressure      int                                              `json:"context_compaction_max_policy_pressure_percent,omitempty"`
+	ContextCompactionPostPolicyObserved     int                                              `json:"context_compaction_post_policy_observed,omitempty"`
+	ContextCompactionPostPolicyStillOver    int                                              `json:"context_compaction_post_policy_still_over_trigger,omitempty"`
+	ContextCompactionMaxPostPolicyPressure  int                                              `json:"context_compaction_max_post_policy_pressure_percent,omitempty"`
 	AvgContextInjections                    float64                                          `json:"avg_context_injections"`
 	AvgContextInjectionBytes                float64                                          `json:"avg_context_injection_bytes"`
 	AvgContextInjectionEstimatedTokens      float64                                          `json:"avg_context_injection_estimated_tokens"`
@@ -4354,6 +4374,9 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextCompactionSummaryEmpty:          res.ContextCompactions.SummaryEmpty,
 		ContextCompactionPolicyObserved:        res.ContextCompactions.PolicyObserved,
 		ContextCompactionMaxPolicyPressure:     res.ContextCompactions.MaxPolicyPressurePercent,
+		ContextCompactionPostPolicyObserved:    res.ContextCompactions.PostPolicyObserved,
+		ContextCompactionPostPolicyStillOver:   res.ContextCompactions.PostPolicyStillOverTrigger,
+		ContextCompactionMaxPostPolicyPressure: res.ContextCompactions.MaxPostPolicyPressurePercent,
 		ContextCompactionExamples:              cloneContextCompactionExamples(res.ContextCompactions.Examples),
 		ContextInjections:                      res.ContextInjections.Count,
 		ContextInjectionBySource:               cloneStringIntMap(res.ContextInjections.BySource),
@@ -4599,6 +4622,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		AvgContextSummaryEmpty:                  batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
 		ContextCompactionPolicyObserved:         s.ContextCompactionPolicyObserved,
 		ContextCompactionMaxPolicyPressure:      s.ContextCompactionMaxPolicyPressure,
+		ContextCompactionPostPolicyObserved:     s.ContextCompactionPostPolicyObserved,
+		ContextCompactionPostPolicyStillOver:    s.ContextCompactionPostPolicyStillOver,
+		ContextCompactionMaxPostPolicyPressure:  s.ContextCompactionMaxPostPolicyPressure,
 		AvgContextInjections:                    batchAverage(s.ContextInjections, s.Total),
 		AvgContextInjectionBytes:                batchAverage(s.ContextInjectionBytes, s.Total),
 		AvgContextInjectionEstimatedTokens:      batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
@@ -5965,7 +5991,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, " loop_protocol_calibration=requests:%d,answers:%d", res.LoopProtocolCalibrationRequests.Count, res.LoopProtocolCalibrations.Count)
 	}
 	if res.ContextCompactions.Count > 0 {
-		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d,policy_observed=%d,max_policy_pressure=%d%%",
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d,policy_observed=%d,max_policy_pressure=%d%%,post_policy_observed=%d,post_policy_over=%d,max_post_policy_pressure=%d%%",
 			res.ContextCompactions.Count,
 			res.ContextCompactions.Reactive,
 			res.ContextCompactions.RemovedMessages,
@@ -5975,6 +6001,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ContextCompactions.SummaryEmpty,
 			res.ContextCompactions.PolicyObserved,
 			res.ContextCompactions.MaxPolicyPressurePercent,
+			res.ContextCompactions.PostPolicyObserved,
+			res.ContextCompactions.PostPolicyStillOverTrigger,
+			res.ContextCompactions.MaxPostPolicyPressurePercent,
 		)
 	}
 	if res.ContextInjections.Count > 0 {

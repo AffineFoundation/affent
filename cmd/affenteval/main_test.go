@@ -1802,19 +1802,23 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			}},
 		},
 		ContextCompactions: agenteval.ContextCompactionStats{
-			Count:                    2,
-			Reactive:                 1,
-			Proactive:                1,
-			RemovedMessages:          64,
-			SummaryBytes:             4096,
-			PolicyObserved:           1,
-			MaxPolicyPressurePercent: 129,
+			Count:                        2,
+			Reactive:                     1,
+			Proactive:                    1,
+			RemovedMessages:              64,
+			SummaryBytes:                 4096,
+			PolicyObserved:               1,
+			MaxPolicyPressurePercent:     129,
+			PostPolicyObserved:           1,
+			PostPolicyStillOverTrigger:   1,
+			MaxPostPolicyPressurePercent: 103,
 			Examples: []agenteval.ContextCompaction{{
 				TurnID:                     "turn-compact-print",
 				BeforeMessages:             72,
 				AfterMessages:              24,
 				RemovedMessages:            48,
 				EstimatedInputTokens:       90000,
+				AfterEstimatedInputTokens:  72000,
 				TriggerInputTokens:         70000,
 				ModelContextWindowTokens:   100000,
 				ReservedOutputTokens:       30000,
@@ -1918,7 +1922,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,reduced_bytes=0,summary_bytes=4096,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=129% context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:policy_missing,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1,ctx_artifacts:1,missing_artifacts:0 omitted=512/4096 ctx_trunc=3,omitted=9216,artifacts=1,missing_artifacts=0 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_turn_checkpoints=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 loop_protocol_calibration=requests:1,answers:1 compactions=2,reactive=1,removed=64,reduced_bytes=0,summary_bytes=4096,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=129%,post_policy_observed=1,post_policy_over=1,max_post_policy_pressure=103% context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:policy_missing,context_compaction:post_pressure,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context,verifier,verifier:output_truncated delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 focused_task_sources=explore:2 subagent_by_mode=review:1 subagent_sources=review:3 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -1934,7 +1938,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence" situation="current risk: dashboard values need network refs" last_turn="id=turn-prev reason=max_turns memory_searches=3 memory_misses=2 session_search=1"`,
 		`loop_protocol_calibration_request_example: loop_id=longrun status=draft questions=1 answers=0 path=.affent/loops/longrun/LOOP.md event_seq=4 question="What should pause this loop?"`,
 		`loop_protocol_calibration_example: loop_id=longrun status=draft questions=1 answers=1 path=.affent/loops/longrun/LOOP.md event_seq=5 question="What should pause this loop?" answer="Pause when browser evidence is missing."`,
-		`context_compaction_example: turn=turn-compact-print reactive=true messages=72->24 removed=48 policy=estimated:90000,trigger:70000,model_window:100000,reserved_output:30000,trigger_percent:80,pressure:129% summary_state=present summary_bytes=2048 reason=context_overflow loop_anchor="LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=full" preview="USER_CONTEXT: keep browser evidence and recovery anchors."`,
+		`context_compaction_example: turn=turn-compact-print reactive=true messages=72->24 removed=48 policy=estimated:90000,trigger:70000,model_window:100000,reserved_output:30000,trigger_percent:80,pressure:129%,after:72000,after_pressure:103% summary_state=present summary_bytes=2048 reason=context_overflow loop_anchor="LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=full" preview="USER_CONTEXT: keep browser evidence and recovery anchors."`,
 		`context_injection_example: turn=turn-1 source=account_access bytes=1200 estimated_tokens=300 title="Account access context injected" summary="Account-level environment and SSH access hints were made available." preview="Configured environment variables: GITHUB_TOKEN"`,
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
@@ -2487,18 +2491,22 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			}},
 		},
 		ContextCompactions: agenteval.ContextCompactionStats{
-			Count:                    1,
-			Reactive:                 1,
-			RemovedMessages:          32,
-			SummaryBytes:             2048,
-			PolicyObserved:           1,
-			MaxPolicyPressurePercent: 120,
+			Count:                        1,
+			Reactive:                     1,
+			RemovedMessages:              32,
+			SummaryBytes:                 2048,
+			PolicyObserved:               1,
+			MaxPolicyPressurePercent:     120,
+			PostPolicyObserved:           1,
+			PostPolicyStillOverTrigger:   0,
+			MaxPostPolicyPressurePercent: 95,
 			Examples: []agenteval.ContextCompaction{{
 				TurnID:                     "turn-summary",
 				BeforeMessages:             70,
 				AfterMessages:              22,
 				RemovedMessages:            48,
 				EstimatedInputTokens:       48000,
+				AfterEstimatedInputTokens:  38000,
 				TriggerInputTokens:         40000,
 				ModelContextWindowTokens:   70000,
 				ReservedOutputTokens:       30000,
@@ -2580,7 +2588,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_turn_checkpoint:50.0%,loop_protocol_feed:50.0%,loop_protocol_calibration_request:50.0%,loop_protocol_calibration:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,policy_observed:1,max_policy_pressure:120%,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,policy_observed:1,max_policy_pressure:120%,post_policy_observed:1,post_policy_over:0,max_post_policy_pressure:95%,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
 		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -2648,10 +2656,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "loop_protocol_feed_scenarios=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1") {
 		t.Fatalf("summary output missing loop protocol feed rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,reduced_bytes=0,summary_bytes=2048,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=120%") {
+	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,reduced_bytes=0,summary_bytes=2048,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=120%,post_policy_observed=1,post_policy_over=0,max_post_policy_pressure=95%") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120% summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
+	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120%,after:38000,after_pressure:95% summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
 		t.Fatalf("summary output missing context compaction example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
@@ -3252,20 +3260,24 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			}},
 		},
 		ContextCompactions: agenteval.ContextCompactionStats{
-			Count:                    3,
-			Reactive:                 1,
-			RemovedMessages:          48,
-			SummaryBytes:             3072,
-			SummaryMissing:           1,
-			SummaryEmpty:             1,
-			PolicyObserved:           1,
-			MaxPolicyPressurePercent: 125,
+			Count:                        3,
+			Reactive:                     1,
+			RemovedMessages:              48,
+			SummaryBytes:                 3072,
+			SummaryMissing:               1,
+			SummaryEmpty:                 1,
+			PolicyObserved:               1,
+			MaxPolicyPressurePercent:     125,
+			PostPolicyObserved:           1,
+			PostPolicyStillOverTrigger:   1,
+			MaxPostPolicyPressurePercent: 110,
 			Examples: []agenteval.ContextCompaction{{
 				TurnID:                     "turn-jsonl",
 				BeforeMessages:             80,
 				AfterMessages:              24,
 				RemovedMessages:            56,
 				EstimatedInputTokens:       50000,
+				AfterEstimatedInputTokens:  44000,
 				TriggerInputTokens:         40000,
 				ModelContextWindowTokens:   70000,
 				ReservedOutputTokens:       30000,
@@ -3445,10 +3457,13 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"context_compaction_summary_missing":  float64(1),
 		"context_compaction_summary_empty":    float64(1),
 		"context_compaction_policy_observed":  float64(1),
-		"context_compaction_max_policy_pressure_percent": float64(125),
-		"context_injections":                             float64(2),
-		"context_injection_bytes":                        float64(3200),
-		"context_injection_estimated_tokens":             float64(800),
+		"context_compaction_max_policy_pressure_percent":      float64(125),
+		"context_compaction_post_policy_observed":             float64(1),
+		"context_compaction_post_policy_still_over_trigger":   float64(1),
+		"context_compaction_max_post_policy_pressure_percent": float64(110),
+		"context_injections":                                  float64(2),
+		"context_injection_bytes":                             float64(3200),
+		"context_injection_estimated_tokens":                  float64(800),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -4529,14 +4544,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			ProtocolPath:            ".affent/loops/taostats-rendered/LOOP.md",
 			EventSeq:                3,
 		}},
-		ContextCompactions:                 1,
-		ContextCompactionsReactive:         1,
-		ContextCompactionRemoved:           32,
-		ContextCompactionSummary:           2048,
-		ContextCompactionSummaryMissing:    1,
-		ContextCompactionSummaryEmpty:      1,
-		ContextCompactionPolicyObserved:    1,
-		ContextCompactionMaxPolicyPressure: 125,
+		ContextCompactions:                     1,
+		ContextCompactionsReactive:             1,
+		ContextCompactionRemoved:               32,
+		ContextCompactionSummary:               2048,
+		ContextCompactionSummaryMissing:        1,
+		ContextCompactionSummaryEmpty:          1,
+		ContextCompactionPolicyObserved:        1,
+		ContextCompactionMaxPolicyPressure:     125,
+		ContextCompactionPostPolicyObserved:    1,
+		ContextCompactionPostPolicyStillOver:   1,
+		ContextCompactionMaxPostPolicyPressure: 110,
 		ContextCompactionExamples: []agenteval.ContextCompaction{{
 			Scenario:                   "taostats-rendered",
 			TurnID:                     "turn-summary-jsonl",
@@ -4544,6 +4562,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			AfterMessages:              20,
 			RemovedMessages:            44,
 			EstimatedInputTokens:       50000,
+			AfterEstimatedInputTokens:  44000,
 			TriggerInputTokens:         40000,
 			ModelContextWindowTokens:   70000,
 			ReservedOutputTokens:       30000,
@@ -5374,6 +5393,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		contextCompactionExample["scenario"] != "taostats-rendered" ||
 		contextCompactionExample["turn_id"] != "turn-summary-jsonl" ||
 		contextCompactionExample["removed_messages"] != float64(44) ||
+		contextCompactionExample["after_estimated_input_tokens"] != float64(44000) ||
 		contextCompactionExample["reason"] != "context_overflow" ||
 		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "JSONL summary evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
