@@ -1801,6 +1801,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		Events:                       events,
 		MaxTurnSteps:                 7,
 		MaxToolCalls:                 5,
+		SessionScheduleRunner:        true,
 		MaxTurnInputTokens:           12345,
 		ToolResultMaxBytesInContext:  1234,
 		ToolResultContextBudgetBytes: 5678,
@@ -1861,6 +1862,28 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		len(payload.Workspace.RootEntries) == 0 ||
 		payload.Workspace.RootEntries[0].Name != "README.md" {
 		t.Fatalf("workspace surface = %+v", payload.Workspace)
+	}
+}
+
+func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: SessionScheduleToolName, CatalogGroup: "Core"})
+	loop := &Loop{
+		Tools:  reg,
+		Events: events,
+	}
+	loop.publishRuntimeSurface("turn_surface", TurnOptions{})
+	ev := <-events
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if !payload.Capabilities.SessionSchedule {
+		t.Fatalf("capabilities = %+v, want session_schedule tool capability", payload.Capabilities)
+	}
+	if payload.Capabilities.SessionScheduleRunner {
+		t.Fatalf("capabilities = %+v, runner must be explicit instead of inferred from tool registration", payload.Capabilities)
 	}
 }
 

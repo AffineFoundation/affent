@@ -731,6 +731,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		MaxTurnSteps:           p.cfg.MaxTurnSteps,
 		MaxTurnInputTokens:     p.cfg.MaxTurnInputTokens,
 		FinalNoToolsOnMaxTurns: true,
+		SessionScheduleRunner:  !p.cfg.EvalMode,
 		PerCallTimeout:         perCallTimeout,
 		MaxTransientRetries:    p.cfg.MaxTransientRetries,
 		TransientBackoff:       retryBackoff,

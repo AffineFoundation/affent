@@ -112,6 +112,10 @@ type Loop struct {
 	Log          zerolog.Logger
 	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps
 	MaxToolCalls int // total tool calls per user turn; zero falls back to the effective MaxTurnSteps
+	// SessionScheduleRunner reports whether session_schedule is backed by a
+	// process-owned background runner. Tool presence alone only means schedules
+	// can be created or managed for this turn.
+	SessionScheduleRunner bool
 	// MaxTurnInputTokens caps aggregate input tokens reported by the upstream
 	// provider for one user turn. Zero uses DefaultMaxTurnInputTokens; negative
 	// disables the budget for backends that do not report reliable usage.
@@ -2810,6 +2814,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		}
 		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(catalog)
 		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)
+		payload.Capabilities.SessionScheduleRunner = payload.Capabilities.SessionSchedule && l.SessionScheduleRunner
 		if len(payload.Capabilities.WorkspaceTools) > 0 {
 			payload.Workspace = runtimeWorkspaceSurface(l.WorkspaceRoot)
 		}
@@ -2838,21 +2843,20 @@ func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
 	}
 	workspaceTools := runtimeWorkspaceToolsForRegistry(reg)
 	return sse.RuntimeCapabilities{
-		Builtins:              runtimeHasCoreWorkspaceTools(workspaceTools),
-		WorkspaceTools:        workspaceTools,
-		Memory:                hasRegisteredTool(reg, MemoryToolName),
-		Plan:                  hasRegisteredTool(reg, PlanToolName),
-		LoopProtocol:          hasRegisteredTool(reg, LoopProtocolToolName),
-		SessionSchedule:       hasRegisteredTool(reg, SessionScheduleToolName),
-		SessionScheduleRunner: hasRegisteredTool(reg, SessionScheduleToolName),
-		SessionSearch:         hasRegisteredTool(reg, SessionSearchToolName),
-		WebFetch:              hasRegisteredTool(reg, "web_fetch"),
-		WebSearch:             hasRegisteredTool(reg, "web_search"),
-		Browser:               hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
-		Subagent:              hasRegisteredTool(reg, SubagentToolName),
-		FocusedTasks:          hasRegisteredTool(reg, FocusedTaskToolName),
-		Skill:                 hasRegisteredTool(reg, SkillToolName),
-		MCP:                   registryHasMCPTools(reg),
+		Builtins:        runtimeHasCoreWorkspaceTools(workspaceTools),
+		WorkspaceTools:  workspaceTools,
+		Memory:          hasRegisteredTool(reg, MemoryToolName),
+		Plan:            hasRegisteredTool(reg, PlanToolName),
+		LoopProtocol:    hasRegisteredTool(reg, LoopProtocolToolName),
+		SessionSchedule: hasRegisteredTool(reg, SessionScheduleToolName),
+		SessionSearch:   hasRegisteredTool(reg, SessionSearchToolName),
+		WebFetch:        hasRegisteredTool(reg, "web_fetch"),
+		WebSearch:       hasRegisteredTool(reg, "web_search"),
+		Browser:         hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
+		Subagent:        hasRegisteredTool(reg, SubagentToolName),
+		FocusedTasks:    hasRegisteredTool(reg, FocusedTaskToolName),
+		Skill:           hasRegisteredTool(reg, SkillToolName),
+		MCP:             registryHasMCPTools(reg),
 	}
 }
 
