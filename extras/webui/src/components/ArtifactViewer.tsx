@@ -10,6 +10,7 @@ import {
 } from "../view/artifactViewer";
 import { formatByteCount } from "../view/byteFormat";
 import type { UseAsDraft } from "../view/draftSource";
+import { isToolResultStoragePath } from "../view/toolResultDisplay";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
 import { HighlightText } from "./HighlightText";
@@ -42,14 +43,17 @@ export function ArtifactViewer({
   const activeViewMode = jsonPreview && viewMode === "json" ? "json" : "text";
   const displayedText = artifact.state === "ready" && activeViewMode === "json" ? jsonPreview ?? artifact.chunk.text : artifact.state === "ready" ? artifact.chunk.text : "";
   const matchPreviews = artifact.state === "ready" ? buildArtifactMatchPreviews(displayedText, artifact.query) : [];
+  const path = artifact.state === "ready" ? artifact.chunk.path : artifact.path;
+  const isStorageOutput = isToolResultStoragePath(path);
+  const referenceLabel = isStorageOutput ? "Saved full tool output" : path;
 
   return (
     <section className="artifact-viewer" data-state={artifact.state} data-testid="artifact-viewer">
       <header className="artifact-head">
         <div>
           <span className="artifact-eyebrow">File preview</span>
-          <h3>{displayName(artifact.state === "ready" ? artifact.chunk.path : artifact.path)}</h3>
-          <code>{artifact.state === "ready" ? artifact.chunk.path : artifact.path}</code>
+          <h3>{isStorageOutput ? "Saved tool output" : displayName(path)}</h3>
+          <code>{isStorageOutput ? "Stored full output" : path}</code>
           {artifact.state === "ready" ? (
             <small className="artifact-head-meta">
               {formatByteCount(stats?.loadedBytes ?? 0)} loaded of {formatByteCount(stats?.totalBytes ?? 0)} total
@@ -98,13 +102,13 @@ export function ArtifactViewer({
               <button
                 type="button"
                 className="node-action"
-                onClick={() => onUseAsDraft(artifactLoadedTextDraft(artifact.chunk.path, artifact.chunk.text), "artifact_text")}
+                onClick={() => onUseAsDraft(artifactLoadedTextDraft(referenceLabel, artifact.chunk.text), "artifact_text")}
                 disabled={artifact.chunk.text.trim() === ""}
               >
                 Use text
               </button>
             ) : null}
-            {artifactDownloadHref ? (
+            {artifactDownloadHref && !isStorageOutput ? (
               <a className="node-action" href={artifactDownloadHref} download={displayName(artifact.chunk.path)}>
                 Download
               </a>
@@ -115,8 +119,8 @@ export function ArtifactViewer({
               panelClassName="artifact-copy-menu-panel"
               triggerClassName="node-action artifact-copy-trigger"
             >
-              <CopyButton label="Copy path" value={artifact.chunk.path} className="node-action" />
-              <CopyButton label="Copy evidence" value={artifactChunkEvidenceText(artifact.chunk)} className="node-action" />
+              {!isStorageOutput ? <CopyButton label="Copy path" value={artifact.chunk.path} className="node-action" /> : null}
+              <CopyButton label="Copy evidence" value={artifactChunkEvidenceText({ ...artifact.chunk, path: referenceLabel })} className="node-action" />
               <CopyButton label="Copy text" value={artifact.chunk.text} className="node-action" />
             </CopyMenu>
           </div>
@@ -131,11 +135,11 @@ export function ArtifactViewer({
                 <span>Match context</span>
                 <span className="artifact-match-tools">
                   {stats && stats.matchCount > matchPreviews.length ? <small>first {matchPreviews.length}</small> : null}
-                  <CopyButton label="Copy matches" value={artifactMatchesText(artifact.chunk.path, artifact.query, matchPreviews)} />
+                  <CopyButton label="Copy matches" value={artifactMatchesText(referenceLabel, artifact.query, matchPreviews)} />
                   {onUseAsDraft ? (
                     <button
                       type="button"
-                      onClick={() => onUseAsDraft(artifactMatchesDraft(artifact.chunk.path, artifact.query, matchPreviews), "evidence")}
+                      onClick={() => onUseAsDraft(artifactMatchesDraft(referenceLabel, artifact.query, matchPreviews), "evidence")}
                     >
                       Use matches
                     </button>

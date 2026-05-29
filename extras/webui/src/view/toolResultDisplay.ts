@@ -27,7 +27,7 @@ function isRawSourceCapture(source: ToolResultSource): boolean {
   return toolNames(source).some((tool) => rawSourceCaptureTools.has(tool));
 }
 
-function isToolResultStoragePath(path: string | undefined): boolean {
+export function isToolResultStoragePath(path: string | undefined): boolean {
   if (typeof path !== "string") return false;
   const normalized = path.replace(/\\/g, "/");
   if (/(?:^|\/)\.affent\/artifacts\/tool-results\//.test(normalized)) return true;

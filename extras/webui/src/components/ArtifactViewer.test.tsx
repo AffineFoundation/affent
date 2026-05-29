@@ -34,7 +34,9 @@ describe("ArtifactViewer", () => {
     );
 
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("File preview");
-    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("000001-c1.txt");
+    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("Saved tool output");
+    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("Stored full output");
+    expect(screen.getByTestId("artifact-viewer")).not.toHaveTextContent("000001-c1.txt");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("20 B loaded of 20 B total");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("partial load");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("more available");
@@ -42,19 +44,16 @@ describe("ArtifactViewer", () => {
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("20 loaded");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("100% loaded");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("1 match");
-    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt");
-    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("download", "000001-c1.txt");
+    expect(screen.queryByRole("link", { name: "Download" })).toBeNull();
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("Line 1");
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("hay needle stack");
     expect(screen.getAllByText("needle").every((node) => node.tagName.toLowerCase() === "mark")).toBe(true);
     await user.click(screen.getByRole("button", { name: "Copy file" }));
-    await user.click(screen.getByRole("button", { name: "Copy path" }));
-    expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");
-    await user.click(screen.getByRole("button", { name: "Copy file" }));
+    expect(screen.queryByRole("button", { name: "Copy path" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Copy evidence" }));
     expect(writeText).toHaveBeenCalledWith(
       [
-        "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
+        "Artifact evidence for Saved full tool output",
         "Loaded: 20 B of 20 B",
         "Status: partial load",
       ].join("\n"),
@@ -65,7 +64,7 @@ describe("ArtifactViewer", () => {
     await user.click(screen.getByRole("button", { name: "Copy matches" }));
     expect(writeText).toHaveBeenCalledWith(
       [
-        "File: .affent/artifacts/tool-results/000001-c1.txt",
+        "File: Saved full tool output",
         "Query: needle",
         "Line 1: hay needle stack",
       ].join("\n"),
@@ -74,7 +73,7 @@ describe("ArtifactViewer", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [
         "Use this artifact evidence in the next step:",
-        "File: .affent/artifacts/tool-results/000001-c1.txt",
+        "File: Saved full tool output",
         "Query: needle",
         "Matches:",
         "Line 1: hay needle stack",
@@ -90,7 +89,7 @@ describe("ArtifactViewer", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [
         "Use this loaded file text in the next step:",
-        "File: .affent/artifacts/tool-results/000001-c1.txt",
+        "File: Saved full tool output",
         "Text:\nhay needle stack",
       ].join("\n"),
       "artifact_text",
