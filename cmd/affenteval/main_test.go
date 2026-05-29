@@ -368,6 +368,13 @@ func TestRunTraceFileAppliesQualityGates(t *testing.T) {
 	if manifest.QualityGatesPassed == nil || *manifest.QualityGatesPassed {
 		t.Fatalf("manifest quality_gates_passed = %#v", manifest.QualityGatesPassed)
 	}
+	if manifest.RecoveryGuide == nil ||
+		!strings.Contains(manifest.RecoveryGuide.Summary, "task checks passed but quality gates failed") ||
+		!strings.Contains(manifest.RecoveryGuide.ContinuePrompt, "Task checks passed, but quality gates failed") ||
+		strings.Contains(manifest.RecoveryGuide.ContinuePrompt, "Use this passing eval as baseline evidence") ||
+		!testStringSliceContains(manifest.RecoveryGuide.Inspect, "quality_gate_failures") {
+		t.Fatalf("manifest recovery guide did not reflect quality gate failure: %+v", manifest.RecoveryGuide)
+	}
 	for _, want := range []string{
 		"tool_error_rate 1.000 > max 0.000",
 		"plan_error_rate 1.000 > max 0.000",
@@ -376,6 +383,14 @@ func TestRunTraceFileAppliesQualityGates(t *testing.T) {
 		if !testStringSliceContains(manifest.QualityGateFailures, want) {
 			t.Fatalf("manifest quality_gate_failures = %#v, want %q", manifest.QualityGateFailures, want)
 		}
+	}
+	timeline, err := os.ReadFile(filepath.Join(outDir, "affenteval-timeline.md"))
+	if err != nil {
+		t.Fatalf("read timeline: %v", err)
+	}
+	if !strings.Contains(string(timeline), "Task checks passed, but quality gates failed") ||
+		strings.Contains(string(timeline), "Use this passing eval as baseline evidence") {
+		t.Fatalf("timeline recovery guide did not reflect quality gate failure:\n%s", timeline)
 	}
 }
 

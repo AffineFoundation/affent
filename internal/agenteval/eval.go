@@ -1814,6 +1814,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "memory_update:missing") {
 		add("For memory_update:missing, inspect memory tool calls and result metadata; either fix the autonomous write decision or make the scenario expectation explicit about why no durable update should occur.")
 	}
+	if containsString(tags, "memory_update:available_unused") {
+		add("For memory_update:available_unused, inspect runtime_surface and tool_timeline; memory was available but never called, so diagnose recall/write decision triggers before changing storage semantics.")
+	}
 	if containsString(tags, "memory_update:absent_longrun") {
 		add("For memory_update:absent_longrun, inspect tool_timeline, loop checkpoints, and stable verified decisions; add memory only for durable future-use facts, not transient task state.")
 	}
@@ -1882,6 +1885,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"loop_protocol:calibration_backlog",
 		"loop_protocol:setup_tool_overrun",
 		"memory_update:missing",
+		"memory_update:available_unused",
 		"memory_update:absent_longrun",
 		"tool_budget:turn_overrun",
 		"research_checkpoint:no_external_evidence",
@@ -3090,6 +3094,7 @@ func UpdateDebugManifestQualityGates(path string, passed *bool, failures []strin
 	}
 	manifest.QualityGatesPassed = cloneBoolPtr(passed)
 	manifest.QualityGateFailures = append([]string(nil), failures...)
+	reconcileRecoveryGuideQualityGates(&manifest, passed, failures)
 	updated, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("encode debug manifest: %w", err)
@@ -3098,7 +3103,86 @@ func UpdateDebugManifestQualityGates(path string, passed *bool, failures []strin
 	if err := os.WriteFile(path, updated, 0o644); err != nil {
 		return fmt.Errorf("write debug manifest: %w", err)
 	}
+	if err := updateDebugTimelineQualityGateRecovery(manifest.TimelinePath, manifest.RecoveryGuide); err != nil {
+		return err
+	}
 	return nil
+}
+
+func reconcileRecoveryGuideQualityGates(manifest *DebugManifest, passed *bool, failures []string) {
+	if manifest == nil || passed == nil || *passed || len(failures) == 0 {
+		return
+	}
+	if manifest.RecoveryGuide == nil {
+		manifest.RecoveryGuide = &DebugRecoveryGuide{}
+	}
+	summary := "scenario failed quality gates; inspect quality_gate_failures before treating the run as baseline evidence"
+	promptPrefix := "Quality gates failed; inspect quality_gate_failures before treating this run as baseline evidence."
+	if manifest.OK {
+		summary = "scenario task checks passed but quality gates failed; do not use this run as baseline evidence until gate failures are understood"
+		promptPrefix = "Task checks passed, but quality gates failed; inspect quality_gate_failures before treating this run as baseline evidence."
+	} else {
+		summary = "scenario task checks and quality gates failed; inspect failures and quality_gate_failures before changing runtime behavior"
+		promptPrefix = "Task checks and quality gates failed; inspect failures and quality_gate_failures before changing runtime behavior."
+	}
+	manifest.RecoveryGuide.Summary = summary
+	if !containsString(manifest.RecoveryGuide.Inspect, "quality_gate_failures") {
+		manifest.RecoveryGuide.Inspect = append(manifest.RecoveryGuide.Inspect, "quality_gate_failures")
+	}
+	current := strings.TrimSpace(manifest.RecoveryGuide.ContinuePrompt)
+	switch {
+	case current == "":
+		manifest.RecoveryGuide.ContinuePrompt = promptPrefix
+	case strings.HasPrefix(current, promptPrefix):
+		manifest.RecoveryGuide.ContinuePrompt = current
+	case strings.HasPrefix(current, "Use this passing eval as baseline evidence."):
+		manifest.RecoveryGuide.ContinuePrompt = promptPrefix + strings.TrimPrefix(current, "Use this passing eval as baseline evidence.")
+	default:
+		manifest.RecoveryGuide.ContinuePrompt = promptPrefix + " " + current
+	}
+}
+
+func updateDebugTimelineQualityGateRecovery(path string, guide *DebugRecoveryGuide) error {
+	path = strings.TrimSpace(path)
+	if path == "" || guide == nil {
+		return nil
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return fmt.Errorf("read debug timeline: %w", err)
+	}
+	lines := strings.Split(string(raw), "\n")
+	changed := false
+	if strings.TrimSpace(guide.Summary) != "" {
+		changed = replaceTimelineLine(lines, "- summary:", "- summary: "+timelineInline(guide.Summary, timelineErrorPreviewBytes)) || changed
+	}
+	if strings.TrimSpace(guide.ContinuePrompt) != "" {
+		changed = replaceTimelineLine(lines, "- continue_prompt:", "- continue_prompt: "+timelineInline(guide.ContinuePrompt, timelineResultPreviewBytes)) || changed
+	}
+	if !changed {
+		return nil
+	}
+	updated := strings.Join(lines, "\n")
+	if !strings.HasSuffix(updated, "\n") {
+		updated += "\n"
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		return fmt.Errorf("write debug timeline: %w", err)
+	}
+	return nil
+}
+
+func replaceTimelineLine(lines []string, prefix, replacement string) bool {
+	for i, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+			lines[i] = replacement
+			return true
+		}
+	}
+	return false
 }
 
 func cloneBoolPtr(value *bool) *bool {

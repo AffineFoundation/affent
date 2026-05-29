@@ -253,6 +253,26 @@ func TestDebugRecoveryPriorityTagsIncludesResearchCheckpointEvidenceGap(t *testi
 	}
 }
 
+func TestDebugRecoveryPriorityTagsIncludesAvailableUnusedMemory(t *testing.T) {
+	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"memory_update:absent_longrun",
+		"memory_update:available_unused",
+		"tool_budget:turn_overrun",
+		"outcome:failed",
+		"misc:later",
+	}})
+	want := []string{
+		"outcome:failed",
+		"memory_update:available_unused",
+		"memory_update:absent_longrun",
+		"tool_budget:turn_overrun",
+		"misc:later",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",
@@ -5357,6 +5377,36 @@ func TestBuildDebugRecoveryGuideAddsToolBudgetRunawayAction(t *testing.T) {
 		"align runtime MaxToolCalls/MaxTurnSteps",
 		"runtime_surface",
 		"loop_turn_checkpoint_examples",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsAvailableUnusedMemoryAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/memory-unused",
+		TimelinePath:      "/tmp/affent-eval/memory-unused/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/memory-unused/affenteval-debug.json",
+		ToolStats: ToolRuntimeStats{
+			ToolRequests: 12,
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{Count: 1},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Capabilities: sse.RuntimeCapabilities{Memory: true},
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"memory_update:available_unused",
+		"memory was available but never called",
+		"diagnose recall/write decision triggers",
+		"runtime_surface",
+		"tool_timeline",
 	} {
 		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
 			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)
