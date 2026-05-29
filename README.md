@@ -1,13 +1,14 @@
 # Affent
 
-Affent is a browser-first agent runtime for durable, auditable software work.
+Affent is an AI coding-agent runtime with a Workbench, CLI, HTTP API, durable
+sessions, traces, memory, and evals.
 
 It turns an OpenAI-compatible model into an engineering operator that can plan a
 task, inspect a workspace, use tools, change files, verify results, recover
 after interruption, and explain its work from the same persistent session
-record. The browser Workbench is the primary operating surface; the CLI, HTTP
-API, traces, memory, plans, skills, and artifacts all read from the same
-file-backed state.
+record. The Workbench is the visual operating surface; the CLI, HTTP API,
+traces, memory, plans, skills, and artifacts all read from the same file-backed
+state.
 
 ## What Affent Provides
 
