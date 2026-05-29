@@ -53,7 +53,7 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		VerificationState: traceTaskVerificationState(trace),
 	}
 	if latest := latestTaskRequest(trace); latest != nil {
-		task.RequestMode = strings.TrimSpace(latest.Mode)
+		task.RequestMode = normalizeTaskRequestMode(latest.Mode)
 		task.RequestSource = strings.TrimSpace(latest.Source)
 		task.ScheduleID = strings.TrimSpace(latest.ScheduleID)
 		task.ScheduleKind = strings.TrimSpace(latest.ScheduleKind)

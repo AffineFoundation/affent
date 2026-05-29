@@ -87,6 +87,22 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	}
 }
 
+func TestDeriveTaskStateDefaultsBlankRequestModeToNormal(t *testing.T) {
+	got := DeriveTaskState(Trace{
+		Prompt:        "Run the scheduled check-in.",
+		TurnEndReason: "completed",
+		UserMessages: []UserMessage{{
+			Text:         "Scheduled check-in for session: due-one",
+			Source:       "schedule",
+			ScheduleID:   "sched_due",
+			ScheduleKind: "loop_tick",
+		}},
+	})
+	if got.RequestMode != "normal" || got.RequestSource != "schedule" || got.ScheduleID != "sched_due" || got.ScheduleKind != "loop_tick" {
+		t.Fatalf("request provenance = mode:%q source:%q schedule:%q kind:%q, want normalized scheduled request", got.RequestMode, got.RequestSource, got.ScheduleID, got.ScheduleKind)
+	}
+}
+
 func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 	original := TaskStateSnapshot{
 		Objective:    "ship task",
