@@ -194,6 +194,12 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByLabelText("Workspace path breadcrumbs")).toHaveTextContent(".");
     expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("src");
     expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("README.md");
+    await user.type(screen.getByLabelText("Search files"), "readme");
+    expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("README.md");
+    expect(screen.getByTestId("session-workspace-browser-list")).not.toHaveTextContent("src");
+    expect(screen.getByTestId("session-workspace-directory-table")).toHaveTextContent("README.md");
+    expect(screen.getByTestId("session-workspace-directory-table")).not.toHaveTextContent("src");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
     await user.click(within(screen.getByTestId("session-workspace-browser-list")).getByRole("button", { name: /src/ }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src");
     await user.click(within(screen.getByTestId("session-workspace-directory-table")).getByRole("button", { name: /README.md/ }));

@@ -208,6 +208,7 @@ export function SessionFilesPanel({
               <WorkspaceDirectory
                 file={workspaceReady}
                 parent={workspaceParent}
+                query={trimmedQuery}
                 onOpenPath={onOpenWorkspacePath}
                 onUseAsDraft={onUseAsDraft}
               />
@@ -258,6 +259,7 @@ export function SessionFilesPanel({
               <WorkspaceDirectoryPreview
                 file={workspaceReady}
                 parent={workspaceParent}
+                query={trimmedQuery}
                 onOpenPath={onOpenWorkspacePath}
                 onUseAsDraft={onUseAsDraft}
               />
@@ -433,15 +435,17 @@ function workspaceCrumbs(path: string): Array<{ label: string; path: string }> {
 function WorkspaceDirectory({
   file,
   parent,
+  query,
   onOpenPath,
   onUseAsDraft,
 }: {
   file: WorkspaceFileView;
   parent?: string;
+  query?: string;
   onOpenPath?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
-  const entries = [...file.entries].sort(compareWorkspaceEntries);
+  const entries = workspaceDirectoryEntries(file, query);
   return (
     <div className="session-workspace-browser-body">
       <span className="session-evidence-actions">
@@ -464,7 +468,7 @@ function WorkspaceDirectory({
           ))}
         </ol>
       ) : (
-        <div className="session-skills-empty">Directory is empty.</div>
+        <div className="session-skills-empty">{query ? `No entries matching "${query}".` : "Directory is empty."}</div>
       )}
       {file.hasMore ? <small className="session-workspace-browser-more">More entries are available; open a narrower path.</small> : null}
     </div>
@@ -474,15 +478,17 @@ function WorkspaceDirectory({
 function WorkspaceDirectoryPreview({
   file,
   parent,
+  query,
   onOpenPath,
   onUseAsDraft,
 }: {
   file: WorkspaceFileView;
   parent?: string;
+  query?: string;
   onOpenPath?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
-  const entries = [...file.entries].sort(compareWorkspaceEntries);
+  const entries = workspaceDirectoryEntries(file, query);
   return (
     <div className="session-file-preview session-workspace-directory-preview" data-testid="session-workspace-directory-preview">
       <div className="session-file-preview-head">
@@ -513,8 +519,8 @@ function WorkspaceDirectoryPreview({
         </ol>
       ) : (
         <div className="session-files-editor-empty compact">
-          <strong>Empty directory</strong>
-          <span>{file.path === "." ? "Workspace root has no visible entries." : `${file.path} has no visible entries.`}</span>
+          <strong>{query ? "No matches" : "Empty directory"}</strong>
+          <span>{query ? `No entries in this directory match "${query}".` : file.path === "." ? "Workspace root has no visible entries." : `${file.path} has no visible entries.`}</span>
         </div>
       )}
       <FileEditorStatus
@@ -522,11 +528,23 @@ function WorkspaceDirectoryPreview({
         path={file.path}
         lines={entries.length}
         countLabel={entries.length === 1 ? "entry" : "entries"}
-        detail={file.hasMore ? "more entries available" : file.detail}
+        detail={query ? `${file.entries.length} total` : file.hasMore ? "more entries available" : file.detail}
       />
       {file.hasMore ? <small className="session-workspace-browser-more">More entries are available; open a narrower path.</small> : null}
     </div>
   );
+}
+
+function workspaceDirectoryEntries(file: WorkspaceFileView, query?: string): WorkspaceFileEntryView[] {
+  const entries = [...file.entries].sort(compareWorkspaceEntries);
+  const cleanQuery = query?.trim();
+  if (!cleanQuery) return entries;
+  return entries.filter((entry) => workspaceEntryMatchesQuery(entry, cleanQuery));
+}
+
+function workspaceEntryMatchesQuery(entry: WorkspaceFileEntryView, query: string): boolean {
+  const haystack = [entry.name, entry.path, entry.kind, entry.size].filter(Boolean).join("\n").toLowerCase();
+  return haystack.includes(query.toLowerCase());
 }
 
 function WorkspaceDirectoryPreviewEntry({ entry, onOpenPath }: { entry: WorkspaceFileEntryView; onOpenPath?: (path: string) => void }) {
