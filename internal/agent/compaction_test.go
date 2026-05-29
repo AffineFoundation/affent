@@ -1302,6 +1302,15 @@ func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	if got := CompactTriggerInputTokensForModelPolicy(4096, 100_000, 80, 30_000, DefaultSummaryTriggerInputTokens); got != 4096 {
 		t.Fatalf("explicit output-reserved trigger = %d, want 4096", got)
 	}
+	if got := ClampAutoCompactTokenLimit(120_000, 131_072, 0, 0); got != 104_857 {
+		t.Fatalf("clamped auto compact limit = %d, want default 80%% policy 104857", got)
+	}
+	if got := ClampAutoCompactTokenLimit(90_000, 131_072, 0, 0); got != 90_000 {
+		t.Fatalf("provider lower auto compact limit = %d, want 90000", got)
+	}
+	if got := ClampAutoCompactTokenLimit(90_000, 100_000, 80, 30_000); got != 70_000 {
+		t.Fatalf("output-reserved auto compact limit = %d, want 70000", got)
+	}
 	if got := CompactTriggerBytesForModelPolicy(0, 100_000, 80, 30_000, DefaultSummaryTriggerBytes); got != 280_000 {
 		t.Fatalf("output-reserved byte trigger = %d, want 280000", got)
 	}

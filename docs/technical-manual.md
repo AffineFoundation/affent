@@ -1032,6 +1032,10 @@ message-count trigger fires. `affentctl --compact-trigger-input-tokens` and
 `affentserve --compact-trigger-input-tokens` can override that request-pressure
 trigger for evals, Workbench sessions, or small-context models; zero keeps the
 runtime-derived default and negative disables this proactive path.
+When model metadata exposes a provider auto-compact limit, Affent accepts it
+only up to the same effective model-window policy used elsewhere: by default
+80% of the known context window, further reduced when an output-token reserve is
+configured. Lower provider limits are preserved.
 Active session summaries expose the same estimated
 request-input pressure so Workbench can explain whether compaction risk is
 driven by message count, raw context bytes, or the next model request shape.

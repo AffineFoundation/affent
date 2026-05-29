@@ -50,6 +50,21 @@ func CompactTriggerInputTokensForModelPolicy(explicit, modelContextWindowTokens,
 	return trigger
 }
 
+// ClampAutoCompactTokenLimit applies Affent's effective model-window policy to
+// provider-advertised auto-compaction thresholds. Some providers expose their
+// own token limit; Affent accepts lower provider limits but caps higher values
+// with the same percent/output-reserve policy used for derived triggers.
+func ClampAutoCompactTokenLimit(providerLimit, modelContextWindowTokens, percent, reservedOutputTokens int) int {
+	if providerLimit <= 0 {
+		return 0
+	}
+	maxPolicy := CompactTriggerInputTokensForModelPolicy(0, modelContextWindowTokens, percent, reservedOutputTokens, 0)
+	if maxPolicy > 0 && providerLimit > maxPolicy {
+		return maxPolicy
+	}
+	return providerLimit
+}
+
 // CompactTriggerBytesForPolicy keeps the conversation-byte compactor aligned
 // with the request-input policy when a model context window is known. The byte
 // value is heuristic because provider tokenizers differ.

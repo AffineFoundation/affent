@@ -31,11 +31,7 @@ func resolveModelContextWindowFromProvider(cfg Config, logger zerolog.Logger) Co
 	}
 	cfg.ModelContextWindowTokens = meta.ContextWindowTokens
 	if cfg.CompactTriggerInputTokens == 0 && meta.AutoCompactTokenLimit > 0 {
-		limit := meta.AutoCompactTokenLimit
-		if maxPolicy := agent.CompactTriggerInputTokensForModelPolicy(0, cfg.ModelContextWindowTokens, 90, reservedOutputTokensForConfig(cfg), 0); maxPolicy > 0 && limit > maxPolicy {
-			limit = maxPolicy
-		}
-		cfg.CompactTriggerInputTokens = limit
+		cfg.CompactTriggerInputTokens = agent.ClampAutoCompactTokenLimit(meta.AutoCompactTokenLimit, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg))
 	}
 	logger.Info().
 		Str("model", cfg.Model).

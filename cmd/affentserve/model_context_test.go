@@ -37,8 +37,36 @@ func TestNewSessionPoolResolvesModelContextWindowFromProvider(t *testing.T) {
 	if pool.cfg.ModelContextWindowTokens != 131072 {
 		t.Fatalf("ModelContextWindowTokens = %d, want 131072", pool.cfg.ModelContextWindowTokens)
 	}
-	if pool.cfg.CompactTriggerInputTokens != 117964 {
-		t.Fatalf("CompactTriggerInputTokens = %d, want clamped provider limit 117964", pool.cfg.CompactTriggerInputTokens)
+	if pool.cfg.CompactTriggerInputTokens != 104857 {
+		t.Fatalf("CompactTriggerInputTokens = %d, want clamped default policy limit 104857", pool.cfg.CompactTriggerInputTokens)
+	}
+}
+
+func TestNewSessionPoolModelContextWindowHonorsCompactPercent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"ctx-model","context_window":100000,"auto_compact_token_limit":95000}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := Config{
+		Listen:                     "127.0.0.1:0",
+		MaxSessions:                4,
+		SessionIdleTTL:             "5m",
+		WorkspaceRoot:              t.TempDir(),
+		BaseURL:                    srv.URL + "/v1",
+		APIKey:                     "test",
+		Model:                      "ctx-model",
+		ModelContextWindowAuto:     true,
+		CompactTriggerInputPercent: 75,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	if pool.cfg.CompactTriggerInputTokens != 75000 {
+		t.Fatalf("CompactTriggerInputTokens = %d, want explicit 75%% policy limit 75000", pool.cfg.CompactTriggerInputTokens)
 	}
 }
 

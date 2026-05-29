@@ -605,8 +605,27 @@ func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
 	if got.modelContextWindowTokens != 131072 {
 		t.Fatalf("modelContextWindowTokens = %d, want 131072", got.modelContextWindowTokens)
 	}
-	if got.compactTriggerInputTokens != 117964 {
-		t.Fatalf("compactTriggerInputTokens = %d, want clamped provider limit 117964", got.compactTriggerInputTokens)
+	if got.compactTriggerInputTokens != 104857 {
+		t.Fatalf("compactTriggerInputTokens = %d, want clamped default policy limit 104857", got.compactTriggerInputTokens)
+	}
+}
+
+func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":100000,"auto_compact_token_limit":95000}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	cf := commonFlags{
+		baseURL:                srv.URL + "/v1",
+		model:                  "auto-model",
+		modelContextWindowAuto: true,
+		compactTriggerPercent:  75,
+	}
+	llm := agent.NewLLMClient(cf.baseURL, "", cf.model)
+	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
+	if got.compactTriggerInputTokens != 75000 {
+		t.Fatalf("compactTriggerInputTokens = %d, want explicit 75%% policy limit 75000", got.compactTriggerInputTokens)
 	}
 }
 
