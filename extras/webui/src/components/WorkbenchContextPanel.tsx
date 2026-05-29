@@ -431,7 +431,7 @@ function TaskStateCard({
   if (!hasTaskState(taskState)) return null;
   const tone = taskStateTone(taskState);
   const rows = compact([
-    taskState.request_mode && taskState.request_mode !== "normal" ? { label: "Request mode", value: requestModeSummary(taskState) } : undefined,
+    hasNonNormalRequestMode(taskState) ? { label: "Request mode", value: requestModeSummary(taskState) } : undefined,
     taskState.request_source ? { label: "Request source", value: requestSourceSummary(taskState) } : undefined,
     taskState.current_step ? { label: "Current step", value: taskState.current_step } : undefined,
     taskState.next_step ? { label: "Next step", value: taskState.next_step } : undefined,
@@ -543,16 +543,36 @@ function hasTaskState(taskState?: SessionTaskStateSummary): taskState is Session
   );
 }
 
+function hasNonNormalRequestMode(taskState: SessionTaskStateSummary): boolean {
+  const mode = taskState.request_mode?.trim().toLowerCase();
+  return Boolean(mode && mode !== "normal");
+}
+
 function requestModeSummary(taskState: SessionTaskStateSummary): string {
-  return taskState.request_mode?.trim().replace(/_/g, " ") || "normal";
+  const mode = taskState.request_mode?.trim().toLowerCase();
+  if (mode === "execute_plan") return "Execute plan";
+  if (mode === "plan_only") return "Plan only";
+  if (mode === "loop_setup") return "Loop setup";
+  return mode?.replace(/_/g, " ") || "Normal";
 }
 
 function requestSourceSummary(taskState: SessionTaskStateSummary): string {
+  const source = taskState.request_source?.trim().toLowerCase();
+  const kind = taskState.schedule_kind?.trim().toLowerCase();
+  if (source === "schedule") return compact(["Scheduled", scheduleKindSummary(kind)]).join(" ");
   return compact([
     taskState.request_source?.trim(),
-    taskState.schedule_kind?.trim(),
-    taskState.schedule_id?.trim(),
+    scheduleKindSummary(kind),
   ]).join(" · ");
+}
+
+function scheduleKindSummary(kind: string | undefined): string | undefined {
+  if (!kind) return undefined;
+  if (kind === "loop_tick") return "loop tick";
+  if (kind === "daily_checkin") return "daily check-in";
+  if (kind === "checkin") return "check-in";
+  if (kind === "custom") return "timer";
+  return kind.replace(/_/g, " ");
 }
 
 function taskStateTone(taskState: SessionTaskStateSummary): "ready" | "attention" | "error" {

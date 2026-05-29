@@ -282,9 +282,10 @@ describe("WorkbenchContextPanel", () => {
     const taskState = screen.getByTestId("workbench-task-state");
     expect(taskState).toHaveTextContent("Harden inline message editing");
     expect(taskState).toHaveTextContent("Request mode");
-    expect(taskState).toHaveTextContent("execute plan");
+    expect(taskState).toHaveTextContent("Execute plan");
     expect(taskState).toHaveTextContent("Request source");
-    expect(taskState).toHaveTextContent("schedule · checkin · sched_context");
+    expect(taskState).toHaveTextContent("Scheduled check-in");
+    expect(taskState).not.toHaveTextContent("sched_context");
     expect(taskState).toHaveTextContent("Current step");
     expect(taskState).toHaveTextContent("Wire task_state into Workbench Context");
     expect(taskState).toHaveTextContent("Next step");
