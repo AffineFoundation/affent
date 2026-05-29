@@ -20,11 +20,9 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByLabelText("Changes summary")).toHaveTextContent("Diff");
     expect(screen.getByTestId("session-changes-review")).toHaveTextContent("Review gap");
     expect(screen.getByTestId("session-changes-review")).toHaveTextContent("1 file needs current-file review");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Diff");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("1/2");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("1 stale");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Scale");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("+2 -1");
+    expect(screen.getByTestId("session-changes-statline")).toHaveTextContent("diff 1/2");
+    expect(screen.getByTestId("session-changes-statline")).toHaveTextContent("1 stale");
+    expect(screen.getByTestId("session-changes-statline")).toHaveTextContent("scale +2 -1");
     expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("Verify current file");
     expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("Diff may predate latest change");
     expect(screen.getByLabelText("Search changes")).toBeInTheDocument();
@@ -37,21 +35,23 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Open current" })[0]);
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Open current" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Copy path" })[0]);
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Copy diff" }));
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Copy diff" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Diff for src/payments.ts"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Diff preview may predate the latest change"));
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/edit.txt");
 
-    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Verify file" })[0]);
+    expect(within(screen.getByTestId("session-changes-list")).queryByRole("button", { name: "Copy path" })).toBeNull();
+    expect(within(screen.getByTestId("session-changes-list")).queryByRole("button", { name: "Verify file" })).toBeNull();
+    await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Verify file" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Path: src/payments.ts"), "changed_file");
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("+  return enabled;"), "changed_file");
@@ -113,9 +113,8 @@ describe("SessionChangesPanel", () => {
     const panel = screen.getByTestId("session-changes-panel");
     expect(screen.getByTestId("session-changes-review")).toHaveTextContent("Review gap");
     expect(screen.getByTestId("session-changes-review")).toHaveTextContent("No diff preview for game2048.py");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("Evidence");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("0/1");
-    expect(screen.getByLabelText("Change review facts")).toHaveTextContent("none captured");
+    expect(screen.getByTestId("session-changes-statline")).toHaveTextContent("evidence 0/1");
+    expect(screen.getByTestId("session-changes-statline")).toHaveTextContent("diff 0/1");
     expect(panel).toHaveTextContent("No diff preview captured");
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Diff/ })).toBeNull();
     expect(within(screen.getByLabelText("Change filters")).queryByRole("button", { name: /Issues/ })).toBeNull();

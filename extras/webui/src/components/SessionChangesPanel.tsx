@@ -44,23 +44,14 @@ export function SessionChangesPanel({
       </summary>
       <div className="session-skills-body">
         <div className="session-changes-overview" aria-label="Changes summary">
-          <div className="session-changes-overview-main">
-            <span>Review</span>
-            <strong>{changes.summary}</strong>
-            <small>{changes.detail || "No write or edit actions recorded."}</small>
-          </div>
           <div className="session-changes-review" data-tone={review.tone ?? "neutral"} data-testid="session-changes-review">
             <span>{review.label}</span>
             <strong>{review.title}</strong>
             <small>{review.detail}</small>
           </div>
-          <div className="session-changes-facts" aria-label="Change review facts">
-            {reviewFacts.map((fact) => (
-              <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
-                <small>{fact.label}</small>
-                <strong>{fact.value}</strong>
-                <b>{fact.detail}</b>
-              </span>
+          <div className="session-changes-statline" data-testid="session-changes-statline" aria-label="Change review summary">
+            {changeStatLine(reviewFacts).map((item) => (
+              <span key={item}>{item}</span>
             ))}
           </div>
           <div className="session-changes-filterbar" role="group" aria-label="Change filters">
@@ -123,6 +114,9 @@ export function SessionChangesPanel({
         {focusFile && !showChangeList && focusFile.diffPreview && focusFile.diffPreview.length > 0 ? (
           <ChangeDiff file={focusFile} />
         ) : null}
+        {focusFile && showChangeList && focusFile.diffPreview && focusFile.diffPreview.length > 0 ? (
+          <ChangeDiff file={focusFile} />
+        ) : null}
         {changes.files.length > 1 ? (
           <div className="session-skills-controls">
             <label className="session-skills-search">
@@ -160,22 +154,12 @@ export function SessionChangesPanel({
                       Open Files
                     </button>
                   ) : null}
-                  <CopyButton label="Copy path" value={file.path} className="ghost-action" />
-                  {file.diffPreview && file.diffPreview.length > 0 ? (
-                    <CopyButton label="Copy diff" value={changedFileDiffText(file)} className="ghost-action" />
-                  ) : null}
                   {file.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(file.artifactPath ?? "")}>
                       Open evidence
                     </button>
                   ) : null}
-                  {onUseAsDraft ? (
-                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(changedFileDraft(file), "changed_file")}>
-                      {changeDraftActionLabel(file)}
-                    </button>
-                  ) : null}
                 </span>
-                {file.diffPreview && file.diffPreview.length > 0 ? <ChangeDiff file={file} /> : null}
               </li>
             ))}
           </ol>
@@ -187,6 +171,17 @@ export function SessionChangesPanel({
       </div>
     </details>
   );
+}
+
+function changeStatLine(facts: ReturnType<typeof changesReviewFacts>): string[] {
+  return facts.map((fact) => {
+    if (fact.label === "Files") return `${fact.value} ${fact.value === "1" ? "file" : "files"}`;
+    if (fact.label === "Diff") return `diff ${fact.value}${fact.detail ? ` · ${fact.detail}` : ""}`;
+    if (fact.label === "Evidence") return `evidence ${fact.value}`;
+    if (fact.label === "Scale") return `scale ${fact.value}`;
+    if (fact.label === "Verify") return `verify ${fact.value}`;
+    return `${fact.label.toLowerCase()} ${fact.value}`;
+  });
 }
 
 function ChangeDiff({ file }: { file: SessionChangedFile }) {
