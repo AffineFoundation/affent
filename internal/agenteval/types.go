@@ -44,6 +44,11 @@ type Scenario struct {
 	// as a separate user turn against the same conversation.
 	Prompts []string
 
+	// PromptOptions carries per-turn runtime provenance for Prompts. Empty
+	// entries use the default direct-user turn. When Prompts is empty, the
+	// first option applies to Prompt.
+	PromptOptions []PromptOptions
+
 	// Setup populates the workspace directory before the run. May
 	// be nil for scenarios that need no fixture (a "does the agent
 	// refuse find /" scenario doesn't need any files on disk). The
@@ -59,6 +64,22 @@ type Scenario struct {
 	// Check sees the full captured Trace. Order is preserved in
 	// Outcome.Results so reporting is stable.
 	Checks []Check
+}
+
+type PromptOptions struct {
+	UserSource      string
+	UserDisplayText string
+	ScheduleID      string
+	ScheduleKind    string
+}
+
+func (o PromptOptions) turnOptions() agent.TurnOptions {
+	return agent.TurnOptions{
+		UserSource:      strings.TrimSpace(o.UserSource),
+		UserDisplayText: strings.TrimSpace(o.UserDisplayText),
+		ScheduleID:      strings.TrimSpace(o.ScheduleID),
+		ScheduleKind:    strings.TrimSpace(o.ScheduleKind),
+	}
 }
 
 // Check is one named binary assertion over a Trace. Checks should be

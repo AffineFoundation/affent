@@ -192,9 +192,10 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		return Outcome{}, fmt.Errorf("system prompt: %w", err)
 	}
 	prompts := runnerScenarioPrompts(s)
+	promptOptions := runnerScenarioPromptOptions(s, len(prompts))
 	trace := newRunnerTrace(s, workspace, runnerPromptDisplay(prompts))
-	for _, prompt := range prompts {
-		turnID, err := loop.SendUser(ctx, prompt)
+	for idx, prompt := range prompts {
+		turnID, err := loop.SendUserWithOptions(ctx, prompt, promptOptions[idx].turnOptions())
 		if err != nil {
 			return Outcome{}, fmt.Errorf("send user: %w", err)
 		}
@@ -217,6 +218,10 @@ func runnerScenarioPrompts(s Scenario) []string {
 		return append([]string(nil), s.Prompts...)
 	}
 	return []string{s.Prompt}
+}
+
+func runnerScenarioPromptOptions(s Scenario, promptCount int) []PromptOptions {
+	return promptOptionsForCount(s.PromptOptions, promptCount)
 }
 
 func runnerPromptDisplay(prompts []string) string {

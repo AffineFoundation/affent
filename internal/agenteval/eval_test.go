@@ -590,6 +590,10 @@ func TestBatchScenarioPromptHelpers(t *testing.T) {
 	if got := batchScenarioPrompts(multi); !reflect.DeepEqual(got, []string{"first", "second"}) {
 		t.Fatalf("multi prompts = %#v", got)
 	}
+	opts := []PromptOptions{{UserSource: "schedule", ScheduleID: "sched_1"}}
+	if got := batchScenarioPromptOptions(BatchScenario{PromptOptions: opts}, 2); len(got) != 2 || got[0].UserSource != "schedule" || got[0].ScheduleID != "sched_1" || got[1] != (PromptOptions{}) {
+		t.Fatalf("prompt options = %#v", got)
+	}
 	display := batchScenarioPromptDisplay(multi)
 	for _, want := range []string{"Turn 1:", "first", "Turn 2:", "second"} {
 		if !strings.Contains(display, want) {
@@ -2264,8 +2268,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 34 {
-		t.Fatalf("long-run suite size = %d, want 34", len(scenarios))
+	if len(scenarios) != 35 {
+		t.Fatalf("long-run suite size = %d, want 35", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -3575,6 +3579,37 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(scheduleFollowup.Domains, scheduleAutomationDomain) || !stringSliceContains(scheduleFollowup.Domains, longRunRecoveryDomain) {
 		t.Fatalf("session schedule Domains = %#v, want schedule automation and longrun recovery", scheduleFollowup.Domains)
+	}
+
+	scheduledTurn, ok := seen["longrun-scheduled-turn-provenance"]
+	if !ok {
+		t.Fatalf("long-run suite missing scheduled turn provenance scenario")
+	}
+	if scheduledTurn.SessionID != "longrun-scheduled-turn-provenance" || len(scheduledTurn.PromptOptions) != 1 {
+		t.Fatalf("scheduled turn session/options = %q/%#v", scheduledTurn.SessionID, scheduledTurn.PromptOptions)
+	}
+	if scheduledTurn.PromptOptions[0].UserSource != "schedule" ||
+		scheduledTurn.PromptOptions[0].ScheduleID != "sched_eval_fire" ||
+		scheduledTurn.PromptOptions[0].ScheduleKind != "custom" {
+		t.Fatalf("scheduled turn PromptOptions = %#v", scheduledTurn.PromptOptions)
+	}
+	if scheduledTurn.RequiredTaskStateRequestSource != "schedule" ||
+		scheduledTurn.RequiredTaskStateScheduleID != "sched_eval_fire" ||
+		scheduledTurn.RequiredTaskStateScheduleKind != "custom" ||
+		scheduledTurn.RequiredContextInjectionSources["schedule"] != 1 {
+		t.Fatalf("scheduled turn provenance requirements = source:%q schedule:%q/%q context:%#v",
+			scheduledTurn.RequiredTaskStateRequestSource,
+			scheduledTurn.RequiredTaskStateScheduleID,
+			scheduledTurn.RequiredTaskStateScheduleKind,
+			scheduledTurn.RequiredContextInjectionSources)
+	}
+	if !stringSliceContains(scheduledTurn.ForbiddenTools, agent.SessionScheduleToolName) ||
+		!stringSliceContains(scheduledTurn.ForbiddenTools, agent.LoopProtocolToolName) {
+		t.Fatalf("scheduled turn ForbiddenTools = %#v, want no schedule management or loop protocol", scheduledTurn.ForbiddenTools)
+	}
+	scheduledTurnCaps := ExpectationCapabilityNames(debugScenarioExpectations(scheduledTurn))
+	if !stringSliceContains(scheduledTurnCaps, "session") || !stringSliceContains(scheduledTurnCaps, "trace") {
+		t.Fatalf("scheduled turn expectation capabilities = %#v, want session and trace", scheduledTurnCaps)
 	}
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]
@@ -6240,7 +6275,12 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		CompactTrigger:            6,
 		CompactTriggerInputTokens: 5,
 		CompactKeepLast:           3,
-	}, "fix it")
+	}, "fix it", PromptOptions{
+		UserSource:      "schedule",
+		UserDisplayText: "Scheduled fix",
+		ScheduleID:      "sched_fix",
+		ScheduleKind:    "custom",
+	})
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{
 		"--executor\x00docker:affent-eval",
@@ -6268,6 +6308,10 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--web-search=true",
 		"--browser=true",
 		"--mcp-config\x00/tmp/eval-mcp.json",
+		"--user-source\x00schedule",
+		"--user-display-text\x00Scheduled fix",
+		"--schedule-id\x00sched_fix",
+		"--schedule-kind\x00custom",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)
@@ -6302,7 +6346,7 @@ func TestBatchRunnerAffentctlRunArgsEvalToolFlagsImplyEvalMode(t *testing.T) {
 			if tc.name == "scenario loop protocol surface" {
 				scenario.ExposeLoopProtocolTool = true
 			}
-			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", scenario, "debug")
+			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", scenario, "debug", PromptOptions{})
 			joined := strings.Join(args, "\x00")
 			if !strings.Contains(joined, "--eval-mode") {
 				t.Fatalf("eval tool flags should imply --eval-mode:\n%q", args)
@@ -6319,7 +6363,7 @@ func TestBatchRunnerAffentctlRunArgsCanKeepTraceDeltas(t *testing.T) {
 		BaseURL:     "https://llm.example/v1",
 		Model:       "model-a",
 		TraceDeltas: true,
-	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug stream", MaxTurns: 2}, "debug stream")
+	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug stream", MaxTurns: 2}, "debug stream", PromptOptions{})
 	joined := strings.Join(args, "\x00")
 	if !strings.Contains(joined, "--trace\x00/tmp/ws/trace.jsonl") {
 		t.Fatalf("args missing trace path:\n%q", args)

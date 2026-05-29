@@ -178,6 +178,7 @@ type BatchScenario struct {
 	Domains                                        []string
 	Prompt                                         string
 	Prompts                                        []string
+	PromptOptions                                  []PromptOptions
 	SessionID                                      string
 	ExecutePlan                                    bool
 	EnableMemory                                   bool
@@ -392,6 +393,7 @@ type DebugManifest struct {
 	TraceDeltas                            bool                              `json:"trace_deltas,omitempty"`
 	Prompt                                 string                            `json:"prompt"`
 	Prompts                                []string                          `json:"prompts,omitempty"`
+	PromptOptions                          []PromptOptions                   `json:"prompt_options,omitempty"`
 	Expectations                           DebugScenarioExpectations         `json:"expectations,omitempty"`
 	ExpectationCapabilityNames             []string                          `json:"expectation_capability_names,omitempty"`
 	ExpectationCapabilityOutcome           string                            `json:"expectation_capability_outcome,omitempty"`
@@ -441,6 +443,7 @@ type DebugScenarioExpectations struct {
 	Suites                                         []string                               `json:"suites,omitempty"`
 	Domains                                        []string                               `json:"domains,omitempty"`
 	SessionID                                      string                                 `json:"session_id,omitempty"`
+	PromptOptions                                  []PromptOptions                        `json:"prompt_options,omitempty"`
 	ExecutePlan                                    bool                                   `json:"execute_plan,omitempty"`
 	EnableMemory                                   bool                                   `json:"enable_memory,omitempty"`
 	EnableLoopProtocol                             bool                                   `json:"enable_loop_protocol,omitempty"`
@@ -542,6 +545,16 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	caps := map[string]bool{}
 	if strings.TrimSpace(exp.SessionID) != "" {
 		caps["session"] = true
+	}
+	for _, opts := range exp.PromptOptions {
+		if strings.TrimSpace(opts.UserSource) != "" ||
+			strings.TrimSpace(opts.UserDisplayText) != "" ||
+			strings.TrimSpace(opts.ScheduleID) != "" ||
+			strings.TrimSpace(opts.ScheduleKind) != "" {
+			caps["session"] = true
+			caps["trace"] = true
+			break
+		}
 	}
 	if len(exp.RequiredUserMessageModes) > 0 {
 		caps["session"] = true
@@ -1217,6 +1230,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunLoopActivationCompletedDraftScenario(),
 		longRunResearchCheckpointScenario(),
 		longRunSessionScheduleRecurringFollowupScenario(),
+		longRunScheduledTurnProvenanceScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		memoryAutonomousDurableRuleScenario(),
 		memoryIgnoreTransientTaskStatusScenario(),
@@ -1548,6 +1562,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		TraceDeltas:                            res.TraceDeltas,
 		Prompt:                                 batchScenarioPromptDisplay(scenario),
 		Prompts:                                append([]string(nil), scenario.Prompts...),
+		PromptOptions:                          append([]PromptOptions(nil), scenario.PromptOptions...),
 		Expectations:                           expectations,
 		ExpectationCapabilityNames:             expectationCapabilities,
 		ExpectationCapabilityOutcome:           ExpectationCapabilityOutcome(res.OK, expectationCapabilities),
@@ -2259,6 +2274,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		Suites:                                         append([]string(nil), s.Suites...),
 		Domains:                                        append([]string(nil), s.Domains...),
 		SessionID:                                      strings.TrimSpace(s.SessionID),
+		PromptOptions:                                  append([]PromptOptions(nil), s.PromptOptions...),
 		ExecutePlan:                                    s.ExecutePlan,
 		EnableMemory:                                   s.EnableMemory,
 		EnableLoopProtocol:                             s.EnableLoopProtocol,
@@ -2497,8 +2513,10 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	var stdout, stderr bytes.Buffer
 	var redactedCommand []string
 	var lastExit int
-	for idx, prompt := range batchScenarioPrompts(scenario) {
-		args := r.affentctlRunArgs(workspace, tracePath, scenario, prompt)
+	prompts := batchScenarioPrompts(scenario)
+	promptOptions := batchScenarioPromptOptions(scenario, len(prompts))
+	for idx, prompt := range prompts {
+		args := r.affentctlRunArgs(workspace, tracePath, scenario, prompt, promptOptions[idx])
 		if idx == 0 {
 			redactedCommand = redactedCommandArgv(goBin, args)
 		}
@@ -2516,7 +2534,7 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	return stdout.String(), stderr.String(), lastExit, redactedCommand, nil
 }
 
-func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario, prompt string) []string {
+func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario, prompt string, promptOptions PromptOptions) []string {
 	executor := strings.TrimSpace(r.Executor)
 	if executor == "" {
 		executor = "local"
@@ -2530,6 +2548,18 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 		"--max-turns", fmt.Sprint(scenario.MaxTurns),
 		"--trace", tracePath,
 		"--prompt", prompt,
+	}
+	if source := strings.TrimSpace(promptOptions.UserSource); source != "" {
+		args = append(args, "--user-source", source)
+	}
+	if display := strings.TrimSpace(promptOptions.UserDisplayText); display != "" {
+		args = append(args, "--user-display-text", display)
+	}
+	if scheduleID := strings.TrimSpace(promptOptions.ScheduleID); scheduleID != "" {
+		args = append(args, "--schedule-id", scheduleID)
+	}
+	if scheduleKind := strings.TrimSpace(promptOptions.ScheduleKind); scheduleKind != "" {
+		args = append(args, "--schedule-kind", scheduleKind)
 	}
 	if scenario.CompactTrigger > 0 {
 		args = append(args, "--compact-trigger", fmt.Sprint(scenario.CompactTrigger))
@@ -2617,6 +2647,19 @@ func batchScenarioPrompts(s BatchScenario) []string {
 		return append([]string(nil), s.Prompts...)
 	}
 	return []string{s.Prompt}
+}
+
+func batchScenarioPromptOptions(s BatchScenario, promptCount int) []PromptOptions {
+	return promptOptionsForCount(s.PromptOptions, promptCount)
+}
+
+func promptOptionsForCount(options []PromptOptions, promptCount int) []PromptOptions {
+	if promptCount <= 0 {
+		return nil
+	}
+	out := make([]PromptOptions, promptCount)
+	copy(out, options)
+	return out
 }
 
 func batchScenarioPromptDisplay(s BatchScenario) string {

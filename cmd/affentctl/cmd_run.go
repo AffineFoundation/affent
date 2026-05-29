@@ -28,6 +28,10 @@ func runCmd(args []string) int {
 	promptFlag := fs.String("prompt", "", "user prompt; '-' for stdin, '@file', or literal")
 	planOnly := fs.Bool("plan-only", false, "create or update the persisted task plan and stop before executing tools")
 	executePlan := fs.Bool("execute-plan", false, "execute the selected session's persisted plan after user confirmation; requires --session-id or --continue and an unfinished non-blocked plan")
+	userSource := fs.String("user-source", "", "advanced trace/runtime provenance for the user turn, such as schedule")
+	userDisplayText := fs.String("user-display-text", "", "advanced UI label for generated control prompts")
+	scheduleID := fs.String("schedule-id", "", "advanced schedule id provenance when --user-source=schedule")
+	scheduleKind := fs.String("schedule-kind", "", "advanced schedule kind provenance when --user-source=schedule")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage: affentctl run [flags]
 
@@ -90,6 +94,10 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		turnOpts.UserMode = agent.UserModeLoopSetup
 		turnOpts.ForceLoopCalibrationQuestion = true
 	}
+	turnOpts.UserSource = strings.TrimSpace(*userSource)
+	turnOpts.UserDisplayText = strings.TrimSpace(*userDisplayText)
+	turnOpts.ScheduleID = strings.TrimSpace(*scheduleID)
+	turnOpts.ScheduleKind = strings.TrimSpace(*scheduleKind)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -107,7 +115,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		b.log.Error().Err(err).Msg("write startup trace events")
 		return exitRuntime
 	}
-	if !*planOnly && !*executePlan {
+	if !*planOnly && !*executePlan && strings.TrimSpace(turnOpts.UserSource) == "" {
 		recordCurrentSessionLoopCalibrationAnswerIfReady(b, prompt)
 	}
 

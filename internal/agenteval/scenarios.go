@@ -2303,6 +2303,52 @@ func longRunSessionScheduleRecurringFollowupScenario() BatchScenario {
 	}
 }
 
+func longRunScheduledTurnProvenanceScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-scheduled-turn-provenance",
+		Suites:    []string{longRunSuite},
+		Domains:   []string{longRunRecoveryDomain, scheduleAutomationDomain},
+		SessionID: "longrun-scheduled-turn-provenance",
+		Prompt:    "This scheduled run should inspect the current launch status and reply with SCHEDULED-RUN-DONE-42. Do not create, update, or delete any schedules.",
+		PromptOptions: []PromptOptions{{
+			UserSource:      "schedule",
+			UserDisplayText: "Launch status timer",
+			ScheduleID:      "sched_eval_fire",
+			ScheduleKind:    "custom",
+		}},
+		RequiredUserMessageModes: map[string]int{
+			agent.UserModeNormal: 1,
+		},
+		RequiredTaskStateRequestMode:   agent.UserModeNormal,
+		RequiredTaskStateRequestSource: "schedule",
+		RequiredTaskStateScheduleID:    "sched_eval_fire",
+		RequiredTaskStateScheduleKind:  "custom",
+		RequiredContextInjectionSources: map[string]int{
+			"schedule": 1,
+		},
+		RequiredTraceEventCounts: map[string]int{
+			"context.injected": 1,
+		},
+		ForbiddenTools: []string{
+			agent.SessionScheduleToolName,
+			agent.LoopProtocolToolName,
+			"shell",
+			"write_file",
+			"edit_file",
+		},
+		RequiredFinalText: []string{"SCHEDULED-RUN-DONE-42"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.SessionScheduleToolName: 0,
+			agent.LoopProtocolToolName:    0,
+			"shell":                       0,
+			"write_file":                  0,
+			"edit_file":                   0,
+		},
+		MaxParentToolCalls: 0,
+		MaxTurns:           3,
+	}
+}
+
 func longRunLoopActivationCalibrationScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-loop-activation-calibration",
