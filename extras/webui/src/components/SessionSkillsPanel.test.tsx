@@ -58,8 +58,9 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
     expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("embed:skillembed:skill");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("coding_repair_workflow");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("trigger:fix");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("tool:workspace");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("2 triggers · 1 tool");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("fix");
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("workspace");
     await user.click(within(screen.getByTestId("session-skills-focus")).getByRole("button", { name: "Start from skill" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("apply, update, or replace"), "skill");
     await user.click(screen.getByRole("button", { name: /Tool-bound\s+1/ }));

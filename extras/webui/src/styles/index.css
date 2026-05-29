@@ -7388,52 +7388,86 @@ button.workbench-context-runtime-item:focus-visible {
   white-space: nowrap;
 }
 
-.session-skills-focus-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
-  gap: 7px;
+.session-skills-focus-statline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
   min-width: 0;
 }
 
-.session-skills-focus-fact {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  border: 1px solid rgba(217, 224, 232, 0.76);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.62);
-  padding: 7px 8px;
-}
-
-.session-skills-focus-fact span,
-.session-skills-focus-fact small,
-.session-skills-focus-body > span {
-  min-width: 0;
+.session-skills-focus-statline span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 22px;
   overflow: hidden;
-  color: var(--text-faint);
-  font-size: 10.5px;
-  font-weight: 750;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-skills-focus-fact span,
-.session-skills-focus-body > span {
-  text-transform: uppercase;
-}
-
-.session-skills-focus-fact strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 12.5px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.session-skills-focus-fact small {
+  border: 1px solid rgba(217, 224, 232, 0.82);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.66);
   color: var(--text-muted);
+  font-size: 10.8px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-disclosure {
+  display: grid;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.48);
+  overflow: hidden;
+}
+
+.session-skills-focus-disclosure > summary {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto;
+  gap: 7px;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.session-skills-focus-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.session-skills-focus-disclosure > summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--text-faint);
+  transform: rotate(-45deg);
+  transition: transform var(--motion-fast) ease;
+}
+
+.session-skills-focus-disclosure[open] > summary::after {
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.session-skills-focus-disclosure strong,
+.session-skills-focus-disclosure span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-skills-focus-disclosure strong {
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+.session-skills-focus-disclosure span {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .session-skills-focus-chips {
@@ -7441,6 +7475,7 @@ button.workbench-context-runtime-item:focus-visible {
   flex-wrap: wrap;
   gap: 5px;
   min-width: 0;
+  padding: 0 8px 8px;
 }
 
 .session-skills-focus-chips span {
@@ -7470,13 +7505,7 @@ button.workbench-context-runtime-item:focus-visible {
   display: grid;
   gap: 4px;
   min-width: 0;
-}
-
-.session-skills-maintenance-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-  min-width: 0;
+  padding: 0 8px 8px;
 }
 
 .session-skills-focus-body pre,
@@ -14641,7 +14670,7 @@ html[data-theme="dark"] .session-skills-panel,
 html[data-theme="dark"] .session-skills-activation,
 html[data-theme="dark"] .session-skills-coverage,
 html[data-theme="dark"] .session-skills-focus,
-html[data-theme="dark"] .session-skills-focus-fact,
+html[data-theme="dark"] .session-skills-focus-disclosure,
 html[data-theme="dark"] .session-skill-item,
 html[data-theme="dark"] .session-search input,
 html[data-theme="dark"] .session-skills-search input,
@@ -14687,6 +14716,11 @@ html[data-theme="dark"] .workbench-panel {
 html[data-theme="dark"] .session-skills-focus {
   border-color: rgba(45, 212, 191, 0.28);
   background: rgba(13, 40, 38, 0.42);
+}
+
+html[data-theme="dark"] .session-skills-focus-statline span {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(14, 17, 22, 0.58);
 }
 
 html[data-theme="dark"] .account-config-focus {

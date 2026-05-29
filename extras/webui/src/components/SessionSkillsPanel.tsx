@@ -677,9 +677,10 @@ function SkillReviewFocus({
   const requiredTools = skill.required_tools ?? [];
   const preview = skill.body_preview || body;
   const contentState = body ? "Loaded" : onLoadBody ? "Available" : preview ? "Preview only" : "Unavailable";
-  const maintenanceDetail = skill.runtime
-    ? "custom skill can be edited"
-    : "built-in skill is read-only";
+  const activationSummaryText = [
+    triggers.length > 0 ? `${triggers.length} ${triggers.length === 1 ? "trigger" : "triggers"}` : "manual",
+    requiredTools.length > 0 ? `${requiredTools.length} ${requiredTools.length === 1 ? "tool" : "tools"}` : undefined,
+  ].filter(Boolean).join(" · ");
   return (
     <section className="session-skills-focus" data-testid="session-skills-focus" aria-label={`Skill review ${skill.name}`}>
       <div className="session-skills-focus-head">
@@ -688,7 +689,6 @@ function SkillReviewFocus({
         <small>{skill.description || "No summary"}</small>
       </div>
       <div className="session-skill-actions">
-        <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
         {onLoadBody && !body ? (
           <button type="button" className="node-action" onClick={onLoadBody}>
             Load content
@@ -710,39 +710,36 @@ function SkillReviewFocus({
           </>
         ) : null}
       </div>
-      <div className="session-skills-focus-grid">
-        <SkillFocusFact label="Source" value={skillOriginLabel(skill) ?? "Runtime"} />
-        <SkillFocusFact label="Size" value={skillSizeLabel(skill)} />
-        <SkillFocusFact label="Triggers" value={triggers.length > 0 ? `${triggers.length}` : "None"} detail={triggers.slice(0, 5).join(", ")} />
-        <SkillFocusFact label="Tools" value={requiredTools.length > 0 ? `${requiredTools.length}` : "None"} detail={requiredTools.join(", ")} />
+      <div className="session-skills-focus-statline" aria-label="Skill summary facts">
+        <span>{skillOriginLabel(skill) ?? "Runtime"}</span>
+        <span>{skillSizeLabel(skill)}</span>
+        <span>{activationSummaryText}</span>
+        <span>{contentState.toLowerCase()}</span>
       </div>
       {triggers.length > 0 || requiredTools.length > 0 ? (
-        <div className="session-skills-focus-chips">
-          {triggers.slice(0, 8).map((trigger) => <span key={`trigger:${trigger}`}>trigger:{trigger}</span>)}
-          {requiredTools.map((tool) => <span key={`tool:${tool}`} data-kind="tool">tool:{tool}</span>)}
-        </div>
+        <details className="session-skills-focus-disclosure">
+          <summary>
+            <strong>Activation</strong>
+            <span>{activationSummaryText}</span>
+          </summary>
+          <div className="session-skills-focus-chips">
+            {triggers.slice(0, 10).map((trigger) => <span key={`trigger:${trigger}`}>{trigger}</span>)}
+            {requiredTools.map((tool) => <span key={`tool:${tool}`} data-kind="tool">{tool}</span>)}
+          </div>
+        </details>
       ) : null}
-      <div className="session-skills-focus-body">
-        <span>Maintenance</span>
-        <div className="session-skills-maintenance-grid">
-          <SkillFocusFact label="Full content" value={contentState} detail={body ? "loaded for review actions" : onLoadBody ? "load only when needed" : undefined} />
-          <SkillFocusFact label="Editable" value={onEdit ? "Yes" : "No"} detail={maintenanceDetail} />
-        </div>
+      <details className="session-skills-focus-disclosure session-skills-focus-content">
+        <summary>
+          <strong>Content</strong>
+          <span>{body ? "full content loaded" : onLoadBody ? "load on demand" : preview ? "preview" : "unavailable"}</span>
+        </summary>
+        <div className="session-skills-focus-body">
         {bodyState?.loading ? <p>Loading full content...</p> : null}
         {bodyState?.error ? <p className="error">{bodyState.error}</p> : null}
         {!bodyState?.loading && !bodyState?.error && preview ? <p>{summarizeSkillPreview(preview)}</p> : null}
-      </div>
+        </div>
+      </details>
     </section>
-  );
-}
-
-function SkillFocusFact({ label, value, detail }: { label: string; value: string; detail?: string }) {
-  return (
-    <div className="session-skills-focus-fact">
-      <span>{label}</span>
-      <strong title={detail || value}>{value}</strong>
-      {detail ? <small title={detail}>{detail}</small> : null}
-    </div>
   );
 }
 
