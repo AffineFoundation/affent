@@ -16,6 +16,7 @@ import {
   type WorkbenchRequestModeView,
   type WorkbenchContextUsageView,
   workbenchContextStatusDetail,
+  workbenchArtifactContextDetail,
 } from "../view/workbenchContext";
 import type { WorkbenchAttention } from "../view/workbenchAttention";
 import type { WorkbenchTab } from "../view/workbenchNav";
@@ -328,11 +329,10 @@ function filesBriefFact(files?: SessionFilesView): ContextBriefFact | undefined 
 
 function artifactsBriefFact(artifacts?: readonly TurnArtifact[]): ContextBriefFact | undefined {
   if (!artifacts?.length) return undefined;
-  const latest = artifacts[artifacts.length - 1];
   return {
     label: "Artifacts",
     value: `${artifacts.length} captured`,
-    detail: latest?.summary || latest?.path || "Latest generated output is available.",
+    detail: workbenchArtifactContextDetail(artifacts),
     tone: "ready",
     target: "artifacts",
   };

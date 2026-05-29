@@ -11,6 +11,7 @@ import {
   workbenchContextEvidenceText,
   workbenchContextStatusDetail,
   workbenchContextSummary,
+  workbenchArtifactContextDetail,
 } from "./workbenchContext";
 import type { SessionOverview } from "./sessionOverview";
 
@@ -37,9 +38,26 @@ describe("workbenchContext", () => {
     expect(workbenchContextSummary(overview, true)).toBe("Review needed");
     expect(buildWorkbenchContextEvidence(input).map((item) => item.label)).toEqual(["Changes", "Run", "Artifacts"]);
     expect(workbenchContextEvidenceText(input)).toContain("Next step: update payment route");
-    expect(workbenchContextEvidenceText(input)).toContain("Artifacts: 1 artifact · checkout failure log");
+    expect(workbenchContextEvidenceText(input)).toContain("Artifacts: 1 artifact · Latest full output: test.log · from npm test");
+    expect(workbenchContextEvidenceText(input)).not.toContain("checkout failure log");
     expect(workbenchContextEvidenceText(input)).not.toContain("Tokens: 12k");
     expect(workbenchContextEvidenceDraft(input)).toContain("Use this current chat context in the next step:");
+  });
+
+  it("summarizes artifact context without leaking raw output into Context", () => {
+    const artifacts = [{
+      path: ".affent/artifacts/tool-results/000008-shell.txt",
+      name: "000008-shell.txt",
+      source: "shell",
+      tool: "shell",
+      turnNumber: 4,
+      summary: "line one\nline two\nnothing added to commit but untracked files present",
+      truncated: true,
+    }];
+
+    const detail = workbenchArtifactContextDetail(artifacts);
+    expect(detail).toBe("Latest full output: 000008-shell.txt · turn 4 · shell · from shell");
+    expect(detail).not.toContain("nothing added to commit");
   });
 
   it("builds explicit workspace and token evidence for Workbench context", () => {

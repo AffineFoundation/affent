@@ -139,15 +139,31 @@ export function buildWorkbenchContextEvidence({
     });
   }
   if (artifacts.length > 0) {
-    const latest = artifacts[artifacts.length - 1];
     items.push({
       target: "artifacts",
       label: "Artifacts",
       summary: `${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`,
-      detail: latest?.summary || latest?.path || "Generated files available",
+      detail: workbenchArtifactContextDetail(artifacts),
     });
   }
   return items;
+}
+
+export function workbenchArtifactContextDetail(artifacts: readonly TurnArtifact[]): string {
+  const latest = artifacts.at(-1);
+  if (!latest) return "Generated files available";
+  const kind = artifactIsFullOutput(latest) ? "full output" : "deliverable";
+  const origin = compact([
+    latest.turnNumber != null ? `turn ${latest.turnNumber}` : undefined,
+    latest.tool,
+  ]).join(" · ");
+  const source = compactSource(latest.source);
+  const parts = [
+    `Latest ${kind}: ${latest.name || artifactName(latest.path)}`,
+    origin || undefined,
+    source ? `from ${source}` : undefined,
+  ];
+  return compact(parts).join(" · ");
 }
 
 export function buildWorkbenchContextUsage(session: SessionState, summary?: SessionSummary): WorkbenchContextUsageView {
@@ -358,6 +374,21 @@ function requestModeLabel(mode: string): string {
   if (mode === "plan_only") return "Plan only";
   if (mode === "execute_plan") return "Execute plan";
   return mode.replace(/_/g, " ");
+}
+
+function artifactIsFullOutput(artifact: TurnArtifact): boolean {
+  return artifact.truncated || artifact.path.replace(/\\/g, "/").includes("/tool-results/");
+}
+
+function artifactName(path: string): string {
+  return path.replace(/\\/g, "/").split("/").filter(Boolean).at(-1) ?? path;
+}
+
+function compactSource(source: string | undefined): string | undefined {
+  const compacted = source?.replace(/\s+/g, " ").trim();
+  if (!compacted) return undefined;
+  if (compacted.length <= 72) return compacted;
+  return `${compacted.slice(0, 69).trimEnd()}...`;
 }
 
 function isLowSignalStatusDetail(value: string | undefined): boolean {
