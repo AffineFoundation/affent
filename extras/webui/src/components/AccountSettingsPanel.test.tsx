@@ -37,8 +37,6 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("1 env");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Run tasks normally");
-    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Env review");
-    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Clean");
     expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy public key" })).toBeInTheDocument();
     expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" })).toBeInTheDocument();
     expect(screen.queryByText("Private repo access")).toBeNull();
@@ -57,8 +55,7 @@ describe("AccountSettingsPanel", () => {
     expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
     await user.click(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" }));
     expect(writeText).toHaveBeenCalledWith("/workspace/.home/.ssh/id_ed25519.pub");
-    await user.click(screen.getByRole("button", { name: "Copy full key" }));
-    expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
+    expect(screen.queryByRole("button", { name: "Copy full key" })).toBeNull();
 
     await user.click(within(screen.getByRole("group", { name: "Git host presets" })).getByRole("button", { name: "GitLab" }));
     expect(screen.getByPlaceholderText("github.com or gitlab.com")).toHaveValue("gitlab.com");
@@ -102,8 +99,6 @@ describe("AccountSettingsPanel", () => {
 
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("2 envs");
-    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Env review");
-    expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Empty 1");
     expect(screen.getByTestId("account-env-review")).toHaveTextContent("1 finding");
     expect(screen.getByTestId("account-env-review")).toHaveTextContent("EMPTY_TOKEN");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");

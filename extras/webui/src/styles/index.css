@@ -5824,58 +5824,6 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
-.account-config-dashboard {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
-  gap: 8px;
-}
-
-.account-config-card {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  border: 1px solid rgba(217, 224, 232, 0.78);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.64);
-  padding: 8px 9px;
-}
-
-.account-config-card[data-state="ready"] {
-  border-color: rgba(20, 184, 166, 0.24);
-  background: linear-gradient(180deg, rgba(240, 253, 250, 0.82), rgba(255, 255, 255, 0.64));
-}
-
-.account-config-card[data-state="attention"] {
-  border-color: rgba(185, 28, 28, 0.22);
-  background: linear-gradient(180deg, rgba(254, 242, 242, 0.72), rgba(255, 255, 255, 0.64));
-}
-
-.account-config-card[data-state="review"] {
-  border-color: rgba(20, 184, 166, 0.28);
-  background: rgba(240, 253, 250, 0.72);
-}
-
-.account-config-card span,
-.account-config-card small {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-faint);
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.account-config-card strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .account-config-focus {
   display: grid;
   gap: 9px;
@@ -14740,7 +14688,6 @@ html[data-theme="dark"] .session-automation-metric,
 html[data-theme="dark"] .account-config-focus,
 html[data-theme="dark"] .account-config-focus-fact,
 html[data-theme="dark"] .account-config-next p,
-html[data-theme="dark"] .account-config-card,
 html[data-theme="dark"] .account-env-review,
 html[data-theme="dark"] .account-env-write,
 html[data-theme="dark"] .account-ssh-storage,
@@ -14813,11 +14760,6 @@ html[data-theme="dark"] .account-config-focus {
 html[data-theme="dark"] .account-config-focus[data-tone="attention"] {
   border-color: rgba(248, 113, 113, 0.28);
   background: rgba(69, 10, 10, 0.2);
-}
-
-html[data-theme="dark"] .account-config-card[data-state="review"] {
-  border-color: rgba(45, 212, 191, 0.32);
-  background: rgba(20, 83, 80, 0.28);
 }
 
 html[data-theme="dark"] .account-config-focus[data-tone="missing"] {

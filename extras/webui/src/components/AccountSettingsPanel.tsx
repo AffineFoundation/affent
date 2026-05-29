@@ -12,7 +12,6 @@ import {
   accountEnvReviewNames,
   sshAccessDescription,
   sshPathDisplay,
-  sshPathState,
   sshStorageDescription,
   type AccountEnvFilter,
 } from "../view/accountConfig";
@@ -149,7 +148,6 @@ export function AccountSettingsPanel({
           <>
             {settings ? (
               <>
-                <ConfigDashboard settings={settings} />
                 <AccountConfigFocus
                   settings={settings}
                   busy={busy}
@@ -437,16 +435,11 @@ function AccountConfigFocus({
         <p>{review.nextAction}</p>
       </div>
       {settings.ssh.public_key ? (
-        <div className="account-config-focus-actions">
-          <CopyButton label="Copy public key" value={settings.ssh.public_key} className="secondary-action" />
-          {settings.ssh.public_key_path ? <CopyButton label="Copy key path" value={settings.ssh.public_key_path} className="ghost-action" /> : null}
-        </div>
-      ) : null}
-      {settings.ssh.public_key ? (
         <div className="account-public-key-row account-public-key-row-compact">
           <span>Public key</span>
           <code className="account-public-key" data-testid="account-public-key" title={settings.ssh.public_key}>{settings.ssh.public_key}</code>
-          <CopyButton label="Copy full key" value={settings.ssh.public_key} className="ghost-action" />
+          <CopyButton label="Copy public key" value={settings.ssh.public_key} className="secondary-action" />
+          {settings.ssh.public_key_path ? <CopyButton label="Copy key path" value={settings.ssh.public_key_path} className="ghost-action" /> : null}
         </div>
       ) : null}
       {settings.ssh.public_key ? (
@@ -553,55 +546,6 @@ function GitCheckResult({ state, kind }: { state?: GitCheckState; kind: AccountG
       {state.output ? <pre>{state.output}</pre> : null}
     </div>
   );
-}
-
-function ConfigDashboard({ settings }: { settings: AccountSettingsResponse }) {
-  const latestEnvUpdate = settings.env
-    .map((entry) => entry.updated_at)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
-  const envReviewFindings = accountEnvReviewFindings(settings);
-  const ssh = settings.ssh;
-  const keyPath = ssh.public_key_path ?? (ssh.exists ? "Path not reported" : "No key");
-  const keyPathDisplay = sshPathDisplay(ssh.public_key_path) || keyPath;
-  const sshState = ssh.public_key ? "Ready" : ssh.exists ? "Attention" : "Missing";
-  const pathState = sshPathState(ssh.public_key_path, ssh.exists);
-  return (
-    <div className="account-config-dashboard" data-testid="account-config-dashboard">
-      <div className="account-config-card" data-state={ssh.public_key ? "ready" : ssh.exists ? "attention" : "missing"}>
-        <span>SSH</span>
-        <strong>{sshState}</strong>
-        <small>{ssh.public_key ? "private Git ready" : ssh.exists ? "public key unavailable" : "no key"}</small>
-      </div>
-      <div className="account-config-card">
-        <span>Key path</span>
-        <strong title={keyPath}>{keyPathDisplay}</strong>
-        <small>{pathState}</small>
-      </div>
-      <div className="account-config-card">
-        <span>Env</span>
-        <strong>{settings.env.length}</strong>
-        <small>{latestEnvUpdate ? `updated ${formatTimestamp(latestEnvUpdate)}` : "no saved values"}</small>
-      </div>
-      <div className="account-config-card" data-state={envReviewFindings.length > 0 ? "review" : undefined}>
-        <span>Env review</span>
-        <strong>{envReviewFindings.length}</strong>
-        <small>{accountEnvReviewSummary(envReviewFindings)}</small>
-      </div>
-    </div>
-  );
-}
-
-function accountEnvReviewSummary(findings: ReturnType<typeof accountEnvReviewFindings>): string {
-  if (findings.length === 0) return "Clean";
-  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
-    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
-    return acc;
-  }, {});
-  return Object.entries(counts)
-    .map(([kind, count]) => `${kind === "empty" ? "Empty" : "Incomplete"} ${count}`)
-    .join(" · ");
 }
 
 function formatPanelError(err: unknown): string {
