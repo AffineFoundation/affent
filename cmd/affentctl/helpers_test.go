@@ -571,13 +571,18 @@ func TestChatLoopRecordsCalibrationAnswerBeforeNextTurn(t *testing.T) {
 		loopProtocolPath: protocolPath,
 	}
 
-	recordCurrentSessionLoopCalibrationAnswerIfReady(b, "Pause if tests or web evidence cannot verify the change.")
+	activated := recordCurrentSessionLoopCalibrationAnswerIfReady(b, "Pause if tests or web evidence cannot verify the change.")
 
 	state, found, err := loopstate.ReadState(loopstate.StatePath(workspace, sessionID))
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
-	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationQuestion, "stop condition") || !strings.Contains(state.LastCalibrationAnswer, "Pause if tests") {
+	if !activated ||
+		state.Status != "running" ||
+		state.CalibrationQuestions != 1 ||
+		state.CalibrationAnswers != 1 ||
+		!strings.Contains(state.LastCalibrationQuestion, "stop condition") ||
+		!strings.Contains(state.LastCalibrationAnswer, "Pause if tests") {
 		t.Fatalf("calibration answer state = %+v", state)
 	}
 	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {

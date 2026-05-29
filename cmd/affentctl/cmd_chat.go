@@ -172,8 +172,9 @@ Slash commands inside the REPL:
 				}
 			}
 		}
+		loopActivatedFromCalibration := false
 		if !strings.HasPrefix(line, "/") {
-			recordCurrentSessionLoopCalibrationAnswerIfReady(b, turnText)
+			loopActivatedFromCalibration = recordCurrentSessionLoopCalibrationAnswerIfReady(b, turnText)
 		}
 
 		// Per-turn cancellation context: Ctrl+C only kills the active
@@ -201,6 +202,8 @@ Slash commands inside the REPL:
 		}
 		if loopActivationAttempt {
 			finalizeCurrentSessionLoopActivation(b)
+		} else if loopActivatedFromCalibration {
+			installCurrentSessionLoopProtocol(b)
 		}
 		emitPlanChange(planBefore, currentSessionPlanSummary(b))
 		cancelTurn()
@@ -574,6 +577,14 @@ func finalizeCurrentSessionLoopActivation(b *loopBundle) {
 		fmt.Fprintf(os.Stderr, "[loop] activation persist failed: %v\n", err)
 		return
 	}
+	installCurrentSessionLoopProtocol(b)
+	fmt.Fprintf(os.Stderr, "[loop] active: %s\n", loopstate.ProtocolRelPath(b.sessionID))
+}
+
+func installCurrentSessionLoopProtocol(b *loopBundle) {
+	if b == nil || b.loop == nil || strings.TrimSpace(b.loopProtocolPath) == "" {
+		return
+	}
 	b.loop.LoopProtocolPath = b.loopProtocolPath
 	if !b.loopProtocolSkillInstalled {
 		b.loop.CompletionGuards = append(b.loop.CompletionGuards, agent.LoopProtocolCompletionGuard(b.loopProtocolPath))
@@ -581,12 +592,11 @@ func finalizeCurrentSessionLoopActivation(b *loopBundle) {
 		b.loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(b.loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(b.planPath), b.loop.SkillProvider)
 		b.loopProtocolSkillInstalled = true
 	}
-	fmt.Fprintf(os.Stderr, "[loop] active: %s\n", loopstate.ProtocolRelPath(b.sessionID))
 }
 
-func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string) {
+func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string) bool {
 	if b == nil || strings.TrimSpace(text) == "" {
-		return
+		return false
 	}
 	path := b.loopProtocolPath
 	if strings.TrimSpace(path) == "" {
@@ -594,21 +604,22 @@ func recordCurrentSessionLoopCalibrationAnswerIfReady(b *loopBundle, text string
 	}
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
 	if err != nil || !found || state.Status != "draft" {
-		return
+		return false
 	}
 	if state.CalibrationQuestions > 0 {
 		if state.CalibrationAnswers >= state.CalibrationQuestions {
-			return
+			return false
 		}
 	} else {
-		return
+		return false
 	}
 	state, _, err = loopstate.RecordProtocolCalibrationAnswer(path, text)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[loop] calibration record failed: %v\n", err)
-		return
+		return false
 	}
 	publishCurrentSessionLoopCalibrationEvent(b, sse.TypeLoopCalibration, state)
+	return activateCurrentSessionLoopProtocolIfReady(b, path)
 }
 
 func publishCurrentSessionLoopCalibrationEvent(b *loopBundle, typ string, state loopstate.State) {
@@ -631,6 +642,68 @@ func publishCurrentSessionLoopCalibrationEvent(b *loopBundle, typ string, state 
 		LastCalibrationAnswer:   state.LastCalibrationAnswer,
 		ProtocolPath:            loopstate.ProtocolRelPath(loopID),
 		EventSeq:                state.EventCount,
+	})
+	if err != nil {
+		return
+	}
+	if b.events != nil {
+		select {
+		case b.events <- ev:
+			return
+		default:
+		}
+	}
+	if b.recorder != nil {
+		_ = b.recorder.Write(ev)
+	}
+}
+
+func activateCurrentSessionLoopProtocolIfReady(b *loopBundle, path string) bool {
+	path = strings.TrimSpace(path)
+	if b == nil || path == "" {
+		return false
+	}
+	if err := loopstate.ValidateProtocolActivationReady(path); err != nil {
+		return false
+	}
+	protocol, _, err := loopstate.PrepareProtocolActivation(path, "")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[loop] activation prepare failed: %v\n", err)
+		return false
+	}
+	if err := loopstate.ValidateProtocolActivation(protocol); err != nil {
+		return false
+	}
+	if err := loopstate.WriteProtocol(path, protocol); err != nil {
+		fmt.Fprintf(os.Stderr, "[loop] activation write failed: %v\n", err)
+		return false
+	}
+	state, event, err := loopstate.RecordProtocolActivation(path, "runtime activated ready calibrated draft")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[loop] activation persist failed: %v\n", err)
+		return false
+	}
+	publishCurrentSessionLoopActivationEvent(b, state, event)
+	return true
+}
+
+func publishCurrentSessionLoopActivationEvent(b *loopBundle, state loopstate.State, event loopstate.Event) {
+	if b == nil {
+		return
+	}
+	loopID := strings.TrimSpace(state.LoopID)
+	if loopID == "" {
+		loopID = strings.TrimSpace(b.sessionID)
+	}
+	if loopID == "" {
+		loopID = "loop"
+	}
+	ev, err := sse.NewEvent(sse.TypeLoopActivation, sse.LoopProtocolActivationPayload{
+		LoopID:          loopID,
+		Status:          state.Status,
+		ProtocolUpdates: state.ProtocolUpdates,
+		ProtocolPath:    loopstate.ProtocolRelPath(loopID),
+		EventSeq:        event.Seq,
 	})
 	if err != nil {
 		return

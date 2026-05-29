@@ -145,6 +145,7 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 	}
 	if state.CalibrationQuestions != 1 ||
 		state.CalibrationAnswers != 1 ||
+		state.Status != "running" ||
 		!strings.Contains(state.LastCalibrationQuestion, "stop condition") ||
 		!strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
 		t.Fatalf("calibration state = %+v", state)
@@ -155,6 +156,7 @@ func TestRunRecordsLoopCalibrationAnswerBeforeTurn(t *testing.T) {
 	}
 	for _, want := range []string{
 		`"type":"loop.protocol_calibration"`,
+		`"type":"loop.protocol_activate"`,
 		`"last_calibration_answer_preview":"Pause if source quality is weak or the market report is complete."`,
 	} {
 		if !strings.Contains(string(trace), want) {
