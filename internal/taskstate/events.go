@@ -454,7 +454,7 @@ func contextCompactionSummary(p sse.ContextCompactPayload) string {
 }
 
 func contextCompactionScopeSummary(p sse.ContextCompactPayload) string {
-	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
+	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactWindowPrefillSource, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
 }
 
 func contextCompactionSkippedSummary(p sse.ContextCompactSkippedPayload) string {
@@ -500,10 +500,10 @@ func contextCompactionSkippedSummary(p sse.ContextCompactSkippedPayload) string 
 }
 
 func contextCompactionSkippedScopeSummary(p sse.ContextCompactSkippedPayload) string {
-	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
+	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactWindowPrefillSource, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
 }
 
-func compactScopeSummaryFields(active bool, ordinal int64, prefill, scoped, hardLimit int) string {
+func compactScopeSummaryFields(active bool, ordinal int64, prefill int, prefillSource string, scoped, hardLimit int) string {
 	var fields []string
 	if active {
 		fields = append(fields, "compact_scope_active=true")
@@ -513,6 +513,9 @@ func compactScopeSummaryFields(active bool, ordinal int64, prefill, scoped, hard
 	}
 	if prefill > 0 {
 		fields = append(fields, fmt.Sprintf("compact_window_prefill_input_tokens=%d", prefill))
+	}
+	if source := strings.TrimSpace(prefillSource); source != "" {
+		fields = append(fields, "compact_window_prefill_source="+source)
 	}
 	if scoped > 0 {
 		fields = append(fields, fmt.Sprintf("compact_scoped_input_tokens=%d", scoped))
@@ -824,7 +827,7 @@ func RuntimeSurfaceCompactScopeSummary(p *sse.RuntimeSurfacePayload) string {
 	if p == nil {
 		return ""
 	}
-	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
+	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactWindowPrefillSource, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
 }
 
 func RuntimeSurfaceRequestPressureSummary(p *sse.RuntimeSurfacePayload) string {

@@ -3424,9 +3424,11 @@ func printContextCompactionExampleLines(w io.Writer, examples []agenteval.Contex
 				fmt.Fprintf(w, ",after:%d,after_pressure:%d%%", ex.AfterEstimatedInputTokens, contextCompactionPostPolicyPressurePercent(ex))
 			}
 			if ex.CompactScopeActive || ex.CompactWindowOrdinal > 0 || ex.CompactScopedInputTokens > 0 || ex.CompactHardInputLimitTokens > 0 {
-				fmt.Fprintf(w, ",scope_active:%t,window:%d,scoped:%d,hard_limit:%d",
+				fmt.Fprintf(w, ",scope_active:%t,window:%d,prefill:%d,prefill_source:%s,scoped:%d,hard_limit:%d",
 					ex.CompactScopeActive,
 					ex.CompactWindowOrdinal,
+					ex.CompactWindowPrefillInputTokens,
+					ex.CompactWindowPrefillSource,
 					ex.CompactScopedInputTokens,
 					ex.CompactHardInputLimitTokens,
 				)
@@ -3483,9 +3485,11 @@ func printContextCompactionSkipExampleLines(w io.Writer, examples []agenteval.Co
 				fmt.Fprintf(w, ",candidate:%d,candidate_pressure:%d%%", ex.AfterEstimatedInputTokens, contextCompactionSkipPostPolicyPressurePercent(ex))
 			}
 			if ex.CompactScopeActive || ex.CompactWindowOrdinal > 0 || ex.CompactScopedInputTokens > 0 || ex.CompactHardInputLimitTokens > 0 {
-				fmt.Fprintf(w, ",scope_active:%t,window:%d,scoped:%d,hard_limit:%d",
+				fmt.Fprintf(w, ",scope_active:%t,window:%d,prefill:%d,prefill_source:%s,scoped:%d,hard_limit:%d",
 					ex.CompactScopeActive,
 					ex.CompactWindowOrdinal,
+					ex.CompactWindowPrefillInputTokens,
+					ex.CompactWindowPrefillSource,
 					ex.CompactScopedInputTokens,
 					ex.CompactHardInputLimitTokens,
 				)

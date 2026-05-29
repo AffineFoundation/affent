@@ -2523,26 +2523,28 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			MaxCompactHardInputLimit:     40000,
 			MaxCompactScopedPressure:     0,
 			Examples: []agenteval.ContextCompaction{{
-				TurnID:                      "turn-summary",
-				BeforeMessages:              70,
-				AfterMessages:               22,
-				RemovedMessages:             48,
-				EstimatedInputTokens:        48000,
-				AfterEstimatedInputTokens:   38000,
-				TriggerInputTokens:          40000,
-				ModelContextWindowTokens:    70000,
-				ReservedOutputTokens:        30000,
-				CompactTriggerInputPercent:  80,
-				CompactScopeActive:          true,
-				CompactWindowOrdinal:        2,
-				CompactScopedInputTokens:    0,
-				CompactHardInputLimitTokens: 40000,
-				Reactive:                    true,
-				Reason:                      "context_overflow",
-				SummaryPresent:              true,
-				SummaryPresentKnown:         true,
-				SummaryBytes:                2048,
-				SummaryPreview:              "USER_CONTEXT: preserve the market evidence trail.",
+				TurnID:                          "turn-summary",
+				BeforeMessages:                  70,
+				AfterMessages:                   22,
+				RemovedMessages:                 48,
+				EstimatedInputTokens:            48000,
+				AfterEstimatedInputTokens:       38000,
+				TriggerInputTokens:              40000,
+				ModelContextWindowTokens:        70000,
+				ReservedOutputTokens:            30000,
+				CompactTriggerInputPercent:      80,
+				CompactScopeActive:              true,
+				CompactWindowOrdinal:            2,
+				CompactWindowPrefillInputTokens: 38000,
+				CompactWindowPrefillSource:      "estimated",
+				CompactScopedInputTokens:        0,
+				CompactHardInputLimitTokens:     40000,
+				Reactive:                        true,
+				Reason:                          "context_overflow",
+				SummaryPresent:                  true,
+				SummaryPresentKnown:             true,
+				SummaryBytes:                    2048,
+				SummaryPreview:                  "USER_CONTEXT: preserve the market evidence trail.",
 			}},
 		},
 		ContextCompactionSkips: agenteval.ContextCompactionSkipStats{
@@ -2559,23 +2561,25 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ByCause:                      map[string]int{"request_pressure_not_reduced": 1},
 			ByReason:                     map[string]int{"estimated_context_pressure": 1},
 			Examples: []agenteval.ContextCompactionSkip{{
-				TurnID:                      "turn-summary",
-				Cause:                       "request_pressure_not_reduced",
-				Reason:                      "estimated_context_pressure",
-				BeforeMessages:              22,
-				CandidateMessages:           8,
-				BeforeBytes:                 24000,
-				CandidateBytes:              26000,
-				EstimatedInputTokens:        50000,
-				AfterEstimatedInputTokens:   52000,
-				TriggerInputTokens:          40000,
-				ModelContextWindowTokens:    70000,
-				ReservedOutputTokens:        30000,
-				CompactTriggerInputPercent:  80,
-				CompactScopeActive:          true,
-				CompactWindowOrdinal:        2,
-				CompactScopedInputTokens:    52000,
-				CompactHardInputLimitTokens: 40000,
+				TurnID:                          "turn-summary",
+				Cause:                           "request_pressure_not_reduced",
+				Reason:                          "estimated_context_pressure",
+				BeforeMessages:                  22,
+				CandidateMessages:               8,
+				BeforeBytes:                     24000,
+				CandidateBytes:                  26000,
+				EstimatedInputTokens:            50000,
+				AfterEstimatedInputTokens:       52000,
+				TriggerInputTokens:              40000,
+				ModelContextWindowTokens:        70000,
+				ReservedOutputTokens:            30000,
+				CompactTriggerInputPercent:      80,
+				CompactScopeActive:              true,
+				CompactWindowOrdinal:            2,
+				CompactWindowPrefillInputTokens: 38000,
+				CompactWindowPrefillSource:      "server_observed",
+				CompactScopedInputTokens:        52000,
+				CompactHardInputLimitTokens:     40000,
 			}},
 		},
 		Repair: agenteval.ToolRepairStats{
@@ -2724,10 +2728,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "compaction_skips=1,policy_observed=1,post_policy_observed=1,post_policy_over=1,max_policy_pressure=125%,max_post_policy_pressure=130%,compact_scope_active=1,max_scoped_tokens=52000,max_hard_limit=40000,max_scoped_pressure=130% compaction_skip_causes=request_pressure_not_reduced:1 compaction_skip_reasons=estimated_context_pressure:1") {
 		t.Fatalf("summary output missing context compaction skip rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120%,after:38000,after_pressure:95%,scope_active:true,window:2,scoped:0,hard_limit:40000 summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
+	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120%,after:38000,after_pressure:95%,scope_active:true,window:2,prefill:38000,prefill_source:estimated,scoped:0,hard_limit:40000 summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
 		t.Fatalf("summary output missing context compaction example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `context_compaction_skip_example: scenario=taostats-rendered turn=turn-summary cause=request_pressure_not_reduced reason=estimated_context_pressure messages=22->8 bytes=24000->26000 policy=estimated:50000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:125%,candidate:52000,candidate_pressure:130%,scope_active:true,window:2,scoped:52000,hard_limit:40000`) {
+	if !strings.Contains(out.String(), `context_compaction_skip_example: scenario=taostats-rendered turn=turn-summary cause=request_pressure_not_reduced reason=estimated_context_pressure messages=22->8 bytes=24000->26000 policy=estimated:50000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:125%,candidate:52000,candidate_pressure:130%,scope_active:true,window:2,prefill:38000,prefill_source:server_observed,scoped:52000,hard_limit:40000`) {
 		t.Fatalf("summary output missing context compaction skip example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
@@ -3344,25 +3348,27 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			MaxCompactHardInputLimit:     40000,
 			MaxCompactScopedPressure:     0,
 			Examples: []agenteval.ContextCompaction{{
-				TurnID:                      "turn-jsonl",
-				BeforeMessages:              80,
-				AfterMessages:               24,
-				RemovedMessages:             56,
-				EstimatedInputTokens:        50000,
-				AfterEstimatedInputTokens:   44000,
-				TriggerInputTokens:          40000,
-				ModelContextWindowTokens:    70000,
-				ReservedOutputTokens:        30000,
-				CompactTriggerInputPercent:  80,
-				CompactScopeActive:          true,
-				CompactWindowOrdinal:        2,
-				CompactScopedInputTokens:    0,
-				CompactHardInputLimitTokens: 40000,
-				Reactive:                    true,
-				Reason:                      "context_overflow",
-				SummaryPresent:              true,
-				SummaryBytes:                3072,
-				SummaryPreview:              "USER_CONTEXT: keep browser network evidence in summary.",
+				TurnID:                          "turn-jsonl",
+				BeforeMessages:                  80,
+				AfterMessages:                   24,
+				RemovedMessages:                 56,
+				EstimatedInputTokens:            50000,
+				AfterEstimatedInputTokens:       44000,
+				TriggerInputTokens:              40000,
+				ModelContextWindowTokens:        70000,
+				ReservedOutputTokens:            30000,
+				CompactTriggerInputPercent:      80,
+				CompactScopeActive:              true,
+				CompactWindowOrdinal:            2,
+				CompactWindowPrefillInputTokens: 44000,
+				CompactWindowPrefillSource:      "estimated",
+				CompactScopedInputTokens:        0,
+				CompactHardInputLimitTokens:     40000,
+				Reactive:                        true,
+				Reason:                          "context_overflow",
+				SummaryPresent:                  true,
+				SummaryBytes:                    3072,
+				SummaryPreview:                  "USER_CONTEXT: keep browser network evidence in summary.",
 			}},
 		},
 		ContextCompactionSkips: agenteval.ContextCompactionSkipStats{
@@ -3379,16 +3385,18 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ByCause:                      map[string]int{"request_pressure_not_reduced": 1},
 			ByReason:                     map[string]int{"estimated_context_pressure": 1},
 			Examples: []agenteval.ContextCompactionSkip{{
-				TurnID:                      "turn-jsonl",
-				Cause:                       "request_pressure_not_reduced",
-				Reason:                      "estimated_context_pressure",
-				EstimatedInputTokens:        50000,
-				AfterEstimatedInputTokens:   52000,
-				TriggerInputTokens:          40000,
-				CompactScopeActive:          true,
-				CompactWindowOrdinal:        2,
-				CompactScopedInputTokens:    52000,
-				CompactHardInputLimitTokens: 40000,
+				TurnID:                          "turn-jsonl",
+				Cause:                           "request_pressure_not_reduced",
+				Reason:                          "estimated_context_pressure",
+				EstimatedInputTokens:            50000,
+				AfterEstimatedInputTokens:       52000,
+				TriggerInputTokens:              40000,
+				CompactScopeActive:              true,
+				CompactWindowOrdinal:            2,
+				CompactWindowPrefillInputTokens: 44000,
+				CompactWindowPrefillSource:      "server_observed",
+				CompactScopedInputTokens:        52000,
+				CompactHardInputLimitTokens:     40000,
 			}},
 		},
 		ContextInjections: agenteval.ContextInjectionStats{
@@ -3867,6 +3875,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		contextCompactionExample["reactive"] != true ||
 		contextCompactionExample["removed_messages"] != float64(56) ||
 		contextCompactionExample["compact_scope_active"] != true ||
+		contextCompactionExample["compact_window_prefill_input_tokens"] != float64(44000) ||
+		contextCompactionExample["compact_window_prefill_source"] != "estimated" ||
 		contextCompactionExample["compact_scoped_input_tokens"] != float64(0) ||
 		contextCompactionExample["compact_hard_input_limit_tokens"] != float64(40000) ||
 		contextCompactionExample["reason"] != "context_overflow" ||
@@ -3885,6 +3895,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	if !ok ||
 		contextSkipExample["turn_id"] != "turn-jsonl" ||
 		contextSkipExample["cause"] != "request_pressure_not_reduced" ||
+		contextSkipExample["compact_window_prefill_source"] != "server_observed" ||
 		contextSkipExample["after_estimated_input_tokens"] != float64(52000) {
 		t.Fatalf("context_compaction_skip_example = %#v\njson=%s", contextSkipExamples[0], out.String())
 	}

@@ -583,19 +583,25 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 		}) +
 		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t1", Code: "llm_timeout", FailureKind: "llm_timeout", Recoverable: true}) +
 		sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
-			TurnID:                     "t1",
-			BeforeMessages:             80,
-			AfterMessages:              40,
-			RemovedMessages:            40,
-			Reactive:                   true,
-			Reason:                     "context_overflow",
-			SummaryPresent:             false,
-			EstimatedInputTokens:       120000,
-			AfterEstimatedInputTokens:  68000,
-			TriggerInputTokens:         70000,
-			ModelContextWindowTokens:   100000,
-			ReservedOutputTokens:       30000,
-			CompactTriggerInputPercent: 80,
+			TurnID:                          "t1",
+			BeforeMessages:                  80,
+			AfterMessages:                   40,
+			RemovedMessages:                 40,
+			Reactive:                        true,
+			Reason:                          "context_overflow",
+			SummaryPresent:                  false,
+			EstimatedInputTokens:            120000,
+			AfterEstimatedInputTokens:       68000,
+			TriggerInputTokens:              70000,
+			ModelContextWindowTokens:        100000,
+			ReservedOutputTokens:            30000,
+			CompactTriggerInputPercent:      80,
+			CompactScopeActive:              true,
+			CompactWindowOrdinal:            2,
+			CompactWindowPrefillInputTokens: 68000,
+			CompactWindowPrefillSource:      "estimated",
+			CompactScopedInputTokens:        0,
+			CompactHardInputLimitTokens:     70000,
 		})
 	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -631,6 +637,12 @@ func TestSession_StatsSnapshotsSeedFromDurableEventsOnReopen(t *testing.T) {
 		runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
 		runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
 		runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
+		!runtime.ContextCompactionLatestCompactScopeActive ||
+		runtime.ContextCompactionLatestCompactWindowOrdinal != 2 ||
+		runtime.ContextCompactionLatestCompactWindowPrefill != 68000 ||
+		runtime.ContextCompactionLatestCompactWindowPrefillSource != "estimated" ||
+		runtime.ContextCompactionLatestCompactScopedInputTokens != 0 ||
+		runtime.ContextCompactionLatestCompactHardInputLimit != 70000 ||
 		runtime.ContextCompactionLatestState != "missing" {
 		t.Fatalf("seeded runtime stats = %+v, want durable event totals", runtime)
 	}
@@ -1008,9 +1020,9 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		events = append(events, ev)
 	}
 	for _, p := range []sse.ContextCompactPayload{
-		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048, EstimatedInputTokens: 120000, AfterEstimatedInputTokens: 65000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
-		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024, EstimatedInputTokens: 64000, AfterEstimatedInputTokens: 50000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
-		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false, EstimatedInputTokens: 130000, AfterEstimatedInputTokens: 72000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80},
+		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048, EstimatedInputTokens: 120000, AfterEstimatedInputTokens: 65000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 1, CompactWindowPrefillInputTokens: 65000, CompactWindowPrefillSource: "estimated", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024, EstimatedInputTokens: 64000, AfterEstimatedInputTokens: 50000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 50000, CompactWindowPrefillSource: "estimated", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false, EstimatedInputTokens: 130000, AfterEstimatedInputTokens: 72000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 3, CompactWindowPrefillInputTokens: 72000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
 	} {
 		ev, err := sse.NewEvent(sse.TypeContextCompact, p)
 		if err != nil {
@@ -1043,6 +1055,12 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 			got.ContextCompactionLatestModelContextWindowTokens == 100000 &&
 			got.ContextCompactionLatestReservedOutputTokens == 30000 &&
 			got.ContextCompactionLatestTriggerInputPercent == 80 &&
+			got.ContextCompactionLatestCompactScopeActive &&
+			got.ContextCompactionLatestCompactWindowOrdinal == 3 &&
+			got.ContextCompactionLatestCompactWindowPrefill == 72000 &&
+			got.ContextCompactionLatestCompactWindowPrefillSource == "server_observed" &&
+			got.ContextCompactionLatestCompactScopedInputTokens == 0 &&
+			got.ContextCompactionLatestCompactHardInputLimit == 70000 &&
 			got.ContextCompactionLatestState == "missing" {
 			break
 		}
@@ -1077,6 +1095,10 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		resp.Sessions[0].Runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
+		!resp.Sessions[0].Runtime.ContextCompactionLatestCompactScopeActive ||
+		resp.Sessions[0].Runtime.ContextCompactionLatestCompactWindowOrdinal != 3 ||
+		resp.Sessions[0].Runtime.ContextCompactionLatestCompactWindowPrefillSource != "server_observed" ||
+		resp.Sessions[0].Runtime.ContextCompactionLatestCompactHardInputLimit != 70000 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestState != "missing" ||
 		resp.Aggregate.Runtime.ContextCompactionRemovedMessages != 96 ||
 		resp.Aggregate.Runtime.ContextCompactionSummaryMissing != 1 {
@@ -1102,6 +1124,10 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		summary.ContextCompactions.LatestModelContextWindowTokens != 100000 ||
 		summary.ContextCompactions.LatestReservedOutputTokens != 30000 ||
 		summary.ContextCompactions.LatestTriggerInputPercent != 80 ||
+		!summary.ContextCompactions.LatestCompactScopeActive ||
+		summary.ContextCompactions.LatestCompactWindowOrdinal != 3 ||
+		summary.ContextCompactions.LatestCompactWindowPrefillSource != "server_observed" ||
+		summary.ContextCompactions.LatestCompactHardInputLimit != 70000 ||
 		summary.ContextCompactions.LatestSummaryState != "missing" {
 		t.Fatalf("active session context compactions = %+v", summary.ContextCompactions)
 	}

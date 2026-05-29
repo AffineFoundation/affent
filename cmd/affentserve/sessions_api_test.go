@@ -2184,19 +2184,25 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t2", Reason: sse.TurnEndError}) +
 		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t2", Code: "llm_timeout", FailureKind: "llm_timeout", Recoverable: true}) +
 		sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
-			TurnID:                     "t2",
-			BeforeMessages:             120,
-			AfterMessages:              80,
-			RemovedMessages:            40,
-			Reactive:                   true,
-			Reason:                     "context_overflow",
-			SummaryPresent:             false,
-			EstimatedInputTokens:       120000,
-			AfterEstimatedInputTokens:  68000,
-			TriggerInputTokens:         70000,
-			ModelContextWindowTokens:   100000,
-			ReservedOutputTokens:       30000,
-			CompactTriggerInputPercent: 80,
+			TurnID:                          "t2",
+			BeforeMessages:                  120,
+			AfterMessages:                   80,
+			RemovedMessages:                 40,
+			Reactive:                        true,
+			Reason:                          "context_overflow",
+			SummaryPresent:                  false,
+			EstimatedInputTokens:            120000,
+			AfterEstimatedInputTokens:       68000,
+			TriggerInputTokens:              70000,
+			ModelContextWindowTokens:        100000,
+			ReservedOutputTokens:            30000,
+			CompactTriggerInputPercent:      80,
+			CompactScopeActive:              true,
+			CompactWindowOrdinal:            2,
+			CompactWindowPrefillInputTokens: 68000,
+			CompactWindowPrefillSource:      "estimated",
+			CompactScopedInputTokens:        0,
+			CompactHardInputLimitTokens:     70000,
 		})
 	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -2226,6 +2232,12 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		summary.Runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
 		summary.Runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
 		summary.Runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
+		!summary.Runtime.ContextCompactionLatestCompactScopeActive ||
+		summary.Runtime.ContextCompactionLatestCompactWindowOrdinal != 2 ||
+		summary.Runtime.ContextCompactionLatestCompactWindowPrefill != 68000 ||
+		summary.Runtime.ContextCompactionLatestCompactWindowPrefillSource != "estimated" ||
+		summary.Runtime.ContextCompactionLatestCompactScopedInputTokens != 0 ||
+		summary.Runtime.ContextCompactionLatestCompactHardInputLimit != 70000 ||
 		summary.Runtime.ContextCompactionLatestState != "missing" {
 		t.Fatalf("durable runtime stats = %+v, want aggregated runtime events", summary.Runtime)
 	}
@@ -2237,6 +2249,12 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		summary.ContextCompactions.LatestModelContextWindowTokens != 100000 ||
 		summary.ContextCompactions.LatestReservedOutputTokens != 30000 ||
 		summary.ContextCompactions.LatestTriggerInputPercent != 80 ||
+		!summary.ContextCompactions.LatestCompactScopeActive ||
+		summary.ContextCompactions.LatestCompactWindowOrdinal != 2 ||
+		summary.ContextCompactions.LatestCompactWindowPrefill != 68000 ||
+		summary.ContextCompactions.LatestCompactWindowPrefillSource != "estimated" ||
+		summary.ContextCompactions.LatestCompactScopedInputTokens != 0 ||
+		summary.ContextCompactions.LatestCompactHardInputLimit != 70000 ||
 		summary.ContextCompactions.LatestSummaryState != "missing" {
 		t.Fatalf("context compaction summary = %+v, want existing durable summary preserved", summary.ContextCompactions)
 	}

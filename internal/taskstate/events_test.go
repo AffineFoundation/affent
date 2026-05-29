@@ -31,6 +31,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 			CompactScopeActive:                 true,
 			CompactWindowOrdinal:               2,
 			CompactWindowPrefillInputTokens:    45000,
+			CompactWindowPrefillSource:         "server_observed",
 			CompactScopedInputTokens:           12000,
 			CompactHardInputLimitTokens:        70000,
 			CompactSummaryPromptMaxBytes:       defaultSummaryPromptMaxBytesForTaskStateTest,
@@ -87,7 +88,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 			Reason: sse.TurnEndCompleted,
 		})
 
-	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{SummaryMaxChar: 1000})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,6 +119,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_scope_active=true") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_window_prefill_input_tokens=45000") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_window_prefill_source=server_observed") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_scoped_input_tokens=12000") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_summary_prompt_max_bytes=196608") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "tool_schema_budget_tokens=3000") ||
@@ -126,7 +128,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}
@@ -460,6 +462,7 @@ func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
 			CompactScopeActive:                 true,
 			CompactWindowOrdinal:               3,
 			CompactWindowPrefillInputTokens:    68000,
+			CompactWindowPrefillSource:         "server_observed",
 			CompactScopedInputTokens:           50000,
 			CompactHardInputLimitTokens:        70000,
 			Reactive:                           true,
@@ -486,6 +489,7 @@ func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
 		!taskStateEvidenceContains(state.Evidence, "context_compaction", "trigger_input_tokens=70000") ||
 		!taskStateEvidenceContains(state.Evidence, "context_compaction", "model_context_window_effective_percent=95") ||
 		!taskStateEvidenceContains(state.Evidence, "context_compaction", "compact_window_prefill_input_tokens=68000") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction", "compact_window_prefill_source=server_observed") ||
 		!taskStateEvidenceContains(state.Evidence, "context_compaction", "compact_scoped_input_tokens=50000") {
 		t.Fatalf("context compaction evidence = %+v", state.Evidence)
 	}
@@ -493,7 +497,7 @@ func TestScanEventsRecordsContextCompactionEvidence(t *testing.T) {
 		t.Fatalf("sources = %+v, want context_compaction", state.Sources)
 	}
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"evidence: source=context_compaction", "removed_messages=32", "reactive=true", "estimated_input_tokens=120000", "trigger_input_tokens=70000", "model_context_window_effective_percent=95", "compact_scoped_input_tokens=50000", "LOOP_PROTOCOL: id=demo"} {
+	for _, want := range []string{"evidence: source=context_compaction", "removed_messages=32", "reactive=true", "estimated_input_tokens=120000", "trigger_input_tokens=70000", "model_context_window_effective_percent=95", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=50000", "LOOP_PROTOCOL: id=demo"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}
@@ -506,16 +510,19 @@ func TestScanEventsRecordsContextCompactionSkippedEvidence(t *testing.T) {
 		Text:   "Continue under context pressure.",
 	}) +
 		taskStateEventLine(t, sse.TypeContextCompactSkipped, sse.ContextCompactSkippedPayload{
-			TurnID:                    "t1",
-			Cause:                     "request_pressure_not_reduced",
-			Reason:                    "estimated_context_pressure",
-			BeforeMessages:            6,
-			CandidateMessages:         5,
-			BeforeBytes:               25396,
-			CandidateBytes:            25535,
-			EstimatedInputTokens:      6732,
-			AfterEstimatedInputTokens: 6766,
-			TriggerInputTokens:        1,
+			TurnID:                     "t1",
+			Cause:                      "request_pressure_not_reduced",
+			Reason:                     "estimated_context_pressure",
+			BeforeMessages:             6,
+			CandidateMessages:          5,
+			BeforeBytes:                25396,
+			CandidateBytes:             25535,
+			EstimatedInputTokens:       6732,
+			AfterEstimatedInputTokens:  6766,
+			TriggerInputTokens:         1,
+			CompactScopeActive:         true,
+			CompactWindowOrdinal:       2,
+			CompactWindowPrefillSource: "estimated",
 		})
 
 	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
@@ -527,6 +534,7 @@ func TestScanEventsRecordsContextCompactionSkippedEvidence(t *testing.T) {
 	}
 	if !taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "request_pressure_not_reduced") ||
 		!taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "estimated_context_pressure") ||
+		!taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "compact_window_prefill_source=estimated") ||
 		!taskStateEvidenceContains(state.Evidence, "context_compaction_skipped", "after_estimated_input_tokens=6766") {
 		t.Fatalf("evidence = %+v, want compaction skipped policy evidence", state.Evidence)
 	}
