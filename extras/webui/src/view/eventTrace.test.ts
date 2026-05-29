@@ -270,6 +270,26 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("distinguishes schedule management from background schedule execution in runtime badges", () => {
+    const model = buildEventTraceModel(normalizeEvents([
+      { id: 1, type: "runtime.surface", data: { turn_id: "t1", capabilities: { session_schedule: true } } },
+      { id: 2, type: "runtime.surface", data: { turn_id: "t2", capabilities: { session_schedule: true, session_schedule_runner: true } } },
+    ]));
+
+    expect(model.items[0]).toMatchObject({
+      kind: "event",
+      display: {
+        badges: ["schedules"],
+      },
+    });
+    expect(model.items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        badges: ["background schedules"],
+      },
+    });
+  });
+
   it("filters trace events by display text, raw payload, and unclassified status", () => {
     const events = normalizeEvents([
       { id: 0, type: "trace.meta", data: { schema_version: 1 } },
