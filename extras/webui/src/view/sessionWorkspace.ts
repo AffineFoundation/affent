@@ -1,4 +1,6 @@
+import type { RuntimeWorkspace } from "../api/events";
 import type { SessionSummary } from "../api/sessions";
+import type { SessionState } from "../store/sessionState";
 import type { RunCommandExecutionRequest, SessionRunView } from "./sessionRun";
 
 export interface SessionWorkspaceView {
@@ -6,7 +8,7 @@ export interface SessionWorkspaceView {
   summary: string;
   shortStatus: string;
   detail: string;
-  verification: "verified" | "bound" | "missing_binding" | "mismatch" | "unknown";
+  verification: "verified" | "bound" | "runtime" | "missing_binding" | "mismatch" | "unknown";
   tone?: "warning" | "error";
   label?: string;
   path?: string;
@@ -14,6 +16,12 @@ export interface SessionWorkspaceView {
   dirtyState?: string;
   lastAgentCwd?: string;
   latestCommandCwd?: string;
+  runtimeDefaultCwd?: string;
+  runtimePathMode?: string;
+  runtimeRoot?: string;
+  runtimeRootEntries?: RuntimeWorkspace["root_entries"];
+  runtimeRootEntryCount?: number;
+  runtimeRootEntriesTruncated?: boolean;
   issue?: string;
 }
 
@@ -27,6 +35,7 @@ export interface SessionWorkspaceFact {
 export function buildSessionWorkspace(
   session: SessionSummary | undefined,
   run: SessionRunView,
+  runtimeWorkspace?: RuntimeWorkspace,
 ): SessionWorkspaceView {
   const path = clean(session?.workspace_path);
   const label = clean(session?.workspace_label) ?? workspaceLabel(path);
@@ -34,9 +43,16 @@ export function buildSessionWorkspace(
   const dirtyState = clean(session?.dirty_state);
   const latestCommandCwd = clean(run.latestCommandCwd) ?? clean(run.commands.find((command) => command.cwd)?.cwd);
   const recordedAgentCwd = clean(session?.last_agent_cwd);
+  const runtimeDefaultCwd = clean(runtimeWorkspace?.default_cwd);
+  const runtimePathMode = clean(runtimeWorkspace?.path_mode);
+  const runtimeRoot = clean(runtimeWorkspace?.root);
+  const runtimeRootEntries = runtimeWorkspace?.root_entries?.filter((entry) => clean(entry.name));
+  const runtimeRootEntryCount = runtimeWorkspace?.root_entry_count;
+  const runtimeRootEntriesTruncated = runtimeWorkspace?.root_entries_truncated;
+  const hasRuntimeWorkspace = !!(runtimeDefaultCwd || runtimePathMode || runtimeRoot || runtimeRootEntries?.length);
   const activeCwd = latestCommandCwd ?? recordedAgentCwd;
   const issue = workspaceIssue(path, activeCwd, latestCommandCwd ? "Latest command cwd" : "Recorded agent cwd");
-  const hasData = !!(path || label || branch || dirtyState || activeCwd);
+  const hasData = !!(path || label || branch || dirtyState || activeCwd || hasRuntimeWorkspace);
 
   if (!hasData) {
     return {
@@ -48,13 +64,13 @@ export function buildSessionWorkspace(
     };
   }
 
-  const verification = workspaceVerification(path, activeCwd, issue);
+  const verification = workspaceVerification(path, activeCwd, issue, hasRuntimeWorkspace);
   const summary = workspaceSummary(verification, label);
   return {
     hasData: true,
     summary,
     shortStatus: workspaceShortStatus({ summary, label, path, branch, dirtyState }),
-    detail: workspaceDetail({ path, branch, dirtyState, cwd: activeCwd }),
+    detail: workspaceDetail({ path, branch, dirtyState, cwd: activeCwd, runtimePathMode }),
     verification,
     tone: issue || verification === "missing_binding" ? "warning" : undefined,
     label,
@@ -63,17 +79,23 @@ export function buildSessionWorkspace(
     dirtyState,
     lastAgentCwd: recordedAgentCwd,
     latestCommandCwd,
+    runtimeDefaultCwd,
+    runtimePathMode,
+    runtimeRoot,
+    runtimeRootEntries,
+    runtimeRootEntryCount,
+    runtimeRootEntriesTruncated,
     issue,
   };
 }
 
 export function workspaceReviewFacts(workspace: SessionWorkspaceView): SessionWorkspaceFact[] {
-  return [
+  const facts: SessionWorkspaceFact[] = [
     {
       label: "Binding",
-      value: workspace.path ? "Recorded" : "Missing",
-      detail: workspace.path ? "session path" : "no session path",
-      tone: workspace.path ? "ok" : workspace.hasData ? "attention" : "neutral",
+      value: workspace.path ? "Recorded" : workspace.verification === "runtime" ? "Runtime" : "Missing",
+      detail: workspace.path ? "session path" : workspace.verification === "runtime" ? runtimePathModeLabel(workspace.runtimePathMode) : "no session path",
+      tone: workspace.path || workspace.verification === "runtime" ? "ok" : workspace.hasData ? "attention" : "neutral",
     },
     {
       label: "Agent cwd",
@@ -94,6 +116,15 @@ export function workspaceReviewFacts(workspace: SessionWorkspaceView): SessionWo
       tone: workspace.dirtyState && !/^clean$/i.test(workspace.dirtyState) ? "attention" : "neutral",
     },
   ];
+  if (workspace.runtimePathMode || workspace.runtimeDefaultCwd || workspace.runtimeRootEntries?.length) {
+    facts.push({
+      label: "Runtime paths",
+      value: runtimePathModeLabel(workspace.runtimePathMode),
+      detail: workspace.runtimeDefaultCwd ? `default ${runtimeDefaultCwdLabel(workspace.runtimeDefaultCwd)}` : "runtime surface",
+      tone: "ok",
+    });
+  }
+  return facts;
 }
 
 export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
@@ -107,8 +138,19 @@ export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
     workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? `Latest command cwd: ${workspace.latestCommandCwd}` : undefined,
     workspace.branch ? `Branch: ${workspace.branch}` : undefined,
     workspace.dirtyState ? `State: ${workspace.dirtyState}` : undefined,
+    workspace.runtimePathMode ? `Runtime path mode: ${runtimePathModeLabel(workspace.runtimePathMode)}` : undefined,
+    workspace.runtimeDefaultCwd ? `Runtime default cwd: ${runtimeDefaultCwdLabel(workspace.runtimeDefaultCwd)}` : undefined,
+    workspace.runtimeRootEntries?.length ? `Runtime root entries: ${workspace.runtimeRootEntries.map(runtimeEntryLabel).join(", ")}${workspace.runtimeRootEntriesTruncated ? `, ... (${workspace.runtimeRootEntryCount ?? "more"} total)` : ""}` : undefined,
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n");
+}
+
+export function latestRuntimeWorkspace(session: SessionState): RuntimeWorkspace | undefined {
+  for (let index = session.turns.length - 1; index >= 0; index -= 1) {
+    const workspace = session.turns[index].runtimeSurface?.workspace;
+    if (workspace) return workspace;
+  }
+  return undefined;
 }
 
 function agentCwdValue(workspace: SessionWorkspaceView): string {
@@ -131,6 +173,8 @@ export function workspaceDraft(workspace: SessionWorkspaceView): string {
     ? "Identify the current workspace before making file changes or running project commands:"
     : workspace.verification === "mismatch"
     ? "Verify this workspace mismatch before making more file changes or running commands:"
+    : workspace.verification === "runtime"
+      ? "Use these runtime workspace-relative path rules in the next step:"
     : workspace.verification === "missing_binding"
       ? "Use this historical command cwd as workspace evidence for the next step:"
     : "Use this workspace boundary for the next step:";
@@ -200,17 +244,20 @@ function workspaceDetail({
   branch,
   dirtyState,
   cwd,
+  runtimePathMode,
 }: {
   path?: string;
   branch?: string;
   dirtyState?: string;
   cwd?: string;
+  runtimePathMode?: string;
 }): string {
   return [
     path ? compactPath(path) : undefined,
     branch ? `branch ${branch}` : undefined,
     dirtyState,
     cwd ? `cwd ${compactPath(cwd)}` : undefined,
+    runtimePathMode ? runtimePathModeLabel(runtimePathMode) : undefined,
   ].filter(Boolean).join(" · ");
 }
 
@@ -228,17 +275,20 @@ function workspaceVerification(
   path?: string,
   cwd?: string,
   issue?: string,
+  hasRuntimeWorkspace = false,
 ): SessionWorkspaceView["verification"] {
   if (issue) return "mismatch";
   if (!path && cwd) return "missing_binding";
   if (path && cwd) return "verified";
   if (path) return "bound";
+  if (hasRuntimeWorkspace) return "runtime";
   return "unknown";
 }
 
 function workspaceSummary(verification: SessionWorkspaceView["verification"], label?: string): string {
   if (verification === "mismatch") return "Workspace mismatch";
   if (verification === "missing_binding") return "Workspace binding missing";
+  if (verification === "runtime") return "Runtime workspace";
   if (verification === "bound") return label ? `${label} bound` : "Workspace bound";
   return label ?? "Workspace recorded";
 }
@@ -256,6 +306,20 @@ function compactPath(path: string): string {
 
 function clean(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function runtimePathModeLabel(value: string | undefined): string {
+  if (value === "workspace_relative") return "workspace-relative";
+  return value ?? "runtime";
+}
+
+function runtimeDefaultCwdLabel(value: string): string {
+  if (value === "workspace_root") return "workspace root";
+  return value;
+}
+
+function runtimeEntryLabel(entry: NonNullable<RuntimeWorkspace["root_entries"]>[number]): string {
+  return entry.kind ? `${entry.name} (${entry.kind})` : entry.name;
 }
 
 function normalizePath(path: string): string {

@@ -89,7 +89,7 @@ import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun, manualRunDraft } from "./view/sessionRun";
 import { buildWorkbenchArtifacts } from "./view/sessionArtifacts";
-import { buildSessionWorkspace } from "./view/sessionWorkspace";
+import { buildSessionWorkspace, latestRuntimeWorkspace } from "./view/sessionWorkspace";
 import { buildWorkspaceFileView, type WorkspaceFileBrowserState } from "./view/workspaceFile";
 import { buildSessionTrace } from "./view/sessionTrace";
 import {
@@ -360,7 +360,8 @@ export function App() {
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
   const workbenchArtifacts = useMemo(() => buildWorkbenchArtifacts(session), [session]);
-  const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun), [selectedSession, sessionRun]);
+  const runtimeWorkspace = useMemo(() => latestRuntimeWorkspace(session), [session]);
+  const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun, runtimeWorkspace), [runtimeWorkspace, selectedSession, sessionRun]);
   const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
   const conversationContext = useMemo(() => buildConversationContextView(session, selectedSession?.context), [selectedSession?.context, session]);
   useEffect(() => {

@@ -170,6 +170,39 @@ describe("SessionWorkspacePanel", () => {
       "workspace",
     );
   });
+
+  it("shows runtime workspace path mode and root entries", () => {
+    render(<SessionWorkspacePanel defaultOpen workspace={{
+      hasData: true,
+      summary: "Runtime workspace",
+      shortStatus: "Runtime workspace",
+      detail: "workspace-relative",
+      verification: "runtime",
+      runtimeDefaultCwd: "workspace_root",
+      runtimePathMode: "workspace_relative",
+      runtimeRoot: ".",
+      runtimeRootEntryCount: 3,
+      runtimeRootEntries: [
+        { name: "README.md", kind: "file" },
+        { name: "src", kind: "dir" },
+        { name: "package.json", kind: "file" },
+      ],
+    }} />);
+
+    const panel = screen.getByTestId("session-workspace-panel");
+    expect(panel).toHaveTextContent("Runtime workspace");
+    expect(panel).toHaveTextContent("Workspace-relative runtime");
+    expect(panel).toHaveTextContent("Workspace tools start at `.`");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Runtime path mode");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("workspace-relative");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Default cwd");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("workspace root");
+    expect(screen.getByLabelText("Workspace review facts")).toHaveTextContent("Runtime paths");
+    expect(screen.getByTestId("session-workspace-root-entries")).toHaveTextContent("Root entries");
+    expect(screen.getByTestId("session-workspace-root-entries")).toHaveTextContent("README.md");
+    expect(screen.getByTestId("session-workspace-root-entries")).toHaveTextContent("src");
+    expect(screen.getByTestId("session-workspace-root-entries")).toHaveTextContent("dir");
+  });
 });
 
 const workspace: SessionWorkspaceView = {

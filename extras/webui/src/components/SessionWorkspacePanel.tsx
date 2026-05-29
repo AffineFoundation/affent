@@ -62,9 +62,30 @@ export function SessionWorkspacePanel({
               {workspace.latestCommandCwd && workspace.lastAgentCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
                 <WorkspaceField label="Recorded agent cwd" value={displayPath(workspace.lastAgentCwd)} title={workspace.lastAgentCwd} mono />
               ) : null}
+              {workspace.runtimePathMode ? <WorkspaceField label="Runtime path mode" value={runtimePathModeLabel(workspace.runtimePathMode)} /> : null}
+              {workspace.runtimeDefaultCwd ? <WorkspaceField label="Default cwd" value={runtimeDefaultCwdLabel(workspace.runtimeDefaultCwd)} /> : null}
               {workspace.branch ? <WorkspaceField label="Branch" value={workspace.branch} /> : null}
               {workspace.dirtyState ? <WorkspaceField label="State" value={workspace.dirtyState} /> : null}
             </div>
+            {workspace.runtimeRootEntries?.length ? (
+              <div className="session-workspace-root-entries" data-testid="session-workspace-root-entries" aria-label="Workspace root entries">
+                <div>
+                  <span>Root entries</span>
+                  <strong>
+                    {workspace.runtimeRootEntryCount ?? workspace.runtimeRootEntries.length}
+                    {workspace.runtimeRootEntriesTruncated ? " listed with more hidden" : " visible"}
+                  </strong>
+                </div>
+                <ul>
+                  {workspace.runtimeRootEntries.slice(0, 12).map((entry) => (
+                    <li key={`${entry.kind ?? "entry"}:${entry.name}`}>
+                      <code title={entry.name}>{entry.name}</code>
+                      {entry.kind ? <span>{entry.kind}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
           <span className="session-evidence-actions">
             {workspace.path ? <CopyButton label="Copy path" value={workspace.path} className="ghost-action" /> : null}
@@ -176,6 +197,7 @@ function workspaceNameFromPath(path: string | undefined): string | undefined {
 
 function workspaceHeroTitle(workspace: SessionWorkspaceView): string {
   if (workspace.verification === "missing_binding") return workspace.latestCommandCwd ? "Command cwd only" : "Recorded cwd only";
+  if (workspace.verification === "runtime") return "Workspace-relative runtime";
   if (workspace.verification === "unknown") return "Workspace evidence";
   return workspace.label ?? workspaceNameFromPath(workspace.path ?? workspace.lastAgentCwd) ?? "Workspace evidence";
 }
@@ -187,6 +209,7 @@ function agentCwdLabel(workspace: SessionWorkspaceView): string {
 function verificationLabel(verification: SessionWorkspaceView["verification"]): string {
   if (verification === "mismatch") return "Check cwd";
   if (verification === "missing_binding") return "Binding missing";
+  if (verification === "runtime") return "Runtime workspace";
   if (verification === "bound") return "Workspace bound";
   if (verification === "verified") return "Boundary verified";
   return "Evidence missing";
@@ -194,6 +217,7 @@ function verificationLabel(verification: SessionWorkspaceView["verification"]): 
 
 function verificationDetail(verification: SessionWorkspaceView["verification"]): string {
   if (verification === "missing_binding") return "This history has command cwd evidence, but no active session workspace path.";
+  if (verification === "runtime") return "Workspace tools start at `.` and use workspace-relative paths.";
   if (verification === "bound") return "Session workspace is recorded; no shell cwd has been observed yet.";
   if (verification === "verified") return "Latest command cwd is inside the session workspace.";
   return "No workspace binding or command cwd has been recorded.";
@@ -202,11 +226,23 @@ function verificationDetail(verification: SessionWorkspaceView["verification"]):
 function workspaceActionLabel(workspace: SessionWorkspaceView): string {
   if (!workspace.hasData || workspace.verification === "unknown") return "Locate workspace";
   if (workspace.verification === "mismatch") return "Ask to verify";
+  if (workspace.verification === "runtime") return "Use runtime workspace";
   if (workspace.verification === "missing_binding") return "Use cwd in chat";
   return "Use workspace in chat";
 }
 
 function workspaceVerifyActionLabel(workspace: SessionWorkspaceView): string {
   if (workspace.verification === "missing_binding") return "Verify cwd";
+  if (workspace.verification === "runtime") return "Verify runtime cwd";
   return "Verify workspace";
+}
+
+function runtimePathModeLabel(value: string): string {
+  if (value === "workspace_relative") return "workspace-relative";
+  return value;
+}
+
+function runtimeDefaultCwdLabel(value: string): string {
+  if (value === "workspace_root") return "workspace root";
+  return value;
 }

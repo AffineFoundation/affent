@@ -3,7 +3,7 @@ import type { SessionSummary } from "../api/sessions";
 import { reduceRawEvents } from "../store/reduce";
 import { buildSessionRun } from "./sessionRun";
 import type { SessionRunView } from "./sessionRun";
-import { buildSessionWorkspace, workspaceCwdBrowserPath, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
+import { buildSessionWorkspace, latestRuntimeWorkspace, workspaceCwdBrowserPath, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "./sessionWorkspace";
 
 describe("buildSessionWorkspace", () => {
   it("summarizes a recorded workspace binding with the latest command cwd", () => {
@@ -100,6 +100,47 @@ describe("buildSessionWorkspace", () => {
       summary: "No workspace evidence",
     });
     expect(workspaceDraft(workspace)).toContain("Identify the current workspace before making file changes or running project commands");
+  });
+
+  it("uses runtime workspace surface when absolute session metadata is not enough", () => {
+    const state = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "runtime.surface",
+        data: {
+          turn_id: "t1",
+          tool_count: 2,
+          capabilities: { workspace_tools: ["read_file", "list_files"] },
+          workspace: {
+            default_cwd: "workspace_root",
+            path_mode: "workspace_relative",
+            root: ".",
+            root_entry_count: 3,
+            root_entries: [
+              { name: "README.md", kind: "file" },
+              { name: "src", kind: "dir" },
+              { name: "package.json", kind: "file" },
+            ],
+          },
+        },
+      },
+    ]);
+    const workspace = buildSessionWorkspace(undefined, run(), latestRuntimeWorkspace(state));
+
+    expect(workspace).toMatchObject({
+      hasData: true,
+      summary: "Runtime workspace",
+      verification: "runtime",
+      runtimeDefaultCwd: "workspace_root",
+      runtimePathMode: "workspace_relative",
+      runtimeRootEntryCount: 3,
+    });
+    expect(workspace.detail).toBe("workspace-relative");
+    expect(workspaceReviewFacts(workspace)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Runtime paths", value: "workspace-relative", detail: "default workspace root", tone: "ok" }),
+    ]));
+    expect(workspaceEvidenceText(workspace)).toContain("Runtime root entries: README.md (file), src (dir), package.json (file)");
   });
 
   it("uses the chronologically latest command cwd instead of the prioritized Run list", () => {

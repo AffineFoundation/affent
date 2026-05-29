@@ -3553,6 +3553,83 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-workspace-root-entries {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  border-radius: var(--radius-sm);
+  background: rgba(240, 253, 250, 0.42);
+  padding: 8px;
+}
+
+.session-workspace-root-entries > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-workspace-root-entries > div span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-workspace-root-entries > div strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-workspace-root-entries ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-workspace-root-entries li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.7);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.68);
+  padding: 6px 7px;
+}
+
+.session-workspace-root-entries code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-workspace-root-entries li span {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.12);
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+}
+
 .session-workspace-boundary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -14789,9 +14866,20 @@ html[data-theme="dark"] .session-workspace-hero[data-tone="warning"] {
 
 html[data-theme="dark"] .session-workspace-boundary-field,
 html[data-theme="dark"] .session-workspace-field,
+html[data-theme="dark"] .session-workspace-root-entries,
 html[data-theme="dark"] .session-workspace-facts > span {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(17, 20, 24, 0.72);
+}
+
+html[data-theme="dark"] .session-workspace-root-entries li {
+  border-color: rgba(58, 68, 81, 0.76);
+  background: rgba(15, 23, 42, 0.46);
+}
+
+html[data-theme="dark"] .session-workspace-root-entries li span {
+  background: rgba(45, 212, 191, 0.12);
+  color: #5eead4;
 }
 
 html[data-theme="dark"] .session-workspace-boundary-field[data-tone="warning"],
