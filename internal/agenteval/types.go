@@ -832,6 +832,9 @@ type ContextCompactionStats struct {
 	PostPolicyObserved           int
 	PostPolicyStillOverTrigger   int
 	MaxPostPolicyPressurePercent int
+	CompactScopeActive           int
+	MaxCompactScopedInputTokens  int
+	MaxCompactHardInputLimit     int
 	ByReason                     map[string]int
 	Examples                     []ContextCompaction
 }
@@ -866,6 +869,9 @@ type ContextCompactionSkipStats struct {
 	PostPolicyStillOverTrigger   int
 	MaxPolicyPressurePercent     int
 	MaxPostPolicyPressurePercent int
+	CompactScopeActive           int
+	MaxCompactScopedInputTokens  int
+	MaxCompactHardInputLimit     int
 	ByCause                      map[string]int
 	ByReason                     map[string]int
 	Examples                     []ContextCompactionSkip
@@ -2115,6 +2121,15 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 				stats.PostPolicyStillOverTrigger++
 			}
 		}
+		if compaction.CompactScopeActive {
+			stats.CompactScopeActive++
+		}
+		if compaction.CompactScopedInputTokens > stats.MaxCompactScopedInputTokens {
+			stats.MaxCompactScopedInputTokens = compaction.CompactScopedInputTokens
+		}
+		if compaction.CompactHardInputLimitTokens > stats.MaxCompactHardInputLimit {
+			stats.MaxCompactHardInputLimit = compaction.CompactHardInputLimitTokens
+		}
 		if contextCompactionSummaryMissing(compaction) {
 			stats.SummaryMissing++
 		}
@@ -2192,6 +2207,15 @@ func (t Trace) ContextCompactionSkipStats(maxExamples int) ContextCompactionSkip
 			if skipped.AfterEstimatedInputTokens >= skipped.TriggerInputTokens {
 				stats.PostPolicyStillOverTrigger++
 			}
+		}
+		if skipped.CompactScopeActive {
+			stats.CompactScopeActive++
+		}
+		if skipped.CompactScopedInputTokens > stats.MaxCompactScopedInputTokens {
+			stats.MaxCompactScopedInputTokens = skipped.CompactScopedInputTokens
+		}
+		if skipped.CompactHardInputLimitTokens > stats.MaxCompactHardInputLimit {
+			stats.MaxCompactHardInputLimit = skipped.CompactHardInputLimitTokens
 		}
 		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
 			continue

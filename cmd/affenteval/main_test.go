@@ -2510,23 +2510,30 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			PostPolicyObserved:           1,
 			PostPolicyStillOverTrigger:   0,
 			MaxPostPolicyPressurePercent: 95,
+			CompactScopeActive:           1,
+			MaxCompactScopedInputTokens:  38000,
+			MaxCompactHardInputLimit:     40000,
 			Examples: []agenteval.ContextCompaction{{
-				TurnID:                     "turn-summary",
-				BeforeMessages:             70,
-				AfterMessages:              22,
-				RemovedMessages:            48,
-				EstimatedInputTokens:       48000,
-				AfterEstimatedInputTokens:  38000,
-				TriggerInputTokens:         40000,
-				ModelContextWindowTokens:   70000,
-				ReservedOutputTokens:       30000,
-				CompactTriggerInputPercent: 80,
-				Reactive:                   true,
-				Reason:                     "context_overflow",
-				SummaryPresent:             true,
-				SummaryPresentKnown:        true,
-				SummaryBytes:               2048,
-				SummaryPreview:             "USER_CONTEXT: preserve the market evidence trail.",
+				TurnID:                      "turn-summary",
+				BeforeMessages:              70,
+				AfterMessages:               22,
+				RemovedMessages:             48,
+				EstimatedInputTokens:        48000,
+				AfterEstimatedInputTokens:   38000,
+				TriggerInputTokens:          40000,
+				ModelContextWindowTokens:    70000,
+				ReservedOutputTokens:        30000,
+				CompactTriggerInputPercent:  80,
+				CompactScopeActive:          true,
+				CompactWindowOrdinal:        2,
+				CompactScopedInputTokens:    38000,
+				CompactHardInputLimitTokens: 40000,
+				Reactive:                    true,
+				Reason:                      "context_overflow",
+				SummaryPresent:              true,
+				SummaryPresentKnown:         true,
+				SummaryBytes:                2048,
+				SummaryPreview:              "USER_CONTEXT: preserve the market evidence trail.",
 			}},
 		},
 		ContextCompactionSkips: agenteval.ContextCompactionSkipStats{
@@ -2536,22 +2543,29 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			PostPolicyStillOverTrigger:   1,
 			MaxPolicyPressurePercent:     125,
 			MaxPostPolicyPressurePercent: 130,
+			CompactScopeActive:           1,
+			MaxCompactScopedInputTokens:  52000,
+			MaxCompactHardInputLimit:     40000,
 			ByCause:                      map[string]int{"request_pressure_not_reduced": 1},
 			ByReason:                     map[string]int{"estimated_context_pressure": 1},
 			Examples: []agenteval.ContextCompactionSkip{{
-				TurnID:                     "turn-summary",
-				Cause:                      "request_pressure_not_reduced",
-				Reason:                     "estimated_context_pressure",
-				BeforeMessages:             22,
-				CandidateMessages:          8,
-				BeforeBytes:                24000,
-				CandidateBytes:             26000,
-				EstimatedInputTokens:       50000,
-				AfterEstimatedInputTokens:  52000,
-				TriggerInputTokens:         40000,
-				ModelContextWindowTokens:   70000,
-				ReservedOutputTokens:       30000,
-				CompactTriggerInputPercent: 80,
+				TurnID:                      "turn-summary",
+				Cause:                       "request_pressure_not_reduced",
+				Reason:                      "estimated_context_pressure",
+				BeforeMessages:              22,
+				CandidateMessages:           8,
+				BeforeBytes:                 24000,
+				CandidateBytes:              26000,
+				EstimatedInputTokens:        50000,
+				AfterEstimatedInputTokens:   52000,
+				TriggerInputTokens:          40000,
+				ModelContextWindowTokens:    70000,
+				ReservedOutputTokens:        30000,
+				CompactTriggerInputPercent:  80,
+				CompactScopeActive:          true,
+				CompactWindowOrdinal:        2,
+				CompactScopedInputTokens:    52000,
+				CompactHardInputLimitTokens: 40000,
 			}},
 		},
 		Repair: agenteval.ToolRepairStats{
@@ -2626,7 +2640,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,memory_search_miss:50.0%,loop_turn_checkpoint:50.0%,loop_protocol_feed:50.0%,loop_protocol_calibration_request:50.0%,loop_protocol_calibration:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,policy_observed:1,max_policy_pressure:120%,post_policy_observed:1,post_policy_over:0,max_post_policy_pressure:95%,avg_skips:0.50,skip_policy_observed:1,skip_post_policy_observed:1,skip_post_policy_over:1,skip_max_policy_pressure:125%,skip_max_post_policy_pressure:130%,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_reduced_bytes:0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,policy_observed:1,max_policy_pressure:120%,post_policy_observed:1,post_policy_over:0,max_post_policy_pressure:95%,compact_scope_active:1,max_scoped_tokens:38000,max_hard_limit:40000,avg_skips:0.50,skip_policy_observed:1,skip_post_policy_observed:1,skip_post_policy_over:1,skip_max_policy_pressure:125%,skip_max_post_policy_pressure:130%,skip_compact_scope_active:1,skip_max_scoped_tokens:52000,skip_max_hard_limit:40000,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
 		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -2694,16 +2708,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "loop_protocol_feed_scenarios=1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1") {
 		t.Fatalf("summary output missing loop protocol feed rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,reduced_bytes=0,summary_bytes=2048,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=120%,post_policy_observed=1,post_policy_over=0,max_post_policy_pressure=95%") {
+	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,reduced_bytes=0,summary_bytes=2048,summary_missing=0,summary_empty=0,policy_observed=1,max_policy_pressure=120%,post_policy_observed=1,post_policy_over=0,max_post_policy_pressure=95%,compact_scope_active=1,max_scoped_tokens=38000,max_hard_limit=40000") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "compaction_skips=1,policy_observed=1,post_policy_observed=1,post_policy_over=1,max_policy_pressure=125%,max_post_policy_pressure=130% compaction_skip_causes=request_pressure_not_reduced:1 compaction_skip_reasons=estimated_context_pressure:1") {
+	if !strings.Contains(out.String(), "compaction_skips=1,policy_observed=1,post_policy_observed=1,post_policy_over=1,max_policy_pressure=125%,max_post_policy_pressure=130%,compact_scope_active=1,max_scoped_tokens=52000,max_hard_limit=40000 compaction_skip_causes=request_pressure_not_reduced:1 compaction_skip_reasons=estimated_context_pressure:1") {
 		t.Fatalf("summary output missing context compaction skip rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120%,after:38000,after_pressure:95% summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
+	if !strings.Contains(out.String(), `context_compaction_example: scenario=taostats-rendered turn=turn-summary reactive=true messages=70->22 removed=48 policy=estimated:48000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:120%,after:38000,after_pressure:95%,scope_active:true,window:2,scoped:38000,hard_limit:40000 summary_state=present summary_bytes=2048 reason=context_overflow preview="USER_CONTEXT: preserve the market evidence trail."`) {
 		t.Fatalf("summary output missing context compaction example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), `context_compaction_skip_example: scenario=taostats-rendered turn=turn-summary cause=request_pressure_not_reduced reason=estimated_context_pressure messages=22->8 bytes=24000->26000 policy=estimated:50000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:125%,candidate:52000,candidate_pressure:130%`) {
+	if !strings.Contains(out.String(), `context_compaction_skip_example: scenario=taostats-rendered turn=turn-summary cause=request_pressure_not_reduced reason=estimated_context_pressure messages=22->8 bytes=24000->26000 policy=estimated:50000,trigger:40000,model_window:70000,reserved_output:30000,trigger_percent:80,pressure:125%,candidate:52000,candidate_pressure:130%,scope_active:true,window:2,scoped:52000,hard_limit:40000`) {
 		t.Fatalf("summary output missing context compaction skip example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
@@ -3315,22 +3329,29 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			PostPolicyObserved:           1,
 			PostPolicyStillOverTrigger:   1,
 			MaxPostPolicyPressurePercent: 110,
+			CompactScopeActive:           1,
+			MaxCompactScopedInputTokens:  44000,
+			MaxCompactHardInputLimit:     40000,
 			Examples: []agenteval.ContextCompaction{{
-				TurnID:                     "turn-jsonl",
-				BeforeMessages:             80,
-				AfterMessages:              24,
-				RemovedMessages:            56,
-				EstimatedInputTokens:       50000,
-				AfterEstimatedInputTokens:  44000,
-				TriggerInputTokens:         40000,
-				ModelContextWindowTokens:   70000,
-				ReservedOutputTokens:       30000,
-				CompactTriggerInputPercent: 80,
-				Reactive:                   true,
-				Reason:                     "context_overflow",
-				SummaryPresent:             true,
-				SummaryBytes:               3072,
-				SummaryPreview:             "USER_CONTEXT: keep browser network evidence in summary.",
+				TurnID:                      "turn-jsonl",
+				BeforeMessages:              80,
+				AfterMessages:               24,
+				RemovedMessages:             56,
+				EstimatedInputTokens:        50000,
+				AfterEstimatedInputTokens:   44000,
+				TriggerInputTokens:          40000,
+				ModelContextWindowTokens:    70000,
+				ReservedOutputTokens:        30000,
+				CompactTriggerInputPercent:  80,
+				CompactScopeActive:          true,
+				CompactWindowOrdinal:        2,
+				CompactScopedInputTokens:    44000,
+				CompactHardInputLimitTokens: 40000,
+				Reactive:                    true,
+				Reason:                      "context_overflow",
+				SummaryPresent:              true,
+				SummaryBytes:                3072,
+				SummaryPreview:              "USER_CONTEXT: keep browser network evidence in summary.",
 			}},
 		},
 		ContextCompactionSkips: agenteval.ContextCompactionSkipStats{
@@ -3340,15 +3361,22 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			PostPolicyStillOverTrigger:   1,
 			MaxPolicyPressurePercent:     125,
 			MaxPostPolicyPressurePercent: 130,
+			CompactScopeActive:           1,
+			MaxCompactScopedInputTokens:  52000,
+			MaxCompactHardInputLimit:     40000,
 			ByCause:                      map[string]int{"request_pressure_not_reduced": 1},
 			ByReason:                     map[string]int{"estimated_context_pressure": 1},
 			Examples: []agenteval.ContextCompactionSkip{{
-				TurnID:                    "turn-jsonl",
-				Cause:                     "request_pressure_not_reduced",
-				Reason:                    "estimated_context_pressure",
-				EstimatedInputTokens:      50000,
-				AfterEstimatedInputTokens: 52000,
-				TriggerInputTokens:        40000,
+				TurnID:                      "turn-jsonl",
+				Cause:                       "request_pressure_not_reduced",
+				Reason:                      "estimated_context_pressure",
+				EstimatedInputTokens:        50000,
+				AfterEstimatedInputTokens:   52000,
+				TriggerInputTokens:          40000,
+				CompactScopeActive:          true,
+				CompactWindowOrdinal:        2,
+				CompactScopedInputTokens:    52000,
+				CompactHardInputLimitTokens: 40000,
 			}},
 		},
 		ContextInjections: agenteval.ContextInjectionStats{
@@ -3523,6 +3551,12 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"context_compaction_post_policy_observed":             float64(1),
 		"context_compaction_post_policy_still_over_trigger":   float64(1),
 		"context_compaction_max_post_policy_pressure_percent": float64(110),
+		"context_compaction_compact_scope_active":             float64(1),
+		"context_compaction_max_scoped_input_tokens":          float64(44000),
+		"context_compaction_max_hard_input_limit":             float64(40000),
+		"context_compaction_skip_compact_scope_active":        float64(1),
+		"context_compaction_skip_max_scoped_input_tokens":     float64(52000),
+		"context_compaction_skip_max_hard_input_limit":        float64(40000),
 		"context_injections":                                  float64(2),
 		"context_injection_bytes":                             float64(3200),
 		"context_injection_estimated_tokens":                  float64(800),
@@ -3818,6 +3852,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		contextCompactionExample["turn_id"] != "turn-jsonl" ||
 		contextCompactionExample["reactive"] != true ||
 		contextCompactionExample["removed_messages"] != float64(56) ||
+		contextCompactionExample["compact_scope_active"] != true ||
+		contextCompactionExample["compact_scoped_input_tokens"] != float64(44000) ||
+		contextCompactionExample["compact_hard_input_limit_tokens"] != float64(40000) ||
 		contextCompactionExample["reason"] != "context_overflow" ||
 		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "browser network evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
@@ -4646,23 +4683,30 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ContextCompactionPostPolicyObserved:    1,
 		ContextCompactionPostPolicyStillOver:   1,
 		ContextCompactionMaxPostPolicyPressure: 110,
+		ContextCompactionCompactScopeActive:    1,
+		ContextCompactionMaxScopedInputTokens:  44000,
+		ContextCompactionMaxHardInputLimit:     40000,
 		ContextCompactionExamples: []agenteval.ContextCompaction{{
-			Scenario:                   "taostats-rendered",
-			TurnID:                     "turn-summary-jsonl",
-			BeforeMessages:             64,
-			AfterMessages:              20,
-			RemovedMessages:            44,
-			EstimatedInputTokens:       50000,
-			AfterEstimatedInputTokens:  44000,
-			TriggerInputTokens:         40000,
-			ModelContextWindowTokens:   70000,
-			ReservedOutputTokens:       30000,
-			CompactTriggerInputPercent: 80,
-			Reactive:                   true,
-			Reason:                     "context_overflow",
-			SummaryPresent:             true,
-			SummaryBytes:               2048,
-			SummaryPreview:             "USER_CONTEXT: preserve JSONL summary evidence.",
+			Scenario:                    "taostats-rendered",
+			TurnID:                      "turn-summary-jsonl",
+			BeforeMessages:              64,
+			AfterMessages:               20,
+			RemovedMessages:             44,
+			EstimatedInputTokens:        50000,
+			AfterEstimatedInputTokens:   44000,
+			TriggerInputTokens:          40000,
+			ModelContextWindowTokens:    70000,
+			ReservedOutputTokens:        30000,
+			CompactTriggerInputPercent:  80,
+			CompactScopeActive:          true,
+			CompactWindowOrdinal:        2,
+			CompactScopedInputTokens:    44000,
+			CompactHardInputLimitTokens: 40000,
+			Reactive:                    true,
+			Reason:                      "context_overflow",
+			SummaryPresent:              true,
+			SummaryBytes:                2048,
+			SummaryPreview:              "USER_CONTEXT: preserve JSONL summary evidence.",
 		}},
 		ContextInjections:               3,
 		ContextInjectionBySource:        map[string]int{"account_access": 1, "loop_protocol": 2},
@@ -5436,6 +5480,16 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			out.String(),
 		)
 	}
+	if got["context_compaction_compact_scope_active"] != float64(1) ||
+		got["context_compaction_max_scoped_input_tokens"] != float64(44000) ||
+		got["context_compaction_max_hard_input_limit"] != float64(40000) {
+		t.Fatalf("context compaction compact scope not preserved: active=%#v scoped=%#v hard=%#v\njson=%s",
+			got["context_compaction_compact_scope_active"],
+			got["context_compaction_max_scoped_input_tokens"],
+			got["context_compaction_max_hard_input_limit"],
+			out.String(),
+		)
+	}
 	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
 	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {
 		t.Fatalf("loop_decision_by_kind = %#v\njson=%s", got["loop_decision_by_kind"], out.String())
@@ -5495,6 +5549,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		contextCompactionExample["turn_id"] != "turn-summary-jsonl" ||
 		contextCompactionExample["removed_messages"] != float64(44) ||
 		contextCompactionExample["after_estimated_input_tokens"] != float64(44000) ||
+		contextCompactionExample["compact_scope_active"] != true ||
+		contextCompactionExample["compact_scoped_input_tokens"] != float64(44000) ||
+		contextCompactionExample["compact_hard_input_limit_tokens"] != float64(40000) ||
 		contextCompactionExample["reason"] != "context_overflow" ||
 		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "JSONL summary evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
