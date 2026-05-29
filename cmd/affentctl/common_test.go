@@ -615,7 +615,7 @@ func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
 
 func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":100000,"auto_compact_token_limit":95000}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":100000,"effective_context_window_percent":95,"auto_compact_token_limit":95000}]}`))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -627,8 +627,14 @@ func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
 	}
 	llm := agent.NewLLMClient(cf.baseURL, "", cf.model)
 	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
-	if got.compactTriggerInputTokens != 75000 {
-		t.Fatalf("compactTriggerInputTokens = %d, want explicit 75%% policy limit 75000", got.compactTriggerInputTokens)
+	if got.modelContextWindowTokens != 95000 {
+		t.Fatalf("modelContextWindowTokens = %d, want effective 95000", got.modelContextWindowTokens)
+	}
+	if got.modelContextWindowEffectivePercent != 95 {
+		t.Fatalf("modelContextWindowEffectivePercent = %d, want 95", got.modelContextWindowEffectivePercent)
+	}
+	if got.compactTriggerInputTokens != 71250 {
+		t.Fatalf("compactTriggerInputTokens = %d, want explicit 75%% effective policy limit 71250", got.compactTriggerInputTokens)
 	}
 	if !got.compactTriggerInputTokensAuto {
 		t.Fatal("compactTriggerInputTokensAuto = false, want provider-derived auto compact limit")
@@ -657,6 +663,50 @@ func TestResolveAffentctlModelContextWindowExplicitSkipsProvider(t *testing.T) {
 	}
 	if called {
 		t.Fatal("explicit model context window should skip provider metadata lookup")
+	}
+}
+
+func TestSetupLoopPropagatesAutoModelContextMetadata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %q, want /v1/models", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":100000,"effective_context_window_percent":95,"auto_compact_token_limit":95000}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "auto-model",
+		"--base-url", srv.URL + "/v1",
+		"--model-context-window-auto",
+		"--compact-trigger-input-percent", "75",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+
+	if b.loop.ModelContextWindowTokens != 95000 ||
+		b.loop.ModelContextWindowEffectivePercent != 95 ||
+		b.loop.CompactTriggerInputTokens != 71250 ||
+		!b.loop.CompactTriggerInputTokensAuto {
+		t.Fatalf("loop model context policy = window:%d effective:%d trigger:%d auto:%t",
+			b.loop.ModelContextWindowTokens,
+			b.loop.ModelContextWindowEffectivePercent,
+			b.loop.CompactTriggerInputTokens,
+			b.loop.CompactTriggerInputTokensAuto,
+		)
 	}
 }
 

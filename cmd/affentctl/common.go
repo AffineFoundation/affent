@@ -103,13 +103,14 @@ type commonFlags struct {
 	// prompt. Default on; set --project-context=false to disable.
 	projectContext bool
 
-	compactTrigger                int // <=0 falls back to agent.DefaultSummaryTriggerMsgs
-	compactTriggerInputTokens     int // 0 derives from byte trigger, <0 disables request-pressure compaction
-	compactTriggerInputTokensAuto bool
-	modelContextWindowTokens      int // 0 means unknown; derives compaction trigger when set
-	modelContextWindowAuto        bool
-	compactTriggerPercent         int // 0 uses agent default
-	compactKeepLast               int
+	compactTrigger                     int // <=0 falls back to agent.DefaultSummaryTriggerMsgs
+	compactTriggerInputTokens          int // 0 derives from byte trigger, <0 disables request-pressure compaction
+	compactTriggerInputTokensAuto      bool
+	modelContextWindowTokens           int // 0 means unknown; derives compaction trigger when set
+	modelContextWindowAuto             bool
+	modelContextWindowEffectivePercent int
+	compactTriggerPercent              int // 0 uses agent default
+	compactKeepLast                    int
 
 	sessionID    string // explicit; empty means "use --continue or new"
 	continueLast bool   // pick most recent session under workspace
@@ -274,6 +275,7 @@ func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LL
 		return c
 	}
 	c.modelContextWindowTokens = meta.ContextWindowTokens
+	c.modelContextWindowEffectivePercent = meta.EffectiveContextWindowPercent
 	if c.compactTriggerInputTokens == 0 && meta.AutoCompactTokenLimit > 0 {
 		c.compactTriggerInputTokens = agent.ClampAutoCompactTokenLimit(meta.AutoCompactTokenLimit, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(llm.Sampling))
 		c.compactTriggerInputTokensAuto = true
@@ -282,6 +284,7 @@ func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LL
 		Str("model", c.model).
 		Str("metadata_model", meta.ID).
 		Int("model_context_window_tokens", c.modelContextWindowTokens).
+		Int("effective_context_window_percent", c.modelContextWindowEffectivePercent).
 		Int("auto_compact_token_limit", c.compactTriggerInputTokens).
 		Msg("model context window resolved from provider metadata")
 	return c
@@ -1613,24 +1616,25 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	loop := &agent.Loop{
-		LLM:                           llm,
-		Tools:                         tools,
-		Conv:                          conv,
-		Events:                        events,
-		Log:                           log,
-		MaxTurnSteps:                  c.maxTurns,
-		MaxTurnInputTokens:            c.maxTurnInputTokens,
-		ModelContextWindowTokens:      c.modelContextWindowTokens,
-		ModelContextWindowAuto:        c.modelContextWindowAuto,
-		CompactTriggerInputPercent:    c.compactTriggerPercent,
-		CompactTriggerInputTokensAuto: c.compactTriggerInputTokensAuto,
-		FinalNoToolsOnMaxTurns:        true,
-		PerCallTimeout:                c.callTimeout,
-		MaxTransientRetries:           c.retryTransient,
-		TransientBackoff:              c.retryBackoff,
-		CompactTriggerInputTokens:     c.compactTriggerInputTokens,
-		WorkspaceRoot:                 workspace,
-		WorkspaceRootProvider:         activeWorkspace.Current,
+		LLM:                                llm,
+		Tools:                              tools,
+		Conv:                               conv,
+		Events:                             events,
+		Log:                                log,
+		MaxTurnSteps:                       c.maxTurns,
+		MaxTurnInputTokens:                 c.maxTurnInputTokens,
+		ModelContextWindowTokens:           c.modelContextWindowTokens,
+		ModelContextWindowAuto:             c.modelContextWindowAuto,
+		ModelContextWindowEffectivePercent: c.modelContextWindowEffectivePercent,
+		CompactTriggerInputPercent:         c.compactTriggerPercent,
+		CompactTriggerInputTokensAuto:      c.compactTriggerInputTokensAuto,
+		FinalNoToolsOnMaxTurns:             true,
+		PerCallTimeout:                     c.callTimeout,
+		MaxTransientRetries:                c.retryTransient,
+		TransientBackoff:                   c.retryBackoff,
+		CompactTriggerInputTokens:          c.compactTriggerInputTokens,
+		WorkspaceRoot:                      workspace,
+		WorkspaceRootProvider:              activeWorkspace.Current,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",
