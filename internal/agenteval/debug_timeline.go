@@ -1247,6 +1247,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if surface.Capabilities.SessionSchedule {
 		caps = append(caps, "session_schedule")
 	}
+	if surface.Capabilities.SessionScheduleRunner {
+		caps = append(caps, "session_schedule_runner")
+	}
 	if surface.Capabilities.SessionSearch {
 		caps = append(caps, "session_search")
 	}
