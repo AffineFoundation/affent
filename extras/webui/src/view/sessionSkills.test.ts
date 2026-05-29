@@ -2,19 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   activationCoverage,
   activationSummary,
-  skillDraft,
-  skillEvidenceText,
   skillKindLabel,
   matchingSkillsForPrompt,
   skillMatchesQuery,
   skillSearchMatches,
   skillSizeLabel,
   skillSummaryTags,
-  skillUpdateDraft,
 } from "./sessionSkills";
 
 describe("sessionSkills view helpers", () => {
-  it("builds actionable skill evidence from metadata and loaded content", () => {
+  it("builds scannable skill metadata and search matches", () => {
     const skill = {
       name: "coding_repair_workflow",
       description: "Repair code by reproducing failures first.",
@@ -37,19 +34,6 @@ describe("sessionSkills view helpers", () => {
       "Trigger: repair",
     ]);
     expect(skillSearchMatches(skill, "workspace")).toEqual(["Tool: workspace"]);
-    expect(skillEvidenceText(skill, "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.")).toBe([
-      "Skill evidence for coding_repair_workflow",
-      "Kind: Built in",
-      "Summary: Repair code by reproducing failures first.",
-      "Source: embed:skill",
-      "Size: 96 B",
-      "Triggers: fix, repair",
-      "Required tools: workspace",
-      "Preview: AFFENT ACTIVE SKILL: coding_repair_workflow",
-      "Loaded content:\nAFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.",
-    ].join("\n"));
-    expect(skillDraft(skill)).toContain("apply, update, or replace");
-    expect(skillUpdateDraft(skill, "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.")).toContain("Review and update this reusable skill");
   });
 
   it("summarizes activation coverage across skills", () => {

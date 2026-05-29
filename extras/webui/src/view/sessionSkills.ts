@@ -92,38 +92,6 @@ export function skillSizeLabel(skill: SessionSkillInfo): string {
   return formatByteCount(skill.body_bytes);
 }
 
-export function skillEvidenceText(skill: SessionSkillInfo, body?: string): string {
-  const triggers = skillTriggers(skill);
-  const lines = [
-    `Skill evidence for ${skill.name}`,
-    `Kind: ${skillKindLabel(skill)}`,
-    skill.description ? `Summary: ${skill.description}` : undefined,
-    skill.source ? `Source: ${skill.source}` : undefined,
-    `Size: ${skillSizeLabel(skill)}`,
-    triggers.length > 0 ? `Triggers: ${triggers.join(", ")}` : undefined,
-    skill.required_tools && skill.required_tools.length > 0 ? `Required tools: ${skill.required_tools.join(", ")}` : undefined,
-    skill.body_preview ? `Preview: ${skill.body_preview}` : undefined,
-    body ? `Loaded content:\n${body}` : undefined,
-  ].filter((line): line is string => !!line);
-  return lines.join("\n");
-}
-
-export function skillDraft(skill: SessionSkillInfo, body?: string): string {
-  return [
-    "Use this skill evidence to decide whether to apply, update, or replace the reusable workflow:",
-    "",
-    skillEvidenceText(skill, body),
-  ].join("\n");
-}
-
-export function skillUpdateDraft(skill: SessionSkillInfo, body?: string): string {
-  return [
-    "Review and update this reusable skill if it is stale, incomplete, duplicated, or unsafe. Preserve useful activation rules and explain any replacement:",
-    "",
-    skillEvidenceText(skill, body),
-  ].join("\n");
-}
-
 export function skillTriggers(skill: SessionSkillInfo): string[] {
   return skill.triggers ?? skill.auto_activation?.any ?? [];
 }

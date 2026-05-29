@@ -5,8 +5,6 @@ import {
   activationCoverage,
   activationSummary,
   matchingSkillsForPrompt,
-  skillDraft,
-  skillEvidenceText,
   skillKindLabel,
   skillMatchesQuery,
   skillOriginLabel,
@@ -14,7 +12,6 @@ import {
   skillSizeLabel,
   skillSummaryTags,
   skillTriggers,
-  skillUpdateDraft,
 } from "../view/sessionSkills";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
@@ -348,7 +345,6 @@ export function SessionSkillsPanel({
                 bodyState={bodyByName[focusedSkill.name]}
                 onLoadBody={onReadSkill ? () => void loadBody(focusedSkill.name) : undefined}
                 onEdit={canInstall && focusedSkill.runtime ? () => void editSkill(focusedSkill) : undefined}
-                onUseAsDraft={onUseAsDraft}
               />
             ) : null}
             <div className="session-skills-list" data-testid="session-skills-list">
@@ -394,40 +390,31 @@ export function SessionSkillsPanel({
                           <span>{skillSizeLabel(skill)}</span>
                           {activationSummary(skill) ? <span>{activationSummary(skill)}</span> : null}
                         </div>
-                        <div className="session-skill-actions">
-                          <CopyButton label="Copy details" value={skillEvidenceText(skill, body)} className="node-action" />
-                          {canInstall && skill.runtime ? (
-                            <button type="button" className="node-action" onClick={() => void editSkill(skill)}>
-                              Edit
-                            </button>
-                          ) : null}
-                          {onDeleteSkill && skill.runtime ? (
-                            deleteConfirmName === skill.name ? (
-                              <span className="session-skill-delete-confirm" role="group" aria-label={`Confirm delete ${skill.name}`}>
-                                <button type="button" className="node-action" disabled={deletingSkillName === skill.name} onClick={() => setDeleteConfirmName(undefined)}>
-                                  Cancel
+                        {(canInstall && skill.runtime) || (onDeleteSkill && skill.runtime) ? (
+                          <div className="session-skill-actions">
+                            {canInstall && skill.runtime ? (
+                              <button type="button" className="node-action" onClick={() => void editSkill(skill)}>
+                                Edit
+                              </button>
+                            ) : null}
+                            {onDeleteSkill && skill.runtime ? (
+                              deleteConfirmName === skill.name ? (
+                                <span className="session-skill-delete-confirm" role="group" aria-label={`Confirm delete ${skill.name}`}>
+                                  <button type="button" className="node-action" disabled={deletingSkillName === skill.name} onClick={() => setDeleteConfirmName(undefined)}>
+                                    Cancel
+                                  </button>
+                                  <button type="button" className="node-action danger-action" disabled={!!deletingSkillName} onClick={() => void deleteSkill(skill.name)}>
+                                    {deletingSkillName === skill.name ? "Deleting" : "Confirm delete"}
+                                  </button>
+                                </span>
+                              ) : (
+                                <button type="button" className="node-action danger-action" disabled={!!deletingSkillName} onClick={() => setDeleteConfirmName(skill.name)}>
+                                  Delete
                                 </button>
-                                <button type="button" className="node-action danger-action" disabled={!!deletingSkillName} onClick={() => void deleteSkill(skill.name)}>
-                                  {deletingSkillName === skill.name ? "Deleting" : "Confirm delete"}
-                                </button>
-                              </span>
-                            ) : (
-                              <button type="button" className="node-action danger-action" disabled={!!deletingSkillName} onClick={() => setDeleteConfirmName(skill.name)}>
-                                Delete
-                              </button>
-                            )
-                          ) : null}
-                          {onUseAsDraft ? (
-                            <>
-                              <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
-                                Start from skill
-                              </button>
-                              <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
-                                Revise skill
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
+                              )
+                            ) : null}
+                          </div>
+                        ) : null}
                         {bodyState?.loading ? <div className="session-skills-empty">Loading full content...</div> : null}
                         {bodyState?.error ? <div className="session-skills-empty error">{bodyState.error}</div> : null}
                         {body ? (
@@ -664,13 +651,11 @@ function SkillReviewFocus({
   bodyState,
   onLoadBody,
   onEdit,
-  onUseAsDraft,
 }: {
   skill: SessionSkillInfo;
   bodyState?: SkillBodyState;
   onLoadBody?: () => void;
   onEdit?: () => void;
-  onUseAsDraft?: UseAsDraft;
 }) {
   const body = bodyState?.body ?? skill.body;
   const triggers = skillTriggers(skill);
@@ -688,28 +673,20 @@ function SkillReviewFocus({
         <strong>{skill.name}</strong>
         <small>{skill.description || "No summary"}</small>
       </div>
-      <div className="session-skill-actions">
-        {onLoadBody && !body ? (
-          <button type="button" className="node-action" onClick={onLoadBody}>
-            Load content
-          </button>
-        ) : null}
-        {onEdit ? (
-          <button type="button" className="node-action" onClick={onEdit}>
-            Edit skill
-          </button>
-        ) : null}
-        {onUseAsDraft ? (
-          <>
-            <button type="button" className="node-action" onClick={() => onUseAsDraft(skillDraft(skill, body), "skill")}>
-              Start from skill
+      {(onLoadBody && !body) || onEdit ? (
+        <div className="session-skill-actions">
+          {onLoadBody && !body ? (
+            <button type="button" className="node-action" onClick={onLoadBody}>
+              Load content
             </button>
-            <button type="button" className="node-action" onClick={() => onUseAsDraft(skillUpdateDraft(skill, body), "skill")}>
-              Revise skill
+          ) : null}
+          {onEdit ? (
+            <button type="button" className="node-action" onClick={onEdit}>
+              Edit skill
             </button>
-          </>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
       <div className="session-skills-focus-statline" aria-label="Skill summary facts">
         <span>{skillOriginLabel(skill) ?? "Runtime"}</span>
         <span>{skillSizeLabel(skill)}</span>

@@ -8,7 +8,6 @@ import { SessionSkillsPanel } from "./SessionSkillsPanel";
 describe("SessionSkillsPanel", () => {
   it("lists skill titles and summaries, then loads full content on expand", async () => {
     const user = userEvent.setup();
-    const onUseAsDraft = vi.fn();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const onReadSkill = vi.fn(async () => ({
@@ -36,7 +35,6 @@ describe("SessionSkillsPanel", () => {
         installEnabled
         onReadSkill={onReadSkill}
         onInstallSkill={vi.fn()}
-        onUseAsDraft={onUseAsDraft}
       />,
     );
 
@@ -61,8 +59,8 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("2 triggers · 1 tool");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("fix");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("workspace");
-    await user.click(within(screen.getByTestId("session-skills-focus")).getByRole("button", { name: "Start from skill" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("apply, update, or replace"), "skill");
+    expect(within(screen.getByTestId("session-skills-focus")).queryByRole("button", { name: "Start from skill" })).toBeNull();
+    expect(within(screen.getByTestId("session-skills-focus")).queryByRole("button", { name: "Revise skill" })).toBeNull();
     await user.click(screen.getByRole("button", { name: /Tool-bound\s+1/ }));
     expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
@@ -76,15 +74,11 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Origin: Built-in library");
     expect(await within(screen.getByTestId("session-skills-list")).findByText(/Reproduce first/)).toBeInTheDocument();
 
-    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Copy details" }));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Skill evidence for coding_repair_workflow"));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Loaded content:"));
-
-    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Start from skill" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("apply, update, or replace"), "skill");
-    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Revise skill" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Review and update this reusable skill"), "skill");
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("Loaded content:"), "skill");
+    expect(within(screen.getByTestId("session-skills-list")).queryByRole("button", { name: "Copy details" })).toBeNull();
+    expect(within(screen.getByTestId("session-skills-list")).queryByRole("button", { name: "Start from skill" })).toBeNull();
+    expect(within(screen.getByTestId("session-skills-list")).queryByRole("button", { name: "Revise skill" })).toBeNull();
+    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Copy" }));
+    expect(writeText).toHaveBeenCalledWith("AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.");
   });
 
   it("submits a manually entered skill", async () => {
