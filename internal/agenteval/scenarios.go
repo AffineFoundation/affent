@@ -2655,6 +2655,33 @@ func memoryAutonomousDurableRuleScenario() BatchScenario {
 	}
 }
 
+func memoryIgnoreTransientTaskStatusScenario() BatchScenario {
+	return BatchScenario{
+		Name:         "memory-ignore-transient-task-status",
+		Suites:       []string{smallModelToolsSuite, longRunSuite},
+		Domains:      []string{memoryDomain, longRunRecoveryDomain},
+		SessionID:    "memory-transient-status",
+		EnableMemory: true,
+		Prompt:       "Temporary status for this turn only: marker TEMP-MEM-NOISE-22, tests are currently red, no commit hash exists, and no push result exists. This status is only useful for the current reply and should not matter in future sessions. Acknowledge it and explicitly distinguish it from durable memory.",
+		Files: map[string]string{
+			"README.md": "# Transient Memory Eval\n\nThis repository has no durable convention to remember.\n",
+		},
+		VerifyCommand: shellAnd(
+			`test ! -d .affent/memory || ! grep -R "TEMP-MEM-NOISE-22" .affent/memory`,
+			`test ! -d .affent/memory || ! grep -R "commit hash" .affent/memory`,
+			`test ! -d .affent/memory || ! grep -R "push result" .affent/memory`,
+		),
+		ForbiddenTools: []string{"memory", "read_file", "shell", "write_file", "edit_file"},
+		RequiredFinalText: []string{
+			"TEMP-MEM-NOISE-22",
+			"current",
+			"durable",
+		},
+		ProtectedFiles: []string{"README.md"},
+		MaxTurns:       5,
+	}
+}
+
 func smallToolRepeatedReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "small-tools-repeated-read",

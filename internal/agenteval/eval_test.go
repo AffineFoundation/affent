@@ -1785,6 +1785,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundSessionHistoryRecall := false
 	foundMemoryWriteStats := false
 	foundMemoryAutonomousWrite := false
+	foundMemoryTransientStatus := false
 	foundSymbolContext := false
 	foundSymbolContextRuntimeCapabilities := false
 	foundSymbolContextThenReadFile := false
@@ -1981,6 +1982,20 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				}
 			}
 		}
+		if scenario.Name == "memory-ignore-transient-task-status" {
+			foundMemoryTransientStatus = true
+			if !scenario.EnableMemory || scenario.SessionID != "memory-transient-status" {
+				t.Fatalf("memory-ignore-transient-task-status memory/session fields = memory:%v session:%q", scenario.EnableMemory, scenario.SessionID)
+			}
+			if !stringSliceContains(scenario.ForbiddenTools, "memory") {
+				t.Fatalf("memory-ignore-transient-task-status ForbiddenTools = %#v, want memory", scenario.ForbiddenTools)
+			}
+			for _, want := range []string{"TEMP-MEM-NOISE-22", "commit hash", "push result"} {
+				if !strings.Contains(scenario.VerifyCommand, want) {
+					t.Fatalf("memory-ignore-transient-task-status VerifyCommand = %q, want %q", scenario.VerifyCommand, want)
+				}
+			}
+		}
 		if scenario.Name == "default-runtime-repo-search" {
 			foundRepoSearch = true
 			if !stringSliceContains(scenario.RequiredTools, "repo_search") {
@@ -2112,6 +2127,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundMemoryAutonomousWrite {
 		t.Fatalf("small-model-tools suite missing memory-autonomous-durable-rule")
 	}
+	if !foundMemoryTransientStatus {
+		t.Fatalf("small-model-tools suite missing memory-ignore-transient-task-status")
+	}
 	if !foundRepoSearch {
 		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
 	}
@@ -2144,8 +2162,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 31 {
-		t.Fatalf("long-run suite size = %d, want 31", len(scenarios))
+	if len(scenarios) != 32 {
+		t.Fatalf("long-run suite size = %d, want 32", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -3413,6 +3431,25 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(debugScenarioExpectations(memoryAutonomousWrite).CheckNames, "memory_update_metadata_at_least:1") {
 		t.Fatalf("autonomous memory write checks = %#v, want structured memory update metadata check", debugScenarioExpectations(memoryAutonomousWrite).CheckNames)
+	}
+
+	memoryTransientStatus, ok := seen["memory-ignore-transient-task-status"]
+	if !ok {
+		t.Fatalf("long-run suite missing transient memory status scenario")
+	}
+	if !memoryTransientStatus.EnableMemory || memoryTransientStatus.SessionID != "memory-transient-status" {
+		t.Fatalf("transient memory status fields = memory:%v session:%q", memoryTransientStatus.EnableMemory, memoryTransientStatus.SessionID)
+	}
+	if !stringSliceContains(memoryTransientStatus.ForbiddenTools, "memory") {
+		t.Fatalf("transient memory status ForbiddenTools = %#v, want memory", memoryTransientStatus.ForbiddenTools)
+	}
+	if !stringSliceContains(memoryTransientStatus.Domains, memoryDomain) || !stringSliceContains(memoryTransientStatus.Domains, longRunRecoveryDomain) {
+		t.Fatalf("transient memory status Domains = %#v, want memory and longrun_recovery", memoryTransientStatus.Domains)
+	}
+	for _, want := range []string{"TEMP-MEM-NOISE-22", "commit hash", "push result"} {
+		if !strings.Contains(memoryTransientStatus.VerifyCommand, want) {
+			t.Fatalf("transient memory status VerifyCommand = %q, want %q", memoryTransientStatus.VerifyCommand, want)
+		}
 	}
 
 	skillInstall, ok := seen["skill-reviewed-install-activation"]
