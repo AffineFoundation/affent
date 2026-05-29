@@ -1238,15 +1238,16 @@ func TestSessionPool_AttachesRollingCompactor(t *testing.T) {
 // the compactor stays on the 240/10 defaults forever.
 func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	cfg := Config{
-		Listen:          "127.0.0.1:0",
-		MaxSessions:     4,
-		SessionIdleTTL:  "5m",
-		WorkspaceRoot:   t.TempDir(),
-		BaseURL:         "http://127.0.0.1:0",
-		APIKey:          "test",
-		Model:           "fake",
-		CompactTrigger:  120,
-		CompactKeepLast: 4,
+		Listen:                    "127.0.0.1:0",
+		MaxSessions:               4,
+		SessionIdleTTL:            "5m",
+		WorkspaceRoot:             t.TempDir(),
+		BaseURL:                   "http://127.0.0.1:0",
+		APIKey:                    "test",
+		Model:                     "fake",
+		CompactTrigger:            120,
+		CompactTriggerInputTokens: 4096,
+		CompactKeepLast:           4,
 	}
 	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
 	if err != nil {
@@ -1271,6 +1272,9 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	if lc.KeepLast != 4 {
 		t.Errorf("KeepLast = %d, want 4 from config", lc.KeepLast)
 	}
+	if s.loop.CompactTriggerInputTokens != 4096 {
+		t.Errorf("CompactTriggerInputTokens = %d, want 4096 from config", s.loop.CompactTriggerInputTokens)
+	}
 }
 
 // TestSessionPool_CompactorFallsBackToDefaults pins the zero-value
@@ -1282,6 +1286,9 @@ func TestSessionPool_CompactorFallsBackToDefaults(t *testing.T) {
 	lc := s.loop.Compactor.(*agent.LLMSummaryCompactor)
 	if lc.TriggerMsgs != agent.DefaultSummaryTriggerMsgs {
 		t.Errorf("TriggerMsgs = %d, want default %d", lc.TriggerMsgs, agent.DefaultSummaryTriggerMsgs)
+	}
+	if s.loop.CompactTriggerInputTokens != 0 {
+		t.Errorf("CompactTriggerInputTokens = %d, want 0 to use runtime default", s.loop.CompactTriggerInputTokens)
 	}
 	if lc.TriggerBytes != agent.DefaultSummaryTriggerBytes {
 		t.Errorf("TriggerBytes = %d, want default %d", lc.TriggerBytes, agent.DefaultSummaryTriggerBytes)

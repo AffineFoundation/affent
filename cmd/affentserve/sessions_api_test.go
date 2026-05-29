@@ -369,6 +369,22 @@ func TestSessionContextSnapshotUsesRequestInputPressure(t *testing.T) {
 	}
 }
 
+func TestSessionContextSnapshotUsesConfiguredRequestInputTrigger(t *testing.T) {
+	got := sessionContextSnapshot(12, 16*1024, 750, Config{CompactTrigger: 240, CompactTriggerInputTokens: 1000})
+	if got.CompactTriggerInputTokens != 1000 ||
+		got.RequestInputCompactPercent != 75 ||
+		got.RequestInputTokensUntilCompact != 250 {
+		t.Fatalf("context snapshot = %+v, want configured request-input trigger at 75%% with 250 remaining", got)
+	}
+
+	disabled := sessionContextSnapshot(12, 16*1024, 750, Config{CompactTrigger: 240, CompactTriggerInputTokens: -1})
+	if disabled.CompactTriggerInputTokens != 0 ||
+		disabled.RequestInputCompactPercent != 0 ||
+		disabled.RequestInputTokensUntilCompact != 0 {
+		t.Fatalf("disabled request-input snapshot = %+v, want no request-input pressure", disabled)
+	}
+}
+
 func TestLatestUserMessageFromConversationFileSkipsOversizedLines(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "conversation.jsonl")
 	hugeUser := `{"role":"user","content":"` + strings.Repeat("x", maxSessionSummaryLineBytes+1024) + `"}` + "\n"

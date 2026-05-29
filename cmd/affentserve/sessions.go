@@ -791,6 +791,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		TriggerBytes: agent.DefaultSummaryTriggerBytes,
 		KeepLast:     keepLast,
 	}
+	loop.CompactTriggerInputTokens = p.cfg.CompactTriggerInputTokens
 	systemPrompt := p.cfg.SystemPrompt
 	if systemPrompt == "" {
 		systemPrompt = agent.BaseSystemPromptForRegistry(reg)

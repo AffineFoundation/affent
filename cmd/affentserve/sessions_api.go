@@ -1432,7 +1432,7 @@ func sessionContextSnapshot(messageCount, contextBytes, estimatedRequestInputTok
 	if byteTrigger > 0 && contextBytes > 0 {
 		bytePercent = (contextBytes*100 + byteTrigger/2) / byteTrigger
 	}
-	inputTrigger := agent.DefaultSummaryTriggerInputTokens
+	inputTrigger := compactTriggerInputTokensForConfig(cfg)
 	inputTokensUntilCompact := inputTrigger - estimatedRequestInputTokens
 	if inputTokensUntilCompact < 0 {
 		inputTokensUntilCompact = 0
@@ -1463,6 +1463,16 @@ func sessionContextSnapshot(messageCount, contextBytes, estimatedRequestInputTok
 		RequestInputCompactPercent:     inputPercent,
 		RequestInputTokensUntilCompact: inputTokensUntilCompact,
 	}
+}
+
+func compactTriggerInputTokensForConfig(cfg Config) int {
+	if cfg.CompactTriggerInputTokens < 0 {
+		return 0
+	}
+	if cfg.CompactTriggerInputTokens > 0 {
+		return cfg.CompactTriggerInputTokens
+	}
+	return agent.DefaultSummaryTriggerInputTokens
 }
 
 func durableSessionDirInfo(path string) (os.FileInfo, bool, error) {

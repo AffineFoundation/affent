@@ -1023,9 +1023,10 @@ the conversation plus currently registered tool schemas. If that estimate
 crosses the compaction input-token trigger, it performs proactive rolling
 compaction with reason `estimated_context_pressure`; this covers sessions where
 tool schemas or a few large messages would approach the model window before the
-message-count trigger fires. `affentctl --compact-trigger-input-tokens` can
-override that request-pressure trigger for evals or small-context models; zero
-keeps the runtime-derived default and negative disables this proactive path.
+message-count trigger fires. `affentctl --compact-trigger-input-tokens` and
+`affentserve --compact-trigger-input-tokens` can override that request-pressure
+trigger for evals, Workbench sessions, or small-context models; zero keeps the
+runtime-derived default and negative disables this proactive path.
 Active session summaries expose the same estimated
 request-input pressure so Workbench can explain whether compaction risk is
 driven by message count, raw context bytes, or the next model request shape.

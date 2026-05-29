@@ -114,6 +114,12 @@ type Config struct {
 	// and you spend less per turn shipping a near-full window.
 	CompactTrigger int `json:"compact_trigger"`
 
+	// CompactTriggerInputTokens overrides request-input-pressure
+	// compaction. Zero falls back to the runtime-derived default,
+	// positive sets an explicit estimated input-token trigger, and
+	// negative disables this proactive path.
+	CompactTriggerInputTokens int `json:"compact_trigger_input_tokens"`
+
 	// CompactKeepLast overrides how many trailing messages survive
 	// compaction verbatim. Zero falls back to
 	// agent.DefaultSummaryKeepLast (10). Smaller = more aggressive
@@ -385,6 +391,7 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_MAX_TURN_INPUT_TOKENS", &c.MaxTurnInputTokens, nil},
 		{"AFFENTSERVE_MAX_TRANSIENT_RETRIES", &c.MaxTransientRetries, nil},
 		{"AFFENTSERVE_COMPACT_TRIGGER", &c.CompactTrigger, nil},
+		{"AFFENTSERVE_COMPACT_TRIGGER_INPUT_TOKENS", &c.CompactTriggerInputTokens, nil},
 		{"AFFENTSERVE_COMPACT_KEEP_LAST", &c.CompactKeepLast, nil},
 	} {
 		if v := os.Getenv(e.env); v != "" {
