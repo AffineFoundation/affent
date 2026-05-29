@@ -42,8 +42,8 @@ describe("automationContext view model", () => {
     );
 
     expect(context).toEqual({
-      title: "Loop waiting · 1 timer pending",
-      detail: "Answer the setup question before LOOP.md can run. · 1 loop timer queued until LOOP.md activation.",
+      title: "Loop waiting · 1 timer active",
+      detail: "Answer the setup question before LOOP.md can run. · 1 timer enabled; open Automation to inspect the next run.",
     });
   });
 

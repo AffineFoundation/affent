@@ -486,6 +486,78 @@ test("active session surfaces the current tool catalog", async ({ page }) => {
   await expect(page.getByTestId("session-tools-list")).toContainText("Search matches");
 });
 
+test("opening a saved chat shows a loading state, not the empty-chat fallback, until history arrives", async ({ page }, testInfo) => {
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "slow-history",
+            active: false,
+            durable: true,
+            topic_user_message: "affine research",
+            has_conversation: true,
+            has_events: true,
+            usage: { input_tokens: 0, output_tokens: 0, turns: 0 },
+            tools: { tool_requests: 0, tool_errors: 0, tool_repair_succeeded: 0, tool_repair_failed: 0 },
+            last_used_at: "2026-05-25T10:38:00Z",
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+
+  // Stall the history request so the "loading chat" window is observable.
+  // We resolve it explicitly later to confirm the loaded-but-empty fallback
+  // takes over only after the fetch completes.
+  let releaseHistory: (() => void) | undefined;
+  const historyHeld = new Promise<void>((resolve) => {
+    releaseHistory = resolve;
+  });
+  await page.route("**/v1/sessions/slow-history/history?after=-1&limit=500", async (route) => {
+    await historyHeld;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "slow-history",
+        events: [],
+        next_after: -1,
+        has_more: false,
+        trace_schema_detected: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/slow-history/events", async (route) => {
+    await route.fulfill({ contentType: "text/event-stream", body: "" });
+  });
+
+  await page.goto("/?sessionId=slow-history");
+
+  // While history is in flight, the loading row replaces the empty-chat
+  // fallback so we never paint a misleading "No messages loaded" page.
+  const loading = page.getByTestId("timeline-loading-session");
+  await expect(loading).toBeVisible();
+  await expect(loading).toHaveAttribute("aria-busy", "true");
+  await expect(loading).toContainText("Loading chat");
+  await expect(loading).toContainText(/affine research/i);
+  await expect(page.getByTestId("timeline-empty-session")).toHaveCount(0);
+  await expect(page.getByText("No messages loaded")).toHaveCount(0);
+  await page.screenshot({
+    path: testInfo.outputPath(`timeline-loading-${testInfo.project.name}.png`),
+    fullPage: true,
+  });
+
+  releaseHistory?.();
+
+  // After the empty-history fetch resolves, the genuine loaded-but-empty
+  // page takes over — proving the loading branch is scoped to the in-flight
+  // window only.
+  await expect(page.getByTestId("timeline-empty-session")).toContainText("No messages loaded");
+  await expect(page.getByTestId("timeline-loading-session")).toHaveCount(0);
+});
+
 test("offline preview keeps creation controls read-only while the API is unreachable", async ({ page }) => {
   await page.route("**/v1/sessions?limit=100", async (route) => {
     await route.abort("failed");

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionSchedulePanel } from "./SessionSchedulePanel";
 
 describe("SessionSchedulePanel", () => {
-  it("blocks resuming paused loop ticks until LOOP.md is running", () => {
+  it("allows resuming paused 30m timers without LOOP.md", () => {
     render(
       <SessionSchedulePanel
         loopStatus="draft"
@@ -28,8 +28,8 @@ describe("SessionSchedulePanel", () => {
       />,
     );
 
-    const button = screen.getByRole("button", { name: "Activate loop first" });
-    expect(button).toBeDisabled();
+    const button = screen.getByRole("button", { name: "Resume" });
+    expect(button).toBeEnabled();
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Paused");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("LOOP.md not running");
   });
@@ -59,7 +59,7 @@ describe("SessionSchedulePanel", () => {
     expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
   });
 
-  it("shows enabled loop ticks as pending until LOOP.md is running", () => {
+  it("shows enabled 30m timers as active without LOOP.md calibration", () => {
     render(
       <SessionSchedulePanel
         defaultOpen
@@ -67,7 +67,6 @@ describe("SessionSchedulePanel", () => {
           count: 1,
           enabled: 1,
           enabled_loop_ticks: 1,
-          pending_loop_ticks: 1,
           next_run_at: "2026-05-27T14:00:00Z",
           next_schedule_id: "sched_loop",
           next_prompt_preview: "Scheduled loop tick for session: long running runtime improvement",
@@ -89,14 +88,12 @@ describe("SessionSchedulePanel", () => {
     );
 
     const panel = screen.getByTestId("session-schedule-panel");
-    expect(panel).toHaveTextContent("1 pending");
-    expect(panel).toHaveTextContent("Loop timer waits for LOOP.md activation");
-    expect(screen.getByTestId("session-schedule-callout")).toHaveTextContent("Calibration pending");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
+    expect(panel).toHaveTextContent("1 active");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("30m timer");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("Scheduled loop tick for session");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Pending calibration");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("waiting for LOOP.md activation");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Active");
+    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("waiting for LOOP.md activation");
   });
 
   it("shows loop ticks as active when LOOP.md is running", () => {
@@ -122,12 +119,12 @@ describe("SessionSchedulePanel", () => {
 
     const panel = screen.getByTestId("session-schedule-panel");
     expect(panel).toHaveTextContent("1 active");
-    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("30m timer");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Active");
     expect(panel).not.toHaveTextContent("Pending calibration");
   });
 
-  it("labels timer creation as a calibration-first chat action", () => {
+  it("labels timer creation as a scheduler action", () => {
     render(
       <SessionSchedulePanel
         summary={{ count: 0, enabled: 0 }}
@@ -142,7 +139,7 @@ describe("SessionSchedulePanel", () => {
     expect(panel).toHaveTextContent("Off");
     expect(panel).toHaveTextContent("No scheduled follow-ups for this chat.");
     expect(screen.getByRole("button", { name: "Schedule 1h check-in" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Schedule 30m loop tick" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Schedule 30m timer" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Schedule daily check-in" })).toBeInTheDocument();
   });
 

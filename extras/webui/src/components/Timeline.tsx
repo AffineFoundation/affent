@@ -22,6 +22,8 @@ export function Timeline({
   latestChat,
   onOpenLatestChat,
   initialHistoryFocus = "latest",
+  loading = false,
+  loadingDetail,
 }: {
   session: SessionState;
   sessionId?: string;
@@ -35,6 +37,12 @@ export function Timeline({
   latestChat?: LatestChatShortcut;
   onOpenLatestChat?: () => void;
   initialHistoryFocus?: "answer" | "latest";
+  /** True while the chat's events are being fetched. Suppresses the
+   * "No messages loaded" empty state so we don't render a misleading
+   * page before the fetch resolves. */
+  loading?: boolean;
+  /** Optional one-line label for the loading row (e.g. chat title). */
+  loadingDetail?: string;
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const latestAnswerRef = useRef<HTMLDivElement | null>(null);
@@ -178,6 +186,32 @@ export function Timeline({
   }, [activityCount, following, pendingMessage, scrollRootRef, session.status]);
 
   if (session.turns.length === 0 && !pendingMessage && sessionId) {
+    if (loading) {
+      // Suppress the "No messages loaded" empty state while the fetch
+      // is still in flight: rendering it would be a fake page, since
+      // we don't actually know yet whether the chat has events.
+      return (
+        <section
+          className="flow-turn intro-turn"
+          data-testid="timeline-loading-session"
+          aria-busy="true"
+        >
+          <div className="conversation-turn">
+            <div className="assistant-cluster">
+              <div className="assistant-name">Affent</div>
+              <div className="flow-step flow-step-assistant">
+                <div className="flow-text intro-copy">
+                  <div className="intro-heading">
+                    <strong>Loading chat…</strong>
+                    {loadingDetail ? <span>{loadingDetail}</span> : null}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
     return (
       <section className="flow-turn intro-turn" data-testid="timeline-empty-session">
         <div className="conversation-turn">

@@ -166,10 +166,6 @@ func handleSessionScheduleUpdate(pool *SessionPool, sessionID, scheduleID string
 		if file.Schedules[i].ID != scheduleID {
 			continue
 		}
-		if *req.Enabled && file.Schedules[i].Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(pool, sessionID) {
-			writeJSONErrorTyped(w, http.StatusConflict, "loop protocol is not running", errors.New("activate LOOP.md before resuming this loop timer"), "loop_protocol_not_running")
-			return
-		}
 		file.Schedules[i].Enabled = *req.Enabled
 		file.Schedules[i].UpdatedAt = now
 		file.Schedules[i].LastError = ""
@@ -312,12 +308,6 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		writeJSONError(w, http.StatusInternalServerError, "create session directory", err)
 		return
 	}
-	if kind == sessionScheduleKindLoopTick {
-		if err := ensureLoopTickProtocolDraft(pool, sessionID, scheduleLoopProtocolGoal(displayText, prompt)); err != nil {
-			writeJSONError(w, http.StatusInternalServerError, "initialize loop protocol draft", err)
-			return
-		}
-	}
 	path := sessionSchedulesPath(pool, sessionID)
 	pool.schedulesMu.Lock()
 	defer pool.schedulesMu.Unlock()
@@ -402,27 +392,6 @@ func decodeSessionScheduleUpdateRequest(w http.ResponseWriter, r *http.Request) 
 
 func sessionSchedulesPath(pool *SessionPool, sessionID string) string {
 	return filepath.Join(pool.sessionDirPath(sessionID), sessionSchedulesFileName)
-}
-
-func ensureLoopTickProtocolDraft(pool *SessionPool, sessionID, goal string) error {
-	if pool == nil {
-		return errors.New("session pool is nil")
-	}
-	_, _, _, err := loopstate.EnsureProtocolTemplate(sessionLoopProtocolPath(pool, sessionID), loopstate.ProtocolTemplateOptions{
-		LoopID:       sessionID,
-		OwnerSession: sessionID,
-		Goal:         goal,
-		Status:       "draft",
-		Plan:         serveLoopProtocolCurrentPlanCheckpoint(filepath.Join(pool.sessionDirPath(sessionID), "plan.json")),
-	})
-	return err
-}
-
-func scheduleLoopProtocolGoal(displayText, prompt string) string {
-	if goal := strings.Join(strings.Fields(displayText), " "); goal != "" {
-		return goal
-	}
-	return strings.Join(strings.Fields(prompt), " ")
 }
 
 func readSessionSchedulesFile(path string) (sessionSchedulesFile, bool, error) {
@@ -567,11 +536,11 @@ func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSum
 }
 
 func summarizeSessionSchedulesForSession(pool *SessionPool, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
-	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunning(pool, sessionID))
+	return summarizeSessionSchedulesWithLoopState(schedules, true)
 }
 
 func summarizeSessionSchedulesForDir(sessionDir, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
-	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunningForDir(sessionDir, sessionID))
+	return summarizeSessionSchedulesWithLoopState(schedules, true)
 }
 
 func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopProtocolRunning bool) *sessionSchedulesSummary {
@@ -589,9 +558,6 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 			summary.Enabled++
 			if schedules[i].Kind == sessionScheduleKindLoopTick {
 				summary.EnabledLoopTicks++
-				if !loopProtocolRunning {
-					summary.PendingLoopTicks++
-				}
 			}
 			if next == nil || scheduleTimeBefore(schedules[i].NextRunAt, next.NextRunAt) {
 				next = &schedules[i]
@@ -825,19 +791,6 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 	for i := range file.Schedules {
 		schedule := &file.Schedules[i]
 		if !schedule.Enabled || !sessionScheduleDue(*schedule, now) {
-			continue
-		}
-		if schedule.Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(p, sessionID) {
-			if schedule.RepeatIntervalSeconds > 0 {
-				schedule.NextRunAt = nextSessionScheduleRunAt(schedule.NextRunAt, schedule.RepeatIntervalSeconds, now).Format(time.RFC3339)
-			} else {
-				schedule.Enabled = false
-			}
-			schedule.LastError = "LOOP.md not running; answer calibration and activate the loop protocol before resuming this timer"
-			schedule.UpdatedAt = nowStr
-			if err := writeSessionSchedulesFile(path, file); err != nil {
-				return sessionScheduleRun{}, false, err
-			}
 			continue
 		}
 		run := sessionScheduleRun{

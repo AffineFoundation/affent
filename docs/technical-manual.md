@@ -954,7 +954,11 @@ Affent stores durable state as inspectable files:
   model-facing `prompt` and optional human-facing `display_text`; WebUI lists,
   session summaries, and scheduled `user.message` events prefer `display_text`
   so long internal loop/timer control prompts do not become the visible task
-  title.
+  title. Schedules are an independent trigger layer: creating, enabling, or
+  firing a timer does not create or require `LOOP.md`. If a scheduled turn needs
+  durable long-running task state, the agent can use an already-active loop
+  protocol as context, but timer delivery itself remains owned by
+  `schedules.json`.
 - Runtime skill files: installed skill bodies and manifests.
 - Memory files: topic-bucketed workspace or user memory.
 - Transcript files: child-task and subagent conversations.

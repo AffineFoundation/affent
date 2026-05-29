@@ -270,7 +270,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).not.toContain("loop protocol");
   });
 
-  it("surfaces pending loop timers when LOOP.md is not running", () => {
+  it("keeps scheduled timers active even when LOOP.md is not running", () => {
     const rows = buildSessionRows([
       session({
         id: "pending-loop-timer",
@@ -294,10 +294,10 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics.some((metric) => metric.startsWith("Automation timer 1 pending/1, waiting for LOOP.md activation"))).toBe(true);
+    expect(rows[0].metrics.some((metric) => metric.startsWith("Automation timer 1/1"))).toBe(true);
     expect(rows[0].stats).toBeUndefined();
     expect(rows[0].chips).toContain("automation");
-    expect(rows[0].searchText).toContain("waiting for loop.md activation");
+    expect(rows[0].searchText).not.toContain("waiting for loop.md activation");
   });
 
   it("keeps loop timers active in the row when LOOP.md is running", () => {
@@ -1138,8 +1138,8 @@ describe("sessionList view model", () => {
           data: {
             turn_id: "t1",
             call_id: "c1",
-            tool: "web_fetch",
-            args: { url: "https://example.invalid" },
+            tool: "shell",
+            args: { command: "cat big.log" },
             args_truncated: false,
             args_bytes: 32,
             args_omitted_bytes: 0,

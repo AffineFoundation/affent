@@ -894,29 +894,11 @@ function loopDecisionBudgetPressure(kind: string, state: SessionLoopState | unde
 function sessionAutomationScheduleMetric(session: SessionSummary): string | undefined {
   const summary = session.schedules;
   if (!summary || summary.count <= 0) return undefined;
-  const pendingLoopTimers = pendingLoopTimerCount(session);
-  const parts = [pendingLoopTimers > 0 ? `Automation timer ${pendingLoopTimers} pending/${summary.count}` : `Automation timer ${summary.enabled}/${summary.count}`];
+  const parts = [`Automation timer ${summary.enabled}/${summary.count}`];
   if ((summary.error_count ?? 0) > 0) parts.push(`${summary.error_count} error${summary.error_count === 1 ? "" : "s"}`);
   if (summary.last_error) parts.push(`last ${summarize(summary.last_error, 72)}`);
-  if (pendingLoopTimers > 0) parts.push("waiting for LOOP.md activation");
   if (summary.next_run_at) parts.push(`next ${formatTimestamp(summary.next_run_at)}`);
   return parts.join(", ");
-}
-
-function pendingLoopTimerCount(session: SessionSummary): number {
-  const summary = session.schedules;
-  if (!summary || summary.enabled <= 0) return 0;
-  if (loopProtocolRunning(session)) return 0;
-  if ((summary.pending_loop_ticks ?? 0) > 0) return summary.pending_loop_ticks ?? 0;
-  if (summary.next_schedule_kind === "loop_tick") return summary.enabled;
-  const preview = summary.next_prompt_preview?.trim().toLowerCase() ?? "";
-  if (preview.includes("scheduled loop tick")) return summary.enabled;
-  return 0;
-}
-
-function loopProtocolRunning(session: SessionSummary): boolean {
-  const status = session.loop_protocol?.state?.status?.trim() || session.loop_state?.status?.trim() || session.loop_protocol?.status?.trim();
-  return status?.toLowerCase() === "running";
 }
 
 function planStatusLabel(plan: SessionPlanSummary): string {

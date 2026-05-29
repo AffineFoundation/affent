@@ -27,13 +27,11 @@ import {
   runSessionCommand,
   sendSessionMessage,
   streamSessionEvents,
-  updateSessionLoopProtocol,
   updateSessionSchedule,
   type SessionScheduleDeleteResponse,
   type SessionSchedule,
   type SessionSchedulesResponse,
   type SessionLoopProtocolDeleteResponse,
-  type SessionLoopProtocolResponse,
   type SessionMemoryResponse,
   type SessionMemoryAddRequest,
   type SessionMemoryRemoveRequest,
@@ -1253,8 +1251,6 @@ export function App() {
     const firstDelayMs = loopTick ? 30 * 60 * 1000 : daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
     const next = new Date(Date.now() + firstDelayMs);
     const scheduleDisplay = webScheduleDisplayText(kind, sessionTitle);
-    const calibrationPrompt = webScheduleCalibrationPrompt(kind, sessionTitle);
-    const calibrationDisplay = webScheduleCalibrationSummary(kind, sessionTitle);
     setScheduleBusy(kind);
     try {
       const resp = await createSessionSchedule(client, sessionId, {
@@ -1269,34 +1265,9 @@ export function App() {
       });
       markSessionSchedules(sessionId, resp);
       setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
-      if (!selectedSession?.has_loop_protocol) {
-        const loopProtocol = await updateSessionLoopProtocol(client, sessionId, {
-          activate: true,
-          goal: webScheduleCalibrationGoal(kind, sessionTitle),
-        });
-        markSessionLoopProtocol(sessionId, loopProtocol, webScheduleCalibrationGoal(kind, sessionTitle));
-      }
-      sendInFlightRef.current = true;
-      sendFailedRef.current = false;
-      setPendingMessage({ text: calibrationPrompt, displayText: calibrationDisplay, kind: "task" });
-      setActionBusy(true);
-      await sendSessionMessage(client, sessionId, { content: calibrationPrompt, display_text: calibrationDisplay });
-      sendInFlightRef.current = false;
-      markSessionLive(sessionId, calibrationDisplay);
-      const hasOpenStream = streamSessionIdRef.current === sessionId && !streamClosedRef.current;
-      if (!hasOpenStream) {
-        const reconciled = await loadHistory(sessionId);
-        releaseSettledTurn(reconciled.session, calibrationPrompt);
-        setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
-      } else {
-        setStatus((current) => ({ ...current, state: "live", label: "Running" }));
-      }
+      setStatus({ state: "connected", label: "Ready", detail: "timer saved" });
     } catch (err) {
-      sendInFlightRef.current = false;
-      sendFailedRef.current = true;
       setStatus({ state: "error", label: "Schedule failed", detail: formatError(err) });
-      setPendingMessage(undefined);
-      setActionBusy(false);
     } finally {
       setScheduleBusy(undefined);
     }
@@ -1408,45 +1379,6 @@ export function App() {
           has_runtime_skills: false,
           latest_user_message: latestUserMessage,
           topic_user_message: latestUserMessage,
-        },
-        ...current,
-      ];
-    });
-  }
-
-  function markSessionLoopProtocol(sessionId: string, loopProtocol: SessionLoopProtocolResponse, goal: string) {
-    setSessions((current) => {
-      let found = false;
-      const next = current.map((item) => {
-        if (item.id !== sessionId) return item;
-        found = true;
-        return {
-          ...item,
-          durable: true,
-          has_loop_protocol: true,
-          has_loop_state: !!loopProtocol.state,
-          loop_protocol: loopProtocol.summary,
-          loop_state: loopProtocol.state,
-        };
-      });
-      if (found) return next;
-      return [
-        {
-          id: sessionId,
-          active: true,
-          durable: true,
-          has_conversation: false,
-          has_events: false,
-          has_plan: false,
-          has_loop_protocol: true,
-          loop_protocol: loopProtocol.summary,
-          has_loop_state: !!loopProtocol.state,
-          loop_state: loopProtocol.state,
-          has_artifacts: false,
-          has_memory: false,
-          has_runtime_skills: false,
-          latest_user_message: `Set up loop: ${goal}`,
-          topic_user_message: goal,
         },
         ...current,
       ];
@@ -1864,7 +1796,6 @@ export function App() {
     const hasScheduleEvidence = selectedSession?.has_schedules
       || (summary?.count ?? 0) > 0
       || (summary?.enabled ?? 0) > 0
-      || (summary?.pending_loop_ticks ?? 0) > 0
       || (summary?.error_count ?? 0) > 0
       || !!summary?.last_error;
     if (!hasScheduleEvidence) return;
@@ -2188,6 +2119,8 @@ export function App() {
                 latestChat={latestChatShortcut}
                 onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}
                 initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
+                loading={status.state === "loading"}
+                loadingDetail={status.state === "loading" ? status.detail : undefined}
               />
             </div>
             <Composer
@@ -2412,15 +2345,6 @@ function automationWorkbenchFocus(
       tone: "danger",
     };
   }
-  if ((schedules?.pending_loop_ticks ?? 0) > 0) {
-    return {
-      label: "Timer waiting",
-      title: `${schedules?.pending_loop_ticks} loop tick pending`,
-      detail: "Activate LOOP.md before queued loop ticks can safely run.",
-      tone: "attention",
-      action: answers > 0 ? "review" : "answer",
-    };
-  }
   if (status === "running") {
     const summary = session?.schedules;
     const visibleSchedules = schedulePanelState.state === "ready" ? schedulePanelState.schedules : [];
@@ -2545,7 +2469,7 @@ function automationWorkbenchQueue(
   } else if (schedulePanelState.state === "ready" && schedulePanelState.schedules.length > 0) {
     const schedules = [...schedulePanelState.schedules].sort((a, b) => Date.parse(a.next_run_at) - Date.parse(b.next_run_at));
     schedules.slice(0, 4).forEach((schedule) => {
-      items.push(automationScheduleQueueItem(schedule, status));
+      items.push(automationScheduleQueueItem(schedule));
     });
     if (schedules.length > 4) {
       items.push({
@@ -2557,7 +2481,7 @@ function automationWorkbenchQueue(
       });
     }
   } else {
-    const summaryItem = automationScheduleSummaryQueueItem(session, status);
+    const summaryItem = automationScheduleSummaryQueueItem(session);
     if (summaryItem) items.push(summaryItem);
   }
 
@@ -2599,7 +2523,7 @@ function automationScheduleErrorItem(
   };
 }
 
-function automationScheduleSummaryQueueItem(session: SessionSummary | undefined, loopStatus?: string): SessionAutomationQueueItem | undefined {
+function automationScheduleSummaryQueueItem(session: SessionSummary | undefined): SessionAutomationQueueItem | undefined {
   const summary = session?.schedules;
   if (!summary) {
     return session?.has_schedules
@@ -2611,16 +2535,6 @@ function automationScheduleSummaryQueueItem(session: SessionSummary | undefined,
         tone: "neutral",
       }
       : undefined;
-  }
-  const pending = summary.pending_loop_ticks ?? 0;
-  if (pending > 0) {
-    return {
-      id: "timers-pending",
-      label: "Timers",
-      title: `${pending} loop ${pending === 1 ? "tick" : "ticks"} pending`,
-      detail: "They will stay queued until LOOP.md is activated.",
-      tone: "attention",
-    };
   }
   if (summary.next_run_at) {
     return {
@@ -2637,7 +2551,7 @@ function automationScheduleSummaryQueueItem(session: SessionSummary | undefined,
       label: "Timers",
       title: `${summary.enabled} enabled ${summary.enabled === 1 ? "timer" : "timers"}`,
       detail: "Load timer details to inspect the next run and recent outcome.",
-      tone: loopStatus === "running" ? "ok" : "neutral",
+      tone: "neutral",
     };
   }
   if (summary.count > 0) {
@@ -2652,22 +2566,21 @@ function automationScheduleSummaryQueueItem(session: SessionSummary | undefined,
   return undefined;
 }
 
-function automationScheduleQueueItem(schedule: SessionSchedule, loopStatus?: string): SessionAutomationQueueItem {
-  const pending = schedule.kind === "loop_tick" && schedule.enabled && loopStatus !== "running";
+function automationScheduleQueueItem(schedule: SessionSchedule): SessionAutomationQueueItem {
   const failed = !!automationCompact(schedule.last_error);
   return {
     id: `timer-${schedule.id}`,
     label: scheduleKindLabel(schedule.kind),
-    title: pending ? "Waiting for LOOP.md activation" : schedule.enabled ? `Next ${automationFormatTime(schedule.next_run_at)}` : "Paused",
-    detail: automationScheduleQueueDetail(schedule, pending),
+    title: schedule.enabled ? `Next ${automationFormatTime(schedule.next_run_at)}` : "Paused",
+    detail: automationScheduleQueueDetail(schedule),
     meta: schedule.id,
-    tone: failed ? "danger" : pending ? "attention" : schedule.enabled ? "ok" : "neutral",
+    tone: failed ? "danger" : schedule.enabled ? "ok" : "neutral",
   };
 }
 
-function automationScheduleQueueDetail(schedule: SessionSchedule, pending: boolean): string {
+function automationScheduleQueueDetail(schedule: SessionSchedule): string {
   const parts = [
-    pending ? "Loop tick cannot run until calibration is complete" : automationCompact(schedule.display_text) ?? automationCompact(schedule.prompt),
+    automationCompact(schedule.display_text) ?? automationCompact(schedule.prompt),
     schedule.repeat_interval_seconds ? `Repeats every ${formatAutomationDuration(schedule.repeat_interval_seconds)}` : "One-time",
     schedule.run_count && schedule.run_count > 0 ? `${schedule.run_count} ${schedule.run_count === 1 ? "run" : "runs"}` : undefined,
     schedule.last_run_at ? `last ${automationFormatTime(schedule.last_run_at)}` : undefined,
@@ -2733,9 +2646,7 @@ function automationTimerMetric(session: SessionSummary | undefined, panelState: 
   const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
   const visibleEnabled = visibleSchedules.filter((schedule) => schedule.enabled).length;
   const summary = session?.schedules;
-  const pending = summary?.pending_loop_ticks ?? 0;
   const errors = summary?.error_count ?? 0;
-  if (pending > 0) return { label: "Timers", value: `${pending} pending`, detail: "Waiting for LOOP.md activation", tone: "attention" };
   if (errors > 0 || summary?.last_error) return { label: "Timers", value: `${Math.max(errors, 1)} error`, detail: automationCompact(summary?.last_error) ?? "Inspect timer history", tone: "danger" };
   const enabled = Math.max(summary?.enabled ?? 0, visibleEnabled);
   const count = Math.max(summary?.count ?? 0, visibleSchedules.length);
@@ -2752,9 +2663,6 @@ function automationNextRunMetric(
   if (panelState.state === "loading") return { label: "Next run", value: "Loading", detail: "Reading timer details", tone: "neutral" };
   if (panelState.state === "error") return { label: "Next run", value: "Error", detail: automationCompact(panelState.error) ?? "Timer details unavailable", tone: "danger" };
   const summary = session?.schedules;
-  if ((summary?.pending_loop_ticks ?? 0) > 0) {
-    return { label: "Next run", value: "Pending", detail: "Activate LOOP.md before queued ticks run", tone: "attention" };
-  }
   if (summary?.next_run_at) {
     return {
       label: "Next run",
@@ -2772,14 +2680,14 @@ function automationNextRunMetric(
 }
 
 function scheduleKindDetail(kind: string | undefined): string {
-  if (kind === "loop_tick") return "loop tick";
+  if (kind === "loop_tick") return "30m timer";
   if (kind === "daily_checkin") return "daily check-in";
   if (kind === "checkin") return "check-in";
   return "scheduled follow-up";
 }
 
 function scheduleKindLabel(kind: string | undefined): string {
-  if (kind === "loop_tick") return "Loop tick";
+  if (kind === "loop_tick") return "30m timer";
   if (kind === "daily_checkin") return "Daily check-in";
   if (kind === "checkin") return "Check-in";
   return "Timer";
@@ -2928,49 +2836,20 @@ function webScheduledCheckInPrompt(sessionTitle: string): string {
   ].join("\n");
 }
 
-function webScheduleCalibrationGoal(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
-  if (kind === "loop") return `Recurring loop timer for ${sessionTitle}`;
-  if (kind === "daily") return `Daily scheduled check-in for ${sessionTitle}`;
-  return `Scheduled check-in for ${sessionTitle}`;
-}
-
-function webScheduleCalibrationSummary(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
-  if (kind === "loop") return `Calibrate loop timer: ${sessionTitle}`;
-  if (kind === "daily") return `Calibrate daily timer: ${sessionTitle}`;
-  return `Calibrate check-in timer: ${sessionTitle}`;
-}
-
 function webScheduleDisplayText(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
-  if (kind === "loop") return `Loop every 30m: ${sessionTitle}`;
+  if (kind === "loop") return `Every 30m: ${sessionTitle}`;
   if (kind === "daily") return `Daily check-in: ${sessionTitle}`;
   return `Check in 1h: ${sessionTitle}`;
 }
 
-function webScheduleCalibrationPrompt(kind: "loop" | "checkin" | "daily", sessionTitle: string): string {
-  const label = kind === "loop" ? "recurring loop tick" : kind === "daily" ? "daily check-in" : "scheduled check-in";
-  return [
-    `Calibrate ${label} for session: ${sessionTitle}`,
-    "",
-    "The timer has been created, but calibration is still required before relying on it.",
-    "Read LOOP.md with loop_protocol action=read; if it is draft, disabled, or underspecified, keep it draft.",
-    "Ask the user one concise question now to clarify timer purpose, stop conditions, memory expectations, and what should change in LOOP.md.",
-    "If the answer leaves another critical field missing, ask one focused follow-up in a later turn and keep LOOP.md as draft.",
-    "Do not complete activation in this same turn unless the user is already answering an earlier calibration question.",
-    "Do not run the scheduled work yet, and do not claim the timer is operationally calibrated until the user answers.",
-    "After the user answers, update LOOP.md only for durable timer policy, Current Situation at or below 1200 characters, recovery anchors, or stop conditions; keep concrete task steps in plan state.",
-  ].join("\n");
-}
-
 function webScheduledLoopTickPrompt(sessionTitle: string): string {
   return [
-    `Scheduled loop tick for session: ${sessionTitle}`,
+    `Scheduled 30m timer for session: ${sessionTitle}`,
     "",
-    "This is an autonomous long-run tick, not a new human instruction.",
-    "Read LOOP.md with loop_protocol action=read before continuing.",
-    "If LOOP.md is missing, draft, disabled, underspecified, or the user's intent is unclear, ask one concise calibration question and do not continue autonomous work.",
-    "If LOOP.md is running, inspect only the minimum needed plan state, memory, recent trace, or artifacts, then advance at most one compact high-value step.",
-    "Prefer evidence-backed progress over broad exploration; update plan state for task progress and update LOOP.md only for durable rules, Current Situation at or below 1200 characters, recovery anchors, or stop conditions.",
-    "End with a concise status, next trigger expectation, and any blocker that should pause future loop ticks.",
+    "This is a scheduled runtime turn, not a new human instruction.",
+    "Execute the scheduled check directly. Use LOOP.md only if an active loop protocol already exists and is relevant.",
+    "Keep the turn compact: inspect only the evidence needed for this scheduled check, report the result, and record durable state only when it is genuinely useful for future turns.",
+    "End with a concise status and any blocker that should pause future timer runs.",
   ].join("\n");
 }
 

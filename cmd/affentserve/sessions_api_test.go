@@ -2273,7 +2273,7 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	if !resp.Sessions[0].HasSchedules || summary == nil {
 		t.Fatalf("session = %+v, want schedule summary", resp.Sessions[0])
 	}
-	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 1 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "Loop every 30m: scheduled-list" {
+	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 0 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "Loop every 30m: scheduled-list" {
 		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
 	}
 	if summary.ErrorCount != 1 || summary.LastError != "LOOP.md not running; answer calibration first" {
@@ -2327,7 +2327,7 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	if schedule.ID == "" || schedule.Kind != sessionScheduleKindLoopTick || schedule.Prompt != "Ask the user two focused questions before enabling loop." || schedule.DisplayText != "Loop every hour: scheduled" || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
 		t.Fatalf("schedule = %+v, want persisted request fields", schedule)
 	}
-	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.EnabledLoopTicks != 1 || created.Summary.PendingLoopTicks != 1 || created.Summary.NextScheduleID != schedule.ID {
+	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.EnabledLoopTicks != 1 || created.Summary.PendingLoopTicks != 0 || created.Summary.NextScheduleID != schedule.ID {
 		t.Fatalf("summary = %+v, want one enabled schedule", created.Summary)
 	}
 
@@ -2368,29 +2368,8 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":true}`))
 	w = httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
-	if got := w.Result().StatusCode; got != http.StatusConflict {
-		t.Fatalf("uncalibrated resume status = %d, want 409; body=%s", got, w.Body.String())
-	}
-	if !strings.Contains(w.Body.String(), "activate LOOP.md") {
-		t.Fatalf("uncalibrated resume body = %s, want activation guidance", w.Body.String())
-	}
-	if activeSessionByID(pool, "scheduled") != nil {
-		t.Fatal("rejected PATCH schedule must not reopen an inactive durable session")
-	}
-
-	writeLoopProtocolStatusFixture(t, pool, "scheduled", "running")
-	if err := loopstate.WriteState(sessionLoopStatePath(pool, "scheduled"), loopstate.State{
-		Version: 1,
-		LoopID:  "scheduled",
-		Status:  "running",
-	}); err != nil {
-		t.Fatalf("write running loop state: %v", err)
-	}
-	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":true}`))
-	w = httptest.NewRecorder()
-	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusOK {
-		t.Fatalf("calibrated resume status = %d, want 200; body=%s", got, w.Body.String())
+		t.Fatalf("resume status = %d, want 200; body=%s", got, w.Body.String())
 	}
 	var resumed sessionSchedulesResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resumed); err != nil {

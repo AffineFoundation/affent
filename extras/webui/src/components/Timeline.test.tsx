@@ -295,6 +295,35 @@ describe("Timeline", () => {
     expect(screen.queryByText("What should we work on?")).toBeNull();
   });
 
+  it("shows a loading state instead of the empty fallback while the chat is being fetched", () => {
+    render(
+      <Timeline
+        session={reduceRawEvents([])}
+        sessionId="sess_loading"
+        loading
+        loadingDetail="affine research"
+      />,
+    );
+
+    const loadingRow = screen.getByTestId("timeline-loading-session");
+    expect(loadingRow).toHaveAttribute("aria-busy", "true");
+    expect(loadingRow).toHaveTextContent("Loading chat");
+    expect(loadingRow).toHaveTextContent("affine research");
+    expect(screen.queryByTestId("timeline-empty-session")).toBeNull();
+    expect(screen.queryByText("No messages loaded")).toBeNull();
+    expect(screen.queryByText("no persisted conversation events")).toBeNull();
+    expect(screen.queryByTestId("timeline-empty")).toBeNull();
+  });
+
+  it("falls back to the loaded-but-empty page once the fetch finishes", () => {
+    render(
+      <Timeline session={reduceRawEvents([])} sessionId="sess_loaded" loading={false} />,
+    );
+
+    expect(screen.queryByTestId("timeline-loading-session")).toBeNull();
+    expect(screen.getByTestId("timeline-empty-session")).toHaveTextContent("No messages loaded");
+  });
+
   it("offers a direct way back to the latest saved chat without auto-opening it", async () => {
     const user = userEvent.setup();
     const onOpenLatestChat = vi.fn();

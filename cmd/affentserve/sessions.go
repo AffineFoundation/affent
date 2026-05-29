@@ -604,6 +604,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			agent.RegisterSessionSearchOnly(reg, p.sessionRootPath(), id)
 		}
 	}
+	if !p.cfg.EvalMode {
+		registerSessionScheduleTool(reg, p, id)
+	}
 
 	var browser *affentbrowser.Session
 	if p.cfg.EnableBrowser {

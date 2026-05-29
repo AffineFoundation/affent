@@ -46,7 +46,7 @@ export function shouldShowScheduleContext(
   if (session?.has_schedules && !session.schedules) return true;
   const summary = session?.schedules;
   if (!summary) return false;
-  if (summary.count > 0 || summary.enabled > 0 || (summary.pending_loop_ticks ?? 0) > 0) return true;
+  if (summary.count > 0 || summary.enabled > 0) return true;
   return (summary.error_count ?? 0) > 0 || !!summary.last_error;
 }
 
@@ -116,8 +116,6 @@ function scheduleAutomationLabel(
   const visibleSchedules = panelState.state === "ready" ? panelState.schedules.length : 0;
   const visibleEnabled = panelState.state === "ready" ? panelState.schedules.filter((schedule) => schedule.enabled).length : 0;
   const summary = session?.schedules;
-  const pending = summary?.pending_loop_ticks ?? 0;
-  if (pending > 0) return `${pending} timer pending`;
   if ((summary?.error_count ?? 0) > 0 || summary?.last_error) return "Timer failed";
   const enabled = Math.max(summary?.enabled ?? 0, visibleEnabled);
   if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} active`;
@@ -135,8 +133,6 @@ function scheduleAutomationDetail(
   if (panelState.state === "error") return `Timers failed: ${compact(panelState.error) ?? "unknown error"}`;
   const summary = session?.schedules;
   const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
-  const pending = summary?.pending_loop_ticks ?? 0;
-  if (pending > 0) return `${pending} loop timer${pending === 1 ? "" : "s"} queued until LOOP.md activation.`;
   const error = scheduleErrorDetail(summary);
   if (error) return error;
   if (summary?.next_run_at) return `Next ${formatScheduleTime(summary.next_run_at)}${compact(summary.next_prompt_preview) ? ` · ${compact(summary.next_prompt_preview)}` : ""}`;
