@@ -3250,7 +3250,24 @@ func (l *Loop) selectToolSurface(opts TurnOptions) ToolSurfaceSelection {
 	if tools == nil {
 		return ToolSurfaceSelection{}
 	}
-	return tools.SelectModelTools(ToolSurfacePolicy{SchemaTokenBudget: l.compactTriggerInputTokens()})
+	var msgs []ChatMessage
+	if l.Conv != nil {
+		msgs = l.Conv.Snapshot()
+	}
+	return tools.SelectModelTools(ToolSurfacePolicy{SchemaTokenBudget: l.toolSchemaBudgetTokens(msgs)})
+}
+
+func (l *Loop) toolSchemaBudgetTokens(msgs []ChatMessage) int {
+	limit := l.compactTriggerInputTokens()
+	if limit <= 0 {
+		return 0
+	}
+	conversationTokens := EstimateRequestInput(msgs, nil).ConversationTokens
+	remaining := limit - conversationTokens
+	if remaining <= 0 {
+		return 1
+	}
+	return remaining
 }
 
 func (l *Loop) toolsForTurn(opts TurnOptions) *Registry {

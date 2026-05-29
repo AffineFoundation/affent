@@ -2058,6 +2058,50 @@ func TestPublishRuntimeSurfaceReflectsBudgetedToolSurface(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeSurfaceBudgetsToolSurfaceAgainstConversationPressure(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "shell", Description: "run commands", Schema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"` + strings.Repeat("s", 1200) + `"}}}`)})
+	reg.Add(&Tool{Name: "read_file", Description: "read files", Schema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: PlanToolName, Description: "manage plan", Schema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: "web_fetch", Description: "fetch web", Schema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","description":"` + strings.Repeat("w", 1200) + `"}}}`)})
+
+	conversation := []ChatMessage{{Role: "user", Content: strings.Repeat("x", 800)}}
+	all := reg.SelectModelTools(ToolSurfacePolicy{})
+	firstTwoToolTokens := EstimateRequestInput(nil, all.Defs[:2]).ToolSchemaTokens
+	conversationTokens := EstimateRequestInput(conversation, nil).ConversationTokens
+	limit := conversationTokens + firstTwoToolTokens
+	loop := &Loop{
+		Tools:                     reg,
+		Events:                    events,
+		Conv:                      &Conversation{messages: conversation},
+		CompactTriggerInputTokens: limit,
+	}
+
+	loop.publishRuntimeSurface("turn_pressure_surface", TurnOptions{})
+	ev := <-events
+	if ev.Type != sse.TypeRuntimeSurface {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeRuntimeSurface)
+	}
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if payload.ToolSchemaBudgetTokens != firstTwoToolTokens {
+		t.Fatalf("tool schema budget = %d, want remaining request budget %d", payload.ToolSchemaBudgetTokens, firstTwoToolTokens)
+	}
+	if payload.EstimatedRequestInputTokens > limit {
+		t.Fatalf("estimated request input tokens = %d, want <= compact trigger %d", payload.EstimatedRequestInputTokens, limit)
+	}
+	gotVisible := []string{payload.Tools[0].Name, payload.Tools[1].Name}
+	if !reflect.DeepEqual(gotVisible, []string{"read_file", PlanToolName}) {
+		t.Fatalf("visible tools = %#v, want read_file/plan", gotVisible)
+	}
+	if payload.ExcludedToolCount != 2 {
+		t.Fatalf("excluded tool count = %d, want 2", payload.ExcludedToolCount)
+	}
+}
+
 func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	maxTokens := 30_000
