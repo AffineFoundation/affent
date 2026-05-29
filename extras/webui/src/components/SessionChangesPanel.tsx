@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { UseAsDraft } from "../view/draftSource";
 import { changedFileDiffText, changedFileDraft, changesReviewFacts, changesReviewFocus, type SessionChangedFile, type SessionChangesView } from "../view/sessionChanges";
 import { CopyButton } from "./CopyButton";
+import { HighlightText } from "./HighlightText";
 
 type ChangeFilter = "all" | "changed" | "issues" | "diff" | "stale";
 
@@ -24,13 +25,16 @@ export function SessionChangesPanel({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ChangeFilter>("all");
+  const [selectedPath, setSelectedPath] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const stats = changeStats(changes.files);
   const review = changesReviewFocus(changes.files);
   const reviewFacts = changesReviewFacts(changes.files);
   const filteredFiles = filter === "all" ? changes.files : changes.files.filter((file) => changeMatchesFilter(file, filter));
   const visibleFiles = trimmedQuery ? filteredFiles.filter((file) => changeMatchesQuery(file, trimmedQuery)) : filteredFiles;
-  const focusFile = visibleFiles.find((file) => file.status === "failed")
+  const selectedFile = selectedPath ? visibleFiles.find((file) => file.path === selectedPath) : undefined;
+  const focusFile = selectedFile
+    ?? visibleFiles.find((file) => file.status === "failed")
     ?? visibleFiles.find((file) => file.status === "running")
     ?? visibleFiles.find((file) => file.diffPreview && file.diffPreview.length > 0)
     ?? visibleFiles[0];
@@ -111,10 +115,7 @@ export function SessionChangesPanel({
             </span>
           </section>
         ) : null}
-        {focusFile && !showChangeList && focusFile.diffPreview && focusFile.diffPreview.length > 0 ? (
-          <ChangeDiff file={focusFile} />
-        ) : null}
-        {focusFile && showChangeList && focusFile.diffPreview && focusFile.diffPreview.length > 0 ? (
+        {focusFile && focusFile.diffPreview && focusFile.diffPreview.length > 0 ? (
           <ChangeDiff file={focusFile} />
         ) : null}
         {changes.files.length > 1 ? (
@@ -134,7 +135,12 @@ export function SessionChangesPanel({
           <ol className="session-changes-list" data-testid="session-changes-list">
             {visibleFiles.map((file) => (
               <li key={file.path} className="session-changes-item" data-status={file.status}>
-                <div className="session-changes-main">
+                <button
+                  type="button"
+                  className="session-changes-main session-changes-select"
+                  data-selected={focusFile?.path === file.path ? "true" : "false"}
+                  onClick={() => setSelectedPath(file.path)}
+                >
                   <strong title={file.path}>{displayPath(file.path)}</strong>
                   <span>{changeMeta(file)}</span>
                   {file.detail ? <small>{file.detail}</small> : null}
@@ -142,7 +148,7 @@ export function SessionChangesPanel({
                     {changeEvidenceState(file).label}
                   </small>
                   {file.artifactPath ? <small title={file.artifactPath}>Evidence: {artifactLabel(file.artifactPath)}</small> : null}
-                </div>
+                </button>
                 <span className="session-evidence-actions">
                   {onOpenWorkspacePath ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(file.path)}>
@@ -185,14 +191,53 @@ function changeStatLine(facts: ReturnType<typeof changesReviewFacts>): string[] 
 }
 
 function ChangeDiff({ file }: { file: SessionChangedFile }) {
+  const [query, setQuery] = useState("");
+  const [changedOnly, setChangedOnly] = useState(false);
+  const cleanQuery = query.trim().toLowerCase();
+  const baseLines = changedOnly
+    ? file.diffPreview?.filter((line) => line.kind === "add" || line.kind === "remove") ?? []
+    : file.diffPreview ?? [];
+  const visibleLines = cleanQuery
+    ? baseLines.filter((line) => line.text.toLowerCase().includes(cleanQuery))
+    : baseLines;
+  const changedLineCount = file.diffPreview?.filter((line) => line.kind === "add" || line.kind === "remove").length ?? 0;
   return (
-    <pre className="session-change-diff" data-testid="session-change-diff" aria-label={`Diff preview for ${file.path}`}>
-      {file.diffStale ? <span data-kind="meta">Diff preview may predate the latest change</span> : null}
-      {file.diffPreview?.map((line, index) => (
-        <span key={`${index}:${line.text}`} data-kind={line.kind}>{line.text}</span>
-      ))}
-      {file.diffTruncated ? <span data-kind="meta">Diff preview truncated</span> : null}
-    </pre>
+    <section className="session-change-diff-panel" data-testid="session-change-diff-panel">
+      <div className="session-change-diff-toolbar">
+        <label className="session-skills-search">
+          <span>Search diff</span>
+          <input
+            aria-label="Search diff"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="changed text"
+          />
+        </label>
+        <button type="button" className="ghost-action" aria-pressed={changedOnly} onClick={() => setChangedOnly((value) => !value)}>
+          Changed lines
+        </button>
+        {query ? (
+          <button type="button" className="ghost-action" onClick={() => setQuery("")}>
+            Clear
+          </button>
+        ) : null}
+        <small>
+          {visibleLines.length}/{baseLines.length} shown
+          {changedLineCount > 0 ? ` · ${changedLineCount} changed` : ""}
+        </small>
+      </div>
+      <pre className="session-change-diff" data-testid="session-change-diff" aria-label={`Diff preview for ${file.path}`}>
+        {file.diffStale && !changedOnly ? <span data-kind="meta">Diff preview may predate the latest change</span> : null}
+        {visibleLines.length > 0 ? visibleLines.map((line, index) => (
+          <span key={`${index}:${line.text}`} data-kind={line.kind}>
+            <HighlightText text={line.text} query={query} />
+          </span>
+        )) : (
+          <span data-kind="meta">{query ? `No diff lines matching "${query}".` : "No changed lines in this preview."}</span>
+        )}
+        {file.diffTruncated && !changedOnly ? <span data-kind="meta">Diff preview truncated</span> : null}
+      </pre>
+    </section>
   );
 }
 

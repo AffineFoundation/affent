@@ -3354,7 +3354,7 @@ describe("App", () => {
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using final answer request");
   });
 
-  it("opens a chat artifact before using loaded text in the composer", async () => {
+  it("opens a Workbench artifact before using loaded text in the composer", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -3384,8 +3384,8 @@ describe("App", () => {
 
     render(<App />);
 
-    const artifactStrip = await screen.findByTestId("turn-artifacts");
-    expect(within(artifactStrip).queryByRole("button", { name: "Use artifact as draft" })).toBeNull();
+    await screen.findByTestId("fallback-answer");
+    expect(screen.queryByTestId("turn-artifacts")).toBeNull();
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
@@ -3393,9 +3393,10 @@ describe("App", () => {
     expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("1 artifact file · 1 full output");
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
-    const backToChat = screen.queryByRole("button", { name: "Back to chat" });
-    if (backToChat) await user.click(backToChat);
-    await user.click(within(artifactStrip).getByRole("button", { name: "Open artifact" }));
+    await selectWorkbenchTab(user, "Artifacts");
+    const artifactsPanel = await screen.findByTestId("session-artifacts-panel");
+    await user.click(within(screen.getByTestId("session-artifacts-focus")).getByRole("button", { name: "Open artifact" }));
+    expect(artifactsPanel).toHaveTextContent("000001-c1.txt");
     await user.click(await screen.findByRole("button", { name: "Use text" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(

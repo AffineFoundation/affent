@@ -34,6 +34,21 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-change-diff")).toHaveAccessibleName("Diff preview for src/payments.ts");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
+    expect(screen.getByTestId("session-change-diff-panel")).toHaveTextContent("9/9 shown");
+
+    await user.type(screen.getByLabelText("Search diff"), "enabled");
+    expect(screen.getByTestId("session-change-diff-panel")).toHaveTextContent("2/9 shown");
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+const enabled = true;/);
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
+    expect(screen.getByTestId("session-change-diff")).not.toHaveTextContent("-  return false;");
+    await user.click(within(screen.getByTestId("session-change-diff-panel")).getByRole("button", { name: "Changed lines" }));
+    expect(screen.getByTestId("session-change-diff-panel")).toHaveTextContent("2/3 shown");
+    await user.click(within(screen.getByTestId("session-change-diff-panel")).getByRole("button", { name: "Clear" }));
+    expect(screen.getByTestId("session-change-diff-panel")).toHaveTextContent("3/3 shown");
+    expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/-\s+return false;/);
+    expect(screen.getByTestId("session-change-diff")).not.toHaveTextContent("@@ -1,3 +1,4 @@");
+    await user.click(within(screen.getByTestId("session-change-diff-panel")).getByRole("button", { name: "Changed lines" }));
+    expect(screen.getByTestId("session-change-diff-panel")).toHaveTextContent("9/9 shown");
 
     await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Open current" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
