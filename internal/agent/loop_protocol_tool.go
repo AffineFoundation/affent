@@ -52,7 +52,7 @@ func loopProtocolTool(protocolPath string) *Tool {
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["start_setup", "read", "patch_draft", "update_draft", "complete_activation", "close"], "description": "start_setup initializes a non-active draft LOOP.md for chat-driven activation; read returns the current LOOP.md; patch_draft replaces compact known sections without resending the full file; update_draft writes a full non-active draft; complete_activation usually omits protocol and activates the saved draft after calibration is recorded; close marks an active loop completed, blocked, or paused."},
+            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["start_setup", "read", "patch_draft", "update_draft", "complete_activation", "close"], "description": "start_setup initializes a non-active draft LOOP.md only in explicit loop_setup/runtime initialization paths; read returns the current LOOP.md; patch_draft replaces compact known sections without resending the full file; update_draft writes a full non-active draft; complete_activation usually omits protocol and activates the saved draft after calibration is recorded; close marks an active loop completed, blocked, or paused."},
             "status": {"type": "string", "enum": ["completed", "blocked", "paused"], "description": "Status for action=close. Use completed only when the loop objective is done with evidence, blocked only when continuation needs external input/state, and paused for deliberate operator pause."},
             "goal": {"type": "string", "maxLength": %d, "description": "Compact long-run goal for start_setup. Use the user's own intent, not a broad generic goal."},
             "protocol": {"type": "string", "maxLength": %d, "description": "Full LOOP.md markdown for update_draft or unusual complete_activation structural rewrites. Prefer patch_draft plus complete_activation without protocol for normal setup."},
@@ -63,12 +63,12 @@ func loopProtocolTool(protocolPath string) *Tool {
     }`, maxLoopProtocolActionBytes, maxLoopProtocolGoalBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes, maxLoopProtocolSectionBytes, maxLoopProtocolPatchBodyBytes))
 	return &Tool{
 		Name:         LoopProtocolToolName,
-		Description:  "Start setup, read, patch, update, complete activation, or close this session's LOOP.md. Use during loop activation or long-run protocol maintenance. If the user asks in chat to enable loop and LOOP.md is missing, call start_setup, then ask a concise calibration question. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status. When the loop objective is complete or cannot continue, use action=close with status completed, blocked, or paused.",
+		Description:  "Read, patch, update, activate, or close this session's LOOP.md. Use during explicit loop setup or long-run protocol maintenance. action=start_setup is reserved for explicit loop_setup/runtime initialization paths, not ordinary chat inference. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status. When the loop objective is complete or cannot continue, use action=close with status completed, blocked, or paused.",
 		Schema:       schema,
 		CatalogGroup: "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			_ = ctx
-			p, err := decodeBuiltinToolArgs[loopProtocolToolArgs](LoopProtocolToolName, args, "action, goal, protocol, reason, sections_changed, patches", "Use action=start_setup when the user asks to enable loop and LOOP.md is missing; use action=read when unsure; use patch_draft for compact draft supplementation; use update_draft only for full draft rewrites; use complete_activation without protocol after calibration is recorded and the saved draft is complete.")
+			p, err := decodeBuiltinToolArgs[loopProtocolToolArgs](LoopProtocolToolName, args, "action, goal, protocol, reason, sections_changed, patches", "Use action=read when unsure; use action=start_setup only in explicit loop_setup/runtime initialization paths; use patch_draft for compact draft supplementation; use update_draft only for full draft rewrites; use complete_activation without protocol after calibration is recorded and the saved draft is complete.")
 			if err != nil {
 				return "", err
 			}
@@ -111,7 +111,7 @@ func startLoopProtocolSetup(protocolPath string, p loopProtocolToolArgs) (string
 		goal = strings.TrimSpace(p.Reason)
 	}
 	if goal == "" {
-		return "", errors.New("goal is required for start_setup\nNext: retry loop_protocol with action=start_setup and a compact goal from the user's loop request, then ask one concise calibration question")
+		return "", errors.New("goal is required for start_setup\nNext: in explicit loop_setup mode, retry loop_protocol with action=start_setup and a compact durable loop goal; otherwise use action=read or ask the user to start loop setup mode")
 	}
 	created, state, event, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
 		LoopID:       loopIDFromProtocolPath(protocolPath),

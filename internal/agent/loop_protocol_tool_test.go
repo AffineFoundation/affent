@@ -11,7 +11,7 @@ import (
 	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
-func TestLoopProtocolToolStartsSetupFromChat(t *testing.T) {
+func TestLoopProtocolToolStartsExplicitSetup(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "chat-loop")
 	tool := loopProtocolTool(path)
@@ -817,8 +817,19 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		HostWorkspaceDir: t.TempDir(),
 		LoopProtocolPath: loopstate.ProtocolPath(t.TempDir(), "loop"),
 	})
-	if _, ok := reg.Get(LoopProtocolToolName); !ok {
+	tool, ok := reg.Get(LoopProtocolToolName)
+	if !ok {
 		t.Fatal("loop_protocol tool not registered")
+	}
+	if !strings.Contains(tool.Description, "explicit loop setup") ||
+		!strings.Contains(tool.Description, "not ordinary chat inference") ||
+		strings.Contains(tool.Description, "If the user asks in chat") {
+		t.Fatalf("loop_protocol description should match explicit setup boundary:\n%s", tool.Description)
+	}
+	schema := string(tool.Schema)
+	if !strings.Contains(schema, "only in explicit loop_setup/runtime initialization paths") ||
+		strings.Contains(schema, "chat-driven activation") {
+		t.Fatalf("loop_protocol schema should match explicit setup boundary:\n%s", schema)
 	}
 	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
@@ -836,6 +847,10 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		!strings.Contains(prompt, "do not use update_draft for running status") ||
 		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("prompt missing loop protocol guidance:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "call loop_protocol action=start_setup with a compact goal from the user's request") ||
+		strings.Contains(prompt, "Do not tell the user to press the UI button") {
+		t.Fatalf("prompt still contains obsolete chat-driven loop setup guidance:\n%s", prompt)
 	}
 }
 
