@@ -1453,6 +1453,7 @@ func TestSessionPoolPromptIncludesScheduleGovernanceAndRuntimeTime(t *testing.T)
 		"session_schedule for future turns, reminders, timers, recurring checks, and scheduled follow-ups",
 		"does not require LOOP.md",
 		"loop_protocol only for durable long-running task state",
+		"action=start_setup is for explicit loop_setup mode",
 		"RFC3339 next_run_at",
 		"repeat_interval_seconds",
 		"kind=loop_tick",

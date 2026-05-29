@@ -531,6 +531,7 @@ func TestWithSessionScheduleSystemGuidance_AppendsOnce(t *testing.T) {
 		"recurring checks",
 		"does not require LOOP.md",
 		"loop_protocol only for durable long-running task state",
+		"action=start_setup is for explicit loop_setup mode",
 		"RFC3339 next_run_at",
 		"repeat_interval_seconds",
 		"kind=loop_tick",
@@ -557,6 +558,7 @@ func TestWithRegistrySystemGuidanceSeparatesScheduleAndLoopResponsibilities(t *t
 	for _, want := range []string{
 		"Loop protocol maintenance:",
 		"Session scheduling:",
+		"action=start_setup is for explicit loop_setup mode",
 		"ordinary timers and recurring checks should create or update a session_schedule",
 		"Use kind=loop_tick only when a scheduled turn is intentionally nudging an already-running LOOP.md",
 	} {
