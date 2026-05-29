@@ -126,6 +126,24 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByRole("button", { name: "Browse workspace" })).toBeInTheDocument();
   });
 
+  it("routes file browser actions to Workspace when no workspace binding can open paths", async () => {
+    const user = userEvent.setup();
+    const onOpenWorkspacePanel = vi.fn();
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={files}
+        onOpenWorkspacePanel={onOpenWorkspacePanel}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Open Workspace" }));
+    expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(1);
+
+    await user.click(within(screen.getByTestId("session-files-review-queue")).getByRole("button", { name: /Browse directory/ }));
+    expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(2);
+  });
+
   it("browses workspace directories and file snapshots", async () => {
     const user = userEvent.setup();
     const onOpenWorkspacePath = vi.fn();

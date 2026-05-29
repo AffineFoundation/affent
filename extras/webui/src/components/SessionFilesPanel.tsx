@@ -24,6 +24,7 @@ export function SessionFilesPanel({
   workspaceBrowser,
   defaultOpen = false,
   onOpenWorkspacePath,
+  onOpenWorkspacePanel,
   onOpenArtifact,
   onUseAsDraft,
 }: {
@@ -31,6 +32,7 @@ export function SessionFilesPanel({
   workspaceBrowser?: WorkspaceFileBrowserState;
   defaultOpen?: boolean;
   onOpenWorkspacePath?: (path: string) => void;
+  onOpenWorkspacePanel?: () => void;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
@@ -64,12 +66,17 @@ export function SessionFilesPanel({
         onOpenWorkspacePath(entry.item.path);
         return;
       }
+      if (onOpenWorkspacePanel) {
+        onOpenWorkspacePanel();
+        return;
+      }
       if (entry.item.contentPreview) setSelectedPath(entry.item.path);
       return;
     }
     if (entry.action === "wait") {
       if (entry.item.contentPreview) setSelectedPath(entry.item.path);
       else onOpenWorkspacePath?.(entry.item.path);
+      if (!entry.item.contentPreview && !onOpenWorkspacePath) onOpenWorkspacePanel?.();
     }
   }
   function selectPreviewLine(lineNumber: number, scroll = false) {
@@ -133,7 +140,7 @@ export function SessionFilesPanel({
                   key={item.id}
                   type="button"
                   data-tone={item.tone ?? "neutral"}
-                  disabled={reviewQueueItemDisabled(item, Boolean(onOpenWorkspacePath))}
+                  disabled={reviewQueueItemDisabled(item, Boolean(onOpenWorkspacePath), Boolean(onOpenWorkspacePanel))}
                   onClick={() => handleReviewQueueClick(item)}
                 >
                   <small>{item.label}</small>
@@ -154,6 +161,12 @@ export function SessionFilesPanel({
             <span className="session-files-overview-actions">
               <button type="button" className="ghost-action" onClick={() => onOpenWorkspacePath(".")}>
                 Browse workspace
+              </button>
+            </span>
+          ) : onOpenWorkspacePanel && files.items.length > 0 ? (
+            <span className="session-files-overview-actions">
+              <button type="button" className="ghost-action primary-run-action" onClick={onOpenWorkspacePanel}>
+                Open Workspace
               </button>
             </span>
           ) : null}
@@ -326,10 +339,10 @@ export function SessionFilesPanel({
   );
 }
 
-function reviewQueueItemDisabled(item: SessionFilesReviewItem, canOpenWorkspace: boolean): boolean {
+function reviewQueueItemDisabled(item: SessionFilesReviewItem, canOpenWorkspace: boolean, canOpenWorkspacePanel: boolean): boolean {
   if (item.action === "view_snapshot") return !item.item.contentPreview;
-  if (item.action === "open_current" || item.action === "recover_path") return !canOpenWorkspace && !item.item.contentPreview;
-  if (item.action === "wait") return !canOpenWorkspace && !item.item.contentPreview;
+  if (item.action === "open_current" || item.action === "recover_path") return !canOpenWorkspace && !canOpenWorkspacePanel && !item.item.contentPreview;
+  if (item.action === "wait") return !canOpenWorkspace && !canOpenWorkspacePanel && !item.item.contentPreview;
   return false;
 }
 

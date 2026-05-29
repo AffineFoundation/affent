@@ -1973,6 +1973,7 @@ export function App() {
           workspaceBrowser={workspaceFileBrowser}
           defaultOpen
           onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
+          onOpenWorkspacePanel={() => setWorkbenchTab("workspace")}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
         />
