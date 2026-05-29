@@ -192,7 +192,8 @@ describe("SessionMemoryPanel", () => {
     expect(candidates).toHaveTextContent("Project goal: Build a Python CLI 2048 game.");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Save candidates");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("1 candidate fact");
-    await user.click(within(candidates).getByRole("button", { name: "Use in form" }));
+    expect(screen.getByTestId("session-memory-form")).not.toBeVisible();
+    await user.click(within(candidates).getByRole("button", { name: "Edit before save" }));
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic")).toHaveValue("project");
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("Project goal: Build a Python CLI 2048 game.");
     expect(screen.getByText("Candidate loaded. Review before saving.")).toBeInTheDocument();

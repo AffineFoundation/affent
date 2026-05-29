@@ -72,7 +72,7 @@ export function SessionMemoryPanel({
   const [editingEntry, setEditingEntry] = useState<{ key: string; value: string } | undefined>();
   const [selectedBucketKey, setSelectedBucketKey] = useState<string | undefined>();
   const [scopeFilter, setScopeFilter] = useState<MemoryScopeFilter>("all");
-  const [writeOpen, setWriteOpen] = useState(!memory?.has_memory);
+  const [writeOpen, setWriteOpen] = useState(false);
   const [savingCandidateId, setSavingCandidateId] = useState<string | undefined>();
   const [revealedEntryKeys, setRevealedEntryKeys] = useState<ReadonlySet<string>>(() => new Set());
   const buckets = useMemo(() => memoryBuckets(memory), [memory]);
@@ -260,7 +260,6 @@ export function SessionMemoryPanel({
               latestUpdate={latestUpdate}
               canWrite={Boolean(onAddMemory)}
               onShowReview={() => setScopeFilter("review")}
-              onOpenWrite={() => setWriteOpen(true)}
               onUseAsDraft={onUseAsDraft}
             />
             {memory?.has_memory && reviewFindings.length > 0 ? (
@@ -276,6 +275,11 @@ export function SessionMemoryPanel({
               onRefresh={onRefresh}
               onUseAsDraft={onUseAsDraft}
             />
+            {candidates.length > 0 && memorySaveState.message && !writeOpen ? (
+              <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"} role="status" aria-live="polite">
+                {memorySaveState.message}
+              </span>
+            ) : null}
             {candidates.length > 0 ? (
               <MemoryCandidateReview
                 candidates={candidates}
@@ -483,7 +487,7 @@ export function SessionMemoryPanel({
               <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
             ) : null}
             {onAddMemory || onUseAsDraft ? (
-              <details className="session-memory-write" open={writeOpen || !memory?.has_memory} onToggle={(event) => setWriteOpen(event.currentTarget.open)}>
+              <details className="session-memory-write" open={writeOpen || (!memory?.has_memory && candidates.length === 0)} onToggle={(event) => setWriteOpen(event.currentTarget.open)}>
                 <summary>
                   <strong>{onAddMemory ? "Add memory" : "Prepare memory draft"}</strong>
                   <span>{onAddMemory ? "Write a durable fact into this chat's memory." : "Prepare an agent instruction to write memory."}</span>
@@ -613,7 +617,6 @@ function MemoryMaintenanceBoard({
   latestUpdate,
   canWrite,
   onShowReview,
-  onOpenWrite,
   onUseAsDraft,
 }: {
   reviewFindings: ReturnType<typeof memoryReviewFindings>;
@@ -621,7 +624,6 @@ function MemoryMaintenanceBoard({
   latestUpdate?: MemoryUpdateMeta;
   canWrite: boolean;
   onShowReview: () => void;
-  onOpenWrite: () => void;
   onUseAsDraft?: UseAsDraft;
 }) {
   const counts = reviewFindings.reduce<Record<string, number>>((acc, finding) => {
@@ -675,11 +677,9 @@ function MemoryMaintenanceBoard({
     actions.push({
       id: "candidates",
       label: canWrite ? "Save candidates" : "Prepare candidates",
-      detail: "Stable facts were derived from this session. Review them before adding to durable memory.",
+      detail: "Stable facts were derived from this session. Review the candidate card before saving durable memory.",
       meta: `${candidateCount} candidate ${candidateCount === 1 ? "fact" : "facts"}`,
       tone: "action",
-      onClick: onOpenWrite,
-      button: canWrite ? "Open form" : "Prepare",
     });
   }
   if (latestUpdate) {
@@ -897,7 +897,7 @@ function MemoryCandidateReview({
             </div>
             <div className="session-memory-actions">
               <button type="button" className="ghost-action" onClick={() => onUseCandidate(candidate)}>
-                Use in form
+                Edit before save
               </button>
               {canSave ? (
                 <button
