@@ -29,6 +29,8 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("1 env");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Run tasks normally");
+    expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy public key" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" })).toBeInTheDocument();
     expect(panel).toHaveTextContent("Existing keys are never overwritten");
     expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
@@ -40,7 +42,11 @@ describe("AccountSettingsPanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith("/workspace/.home/.ssh/id_ed25519.pub");
-    await user.click(screen.getByRole("button", { name: "Copy public key" }));
+    await user.click(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy public key" }));
+    expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
+    await user.click(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" }));
+    expect(writeText).toHaveBeenCalledWith("/workspace/.home/.ssh/id_ed25519.pub");
+    await user.click(screen.getByRole("button", { name: "Copy full key" }));
     expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
 
     await user.clear(screen.getByPlaceholderText("github.com"));
