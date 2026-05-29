@@ -113,11 +113,6 @@ export function SessionFilesPanel({
       </summary>
       <div className="session-skills-body">
         <div className="session-files-overview" aria-label="File work summary">
-          <div className="session-files-overview-main">
-            <span>Evidence</span>
-            <strong>{files.summary}</strong>
-            <small>{files.detail || "No file actions recorded."}</small>
-          </div>
           <div className="session-files-review" data-tone={review.tone ?? "neutral"} data-testid="session-files-review">
             <span>{review.label}</span>
             <strong title={review.title}>{displayPath(review.title)}</strong>
@@ -125,10 +120,10 @@ export function SessionFilesPanel({
           </div>
           <div className="session-files-facts" aria-label="File review facts">
             {reviewFacts.map((fact) => (
-              <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+              <span key={fact.label} data-tone={fact.tone ?? "neutral"} title={fact.detail}>
                 <small>{fact.label}</small>
                 <strong>{fact.value}</strong>
-                <b>{fact.detail}</b>
+                {fileFactVisibleDetail(fact) ? <b>{fileFactVisibleDetail(fact)}</b> : null}
               </span>
             ))}
           </div>
@@ -542,6 +537,17 @@ function FileFilterButton({
       <strong>{value}</strong>
     </button>
   );
+}
+
+function fileFactVisibleDetail(fact: { detail: string }): string | undefined {
+  const detail = fact.detail.trim();
+  if (!detail) return undefined;
+  if (detail === "referenced path" || detail === "referenced paths") return undefined;
+  if (detail === "file snapshots") return "snapshots";
+  if (detail === "write/edit paths") return "changed";
+  if (detail === "loaded content") return "loaded";
+  if (detail === "none") return undefined;
+  return detail;
 }
 
 function fileMatchesQuery(item: SessionFileEvidence, query: string): boolean {

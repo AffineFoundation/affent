@@ -62,11 +62,6 @@ export function SessionArtifactsPanel({
       <div className="session-skills-body">
         {artifacts.length > 0 ? (
           <div className="session-artifacts-overview" aria-label="Artifact evidence summary">
-            <div>
-              <span>Stored outputs</span>
-              <strong>{artifactReviewSummary(artifacts)}</strong>
-              <small>{artifactReviewDetail(artifacts)}</small>
-            </div>
             {focus ? (
               <div className="session-artifacts-focus" data-testid="session-artifacts-focus">
                 <div className="session-artifacts-focus-main">
@@ -101,10 +96,10 @@ export function SessionArtifactsPanel({
             ) : null}
             <div className="session-artifacts-facts" aria-label="Artifact review facts">
               {reviewFacts.map((fact) => (
-                <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+                <span key={fact.label} data-tone={fact.tone ?? "neutral"} title={fact.detail}>
                   <small>{fact.label}</small>
                   <strong>{fact.value}</strong>
-                  <b>{fact.detail}</b>
+                  {artifactFactVisibleDetail(fact) ? <b>{artifactFactVisibleDetail(fact)}</b> : null}
                 </span>
               ))}
             </div>
@@ -239,6 +234,16 @@ function ArtifactFilterButton({
       <strong>{value}</strong>
     </button>
   );
+}
+
+function artifactFactVisibleDetail(fact: { detail: string }): string | undefined {
+  const detail = fact.detail.trim();
+  if (!detail) return undefined;
+  if (detail === "artifact" || detail === "artifacts") return undefined;
+  if (detail === "generated files") return "files";
+  if (detail === "known size") return undefined;
+  if (/^\d+ sources?$/.test(detail)) return detail;
+  return detail;
 }
 
 function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {

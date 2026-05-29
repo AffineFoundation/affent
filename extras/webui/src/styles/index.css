@@ -1761,7 +1761,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-artifacts-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -1821,9 +1821,9 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-artifacts-focus {
   display: grid;
+  grid-column: 1 / -1;
   gap: 6px;
   min-width: 0;
-  max-width: 280px;
   border: 1px solid rgba(20, 184, 166, 0.22);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.68);
@@ -1864,14 +1864,16 @@ button.workbench-context-runtime-item:focus-visible {
 .session-artifacts-facts {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(142px, 1fr));
   gap: 6px;
   min-width: 0;
 }
 
 .session-artifacts-facts > span {
   display: grid;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 7px;
+  align-items: baseline;
   min-width: 0;
   border: 1px solid rgba(217, 224, 232, 0.74);
   border-radius: var(--radius-sm);
@@ -1913,6 +1915,7 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-artifacts-facts b {
+  grid-column: 1 / -1;
   color: var(--text-muted);
   font-size: 10px;
   text-transform: none;
@@ -2130,7 +2133,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-files-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -2148,7 +2151,6 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-files-review {
-  grid-column: 1 / -1;
   border: 1px solid rgba(217, 224, 232, 0.78);
   border-left: 2px solid rgba(20, 184, 166, 0.46);
   border-radius: var(--radius-sm);
@@ -2234,7 +2236,7 @@ button.workbench-context-runtime-item:focus-visible {
 .session-files-facts {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 6px;
   min-width: 0;
 }
@@ -2333,7 +2335,9 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-files-facts > span {
   display: grid;
-  gap: 1px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 7px;
+  align-items: baseline;
   min-width: 0;
   border: 1px solid rgba(217, 224, 232, 0.74);
   border-radius: var(--radius-sm);
@@ -2376,6 +2380,11 @@ button.workbench-context-runtime-item:focus-visible {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-files-facts b {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
 }
 
 .session-files-filterbar {

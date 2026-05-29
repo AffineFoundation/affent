@@ -295,16 +295,6 @@ function artifactReviewItem(artifact: TurnArtifact): SessionArtifactReviewItem |
       tone: "ok",
     };
   }
-  if (artifactKind(artifact) === "full_output") {
-    return {
-      id: `${artifact.path}:output`,
-      label: "Inspect tool output",
-      title: artifact.name,
-      detail: [artifactOutcomeLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
-      artifact,
-      tone: "neutral",
-    };
-  }
   return undefined;
 }
 

@@ -53,7 +53,6 @@ describe("SessionArtifactsPanel", () => {
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("1 deliverable · 1 full output");
     expect(panel).toHaveTextContent("2 files · 10 KiB recorded");
-    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Stored outputs");
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Full output");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Latest turn");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("4");
