@@ -1321,6 +1321,8 @@ func TestLoopRequestPressureUsesAutoCompactWindowBaseline(t *testing.T) {
 	if !payload.CompactScopeActive ||
 		payload.CompactWindowOrdinal != 1 ||
 		payload.CompactWindowPrefillInputTokens <= 0 ||
+		payload.CompactWindowPrefillInputTokens != payload.AfterEstimatedInputTokens ||
+		payload.CompactScopedInputTokens != 0 ||
 		payload.CompactHardInputLimitTokens != 10_000 {
 		t.Fatalf("compact window payload = %+v", payload)
 	}

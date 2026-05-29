@@ -308,6 +308,7 @@ func run(args []string) int {
 			MaxContextCompactionPolicyPressure:     fs.Float64("max-context-compaction-policy-pressure-percent", -1, "optional quality gate: maximum observed context compaction estimated-input/trigger pressure percent"),
 			MaxContextCompactionPostPolicyPressure: fs.Float64("max-context-compaction-post-policy-pressure-percent", -1, "optional quality gate: maximum observed post-compaction estimated-input/trigger pressure percent"),
 			MaxContextCompactionPostPolicyOverRate: fs.Float64("max-context-compaction-post-policy-over-rate", -1, "optional quality gate: maximum rate of policy-observed compactions still over trigger after compaction, 0..1"),
+			MaxContextCompactionScopedPressure:     fs.Float64("max-context-compaction-scoped-pressure-percent", -1, "optional quality gate: maximum successful compaction scoped-window pressure percent after compaction"),
 			MaxAvgContextInjections:                fs.Float64("max-avg-context-injections", -1, "optional quality gate: maximum average injected system-context blocks per scenario"),
 			MaxAvgContextInjectionBytes:            fs.Float64("max-avg-context-injection-bytes", -1, "optional quality gate: maximum average injected system-context bytes per scenario"),
 			MaxAvgContextInjectionEstimatedTokens:  fs.Float64("max-avg-context-injection-estimated-tokens", -1, "optional quality gate: maximum average estimated injected system-context tokens per scenario"),
@@ -651,6 +652,7 @@ type qualityGateConfig struct {
 	MaxContextCompactionPolicyPressure             *float64
 	MaxContextCompactionPostPolicyPressure         *float64
 	MaxContextCompactionPostPolicyOverRate         *float64
+	MaxContextCompactionScopedPressure             *float64
 	MaxAvgContextInjections                        *float64
 	MaxAvgContextInjectionBytes                    *float64
 	MaxAvgContextInjectionEstimatedTokens          *float64
@@ -710,6 +712,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgContextSummaryBytes:             float64Ptr(24000),
 				MaxAvgContextSummaryMissing:           float64Ptr(0),
 				MaxAvgContextSummaryEmpty:             float64Ptr(0),
+				MaxContextCompactionScopedPressure:    float64Ptr(0),
 				MaxAvgContextInjections:               float64Ptr(8),
 				MaxAvgContextInjectionBytes:           float64Ptr(24000),
 				MaxAvgContextInjectionEstimatedTokens: float64Ptr(6000),
@@ -878,6 +881,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure)
 	add("max-context-compaction-post-policy-pressure-percent", g.MaxContextCompactionPostPolicyPressure)
 	add("max-context-compaction-post-policy-over-rate", g.MaxContextCompactionPostPolicyOverRate)
+	add("max-context-compaction-scoped-pressure-percent", g.MaxContextCompactionScopedPressure)
 	add("max-avg-context-injections", g.MaxAvgContextInjections)
 	add("max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes)
 	add("max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens)
@@ -975,6 +979,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-context-compaction-policy-pressure-percent", &g.MaxContextCompactionPolicyPressure, profileConfig.MaxContextCompactionPolicyPressure)
 	apply("max-context-compaction-post-policy-pressure-percent", &g.MaxContextCompactionPostPolicyPressure, profileConfig.MaxContextCompactionPostPolicyPressure)
 	apply("max-context-compaction-post-policy-over-rate", &g.MaxContextCompactionPostPolicyOverRate, profileConfig.MaxContextCompactionPostPolicyOverRate)
+	apply("max-context-compaction-scoped-pressure-percent", &g.MaxContextCompactionScopedPressure, profileConfig.MaxContextCompactionScopedPressure)
 	apply("max-avg-context-injections", &g.MaxAvgContextInjections, profileConfig.MaxAvgContextInjections)
 	apply("max-avg-context-injection-bytes", &g.MaxAvgContextInjectionBytes, profileConfig.MaxAvgContextInjectionBytes)
 	apply("max-avg-context-injection-estimated-tokens", &g.MaxAvgContextInjectionEstimatedTokens, profileConfig.MaxAvgContextInjectionEstimatedTokens)
@@ -1175,6 +1180,7 @@ type batchSummary struct {
 	ContextCompactionCompactScopeActive     int
 	ContextCompactionMaxScopedInputTokens   int
 	ContextCompactionMaxHardInputLimit      int
+	ContextCompactionMaxScopedPressure      int
 	ContextCompactionExamples               []agenteval.ContextCompaction
 	ContextCompactionSkips                  int
 	ContextSkipPolicyObserved               int
@@ -1185,6 +1191,7 @@ type batchSummary struct {
 	ContextSkipCompactScopeActive           int
 	ContextSkipMaxScopedInputTokens         int
 	ContextSkipMaxHardInputLimit            int
+	ContextSkipMaxScopedPressure            int
 	ContextSkipByCause                      map[string]int
 	ContextSkipByReason                     map[string]int
 	ContextSkipExamples                     []agenteval.ContextCompactionSkip
@@ -1492,6 +1499,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	if res.ContextCompactions.MaxCompactHardInputLimit > s.ContextCompactionMaxHardInputLimit {
 		s.ContextCompactionMaxHardInputLimit = res.ContextCompactions.MaxCompactHardInputLimit
 	}
+	if res.ContextCompactions.MaxCompactScopedPressure > s.ContextCompactionMaxScopedPressure {
+		s.ContextCompactionMaxScopedPressure = res.ContextCompactions.MaxCompactScopedPressure
+	}
 	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ContextCompactionSkips += res.ContextCompactionSkips.Count
 	s.ContextSkipPolicyObserved += res.ContextCompactionSkips.PolicyObserved
@@ -1509,6 +1519,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	}
 	if res.ContextCompactionSkips.MaxCompactHardInputLimit > s.ContextSkipMaxHardInputLimit {
 		s.ContextSkipMaxHardInputLimit = res.ContextCompactionSkips.MaxCompactHardInputLimit
+	}
+	if res.ContextCompactionSkips.MaxCompactScopedPressure > s.ContextSkipMaxScopedPressure {
+		s.ContextSkipMaxScopedPressure = res.ContextCompactionSkips.MaxCompactScopedPressure
 	}
 	for k, v := range res.ContextCompactionSkips.ByCause {
 		if s.ContextSkipByCause == nil {
@@ -2026,7 +2039,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
 	)
-	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_reduced_bytes:%.0f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,policy_observed:%d,max_policy_pressure:%d%%,post_policy_observed:%d,post_policy_over:%d,max_post_policy_pressure:%d%%,compact_scope_active:%d,max_scoped_tokens:%d,max_hard_limit:%d,avg_skips:%.2f,skip_policy_observed:%d,skip_post_policy_observed:%d,skip_post_policy_over:%d,skip_max_policy_pressure:%d%%,skip_max_post_policy_pressure:%d%%,skip_compact_scope_active:%d,skip_max_scoped_tokens:%d,skip_max_hard_limit:%d,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
+	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_reduced_bytes:%.0f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,policy_observed:%d,max_policy_pressure:%d%%,post_policy_observed:%d,post_policy_over:%d,max_post_policy_pressure:%d%%,compact_scope_active:%d,max_scoped_tokens:%d,max_hard_limit:%d,max_scoped_pressure:%d%%,avg_skips:%.2f,skip_policy_observed:%d,skip_post_policy_observed:%d,skip_post_policy_over:%d,skip_max_policy_pressure:%d%%,skip_max_post_policy_pressure:%d%%,skip_compact_scope_active:%d,skip_max_scoped_tokens:%d,skip_max_hard_limit:%d,skip_max_scoped_pressure:%d%%,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
 		batchAverage(s.ContextCompactions, s.Total),
 		batchAverage(s.ContextCompactionsReactive, s.Total),
 		batchAverage(s.ContextCompactionRemoved, s.Total),
@@ -2042,6 +2055,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ContextCompactionCompactScopeActive,
 		s.ContextCompactionMaxScopedInputTokens,
 		s.ContextCompactionMaxHardInputLimit,
+		s.ContextCompactionMaxScopedPressure,
 		batchAverage(s.ContextCompactionSkips, s.Total),
 		s.ContextSkipPolicyObserved,
 		s.ContextSkipPostPolicyObserved,
@@ -2051,6 +2065,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ContextSkipCompactScopeActive,
 		s.ContextSkipMaxScopedInputTokens,
 		s.ContextSkipMaxHardInputLimit,
+		s.ContextSkipMaxScopedPressure,
 		batchAverage(s.ContextInjections, s.Total),
 		batchAverage(s.ContextInjectionBytes, s.Total),
 		batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
@@ -2190,7 +2205,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		)
 	}
 	if s.ContextCompactions > 0 {
-		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d,policy_observed=%d,max_policy_pressure=%d%%,post_policy_observed=%d,post_policy_over=%d,max_post_policy_pressure=%d%%,compact_scope_active=%d,max_scoped_tokens=%d,max_hard_limit=%d",
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d,policy_observed=%d,max_policy_pressure=%d%%,post_policy_observed=%d,post_policy_over=%d,max_post_policy_pressure=%d%%,compact_scope_active=%d,max_scoped_tokens=%d,max_hard_limit=%d,max_scoped_pressure=%d%%",
 			s.ContextCompactions,
 			s.ContextCompactionsReactive,
 			s.ContextCompactionRemoved,
@@ -2206,10 +2221,11 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.ContextCompactionCompactScopeActive,
 			s.ContextCompactionMaxScopedInputTokens,
 			s.ContextCompactionMaxHardInputLimit,
+			s.ContextCompactionMaxScopedPressure,
 		)
 	}
 	if s.ContextCompactionSkips > 0 {
-		fmt.Fprintf(w, " compaction_skips=%d,policy_observed=%d,post_policy_observed=%d,post_policy_over=%d,max_policy_pressure=%d%%,max_post_policy_pressure=%d%%,compact_scope_active=%d,max_scoped_tokens=%d,max_hard_limit=%d",
+		fmt.Fprintf(w, " compaction_skips=%d,policy_observed=%d,post_policy_observed=%d,post_policy_over=%d,max_policy_pressure=%d%%,max_post_policy_pressure=%d%%,compact_scope_active=%d,max_scoped_tokens=%d,max_hard_limit=%d,max_scoped_pressure=%d%%",
 			s.ContextCompactionSkips,
 			s.ContextSkipPolicyObserved,
 			s.ContextSkipPostPolicyObserved,
@@ -2219,6 +2235,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.ContextSkipCompactScopeActive,
 			s.ContextSkipMaxScopedInputTokens,
 			s.ContextSkipMaxHardInputLimit,
+			s.ContextSkipMaxScopedPressure,
 		)
 		if len(s.ContextSkipByCause) > 0 {
 			fmt.Fprintf(w, " compaction_skip_causes=%s", formatStringIntCounts(s.ContextSkipByCause))
@@ -2621,6 +2638,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure, false},
 		{"--max-context-compaction-post-policy-pressure-percent", g.MaxContextCompactionPostPolicyPressure, false},
 		{"--max-context-compaction-post-policy-over-rate", g.MaxContextCompactionPostPolicyOverRate, true},
+		{"--max-context-compaction-scoped-pressure-percent", g.MaxContextCompactionScopedPressure, false},
 		{"--max-avg-context-injections", g.MaxAvgContextInjections, false},
 		{"--max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes, false},
 		{"--max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens, false},
@@ -2794,6 +2812,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("context_compaction_policy_pressure_percent", float64(s.ContextCompactionMaxPolicyPressure), g.MaxContextCompactionPolicyPressure, s.ContextCompactionPolicyObserved > 0)
 	checkMax("context_compaction_post_policy_pressure_percent", float64(s.ContextCompactionMaxPostPolicyPressure), g.MaxContextCompactionPostPolicyPressure, s.ContextCompactionPostPolicyObserved > 0)
 	checkMax("context_compaction_post_policy_over_rate", batchRatio(s.ContextCompactionPostPolicyStillOver, s.ContextCompactionPostPolicyObserved), g.MaxContextCompactionPostPolicyOverRate, s.ContextCompactionPostPolicyObserved > 0)
+	checkMax("context_compaction_scoped_pressure_percent", float64(s.ContextCompactionMaxScopedPressure), g.MaxContextCompactionScopedPressure, s.ContextCompactionCompactScopeActive > 0)
 	checkMax("avg_context_injections", batchAverage(s.ContextInjections, s.Total), g.MaxAvgContextInjections, s.Total > 0)
 	checkMax("avg_context_injection_bytes", batchAverage(s.ContextInjectionBytes, s.Total), g.MaxAvgContextInjectionBytes, s.Total > 0)
 	checkMax("avg_context_injection_estimated_tokens", batchAverage(s.ContextInjectionEstimatedTokens, s.Total), g.MaxAvgContextInjectionEstimatedTokens, s.Total > 0)
@@ -3949,6 +3968,7 @@ type evalJSONLMetadata struct {
 	MaxContextCompactionPolicyPressure             *float64           `json:"max_context_compaction_policy_pressure_percent,omitempty"`
 	MaxContextCompactionPostPolicyPressure         *float64           `json:"max_context_compaction_post_policy_pressure_percent,omitempty"`
 	MaxContextCompactionPostPolicyOverRate         *float64           `json:"max_context_compaction_post_policy_over_rate,omitempty"`
+	MaxContextCompactionScopedPressure             *float64           `json:"max_context_compaction_scoped_pressure_percent,omitempty"`
 	MaxAvgContextInjections                        *float64           `json:"max_avg_context_injections,omitempty"`
 	MaxAvgContextInjectionBytes                    *float64           `json:"max_avg_context_injection_bytes,omitempty"`
 	MaxAvgContextInjectionEstimatedTokens          *float64           `json:"max_avg_context_injection_estimated_tokens,omitempty"`
@@ -4037,6 +4057,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxContextCompactionPolicyPressure:             enabledQualityGateValue(gates.MaxContextCompactionPolicyPressure),
 		MaxContextCompactionPostPolicyPressure:         enabledQualityGateValue(gates.MaxContextCompactionPostPolicyPressure),
 		MaxContextCompactionPostPolicyOverRate:         enabledQualityGateValue(gates.MaxContextCompactionPostPolicyOverRate),
+		MaxContextCompactionScopedPressure:             enabledQualityGateValue(gates.MaxContextCompactionScopedPressure),
 		MaxAvgContextInjections:                        enabledQualityGateValue(gates.MaxAvgContextInjections),
 		MaxAvgContextInjectionBytes:                    enabledQualityGateValue(gates.MaxAvgContextInjectionBytes),
 		MaxAvgContextInjectionEstimatedTokens:          enabledQualityGateValue(gates.MaxAvgContextInjectionEstimatedTokens),
@@ -4165,8 +4186,9 @@ type batchResultRecord struct {
 	ContextCompactionPostPolicyStillOver   int                                        `json:"context_compaction_post_policy_still_over_trigger,omitempty"`
 	ContextCompactionMaxPostPolicyPressure int                                        `json:"context_compaction_max_post_policy_pressure_percent,omitempty"`
 	ContextCompactionCompactScopeActive    int                                        `json:"context_compaction_compact_scope_active,omitempty"`
-	ContextCompactionMaxScopedInputTokens  int                                        `json:"context_compaction_max_scoped_input_tokens,omitempty"`
+	ContextCompactionMaxScopedInputTokens  int                                        `json:"context_compaction_max_scoped_input_tokens"`
 	ContextCompactionMaxHardInputLimit     int                                        `json:"context_compaction_max_hard_input_limit,omitempty"`
+	ContextCompactionMaxScopedPressure     int                                        `json:"context_compaction_max_scoped_pressure_percent"`
 	ContextCompactionExamples              []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
 	ContextCompactionSkips                 int                                        `json:"context_compaction_skips,omitempty"`
 	ContextSkipPolicyObserved              int                                        `json:"context_compaction_skip_policy_observed,omitempty"`
@@ -4177,6 +4199,7 @@ type batchResultRecord struct {
 	ContextSkipCompactScopeActive          int                                        `json:"context_compaction_skip_compact_scope_active,omitempty"`
 	ContextSkipMaxScopedInputTokens        int                                        `json:"context_compaction_skip_max_scoped_input_tokens,omitempty"`
 	ContextSkipMaxHardInputLimit           int                                        `json:"context_compaction_skip_max_hard_input_limit,omitempty"`
+	ContextSkipMaxScopedPressure           int                                        `json:"context_compaction_skip_max_scoped_pressure_percent,omitempty"`
 	ContextSkipByCause                     map[string]int                             `json:"context_compaction_skip_by_cause,omitempty"`
 	ContextSkipByReason                    map[string]int                             `json:"context_compaction_skip_by_reason,omitempty"`
 	ContextSkipExamples                    []agenteval.ContextCompactionSkip          `json:"context_compaction_skip_examples,omitempty"`
@@ -4380,8 +4403,9 @@ type batchSummaryRecord struct {
 	ContextCompactionSummaryMissing         int                                              `json:"context_compaction_summary_missing,omitempty"`
 	ContextCompactionSummaryEmpty           int                                              `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionCompactScopeActive     int                                              `json:"context_compaction_compact_scope_active,omitempty"`
-	ContextCompactionMaxScopedInputTokens   int                                              `json:"context_compaction_max_scoped_input_tokens,omitempty"`
+	ContextCompactionMaxScopedInputTokens   int                                              `json:"context_compaction_max_scoped_input_tokens"`
 	ContextCompactionMaxHardInputLimit      int                                              `json:"context_compaction_max_hard_input_limit,omitempty"`
+	ContextCompactionMaxScopedPressure      int                                              `json:"context_compaction_max_scoped_pressure_percent"`
 	ContextCompactionExamples               []agenteval.ContextCompaction                    `json:"context_compaction_examples,omitempty"`
 	ContextCompactionSkips                  int                                              `json:"context_compaction_skips,omitempty"`
 	ContextSkipPolicyObserved               int                                              `json:"context_compaction_skip_policy_observed,omitempty"`
@@ -4392,6 +4416,7 @@ type batchSummaryRecord struct {
 	ContextSkipCompactScopeActive           int                                              `json:"context_compaction_skip_compact_scope_active,omitempty"`
 	ContextSkipMaxScopedInputTokens         int                                              `json:"context_compaction_skip_max_scoped_input_tokens,omitempty"`
 	ContextSkipMaxHardInputLimit            int                                              `json:"context_compaction_skip_max_hard_input_limit,omitempty"`
+	ContextSkipMaxScopedPressure            int                                              `json:"context_compaction_skip_max_scoped_pressure_percent,omitempty"`
 	ContextSkipByCause                      map[string]int                                   `json:"context_compaction_skip_by_cause,omitempty"`
 	ContextSkipByReason                     map[string]int                                   `json:"context_compaction_skip_by_reason,omitempty"`
 	ContextSkipExamples                     []agenteval.ContextCompactionSkip                `json:"context_compaction_skip_examples,omitempty"`
@@ -4633,6 +4658,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextCompactionCompactScopeActive:    res.ContextCompactions.CompactScopeActive,
 		ContextCompactionMaxScopedInputTokens:  res.ContextCompactions.MaxCompactScopedInputTokens,
 		ContextCompactionMaxHardInputLimit:     res.ContextCompactions.MaxCompactHardInputLimit,
+		ContextCompactionMaxScopedPressure:     res.ContextCompactions.MaxCompactScopedPressure,
 		ContextCompactionExamples:              cloneContextCompactionExamples(res.ContextCompactions.Examples),
 		ContextCompactionSkips:                 res.ContextCompactionSkips.Count,
 		ContextSkipPolicyObserved:              res.ContextCompactionSkips.PolicyObserved,
@@ -4643,6 +4669,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextSkipCompactScopeActive:          res.ContextCompactionSkips.CompactScopeActive,
 		ContextSkipMaxScopedInputTokens:        res.ContextCompactionSkips.MaxCompactScopedInputTokens,
 		ContextSkipMaxHardInputLimit:           res.ContextCompactionSkips.MaxCompactHardInputLimit,
+		ContextSkipMaxScopedPressure:           res.ContextCompactionSkips.MaxCompactScopedPressure,
 		ContextSkipByCause:                     cloneStringIntMap(res.ContextCompactionSkips.ByCause),
 		ContextSkipByReason:                    cloneStringIntMap(res.ContextCompactionSkips.ByReason),
 		ContextSkipExamples:                    cloneContextSkipExamples(res.ContextCompactionSkips.Examples),
@@ -5003,6 +5030,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextCompactionCompactScopeActive:     s.ContextCompactionCompactScopeActive,
 		ContextCompactionMaxScopedInputTokens:   s.ContextCompactionMaxScopedInputTokens,
 		ContextCompactionMaxHardInputLimit:      s.ContextCompactionMaxHardInputLimit,
+		ContextCompactionMaxScopedPressure:      s.ContextCompactionMaxScopedPressure,
 		ContextCompactionExamples:               cloneContextCompactionExamples(s.ContextCompactionExamples),
 		ContextCompactionSkips:                  s.ContextCompactionSkips,
 		ContextSkipPolicyObserved:               s.ContextSkipPolicyObserved,
@@ -5013,6 +5041,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextSkipCompactScopeActive:           s.ContextSkipCompactScopeActive,
 		ContextSkipMaxScopedInputTokens:         s.ContextSkipMaxScopedInputTokens,
 		ContextSkipMaxHardInputLimit:            s.ContextSkipMaxHardInputLimit,
+		ContextSkipMaxScopedPressure:            s.ContextSkipMaxScopedPressure,
 		ContextSkipByCause:                      cloneStringIntMap(s.ContextSkipByCause),
 		ContextSkipByReason:                     cloneStringIntMap(s.ContextSkipByReason),
 		ContextSkipExamples:                     cloneContextSkipExamples(s.ContextSkipExamples),
@@ -5179,6 +5208,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxContextCompactionPolicyPressure != nil ||
 		meta.MaxContextCompactionPostPolicyPressure != nil ||
 		meta.MaxContextCompactionPostPolicyOverRate != nil ||
+		meta.MaxContextCompactionScopedPressure != nil ||
 		meta.MaxAvgContextInjections != nil ||
 		meta.MaxAvgContextInjectionBytes != nil ||
 		meta.MaxAvgContextInjectionEstimatedTokens != nil ||

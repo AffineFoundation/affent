@@ -807,7 +807,7 @@ type ContextCompaction struct {
 	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
 	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
 	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
-	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
+	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens"`
 	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 	Reactive                           bool   `json:"reactive"`
 	Reason                             string `json:"reason"`
@@ -835,6 +835,7 @@ type ContextCompactionStats struct {
 	CompactScopeActive           int
 	MaxCompactScopedInputTokens  int
 	MaxCompactHardInputLimit     int
+	MaxCompactScopedPressure     int
 	ByReason                     map[string]int
 	Examples                     []ContextCompaction
 }
@@ -872,6 +873,7 @@ type ContextCompactionSkipStats struct {
 	CompactScopeActive           int
 	MaxCompactScopedInputTokens  int
 	MaxCompactHardInputLimit     int
+	MaxCompactScopedPressure     int
 	ByCause                      map[string]int
 	ByReason                     map[string]int
 	Examples                     []ContextCompactionSkip
@@ -2130,6 +2132,9 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 		if compaction.CompactHardInputLimitTokens > stats.MaxCompactHardInputLimit {
 			stats.MaxCompactHardInputLimit = compaction.CompactHardInputLimitTokens
 		}
+		if pressure := contextCompactionPolicyPressurePercent(compaction.CompactScopedInputTokens, compaction.TriggerInputTokens); pressure > stats.MaxCompactScopedPressure {
+			stats.MaxCompactScopedPressure = pressure
+		}
 		if contextCompactionSummaryMissing(compaction) {
 			stats.SummaryMissing++
 		}
@@ -2216,6 +2221,9 @@ func (t Trace) ContextCompactionSkipStats(maxExamples int) ContextCompactionSkip
 		}
 		if skipped.CompactHardInputLimitTokens > stats.MaxCompactHardInputLimit {
 			stats.MaxCompactHardInputLimit = skipped.CompactHardInputLimitTokens
+		}
+		if pressure := contextCompactionPolicyPressurePercent(skipped.CompactScopedInputTokens, skipped.TriggerInputTokens); pressure > stats.MaxCompactScopedPressure {
+			stats.MaxCompactScopedPressure = pressure
 		}
 		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
 			continue

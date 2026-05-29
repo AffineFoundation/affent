@@ -3984,7 +3984,7 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		CompactScopeActive:                 policy.ScopedWindowActivated || policy.WindowPrefillAfterCompact > 0,
 		CompactWindowOrdinal:               compactWindowOrdinalForEvent(policy),
 		CompactWindowPrefillInputTokens:    compactWindowPrefillForEvent(policy),
-		CompactScopedInputTokens:           policy.ScopedInputTokens,
+		CompactScopedInputTokens:           compactScopedInputForEvent(policy),
 		CompactHardInputLimitTokens:        policy.HardInputLimitTokens,
 		Reactive:                           reactive,
 		Reason:                             reason,
@@ -4039,6 +4039,13 @@ func compactWindowPrefillForEvent(policy contextCompactPolicy) int {
 		return policy.WindowPrefillAfterCompact
 	}
 	return policy.PrefillInputTokens
+}
+
+func compactScopedInputForEvent(policy contextCompactPolicy) int {
+	if policy.WindowPrefillAfterCompact > 0 {
+		return max(0, policy.AfterEstimatedInputTokens-policy.WindowPrefillAfterCompact)
+	}
+	return policy.ScopedInputTokens
 }
 
 func (l *Loop) perCallTimeout() time.Duration {
