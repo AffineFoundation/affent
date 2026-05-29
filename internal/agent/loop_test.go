@@ -72,6 +72,25 @@ func TestBaseSystemPromptsMatchUserLanguage(t *testing.T) {
 	}
 }
 
+func TestMemoryOnlySystemPromptConstrainsDurableWrites(t *testing.T) {
+	for _, want := range []string{
+		"only when the user is teaching you something",
+		"durable or asking you to recall it",
+		"Save only stable preferences",
+		"durable project/user facts",
+		"likely to matter in future sessions",
+		"Do not save transient task progress",
+		"raw dumps",
+		"secrets",
+		"guesses",
+		"easy to re-read from project files",
+	} {
+		if !strings.Contains(MemoryOnlySystemPrompt, want) {
+			t.Fatalf("memory-only prompt missing durable-write boundary %q:\n%s", want, MemoryOnlySystemPrompt)
+		}
+	}
+}
+
 func TestLimitedToolSystemPromptReflectsToolBudget(t *testing.T) {
 	for _, want := range []string{
 		fmt.Sprintf("~%d tool calls", DefaultMaxTurnSteps),
