@@ -323,6 +323,79 @@ func TestSearchFindsRecoveryEventAnchors(t *testing.T) {
 	}
 }
 
+func TestSearchFindsTaskStateAnchorsFromEvents(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "task-state-session",
+		mustEvent(t, sse.TypeUserMessage, map[string]any{
+			"turn_id":       "t1",
+			"text":          "Fix clamp behavior and push the result.",
+			"mode":          "execute_plan",
+			"source":        "schedule",
+			"schedule_id":   "sched_clamp",
+			"schedule_kind": "checkin",
+		}),
+		mustEvent(t, sse.TypeToolRequest, map[string]any{
+			"turn_id": "t1",
+			"call_id": "edit-1",
+			"tool":    "edit_file",
+			"args":    map[string]any{"path": "app/mathutil/clamp.go"},
+		}),
+		mustEvent(t, sse.TypeToolResult, map[string]any{
+			"turn_id":        "t1",
+			"call_id":        "edit-1",
+			"exit_code":      0,
+			"result_summary": "replaced 1 occurrence",
+		}),
+		mustEvent(t, sse.TypeToolRequest, map[string]any{
+			"turn_id": "t1",
+			"call_id": "test-1",
+			"tool":    "shell",
+			"args":    map[string]any{"command": "go test ./..."},
+		}),
+		mustEvent(t, sse.TypeToolResult, map[string]any{
+			"turn_id":        "t1",
+			"call_id":        "test-1",
+			"exit_code":      1,
+			"failure_kind":   "test_failed",
+			"result_summary": "FAIL ./...",
+			"result":         "FAIL ./...\nNext: inspect clamp bounds then rerun go test\nFailure: kind=test_failed",
+		}),
+		mustEvent(t, sse.TypeToolRequest, map[string]any{
+			"turn_id": "t1",
+			"call_id": "push-1",
+			"tool":    "shell",
+			"args":    map[string]any{"command": "git push origin main"},
+		}),
+		mustEvent(t, sse.TypeToolResult, map[string]any{
+			"turn_id":        "t1",
+			"call_id":        "push-1",
+			"exit_code":      0,
+			"result_summary": "pushed",
+		}),
+		mustEvent(t, sse.TypeTurnEnd, map[string]any{
+			"turn_id": "t1",
+			"reason":  sse.TurnEndCompleted,
+		}),
+	)
+
+	hits, err := Search(context.Background(), dir, "current", "clamp git push test_failed", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected task_state hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != "task-state-session" || hit.Role != "task_state" {
+		t.Fatalf("expected task_state hit, got %+v", hit)
+	}
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "git push origin main"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("task_state hit missing %q:\n%+v", want, hit)
+		}
+	}
+}
+
 func TestSearchFindsLoopTurnCheckpointRecoveryEventAnchors(t *testing.T) {
 	dir := t.TempDir()
 	writeDurableEvents(t, dir, "checkpoint-loop",
@@ -719,6 +792,57 @@ func TestRecentSessionsIncludesRecoveryAnchorsFromEvents(t *testing.T) {
 	}
 	if strings.Contains(fmt.Sprint(recent), "current") {
 		t.Fatalf("current session events leaked into recent anchors: %+v", recent)
+	}
+}
+
+func TestRecentSessionsIncludesTaskStateAnchorsFromEvents(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "task-state-recent",
+		mustEvent(t, sse.TypeUserMessage, map[string]any{
+			"turn_id": "t1",
+			"text":    "Continue queue priority repair",
+			"mode":    "execute_plan",
+			"source":  "user",
+		}),
+		mustEvent(t, sse.TypeToolRequest, map[string]any{
+			"turn_id": "t1",
+			"call_id": "test-1",
+			"tool":    "shell",
+			"args":    map[string]any{"command": "go test ./..."},
+		}),
+		mustEvent(t, sse.TypeToolResult, map[string]any{
+			"turn_id":        "t1",
+			"call_id":        "test-1",
+			"exit_code":      1,
+			"failure_kind":   "test_failed",
+			"result_summary": "FAIL ./queue",
+			"result":         "FAIL ./queue\nNext: inspect queue ordering regression\nFailure: kind=test_failed",
+		}),
+		mustEvent(t, sse.TypeTurnEnd, map[string]any{
+			"turn_id": "t1",
+			"reason":  sse.TurnEndMaxTurns,
+		}),
+	)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "task-state-recent", "events.jsonl"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 {
+		t.Fatalf("expected one recent task state anchor, got %+v", recent)
+	}
+	got := recent[0]
+	if got.SessionID != "task-state-recent" || got.TaskState == "" {
+		t.Fatalf("task_state recent anchor missing: %+v", got)
+	}
+	for _, want := range []string{"task_state:", "status=blocked", "objective: Continue queue priority repair", "failed_action:", "inspect queue ordering regression"} {
+		if !strings.Contains(got.TaskState, want) {
+			t.Fatalf("task_state preview missing %q: %+v", want, got)
+		}
 	}
 }
 

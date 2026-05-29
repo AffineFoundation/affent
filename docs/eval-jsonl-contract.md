@@ -458,11 +458,12 @@ Scenario records describe one eval case:
   `session_search` JSON responses.
 - `session_search_context_hits`: count of `session_search` hits that included
   adjacent transcript context, a compact persisted plan anchor, or a compact
-  loop-protocol anchor.
+  loop-protocol or task-state anchor.
 - `session_search_matched_terms`: count of unique matched query terms reported
   across parsed `session_search` responses.
 - `session_search_recent_sessions`: count of recent-session recovery anchors
-  returned by parsed no-hit `session_search` responses.
+  returned by parsed no-hit `session_search` responses. Recent-session anchors
+  may include canonical `task_state` previews derived from `events.jsonl`.
 - `session_search_examples`: optional bounded examples of parsed
   `session_search` responses. Each sample includes tool index, call id, query,
   total result count, matched session id, logical turn index, physical

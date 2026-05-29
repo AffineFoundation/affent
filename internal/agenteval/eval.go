@@ -156,6 +156,7 @@ type RecentSessionSearchRequirement struct {
 	AssistantContains string
 	PlanContains      string
 	LoopContains      string
+	TaskStateContains string
 	RecoveryContains  string
 	MessageContains   string
 	// Min is the required number of matching recent-session anchors. Values
@@ -1037,6 +1038,7 @@ type DebugRecentSessionSearchRequirement struct {
 	AssistantContains string `json:"assistant_contains,omitempty"`
 	PlanContains      string `json:"plan_contains,omitempty"`
 	LoopContains      string `json:"loop_contains,omitempty"`
+	TaskStateContains string `json:"task_state_contains,omitempty"`
 	RecoveryContains  string `json:"recovery_contains,omitempty"`
 	MessageContains   string `json:"message_contains,omitempty"`
 	Min               int    `json:"min,omitempty"`
@@ -2123,6 +2125,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			AssistantContains: req.AssistantContains,
 			PlanContains:      req.PlanContains,
 			LoopContains:      req.LoopContains,
+			TaskStateContains: req.TaskStateContains,
 			RecoveryContains:  req.RecoveryContains,
 			MessageContains:   req.MessageContains,
 			Min:               req.Min,
@@ -3525,7 +3528,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		if min <= 0 {
 			min = 1
 		}
-		checks = append(checks, RecentSessionSearchAnchorAtLeast(req.QueryContains, req.SessionID, req.UserContains, req.AssistantContains, req.PlanContains, req.LoopContains, req.RecoveryContains, req.MessageContains, min))
+		checks = append(checks, RecentSessionSearchAnchorAtLeast(req.QueryContains, req.SessionID, req.UserContains, req.AssistantContains, req.PlanContains, req.LoopContains, req.TaskStateContains, req.RecoveryContains, req.MessageContains, min))
 	}
 	for _, source := range sortedStringMapKeys(scenario.RequiredContextInjectionSources) {
 		checks = append(checks, ContextInjectionSourceAtLeast(source, scenario.RequiredContextInjectionSources[source]))

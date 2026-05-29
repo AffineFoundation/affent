@@ -1,0 +1,493 @@
+package taskstate
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
+
+	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
+	"github.com/affinefoundation/affent/internal/toolfailure"
+)
+
+const (
+	DefaultMaxItems       = 8
+	DefaultSummaryMaxChar = 180
+)
+
+type EventState struct {
+	Snapshot
+	LatestTurnStatus  string
+	LatestRequestText string
+	RuntimeSurface    *sse.RuntimeSurfacePayload
+	RuntimeWorkspace  *sse.RuntimeWorkspace
+}
+
+type EventScanOptions struct {
+	MaxItems       int
+	SummaryMaxChar int
+	MaxLineBytes   int
+}
+
+type eventTaskRequest struct {
+	Tool   string
+	TurnID string
+	CallID string
+	Args   map[string]any
+}
+
+func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
+	if r == nil {
+		return nil, nil
+	}
+	maxLineBytes := opts.MaxLineBytes
+	if maxLineBytes <= 0 {
+		maxLineBytes = jsonl.DefaultMaxRecordBytes
+	}
+	reader, ok := r.(*bufio.Reader)
+	if !ok {
+		reader = bufio.NewReaderSize(r, 64*1024)
+	}
+	state := &EventState{}
+	requests := map[string]eventTaskRequest{}
+	seen := false
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(reader, maxLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		switch ev.Type {
+		case sse.TypeUserMessage:
+			var p sse.UserMessagePayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			state.LatestRequestText = compactSummary(p.Text, opts.SummaryMaxChar)
+			state.Objective = compactSummary(firstNonEmpty(p.DisplayText, p.Text), opts.SummaryMaxChar)
+			state.RequestMode = normalizeRequestMode(p.Mode)
+			state.RequestSource = normalizeRequestSource(p.Source)
+			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
+			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
+			addSource(state, state.RequestSource, opts.MaxItems)
+			seen = true
+		case sse.TypeRuntimeSurface:
+			var p sse.RuntimeSurfacePayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			state.RuntimeSurface = &p
+			if runtimeSurfaceHasCapabilityData(&p) {
+				addSource(state, "runtime_surface", opts.MaxItems)
+				seen = true
+			}
+			if p.Workspace != nil {
+				state.RuntimeWorkspace = p.Workspace
+				seen = true
+			}
+		case sse.TypeContextInjected:
+			var p sse.ContextInjectedPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if p.Source != "" {
+				addSource(state, p.Source, opts.MaxItems)
+			}
+			if p.Source == "runtime_workspace" || p.Source == "active_plan" || p.Source == "skill" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  p.Source,
+					Summary: compactSummary(firstNonEmpty(p.Summary, p.Title, p.Preview), opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+				seen = true
+			}
+		case sse.TypeToolRequest:
+			var p sse.ToolRequestPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil || p.CallID == "" {
+				continue
+			}
+			req := eventTaskRequest{Tool: p.Tool, TurnID: p.TurnID, CallID: p.CallID, Args: p.Args}
+			requests[p.CallID] = req
+			state.AttemptedActions = appendAction(state.AttemptedActions, Action{
+				Tool:    p.Tool,
+				Summary: compactSummary(actionSummary(req), opts.SummaryMaxChar),
+				TurnID:  p.TurnID,
+				CallID:  p.CallID,
+			}, opts.MaxItems)
+			if file := changedFile(req); file.Path != "" {
+				state.ChangedFiles = appendFile(state.ChangedFiles, file, opts.MaxItems)
+			}
+			seen = true
+		case sse.TypeToolResult:
+			var p sse.ToolResultPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			req := requests[p.CallID]
+			kinds := failureKinds(req.Tool, p, opts.MaxItems)
+			if p.ExitCode != 0 || len(kinds) > 0 {
+				state.FailedActions = appendFailure(state.FailedActions, Failure{
+					Tool:    firstNonEmpty(req.Tool, "tool"),
+					Summary: compactSummary(firstNonEmpty(p.ResultSummary, p.Result), opts.SummaryMaxChar),
+					Kinds:   kinds,
+					Next:    NextHint(p.ResultSummary, p.Result),
+					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
+					CallID:  p.CallID,
+				}, opts.MaxItems)
+				state.VerificationState = "failed"
+			} else if source := toolEvidenceSource(req.Tool); source != "" {
+				if req.Tool == "shell" {
+					state.VerificationState = "last_shell_passed"
+				}
+				action := actionSummary(req)
+				summary := compactSummary(action, opts.SummaryMaxChar)
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  source,
+					Summary: summary,
+					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
+					CallID:  p.CallID,
+				}, opts.MaxItems)
+				addSource(state, source, opts.MaxItems)
+				if req.Tool == "shell" {
+					source = ShellHandoffEvidenceSource(action)
+				} else {
+					source = ""
+				}
+				if source != "" {
+					state.Evidence = appendEvidence(state.Evidence, Evidence{
+						Source:  source,
+						Summary: summary,
+						TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
+						CallID:  p.CallID,
+					}, opts.MaxItems)
+					addSource(state, source, opts.MaxItems)
+				}
+			}
+			seen = true
+		case sse.TypeMessageRejected:
+			var p sse.MessageRejectedPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if p.RequiredAction != "" {
+				state.OpenQuestions = appendUnique(state.OpenQuestions, compactSummary(p.RequiredAction, opts.SummaryMaxChar), opts.MaxItems)
+				seen = true
+			}
+		case sse.TypeTurnEnd:
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			state.LatestTurnStatus = strings.TrimSpace(p.Reason)
+			state.Status = statusFromTurnEnd(p.Reason)
+			seen = true
+		}
+	}
+	if !seen || IsEmpty(state.Snapshot) {
+		return nil, nil
+	}
+	if state.VerificationState == "" {
+		state.VerificationState = "unknown"
+	}
+	return state, nil
+}
+
+func SearchText(task Snapshot) string {
+	if IsEmpty(task) {
+		return ""
+	}
+	var b strings.Builder
+	appendStateLine(&b, "task_state",
+		"status="+task.Status,
+		"verification="+task.VerificationState,
+		"mode="+task.RequestMode,
+		"source="+task.RequestSource,
+		"schedule_kind="+task.ScheduleKind,
+		"schedule_id="+task.ScheduleID,
+	)
+	appendTextLine(&b, "objective", task.Objective)
+	appendTextLine(&b, "current_step", task.CurrentStep)
+	appendTextLine(&b, "next_step", task.NextStep)
+	for _, item := range task.OpenQuestions {
+		appendTextLine(&b, "open_question", item)
+	}
+	for _, item := range task.Constraints {
+		appendTextLine(&b, "constraint", item)
+	}
+	for _, item := range task.KnownFacts {
+		appendTextLine(&b, "known_fact", item)
+	}
+	for _, file := range task.ChangedFiles {
+		appendStateLine(&b, "changed_file", "action="+file.Action, "path="+file.Path)
+	}
+	for _, action := range task.AttemptedActions {
+		appendStateLine(&b, "attempted_action", "tool="+action.Tool, "summary="+action.Summary)
+	}
+	for _, failure := range task.FailedActions {
+		appendStateLine(&b, "failed_action", "tool="+failure.Tool, "kinds="+strings.Join(failure.Kinds, ","), "summary="+failure.Summary, "next="+failure.Next)
+	}
+	for _, evidence := range task.Evidence {
+		appendStateLine(&b, "evidence", "source="+evidence.Source, "summary="+evidence.Summary)
+	}
+	if len(task.Sources) > 0 {
+		appendTextLine(&b, "sources", strings.Join(task.Sources, ", "))
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func actionSummary(req eventTaskRequest) string {
+	switch req.Tool {
+	case "shell":
+		return argString(req.Args, "command")
+	case "read_file", "write_file", "edit_file", "list_files", "file_context", "symbol_context", "repo_search":
+		return argString(req.Args, "path")
+	case "plan", "memory", "skill", "loop_protocol", "session_schedule":
+		return argString(req.Args, "action")
+	case "run_task":
+		return argString(req.Args, "task_type")
+	case "subagent_run":
+		return argString(req.Args, "mode")
+	default:
+		for _, key := range []string{"path", "query", "url", "action", "task", "objective"} {
+			if value := argString(req.Args, key); value != "" {
+				return key + ": " + value
+			}
+		}
+	}
+	return ""
+}
+
+func changedFile(req eventTaskRequest) File {
+	switch req.Tool {
+	case "write_file":
+		return File{Path: argString(req.Args, "path"), Action: "write"}
+	case "edit_file":
+		return File{Path: argString(req.Args, "path"), Action: "edit"}
+	default:
+		return File{}
+	}
+}
+
+func toolEvidenceSource(tool string) string {
+	switch tool {
+	case "shell", "plan", "memory", "loop_protocol", "session_schedule":
+		return tool
+	default:
+		return ""
+	}
+}
+
+func failureKinds(tool string, p sse.ToolResultPayload, limit int) []string {
+	var out []string
+	for _, kind := range p.FailureKinds {
+		out = appendUnique(out, kind, limit)
+	}
+	if p.FailureKind != "" {
+		out = appendUnique(out, p.FailureKind, limit)
+	}
+	for _, kind := range toolfailure.KindsForResult(tool, p.Result, p.ExitCode != 0) {
+		out = appendUnique(out, kind, limit)
+	}
+	return out
+}
+
+func appendAction(items []Action, item Action, limit int) []Action {
+	if item.Tool == "" {
+		return items
+	}
+	if limit > 0 && len(items) >= limit {
+		items = items[1:]
+	}
+	return append(items, item)
+}
+
+func appendFailure(items []Failure, item Failure, limit int) []Failure {
+	if item.Tool == "" {
+		return items
+	}
+	if limit > 0 && len(items) >= limit {
+		items = items[1:]
+	}
+	return append(items, item)
+}
+
+func appendEvidence(items []Evidence, item Evidence, limit int) []Evidence {
+	if item.Source == "" && item.Summary == "" {
+		return items
+	}
+	if limit > 0 && len(items) >= limit {
+		items = items[1:]
+	}
+	return append(items, item)
+}
+
+func appendFile(items []File, item File, limit int) []File {
+	item.Path = strings.TrimSpace(item.Path)
+	if item.Path == "" {
+		return items
+	}
+	for i := range items {
+		if items[i].Path == item.Path {
+			if item.Action != "" {
+				items[i].Action = item.Action
+			}
+			return items
+		}
+	}
+	if limit > 0 && len(items) >= limit {
+		items = items[1:]
+	}
+	return append(items, item)
+}
+
+func addSource(state *EventState, source string, limit int) {
+	if state == nil {
+		return
+	}
+	state.Sources = appendUnique(state.Sources, source, limit)
+}
+
+func appendUnique(items []string, item string, limit int) []string {
+	item = strings.TrimSpace(item)
+	if item == "" {
+		return items
+	}
+	for _, existing := range items {
+		if existing == item {
+			return items
+		}
+	}
+	if limit <= 0 {
+		limit = DefaultMaxItems
+	}
+	if len(items) >= limit {
+		items = items[1:]
+	}
+	return append(items, item)
+}
+
+func compactSummary(text string, maxBytes int) string {
+	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	if maxBytes <= 0 {
+		maxBytes = DefaultSummaryMaxChar
+	}
+	return textutil.Preview(text, maxBytes)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func argString(args map[string]any, key string) string {
+	if args == nil {
+		return ""
+	}
+	value, ok := args[key]
+	if !ok || value == nil {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
+}
+
+func normalizeRequestMode(mode string) string {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		return "normal"
+	}
+	return mode
+}
+
+func normalizeRequestSource(source string) string {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return "user"
+	}
+	return source
+}
+
+func statusFromTurnEnd(reason string) string {
+	switch strings.TrimSpace(reason) {
+	case sse.TurnEndCompleted:
+		return "completed"
+	case sse.TurnEndCancelled:
+		return "cancelled"
+	case sse.TurnEndMaxTurns:
+		return "blocked"
+	case sse.TurnEndError:
+		return "failed"
+	default:
+		return ""
+	}
+}
+
+func runtimeSurfaceHasCapabilityData(p *sse.RuntimeSurfacePayload) bool {
+	if p == nil {
+		return false
+	}
+	return p.ToolCount > 0 ||
+		len(p.Tools) > 0 ||
+		len(p.ToolCallCaps) > 0 ||
+		len(p.CompletionGuards) > 0 ||
+		p.Capabilities.Builtins ||
+		len(p.Capabilities.WorkspaceTools) > 0 ||
+		p.Capabilities.Memory ||
+		p.Capabilities.Plan ||
+		p.Capabilities.LoopProtocol ||
+		p.Capabilities.SessionSchedule ||
+		p.Capabilities.SessionSearch ||
+		p.Capabilities.WebFetch ||
+		p.Capabilities.WebSearch ||
+		p.Capabilities.Browser ||
+		p.Capabilities.Subagent ||
+		p.Capabilities.FocusedTasks ||
+		p.Capabilities.Skill ||
+		p.Capabilities.MCP
+}
+
+func appendTextLine(b *strings.Builder, label, value string) {
+	value = compactSummary(value, 300)
+	if value == "" {
+		return
+	}
+	fmt.Fprintf(b, "%s: %s\n", label, value)
+}
+
+func appendStateLine(b *strings.Builder, label string, fields ...string) {
+	var parts []string
+	for _, field := range fields {
+		key, value, ok := strings.Cut(field, "=")
+		if !ok || strings.TrimSpace(value) == "" {
+			continue
+		}
+		parts = append(parts, strings.TrimSpace(key)+"="+compactSummary(value, 300))
+	}
+	if len(parts) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%s: %s\n", label, strings.Join(parts, " "))
+}

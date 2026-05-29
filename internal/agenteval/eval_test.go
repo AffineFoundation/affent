@@ -1580,7 +1580,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "HIST-STOCK-44", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true},
 		},
 		RequiredRecentSessionSearch: []RecentSessionSearchRequirement{
-			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "source review", LoopContains: "loop.protocol_feed", RecoveryContains: "max_turns"},
+			{QueryContains: "missing marker", SessionID: "market-alpha", PlanContains: "source review", LoopContains: "loop.protocol_feed", TaskStateContains: "test_failed", RecoveryContains: "max_turns"},
 		},
 		RequiredContextCompactions:  1,
 		RequiredReactiveCompactions: 1,
@@ -1656,7 +1656,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_protocol_full_feed_after_compaction",
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
-		"recent_session_search_anchor_at_least:missing marker:market-alpha:*:*:source review:loop.protocol_feed:max_turns:*:1",
+		"recent_session_search_anchor_at_least:missing marker:market-alpha:*:*:source review:loop.protocol_feed:test_failed:max_turns:*:1",
 		"context_injection_source_at_least:final_evidence_digest:1",
 		"context_injection_text_at_least:final_evidence_digest:verified source:1",
 		"context_compactions_at_least:1",

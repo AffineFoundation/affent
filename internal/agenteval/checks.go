@@ -1831,12 +1831,12 @@ func sessionSearchRequirementMatches(ex SessionSearchExample, queryContains, ses
 	return true
 }
 
-func RecentSessionSearchAnchorAtLeast(queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains string, min int) Check {
+func RecentSessionSearchAnchorAtLeast(queryContains, sessionID, userContains, assistantContains, planContains, loopContains, taskStateContains, recoveryContains, messageContains string, min int) Check {
 	if min <= 0 {
 		min = 1
 	}
 	nameParts := []string{"recent_session_search_anchor_at_least"}
-	for _, part := range []string{queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains, fmt.Sprint(min)} {
+	for _, part := range []string{queryContains, sessionID, userContains, assistantContains, planContains, loopContains, taskStateContains, recoveryContains, messageContains, fmt.Sprint(min)} {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			part = "*"
@@ -1851,7 +1851,7 @@ func RecentSessionSearchAnchorAtLeast(queryContains, sessionID, userContains, as
 			var matched []string
 			var observed []string
 			for _, ex := range examples {
-				if recentSessionSearchAnchorMatches(ex, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains) {
+				if recentSessionSearchAnchorMatches(ex, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, taskStateContains, recoveryContains, messageContains) {
 					count++
 					if len(matched) < 5 {
 						matched = append(matched, sessionSearchExampleSummary(ex))
@@ -1868,15 +1868,15 @@ func RecentSessionSearchAnchorAtLeast(queryContains, sessionID, userContains, as
 			return CheckResult{
 				Pass: false,
 				Detail: fmt.Sprintf(
-					"expected at least %d recent session_search anchor(s) matching query_contains=%q session_id=%q user_contains=%q assistant_contains=%q plan_contains=%q loop_contains=%q recovery_contains=%q message_contains=%q, got %d; observed=%v",
-					min, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains, count, observed,
+					"expected at least %d recent session_search anchor(s) matching query_contains=%q session_id=%q user_contains=%q assistant_contains=%q plan_contains=%q loop_contains=%q task_state_contains=%q recovery_contains=%q message_contains=%q, got %d; observed=%v",
+					min, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, taskStateContains, recoveryContains, messageContains, count, observed,
 				),
 			}
 		},
 	}
 }
 
-func recentSessionSearchAnchorMatches(ex SessionSearchExample, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, recoveryContains, messageContains string) bool {
+func recentSessionSearchAnchorMatches(ex SessionSearchExample, queryContains, sessionID, userContains, assistantContains, planContains, loopContains, taskStateContains, recoveryContains, messageContains string) bool {
 	if ex.RecentSessionID == "" {
 		return false
 	}
@@ -1890,6 +1890,7 @@ func recentSessionSearchAnchorMatches(ex SessionSearchExample, queryContains, se
 		{assistantContains, ex.RecentAssistantPreview},
 		{planContains, ex.RecentPlanPreview},
 		{loopContains, ex.RecentLoopPreview},
+		{taskStateContains, ex.RecentTaskStatePreview},
 		{recoveryContains, ex.RecentRecoveryPreview},
 		{messageContains, ex.Message},
 	} {
@@ -1938,6 +1939,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	}
 	if ex.RecentLoopPreview != "" {
 		parts = append(parts, "recent_loop="+previewSubstr(ex.RecentLoopPreview, 100))
+	}
+	if ex.RecentTaskStatePreview != "" {
+		parts = append(parts, "recent_task_state="+previewSubstr(ex.RecentTaskStatePreview, 100))
 	}
 	if ex.RecentRecoveryPreview != "" {
 		parts = append(parts, "recent_recovery="+previewSubstr(ex.RecentRecoveryPreview, 100))

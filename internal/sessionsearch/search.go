@@ -17,6 +17,7 @@ import (
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/planstate"
+	"github.com/affinefoundation/affent/internal/taskstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -44,6 +45,7 @@ type RecentSession struct {
 	Plan            string `json:"plan,omitempty"`
 	Loop            string `json:"loop,omitempty"`
 	Recovery        string `json:"recovery,omitempty"`
+	TaskState       string `json:"task_state,omitempty"`
 }
 
 // Response is the session_search tool return shape.
@@ -141,6 +143,14 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 				}
 				eventsPath := filepath.Join(sessionsDir, sid, "events.jsonl")
 				if mtime, ok := regularFileModTime(eventsPath); ok {
+					hit, ok, serr := scoreTaskStateFile(ctx, eventsPath, sid, terms, mtime)
+					if serr != nil {
+						if ctx.Err() != nil {
+							return nil, ctx.Err()
+						}
+					} else if ok {
+						sessionHits = appendBoundedHits(sessionHits, hit, maxPerSession)
+					}
 					hits, serr := scoreEventsFile(ctx, eventsPath, sid, terms, maxPerSession, mtime)
 					if serr != nil {
 						if ctx.Err() != nil {
@@ -386,11 +396,14 @@ func recentSessionSummary(ctx context.Context, cand sessionLogCandidate) (Recent
 		}
 	}
 	if cand.eventsPath != "" {
+		if task := recentTaskStatePreview(cand.eventsPath); task != "" {
+			summary.TaskState = task
+		}
 		if recovery := recentRecoveryPreview(cand.eventsPath); recovery != "" {
 			summary.Recovery = recovery
 		}
 	}
-	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" && summary.Loop == "" && summary.Recovery == "" {
+	if summary.LatestUser == "" && summary.LatestAssistant == "" && summary.Plan == "" && summary.Loop == "" && summary.Recovery == "" && summary.TaskState == "" {
 		return RecentSession{}, false, nil
 	}
 	return summary, true, nil
@@ -661,6 +674,28 @@ func scoreEventsFile(ctx context.Context, path, sid string, terms []string, maxP
 	return hits, nil
 }
 
+func scoreTaskStateFile(ctx context.Context, path, sid string, terms []string, mtime string) (Hit, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return Hit{}, false, err
+	}
+	content := taskStateSearchContent(path)
+	if content == "" {
+		return Hit{}, false, nil
+	}
+	score, matchedTerms := scoreContentDetails(content, terms)
+	if score <= 0 {
+		return Hit{}, false, nil
+	}
+	return Hit{
+		SessionID:    sid,
+		Role:         "task_state",
+		Snippet:      SnippetAround(content, terms),
+		Score:        score,
+		MatchedTerms: append([]string(nil), matchedTerms...),
+		ModTime:      mtime,
+	}, true, nil
+}
+
 func planSearchContent(summary planstate.Summary) string {
 	var b strings.Builder
 	if summary.Label != "" {
@@ -835,6 +870,30 @@ func recentRecoveryPreview(path string) string {
 		}
 	}
 	return latest
+}
+
+func recentTaskStatePreview(path string) string {
+	return recentSessionPreview(taskStateSearchContent(path))
+}
+
+func taskStateSearchContent(path string) string {
+	if _, ok := regularFileInfo(path); !ok {
+		return ""
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	state, err := taskstate.ScanEvents(f, taskstate.EventScanOptions{
+		MaxItems:       8,
+		SummaryMaxChar: recentSessionPreviewBytes,
+		MaxLineBytes:   maxSessionLogLineBytes,
+	})
+	if err != nil || state == nil {
+		return ""
+	}
+	return taskstate.SearchText(state.Snapshot)
 }
 
 type eventRecord struct {

@@ -627,13 +627,13 @@ func TestRecentSessionSearchAnchorAtLeast(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		CallID: "s1",
 		Tool:   "session_search",
-		Result: `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"market-alpha","latest_user":"Analyze Alpha Coast stock recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: current_step: 2 [in_progress] Recheck Alpha Coast risk","loop":"recent_loop_events: event: type=loop.protocol_feed mode=digest","recovery":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2"}]}`,
+		Result: `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"market-alpha","latest_user":"Analyze Alpha Coast stock recovery","latest_assistant":"final marker HIST-STOCK-44","plan":"plan_status: current_step: 2 [in_progress] Recheck Alpha Coast risk","loop":"recent_loop_events: event: type=loop.protocol_feed mode=digest","task_state":"task_state: status=blocked verification=failed\nfailed_action: tool=shell kinds=test_failed summary=go test ./... next=inspect test failure","recovery":"turn_end: reason=max_turns; top_failure=loop_guard_no_new_evidence:2"}]}`,
 	}}}
 
-	if res := RecentSessionSearchAnchorAtLeast("missing marker", "market-alpha", "Alpha Coast", "HIST-STOCK-44", "Recheck Alpha Coast", "loop.protocol_feed", "loop_guard_no_new_evidence", "retry", 1).Eval(trace); !res.Pass {
+	if res := RecentSessionSearchAnchorAtLeast("missing marker", "market-alpha", "Alpha Coast", "HIST-STOCK-44", "Recheck Alpha Coast", "loop.protocol_feed", "test_failed", "loop_guard_no_new_evidence", "retry", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected recent session anchor check to pass: %+v", res)
 	}
-	if res := RecentSessionSearchAnchorAtLeast("missing marker", "market-alpha", "", "", "", "", "different_failure", "", 1).Eval(trace); res.Pass {
+	if res := RecentSessionSearchAnchorAtLeast("missing marker", "market-alpha", "", "", "", "", "", "different_failure", "", 1).Eval(trace); res.Pass {
 		t.Fatalf("expected recovery mismatch to fail: %+v", res)
 	}
 }

@@ -1328,6 +1328,11 @@ func appendCompactRecentSessions(b *strings.Builder, sessions []sessionsearch.Re
 			b.WriteString(textutil.Preview(strings.TrimSpace(session.Loop), 180))
 			b.WriteByte(' ')
 		}
+		if session.TaskState != "" {
+			b.WriteString("task_state=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(session.TaskState), 220))
+			b.WriteByte(' ')
+		}
 		if session.Recovery != "" {
 			b.WriteString("recovery=")
 			b.WriteString(textutil.Preview(strings.TrimSpace(session.Recovery), 180))

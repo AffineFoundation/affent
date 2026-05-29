@@ -42,7 +42,7 @@ const modulePath = "github.com/affinefoundation/affent"
 //	leaves      - jsonl, netguard, sessionstate, sourceaccess, sse,
 //	              textutil, toolfailure, toolrepair, websource, workspaceignore
 //	leaf-deps   - gosymbols, loopstate, memory, metrictext, planstate,
-//	              projectcontext, sessionsearch
+//	              projectcontext, sessionsearch, taskstate
 //	exec        - executor
 //	wire        - eventlog, mcp                              (mcp -> agent adapter — see note)
 //	core        - agent                                      (everything below)
@@ -74,8 +74,9 @@ var allowedDeps = map[string]map[string]bool{
 	"internal/workspaceignore": {},
 
 	// --- leaf-deps: small packages that legitimately use textutil
-	// for cap-aware string trimming. sessionsearch also reads compact
-	// plan and loop summaries so recall can surface task-state anchors.
+	// for cap-aware string trimming. taskstate is the canonical
+	// event-derived task snapshot reader; sessionsearch indexes that
+	// snapshot alongside compact plan and loop summaries.
 	"internal/memory": {
 		"internal/textutil": true,
 	},
@@ -101,7 +102,14 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/jsonl":     true,
 		"internal/loopstate": true,
 		"internal/planstate": true,
+		"internal/taskstate": true,
 		"internal/textutil":  true,
+	},
+	"internal/taskstate": {
+		"internal/jsonl":       true,
+		"internal/sse":         true,
+		"internal/textutil":    true,
+		"internal/toolfailure": true,
 	},
 
 	// --- exec ---
@@ -153,6 +161,7 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/planstate":    true,
 		"internal/sourceaccess": true,
 		"internal/sse":          true,
+		"internal/taskstate":    true,
 		"internal/textutil":     true,
 		"internal/toolfailure":  true,
 		"internal/toolrepair":   true,

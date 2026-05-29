@@ -1,20 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
 	"errors"
-	"io"
 	"os"
 	"strings"
 
-	"github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/taskstate"
-	"github.com/affinefoundation/affent/internal/textutil"
-	"github.com/affinefoundation/affent/internal/toolfailure"
 )
 
 const (
@@ -22,30 +14,7 @@ const (
 	sessionTaskStateSummaryMaxChar = 180
 )
 
-type sessionTaskEventState struct {
-	LatestTurnStatus  string
-	LatestRequestText string
-	RequestMode       string
-	RequestSource     string
-	ScheduleID        string
-	ScheduleKind      string
-	RuntimeSurface    *sse.RuntimeSurfacePayload
-	RuntimeWorkspace  *sse.RuntimeWorkspace
-	ChangedFiles      []sessionTaskStateFile
-	AttemptedActions  []sessionTaskStateAction
-	FailedActions     []sessionTaskStateFailure
-	Evidence          []sessionTaskStateEvidence
-	OpenQuestions     []string
-	VerificationState string
-	Sources           []string
-}
-
-type sessionTaskRequest struct {
-	Tool   string
-	TurnID string
-	CallID string
-	Args   map[string]any
-}
+type sessionTaskEventState = taskstate.EventState
 
 func populateSessionTaskState(summary *sessionSummary, eventsPath string) error {
 	if summary == nil {
@@ -108,157 +77,11 @@ func sessionTaskStateFromEventsFile(path string) (*sessionTaskEventState, error)
 	if err := seekSessionSummaryTail(f); err != nil {
 		return nil, err
 	}
-	return scanSessionTaskStateFromEvents(bufio.NewReaderSize(f, 64*1024))
-}
-
-func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, error) {
-	state := &sessionTaskEventState{}
-	requests := map[string]sessionTaskRequest{}
-	seen := false
-	for {
-		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return nil, err
-		}
-		if tooLong {
-			continue
-		}
-		line = bytes.TrimRight(line, "\r\n")
-		var ev sse.Event
-		if err := json.Unmarshal(line, &ev); err != nil {
-			continue
-		}
-		switch ev.Type {
-		case sse.TypeUserMessage:
-			var p sse.UserMessagePayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				continue
-			}
-			state.LatestRequestText = compactTaskSummary(p.Text)
-			state.RequestMode = normalizeTaskRequestMode(p.Mode)
-			state.RequestSource = normalizeTaskRequestSource(p.Source)
-			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
-			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
-			addTaskStateSource(state, state.RequestSource)
-			seen = true
-		case sse.TypeRuntimeSurface:
-			var p sse.RuntimeSurfacePayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				continue
-			}
-			state.RuntimeSurface = &p
-			if runtimeSurfaceHasCapabilityData(&p) {
-				addTaskStateSource(state, "runtime_surface")
-				seen = true
-			}
-			if p.Workspace != nil {
-				state.RuntimeWorkspace = p.Workspace
-				seen = true
-			}
-		case sse.TypeContextInjected:
-			var p sse.ContextInjectedPayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				continue
-			}
-			if p.Source != "" {
-				addTaskStateSource(state, p.Source)
-			}
-			if p.Source == "runtime_workspace" || p.Source == "active_plan" || p.Source == "skill" {
-				state.Evidence = appendTaskEvidence(state.Evidence, sessionTaskStateEvidence{
-					Source:  p.Source,
-					Summary: compactTaskSummary(firstNonEmpty(p.Summary, p.Title, p.Preview)),
-					TurnID:  p.TurnID,
-				})
-				seen = true
-			}
-		case sse.TypeToolRequest:
-			var p sse.ToolRequestPayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil || p.CallID == "" {
-				continue
-			}
-			req := sessionTaskRequest{Tool: p.Tool, TurnID: p.TurnID, CallID: p.CallID, Args: p.Args}
-			requests[p.CallID] = req
-			state.AttemptedActions = appendTaskAction(state.AttemptedActions, sessionTaskStateAction{
-				Tool:    p.Tool,
-				Summary: compactTaskSummary(taskActionSummary(req)),
-				TurnID:  p.TurnID,
-				CallID:  p.CallID,
-			})
-			if file := changedFileFromTaskRequest(req); file.Path != "" {
-				state.ChangedFiles = appendTaskFile(state.ChangedFiles, file)
-			}
-			seen = true
-		case sse.TypeToolResult:
-			var p sse.ToolResultPayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				continue
-			}
-			req := requests[p.CallID]
-			kinds := taskFailureKinds(req.Tool, p)
-			if p.ExitCode != 0 || len(kinds) > 0 {
-				state.FailedActions = appendTaskFailure(state.FailedActions, sessionTaskStateFailure{
-					Tool:    firstNonEmpty(req.Tool, "tool"),
-					Summary: compactTaskSummary(firstNonEmpty(p.ResultSummary, p.Result)),
-					Kinds:   kinds,
-					Next:    taskstate.NextHint(p.ResultSummary, p.Result),
-					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
-					CallID:  p.CallID,
-				})
-				state.VerificationState = "failed"
-			} else if source := taskToolEvidenceSource(req.Tool); source != "" {
-				if req.Tool == "shell" {
-					state.VerificationState = "last_shell_passed"
-				}
-				actionSummary := taskActionSummary(req)
-				summary := compactTaskSummary(actionSummary)
-				state.Evidence = appendTaskEvidence(state.Evidence, sessionTaskStateEvidence{
-					Source:  source,
-					Summary: summary,
-					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
-					CallID:  p.CallID,
-				})
-				addTaskStateSource(state, source)
-				if req.Tool == "shell" {
-					source = taskstate.ShellHandoffEvidenceSource(actionSummary)
-				} else {
-					source = ""
-				}
-				if source != "" {
-					state.Evidence = appendTaskEvidence(state.Evidence, sessionTaskStateEvidence{
-						Source:  source,
-						Summary: summary,
-						TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
-						CallID:  p.CallID,
-					})
-					addTaskStateSource(state, source)
-				}
-			}
-			seen = true
-		case sse.TypeMessageRejected:
-			var p sse.MessageRejectedPayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				continue
-			}
-			if p.RequiredAction != "" {
-				state.OpenQuestions = appendUniqueLimited(state.OpenQuestions, compactTaskSummary(p.RequiredAction), sessionTaskStateMaxItems)
-				seen = true
-			}
-		case sse.TypeTurnEnd:
-			var p sse.TurnEndPayload
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				continue
-			}
-			state.LatestTurnStatus = strings.TrimSpace(p.Reason)
-			seen = true
-		}
-	}
-	if !seen {
-		return nil, nil
-	}
-	return state, nil
+	return taskstate.ScanEvents(f, taskstate.EventScanOptions{
+		MaxItems:       sessionTaskStateMaxItems,
+		SummaryMaxChar: sessionTaskStateSummaryMaxChar,
+		MaxLineBytes:   maxSessionSummaryLineBytes,
+	})
 }
 
 func sessionTaskCurrentStep(summary sessionSummary) string {
@@ -311,22 +134,6 @@ func sessionTaskStatus(summary sessionSummary, eventState sessionTaskEventState)
 		return "running"
 	}
 	return "unknown"
-}
-
-func normalizeTaskRequestMode(mode string) string {
-	mode = strings.TrimSpace(mode)
-	if mode == "" {
-		return agent.UserModeNormal
-	}
-	return mode
-}
-
-func normalizeTaskRequestSource(source string) string {
-	source = strings.TrimSpace(source)
-	if source == "" {
-		return "user"
-	}
-	return source
 }
 
 func sessionTaskConstraints(summary sessionSummary, eventState sessionTaskEventState) []string {
@@ -418,118 +225,6 @@ func sessionTaskNextStep(task sessionTaskStateSummary, summary sessionSummary) s
 	return ""
 }
 
-func taskActionSummary(req sessionTaskRequest) string {
-	switch req.Tool {
-	case "shell":
-		return argString(req.Args, "command")
-	case "read_file", "write_file", "edit_file", "list_files", "file_context", "symbol_context", "repo_search":
-		return argString(req.Args, "path")
-	case "plan", "memory", "skill", "loop_protocol", "session_schedule":
-		return argString(req.Args, "action")
-	case "run_task":
-		return argString(req.Args, "task_type")
-	case "subagent_run":
-		return argString(req.Args, "mode")
-	default:
-		for _, key := range []string{"path", "query", "url", "action", "task", "objective"} {
-			if value := argString(req.Args, key); value != "" {
-				return key + ": " + value
-			}
-		}
-	}
-	return ""
-}
-
-func taskToolEvidenceSource(tool string) string {
-	switch tool {
-	case "shell", "plan", "memory", "loop_protocol", "session_schedule":
-		return tool
-	default:
-		return ""
-	}
-}
-
-func changedFileFromTaskRequest(req sessionTaskRequest) sessionTaskStateFile {
-	switch req.Tool {
-	case "write_file":
-		return sessionTaskStateFile{Path: argString(req.Args, "path"), Action: "write"}
-	case "edit_file":
-		return sessionTaskStateFile{Path: argString(req.Args, "path"), Action: "edit"}
-	default:
-		return sessionTaskStateFile{}
-	}
-}
-
-func taskFailureKinds(tool string, p sse.ToolResultPayload) []string {
-	var out []string
-	for _, kind := range p.FailureKinds {
-		out = appendUniqueLimited(out, kind, sessionTaskStateMaxItems)
-	}
-	if p.FailureKind != "" {
-		out = appendUniqueLimited(out, p.FailureKind, sessionTaskStateMaxItems)
-	}
-	for _, kind := range toolfailure.KindsForResult(tool, p.Result, p.ExitCode != 0) {
-		out = appendUniqueLimited(out, kind, sessionTaskStateMaxItems)
-	}
-	return out
-}
-
-func appendTaskAction(items []sessionTaskStateAction, item sessionTaskStateAction) []sessionTaskStateAction {
-	if item.Tool == "" {
-		return items
-	}
-	if len(items) >= sessionTaskStateMaxItems {
-		items = items[1:]
-	}
-	return append(items, item)
-}
-
-func appendTaskFailure(items []sessionTaskStateFailure, item sessionTaskStateFailure) []sessionTaskStateFailure {
-	if item.Tool == "" {
-		return items
-	}
-	if len(items) >= sessionTaskStateMaxItems {
-		items = items[1:]
-	}
-	return append(items, item)
-}
-
-func appendTaskEvidence(items []sessionTaskStateEvidence, item sessionTaskStateEvidence) []sessionTaskStateEvidence {
-	if item.Source == "" && item.Summary == "" {
-		return items
-	}
-	if len(items) >= sessionTaskStateMaxItems {
-		items = items[1:]
-	}
-	return append(items, item)
-}
-
-func appendTaskFile(items []sessionTaskStateFile, item sessionTaskStateFile) []sessionTaskStateFile {
-	item.Path = strings.TrimSpace(item.Path)
-	if item.Path == "" {
-		return items
-	}
-	for i := range items {
-		if items[i].Path == item.Path {
-			if item.Action != "" {
-				items[i].Action = item.Action
-			}
-			return items
-		}
-	}
-	if len(items) >= sessionTaskStateMaxItems {
-		items = items[1:]
-	}
-	return append(items, item)
-}
-
-func addTaskStateSource(state *sessionTaskEventState, source string) {
-	if state == nil {
-		return
-	}
-	state.Sources = appendUniqueLimited(state.Sources, strings.TrimSpace(source), sessionTaskStateMaxItems)
-}
-
 func appendUniqueLimited(items []string, item string, limit int) []string {
 	item = strings.TrimSpace(item)
 	if item == "" {
@@ -544,11 +239,6 @@ func appendUniqueLimited(items []string, item string, limit int) []string {
 		items = items[1:]
 	}
 	return append(items, item)
-}
-
-func compactTaskSummary(text string) string {
-	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
-	return textutil.Preview(text, sessionTaskStateSummaryMaxChar)
 }
 
 func sessionTaskStateEmpty(task sessionTaskStateSummary) bool {

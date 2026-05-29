@@ -1743,6 +1743,9 @@ func renderTimelineSessionSearch(b *strings.Builder, trace *Trace) {
 		if ex.RecentLoopPreview != "" {
 			fmt.Fprintf(b, "   recent_loop: %s\n", timelineInline(ex.RecentLoopPreview, timelineMemoryPreviewBytes))
 		}
+		if ex.RecentTaskStatePreview != "" {
+			fmt.Fprintf(b, "   recent_task_state: %s\n", timelineInline(ex.RecentTaskStatePreview, timelineMemoryPreviewBytes))
+		}
 		if ex.RecentRecoveryPreview != "" {
 			fmt.Fprintf(b, "   recent_recovery: %s\n", timelineInline(ex.RecentRecoveryPreview, timelineMemoryPreviewBytes))
 		}

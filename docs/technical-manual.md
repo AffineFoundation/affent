@@ -507,8 +507,9 @@ resume/recovery runs be debugged without opening the full transcript. When
 transcript recall has no lexical hits,
 `session_search` may also return a small `recent_sessions` list with session
 ids, modification times, compact latest user/assistant previews, compact plan
-previews, and compact loop previews so the agent can retry with better anchors
-instead of guessing unseen history.
+previews, compact loop previews, and canonical task-state previews derived
+from `events.jsonl` so the agent can retry with better anchors instead of
+guessing unseen history.
 Session ids themselves are searchable anchors; retrying with a recent
 `session_id` returns the latest compact user/assistant context from that
 session when ordinary transcript terms do not match. Each
@@ -1037,9 +1038,9 @@ Compacted plan tool results also include the same `plan:x/y:status` label so
 post-compaction recovery can identify current progress even if natural-language
 step text was shortened.
 Compacted `session_search` results preserve no-hit `recent_sessions` anchors,
-including compact user/assistant, plan, loop, and recovery previews such as
-`loop_turn_checkpoint` anchors, so a compaction does not erase the retry path
-the model was supposed to use for long-run recovery.
+including compact user/assistant, plan, loop, task-state, and recovery previews
+such as `loop_turn_checkpoint` anchors, so a compaction does not erase the
+retry path the model was supposed to use for long-run recovery.
 If the compacted span included an active `LOOP.md` feed, the rolling summary
 also receives a deterministic `LOOP_PROTOCOL:` anchor with the protocol path,
 feed mode/count, loop id/status, and active plan checkpoint. This keeps
@@ -1109,10 +1110,10 @@ Current built-in suites:
   manifests and timelines surface conversation repair examples with the
   repaired count, failure kind, and next-step guidance.
   Session-recall scenarios can require either direct `session_search` hits or
-  no-hit `recent_sessions` recovery anchors, including plan, loop, and
-  recovery previews. The recent-session recovery case also asserts loop-feed
-  failure counters such as `tool_errors=1`, `forced_no_tools=1`, and the next
-  `browser_network_read` action, so long-run tests fail when cross-session
+  no-hit `recent_sessions` recovery anchors, including plan, loop, task-state,
+  and recovery previews. The recent-session recovery case also asserts
+  loop-feed failure counters such as `tool_errors=1`, `forced_no_tools=1`, and
+  the next `browser_network_read` action, so long-run tests fail when cross-session
   recovery only exposes generic chat text instead of actionable continuation
   state.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
