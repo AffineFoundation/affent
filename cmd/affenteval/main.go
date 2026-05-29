@@ -304,6 +304,7 @@ func run(args []string) int {
 			MaxAvgContextSummaryBytes:             fs.Float64("max-avg-context-summary-bytes", -1, "optional quality gate: maximum average context compaction summary bytes per scenario"),
 			MaxAvgContextSummaryMissing:           fs.Float64("max-avg-context-summary-missing", -1, "optional quality gate: maximum average missing context compaction summaries per scenario"),
 			MaxAvgContextSummaryEmpty:             fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
+			MaxContextCompactionPolicyPressure:    fs.Float64("max-context-compaction-policy-pressure-percent", -1, "optional quality gate: maximum observed context compaction estimated-input/trigger pressure percent"),
 			MaxAvgContextInjections:               fs.Float64("max-avg-context-injections", -1, "optional quality gate: maximum average injected system-context blocks per scenario"),
 			MaxAvgContextInjectionBytes:           fs.Float64("max-avg-context-injection-bytes", -1, "optional quality gate: maximum average injected system-context bytes per scenario"),
 			MaxAvgContextInjectionEstimatedTokens: fs.Float64("max-avg-context-injection-estimated-tokens", -1, "optional quality gate: maximum average estimated injected system-context tokens per scenario"),
@@ -643,6 +644,7 @@ type qualityGateConfig struct {
 	MaxAvgContextSummaryBytes                      *float64
 	MaxAvgContextSummaryMissing                    *float64
 	MaxAvgContextSummaryEmpty                      *float64
+	MaxContextCompactionPolicyPressure             *float64
 	MaxAvgContextInjections                        *float64
 	MaxAvgContextInjectionBytes                    *float64
 	MaxAvgContextInjectionEstimatedTokens          *float64
@@ -864,6 +866,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes)
 	add("max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing)
 	add("max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty)
+	add("max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure)
 	add("max-avg-context-injections", g.MaxAvgContextInjections)
 	add("max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes)
 	add("max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens)
@@ -957,6 +960,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-context-summary-bytes", &g.MaxAvgContextSummaryBytes, profileConfig.MaxAvgContextSummaryBytes)
 	apply("max-avg-context-summary-missing", &g.MaxAvgContextSummaryMissing, profileConfig.MaxAvgContextSummaryMissing)
 	apply("max-avg-context-summary-empty", &g.MaxAvgContextSummaryEmpty, profileConfig.MaxAvgContextSummaryEmpty)
+	apply("max-context-compaction-policy-pressure-percent", &g.MaxContextCompactionPolicyPressure, profileConfig.MaxContextCompactionPolicyPressure)
 	apply("max-avg-context-injections", &g.MaxAvgContextInjections, profileConfig.MaxAvgContextInjections)
 	apply("max-avg-context-injection-bytes", &g.MaxAvgContextInjectionBytes, profileConfig.MaxAvgContextInjectionBytes)
 	apply("max-avg-context-injection-estimated-tokens", &g.MaxAvgContextInjectionEstimatedTokens, profileConfig.MaxAvgContextInjectionEstimatedTokens)
@@ -2473,6 +2477,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes, false},
 		{"--max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing, false},
 		{"--max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty, false},
+		{"--max-context-compaction-policy-pressure-percent", g.MaxContextCompactionPolicyPressure, false},
 		{"--max-avg-context-injections", g.MaxAvgContextInjections, false},
 		{"--max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes, false},
 		{"--max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens, false},
@@ -2642,6 +2647,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_context_summary_bytes", batchAverage(s.ContextCompactionSummary, s.Total), g.MaxAvgContextSummaryBytes, s.Total > 0)
 	checkMax("avg_context_summary_missing", batchAverage(s.ContextCompactionSummaryMissing, s.Total), g.MaxAvgContextSummaryMissing, s.Total > 0)
 	checkMax("avg_context_summary_empty", batchAverage(s.ContextCompactionSummaryEmpty, s.Total), g.MaxAvgContextSummaryEmpty, s.Total > 0)
+	checkMax("context_compaction_policy_pressure_percent", float64(s.ContextCompactionMaxPolicyPressure), g.MaxContextCompactionPolicyPressure, s.ContextCompactionPolicyObserved > 0)
 	checkMax("avg_context_injections", batchAverage(s.ContextInjections, s.Total), g.MaxAvgContextInjections, s.Total > 0)
 	checkMax("avg_context_injection_bytes", batchAverage(s.ContextInjectionBytes, s.Total), g.MaxAvgContextInjectionBytes, s.Total > 0)
 	checkMax("avg_context_injection_estimated_tokens", batchAverage(s.ContextInjectionEstimatedTokens, s.Total), g.MaxAvgContextInjectionEstimatedTokens, s.Total > 0)
@@ -3709,6 +3715,7 @@ type evalJSONLMetadata struct {
 	MaxAvgContextSummaryBytes                      *float64           `json:"max_avg_context_summary_bytes,omitempty"`
 	MaxAvgContextSummaryMissing                    *float64           `json:"max_avg_context_summary_missing,omitempty"`
 	MaxAvgContextSummaryEmpty                      *float64           `json:"max_avg_context_summary_empty,omitempty"`
+	MaxContextCompactionPolicyPressure             *float64           `json:"max_context_compaction_policy_pressure_percent,omitempty"`
 	MaxAvgContextInjections                        *float64           `json:"max_avg_context_injections,omitempty"`
 	MaxAvgContextInjectionBytes                    *float64           `json:"max_avg_context_injection_bytes,omitempty"`
 	MaxAvgContextInjectionEstimatedTokens          *float64           `json:"max_avg_context_injection_estimated_tokens,omitempty"`
@@ -3737,70 +3744,71 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
 	}
 	return evalJSONLMetadata{
-		SchemaVersion:                         evalJSONLSchemaVersion,
-		Suite:                                 strings.TrimSpace(suite),
-		Model:                                 model,
-		ProviderLabel:                         providerLabel,
-		Executor:                              normalizedEvalExecutor(executor),
-		Temperature:                           strings.TrimSpace(temperature),
-		TopP:                                  strings.TrimSpace(topP),
-		MaxTokens:                             strings.TrimSpace(maxTokens),
-		Seed:                                  strings.TrimSpace(seed),
-		RuntimeEvalMode:                       runtimeEvalMode,
-		RuntimeTools:                          strings.TrimSpace(runtimeTools),
-		RuntimeAllTools:                       runtimeAllTools,
-		RuntimeMemory:                         runtimeMemory,
-		RuntimeWeb:                            runtimeWeb,
-		RuntimeBrowser:                        runtimeBrowser,
-		TraceDeltas:                           traceDeltas,
-		RuntimeMCP:                            strings.TrimSpace(runtimeMCPConfig) != "",
-		TimeoutMS:                             timeout.Milliseconds(),
-		QualityProfile:                        strings.ToLower(strings.TrimSpace(qualityProfile)),
-		MinPassRate:                           enabledQualityGateValue(gates.MinPassRate),
-		MinCompletionRate:                     enabledQualityGateValue(gates.MinCompletionRate),
-		MinMemoryUpdateRate:                   enabledQualityGateValue(gates.MinMemoryUpdateRate),
-		MinLoopTurnCheckpointRate:             enabledQualityGateValue(gates.MinLoopTurnCheckpointRate),
-		MinLoopProtocolFeedRate:               enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
-		MinLoopProtocolCalibrationRequestRate: enabledQualityGateValue(gates.MinLoopProtocolCalibrationRequestRate),
-		MinLoopProtocolCalibrationRate:        enabledQualityGateValue(gates.MinLoopProtocolCalibrationRate),
-		MinRuntimeSurfaceRate:                 enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
-		MinTraceEventRate:                     enabledQualityGateValue(gates.MinTraceEventRate),
-		MinSourceNetworkRate:                  enabledQualityGateValue(gates.MinSourceNetworkRate),
-		MinSourceAccessVerifiedRate:           enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
-		MinExpectationCapabilityPassRate:      enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
-		MinEachExpectationCapabilityPassRate:  enabledQualityGateValue(gates.MinEachExpectationCapabilityPassRate),
-		MinExpectationDomainPassRate:          enabledQualityGateValue(gates.MinExpectationDomainPassRate),
-		MinEachExpectationDomainPassRate:      enabledQualityGateValue(gates.MinEachExpectationDomainPassRate),
-		MinSessionSearchContextHitRate:        enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
-		MinSessionSearchMatchedTermsPerCall:   enabledQualityGateValue(gates.MinSessionSearchMatchedTermsPerCall),
-		MinToolRepairSuccessRate:              enabledQualityGateValue(gates.MinToolRepairSuccessRate),
-		MinVerifierPassRate:                   enabledQualityGateValue(gates.MinVerifierPassRate),
-		MaxFocusedTaskErrorRate:               enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
-		MaxForcedNoToolsRate:                  enabledQualityGateValue(gates.MaxForcedNoToolsRate),
-		MaxLoopGuardInterventionRate:          enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
-		MaxPlanErrorRate:                      enabledQualityGateValue(gates.MaxPlanErrorRate),
-		MaxMemorySearchMissRate:               enabledQualityGateValue(gates.MaxMemorySearchMissRate),
-		MaxSourceDiscoveryOnlyRate:            enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
-		MaxSourceDynamicPartialRate:           enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
-		MaxSubagentErrorRate:                  enabledQualityGateValue(gates.MaxSubagentErrorRate),
-		MaxToolErrorRate:                      enabledQualityGateValue(gates.MaxToolErrorRate),
-		MaxToolContextTruncationRate:          enabledQualityGateValue(gates.MaxToolContextTruncationRate),
-		MaxToolResultTruncationRate:           enabledQualityGateValue(gates.MaxToolResultTruncationRate),
-		MaxAvgRuntimeErrors:                   enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
-		MaxAvgContextCompactions:              enabledQualityGateValue(gates.MaxAvgContextCompactions),
-		MaxAvgReactiveCompactions:             enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
-		MaxAvgContextRemovedMessages:          enabledQualityGateValue(gates.MaxAvgContextRemovedMessages),
-		MaxAvgContextSummaryBytes:             enabledQualityGateValue(gates.MaxAvgContextSummaryBytes),
-		MaxAvgContextSummaryMissing:           enabledQualityGateValue(gates.MaxAvgContextSummaryMissing),
-		MaxAvgContextSummaryEmpty:             enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
-		MaxAvgContextInjections:               enabledQualityGateValue(gates.MaxAvgContextInjections),
-		MaxAvgContextInjectionBytes:           enabledQualityGateValue(gates.MaxAvgContextInjectionBytes),
-		MaxAvgContextInjectionEstimatedTokens: enabledQualityGateValue(gates.MaxAvgContextInjectionEstimatedTokens),
-		MaxAvgToolCalls:                       enabledQualityGateValue(gates.MaxAvgToolCalls),
-		MaxAvgDurationMS:                      enabledQualityGateValue(gates.MaxAvgDurationMS),
-		MaxAvgTotalTokens:                     enabledQualityGateValue(gates.MaxAvgTotalTokens),
-		MaxScenarioTotalTokens:                enabledQualityGateValue(gates.MaxScenarioTotalTokens),
-		MaxDebugBriefTagRates:                 enabledQualityGateMap(gates.MaxDebugBriefTagRates),
+		SchemaVersion:                                  evalJSONLSchemaVersion,
+		Suite:                                          strings.TrimSpace(suite),
+		Model:                                          model,
+		ProviderLabel:                                  providerLabel,
+		Executor:                                       normalizedEvalExecutor(executor),
+		Temperature:                                    strings.TrimSpace(temperature),
+		TopP:                                           strings.TrimSpace(topP),
+		MaxTokens:                                      strings.TrimSpace(maxTokens),
+		Seed:                                           strings.TrimSpace(seed),
+		RuntimeEvalMode:                                runtimeEvalMode,
+		RuntimeTools:                                   strings.TrimSpace(runtimeTools),
+		RuntimeAllTools:                                runtimeAllTools,
+		RuntimeMemory:                                  runtimeMemory,
+		RuntimeWeb:                                     runtimeWeb,
+		RuntimeBrowser:                                 runtimeBrowser,
+		TraceDeltas:                                    traceDeltas,
+		RuntimeMCP:                                     strings.TrimSpace(runtimeMCPConfig) != "",
+		TimeoutMS:                                      timeout.Milliseconds(),
+		QualityProfile:                                 strings.ToLower(strings.TrimSpace(qualityProfile)),
+		MinPassRate:                                    enabledQualityGateValue(gates.MinPassRate),
+		MinCompletionRate:                              enabledQualityGateValue(gates.MinCompletionRate),
+		MinMemoryUpdateRate:                            enabledQualityGateValue(gates.MinMemoryUpdateRate),
+		MinLoopTurnCheckpointRate:                      enabledQualityGateValue(gates.MinLoopTurnCheckpointRate),
+		MinLoopProtocolFeedRate:                        enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
+		MinLoopProtocolCalibrationRequestRate:          enabledQualityGateValue(gates.MinLoopProtocolCalibrationRequestRate),
+		MinLoopProtocolCalibrationRate:                 enabledQualityGateValue(gates.MinLoopProtocolCalibrationRate),
+		MinRuntimeSurfaceRate:                          enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
+		MinTraceEventRate:                              enabledQualityGateValue(gates.MinTraceEventRate),
+		MinSourceNetworkRate:                           enabledQualityGateValue(gates.MinSourceNetworkRate),
+		MinSourceAccessVerifiedRate:                    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
+		MinExpectationCapabilityPassRate:               enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
+		MinEachExpectationCapabilityPassRate:           enabledQualityGateValue(gates.MinEachExpectationCapabilityPassRate),
+		MinExpectationDomainPassRate:                   enabledQualityGateValue(gates.MinExpectationDomainPassRate),
+		MinEachExpectationDomainPassRate:               enabledQualityGateValue(gates.MinEachExpectationDomainPassRate),
+		MinSessionSearchContextHitRate:                 enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
+		MinSessionSearchMatchedTermsPerCall:            enabledQualityGateValue(gates.MinSessionSearchMatchedTermsPerCall),
+		MinToolRepairSuccessRate:                       enabledQualityGateValue(gates.MinToolRepairSuccessRate),
+		MinVerifierPassRate:                            enabledQualityGateValue(gates.MinVerifierPassRate),
+		MaxFocusedTaskErrorRate:                        enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
+		MaxForcedNoToolsRate:                           enabledQualityGateValue(gates.MaxForcedNoToolsRate),
+		MaxLoopGuardInterventionRate:                   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
+		MaxPlanErrorRate:                               enabledQualityGateValue(gates.MaxPlanErrorRate),
+		MaxMemorySearchMissRate:                        enabledQualityGateValue(gates.MaxMemorySearchMissRate),
+		MaxSourceDiscoveryOnlyRate:                     enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
+		MaxSourceDynamicPartialRate:                    enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
+		MaxSubagentErrorRate:                           enabledQualityGateValue(gates.MaxSubagentErrorRate),
+		MaxToolErrorRate:                               enabledQualityGateValue(gates.MaxToolErrorRate),
+		MaxToolContextTruncationRate:                   enabledQualityGateValue(gates.MaxToolContextTruncationRate),
+		MaxToolResultTruncationRate:                    enabledQualityGateValue(gates.MaxToolResultTruncationRate),
+		MaxAvgRuntimeErrors:                            enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
+		MaxAvgContextCompactions:                       enabledQualityGateValue(gates.MaxAvgContextCompactions),
+		MaxAvgReactiveCompactions:                      enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
+		MaxAvgContextRemovedMessages:                   enabledQualityGateValue(gates.MaxAvgContextRemovedMessages),
+		MaxAvgContextSummaryBytes:                      enabledQualityGateValue(gates.MaxAvgContextSummaryBytes),
+		MaxAvgContextSummaryMissing:                    enabledQualityGateValue(gates.MaxAvgContextSummaryMissing),
+		MaxAvgContextSummaryEmpty:                      enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
+		MaxContextCompactionPolicyPressure:             enabledQualityGateValue(gates.MaxContextCompactionPolicyPressure),
+		MaxAvgContextInjections:                        enabledQualityGateValue(gates.MaxAvgContextInjections),
+		MaxAvgContextInjectionBytes:                    enabledQualityGateValue(gates.MaxAvgContextInjectionBytes),
+		MaxAvgContextInjectionEstimatedTokens:          enabledQualityGateValue(gates.MaxAvgContextInjectionEstimatedTokens),
+		MaxAvgToolCalls:                                enabledQualityGateValue(gates.MaxAvgToolCalls),
+		MaxAvgDurationMS:                               enabledQualityGateValue(gates.MaxAvgDurationMS),
+		MaxAvgTotalTokens:                              enabledQualityGateValue(gates.MaxAvgTotalTokens),
+		MaxScenarioTotalTokens:                         enabledQualityGateValue(gates.MaxScenarioTotalTokens),
+		MaxDebugBriefTagRates:                          enabledQualityGateMap(gates.MaxDebugBriefTagRates),
 		MinExpectationDomainSourceAccessVerifiedRates:  enabledQualityGateMap(gates.MinExpectationDomainSourceAccessVerifiedRates),
 		MaxExpectationDomainAvgTotalTokens:             enabledQualityGateMap(gates.MaxExpectationDomainAvgTotalTokens),
 		MaxExpectationDomainAvgToolCalls:               enabledQualityGateMap(gates.MaxExpectationDomainAvgToolCalls),
@@ -4799,6 +4807,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgContextSummaryBytes != nil ||
 		meta.MaxAvgContextSummaryMissing != nil ||
 		meta.MaxAvgContextSummaryEmpty != nil ||
+		meta.MaxContextCompactionPolicyPressure != nil ||
 		meta.MaxAvgContextInjections != nil ||
 		meta.MaxAvgContextInjectionBytes != nil ||
 		meta.MaxAvgContextInjectionEstimatedTokens != nil ||
