@@ -436,6 +436,7 @@ export interface SessionCapabilities {
   plan: boolean;
   loop_protocol?: boolean;
   session_schedule?: boolean;
+  session_schedule_runner?: boolean;
   memory: boolean;
   session_search: boolean;
   symbol_context: boolean;

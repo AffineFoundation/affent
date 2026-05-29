@@ -42,11 +42,21 @@ type statsResponse struct {
 	SessionStateRoot   string                    `json:"session_state_root"`
 	BrowserCacheDir    string                    `json:"browser_cache_dir,omitempty"`
 	WebSearchBackend   string                    `json:"web_search_backend,omitempty"`
+	ScheduleRunner     scheduleRunnerStats       `json:"schedule_runner"`
 	ServerTime         string                    `json:"server_time"`
 	Sessions           []sessionStatsResponse    `json:"sessions"`
 	Aggregate          aggregateStats            `json:"aggregate"`
 	Boundaries         statsBoundaries           `json:"boundaries"`
 	RuntimeContract    runtimeCapabilityContract `json:"runtime_contract"`
+}
+
+type scheduleRunnerStats struct {
+	Enabled                bool   `json:"enabled"`
+	Active                 bool   `json:"active"`
+	FrontendIndependent    bool   `json:"frontend_independent"`
+	SweepInterval          string `json:"sweep_interval,omitempty"`
+	DurableSessionStateDir string `json:"durable_session_state_dir,omitempty"`
+	DisabledReason         string `json:"disabled_reason,omitempty"`
 }
 
 type statsBoundaries struct {
@@ -233,6 +243,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			SessionStateRoot:   pool.sessionRootPath(),
 			BrowserCacheDir:    cfg.BrowserCacheDir,
 			WebSearchBackend:   statsWebSearchBackend(cfg),
+			ScheduleRunner:     scheduleRunnerStatsForPool(cfg, pool),
 			ServerTime:         time.Now().UTC().Format(time.RFC3339),
 			Sessions:           sess,
 			Aggregate:          agg,
@@ -242,6 +253,28 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}
+}
+
+func scheduleRunnerStatsForPool(cfg Config, pool *SessionPool) scheduleRunnerStats {
+	stats := scheduleRunnerStats{
+		Enabled:             !cfg.EvalMode,
+		FrontendIndependent: !cfg.EvalMode,
+		SweepInterval:       sessionScheduleSweepInterval.String(),
+	}
+	if pool != nil {
+		stats.DurableSessionStateDir = pool.sessionRootPath()
+	}
+	if cfg.EvalMode {
+		stats.DisabledReason = "eval mode disables background scheduled turns"
+		stats.SweepInterval = ""
+		stats.DurableSessionStateDir = ""
+		return stats
+	}
+	stats.Active = pool != nil && !pool.IsShuttingDown()
+	if !stats.Active {
+		stats.DisabledReason = "session pool is shutting down"
+	}
+	return stats
 }
 
 func statsWebSearchBackend(cfg Config) string {

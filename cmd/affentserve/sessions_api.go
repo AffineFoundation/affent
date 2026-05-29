@@ -192,27 +192,28 @@ type sessionMemorySummary struct {
 }
 
 type sessionCapabilities struct {
-	EvalMode          bool     `json:"eval_mode"`
-	EvalTools         string   `json:"eval_tools,omitempty"`
-	EvalAllTools      bool     `json:"eval_all_tools,omitempty"`
-	WorkspaceTools    []string `json:"workspace_tools,omitempty"`
-	Builtins          bool     `json:"builtins"`
-	SkillInstall      bool     `json:"skill_install"`
-	Plan              bool     `json:"plan"`
-	LoopProtocol      bool     `json:"loop_protocol"`
-	SessionSchedule   bool     `json:"session_schedule"`
-	Memory            bool     `json:"memory"`
-	SessionSearch     bool     `json:"session_search"`
-	SymbolContext     bool     `json:"symbol_context"`
-	RepoSearch        bool     `json:"repo_search"`
-	Browser           bool     `json:"browser"`
-	BrowserScreenshot bool     `json:"browser_screenshot"`
-	Web               bool     `json:"web"`
-	WebSearch         bool     `json:"web_search"`
-	WebSearchBackend  string   `json:"web_search_backend,omitempty"`
-	Subagent          bool     `json:"subagent"`
-	SubagentMaxDepth  int      `json:"subagent_max_depth"`
-	FocusedTasks      bool     `json:"focused_tasks"`
+	EvalMode              bool     `json:"eval_mode"`
+	EvalTools             string   `json:"eval_tools,omitempty"`
+	EvalAllTools          bool     `json:"eval_all_tools,omitempty"`
+	WorkspaceTools        []string `json:"workspace_tools,omitempty"`
+	Builtins              bool     `json:"builtins"`
+	SkillInstall          bool     `json:"skill_install"`
+	Plan                  bool     `json:"plan"`
+	LoopProtocol          bool     `json:"loop_protocol"`
+	SessionSchedule       bool     `json:"session_schedule"`
+	SessionScheduleRunner bool     `json:"session_schedule_runner"`
+	Memory                bool     `json:"memory"`
+	SessionSearch         bool     `json:"session_search"`
+	SymbolContext         bool     `json:"symbol_context"`
+	RepoSearch            bool     `json:"repo_search"`
+	Browser               bool     `json:"browser"`
+	BrowserScreenshot     bool     `json:"browser_screenshot"`
+	Web                   bool     `json:"web"`
+	WebSearch             bool     `json:"web_search"`
+	WebSearchBackend      string   `json:"web_search_backend,omitempty"`
+	Subagent              bool     `json:"subagent"`
+	SubagentMaxDepth      int      `json:"subagent_max_depth"`
+	FocusedTasks          bool     `json:"focused_tasks"`
 	// FocusedTaskProfiles enumerates the run_task task_type values the
 	// model can actually request under this session's wiring. Omitted
 	// when focused tasks are disabled or no profile's deps are
@@ -664,26 +665,27 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 	webSearch := hasTool("web_search")
 	workspaceTools := activeWorkspaceTools(s.registry)
 	caps := sessionCapabilities{
-		EvalMode:          cfg.EvalMode,
-		EvalTools:         strings.TrimSpace(cfg.EvalTools),
-		EvalAllTools:      cfg.EvalAllTools,
-		WorkspaceTools:    workspaceTools,
-		Builtins:          hasAllWorkspaceTools(workspaceTools),
-		SkillInstall:      hasTool("skill"),
-		Plan:              hasTool(agent.PlanToolName),
-		LoopProtocol:      hasTool(agent.LoopProtocolToolName),
-		SessionSchedule:   hasTool(agent.SessionScheduleToolName),
-		Memory:            hasTool("memory"),
-		SessionSearch:     hasTool("session_search"),
-		SymbolContext:     hasTool("symbol_context"),
-		RepoSearch:        hasTool("repo_search"),
-		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find") || hasTool("browser_network") || hasTool("browser_network_read"),
-		BrowserScreenshot: hasTool("browser_screenshot"),
-		Web:               hasTool("web_fetch"),
-		WebSearch:         webSearch,
-		Subagent:          hasTool(agent.SubagentToolName),
-		SubagentMaxDepth:  cfg.SubagentMaxDepth,
-		FocusedTasks:      focusedRegistered,
+		EvalMode:              cfg.EvalMode,
+		EvalTools:             strings.TrimSpace(cfg.EvalTools),
+		EvalAllTools:          cfg.EvalAllTools,
+		WorkspaceTools:        workspaceTools,
+		Builtins:              hasAllWorkspaceTools(workspaceTools),
+		SkillInstall:          hasTool("skill"),
+		Plan:                  hasTool(agent.PlanToolName),
+		LoopProtocol:          hasTool(agent.LoopProtocolToolName),
+		SessionSchedule:       hasTool(agent.SessionScheduleToolName),
+		SessionScheduleRunner: hasTool(agent.SessionScheduleToolName) && !cfg.EvalMode,
+		Memory:                hasTool("memory"),
+		SessionSearch:         hasTool("session_search"),
+		SymbolContext:         hasTool("symbol_context"),
+		RepoSearch:            hasTool("repo_search"),
+		Browser:               hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find") || hasTool("browser_network") || hasTool("browser_network_read"),
+		BrowserScreenshot:     hasTool("browser_screenshot"),
+		Web:                   hasTool("web_fetch"),
+		WebSearch:             webSearch,
+		Subagent:              hasTool(agent.SubagentToolName),
+		SubagentMaxDepth:      cfg.SubagentMaxDepth,
+		FocusedTasks:          focusedRegistered,
 	}
 	if webSearch {
 		caps.WebSearchBackend = configuredSearchBackendName()

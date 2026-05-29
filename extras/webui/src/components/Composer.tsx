@@ -15,6 +15,7 @@ interface DraftContext {
   mode: "append" | "replace";
   preview: string;
   source?: DraftSource;
+  action?: "loop_setup";
 }
 
 export function Composer({
@@ -27,6 +28,7 @@ export function Composer({
   disabledReason,
   runtimeCapabilities,
   onSubmit,
+  onStartLoop,
   onCancel,
 }: {
   disabled: boolean;
@@ -71,7 +73,14 @@ export function Composer({
     const replace = draftMergeMode(draft.source) === "replace" || !!draftContext;
     setContent((current) => {
       const merged = mergeDraftContent(current, incoming, replace);
-      setDraftContext({ label, content: incoming, mode: merged.mode, preview: summarizeDraft(incoming, 92), source: draft.source });
+      setDraftContext({
+        label,
+        content: incoming,
+        mode: merged.mode,
+        preview: summarizeDraft(incoming, 92),
+        source: draft.source,
+        action: draft.source === "loop_setup" ? "loop_setup" : undefined,
+      });
       return merged.content;
     });
     textareaRef.current?.focus();
@@ -99,7 +108,11 @@ export function Composer({
     const trimmed = content.trim();
     if (!trimmed || disabled || cancelling) return;
     try {
-      await onSubmit(trimmed);
+      if (draftContext?.action === "loop_setup" && onStartLoop) {
+        await onStartLoop(trimmed);
+      } else {
+        await onSubmit(trimmed);
+      }
       setContent("");
       setDraftContext(undefined);
     } catch {
@@ -156,6 +169,19 @@ export function Composer({
 
   function insertTemplate(template: string) {
     appendContent(template);
+    closeAddMenu();
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }
+
+  function startLoopDraft() {
+    setDraftContext({
+      label: "Loop setup",
+      content: "",
+      mode: "replace",
+      preview: "Next message will start loop setup.",
+      source: "starter",
+      action: "loop_setup",
+    });
     closeAddMenu();
     requestAnimationFrame(() => textareaRef.current?.focus());
   }
@@ -280,7 +306,7 @@ export function Composer({
             <button type="button" onClick={openFilePicker}>
               Upload file
             </button>
-            <button type="button" onClick={() => insertTemplate(loopPromptTemplate)}>
+            <button type="button" onClick={startLoopDraft}>
               Loop
             </button>
             <button type="button" onClick={() => insertTemplate(schedulePromptTemplate)}>
@@ -350,8 +376,6 @@ function draftModeLabel(mode: DraftContext["mode"]): string {
   return mode === "append" ? "Added" : "";
 }
 
-const loopPromptTemplate = "Start a long-running loop for this goal: ";
-
 const schedulePromptTemplate = "Every day at UTC+8 09:00, ";
 
 async function fileDraft(file: File): Promise<string> {
@@ -409,6 +433,7 @@ function composerStatusLabel({
   if (cancelling) return "Stopping run";
   if (busy) return hasContent ? "Guidance ready" : "Live run";
   if (draftContext) {
+    if (draftContext.action === "loop_setup") return "Loop setup ready";
     if (draftContext.source === "retry_reply") return "Retry ready";
     return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
   }

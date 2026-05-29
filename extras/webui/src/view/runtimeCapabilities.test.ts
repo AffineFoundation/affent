@@ -99,6 +99,32 @@ describe("buildRuntimeCapabilityView", () => {
     ]));
   });
 
+  it("distinguishes server-owned schedules from frontend-only capability", () => {
+    const view = buildRuntimeCapabilityView({
+      eval_mode: false,
+      builtins: true,
+      skill_install: false,
+      plan: false,
+      session_schedule: true,
+      session_schedule_runner: true,
+      memory: false,
+      session_search: false,
+      symbol_context: false,
+      repo_search: false,
+      browser: false,
+      browser_screenshot: false,
+      web: false,
+      web_search: false,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    });
+
+    expect(view?.chips).toEqual(expect.arrayContaining([
+      { group: "Automation", label: "Background schedules", detail: "Server-owned scheduled turns keep running without an open Workbench.", tone: "ready" },
+    ]));
+  });
+
   it("warns before a live research task when external tools are off", () => {
     const view = buildRuntimeCapabilityView({
       eval_mode: false,

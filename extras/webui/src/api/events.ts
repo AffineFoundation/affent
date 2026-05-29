@@ -113,6 +113,7 @@ export interface RuntimeCapabilities {
   plan?: boolean;
   loop_protocol?: boolean;
   session_schedule?: boolean;
+  session_schedule_runner?: boolean;
   session_search?: boolean;
   web_fetch?: boolean;
   web_search?: boolean;

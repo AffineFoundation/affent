@@ -11,6 +11,7 @@ export type DraftSource =
   | "file_range"
   | "file_snapshot"
   | "guidance_receipt"
+  | "loop_setup"
   | "memory"
   | "previous_message"
   | "recent_chat"
@@ -41,6 +42,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   file_range: "Using file range",
   file_snapshot: "Using file snapshot",
   guidance_receipt: "Editing sent guidance",
+  loop_setup: "Loop setup",
   memory: "Using memory evidence",
   previous_message: "Editing previous message",
   recent_chat: "Starting from recent chat",
@@ -69,6 +71,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   file_range: "append",
   file_snapshot: "append",
   guidance_receipt: "replace",
+  loop_setup: "replace",
   memory: "append",
   previous_message: "replace",
   recent_chat: "replace",

@@ -836,7 +836,7 @@ describe("sessionList view model", () => {
         id: "long-loop",
         durable: true,
         summary_title: "1",
-        latest_user_message: "Start a long-running loop for this goal: monitor runtime health",
+        latest_user_message: "Set up loop: monitor runtime health",
       }),
     ]);
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SessionState } from "../store/sessionState";
-import type { UseAsDraft } from "../view/draftSource";
+import type { DraftSource, UseAsDraft } from "../view/draftSource";
 import { TurnCard } from "./TurnCard";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
@@ -325,7 +325,7 @@ function IntroStarterPanel({ onUseAsDraft }: { onUseAsDraft: UseAsDraft }) {
   const activeStarter = starterDrafts[activeIndex] ?? starterDrafts[0];
 
   function useDraft(starter = activeStarter) {
-    onUseAsDraft(starter.prompt, "starter");
+    onUseAsDraft(starter.prompt, starter.source ?? "starter");
   }
 
   function previewDraft(index: number) {
@@ -361,11 +361,12 @@ function IntroStarterPanel({ onUseAsDraft }: { onUseAsDraft: UseAsDraft }) {
   );
 }
 
-const starterDrafts = [
+const starterDrafts: Array<{ title: string; preview: string; prompt: string; source?: DraftSource }> = [
   {
     title: "Start loop",
     preview: "Keep improving or checking a long-running goal.",
-    prompt: "Start a long-running loop for this goal: Improve checkout reliability until the release checklist is green.",
+    prompt: "Improve checkout reliability until the release checklist is green.",
+    source: "loop_setup",
   },
   {
     title: "Daily task",

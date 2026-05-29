@@ -880,8 +880,8 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    expect((input as HTMLTextAreaElement).value).toContain("analyze market data for several days");
-    expect((input as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
+    expect((input as HTMLTextAreaElement).value).toBe("analyze market data for several days");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Loop setup");
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-1/loop-protocol", expect.anything());
 
     fireEvent.keyDown(input, { key: "Enter", code: "Enter", charCode: 13 });
@@ -948,7 +948,8 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Start a long-running loop for this goal:");
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toBe("long running subnet analysis");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Loop setup");
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/loop-panel/loop-protocol", expect.anything());
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
   });

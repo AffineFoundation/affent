@@ -182,6 +182,7 @@ func runtimeSurfaceHasCapabilityData(surface *sse.RuntimeSurfacePayload) bool {
 		caps.Plan ||
 		caps.LoopProtocol ||
 		caps.SessionSchedule ||
+		caps.SessionScheduleRunner ||
 		caps.SessionSearch ||
 		caps.WebFetch ||
 		caps.WebSearch ||

@@ -127,14 +127,17 @@ type RuntimeCapabilities struct {
 	Plan            bool     `json:"plan,omitempty"`
 	LoopProtocol    bool     `json:"loop_protocol,omitempty"`
 	SessionSchedule bool     `json:"session_schedule,omitempty"`
-	SessionSearch   bool     `json:"session_search,omitempty"`
-	WebFetch        bool     `json:"web_fetch,omitempty"`
-	WebSearch       bool     `json:"web_search,omitempty"`
-	Browser         bool     `json:"browser,omitempty"`
-	Subagent        bool     `json:"subagent,omitempty"`
-	FocusedTasks    bool     `json:"focused_tasks,omitempty"`
-	Skill           bool     `json:"skill,omitempty"`
-	MCP             bool     `json:"mcp,omitempty"`
+	// SessionScheduleRunner means scheduled turns are owned by the server
+	// process and can fire without an attached browser/WebUI client.
+	SessionScheduleRunner bool `json:"session_schedule_runner,omitempty"`
+	SessionSearch         bool `json:"session_search,omitempty"`
+	WebFetch              bool `json:"web_fetch,omitempty"`
+	WebSearch             bool `json:"web_search,omitempty"`
+	Browser               bool `json:"browser,omitempty"`
+	Subagent              bool `json:"subagent,omitempty"`
+	FocusedTasks          bool `json:"focused_tasks,omitempty"`
+	Skill                 bool `json:"skill,omitempty"`
+	MCP                   bool `json:"mcp,omitempty"`
 }
 
 // ContextInjectedPayload records a bounded, redacted summary of hidden system

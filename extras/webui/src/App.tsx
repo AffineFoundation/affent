@@ -1139,11 +1139,6 @@ export function App() {
   }
 
   async function handleSend(content: string) {
-    const loopGoal = loopStartGoalFromComposer(content);
-    if (loopGoal) {
-      await handleStartLoop(loopGoal);
-      return;
-    }
     let targetSessionId = selectedSessionId;
     const pendingKind: PendingMessageView["kind"] = targetSessionId && session.status === "running" ? "guidance" : "task";
     sendInFlightRef.current = true;
@@ -2729,47 +2724,6 @@ function compactArray<T>(items: readonly (T | undefined)[]): T[] {
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
-}
-
-const loopStartMarker = "Start a long-running loop for this goal:";
-
-function loopStartGoalFromComposer(content: string): string | undefined {
-  const text = content.trim();
-  const markerAt = text.toLowerCase().indexOf(loopStartMarker.toLowerCase());
-  if (markerAt < 0) return undefined;
-  const beforeMarker = text.slice(0, markerAt).trim();
-  const afterMarker = text.slice(markerAt + loopStartMarker.length).trim();
-  const goalField = loopTemplateField(afterMarker, "Goal:", [
-    "Success criteria:",
-    "What to keep improving or checking:",
-    "When to pause and ask me:",
-  ]);
-  return compactLoopGoal(goalField || inlineLoopGoal(afterMarker) || beforeMarker);
-}
-
-function loopTemplateField(text: string, label: string, nextLabels: string[]): string {
-  const lower = text.toLowerCase();
-  const start = lower.indexOf(label.toLowerCase());
-  if (start < 0) return "";
-  const valueStart = start + label.length;
-  let valueEnd = text.length;
-  for (const next of nextLabels) {
-    const nextAt = lower.indexOf(next.toLowerCase(), valueStart);
-    if (nextAt >= 0 && nextAt < valueEnd) valueEnd = nextAt;
-  }
-  return text.slice(valueStart, valueEnd).trim();
-}
-
-function inlineLoopGoal(text: string): string {
-  const firstLine = text.split(/\r\n|\r|\n/, 1)[0]?.trim() ?? "";
-  if (!firstLine || firstLine.endsWith(":")) return "";
-  return firstLine;
-}
-
-function compactLoopGoal(goal: string): string | undefined {
-  const compacted = goal.replace(/\s+/g, " ").trim();
-  if (!compacted) return undefined;
-  return compacted.length > 500 ? compacted.slice(0, 497).trimEnd() + "..." : compacted;
 }
 
 function webLoopProtocolDraftPrompt(

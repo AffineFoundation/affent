@@ -33,6 +33,10 @@ type chatRequest struct {
 	// JSON body.
 	SessionID       string `json:"session_id"`
 	AffentSessionID string `json:"affent_session_id"`
+	// AffentMode carries Affent-specific turn intent for clients using
+	// the OpenAI-compatible endpoint. Text content stays ordinary user
+	// content; durable loop setup must be requested structurally.
+	AffentMode string `json:"affent_mode,omitempty"`
 	// StreamOptions is OpenAI's per-request streaming control. The
 	// only field we honor is include_usage: when true AND stream=true,
 	// the SSE response emits a final chunk with token counts before
@@ -121,8 +125,24 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "last message must have role=user with non-empty content", nil)
 			return
 		}
-		loopSetupGoal := sessionLoopSetupGoalFromMessage(userText)
-		if loopSetupGoal != "" && (!pool.cfg.EnableLoopProtocol || pool.cfg.EvalMode) {
+		mode, err := normalizeSessionMessageMode(req.AffentMode)
+		if err != nil {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "invalid chat completion request", err, "bad_request")
+			return
+		}
+		if sessionMessageModeRequiresPlanTool(mode) {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "invalid chat completion request", errors.New("affent_mode supports normal or loop_setup for chat completions"), "bad_request")
+			return
+		}
+		loopSetupGoal := ""
+		if mode == sessionMessageModeLoopSetup {
+			loopSetupGoal = compactSessionLoopSetupGoal(userText)
+		}
+		if mode == sessionMessageModeLoopSetup && loopSetupGoal == "" {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "loop setup", errors.New("loop setup goal is required"), "bad_request")
+			return
+		}
+		if mode == sessionMessageModeLoopSetup && (!pool.cfg.EnableLoopProtocol || pool.cfg.EvalMode) {
 			writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("loop protocol is not available"), "mode_unavailable")
 			return
 		}

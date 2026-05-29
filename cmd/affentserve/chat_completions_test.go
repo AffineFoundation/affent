@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -123,7 +124,7 @@ func TestChatCompletions_ResponseLabelsEchoRequestWhenCfgEmpty(t *testing.T) {
 	}
 }
 
-func TestChatCompletions_LoopStarterUsesProtocolSetup(t *testing.T) {
+func TestChatCompletions_LoopSetupModeUsesProtocolSetup(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(200)
@@ -138,7 +139,7 @@ func TestChatCompletions_LoopStarterUsesProtocolSetup(t *testing.T) {
 	cfg := Config{Model: "fake", BaseURL: srv.URL}
 	handler := handleChatCompletions(cfg, pool)
 
-	body := `{"model":"fake","session_id":"chat-loop","messages":[{"role":"user","content":"Start a long-running loop for this goal: 持续分析最近的世界形势"}]}`
+	body := `{"model":"fake","session_id":"chat-loop","affent_mode":"loop_setup","messages":[{"role":"user","content":"持续分析最近的世界形势"}]}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
 	rec := httptest.NewRecorder()
 	handler(rec, req)
@@ -170,12 +171,46 @@ func TestChatCompletions_LoopStarterUsesProtocolSetup(t *testing.T) {
 			strings.Contains(msg.Content, "Set up loop for: 持续分析最近的世界形势") {
 			sawSetupPrompt = true
 		}
-		if msg.Content == "Start a long-running loop for this goal: 持续分析最近的世界形势" {
-			t.Fatalf("conversation should contain backend loop setup prompt, not raw marker: %+v", messages)
+		if msg.Content == "持续分析最近的世界形势" {
+			t.Fatalf("conversation should contain backend loop setup prompt, not raw goal: %+v", messages)
 		}
 	}
 	if !sawSetupPrompt {
 		t.Fatalf("conversation should include backend loop setup prompt, got %+v", messages)
+	}
+}
+
+func TestChatCompletions_DoesNotInferLoopSetupFromText(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	pool.cfg.EnableLoopProtocol = true
+	cfg := Config{Model: "fake", BaseURL: srv.URL}
+	handler := handleChatCompletions(cfg, pool)
+
+	body := `{"model":"fake","session_id":"chat-normal","messages":[{"role":"user","content":"Set up loop: 持续分析最近的世界形势"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if got := rec.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, rec.Body.String())
+	}
+	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "chat-normal")); err != nil || found {
+		t.Fatalf("ReadProtocol found=%v err=%v, want no protocol", found, err)
+	}
+	events, err := os.ReadFile(filepath.Join(pool.sessionDirPath("chat-normal"), "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(events), `"mode":"loop_setup"`) {
+		t.Fatalf("normal chat text must not be upgraded to loop setup:\n%s", string(events))
 	}
 }
 

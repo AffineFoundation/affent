@@ -1823,7 +1823,8 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	if payload.TurnID != "turn_surface" || payload.ToolCount != 5 || len(payload.Tools) != 5 {
 		t.Fatalf("payload identity = %+v", payload)
 	}
-	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory || !payload.Capabilities.SessionSchedule {
+	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory ||
+		!payload.Capabilities.SessionSchedule || !payload.Capabilities.SessionScheduleRunner {
 		t.Fatalf("capabilities missing expected tools: %+v", payload.Capabilities)
 	}
 	if payload.Capabilities.Builtins {

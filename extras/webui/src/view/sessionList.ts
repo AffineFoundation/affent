@@ -1118,7 +1118,7 @@ function summarizeDirectReplyPrompt(text: string): string | undefined {
 }
 
 function summarizeLoopSetupPrompt(text: string): string | undefined {
-  const match = text.match(/^(?:set\s+up\s+loop(?:\s+for)?|start\s+a\s+long-running\s+loop\s+for\s+this\s+goal)\s*[:：]\s*([\s\S]+)$/i);
+  const match = text.match(/^set\s+up\s+loop(?:\s+for)?\s*[:：]\s*([\s\S]+)$/i);
   if (!match) return undefined;
   const goal = match[1]
     .split(/\n+/)[0]

@@ -185,49 +185,46 @@ func TestHandleSessionMessage_PublishesDisplayTextForGeneratedPrompts(t *testing
 	t.Fatalf("history missing user.message: %+v", history.Events)
 }
 
-func TestHandleSessionMessage_LoopSetupMarkerCreatesDraftBeforeTurn(t *testing.T) {
+func TestHandleSessionMessage_NormalTextDoesNotStartLoopSetup(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"What should pause this loop?"},"finish_reason":"stop"}]}` + "\n\n"))
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}` + "\n\n"))
 	}))
 	defer srv.Close()
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.BaseURL = srv.URL
 	pool.cfg.EnableLoopProtocol = true
 
-	body := `{"content":"Start a long-running loop for this goal: 持续分析最近的世界形势"}`
-	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/loop-marker/messages", strings.NewReader(body))
+	body := `{"content":"Set up loop: 持续分析最近的世界形势"}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/plain-loop-text/messages", strings.NewReader(body))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusAccepted {
 		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
 	}
-	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "loop-marker"))
-	if err != nil || !found {
-		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "plain-loop-text")); err != nil || found {
+		t.Fatalf("ReadProtocol found=%v err=%v, want no protocol", found, err)
 	}
-	if loopstate.ProtocolStatus(protocol) != "draft" ||
-		!strings.Contains(protocol, "持续分析最近的世界形势") {
-		t.Fatalf("loop setup protocol:\n%s", protocol)
+	events, err := os.ReadFile(filepath.Join(pool.sessionDirPath("plain-loop-text"), "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-marker"), "events.jsonl"), `"display_text":"Set up loop: 持续分析最近的世界形势"`)
-	s := activeSessionByID(pool, "loop-marker")
+	if strings.Contains(string(events), `"mode":"loop_setup"`) {
+		t.Fatalf("normal text must not be upgraded to loop setup:\n%s", string(events))
+	}
+	s := activeSessionByID(pool, "plain-loop-text")
 	if s == nil {
-		t.Fatal("loop setup should create active session")
+		t.Fatal("normal message should create active session")
 	}
 	messages := s.conv.Snapshot()
-	sawSetupPrompt := false
+	sawRawMessage := false
 	for _, msg := range messages {
-		if msg.Role != "user" {
-			continue
-		}
-		if strings.Contains(msg.Content, "Loop protocol activation is pending, not active yet.") &&
-			!strings.Contains(msg.Content, sessionLoopSetupMarker) {
-			sawSetupPrompt = true
+		if msg.Role == "user" && msg.Content == "Set up loop: 持续分析最近的世界形势" {
+			sawRawMessage = true
 		}
 	}
-	if !sawSetupPrompt {
-		t.Fatalf("conversation should include backend loop setup prompt, got %+v", messages)
+	if !sawRawMessage {
+		t.Fatalf("conversation should preserve normal text, got %+v", messages)
 	}
 }
 
@@ -285,11 +282,11 @@ func TestHandleSessionMessage_LoopSetupModeUsesContentAsGoal(t *testing.T) {
 	waitForFileSubstring(t, filepath.Join(pool.sessionDirPath("loop-mode"), "events.jsonl"), `"type":"turn.end"`)
 }
 
-func TestHandleSessionMessage_LoopSetupMarkerRequiresLoopProtocol(t *testing.T) {
+func TestHandleSessionMessage_LoopSetupModeRequiresLoopProtocol(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableLoopProtocol = false
 
-	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/no-loop-mode/messages", strings.NewReader(`{"content":"Start a long-running loop for this goal: market monitor"}`))
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/no-loop-mode/messages", strings.NewReader(`{"mode":"loop_setup","content":"market monitor"}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusConflict {

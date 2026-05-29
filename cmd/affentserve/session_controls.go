@@ -26,8 +26,6 @@ const (
 	sessionMessageModeLoopSetup   = agent.UserModeLoopSetup
 )
 
-const sessionLoopSetupMarker = "Start a long-running loop for this goal:"
-
 type sessionMessageRequest struct {
 	Content     string `json:"content"`
 	DisplayText string `json:"display_text,omitempty"`
@@ -84,11 +82,6 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 	loopSetupGoal := ""
 	if mode == sessionMessageModeLoopSetup {
 		loopSetupGoal = compactSessionLoopSetupGoal(content)
-	} else {
-		loopSetupGoal = sessionLoopSetupGoalFromMessage(content)
-		if mode == sessionMessageModeNormal && loopSetupGoal != "" {
-			mode = sessionMessageModeLoopSetup
-		}
 	}
 	executePlanStepIndex := 0
 	if sessionMessageModeRequiresPlanTool(mode) && !pool.cfg.EnableBuiltins {
@@ -280,51 +273,6 @@ func prepareSessionExecutePlan(pool *SessionPool, sessionID, request string) (st
 		request = "Proceed with the active persisted plan."
 	}
 	return sessionExecutePlanPrompt(request, summary.Label), summary.CurrentStepIndex, nil
-}
-
-func sessionLoopSetupGoalFromMessage(content string) string {
-	text := strings.TrimSpace(content)
-	if text == "" {
-		return ""
-	}
-	markerAt := strings.Index(strings.ToLower(text), strings.ToLower(sessionLoopSetupMarker))
-	if markerAt < 0 {
-		return ""
-	}
-	afterMarker := strings.TrimSpace(text[markerAt+len(sessionLoopSetupMarker):])
-	goal := sessionLoopSetupTemplateField(afterMarker, "Goal:", []string{
-		"Success criteria:",
-		"What to keep improving or checking:",
-		"When to pause and ask me:",
-	})
-	if goal == "" {
-		goal = sessionLoopSetupInlineGoal(afterMarker)
-	}
-	return compactSessionLoopSetupGoal(goal)
-}
-
-func sessionLoopSetupTemplateField(text, label string, nextLabels []string) string {
-	lower := strings.ToLower(text)
-	start := strings.Index(lower, strings.ToLower(label))
-	if start < 0 {
-		return ""
-	}
-	valueStart := start + len(label)
-	valueEnd := len(text)
-	for _, next := range nextLabels {
-		if nextAt := strings.Index(lower[valueStart:], strings.ToLower(next)); nextAt >= 0 && valueStart+nextAt < valueEnd {
-			valueEnd = valueStart + nextAt
-		}
-	}
-	return strings.TrimSpace(text[valueStart:valueEnd])
-}
-
-func sessionLoopSetupInlineGoal(text string) string {
-	line := strings.TrimSpace(strings.SplitN(text, "\n", 2)[0])
-	if line == "" || strings.HasSuffix(line, ":") {
-		return ""
-	}
-	return line
 }
 
 func compactSessionLoopSetupGoal(goal string) string {

@@ -82,6 +82,11 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.SessionStateRoot != pool.sessionRootPath() {
 		t.Fatalf("SessionStateRoot = %q, want %q", resp.SessionStateRoot, pool.sessionRootPath())
 	}
+	if !resp.ScheduleRunner.Enabled || !resp.ScheduleRunner.Active || !resp.ScheduleRunner.FrontendIndependent ||
+		resp.ScheduleRunner.SweepInterval != sessionScheduleSweepInterval.String() ||
+		resp.ScheduleRunner.DurableSessionStateDir != pool.sessionRootPath() {
+		t.Fatalf("ScheduleRunner = %+v, want active server-owned runner", resp.ScheduleRunner)
+	}
 	if resp.Boundaries.MaxTurnSteps != agent.DefaultMaxTurnSteps {
 		t.Fatalf("Boundaries.MaxTurnSteps = %d, want default %d", resp.Boundaries.MaxTurnSteps, agent.DefaultMaxTurnSteps)
 	}
@@ -363,6 +368,10 @@ func TestHandleStats_ReportsRuntimeSwitches(t *testing.T) {
 	}
 	if !resp.EvalMode || resp.EvalTools != "read_file,shell" || !resp.EvalAllTools {
 		t.Fatalf("eval switches = %+v, want eval mode/tool allowlist/all-tools visible", resp)
+	}
+	if resp.ScheduleRunner.Enabled || resp.ScheduleRunner.Active || resp.ScheduleRunner.FrontendIndependent ||
+		!strings.Contains(resp.ScheduleRunner.DisabledReason, "eval mode") {
+		t.Fatalf("ScheduleRunner = %+v, want eval-mode disabled runner", resp.ScheduleRunner)
 	}
 }
 

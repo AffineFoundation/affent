@@ -279,7 +279,6 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("start from a draft");
     expect(screen.getByRole("button", { name: /Start loop/ })).toBeInTheDocument();
-    expect(screen.getByTestId("starter-preview")).toHaveTextContent("Start a long-running loop for this goal:");
     expect(screen.getByTestId("starter-preview")).toHaveTextContent("Improve checkout reliability until the release checklist is green.");
     expect(screen.getByTestId("starter-preview")).not.toHaveTextContent("世界形势");
     expect(screen.getByTestId("starter-preview")).not.toHaveTextContent("Inspect this project");
@@ -363,6 +362,19 @@ describe("Timeline", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith(
       "Every hour at minute 5, check whether the monitored service is healthy and report only changes.",
       "starter",
+    );
+  });
+
+  it("places loop starters into the composer as structured loop setup", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline([], undefined, undefined, onUseAsDraft);
+
+    await user.click(screen.getByRole("button", { name: "Use starter draft" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      "Improve checkout reliability until the release checklist is green.",
+      "loop_setup",
     );
   });
 

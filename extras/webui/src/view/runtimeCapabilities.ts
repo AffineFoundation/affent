@@ -122,6 +122,9 @@ function skillsChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefine
 }
 
 function scheduleChip(caps: SessionCapabilities): RuntimeCapabilityChip {
+  if (caps.session_schedule_runner) {
+    return { group: "Automation", label: "Background schedules", detail: "Server-owned scheduled turns keep running without an open Workbench.", tone: "ready" };
+  }
   return caps.session_schedule
     ? { group: "Automation", label: "Session schedules", detail: "Can create future and recurring turns without requiring LOOP.md.", tone: "ready" }
     : { group: "Automation", label: "Schedules unavailable", detail: "Future and recurring turns cannot be created from this tool surface.", tone: "muted" };

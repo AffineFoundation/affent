@@ -47,20 +47,25 @@ describe("Composer", () => {
     expect(screen.getByRole("button", { name: "Add context or automation" })).toBeVisible();
   });
 
-  it("uses the add menu to insert editable loop and schedule prompts", async () => {
+  it("uses structured loop setup intent and keeps scheduled prompts editable", async () => {
     const user = userEvent.setup();
-    render(<Composer disabled={false} busy={false} hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const onStartLoop = vi.fn().mockResolvedValue(undefined);
+    render(<Composer disabled={false} busy={false} hasSession onSubmit={onSubmit} onStartLoop={onStartLoop} onCancel={vi.fn()} />);
 
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Loop" }));
 
-    expect((input as HTMLTextAreaElement).value).toBe("Start a long-running loop for this goal:");
-    expect((input as HTMLTextAreaElement).value).not.toContain("Success criteria:");
-    expect((input as HTMLTextAreaElement).value).not.toContain("Goal:");
+    expect((input as HTMLTextAreaElement).value).toBe("");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Loop setup");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Loop setup ready");
     expect(screen.getByTestId("composer-add")).not.toHaveAttribute("open");
+    await user.type(input, "monitor release readiness");
+    await user.keyboard("{Enter}");
+    expect(onStartLoop).toHaveBeenCalledWith("monitor release readiness");
+    expect(onSubmit).not.toHaveBeenCalled();
 
-    await user.clear(input);
     await user.click(screen.getByRole("button", { name: "Add context or automation" }));
     await user.click(within(screen.getByTestId("composer-add")).getByRole("button", { name: "Scheduled task" }));
 
