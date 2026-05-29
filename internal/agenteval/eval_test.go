@@ -28,6 +28,33 @@ func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
 	}
 }
 
+func TestEvalCommandEnvScrubsGOROOTAndPinsPATH(t *testing.T) {
+	t.Setenv("GOROOT", "/poisoned/go")
+	t.Setenv("PATH", "/usr/bin")
+	repoRoot := filepath.Join(t.TempDir(), "repo")
+	env := evalCommandEnv(repoRoot)
+	if got := envValue(env, "GOROOT"); got != "" {
+		t.Fatalf("GOROOT = %q, want scrubbed", got)
+	}
+	path := envValue(env, "PATH")
+	if path == "" {
+		t.Fatal("PATH missing")
+	}
+	if !strings.Contains(path, filepath.Join(repoRoot, ".tmp", "toolchains", "go", "bin")) {
+		t.Fatalf("PATH missing repo-local toolchain dir: %q", path)
+	}
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, kv := range env {
+		if strings.HasPrefix(kv, prefix) {
+			return strings.TrimPrefix(kv, prefix)
+		}
+	}
+	return ""
+}
+
 func TestExpectationCapabilityNamesIncludesResearchCheckpoint(t *testing.T) {
 	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
 		RequiredLoopDecisionMatches: []DebugLoopDecisionRequirement{{
@@ -481,6 +508,24 @@ func TestCheckTraceIgnoresGuardRejectedForbiddenCommand(t *testing.T) {
 	}
 	if failures := CheckBatchTrace(trace, scenario); len(failures) != 0 {
 		t.Fatalf("guard-rejected command should not fail batch eval: %v", failures)
+	}
+}
+
+func TestCheckTraceLoopTokenCeilingsRequireLoopCheckpointsOnlyForLoopScenarios(t *testing.T) {
+	trace := Trace{TurnEndReason: "completed"}
+	scenario := BatchScenario{
+		MaxLoopTurnInputTokens: 300000,
+		MaxLoopTurnTotalTokens: 320000,
+	}
+	if failures := CheckBatchTrace(trace, scenario); len(failures) != 0 {
+		t.Fatalf("non-loop token ceilings should stay metadata-only, got failures: %v", failures)
+	}
+
+	scenario.EnableLoopProtocol = true
+	failures := CheckBatchTrace(trace, scenario)
+	joined := strings.Join(failures, "\n")
+	if !strings.Contains(joined, "expected loop.turn_checkpoint events") {
+		t.Fatalf("loop scenario should require checkpoint evidence, got failures: %v", failures)
 	}
 }
 
@@ -2266,8 +2311,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("commit/push RequiredCommandAfterTool = %#v, want %#v", commitPush.RequiredCommandAfterTool, want)
 		}
 	}
-	if !stringSliceContains(commitPush.RequiredFinalText, "status") {
-		t.Fatalf("commit/push RequiredFinalText = %#v, want status", commitPush.RequiredFinalText)
+	if !stringSliceContains(commitPush.RequiredFinalText, "clean") || !stringSliceContains(commitPush.RequiredFinalText, "hash") {
+		t.Fatalf("commit/push RequiredFinalText = %#v, want clean status evidence and commit hash evidence", commitPush.RequiredFinalText)
 	}
 	if !stringSliceContains(commitPush.ProtectedFiles, "set/set_test.go") {
 		t.Fatalf("commit/push ProtectedFiles = %#v, want test protection", commitPush.ProtectedFiles)
@@ -2323,8 +2368,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if got := clonePush.RequiredFileSubstrings["app/mathutil/clamp.go"]; !stringSliceContains(got, "return max") {
 		t.Fatalf("clone/push RequiredFileSubstrings = %#v, want fixed clamp", clonePush.RequiredFileSubstrings)
 	}
-	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") || !stringSliceContains(clonePush.RequiredFinalText, "status") {
-		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command, changed file, and status", clonePush.RequiredFinalText)
+	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") || !stringSliceContains(clonePush.RequiredFinalText, "clean") || !stringSliceContains(clonePush.RequiredFinalText, "hash") {
+		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command, changed file, clean status evidence, and commit hash evidence", clonePush.RequiredFinalText)
 	}
 	if strings.Contains(clonePush.Prompt, "请") || !strings.Contains(clonePush.Prompt, "Clone remote.git into app") {
 		t.Fatalf("clone/push prompt should be English and clone-specific: %q", clonePush.Prompt)
@@ -2381,8 +2426,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if got := sourceRepo.RequiredFileSubstrings["app/greet/greet.go"]; !stringSliceContains(got, "hello, guest") {
 		t.Fatalf("source repo RequiredFileSubstrings = %#v, want fixed greeting", sourceRepo.RequiredFileSubstrings)
 	}
-	if !stringSliceContains(sourceRepo.RequiredFinalText, "status") {
-		t.Fatalf("source repo RequiredFinalText = %#v, want status", sourceRepo.RequiredFinalText)
+	if !stringSliceContains(sourceRepo.RequiredFinalText, "clean") || !stringSliceContains(sourceRepo.RequiredFinalText, "hash") {
+		t.Fatalf("source repo RequiredFinalText = %#v, want clean status evidence and commit hash evidence", sourceRepo.RequiredFinalText)
 	}
 	if !stringSliceContains(sourceRepo.ProtectedFiles, "app/greet/greet_test.go") {
 		t.Fatalf("source repo ProtectedFiles = %#v, want cloned test protection", sourceRepo.ProtectedFiles)

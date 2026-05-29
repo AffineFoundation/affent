@@ -2351,7 +2351,7 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 		}
 		cmd := exec.CommandContext(ctx, goBin, args...)
 		cmd.Dir = repoRoot
-		cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
+		cmd.Env = evalCommandEnv(repoRoot)
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
 		err := runEvalCommand(ctx, cmd)
@@ -2503,7 +2503,7 @@ type verifierRun struct {
 func (r BatchRunner) runVerifier(ctx context.Context, workspace, repoRoot, command string) verifierRun {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = workspace
-	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
+	cmd.Env = evalCommandEnv(repoRoot)
 	out := newVerifierOutputBuffer(r.VerifierOutputCapBytes)
 	cmd.Stdout = out
 	cmd.Stderr = out
@@ -2578,7 +2578,7 @@ func cleanScenarioSourceRepoDir(dir string) (string, error) {
 func (r BatchRunner) runGit(ctx context.Context, dir, repoRoot string, args ...string) verifierRun {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
+	cmd.Env = evalCommandEnv(repoRoot)
 	out := newVerifierOutputBuffer(r.VerifierOutputCapBytes)
 	cmd.Stdout = out
 	cmd.Stderr = out
@@ -3418,10 +3418,10 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	for _, tool := range sortedStringMapKeys(scenario.MaxSuccessfulToolCallsByTool) {
 		checks = append(checks, MaxSuccessfulToolCallsForTool(tool, scenario.MaxSuccessfulToolCallsByTool[tool]))
 	}
-	if scenario.MaxLoopTurnInputTokens > 0 {
+	if scenarioRequiresLoopTurnCheckpoints(scenario) && scenario.MaxLoopTurnInputTokens > 0 {
 		checks = append(checks, MaxLoopTurnInputTokens(scenario.MaxLoopTurnInputTokens))
 	}
-	if scenario.MaxLoopTurnTotalTokens > 0 {
+	if scenarioRequiresLoopTurnCheckpoints(scenario) && scenario.MaxLoopTurnTotalTokens > 0 {
 		checks = append(checks, MaxLoopTurnTotalTokens(scenario.MaxLoopTurnTotalTokens))
 	}
 	for _, want := range scenario.RequiredCommands {
@@ -3449,6 +3449,19 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, FileNotEdited(scenario.ProtectedFiles))
 	}
 	return checks
+}
+
+func scenarioRequiresLoopTurnCheckpoints(s BatchScenario) bool {
+	return s.EnableLoopProtocol ||
+		s.RequiredLoopProtocolFeeds > 0 ||
+		s.RequiredLoopProtocolCalibrationRequests > 0 ||
+		s.RequiredLoopProtocolCalibrations > 0 ||
+		len(s.RequiredLoopProtocolCalibrationRequestStatuses) > 0 ||
+		len(s.RequiredLoopProtocolCalibrationStatuses) > 0 ||
+		len(s.RequiredLoopProtocolFeedModes) > 0 ||
+		len(s.RequiredLoopProtocolFeedMatches) > 0 ||
+		s.RequireLoopProtocolFullAfterCompact ||
+		strings.TrimSpace(s.RequiredLoopProtocolFinalStatus) != ""
 }
 
 func sortedStringMapKeys[V any](m map[string]V) []string {
@@ -3572,6 +3585,26 @@ func evalPath(repoRoot string) string {
 	return strings.Join(dedupeNonEmpty(parts), string(os.PathListSeparator))
 }
 
+func evalCommandEnv(repoRoot string, extra ...string) []string {
+	base := os.Environ()
+	out := make([]string, 0, len(base)+len(extra)+1)
+	for _, kv := range base {
+		key, _, ok := strings.Cut(kv, "=")
+		if !ok {
+			continue
+		}
+		switch key {
+		case "GOROOT", "PATH":
+			continue
+		default:
+			out = append(out, kv)
+		}
+	}
+	out = append(out, "PATH="+evalPath(repoRoot))
+	out = append(out, extra...)
+	return out
+}
+
 func findGo(repoRoot string) string {
 	for _, candidate := range []string{
 		filepath.Join(repoRoot, ".tmp", "toolchains", "go", "bin", "go"),
@@ -3604,7 +3637,7 @@ func goCommandUsableForRepo(goBin, repoRoot string) bool {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, goBin, "list", "-m")
 	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+	cmd.Env = evalCommandEnv(repoRoot, "GOTOOLCHAIN=local")
 	return cmd.Run() == nil
 }
 
