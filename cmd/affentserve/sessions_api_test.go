@@ -2639,6 +2639,7 @@ func TestHandleSessionLoopProtocolUpdate_RejectsPrematureActivation(t *testing.T
 		Goal:         "Understand the user's long-running market analysis intent.",
 		Status:       "running",
 	})
+	protocol = blankDefaultLoopActivationFieldsForAPI(protocol)
 	body := `{"activate":true,"protocol":` + strconv.Quote(protocol) + `,"reason":"premature"}`
 	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop-premature/loop-protocol", strings.NewReader(body))
 	w := httptest.NewRecorder()
@@ -3570,6 +3571,20 @@ func TestHandleSessionDetail_RejectsUnsafeID(t *testing.T) {
 	if got := w.Result().StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
 	}
+}
+
+func blankDefaultLoopActivationFieldsForAPI(protocol string) string {
+	for _, replacement := range [][2]string{
+		{"- hard constraints: follow system, user, tool, workspace, and safety policy; preserve evidence requirements.", "- hard constraints:"},
+		{"- known evidence: none recorded yet.", "- known evidence:"},
+		{"- current risk or blocker: none recorded yet.", "- current risk or blocker:"},
+		{"- important artifacts: none recorded yet.", "- important artifacts:"},
+		{"- important trace spans: loop initialization.", "- important trace spans:"},
+		{"- last known recovery note: reload LOOP.md, plan state, memory search/list, and recent trace before continuing.", "- last known recovery note:"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	return protocol
 }
 
 func newPoolWithMemoryRoot(t *testing.T, memRoot string) *SessionPool {

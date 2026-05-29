@@ -294,12 +294,21 @@ func TestRecordProtocolUpdateForcesFullFeedForRunningProtocol(t *testing.T) {
 }
 
 func TestValidateProtocolActivationRejectsUnresolvedTemplatePlaceholders(t *testing.T) {
-	protocol := strings.Replace(DefaultProtocolTemplate(ProtocolTemplateOptions{
+	protocol := DefaultProtocolTemplate(ProtocolTemplateOptions{
 		LoopID:       "longrun",
 		OwnerSession: "longrun",
 		Goal:         "Run a long market analysis without losing recovery context.",
 		Status:       "running",
-	}), "- current risk or blocker:", "- current risk or blocker: needs live source verification", 1)
+	})
+	for _, replacement := range [][2]string{
+		{"- hard constraints: follow system, user, tool, workspace, and safety policy; preserve evidence requirements.", "- hard constraints:"},
+		{"- known evidence: none recorded yet.", "- known evidence:"},
+		{"- important artifacts: none recorded yet.", "- important artifacts:"},
+		{"- important trace spans: loop initialization.", "- important trace spans:"},
+		{"- last known recovery note: reload LOOP.md, plan state, memory search/list, and recent trace before continuing.", "- last known recovery note:"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
 
 	err := ValidateProtocolActivation(protocol)
 	if err == nil ||

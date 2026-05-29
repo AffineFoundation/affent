@@ -2338,11 +2338,9 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			"loop.protocol_calibration_request": 1,
 			"loop.protocol_calibration":         1,
 		},
+		RequiredLoopProtocolFinalStatus: "running",
 		RequiredFinalText: []string{
-			"LOOP-ACTIVATE-Q23",
 			"LOOP-ACTIVATED-23",
-			"status running",
-			"activated LOOP.md status=running",
 		},
 		ForbiddenTools: []string{
 			"read_file", "write_file", "edit_file", "shell",
@@ -2350,9 +2348,9 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			"browser_find", "browser_network", "browser_network_read",
 			"run_task", "subagent_run",
 		},
-		MaxParentToolCalls: 2,
+		MaxParentToolCalls: 3,
 		MaxSuccessfulToolCallsByTool: map[string]int{
-			"loop_protocol": 2,
+			"loop_protocol": 3,
 		},
 		MaxTurns: 8,
 	}

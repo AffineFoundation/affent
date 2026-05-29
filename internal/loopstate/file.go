@@ -130,9 +130,9 @@ Operational stop conditions:
 Keep this section short: at most 8 bullets or about 1200 characters. It is the compact global snapshot used after long runs, compaction, or session recovery.
 
 - current intent: ` + goal + `
-- hard constraints:
-- known evidence:
-- current risk or blocker:
+- hard constraints: follow system, user, tool, workspace, and safety policy; preserve evidence requirements.
+- known evidence: none recorded yet.
+- current risk or blocker: none recorded yet.
 - next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing
 
 ## 3. Evolution Protocol
@@ -195,9 +195,9 @@ Keep this section short. Store detailed history in artifacts or trace.
 
 - loop state: state.json and events.jsonl
 - memory lookup: use the memory tool or memory files only for stable facts and lessons
-- important artifacts:
-- important trace spans:
-- last known recovery note:
+- important artifacts: none recorded yet.
+- important trace spans: loop initialization.
+- last known recovery note: reload LOOP.md, plan state, memory search/list, and recent trace before continuing.
 `)
 }
 

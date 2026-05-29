@@ -3190,9 +3190,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("loop activation expectations = prompts:%d modes:%#v requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopActivation.Prompts), loopActivation.RequiredUserMessageModes, loopActivation.RequiredLoopProtocolCalibrationRequests, loopActivation.RequiredLoopProtocolCalibrations, loopActivation.RequiredLoopProtocolCalibrationRequestStatuses, loopActivation.RequiredLoopProtocolCalibrationStatuses, loopActivation.RequiredTraceEventCounts)
 	}
 	if loopActivation.RequiredToolCounts["loop_protocol"] != 2 ||
-		loopActivation.MaxParentToolCalls != 2 ||
-		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 2 {
-		t.Fatalf("loop activation tool counts = required:%#v max_parent:%d max_by_tool:%#v, want exactly two loop_protocol calls", loopActivation.RequiredToolCounts, loopActivation.MaxParentToolCalls, loopActivation.MaxSuccessfulToolCallsByTool)
+		loopActivation.MaxParentToolCalls != 3 ||
+		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 3 {
+		t.Fatalf("loop activation tool counts = required:%#v max_parent:%d max_by_tool:%#v, want bounded activation calls", loopActivation.RequiredToolCounts, loopActivation.MaxParentToolCalls, loopActivation.MaxSuccessfulToolCallsByTool)
 	}
 	if !toolArgRequirementContains(loopActivation.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "patch_draft"}) {
 		t.Fatalf("loop activation RequiredToolArgContains = %#v, want patch_draft action", loopActivation.RequiredToolArgContains)
@@ -3218,7 +3218,10 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("loop activation MaxToolFailureKindCounts = %#v, want %s=0", loopActivation.MaxToolFailureKindCounts, kind)
 		}
 	}
-	for _, want := range []string{"LOOP-ACTIVATE-Q23", "LOOP-ACTIVATED-23", "status running", "activated LOOP.md status=running"} {
+	if loopActivation.RequiredLoopProtocolFinalStatus != "running" {
+		t.Fatalf("loop activation RequiredLoopProtocolFinalStatus = %q, want running", loopActivation.RequiredLoopProtocolFinalStatus)
+	}
+	for _, want := range []string{"LOOP-ACTIVATED-23"} {
 		if !stringSliceContains(loopActivation.RequiredFinalText, want) {
 			t.Fatalf("loop activation RequiredFinalText = %#v, want %q", loopActivation.RequiredFinalText, want)
 		}

@@ -160,7 +160,7 @@ func TestLoopProtocolToolCompletesActivationFromSavedDraftWhenProtocolPayloadHas
 	}
 }
 
-func TestLoopProtocolToolMalformedActivationPayloadValidatesSavedDraft(t *testing.T) {
+func TestLoopProtocolToolMalformedActivationPayloadUsesActivationReadySavedDraft(t *testing.T) {
 	dir := t.TempDir()
 	path := loopstate.ProtocolPath(dir, "longrun")
 	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
@@ -179,25 +179,24 @@ func TestLoopProtocolToolMalformedActivationPayloadValidatesSavedDraft(t *testin
 	}
 
 	tool := loopProtocolTool(path)
-	_, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
 		"action":   "complete_activation",
 		"protocol": "# Loop Protocol — stale payload without metadata\n\n## Goal\nBuild something else.",
 		"reason":   "calibration answered",
 	})))
-	if err == nil {
-		t.Fatal("complete_activation unexpectedly succeeded")
+	if err != nil {
+		t.Fatalf("complete_activation: %v", err)
 	}
-	if !strings.Contains(err.Error(), loopProtocolActivationInvalidFailureKind) ||
-		!strings.Contains(err.Error(), "unresolved activation placeholder") ||
-		strings.Contains(err.Error(), loopProtocolActivationStatusFailureKind) {
-		t.Fatalf("complete_activation error should validate saved draft, got:\n%v", err)
+	if !strings.Contains(out, "activated LOOP.md status=running") ||
+		!strings.Contains(out, "ignored_protocol_payload=missing_metadata") {
+		t.Fatalf("activation output = %q", out)
 	}
-	got, found, readErr := loopstate.ReadProtocol(path)
-	if readErr != nil || !found {
-		t.Fatalf("ReadProtocol after failed activation found=%v err=%v", found, readErr)
+	got, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol after activation found=%v err=%v", found, err)
 	}
-	if loopstate.ProtocolStatus(got) != "draft" || strings.Contains(got, "Build something else") {
-		t.Fatalf("failed activation should keep saved draft unchanged:\n%s", got)
+	if loopstate.ProtocolStatus(got) != "running" || strings.Contains(got, "Build something else") {
+		t.Fatalf("activation should use saved draft:\n%s", got)
 	}
 }
 
@@ -501,6 +500,13 @@ func TestLoopProtocolToolRejectsUnresolvedActivationPlaceholders(t *testing.T) {
 		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
 	}
 	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	protocol = blankDefaultLoopActivationFields(protocol)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
 	tool := loopProtocolTool(path)
 	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
 		"action":   "complete_activation",
@@ -638,16 +644,30 @@ func TestLoopProtocolToolMalformedActivationPayloadUsesSavedDraft(t *testing.T) 
 		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
 	}
 	protocol = strings.Replace(protocol, "- status: draft\n", "", 1)
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "What stop condition should pause this loop?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
 	tool := loopProtocolTool(path)
-	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
 		"action":   "complete_activation",
 		"protocol": protocol,
 	})))
-	if err == nil ||
-		!strings.Contains(err.Error(), "unresolved activation placeholder") ||
-		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_invalid") ||
-		strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
-		t.Fatalf("complete_activation without status err = %v", err)
+	if err != nil {
+		t.Fatalf("complete_activation: %v", err)
+	}
+	if !strings.Contains(out, "activated LOOP.md status=running") ||
+		!strings.Contains(out, "ignored_protocol_payload=missing_metadata") {
+		t.Fatalf("activation output = %q", out)
+	}
+	got, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol after activation found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(got) != "running" {
+		t.Fatalf("protocol status after activation = %q\n%s", loopstate.ProtocolStatus(got), got)
 	}
 }
 
@@ -701,4 +721,18 @@ func mustMarshalJSON(t *testing.T, v any) string {
 		t.Fatal(err)
 	}
 	return string(raw)
+}
+
+func blankDefaultLoopActivationFields(protocol string) string {
+	for _, replacement := range [][2]string{
+		{"- hard constraints: follow system, user, tool, workspace, and safety policy; preserve evidence requirements.", "- hard constraints:"},
+		{"- known evidence: none recorded yet.", "- known evidence:"},
+		{"- current risk or blocker: none recorded yet.", "- current risk or blocker:"},
+		{"- important artifacts: none recorded yet.", "- important artifacts:"},
+		{"- important trace spans: loop initialization.", "- important trace spans:"},
+		{"- last known recovery note: reload LOOP.md, plan state, memory search/list, and recent trace before continuing.", "- last known recovery note:"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	return protocol
 }
