@@ -231,6 +231,160 @@ done:
 	}
 }
 
+func TestRunTurnRepairsMalformedLoopActivationProtocolToSavedDraft(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "activation-repair")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "activation-repair",
+		OwnerSession: "activation-repair",
+		Goal:         "Build a CLI puzzle game.",
+		Status:       "draft",
+		Workspace:    ".",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "- hard constraints:", "- hard constraints: pause after repeated tool failures", 1)
+	protocol = strings.Replace(protocol, "- known evidence:", "- known evidence: user chose Python for the CLI game", 1)
+	protocol = strings.Replace(protocol, "- current risk or blocker:", "- current risk or blocker: none", 1)
+	protocol = strings.Replace(protocol, "- important artifacts:", "- important artifacts: none yet", 1)
+	protocol = strings.Replace(protocol, "- important trace spans:", "- important trace spans: setup turn", 1)
+	protocol = strings.Replace(protocol, "- last known recovery note:", "- last known recovery note: reload plan and LOOP.md before continuing", 1)
+	if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "Which implementation language should I use?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Python"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	args, err := json.Marshal(map[string]any{
+		"action":   "complete_activation",
+		"protocol": "# Loop Protocol — stale model payload without metadata\n\n## Goal\nWrong task",
+		"reason":   "calibration answered",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if call == 1 {
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "lp_activate",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(args),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Loop activated from the saved protocol.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(tmp, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	RegisterLoopProtocolOnly(reg, protocolPath)
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv,
+		Events: events, LoopProtocolPath: protocolPath,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "python"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawRepairedActivation := false
+	sawActivatedResult := false
+	for {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeToolRequest:
+				var p sse.ToolRequestPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.request: %v", err)
+				}
+				if p.CallID == "lp_activate" {
+					if _, ok := p.Args["protocol"]; ok {
+						t.Fatalf("malformed activation protocol should be repaired out before dispatch: %+v", p)
+					}
+					if !p.ArgsRepaired || !strings.Contains(strings.Join(p.RepairNotes, "\n"), "missing LOOP.md metadata") {
+						t.Fatalf("activation repair metadata missing: %+v", p)
+					}
+					sawRepairedActivation = true
+				}
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.CallID == "lp_activate" && p.ExitCode == 0 && strings.Contains(p.Result, "activated LOOP.md status=running") {
+					sawActivatedResult = true
+				}
+			case sse.TypeTurnEnd:
+				if !sawRepairedActivation {
+					t.Fatal("turn ended without repaired activation tool request")
+				}
+				if !sawActivatedResult {
+					t.Fatal("turn ended without successful activation result")
+				}
+				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+				if err != nil || !found {
+					t.Fatalf("ReadState found=%v err=%v", found, err)
+				}
+				if state.Status != "running" {
+					t.Fatalf("saved protocol was not activated: %+v", state)
+				}
+				content, found, err := loopstate.ReadProtocol(protocolPath)
+				if err != nil || !found {
+					t.Fatalf("ReadProtocol after activation found=%v err=%v", found, err)
+				}
+				if !strings.Contains(content, "- status: running") || strings.Contains(content, "Wrong task") {
+					t.Fatalf("activation did not preserve the saved protocol:\n%s", content)
+				}
+				if got := atomic.LoadInt32(&calls); got != 2 {
+					t.Fatalf("LLM calls = %d, want 2", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "setup-gate")
