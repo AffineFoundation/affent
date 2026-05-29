@@ -185,6 +185,9 @@ func traceContextCompactionSummary(c ContextCompaction) string {
 		reason = "threshold"
 	}
 	fields = append(fields, "reason="+reason)
+	if anchor := strings.TrimSpace(c.LoopProtocolAnchor); anchor != "" {
+		fields = append(fields, "loop_anchor="+anchor)
+	}
 	if c.Reactive {
 		fields = append(fields, "reactive=true")
 	}
@@ -196,9 +199,6 @@ func traceContextCompactionSummary(c ContextCompaction) string {
 	}
 	if c.SummaryPresent {
 		fields = append(fields, "summary_present=true")
-	}
-	if anchor := strings.TrimSpace(c.LoopProtocolAnchor); anchor != "" {
-		fields = append(fields, "loop_anchor="+anchor)
 	}
 	return strings.Join(fields, " ")
 }

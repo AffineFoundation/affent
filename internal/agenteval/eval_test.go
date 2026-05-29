@@ -3322,6 +3322,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("compaction retention RequiredContextLoopProtocolAnchorText = %#v, want %q", compactionRetention.RequiredContextLoopProtocolAnchorText, want)
 		}
 	}
+	for _, want := range []TaskStateEvidenceRequirement{
+		{Source: "context_compaction", SummaryContains: "threshold"},
+		{Source: "context_compaction", SummaryContains: ".affent/loops/longrun-compaction-retention/LOOP.md"},
+		{Source: "context_compaction", SummaryContains: "loop_id=longrun-compaction-retention"},
+	} {
+		if !taskStateEvidenceRequirementContains(compactionRetention.RequiredTaskStateEvidence, want) {
+			t.Fatalf("compaction retention RequiredTaskStateEvidence = %#v, want %#v", compactionRetention.RequiredTaskStateEvidence, want)
+		}
+	}
 	if compactionRetention.RequiredLoopProtocolFeeds != 2 ||
 		compactionRetention.RequiredLoopProtocolFeedModes["full"] != 2 ||
 		!compactionRetention.RequireLoopProtocolFullAfterCompact ||
@@ -3398,6 +3407,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_reason_at_least:estimated_context_pressure:1") {
 		t.Fatalf("request pressure checks missing compaction reason assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
 	}
+	if !taskStateEvidenceRequirementContains(requestPressure.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
+		t.Fatalf("request pressure RequiredTaskStateEvidence = %#v, want context_compaction estimated_context_pressure", requestPressure.RequiredTaskStateEvidence)
+	}
 
 	modelWindowPolicy, ok := seen["longrun-model-window-compaction-policy"]
 	if !ok {
@@ -3436,6 +3448,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		if !stringSliceContains(modelWindowChecks, want) {
 			t.Fatalf("model-window policy checks missing %q: %#v", want, modelWindowChecks)
 		}
+	}
+	if !taskStateEvidenceRequirementContains(modelWindowPolicy.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
+		t.Fatalf("model-window policy RequiredTaskStateEvidence = %#v, want context_compaction estimated_context_pressure", modelWindowPolicy.RequiredTaskStateEvidence)
 	}
 
 	loopCalibration, ok := seen["longrun-loop-activation-calibration"]
@@ -4243,6 +4258,27 @@ func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t
 	}
 }
 
+func TestBuiltinContextCompactionScenariosRequireTaskStateEvidence(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if scenario.RequiredContextCompactions <= 0 {
+			continue
+		}
+		if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", "") {
+			t.Fatalf("%s requires context compaction but lacks task_state context_compaction evidence requirement: %#v", scenario.Name, scenario.RequiredTaskStateEvidence)
+		}
+		for reason := range scenario.RequiredContextCompactionReasons {
+			if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", reason) {
+				t.Fatalf("%s requires context compaction reason %q but lacks matching task_state evidence requirement: %#v", scenario.Name, reason, scenario.RequiredTaskStateEvidence)
+			}
+		}
+		for _, anchor := range scenario.RequiredContextLoopProtocolAnchorText {
+			if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", anchor) {
+				t.Fatalf("%s requires context compaction loop anchor %q but lacks matching task_state evidence requirement: %#v", scenario.Name, anchor, scenario.RequiredTaskStateEvidence)
+			}
+		}
+	}
+}
+
 func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if !scenarioRequiresGitCommitAndPush(scenario) || !scenarioRequiresCleanGitStatus(scenario) {
@@ -4329,6 +4365,21 @@ func scenarioVerifierRejectsMemoryText(scenario BatchScenario, term string) bool
 	return strings.Contains(scenario.VerifyCommand, `! grep`) &&
 		strings.Contains(scenario.VerifyCommand, `.affent/memory`) &&
 		strings.Contains(scenario.VerifyCommand, term)
+}
+
+func scenarioRequiresTaskStateEvidence(scenario BatchScenario, source, summaryContains string) bool {
+	for _, req := range scenario.RequiredTaskStateEvidence {
+		if req.Source != source {
+			continue
+		}
+		if summaryContains == "" {
+			return true
+		}
+		if req.SummaryContains != "" && (strings.Contains(req.SummaryContains, summaryContains) || strings.Contains(summaryContains, req.SummaryContains)) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
@@ -4477,6 +4528,15 @@ func taskStateChangedFileRequirementContains(values []TaskStateChangedFileRequir
 }
 
 func taskStateAttemptedActionRequirementContains(values []TaskStateAttemptedActionRequirement, want TaskStateAttemptedActionRequirement) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func taskStateEvidenceRequirementContains(values []TaskStateEvidenceRequirement, want TaskStateEvidenceRequirement) bool {
 	for _, value := range values {
 		if value == want {
 			return true

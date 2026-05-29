@@ -2079,6 +2079,11 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			".affent/loops/longrun-compaction-retention/LOOP.md",
 			"loop_id=longrun-compaction-retention",
 		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "context_compaction", SummaryContains: "threshold"},
+			{Source: "context_compaction", SummaryContains: ".affent/loops/longrun-compaction-retention/LOOP.md"},
+			{Source: "context_compaction", SummaryContains: "loop_id=longrun-compaction-retention"},
+		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 2,
@@ -2191,6 +2196,9 @@ func longRunRequestInputPressureCompactionScenario() BatchScenario {
 		RequiredContextCompactionReasons: map[string]int{
 			"estimated_context_pressure": 1,
 		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "context_compaction", SummaryContains: "estimated_context_pressure"},
+		},
 		RequiredFinalText:         []string{"REQUEST-PRESSURE-OK-3"},
 		ForbiddenTools:            []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
 		MaxParentToolCalls:        0,
@@ -2218,6 +2226,9 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 		RequiredTraceEventCounts: map[string]int{
 			"context.compacted": 1,
 			"runtime.surface":   1,
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "context_compaction", SummaryContains: "estimated_context_pressure"},
 		},
 		ForbiddenTools:             []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
 		MaxParentToolCalls:         0,

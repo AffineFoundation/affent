@@ -354,6 +354,9 @@ func contextCompactionSummary(p sse.ContextCompactPayload) string {
 		reason = "threshold"
 	}
 	fields = append(fields, "reason="+reason)
+	if anchor := strings.TrimSpace(p.LoopProtocolAnchor); anchor != "" {
+		fields = append(fields, "loop_anchor="+anchor)
+	}
 	if p.Reactive {
 		fields = append(fields, "reactive=true")
 	}
@@ -365,9 +368,6 @@ func contextCompactionSummary(p sse.ContextCompactPayload) string {
 	}
 	if p.SummaryPresent {
 		fields = append(fields, "summary_present=true")
-	}
-	if anchor := strings.TrimSpace(p.LoopProtocolAnchor); anchor != "" {
-		fields = append(fields, "loop_anchor="+anchor)
 	}
 	return strings.Join(fields, " ")
 }
