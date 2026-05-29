@@ -4206,6 +4206,11 @@ type runtimeSurfaceSummary struct {
 	Workspace                    *sse.RuntimeWorkspace    `json:"workspace,omitempty"`
 	MaxTurnSteps                 int                      `json:"max_turn_steps,omitempty"`
 	MaxToolCalls                 int                      `json:"max_tool_calls,omitempty"`
+	MaxTurnInputTokens           int                      `json:"max_turn_input_tokens,omitempty"`
+	ModelContextWindowTokens     int                      `json:"model_context_window_tokens,omitempty"`
+	ReservedOutputTokens         int                      `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputTokens    int                      `json:"compact_trigger_input_tokens,omitempty"`
+	CompactTriggerInputPercent   int                      `json:"compact_trigger_input_percent,omitempty"`
 	ToolResultEventCapBytes      int                      `json:"tool_result_event_cap_bytes,omitempty"`
 	ToolResultContextMaxBytes    int                      `json:"tool_result_context_max_bytes,omitempty"`
 	ToolResultContextBudgetBytes int                      `json:"tool_result_context_budget_bytes,omitempty"`
@@ -4382,6 +4387,11 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 		Workspace:                    surface.Workspace,
 		MaxTurnSteps:                 surface.MaxTurnSteps,
 		MaxToolCalls:                 surface.MaxToolCalls,
+		MaxTurnInputTokens:           surface.MaxTurnInputTokens,
+		ModelContextWindowTokens:     surface.ModelContextWindowTokens,
+		ReservedOutputTokens:         surface.ReservedOutputTokens,
+		CompactTriggerInputTokens:    surface.CompactTriggerInputTokens,
+		CompactTriggerInputPercent:   surface.CompactTriggerInputPercent,
 		ToolResultEventCapBytes:      surface.ToolResultEventCapBytes,
 		ToolResultContextMaxBytes:    surface.ToolResultContextMaxBytes,
 		ToolResultContextBudgetBytes: surface.ToolResultContextBudgetBytes,

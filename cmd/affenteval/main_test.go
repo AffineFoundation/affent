@@ -3827,6 +3827,11 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 			ToolCallCaps:                 []sse.RuntimeToolCallCap{{Tool: "web_fetch", Max: 8}, {Tool: "browser_find", Max: 8}},
 			MaxTurnSteps:                 12,
 			MaxToolCalls:                 40,
+			MaxTurnInputTokens:           300000,
+			ModelContextWindowTokens:     100000,
+			ReservedOutputTokens:         30000,
+			CompactTriggerInputTokens:    70000,
+			CompactTriggerInputPercent:   80,
 			ToolResultEventCapBytes:      8192,
 			ToolResultContextMaxBytes:    4096,
 			ToolResultContextBudgetBytes: 32768,
@@ -3863,6 +3868,11 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	if surface["tool_count"] != float64(4) ||
 		surface["max_turn_steps"] != float64(12) ||
 		surface["max_tool_calls"] != float64(40) ||
+		surface["max_turn_input_tokens"] != float64(300000) ||
+		surface["model_context_window_tokens"] != float64(100000) ||
+		surface["reserved_output_tokens"] != float64(30000) ||
+		surface["compact_trigger_input_tokens"] != float64(70000) ||
+		surface["compact_trigger_input_percent"] != float64(80) ||
 		surface["tool_result_event_cap_bytes"] != float64(8192) ||
 		surface["tool_result_artifact_prefix"] != ".affent/artifacts/tool-results" {
 		t.Fatalf("runtime_surface limits = %#v\njson=%s", surface, out.String())
