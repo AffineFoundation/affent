@@ -213,4 +213,44 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).toHaveTextContent("truncated");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started request");
   });
+
+  it("shows admitted and skipped tool request totals from trace stats", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "skipped-plan",
+          tool: "plan",
+          args: { action: "update" },
+          skipped: true,
+          skip_failure_kind: "loop_guard_no_budget",
+        },
+      },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "max_turns",
+          tool_stats: {
+            tool_requests: 4,
+            tool_requests_admitted: 3,
+            tool_requests_skipped: 1,
+            tool_errors: 1,
+          },
+        },
+      },
+    ]);
+
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
+
+    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Actions");
+    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("4 · 3 admitted · 1 skipped");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("not dispatched");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("loop_guard_no_budget");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("3 admitted / 1 skipped");
+  });
 });

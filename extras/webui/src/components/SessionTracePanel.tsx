@@ -119,6 +119,7 @@ export function SessionTracePanel({
             <TraceSelectionSummaryView summary={selectionSummary} />
             <div className="session-trace-metrics" data-testid="session-trace-metrics">
               <span><strong>Records</strong>{trace.recordCount}</span>
+              {trace.toolRequests.total > 0 ? <span><strong>Actions</strong>{traceToolRequestStatsLabel(trace.toolRequests)}</span> : null}
               {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
               {trace.unknownCount > 0 ? <span data-tone="warning"><strong>Unclassified</strong>{trace.unknownCount}</span> : null}
             </div>
@@ -274,6 +275,11 @@ function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceTool
   return [...counts.entries()]
     .map(([tool, count]) => ({ tool, count }))
     .sort((a, b) => b.count - a.count || a.tool.localeCompare(b.tool));
+}
+
+function traceToolRequestStatsLabel(stats: SessionTraceView["toolRequests"]): string {
+  if (stats.admitted == null && stats.skipped == null) return String(stats.total);
+  return `${stats.total} · ${stats.admitted ?? 0} admitted · ${stats.skipped ?? 0} skipped`;
 }
 
 function TraceSelectionSummaryView({ summary }: { summary: TraceSelectionSummary }) {

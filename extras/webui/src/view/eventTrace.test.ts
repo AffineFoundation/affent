@@ -141,6 +141,8 @@ describe("eventTrace view model", () => {
           reason: "max_turns",
           tool_stats: {
             tool_requests: 2,
+            tool_requests_admitted: 1,
+            tool_requests_skipped: 1,
             tool_errors: 1,
             session_search_calls: 1,
             session_search_results: 2,
@@ -235,7 +237,35 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Stopped at limit",
-        meta: ["Request 1", "max_turns", "2 actions", "1 failed", "Recall 2 hits, 1 context, 3 terms", "2 sources", "1 network", "1 partial", "1.2 s"],
+        meta: ["Request 1", "max_turns", "2 actions", "1 admitted / 1 skipped", "1 failed", "Recall 2 hits, 1 context, 3 terms", "2 sources", "1 network", "1 partial", "1.2 s"],
+      },
+    });
+  });
+
+  it("marks skipped tool requests as protocol placeholders", () => {
+    const model = buildEventTraceModel(normalizeEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "skipped",
+          tool: "plan",
+          args: { action: "update" },
+          skipped: true,
+          skip_failure_kind: "loop_guard_no_budget",
+        },
+      },
+    ]));
+
+    const request = model.items.find((item) => item.kind === "event" && item.event.type === "tool.request");
+    expect(request).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Started action",
+        meta: ["Request 1", "plan", "not dispatched", "loop_guard_no_budget"],
+        badges: ["skipped"],
       },
     });
   });

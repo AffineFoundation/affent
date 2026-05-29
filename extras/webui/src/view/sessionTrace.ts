@@ -1,10 +1,17 @@
 import type { SessionState } from "../store/sessionState";
 import { buildEventTraceModel, streamSummary, type EventTraceItem } from "./eventTrace";
 
+export interface TraceToolRequestStats {
+  total: number;
+  admitted?: number;
+  skipped?: number;
+}
+
 export interface SessionTraceView {
   summary: string;
   detail: string;
   eventCount: number;
+  toolRequests: TraceToolRequestStats;
   toolIssueCount: number;
   toolIssues: TraceToolIssueView[];
   recordCount: number;
@@ -40,6 +47,7 @@ export function buildSessionTrace(session: SessionState): SessionTraceView {
   const recordCount = model.items.length + (metadataCount > 0 ? 1 : 0);
   const latest = latestTraceRecord(model.items);
   const eventCount = session.events.length;
+  const toolRequests = traceToolRequestStats(session);
   const toolIssues = buildTraceToolIssues(session);
   const toolIssueCount = toolIssues.reduce((sum, issue) => sum + issue.occurrences, 0);
   const summary = eventCount > 0
@@ -55,6 +63,7 @@ export function buildSessionTrace(session: SessionState): SessionTraceView {
     summary,
     detail: detailParts.join(" · ") || "No persisted trace loaded for this chat.",
     eventCount,
+    toolRequests,
     toolIssueCount,
     toolIssues,
     recordCount,
@@ -135,6 +144,9 @@ export function sessionTraceEvidenceText(trace: SessionTraceView): string {
   ];
   if (trace.schemaVersion) lines.push(`Schema: v${trace.schemaVersion}`);
   if (trace.unknownCount > 0) lines.push(`Unclassified events: ${trace.unknownCount}`);
+  if (trace.toolRequests.total > 0) {
+    lines.push(`Tool requests: ${traceToolRequestStatsText(trace.toolRequests)}`);
+  }
   if (trace.toolIssues.length > 0) {
     lines.push(`Tool issues: ${trace.toolIssueCount}`);
     for (const issue of trace.toolIssues.slice(0, 3)) {
@@ -147,6 +159,54 @@ export function sessionTraceEvidenceText(trace: SessionTraceView): string {
     if (trace.latest.detail) lines.push(`Latest detail: ${trace.latest.detail}`);
   }
   return lines.join("\n");
+}
+
+function traceToolRequestStats(session: SessionState): TraceToolRequestStats {
+  const fromTurnEnd = session.events
+    .map((event) => event.data && typeof event.data === "object" ? (event.data as { tool_stats?: unknown }).tool_stats : undefined)
+    .filter((stats): stats is Record<string, unknown> => !!stats && typeof stats === "object" && !Array.isArray(stats))
+    .reduce<TraceToolRequestStats>((acc, stats) => {
+      const total = readNumber(stats, "tool_requests");
+      const admitted = readNumber(stats, "tool_requests_admitted");
+      const skipped = readNumber(stats, "tool_requests_skipped");
+      if (typeof total === "number") acc.total += total;
+      if (typeof admitted === "number") acc.admitted = (acc.admitted ?? 0) + admitted;
+      if (typeof skipped === "number") acc.skipped = (acc.skipped ?? 0) + skipped;
+      return acc;
+    }, { total: 0 });
+  if (fromTurnEnd.total > 0 || fromTurnEnd.admitted != null || fromTurnEnd.skipped != null) {
+    return normalizeTraceToolRequestStats(fromTurnEnd);
+  }
+
+  let total = 0;
+  let skipped = 0;
+  for (const event of session.events) {
+    if (event.type !== "tool.request") continue;
+    total += 1;
+    if (event.data && typeof event.data === "object" && (event.data as { skipped?: unknown }).skipped === true) skipped += 1;
+  }
+  return normalizeTraceToolRequestStats({ total, admitted: total > 0 && skipped > 0 ? total - skipped : undefined, skipped: skipped > 0 ? skipped : undefined });
+}
+
+function normalizeTraceToolRequestStats(stats: TraceToolRequestStats): TraceToolRequestStats {
+  const total = Math.max(0, stats.total);
+  const admitted = stats.admitted == null ? undefined : Math.max(0, stats.admitted);
+  const skipped = stats.skipped == null ? undefined : Math.max(0, stats.skipped);
+  return { total, admitted, skipped };
+}
+
+function traceToolRequestStatsText(stats: TraceToolRequestStats): string {
+  const parts = [`${stats.total}`];
+  if (stats.admitted != null || stats.skipped != null) {
+    parts.push(`${stats.admitted ?? 0} admitted`);
+    parts.push(`${stats.skipped ?? 0} skipped`);
+  }
+  return parts.join(" · ");
+}
+
+function readNumber(value: Record<string, unknown>, key: string): number | undefined {
+  const n = value[key];
+  return typeof n === "number" && Number.isFinite(n) ? n : undefined;
 }
 
 export function sessionTraceDraft(trace: SessionTraceView): string {

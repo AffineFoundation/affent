@@ -144,6 +144,7 @@ describe("buildWorkbenchNavItems", () => {
         summary: "12 trace entries",
         detail: "5 grouped records · schema v1",
         eventCount: 12,
+        toolRequests: { total: 0 },
         toolIssueCount: 0,
         toolIssues: [],
         recordCount: 5,

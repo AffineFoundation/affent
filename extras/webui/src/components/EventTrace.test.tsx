@@ -263,6 +263,8 @@ describe("EventTrace", () => {
           reason: "max_turns",
           tool_stats: {
             tool_requests: 4,
+            tool_requests_admitted: 3,
+            tool_requests_skipped: 1,
             tool_errors: 1,
             loop_guard_interventions: 2,
             forced_no_tools: 1,
@@ -277,7 +279,7 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("Request trace")).toBeInTheDocument();
-    expect(screen.getByText("Request 1 · recover repeated browser failures · max_turns · 4 actions · 1 failed · Guard 2 · 1 no-tools · 2 memory updates (1 add, 1 replace)")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · recover repeated browser failures · max_turns · 4 actions · 3 admitted / 1 skipped · 1 failed · Guard 2 · 1 no-tools · 2 memory updates (1 add, 1 replace)")).toBeInTheDocument();
     expect(screen.queryByText(/"loop_guard_interventions"/)).not.toBeInTheDocument();
   });
 

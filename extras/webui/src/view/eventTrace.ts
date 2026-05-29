@@ -679,15 +679,20 @@ function loopDecisionInputBudgetMeta(event: NormalizedEvent): string | undefined
 
 function toolRequestMeta(event: NormalizedEvent, turn: string | undefined): string[] {
   const argsSummary = readString(event.data, "original_args_summary");
+  const skipped = readBoolean(event.data, "skipped");
+  const skipFailureKind = readString(event.data, "skip_failure_kind");
   return compact([
     turn,
     readString(event.data, "tool"),
+    skipped ? "not dispatched" : undefined,
+    skipFailureKind,
     argsSummary ? streamSummary(argsSummary) : undefined,
   ]);
 }
 
 function toolRequestBadges(event: NormalizedEvent): string[] {
   return compact([
+    readBoolean(event.data, "skipped") ? "skipped" : undefined,
     readBoolean(event.data, "canonicalized") ? "renamed" : undefined,
     readBoolean(event.data, "args_repaired") ? "repaired" : undefined,
     readBoolean(event.data, "args_truncated") ? "truncated" : undefined,
@@ -979,6 +984,8 @@ function readToolStats(event: NormalizedEvent | undefined): Record<string, unkno
 
 function toolRuntimeStatsMeta(toolStats: Record<string, unknown> | undefined): string[] {
   const toolRequests = readNumber(toolStats, "tool_requests");
+  const toolRequestsAdmitted = readNumber(toolStats, "tool_requests_admitted");
+  const toolRequestsSkipped = readNumber(toolStats, "tool_requests_skipped");
   const toolErrors = readNumber(toolStats, "tool_errors");
   const loopGuard = readNumber(toolStats, "loop_guard_interventions");
   const forcedNoTools = readNumber(toolStats, "forced_no_tools");
@@ -992,6 +999,7 @@ function toolRuntimeStatsMeta(toolStats: Record<string, unknown> | undefined): s
 
   return compact([
     typeof toolRequests === "number" ? `${toolRequests} actions` : undefined,
+    toolRequestAdmissionMeta(toolRequests, toolRequestsAdmitted, toolRequestsSkipped),
     typeof toolErrors === "number" && toolErrors > 0 ? `${toolErrors} failed` : undefined,
     typeof loopGuard === "number" && loopGuard > 0 ? `Guard ${loopGuard}` : undefined,
     typeof forcedNoTools === "number" && forcedNoTools > 0 ? `${forcedNoTools} no-tools` : undefined,
@@ -1002,6 +1010,12 @@ function toolRuntimeStatsMeta(toolStats: Record<string, unknown> | undefined): s
     typeof dynamicPartialSources === "number" && dynamicPartialSources > 0 ? `${dynamicPartialSources} partial` : undefined,
     typeof toolDuration === "number" ? formatDuration(toolDuration) : undefined,
   ]);
+}
+
+function toolRequestAdmissionMeta(total: number | undefined, admitted: number | undefined, skipped: number | undefined): string | undefined {
+  if (typeof admitted !== "number" && typeof skipped !== "number") return undefined;
+  if ((skipped ?? 0) <= 0 && admitted === total) return undefined;
+  return `${admitted ?? 0} admitted / ${skipped ?? 0} skipped`;
 }
 
 function sessionSearchStatsMeta(toolStats: Record<string, unknown> | undefined, results: number): string {

@@ -99,6 +99,30 @@ describe("buildSessionTrace", () => {
     expect(sessionTraceEvidenceText(trace)).toContain("2 occurrences");
   });
 
+  it("summarizes admitted and skipped tool request counts from turn stats", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            tool_requests: 5,
+            tool_requests_admitted: 3,
+            tool_requests_skipped: 2,
+          },
+        },
+      },
+    ]);
+
+    const trace = buildSessionTrace(session);
+
+    expect(trace.toolRequests).toEqual({ total: 5, admitted: 3, skipped: 2 });
+    expect(sessionTraceEvidenceText(trace)).toContain("Tool requests: 5 · 3 admitted · 2 skipped");
+  });
+
   it("returns an empty state for sessions without trace", () => {
     const trace = buildSessionTrace(reduceRawEvents([]));
 

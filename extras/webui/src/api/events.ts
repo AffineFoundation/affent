@@ -176,6 +176,8 @@ export interface ToolRequestPayload {
   canonicalized?: boolean;
   args_repaired?: boolean;
   repair_notes?: string[];
+  skipped?: boolean;
+  skip_failure_kind?: string;
   delegation?: DelegationMeta;
 }
 
@@ -211,6 +213,8 @@ export interface UsagePayload {
 
 export interface ToolRuntimeStats {
   tool_requests?: number;
+  tool_requests_admitted?: number;
+  tool_requests_skipped?: number;
   tool_name_canonicalized?: number;
   tool_args_repaired?: number;
   tool_repair_calls?: number;
