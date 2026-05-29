@@ -1424,6 +1424,48 @@ func TestSessionPool_ToolLightMixedSurfaceUsesLimitedPrompt(t *testing.T) {
 	}
 }
 
+func TestSessionPoolPromptIncludesScheduleGovernanceAndRuntimeTime(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableLoopProtocol = true
+
+	s, err := pool.GetOrCreate("schedule-governance-prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.registry.Get(agent.SessionScheduleToolName); !ok {
+		t.Fatal("session_schedule tool should be available")
+	}
+	if _, ok := s.registry.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol tool should be available")
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	prompt := msgs[0].Content
+	for _, want := range []string{
+		"Runtime context:",
+		"Current UTC date:",
+		"Current UTC time:",
+		"relative timer and reminder calculations",
+		"Loop protocol maintenance:",
+		"Session scheduling:",
+		"session_schedule for future turns, reminders, timers, recurring checks, and scheduled follow-ups",
+		"does not require LOOP.md",
+		"loop_protocol only for durable long-running task state",
+		"RFC3339 next_run_at",
+		"repeat_interval_seconds",
+		"kind=loop_tick",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("system prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Index(prompt, "Session scheduling:") < strings.Index(prompt, "Loop protocol maintenance:") {
+		t.Fatalf("schedule guidance should follow loop guidance in the serve prompt:\n%s", prompt)
+	}
+}
+
 func TestSessionPool_SubagentRegistersExternalResearchPolicy(t *testing.T) {
 	cfg := Config{
 		Listen:         "127.0.0.1:0",
