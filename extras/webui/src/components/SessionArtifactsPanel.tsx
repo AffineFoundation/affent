@@ -9,13 +9,12 @@ import {
   artifactOutcomeLabel,
   artifactReviewDetail,
   artifactReviewFocus,
-  artifactReviewFacts,
-  artifactReviewQueue,
   artifactReviewStats,
   artifactReviewSummary,
   artifactSourceGroupKey,
   artifactSourceGroups,
   artifactSummaryPreview,
+  type SessionArtifactStats,
   type SessionArtifactKind,
 } from "../view/sessionArtifacts";
 import { artifactSizeLabel, type TurnArtifact } from "../view/turnArtifacts";
@@ -26,13 +25,11 @@ type ArtifactFilter = "all" | SessionArtifactKind;
 export function SessionArtifactsPanel({
   artifacts,
   defaultOpen = false,
-  downloadHref,
   onOpenArtifact,
   onUseAsDraft,
 }: {
   artifacts: readonly TurnArtifact[];
   defaultOpen?: boolean;
-  downloadHref?: (path: string) => string | undefined;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
@@ -43,15 +40,12 @@ export function SessionArtifactsPanel({
   const stats = artifactReviewStats(artifacts);
   const kindFilteredArtifacts = filter === "all" ? artifacts : artifacts.filter((artifact) => artifactKind(artifact) === filter);
   const focus = artifactReviewFocus(artifacts);
-  const reviewFacts = artifactReviewFacts(artifacts);
-  const reviewQueue = artifactReviewQueue(artifacts);
   const sourceGroups = artifactSourceGroups(artifacts);
   const activeSource = sourceGroups.find((group) => group.key === sourceKey);
   const sourceFilteredArtifacts = sourceKey
     ? kindFilteredArtifacts.filter((artifact) => artifactSourceGroupKey(artifact) === sourceKey)
     : kindFilteredArtifacts;
   const visibleArtifacts = trimmedQuery ? sourceFilteredArtifacts.filter((artifact) => artifactMatchesQuery(artifact, trimmedQuery)) : sourceFilteredArtifacts;
-  const focusDownloadUrl = focus ? downloadHref?.(focus.path) : undefined;
   return (
     <details className="session-skills-panel session-artifacts-panel" data-testid="session-artifacts-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
@@ -79,11 +73,6 @@ export function SessionArtifactsPanel({
                       Open artifact
                     </button>
                   ) : null}
-                  {focusDownloadUrl ? (
-                    <a className="ghost-action" href={focusDownloadUrl} download={focus.name}>
-                      Download
-                    </a>
-                  ) : null}
                   <CopyButton label="Copy path" value={focus.path} className="ghost-action" />
                   <CopyButton label="Copy details" value={artifactEvidenceText(focus)} className="ghost-action" />
                   {onUseAsDraft ? (
@@ -94,33 +83,11 @@ export function SessionArtifactsPanel({
                 </div>
               </div>
             ) : null}
-            <div className="session-artifacts-facts" aria-label="Artifact review facts">
-              {reviewFacts.map((fact) => (
-                <span key={fact.label} data-tone={fact.tone ?? "neutral"} title={fact.detail}>
-                  <small>{fact.label}</small>
-                  <strong>{fact.value}</strong>
-                  {artifactFactVisibleDetail(fact) ? <b>{artifactFactVisibleDetail(fact)}</b> : null}
-                </span>
+            <div className="session-artifacts-statline" data-testid="session-artifacts-statline" aria-label="Artifact review summary">
+              {artifactStatLineItems(stats).map((item) => (
+                <span key={item}>{item}</span>
               ))}
             </div>
-            {reviewQueue.length > 0 ? (
-              <div className="session-artifacts-review-queue" data-testid="session-artifacts-review-queue" aria-label="Artifact review queue">
-                <span>Review queue</span>
-                {reviewQueue.slice(0, 4).map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    data-tone={item.tone ?? "neutral"}
-                    onClick={() => onOpenArtifact?.(item.artifact.path)}
-                    disabled={!onOpenArtifact}
-                  >
-                    <small>{item.label}</small>
-                    <strong title={item.artifact.path}>{item.title}</strong>
-                    <b>{item.detail}</b>
-                  </button>
-                ))}
-              </div>
-            ) : null}
             {sourceGroups.length > 1 ? (
               <div className="session-artifacts-source-index" aria-label="Artifact source index">
                 <span>
@@ -170,13 +137,12 @@ export function SessionArtifactsPanel({
         {visibleArtifacts.length > 0 ? (
           <ol className="session-artifacts-list" data-testid="session-artifacts-list">
             {visibleArtifacts.map((artifact) => {
-              const downloadUrl = downloadHref?.(artifact.path);
               const summaryPreview = artifactSummaryPreview(artifact);
               return (
                 <li key={artifact.path} className="session-artifacts-item">
                   <div className="session-artifacts-main">
                     <strong title={artifact.path}>{artifact.name}</strong>
-                    <span>{artifactMeta(artifact)}</span>
+                    <span title={artifact.source}>{artifactMeta(artifact)}</span>
                     {summaryPreview ? <small className="session-artifacts-summary">{summaryPreview}</small> : null}
                     <small className="session-artifacts-path" title={artifact.path}>{artifact.path}</small>
                   </div>
@@ -186,18 +152,7 @@ export function SessionArtifactsPanel({
                         Open
                       </button>
                     ) : null}
-                    {downloadUrl ? (
-                      <a className="ghost-action" href={downloadUrl} download={artifact.name}>
-                        Download
-                      </a>
-                    ) : null}
                     <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
-                    <CopyButton label="Copy details" value={artifactEvidenceText(artifact)} className="ghost-action" />
-                    {onUseAsDraft ? (
-                      <button type="button" className="ghost-action" onClick={() => onUseAsDraft(artifactEvidenceDraft(artifact), "artifact")}>
-                        Reference
-                      </button>
-                    ) : null}
                   </span>
                 </li>
               );
@@ -236,14 +191,17 @@ function ArtifactFilterButton({
   );
 }
 
-function artifactFactVisibleDetail(fact: { detail: string }): string | undefined {
-  const detail = fact.detail.trim();
-  if (!detail) return undefined;
-  if (detail === "artifact" || detail === "artifacts") return undefined;
-  if (detail === "generated files") return "files";
-  if (detail === "known size") return undefined;
-  if (/^\d+ sources?$/.test(detail)) return detail;
-  return detail;
+function artifactStatLineItems(stats: SessionArtifactStats): string[] {
+  const items = [
+    stats.deliverables > 0 ? `${stats.deliverables} deliverable${stats.deliverables === 1 ? "" : "s"}` : undefined,
+    stats.fullOutputs > 0 ? `${stats.fullOutputs} full output${stats.fullOutputs === 1 ? "" : "s"}` : undefined,
+    stats.failedOutputs > 0 ? `${stats.failedOutputs} failed` : undefined,
+    stats.partialOutputs > 0 ? `${stats.partialOutputs} partial` : undefined,
+    stats.recordedBytes > 0 ? `${Math.ceil(stats.recordedBytes / 1024)} KiB recorded` : undefined,
+    stats.latestTurn != null ? `latest turn ${stats.latestTurn}` : undefined,
+    `${stats.sourceCount} ${stats.sourceCount === 1 ? "source" : "sources"}`,
+  ].filter((item): item is string => Boolean(item));
+  return items.length ? items : ["No recorded artifact evidence"];
 }
 
 function artifactMatchesQuery(artifact: TurnArtifact, query: string): boolean {
@@ -265,10 +223,17 @@ function artifactMeta(artifact: TurnArtifact): string {
     artifactKindLabel(artifact),
     artifactLineageLabel(artifact),
     artifactOutcomeLabel(artifact),
-    artifact.source,
+    compactArtifactSource(artifact.source),
     artifactSizeLabel(artifact) || undefined,
   ].filter(Boolean);
   return parts.join(" · ");
+}
+
+function compactArtifactSource(source: string): string | undefined {
+  const compact = source.replace(/\s+/g, " ").trim();
+  if (!compact) return undefined;
+  if (compact.length <= 96) return compact;
+  return `${compact.slice(0, 93).trimEnd()}...`;
 }
 
 function artifactFilterLabel(filter: ArtifactFilter): string {
