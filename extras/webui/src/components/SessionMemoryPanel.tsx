@@ -16,7 +16,6 @@ import {
   memoryBucketUsage,
   memoryEntryIsSensitive,
   memoryEntrySafePreview,
-  memoryPressureLabel,
   memoryReviewFindings,
   memoryScopeLabel,
   memorySuggestionDraft,
@@ -255,13 +254,6 @@ export function SessionMemoryPanel({
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
         {!loading && !noSession && (!error || hasMemorySnapshot) ? (
           <>
-            <MemoryDashboard
-              memory={memory}
-              stats={stats}
-              reviewFindings={reviewFindings}
-              canWrite={Boolean(onAddMemory)}
-              canDraft={Boolean(onUseAsDraft)}
-            />
             <MemoryMaintenanceBoard
               reviewFindings={reviewFindings}
               candidateCount={candidates.length}
@@ -279,6 +271,7 @@ export function SessionMemoryPanel({
             ) : null}
             <MemoryPanelActions
               memory={memory}
+              stats={stats}
               hasSearch={hasSearch}
               onRefresh={onRefresh}
               onUseAsDraft={onUseAsDraft}
@@ -833,11 +826,13 @@ function MemoryFocusFact({ label, value }: { label: string; value: string }) {
 
 function MemoryPanelActions({
   memory,
+  stats,
   hasSearch,
   onRefresh,
   onUseAsDraft,
 }: {
   memory?: SessionMemoryResponse;
+  stats: ReturnType<typeof memoryStats>;
   hasSearch: boolean;
   onRefresh?: () => Promise<void> | void;
   onUseAsDraft?: UseAsDraft;
@@ -846,6 +841,9 @@ function MemoryPanelActions({
   const hasSavedMemory = Boolean(memory?.has_memory);
   const minimal = !hasSavedMemory && !hasSearch;
   const candidateDraftHandler = !minimal ? onUseAsDraft : undefined;
+  const status = memory && hasSavedMemory
+    ? `${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} · ${memoryUsageLabel(stats)} · ${memoryScopeLabel(memory)}`
+    : undefined;
   return (
     <div className="session-memory-toolbar" data-mode={minimal ? "minimal" : undefined} data-testid="session-memory-toolbar">
       {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="ghost-action" /> : null}
@@ -859,7 +857,7 @@ function MemoryPanelActions({
           Review snapshot
         </button>
       ) : null}
-      {hasSearch ? <span>Searchable durable memory</span> : null}
+      {status ? <span>{status}</span> : hasSearch ? <span>Searchable durable memory</span> : null}
       {onRefresh ? (
         <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
           Refresh
@@ -917,59 +915,6 @@ function MemoryCandidateReview({
       </ul>
     </section>
   );
-}
-
-function MemoryDashboard({
-  memory,
-  stats,
-  reviewFindings,
-  canWrite,
-  canDraft,
-}: {
-  memory?: SessionMemoryResponse;
-  stats: ReturnType<typeof memoryStats>;
-  reviewFindings: ReturnType<typeof memoryReviewFindings>;
-  canWrite: boolean;
-  canDraft: boolean;
-}) {
-  const writeMode = canWrite ? "Direct write" : canDraft ? "Draft only" : "Read only";
-  const pressureTone = stats.pressure === "full" || stats.pressure === "watch" ? "watch" : "normal";
-  const reviewTone = reviewFindings.length > 0 ? "action" : "normal";
-  return (
-    <div className="session-memory-dashboard" data-testid="session-memory-dashboard">
-      <div className="session-memory-stat">
-        <span>Scope</span>
-        <strong>{memoryScopeLabel(memory)}</strong>
-        <small>{writeMode}</small>
-      </div>
-      <div className="session-memory-stat">
-        <span>Entries</span>
-        <strong>{stats.entryCount}</strong>
-        <small>{stats.bucketCount} {stats.bucketCount === 1 ? "bucket" : "buckets"}</small>
-      </div>
-      <div className="session-memory-stat" data-tone={reviewTone}>
-        <span>Review</span>
-        <strong>{reviewFindings.length}</strong>
-        <small>{memoryReviewSummary(reviewFindings)}</small>
-      </div>
-      <div className="session-memory-stat" data-tone={pressureTone}>
-        <span>Usage</span>
-        <strong>{memoryUsageLabel(stats)}</strong>
-        <small>{memoryPressureLabel(stats)}</small>
-      </div>
-    </div>
-  );
-}
-
-function memoryReviewSummary(findings: ReturnType<typeof memoryReviewFindings>): string {
-  if (findings.length === 0) return "Clean";
-  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
-    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
-    return acc;
-  }, {});
-  return Object.entries(counts)
-    .map(([kind, count]) => `${memoryFindingKindLabel(kind)} ${count}`)
-    .join(" · ");
 }
 
 function MemoryDraftForm({

@@ -60,15 +60,11 @@ describe("SessionMemoryPanel", () => {
 
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("4 entries");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("shared user");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Shared user + session");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("104/7975 chars");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Review");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Clean");
+    expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Maintenance");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Verify latest write");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Replaced · memory:research");
-    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Searchable durable memory");
+    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("4 entries · 104/7975 chars · Shared user + session");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Find candidates" }));
@@ -363,11 +359,7 @@ describe("SessionMemoryPanel", () => {
       />,
     );
 
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Review");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("4");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Sensitive 1");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Duplicate 2");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Capacity 1");
+    expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Remove secrets");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Deduplicate");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Reduce pressure");
@@ -405,8 +397,7 @@ describe("SessionMemoryPanel", () => {
     const panel = screen.getByTestId("session-memory-panel");
     expect(panel).toHaveTextContent("No durable memory");
     expect(panel).toHaveTextContent("No user, core, or topic entries saved.");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Session scoped");
-    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
+    expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No durable memory saved");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Save only stable, non-secret facts");
     expect(within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Find candidates" })).toBeInTheDocument();
