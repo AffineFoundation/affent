@@ -103,6 +103,22 @@ func TestDeriveTaskStateDefaultsBlankRequestModeToNormal(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateDefaultsBlankRequestSourceToUser(t *testing.T) {
+	got := DeriveTaskState(Trace{
+		Prompt:        "Inspect the repo.",
+		TurnEndReason: "completed",
+		UserMessages: []UserMessage{{
+			Text: "Inspect the repo.",
+		}},
+	})
+	if got.RequestMode != "normal" || got.RequestSource != "user" {
+		t.Fatalf("request provenance = mode:%q source:%q, want normal/user", got.RequestMode, got.RequestSource)
+	}
+	if !taskStateHasSource(got, "user") {
+		t.Fatalf("sources = %+v, want user source", got.Sources)
+	}
+}
+
 func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 	original := TaskStateSnapshot{
 		Objective:    "ship task",

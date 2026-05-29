@@ -1385,6 +1385,41 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	}
 }
 
+func TestSummarizeDurableSessionDefaultsTaskRequestSourceToUser(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "task-state-user-source")
+	dir := pool.sessionDirPath("task-state-user-source")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Inspect the repository and report risks",
+	}) + sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t1",
+		Reason: sse.TurnEndCompleted,
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "task-state-user-source")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || summary.TaskState == nil {
+		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
+	}
+	task := summary.TaskState
+	if task.RequestMode != "normal" || task.RequestSource != "user" {
+		t.Fatalf("request fields = mode:%q source:%q, want normal/user", task.RequestMode, task.RequestSource)
+	}
+	if !stringSliceContains(task.KnownFacts, "latest request source: user") {
+		t.Fatalf("known_facts = %+v, want user request source", task.KnownFacts)
+	}
+	if !stringSliceContains(task.Sources, "user") {
+		t.Fatalf("sources = %+v, want user source", task.Sources)
+	}
+}
+
 func TestSummarizeDurableSessionRestoresRecoveryHintFromLoopStateDecision(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

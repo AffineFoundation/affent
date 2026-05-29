@@ -54,10 +54,10 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 	}
 	if latest := latestTaskRequest(trace); latest != nil {
 		task.RequestMode = normalizeTaskRequestMode(latest.Mode)
-		task.RequestSource = strings.TrimSpace(latest.Source)
+		task.RequestSource = normalizeTaskRequestSource(latest.Source)
 		task.ScheduleID = strings.TrimSpace(latest.ScheduleID)
 		task.ScheduleKind = strings.TrimSpace(latest.ScheduleKind)
-		task.Sources = appendUniqueTaskString(task.Sources, latest.Source, taskStateMaxItems)
+		task.Sources = appendUniqueTaskString(task.Sources, task.RequestSource, taskStateMaxItems)
 	}
 	for _, injection := range trace.ContextInjections {
 		task.Sources = appendUniqueTaskString(task.Sources, injection.Source, taskStateMaxItems)

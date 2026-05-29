@@ -138,7 +138,7 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 			}
 			state.LatestRequestText = compactTaskSummary(p.Text)
 			state.RequestMode = normalizeTaskRequestMode(p.Mode)
-			state.RequestSource = strings.TrimSpace(p.Source)
+			state.RequestSource = normalizeTaskRequestSource(p.Source)
 			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
 			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
 			addTaskStateSource(state, state.RequestSource)
@@ -298,6 +298,14 @@ func normalizeTaskRequestMode(mode string) string {
 		return agent.UserModeNormal
 	}
 	return mode
+}
+
+func normalizeTaskRequestSource(source string) string {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return "user"
+	}
+	return source
 }
 
 func sessionTaskConstraints(summary sessionSummary, eventState sessionTaskEventState) []string {
