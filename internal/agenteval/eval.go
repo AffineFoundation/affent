@@ -975,6 +975,9 @@ type DebugTranscriptRef struct {
 type DebugMetrics struct {
 	TurnEndReason                   string         `json:"turn_end_reason,omitempty"`
 	ToolCalls                       int            `json:"tool_calls"`
+	ToolRequests                    int            `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted            int            `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped             int            `json:"tool_requests_skipped,omitempty"`
 	ToolErrors                      int            `json:"tool_errors"`
 	ToolArgsRepaired                int            `json:"tool_args_repaired"`
 	ToolNameCanonicalized           int            `json:"tool_name_canonicalized"`
@@ -1469,6 +1472,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		Metrics: DebugMetrics{
 			TurnEndReason:                   res.TurnEndReason,
 			ToolCalls:                       res.ToolCalls,
+			ToolRequests:                    res.ToolStats.ToolRequests,
+			ToolRequestsAdmitted:            res.ToolStats.ToolRequestsAdmitted,
+			ToolRequestsSkipped:             res.ToolStats.ToolRequestsSkipped,
 			ToolErrors:                      res.ToolStats.ToolErrors,
 			ToolArgsRepaired:                res.ToolStats.ToolArgsRepaired,
 			ToolNameCanonicalized:           res.ToolStats.ToolNameCanonicalized,

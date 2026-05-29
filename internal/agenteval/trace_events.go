@@ -118,6 +118,8 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			Canonicalized:       p.Canonicalized,
 			ArgsRepaired:        p.ArgsRepaired,
 			RepairNotes:         p.RepairNotes,
+			Skipped:             p.Skipped,
+			SkipFailureKind:     p.SkipFailureKind,
 			Delegation:          p.Delegation,
 		})
 	case sse.TypeToolResult:
@@ -203,6 +205,8 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			if p.ToolStats != nil {
 				stats := ToolRuntimeStats{
 					ToolRequests:               p.ToolStats.ToolRequests,
+					ToolRequestsAdmitted:       p.ToolStats.ToolRequestsAdmitted,
+					ToolRequestsSkipped:        p.ToolStats.ToolRequestsSkipped,
 					ToolNameCanonicalized:      p.ToolStats.ToolNameCanonicalized,
 					ToolArgsRepaired:           p.ToolStats.ToolArgsRepaired,
 					ToolRepairCalls:            p.ToolStats.ToolRepairCalls,
@@ -498,6 +502,8 @@ func traceEventMatchesTurn(eventTurnID, wantTurnID string) bool {
 
 func mergeToolRuntimeStats(a, b ToolRuntimeStats) ToolRuntimeStats {
 	a.ToolRequests += b.ToolRequests
+	a.ToolRequestsAdmitted += b.ToolRequestsAdmitted
+	a.ToolRequestsSkipped += b.ToolRequestsSkipped
 	a.ToolNameCanonicalized += b.ToolNameCanonicalized
 	a.ToolArgsRepaired += b.ToolArgsRepaired
 	a.ToolRepairCalls += b.ToolRepairCalls

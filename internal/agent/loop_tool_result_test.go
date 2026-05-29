@@ -2658,6 +2658,9 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 					t.Fatalf("decode tool.request: %v", err)
 				}
 				if p.CallID == "c2" {
+					if !p.Skipped || p.SkipFailureKind != "loop_guard_no_budget" {
+						t.Fatalf("skipped request metadata = skipped:%t kind:%q, want true/loop_guard_no_budget", p.Skipped, p.SkipFailureKind)
+					}
 					if got, _ := p.Args["url"].(string); got != "https://example.com/skipped" {
 						t.Fatalf("skipped tool args url = %q, want original URL", got)
 					}
@@ -2686,7 +2689,12 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 			if !sawSkippedArgs {
 				t.Fatal("expected skipped tool request to retain original args")
 			}
-			if p.ToolStats == nil || p.ToolStats.ToolRequests != 2 || p.ToolStats.ToolErrors != 1 {
+			if p.ToolStats == nil ||
+				p.ToolStats.ToolRequests != 2 ||
+				p.ToolStats.ToolRequestsAdmitted != 1 ||
+				p.ToolStats.ToolRequestsSkipped != 1 ||
+				p.ToolStats.ToolErrors != 1 ||
+				p.ToolStats.ToolFailureByKind["loop_guard_no_budget"] != 1 {
 				t.Fatalf("expected one successful request and one skipped error, got %+v", p.ToolStats)
 			}
 			if got := atomic.LoadInt32(&secondToolRan); got != 0 {

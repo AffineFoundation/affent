@@ -135,6 +135,8 @@ func capToolRequestArgValue(v any) (any, int) {
 
 func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 	if stats.ToolRequests == 0 &&
+		stats.ToolRequestsAdmitted == 0 &&
+		stats.ToolRequestsSkipped == 0 &&
 		stats.ToolNameCanonicalized == 0 &&
 		stats.ToolArgsRepaired == 0 &&
 		stats.ToolRepairCalls == 0 &&
@@ -168,6 +170,30 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		return nil
 	}
 	return &stats
+}
+
+func recordAdmittedToolRequest(stats *sse.ToolRuntimeStats) {
+	if stats == nil {
+		return
+	}
+	stats.ToolRequests++
+	stats.ToolRequestsAdmitted++
+}
+
+func recordSkippedToolRequests(stats *sse.ToolRuntimeStats, count int, reason skippedToolResultReason) {
+	if stats == nil || count <= 0 {
+		return
+	}
+	stats.ToolRequests += count
+	stats.ToolRequestsSkipped += count
+	stats.ToolErrors += count
+	if reason.FailureKind == "" {
+		return
+	}
+	if stats.ToolFailureByKind == nil {
+		stats.ToolFailureByKind = make(map[string]int)
+	}
+	stats.ToolFailureByKind[reason.FailureKind] += count
 }
 
 func recordToolContextOmission(stats *sse.ToolRuntimeStats, omitted int) {

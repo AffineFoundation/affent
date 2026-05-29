@@ -13,7 +13,7 @@ func TestApplyTraceEventFiltersToolResultsByTurn(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}
 
-	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolRequest, json.RawMessage(`{"turn_id":"turn-1","call_id":"c1","tool":"shell","args":{}}`), "turn-1"); err != nil {
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolRequest, json.RawMessage(`{"turn_id":"turn-1","call_id":"c1","tool":"shell","args":{},"skipped":true,"skip_failure_kind":"loop_guard_no_budget"}`), "turn-1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolResult, json.RawMessage(`{"turn_id":"turn-2","call_id":"orphan","result":"wrong turn","exit_code":0}`), "turn-1"); err != nil {
@@ -28,6 +28,9 @@ func TestApplyTraceEventFiltersToolResultsByTurn(t *testing.T) {
 	}
 	if trace.Tools[0].TurnID != "turn-1" || trace.Tools[0].Result != "ok" {
 		t.Fatalf("tool result not stitched to matching turn: %+v", trace.Tools[0])
+	}
+	if !trace.Tools[0].Skipped || trace.Tools[0].SkipFailureKind != "loop_guard_no_budget" {
+		t.Fatalf("skipped request metadata not parsed: %+v", trace.Tools[0])
 	}
 }
 
@@ -71,10 +74,10 @@ func TestApplyTraceEventAggregatesDiskParsedTurnStats(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}
 
-	if done, err := applyTraceEvent(&trace, pending, sse.TypeTurnEnd, json.RawMessage(`{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":2,"tool_errors":1,"tool_failure_by_kind":{"invalid_args":1},"memory_updates":1}}`), ""); err != nil || !done {
+	if done, err := applyTraceEvent(&trace, pending, sse.TypeTurnEnd, json.RawMessage(`{"turn_id":"turn-1","reason":"completed","tool_stats":{"tool_requests":2,"tool_requests_admitted":2,"tool_errors":1,"tool_failure_by_kind":{"invalid_args":1},"memory_updates":1}}`), ""); err != nil || !done {
 		t.Fatalf("first turn.end done=%t err=%v", done, err)
 	}
-	if done, err := applyTraceEvent(&trace, pending, sse.TypeTurnEnd, json.RawMessage(`{"turn_id":"turn-2","reason":"completed","tool_stats":{"tool_requests":3,"tool_errors":2,"tool_failure_by_kind":{"loop_guard_no_budget":2},"session_search_calls":1}}`), ""); err != nil || !done {
+	if done, err := applyTraceEvent(&trace, pending, sse.TypeTurnEnd, json.RawMessage(`{"turn_id":"turn-2","reason":"completed","tool_stats":{"tool_requests":3,"tool_requests_admitted":1,"tool_requests_skipped":2,"tool_errors":2,"tool_failure_by_kind":{"loop_guard_no_budget":2},"session_search_calls":1}}`), ""); err != nil || !done {
 		t.Fatalf("second turn.end done=%t err=%v", done, err)
 	}
 
@@ -82,6 +85,8 @@ func TestApplyTraceEventAggregatesDiskParsedTurnStats(t *testing.T) {
 		t.Fatalf("TurnEndReason = %q, want completed", trace.TurnEndReason)
 	}
 	if trace.ToolStats.ToolRequests != 5 ||
+		trace.ToolStats.ToolRequestsAdmitted != 3 ||
+		trace.ToolStats.ToolRequestsSkipped != 2 ||
 		trace.ToolStats.ToolErrors != 3 ||
 		trace.ToolStats.MemoryUpdates != 1 ||
 		trace.ToolStats.SessionSearchCalls != 1 {

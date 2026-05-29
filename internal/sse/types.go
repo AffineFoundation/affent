@@ -217,6 +217,13 @@ type ToolRequestPayload struct {
 	Canonicalized       bool     `json:"canonicalized,omitempty"`
 	ArgsRepaired        bool     `json:"args_repaired,omitempty"`
 	RepairNotes         []string `json:"repair_notes,omitempty"`
+	// Skipped marks protocol placeholder requests that were not admitted
+	// to runtime dispatch because the turn was cancelled, exhausted a
+	// budget, or a guard forced a no-tool continuation. These events keep
+	// the conversation protocol consistent while allowing UIs/evals to
+	// distinguish model-emitted calls from admitted runtime work.
+	Skipped         bool   `json:"skipped,omitempty"`
+	SkipFailureKind string `json:"skip_failure_kind,omitempty"`
 	// Delegation, when set, classifies this tool call as a bounded
 	// child-Loop delegation. Nil for normal tools.
 	Delegation *DelegationMeta `json:"delegation,omitempty"`
@@ -447,6 +454,8 @@ type ContextCompactPayload struct {
 
 type ToolRuntimeStats struct {
 	ToolRequests          int            `json:"tool_requests,omitempty"`
+	ToolRequestsAdmitted  int            `json:"tool_requests_admitted,omitempty"`
+	ToolRequestsSkipped   int            `json:"tool_requests_skipped,omitempty"`
 	ToolNameCanonicalized int            `json:"tool_name_canonicalized,omitempty"`
 	ToolArgsRepaired      int            `json:"tool_args_repaired,omitempty"`
 	ToolRepairCalls       int            `json:"tool_repair_calls,omitempty"`

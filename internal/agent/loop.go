@@ -1144,8 +1144,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				return true, "", nil
 			}
 			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, nextSkippedReason)
-			toolStats.ToolRequests += skipped
-			toolStats.ToolErrors += skipped
+			recordSkippedToolRequests(&toolStats, skipped, nextSkippedReason)
 			nextPrompt = forceNoToolsFinalPrompt
 			nextSkippedReason = skippedToolResultReason{
 				Message:     "(tools are disabled; final no-tool answer requested)",
@@ -1259,13 +1258,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 						finishedNaturally = true
 						break
 					}
-					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, skippedToolResultReason{
+					skipReason := skippedToolResultReason{
 						Message:     "(previous answer was truncated; final no-tool answer requested)",
 						FailureKind: "final_answer_truncated",
 						Next:        "produce a concise final answer from the evidence already gathered without requesting tools",
-					})
-					toolStats.ToolRequests += skipped
-					toolStats.ToolErrors += skipped
+					}
+					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, skipReason)
+					recordSkippedToolRequests(&toolStats, skipped, skipReason)
 				}
 				endReason = sse.TurnEndMaxTurns
 				break
@@ -1286,13 +1285,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 						finishedNaturally = true
 						break
 					}
-					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, skippedToolResultReason{
+					skipReason := skippedToolResultReason{
 						Message:     "(previous response was process narration; final no-tool answer requested)",
 						FailureKind: "final_answer_process_narration",
 						Next:        "produce a user-facing final answer from the evidence already gathered without requesting tools",
-					})
-					toolStats.ToolRequests += skipped
-					toolStats.ToolErrors += skipped
+					}
+					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, skipReason)
+					recordSkippedToolRequests(&toolStats, skipped, skipReason)
 				}
 				endReason = sse.TurnEndMaxTurns
 				break
@@ -1317,8 +1316,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		if forceNoToolsForInputBudget() {
 			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, forceNoToolsReason)
-			toolStats.ToolRequests += skipped
-			toolStats.ToolErrors += skipped
+			recordSkippedToolRequests(&toolStats, skipped, forceNoToolsReason)
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
 				l.maybeCompactForBudgetPressure(ctx, turnID)
 				done, reason, err := runBudgetFinal(forceNoToolsPrompt, forceNoToolsReason)
@@ -1336,8 +1334,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		if forceNoToolsNext {
 			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, forceNoToolsReason)
-			toolStats.ToolRequests += skipped
-			toolStats.ToolErrors += skipped
+			recordSkippedToolRequests(&toolStats, skipped, forceNoToolsReason)
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
 				done, reason, err := runBudgetFinal(forceNoToolsFinalPrompt, forceNoToolsReason)
 				if err != nil {
@@ -1353,13 +1350,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			break
 		}
 		if toolRounds >= steps {
-			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, skippedToolResultReason{
+			skipReason := skippedToolResultReason{
 				Message:     "(max_turns reached before this tool ran)",
 				FailureKind: "loop_guard_no_budget",
 				Next:        "answer from the evidence already gathered or continue in a new turn with a smaller next action",
-			})
-			toolStats.ToolRequests += skipped
-			toolStats.ToolErrors += skipped
+			}
+			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, skipReason)
+			recordSkippedToolRequests(&toolStats, skipped, skipReason)
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
 				done, reason, err := runBudgetFinal(maxTurnsFinalPrompt, skippedToolResultReason{
 					Message:     "(max_turns reached; final no-tool answer requested)",
@@ -1383,13 +1380,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		// conversation, then loop back to ask the model for the next step.
 		for i, tc := range final.Final.ToolCalls {
 			if maxToolCalls := l.maxToolCallsForTurn(opts); maxToolCalls > 0 && toolCallsUsed >= maxToolCalls {
-				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], skippedToolResultReason{
+				skipReason := skippedToolResultReason{
 					Message:     "(tool call budget reached before this tool ran)",
 					FailureKind: "loop_guard_no_budget",
 					Next:        "answer from the evidence already gathered or continue in a new turn with fewer tool calls",
-				})
-				toolStats.ToolRequests += skipped
-				toolStats.ToolErrors += skipped
+				}
+				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], skipReason)
+				recordSkippedToolRequests(&toolStats, skipped, skipReason)
 				toolBudgetExhausted = true
 				break
 			}
@@ -1415,13 +1412,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				// IDs are already non-empty (ensureToolCallIDs ran
 				// before persistence in consumeAndPersist) so we can
 				// use skipped.ID directly without the old fallback.
-				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], skippedToolResultReason{
+				skipReason := skippedToolResultReason{
 					Message:     "(cancelled by user before this tool ran)",
 					FailureKind: "cancelled",
 					Next:        "stop tool work and wait for the next user instruction",
-				})
-				toolStats.ToolRequests += skipped
-				toolStats.ToolErrors += skipped
+				}
+				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], skipReason)
+				recordSkippedToolRequests(&toolStats, skipped, skipReason)
 				break
 			}
 			callID := tc.ID
@@ -1481,7 +1478,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				originalArgsSummary = summarizeOriginalToolArgs(tc.Function.Arguments)
 				originalArgsSummary = redactSecretValues(originalArgsSummary, l.SecretValuesProvider)
 			}
-			toolStats.ToolRequests++
+			recordAdmittedToolRequest(&toolStats)
 			argsView := toolRequestArgsEventViewWithSecrets(args, l.SecretValuesProvider)
 			// Classify delegations once per dispatch and stamp the result
 			// on both the request and the eventual result event. Keeps
@@ -1689,8 +1686,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			recordToolFailureKind(&toolStats, toolName, result, !outcomeOK)
 			if stopToolBatchForCalibration {
 				if skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i+1:], forceNoToolsReason); skipped > 0 {
-					toolStats.ToolRequests += skipped
-					toolStats.ToolErrors += skipped
+					recordSkippedToolRequests(&toolStats, skipped, forceNoToolsReason)
 				}
 				break
 			}
@@ -2504,6 +2500,8 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, reason 
 			ArgsCapBytes:     argsView.CapBytes,
 			ArgsTruncated:    argsView.Truncated,
 			ArgsOmittedBytes: argsView.OmittedBytes,
+			Skipped:          true,
+			SkipFailureKind:  reason.FailureKind,
 			Delegation:       delegation,
 		})
 		skippedResultPayload := toolResultEventPayloadForTurn(turnID, callID, 1, content)

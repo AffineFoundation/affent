@@ -184,6 +184,9 @@ func timelineMetricsSummary(res BatchResult) string {
 		fmt.Sprintf("loop_guard=%d", res.ToolStats.LoopGuardInterventions),
 		fmt.Sprintf("forced_no_tools=%d", res.ToolStats.ForcedNoTools),
 	}
+	if res.ToolStats.ToolRequestsAdmitted > 0 || res.ToolStats.ToolRequestsSkipped > 0 {
+		parts = append(parts, fmt.Sprintf("tool_admitted=%d,skipped=%d", res.ToolStats.ToolRequestsAdmitted, res.ToolStats.ToolRequestsSkipped))
+	}
 	if res.ToolStats.SourceAccessResults > 0 ||
 		res.ToolStats.SourceAccessVerified > 0 ||
 		res.ToolStats.SourceAccessNetwork > 0 ||

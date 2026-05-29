@@ -736,13 +736,20 @@ func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string
 
 func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
 	budget := effectiveToolCallBudget(res)
-	if budget <= 0 || res.LoopTurnCheckpoints.MaxToolRequests <= budget {
+	observed := res.LoopTurnCheckpoints.MaxToolRequests
+	if res.ToolStats.ToolRequestsAdmitted > 0 || res.ToolStats.ToolRequestsSkipped > 0 {
+		observed = res.ToolStats.ToolRequestsAdmitted
+	}
+	if budget <= 0 || observed <= budget {
 		return nil, false
 	}
 	counts := map[string]int{
-		"max_tool_requests": res.LoopTurnCheckpoints.MaxToolRequests,
+		"max_tool_requests": observed,
 		"tool_call_budget":  budget,
 		"checkpoints":       res.LoopTurnCheckpoints.Count,
+	}
+	if res.ToolStats.ToolRequestsSkipped > 0 {
+		counts["skipped_tool_requests"] = res.ToolStats.ToolRequestsSkipped
 	}
 	if res.LoopTurnCheckpoints.MaxInputTokens > 0 {
 		counts["max_input_tokens"] = res.LoopTurnCheckpoints.MaxInputTokens

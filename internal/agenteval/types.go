@@ -263,6 +263,10 @@ type ToolCall struct {
 	// RepairNotes are short runtime diagnostics explaining
 	// canonicalization or argument repair.
 	RepairNotes []string
+	// Skipped marks runtime protocol placeholders that were not admitted
+	// to tool dispatch.
+	Skipped         bool
+	SkipFailureKind string
 	// Result is the tool output carried by the tool.result event. It may
 	// be clipped by the runtime's event cap; inspect ResultTruncated and
 	// the byte counters before treating it as complete.
@@ -319,6 +323,8 @@ type ToolCall struct {
 
 type ToolRuntimeStats struct {
 	ToolRequests               int
+	ToolRequestsAdmitted       int
+	ToolRequestsSkipped        int
 	ToolNameCanonicalized      int
 	ToolArgsRepaired           int
 	ToolRepairCalls            int
@@ -839,6 +845,9 @@ func loopProtocolFreshStartSetup(call ToolCall) bool {
 }
 
 func loopProtocolSetupSkippedTool(call ToolCall) bool {
+	if call.Skipped {
+		return true
+	}
 	return call.ExitCode != 0 && strings.Contains(call.Result, "calibration question required before more tools")
 }
 

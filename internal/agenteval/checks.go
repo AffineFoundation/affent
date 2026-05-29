@@ -2058,6 +2058,8 @@ func FinalPlanCompleted() Check {
 
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"tool_requests":                 func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
+	"tool_requests_admitted":        func(s ToolRuntimeStats) int64 { return int64(s.ToolRequestsAdmitted) },
+	"tool_requests_skipped":         func(s ToolRuntimeStats) int64 { return int64(s.ToolRequestsSkipped) },
 	"tool_name_canonicalized":       func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
 	"tool_args_repaired":            func(s ToolRuntimeStats) int64 { return int64(s.ToolArgsRepaired) },
 	"tool_repair_calls":             func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairCalls) },
