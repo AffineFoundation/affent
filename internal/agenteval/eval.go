@@ -180,6 +180,7 @@ type BatchScenario struct {
 	ForbiddenUserMessageModes                      []string
 	RequiredTaskStateRequestMode                   string
 	RequiredTaskStateRequestSource                 string
+	RequiredTaskStateScheduleID                    string
 	RequiredTaskStateScheduleKind                  string
 	RequiredConversationRepairStatsAtLeast         map[string]int
 	RequiredConversationRepairKinds                map[string]int
@@ -438,6 +439,7 @@ type DebugScenarioExpectations struct {
 	ForbiddenUserMessageModes                      []string                              `json:"forbidden_user_message_modes,omitempty"`
 	RequiredTaskStateRequestMode                   string                                `json:"required_task_state_request_mode,omitempty"`
 	RequiredTaskStateRequestSource                 string                                `json:"required_task_state_request_source,omitempty"`
+	RequiredTaskStateScheduleID                    string                                `json:"required_task_state_schedule_id,omitempty"`
 	RequiredTaskStateScheduleKind                  string                                `json:"required_task_state_schedule_kind,omitempty"`
 	RequiredConversationRepairStatsAtLeast         map[string]int                        `json:"required_conversation_repair_stats_at_least,omitempty"`
 	RequiredConversationRepairKinds                map[string]int                        `json:"required_conversation_repair_kinds,omitempty"`
@@ -519,7 +521,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 			}
 		}
 	}
-	if strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
+	if strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleID) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
 		caps["session"] = true
 		caps["trace"] = true
 	}
@@ -641,7 +643,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	for stat := range exp.RequiredToolStatsAtLeast {
 		addExpectationStatCapabilities(caps, stat)
 	}
-	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 || len(exp.ForbiddenUserMessageModes) > 0 || strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
+	if len(exp.RequiredTraceEventCounts) > 0 || len(exp.RequiredUserMessageModes) > 0 || len(exp.ForbiddenUserMessageModes) > 0 || strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" || strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleID) != "" || strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
 		caps["trace"] = true
 	}
 	if len(exp.RequiredConversationRepairStatsAtLeast) > 0 || len(exp.RequiredConversationRepairKinds) > 0 {
@@ -2185,6 +2187,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ForbiddenUserMessageModes:                      append([]string(nil), s.ForbiddenUserMessageModes...),
 		RequiredTaskStateRequestMode:                   strings.TrimSpace(s.RequiredTaskStateRequestMode),
 		RequiredTaskStateRequestSource:                 strings.TrimSpace(s.RequiredTaskStateRequestSource),
+		RequiredTaskStateScheduleID:                    strings.TrimSpace(s.RequiredTaskStateScheduleID),
 		RequiredTaskStateScheduleKind:                  strings.TrimSpace(s.RequiredTaskStateScheduleKind),
 		RequiredConversationRepairStatsAtLeast:         cloneStringIntMap(s.RequiredConversationRepairStatsAtLeast),
 		RequiredConversationRepairKinds:                cloneStringIntMap(s.RequiredConversationRepairKinds),
@@ -3379,6 +3382,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if source := strings.TrimSpace(scenario.RequiredTaskStateRequestSource); source != "" {
 		checks = append(checks, TaskStateRequestSourceIs(source))
+	}
+	if id := strings.TrimSpace(scenario.RequiredTaskStateScheduleID); id != "" {
+		checks = append(checks, TaskStateScheduleIDIs(id))
 	}
 	if kind := strings.TrimSpace(scenario.RequiredTaskStateScheduleKind); kind != "" {
 		checks = append(checks, TaskStateScheduleKindIs(kind))

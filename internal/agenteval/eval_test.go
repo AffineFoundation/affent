@@ -108,6 +108,7 @@ func TestExpectationCapabilityNamesIgnoresMaxOnlyToolCaps(t *testing.T) {
 func TestExpectationCapabilityNamesIncludesTaskStateProvenance(t *testing.T) {
 	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
 		RequiredTaskStateRequestSource: "schedule",
+		RequiredTaskStateScheduleID:    "sched_clamp",
 		RequiredTaskStateScheduleKind:  "checkin",
 	})
 	want := []string{"session", "trace"}
@@ -1536,6 +1537,10 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolStatsAtLeast: map[string]int{
 			"memory_updates": 1,
 		},
+		RequiredTaskStateRequestMode:   "execute_plan",
+		RequiredTaskStateRequestSource: "schedule",
+		RequiredTaskStateScheduleID:    "sched_clamp",
+		RequiredTaskStateScheduleKind:  "checkin",
 		RequiredContextInjectionSources: map[string]int{
 			"final_evidence_digest": 1,
 		},
@@ -1628,6 +1633,10 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_failure_kind_at_most:loop_guard_call_cap:0",
 		"tool_stats_at_least:memory_updates:1",
 		"memory_update_metadata_at_least:1",
+		"task_state_request_mode:execute_plan",
+		"task_state_request_source:schedule",
+		"task_state_schedule_id:sched_clamp",
+		"task_state_schedule_kind:checkin",
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",

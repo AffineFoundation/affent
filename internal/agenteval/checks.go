@@ -197,6 +197,23 @@ func TaskStateScheduleKindIs(kind string) Check {
 	}
 }
 
+func TaskStateScheduleIDIs(id string) Check {
+	id = strings.TrimSpace(id)
+	return Check{
+		Name: fmt.Sprintf("task_state_schedule_id:%s", id),
+		Eval: func(t Trace) CheckResult {
+			got := strings.TrimSpace(t.TaskState.ScheduleID)
+			if got == id {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("schedule_id=%s", got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected task_state schedule_id %q, got %q", id, got),
+			}
+		},
+	}
+}
+
 func normalizeTaskRequestMode(mode string) string {
 	mode = strings.TrimSpace(mode)
 	if mode == "" {
