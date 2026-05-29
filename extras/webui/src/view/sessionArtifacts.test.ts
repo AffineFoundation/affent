@@ -19,7 +19,7 @@ import {
 } from "./sessionArtifacts";
 
 describe("sessionArtifacts", () => {
-  it("deduplicates artifacts across turns and summarizes their size", () => {
+  it("deduplicates workbench-visible artifacts across turns and summarizes their size", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       {
@@ -28,8 +28,8 @@ describe("sessionArtifacts", () => {
         data: {
           turn_id: "t1",
           call_id: "c1",
-          tool: "web_fetch",
-          args: { url: "https://example.invalid" },
+          tool: "shell",
+          args: { command: "cat big.log" },
           args_truncated: false,
           args_bytes: 32,
           args_omitted_bytes: 0,
@@ -61,8 +61,8 @@ describe("sessionArtifacts", () => {
         data: {
           turn_id: "t2",
           call_id: "c2",
-          tool: "web_fetch",
-          args: { url: "https://example.invalid" },
+          tool: "shell",
+          args: { command: "cat big.log" },
           args_truncated: false,
           args_bytes: 32,
           args_omitted_bytes: 0,
@@ -94,7 +94,7 @@ describe("sessionArtifacts", () => {
     expect(buildWorkbenchArtifacts(session)).toHaveLength(1);
     expect(sessionArtifactLabel(session)).toBe("1 file (8 KiB, 1 MiB omitted)");
     expect(artifactKind(artifacts[0])).toBe("full_output");
-    expect(artifactLineageLabel(artifacts[0])).toBe("turn 1 · web_fetch · call 1");
+    expect(artifactLineageLabel(artifacts[0])).toBe("turn 1 · shell · call 1");
     expect(artifactOutcomeLabel(artifacts[0])).toBe("passed · exit 0 · 10 ms");
     expect(artifactFailed(artifacts[0])).toBe(false);
     expect(artifactReviewSummary(artifacts)).toBe("1 full output");
@@ -104,7 +104,7 @@ describe("sessionArtifacts", () => {
     ]));
     expect(artifactSourceGroups(artifacts)).toEqual([
       expect.objectContaining({
-        label: "web_fetch",
+        label: "shell: cat big.log",
         count: 1,
         kindLabel: "Full output",
         turns: "turn 1",
@@ -114,8 +114,8 @@ describe("sessionArtifacts", () => {
     expect(artifactEvidenceText(artifacts[0])).toBe(
       [
         "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
-        "Source: web_fetch",
-        "Origin: turn 1 · web_fetch · call 1",
+        "Source: cat big.log",
+        "Origin: turn 1 · shell · call 1",
         "Size: (8 KiB, cap 256 KiB, 1 MiB omitted)",
         "Full output available as artifact",
         "Outcome: passed · exit 0 · 10 ms",
@@ -123,6 +123,48 @@ describe("sessionArtifacts", () => {
       ].join("\n"),
     );
     expect(artifactEvidenceDraft(artifacts[0])).toContain("Reference this artifact in the next step:\nArtifact evidence");
+  });
+
+  it("keeps raw web fetch capture files out of artifact summaries", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "web_fetch",
+          args: { url: "https://example.invalid" },
+          args_truncated: false,
+          args_bytes: 32,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 65536,
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 10,
+          result_summary: "saved source capture",
+          result: "saved source capture",
+          result_truncated: true,
+          result_bytes: 8192,
+          result_omitted_bytes: 1048576,
+          result_cap_bytes: 262144,
+          result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    expect(buildSessionArtifacts(session)).toEqual([]);
+    expect(buildWorkbenchArtifacts(session)).toEqual([]);
+    expect(sessionArtifactLabel(session)).toBeUndefined();
   });
 
   it("keeps deliverable artifacts and full-output files in Workbench", () => {

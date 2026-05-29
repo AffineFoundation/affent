@@ -433,8 +433,8 @@ describe("SessionList", () => {
           data: {
             turn_id: "t1",
             call_id: "c1",
-            tool: "web_fetch",
-            args: { url: "https://example.invalid" },
+            tool: "shell",
+            args: { command: "cat repo-report.log" },
             args_truncated: false,
             args_bytes: 32,
             args_omitted_bytes: 0,

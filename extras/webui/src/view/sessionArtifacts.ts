@@ -1,5 +1,6 @@
 import type { SessionState } from "../store/sessionState";
 import { formatByteCount } from "./byteFormat";
+import { showsWorkbenchArtifact } from "./toolResultDisplay";
 import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, type TurnArtifact } from "./turnArtifacts";
 
 export type SessionArtifactKind = "deliverable" | "full_output";
@@ -47,6 +48,7 @@ export function buildSessionArtifacts(session: SessionState): TurnArtifact[] {
   const artifacts: TurnArtifact[] = [];
   session.turns.forEach((turn, turnIndex) => {
     for (const artifact of buildTurnArtifacts(turn, { turnNumber: turnIndex + 1 })) {
+      if (!showsWorkbenchArtifact(artifact)) continue;
       if (seen.has(artifact.path)) continue;
       seen.add(artifact.path);
       artifacts.push(artifact);

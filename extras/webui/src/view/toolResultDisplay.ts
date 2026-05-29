@@ -7,6 +7,10 @@ export function showsChatArtifact(source: ToolResultSource): boolean {
   return !isRawSourceCapture(source);
 }
 
+export function showsWorkbenchArtifact(source: ToolResultSource): boolean {
+  return !isRawSourceCapture(source);
+}
+
 export function showsResultStorageChrome(source: ToolResultSource): boolean {
   return !isRawSourceCapture(source);
 }
