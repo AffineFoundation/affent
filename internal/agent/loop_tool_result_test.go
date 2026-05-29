@@ -42,18 +42,29 @@ func containsString(values []string, want string) bool {
 	return false
 }
 
-func TestSkippedToolResultContentAddsNoBudgetFailureKind(t *testing.T) {
-	cases := []string{
-		"(max_turns reached before this tool ran)",
-		"(tool call budget reached before this tool ran)",
+func TestSkippedToolResultReasonContentAddsFailureKindAndNext(t *testing.T) {
+	cases := []skippedToolResultReason{
+		{
+			Message:     "(max_turns reached before this tool ran)",
+			FailureKind: "loop_guard_no_budget",
+			Next:        "answer from gathered evidence",
+		},
+		{
+			Message:     "(tool result context budget exhausted; final no-tool answer requested)",
+			FailureKind: "tool_context_budget_exhausted",
+			Next:        "answer from verified evidence already collected",
+		},
 	}
 	for _, input := range cases {
-		got := skippedToolResultContent(input)
-		if !strings.Contains(got, input) {
+		got := input.content()
+		if !strings.Contains(got, input.Message) {
 			t.Fatalf("skipped content lost original message: %q", got)
 		}
-		if !strings.Contains(got, "Failure: kind=loop_guard_no_budget") {
-			t.Fatalf("skipped content missing no-budget failure kind: %q", got)
+		if !strings.Contains(got, "Failure: kind="+input.FailureKind) {
+			t.Fatalf("skipped content missing failure kind: %q", got)
+		}
+		if !strings.Contains(got, "Next: "+input.Next) {
+			t.Fatalf("skipped content missing next step: %q", got)
 		}
 		if strings.Count(got, "Failure: kind=") != 1 {
 			t.Fatalf("skipped content duplicated failure kind: %q", got)
@@ -61,7 +72,7 @@ func TestSkippedToolResultContentAddsNoBudgetFailureKind(t *testing.T) {
 	}
 
 	alreadyStructured := "(max_turns reached before this tool ran)\nFailure: kind=loop_guard_no_budget"
-	if got := skippedToolResultContent(alreadyStructured); got != alreadyStructured {
+	if got := (skippedToolResultReason{Message: alreadyStructured, FailureKind: "other"}).content(); got != alreadyStructured {
 		t.Fatalf("already structured content changed: %q", got)
 	}
 }
@@ -870,7 +881,8 @@ func TestRunTurn_ForcesNoToolsAfterRepeatedContextBudgetExhaustion(t *testing.T)
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(200)
 		fl := w.(http.Flusher)
-		if atomic.AddInt32(&calls, 1) == 1 {
+		callNum := atomic.AddInt32(&calls, 1)
+		if callNum == 1 {
 			lines := []string{
 				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://example.com/large\"}"}},{"index":1,"id":"c2","type":"function","function":{"name":"browser_snapshot","arguments":"{}"}}]},"finish_reason":null}]}`,
 				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
@@ -882,7 +894,19 @@ func TestRunTurn_ForcesNoToolsAfterRepeatedContextBudgetExhaustion(t *testing.T)
 			}
 			return
 		}
-		secondReq = body
+		if callNum == 2 {
+			secondReq = body
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c3","type":"function","function":{"name":"browser_snapshot","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
 		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"final\"},\"finish_reason\":\"stop\"}]}\n\n"))
 		w.Write([]byte("data: [DONE]\n\n"))
 		fl.Flush()
@@ -927,12 +951,22 @@ func TestRunTurn_ForcesNoToolsAfterRepeatedContextBudgetExhaustion(t *testing.T)
 		t.Fatal(err)
 	}
 
+	sawContextBudgetFailureKind := false
 	deadline := time.After(10 * time.Second)
 	for {
 		select {
 		case ev, ok := <-events:
 			if !ok {
 				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type == sse.TypeToolResult {
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.FailureKind == "tool_context_budget_exhausted" && p.ExitCode != 0 {
+					sawContextBudgetFailureKind = true
+				}
 			}
 			if ev.Type != sse.TypeTurnEnd {
 				continue
@@ -949,6 +983,9 @@ func TestRunTurn_ForcesNoToolsAfterRepeatedContextBudgetExhaustion(t *testing.T)
 			}
 			if p.ToolStats == nil || p.ToolStats.ForcedNoTools != 1 || p.ToolStats.ToolContextTruncated < 2 {
 				t.Fatalf("expected forced no-tools after repeated context truncation, got %+v", p.ToolStats)
+			}
+			if !sawContextBudgetFailureKind {
+				t.Fatal("skipped tool result should carry tool_context_budget_exhausted failure kind")
 			}
 			if got := atomic.LoadInt32(&dispatches); got != 2 {
 				t.Fatalf("only the first two budget-exhausting tools should run, got %d", got)

@@ -199,7 +199,7 @@ func readWorkspaceTextForContext(ctx context.Context, deps BuiltinDeps, path str
 	f, err := os.Open(full)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", false, fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry file_context", displayFileToolPath(deps, path), parentForToolPath(deps, path))
+			return "", false, fileNotFoundToolError(deps, "file_context", path)
 		}
 		return "", false, err
 	}

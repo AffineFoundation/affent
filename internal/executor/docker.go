@@ -268,10 +268,10 @@ func (d *DockerExecExecutor) EditFile(ctx context.Context, path, oldStr, newStr 
 	}
 	n := strings.Count(body, oldStr)
 	if n == 0 {
-		return 0, fmt.Errorf("old string not found in %s", path)
+		return 0, fmt.Errorf("%w in %s", ErrEditNoMatch, path)
 	}
 	if n > 1 && !replaceAll {
-		return n, fmt.Errorf("old string occurs %d times in %s; pass replace_all=true or include more context to make it unique", n, path)
+		return n, fmt.Errorf("%w: old string occurs %d times in %s; pass replace_all=true or include more context to make it unique", ErrEditAmbiguousMatch, n, path)
 	}
 	var updated string
 	if replaceAll {

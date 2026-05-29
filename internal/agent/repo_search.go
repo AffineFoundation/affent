@@ -105,7 +105,7 @@ func repoSearchTool(deps BuiltinDeps) *Tool {
 			info, err := os.Stat(root)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					return "", fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find a valid path, then retry repo_search", displayFileToolPath(deps, p.Path), parentForToolPath(deps, p.Path))
+					return "", fileNotFoundToolError(deps, "repo_search", p.Path)
 				}
 				return "", err
 			}

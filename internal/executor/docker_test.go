@@ -111,6 +111,8 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	// Edit non-unique without replace_all should error.
 	if _, err := d.EditFile(ctx, "/work/notes/x.txt", "a", "A", false); err == nil {
 		t.Error("expected non-unique edit without replace_all to fail")
+	} else if !errors.Is(err, ErrEditAmbiguousMatch) {
+		t.Fatalf("non-unique edit error should wrap ErrEditAmbiguousMatch, got %v", err)
 	}
 	// Edit refuses large files before streaming them back to the host
 	// process. Use a sparse file so the test exercises size handling

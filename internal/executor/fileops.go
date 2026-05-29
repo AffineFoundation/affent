@@ -1,6 +1,17 @@
 package executor
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var (
+	// ErrEditNoMatch is returned by FileOps.EditFile when old text is absent.
+	ErrEditNoMatch = errors.New("edit old string not found")
+	// ErrEditAmbiguousMatch is returned by FileOps.EditFile when old text is
+	// not unique and replaceAll was not requested.
+	ErrEditAmbiguousMatch = errors.New("edit old string occurs multiple times")
+)
 
 // FileOps is an optional extension implemented by Executors that can
 // expose file-system primitives backed by the same isolation boundary

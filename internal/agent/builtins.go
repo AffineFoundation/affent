@@ -978,13 +978,21 @@ const maxFileToolPathBytes = 4096
 
 func validateFileToolPath(tool, path string) error {
 	if len(path) > maxFileToolPathBytes {
-		return fmt.Errorf("path is %d bytes; %s supports paths up to %d bytes\nNext: retry %s with a shorter workspace-relative path, or use shell to generate deeply nested artifacts inside the workspace", len(path), tool, maxFileToolPathBytes, tool)
+		return structuredToolError(
+			fmt.Sprintf("path is %d bytes; %s supports paths up to %d bytes", len(path), tool, maxFileToolPathBytes),
+			"invalid_args",
+			fmt.Sprintf("retry %s with a shorter workspace-relative path, or use shell to generate deeply nested artifacts inside the workspace", tool),
+		)
 	}
 	return nil
 }
 
 func requiredFileToolPathError(tool string) error {
-	return fmt.Errorf("path is required\nNext: retry %s with a non-empty workspace path, or call list_files on . to discover available paths", tool)
+	return structuredToolError(
+		"path is required",
+		"invalid_args",
+		fmt.Sprintf("retry %s with a non-empty workspace path, or call list_files on . to discover available paths", tool),
+	)
 }
 
 func readFileTool(deps BuiltinDeps) *Tool {
@@ -1036,7 +1044,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			f, err := os.Open(full)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					return "", fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry read_file", displayFileToolPath(deps, p.Path), parentForToolPath(deps, p.Path))
+					return "", fileNotFoundToolError(deps, "read_file", p.Path)
 				}
 				return "", err
 			}
@@ -1122,6 +1130,47 @@ func parentForToolPath(deps BuiltinDeps, p string) string {
 	return parent
 }
 
+func structuredToolError(message, kind, next string) error {
+	return errors.New(structuredToolFailure(message, kind, next))
+}
+
+func structuredToolFailure(message, kind, next string) string {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "tool failed"
+	}
+	var b strings.Builder
+	b.WriteString(message)
+	if kind = strings.TrimSpace(kind); kind != "" && !strings.Contains(message, "Failure: kind=") {
+		b.WriteString("\nFailure: kind=")
+		b.WriteString(kind)
+	}
+	if next = strings.TrimSpace(next); next != "" && !strings.Contains(message, "\nNext:") {
+		b.WriteString("\nNext: ")
+		b.WriteString(next)
+	}
+	return b.String()
+}
+
+func fileNotFoundToolError(deps BuiltinDeps, tool, path string) error {
+	displayPath := displayFileToolPath(deps, path)
+	parent := parentForToolPath(deps, path)
+	var next string
+	switch tool {
+	case "read_file":
+		next = fmt.Sprintf("call list_files on %s or the workspace root to find the correct path, then retry read_file", parent)
+	case "list_files":
+		next = fmt.Sprintf("call list_files on %s or the workspace root to find an existing directory, then retry list_files with that path", parent)
+	case "edit_file":
+		next = fmt.Sprintf("call list_files on %s or the workspace root to find the correct path, then call read_file before retrying edit_file", parent)
+	case "file_context":
+		next = fmt.Sprintf("call list_files on %s or the workspace root to find the correct path, then retry file_context", parent)
+	default:
+		next = fmt.Sprintf("call list_files on %s or the workspace root to find the correct path, then retry %s", parent, tool)
+	}
+	return structuredToolError(fmt.Sprintf("%s not found", displayPath), "not_found", next)
+}
+
 func recoverableFileToolError(deps BuiltinDeps, tool, path string, err error) error {
 	if err == nil {
 		return nil
@@ -1131,27 +1180,18 @@ func recoverableFileToolError(deps BuiltinDeps, tool, path string, err error) er
 	}
 	displayPath := displayFileToolPath(deps, path)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, executor.ErrNotFoundInContainer) {
-		switch tool {
-		case "read_file":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry read_file", displayPath, parentForToolPath(deps, path))
-		case "list_files":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find an existing directory, then retry list_files with that path", displayPath, parentForToolPath(deps, path))
-		case "edit_file":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then call read_file before retrying edit_file", displayPath, parentForToolPath(deps, path))
-		case "file_context":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry file_context", displayPath, parentForToolPath(deps, path))
-		}
+		return fileNotFoundToolError(deps, tool, path)
 	}
 	msg := relativizeWorkspacePathsInText(err.Error(), deps.HostWorkspaceDir)
 	switch {
-	case tool == "edit_file" && strings.Contains(msg, "old string not found"):
-		return fmt.Errorf("%s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", msg, displayPath)
-	case tool == "edit_file" && strings.Contains(msg, "old string occurs"):
-		return fmt.Errorf("%s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", msg, displayPath)
+	case tool == "edit_file" && errors.Is(err, executor.ErrEditNoMatch):
+		return structuredToolError(msg, "edit_no_match", fmt.Sprintf("call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", displayPath))
+	case tool == "edit_file" && errors.Is(err, executor.ErrEditAmbiguousMatch):
+		return structuredToolError(msg, "edit_ambiguous_match", fmt.Sprintf("call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", displayPath))
 	case tool == "edit_file" && strings.Contains(msg, "supports files up to"):
-		return fmt.Errorf("%s\nNext: use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing", msg)
+		return structuredToolError(msg, "file_too_large", "use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing")
 	case strings.Contains(msg, "appears to be binary"):
-		return fmt.Errorf("%s\nNext: use shell with file/xxd/base64 on a targeted path, or choose a text file instead", msg)
+		return structuredToolError(msg, "binary_file", "use shell with file/xxd/base64 on a targeted path, or choose a text file instead")
 	}
 	return err
 }
@@ -1186,7 +1226,11 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 				return "", err
 			}
 			if len(p.Content) > MaxWriteFileBytes {
-				return "", fmt.Errorf("content is %d bytes; write_file supports content up to %d bytes\nNext: write large generated artifacts with a shell command inside the workspace/sandbox, or split the file into smaller chunks", len(p.Content), MaxWriteFileBytes)
+				return "", structuredToolError(
+					fmt.Sprintf("content is %d bytes; write_file supports content up to %d bytes", len(p.Content), MaxWriteFileBytes),
+					"invalid_args",
+					"write large generated artifacts with a shell command inside the workspace/sandbox, or split the file into smaller chunks",
+				)
 			}
 			if fo := fileOps(deps); fo != nil {
 				if err := fo.WriteFile(ctx, p.Path, p.Content); err != nil {
@@ -1237,7 +1281,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			}
 			p.Path = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Path))
 			if p.Path == "" || strings.TrimSpace(p.Old) == "" {
-				return "", errors.New("path and old are required\nNext: call read_file on the target file, copy the exact current text into old, then retry edit_file with a non-empty path")
+				return "", structuredToolError("path and old are required", "invalid_args", "call read_file on the target file, copy the exact current text into old, then retry edit_file with a non-empty path")
 			}
 			if err := validateFileToolPath("edit_file", p.Path); err != nil {
 				return "", err
@@ -1258,7 +1302,11 @@ func editFileTool(deps BuiltinDeps) *Tool {
 				return "", recoverableFileToolError(deps, "edit_file", p.Path, err)
 			}
 			if info.Size() > MaxEditFileBytes {
-				return "", fmt.Errorf("%s is %d bytes; edit_file supports files up to %d bytes\nNext: use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing", p.Path, info.Size(), MaxEditFileBytes)
+				return "", structuredToolError(
+					fmt.Sprintf("%s is %d bytes; edit_file supports files up to %d bytes", displayFileToolPath(deps, p.Path), info.Size(), MaxEditFileBytes),
+					"file_too_large",
+					"use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing",
+				)
 			}
 			raw, err := os.ReadFile(full)
 			if err != nil {
@@ -1268,10 +1316,10 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			n := strings.Count(body, p.Old)
 			displayPath := displayFileToolPath(deps, p.Path)
 			if n == 0 {
-				return "", fmt.Errorf("old string not found in %s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", displayPath, displayPath)
+				return "", structuredToolError(fmt.Sprintf("old string not found in %s", displayPath), "edit_no_match", fmt.Sprintf("call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", displayPath))
 			}
 			if n > 1 && !p.ReplaceAll {
-				return "", fmt.Errorf("old string occurs %d times in %s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", n, displayPath, displayPath)
+				return "", structuredToolError(fmt.Sprintf("old string occurs %d times in %s", n, displayPath), "edit_ambiguous_match", fmt.Sprintf("call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", displayPath))
 			}
 			var updated string
 			if p.ReplaceAll {
