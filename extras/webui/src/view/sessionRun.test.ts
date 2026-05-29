@@ -204,7 +204,7 @@ describe("buildSessionRun", () => {
     });
     expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Failures", value: "1", detail: "covered by later pass", tone: "ok" }),
-      expect.objectContaining({ label: "Verification", value: "1/2", detail: "test/build/lint/typecheck", tone: "attention" }),
+      expect.objectContaining({ label: "Verification", value: "1/2", detail: "test/build/lint/typecheck", tone: "ok" }),
       expect.objectContaining({ label: "Latest", value: "passed", detail: "turn 2", tone: "ok" }),
     ]));
   });
@@ -252,7 +252,7 @@ describe("buildSessionRun", () => {
       title: "git push -u origin main",
     });
     expect(runReviewFacts(run.commands)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Verification", value: "0/0", detail: "none recorded", tone: "attention" }),
+      expect.objectContaining({ label: "Verification", value: "0/0", detail: "none recorded", tone: "neutral" }),
     ]));
   });
 

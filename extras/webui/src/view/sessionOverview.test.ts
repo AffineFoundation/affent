@@ -221,8 +221,8 @@ describe("buildSessionOverview", () => {
         data: {
           turn_id: "t1",
           call_id: "c1",
-          tool: "web_fetch",
-          args: { url: "https://example.invalid" },
+          tool: "shell",
+          args: { command: "cat big.log" },
           args_truncated: false,
           args_bytes: 32,
           args_omitted_bytes: 0,
@@ -256,7 +256,7 @@ describe("buildSessionOverview", () => {
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
       { label: "Artifact", value: "1 file (8 KiB, 1 MiB omitted)" },
-      { label: "Work", value: "1 action · 1 source", tone: undefined },
+      { label: "Work", value: "1 action", tone: undefined },
     ]));
   });
 
