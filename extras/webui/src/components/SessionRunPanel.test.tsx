@@ -157,6 +157,7 @@ describe("SessionRunPanel", () => {
           commands: [
             { ...run.commands[0], turnNumber: 1, sequence: 1 },
             { ...run.commands[1], command: "npm test -- checkout.spec.ts", detail: "checkout spec passed", turnNumber: 2, sequence: 2 },
+            { command: "git push origin main", cwd: "extras/webui", status: "passed", turnNumber: 3, sequence: 3, exitCode: 0, detail: "push succeeded" },
           ],
         }}
       />,
@@ -167,12 +168,37 @@ describe("SessionRunPanel", () => {
     expect(screen.getByLabelText("Run review facts")).toHaveTextContent("recovered");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(screen.getByTestId("session-run-focus")).not.toHaveTextContent("git push origin main");
 
     await user.click(screen.getByRole("button", { name: "Inspect latest failure" }));
 
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Recovery needed");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.queryByTestId("session-run-list")).toBeNull();
+  });
+
+  it("keeps long command history compact until the user filters", async () => {
+    const user = userEvent.setup();
+    const commands = Array.from({ length: 13 }, (_, index) => ({
+      command: index === 0 ? "npm test -- smoke.spec.ts" : `echo command-${index}`,
+      cwd: "extras/webui",
+      status: "passed" as const,
+      turnNumber: 20 - index,
+      sequence: 20 - index,
+      exitCode: 0,
+      detail: index === 0 ? "smoke tests passed" : `command ${index} passed`,
+    }));
+
+    render(<SessionRunPanel defaultOpen run={{ summary: "13 passed commands", detail: "13 passed", commands }} />);
+
+    expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
+    expect(screen.getByTestId("session-run-history")).toHaveTextContent("8 shown");
+    expect(screen.getByTestId("session-run-history")).toHaveTextContent("4 more via search/filter");
+    expect(within(screen.getByTestId("session-run-history")).queryByRole("button", { name: "Copy command" })).toBeNull();
+
+    await user.click(within(screen.getByLabelText("Run filters")).getByRole("button", { name: /Passed/ }));
+    expect(screen.getByTestId("session-run-history")).toHaveTextContent("12 shown");
+    expect(screen.getByTestId("session-run-history")).not.toHaveTextContent("more via search/filter");
   });
 });
 

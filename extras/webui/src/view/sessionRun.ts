@@ -160,13 +160,21 @@ export function runFocusCommand(commands: readonly SessionRunCommand[]): Session
       tone: "warning",
     };
   }
+  const latestPassedVerification = latestCommand(commands, (command) => command.status === "passed" && isVerificationKind(runCommandKind(command)));
+  if (latestPassedVerification) {
+    return {
+      command: latestPassedVerification,
+      label: "Latest verification",
+      detail: latestPassedVerification.detail ?? "Most recent verification command passed.",
+      tone: "success",
+    };
+  }
   const latestPassed = commands.find((command) => command.status === "passed");
   if (latestPassed) {
-    const verification = isVerificationKind(runCommandKind(latestPassed));
     return {
       command: latestPassed,
-      label: verification ? "Latest verification" : "Latest command",
-      detail: latestPassed.detail ?? (verification ? "Most recent verification command passed." : "Most recent command passed."),
+      label: "Latest command",
+      detail: latestPassed.detail ?? "Most recent command passed.",
       tone: "success",
     };
   }

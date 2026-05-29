@@ -34,6 +34,9 @@ export function SessionRunPanel({
   const visibleCommands = trimmedQuery ? filteredCommands.filter((command) => runMatchesQuery(command, trimmedQuery)) : filteredCommands;
   const focus = runFocusCommand(visibleCommands);
   const historyCommands = focus ? visibleCommands.filter((command) => command !== focus.command) : visibleCommands;
+  const historyExpanded = filter !== "all" || Boolean(trimmedQuery);
+  const displayedHistoryCommands = historyExpanded ? historyCommands : historyCommands.slice(0, 8);
+  const hiddenHistoryCount = historyCommands.length - displayedHistoryCommands.length;
   const canInspectRecoveredFailure = !!latestFailedCommand && focus?.command !== latestFailedCommand;
   const quickCommands = runQuickCommands(run.commands, run.latestCommandCwd);
 
@@ -187,10 +190,13 @@ export function SessionRunPanel({
           <section className="session-run-history" data-testid="session-run-history" aria-label="Command history">
             <div className="session-run-history-head">
               <strong>Command history</strong>
-              <span>{historyCommands.length} {historyCommands.length === 1 ? "entry" : "entries"}</span>
+              <span>
+                {displayedHistoryCommands.length} shown
+                {hiddenHistoryCount > 0 ? ` · ${hiddenHistoryCount} more via search/filter` : ""}
+              </span>
             </div>
             <ol className="session-run-list" data-testid="session-run-list">
-              {historyCommands.map((command, index) => (
+              {displayedHistoryCommands.map((command, index) => (
                 <li key={`${command.turnNumber}:${index}:${command.command}`} className="session-run-item" data-status={command.status}>
                   <div className="session-run-main">
                     <strong title={command.command}>{commandLabel(command.command)}</strong>
@@ -200,8 +206,8 @@ export function SessionRunPanel({
                     {command.next ? <small>Next: {command.next}</small> : null}
                     {command.artifactPath ? <small title={command.artifactPath}>Output: {artifactLabel(command.artifactPath)}</small> : null}
                   </div>
-                  <span className="session-evidence-actions">
-                    <CopyButton label="Copy command" value={command.command} className="ghost-action" />
+                  {(command.artifactPath && onOpenArtifact) || (onRunCommand && command.status !== "passed") ? (
+                    <span className="session-evidence-actions">
                     {command.artifactPath && onOpenArtifact ? (
                       <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
                         Open command output
@@ -212,7 +218,8 @@ export function SessionRunPanel({
                         Rerun now
                       </button>
                     ) : null}
-                  </span>
+                    </span>
+                  ) : null}
                 </li>
               ))}
             </ol>
