@@ -1374,6 +1374,42 @@ func TestLoopRequestPressureKeepsExplicitTriggerTotalScoped(t *testing.T) {
 	}
 }
 
+func TestLoopRequestPressureScopesProviderAutoTrigger(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("OLD_CONTEXT ", 1200)},
+		{Role: "assistant", Content: "historical progress"},
+		{Role: "user", Content: "continue"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var toolDef ToolDef
+	toolDef.Type = "function"
+	toolDef.Function.Name = "pressure_tool"
+	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
+	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	compactor := &stagedPreRequestCompactor{}
+	loop := &Loop{
+		Conv:                          conv,
+		Events:                        make(chan sse.Event, 8),
+		ModelContextWindowTokens:      10_000,
+		CompactTriggerInputTokens:     500,
+		CompactTriggerInputTokensAuto: true,
+		Compactor:                     compactor,
+	}
+
+	loop.compactForRequestPressure(context.Background(), "turn-auto", []ToolDef{toolDef}, 0)
+	loop.compactForRequestPressure(context.Background(), "turn-auto-repeat", []ToolDef{toolDef}, 0)
+
+	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
+		t.Fatalf("compaction calls = %d, want provider-derived auto trigger to use compact-window scope", got)
+	}
+}
+
 func TestLoopRequestPressureRecompactsAfterScopedGrowth(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
 	if err != nil {

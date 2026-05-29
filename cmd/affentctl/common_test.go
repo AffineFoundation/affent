@@ -608,6 +608,9 @@ func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
 	if got.compactTriggerInputTokens != 104857 {
 		t.Fatalf("compactTriggerInputTokens = %d, want clamped default policy limit 104857", got.compactTriggerInputTokens)
 	}
+	if !got.compactTriggerInputTokensAuto {
+		t.Fatal("compactTriggerInputTokensAuto = false, want provider-derived auto compact limit")
+	}
 }
 
 func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
@@ -626,6 +629,9 @@ func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
 	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
 	if got.compactTriggerInputTokens != 75000 {
 		t.Fatalf("compactTriggerInputTokens = %d, want explicit 75%% policy limit 75000", got.compactTriggerInputTokens)
+	}
+	if !got.compactTriggerInputTokensAuto {
+		t.Fatal("compactTriggerInputTokensAuto = false, want provider-derived auto compact limit")
 	}
 }
 
