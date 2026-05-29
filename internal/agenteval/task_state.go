@@ -1,6 +1,7 @@
 package agenteval
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/taskstate"
@@ -44,6 +45,15 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 	}
 	if len(trace.RuntimeSurfaces) > 0 {
 		task.Sources = appendUniqueTaskString(task.Sources, "runtime_surface", taskStateMaxItems)
+	}
+	for _, compaction := range trace.ContextCompactions {
+		summary := traceContextCompactionSummary(compaction)
+		task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+			Source:  "context_compaction",
+			Summary: compactTaskStateSummary(summary),
+			TurnID:  compaction.TurnID,
+		})
+		task.Sources = appendUniqueTaskString(task.Sources, "context_compaction", taskStateMaxItems)
 	}
 	for _, tool := range trace.Tools {
 		task.AttemptedActions = appendTaskAction(task.AttemptedActions, TaskStateAction{
@@ -166,6 +176,31 @@ func traceTaskVerificationState(trace Trace) string {
 		}
 	}
 	return state
+}
+
+func traceContextCompactionSummary(c ContextCompaction) string {
+	var fields []string
+	reason := strings.TrimSpace(c.Reason)
+	if reason == "" {
+		reason = "threshold"
+	}
+	fields = append(fields, "reason="+reason)
+	if c.Reactive {
+		fields = append(fields, "reactive=true")
+	}
+	if c.RemovedMessages > 0 {
+		fields = append(fields, fmt.Sprintf("removed_messages=%d", c.RemovedMessages))
+	}
+	if c.ReducedBytes > 0 {
+		fields = append(fields, fmt.Sprintf("reduced_bytes=%d", c.ReducedBytes))
+	}
+	if c.SummaryPresent {
+		fields = append(fields, "summary_present=true")
+	}
+	if anchor := strings.TrimSpace(c.LoopProtocolAnchor); anchor != "" {
+		fields = append(fields, "loop_anchor="+anchor)
+	}
+	return strings.Join(fields, " ")
 }
 
 func traceTaskNextStep(trace Trace, task TaskStateSnapshot) string {

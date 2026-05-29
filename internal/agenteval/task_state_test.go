@@ -206,6 +206,38 @@ func TestDeriveTaskStateIncludesRuntimeOwnedToolEvidence(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateIncludesContextCompactionEvidence(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Continue the durable release loop.",
+		TurnEndReason: "max_turns",
+		ContextCompactions: []ContextCompaction{{
+			TurnID:             "turn-compact",
+			BeforeMessages:     80,
+			AfterMessages:      16,
+			RemovedMessages:    64,
+			ReducedBytes:       70000,
+			Reactive:           true,
+			Reason:             "context_overflow",
+			SummaryPresent:     true,
+			LoopProtocolAnchor: "LOOP_PROTOCOL: id=release-loop status=running step=rerun tests",
+		}},
+	}
+
+	got := DeriveTaskState(trace)
+	if !taskStateHasEvidence(got, "context_compaction") {
+		t.Fatalf("evidence = %+v, want context_compaction", got.Evidence)
+	}
+	if !taskStateHasSource(got, "context_compaction") {
+		t.Fatalf("sources = %+v, want context_compaction", got.Sources)
+	}
+	evidence := taskStateEvidence(got, "context_compaction")
+	for _, want := range []string{"context_overflow", "reactive=true", "removed_messages=64", "LOOP_PROTOCOL: id=release-loop"} {
+		if !strings.Contains(evidence.Summary, want) {
+			t.Fatalf("context compaction summary missing %q: %+v", want, evidence)
+		}
+	}
+}
+
 func TestDeriveTaskStateUsesCanonicalPrimaryFailureKind(t *testing.T) {
 	trace := Trace{
 		Prompt:        "Fetch current evidence.",
@@ -276,6 +308,15 @@ func taskStateHasEvidence(task TaskStateSnapshot, source string) bool {
 		}
 	}
 	return false
+}
+
+func taskStateEvidence(task TaskStateSnapshot, source string) TaskStateEvidence {
+	for _, evidence := range task.Evidence {
+		if evidence.Source == source {
+			return evidence
+		}
+	}
+	return TaskStateEvidence{}
 }
 
 func taskStateHasSource(task TaskStateSnapshot, source string) bool {
