@@ -37,6 +37,7 @@ export function SessionFilesPanel({
   workspaceBrowser,
   defaultOpen = false,
   onOpenWorkspacePath,
+  onUploadWorkspaceFile,
   onOpenWorkspacePanel,
   onOpenArtifact,
   onUseAsDraft,
@@ -45,6 +46,7 @@ export function SessionFilesPanel({
   workspaceBrowser?: WorkspaceFileBrowserState;
   defaultOpen?: boolean;
   onOpenWorkspacePath?: (path: string) => void;
+  onUploadWorkspaceFile?: (path: string, text: string) => Promise<void> | void;
   onOpenWorkspacePanel?: () => void;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
@@ -59,6 +61,8 @@ export function SessionFilesPanel({
   const [collapsedPaths, setCollapsedPaths] = useState<ReadonlySet<string>>(() => new Set());
   const [filter, setFilter] = useState<FileFilter>("all");
   const [wrapLines, setWrapLines] = useState(true);
+  const [uploadStatus, setUploadStatus] = useState<{ tone: "ready" | "error"; text: string } | undefined>();
+  const [lastWorkspaceDirectory, setLastWorkspaceDirectory] = useState<WorkspaceFileView | undefined>();
   const trimmedQuery = query.trim();
   const stats = fileStats(files);
   const filteredItems = filter === "all" ? files.items : files.items.filter((item) => fileMatchesFilter(item, filter));
@@ -76,15 +80,23 @@ export function SessionFilesPanel({
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
   const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
   const workspaceReady = workspaceBrowser?.state === "ready" ? workspaceBrowser.file : undefined;
+  const workspaceDirectory = workspaceReady?.kind === "directory" ? workspaceReady : lastWorkspaceDirectory;
   const workspaceCurrentPath = workspaceBrowser?.state === "ready"
     ? workspaceBrowser.file.path
     : workspaceBrowser?.state === "loading" || workspaceBrowser?.state === "error"
       ? workspaceBrowser.path ?? "."
       : ".";
   const workspaceParent = workspaceReady ? parentWorkspacePath(workspaceReady.path) : undefined;
+  const workspaceDirectoryParent = workspaceDirectory ? parentWorkspacePath(workspaceDirectory.path) : undefined;
   const canOpenWorkspacePath = Boolean(onOpenWorkspacePath);
+  const canUploadWorkspaceFile = Boolean(onUploadWorkspaceFile && canOpenWorkspacePath);
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const autoOpenedWorkspaceRef = useRef<string | undefined>(undefined);
+  const panelSummary = canOpenWorkspacePath ? "Workspace files" : "File evidence";
+  const panelDetail = canOpenWorkspacePath ? workspaceBrowserDetail(workspaceBrowser ?? { state: "idle" }) : files.detail;
+  const explorerTitle = workspaceDirectory ? workspaceDirectory.title : canOpenWorkspacePath ? workspaceBrowserTitle(workspaceBrowser ?? { state: "idle" }) : "Agent file evidence";
+  const explorerDetail = workspaceDirectory ? workspaceDirectory.detail : canOpenWorkspacePath ? workspaceBrowserDetail(workspaceBrowser ?? { state: "idle" }) : "Workspace not bound; showing recorded file actions.";
   const editorTitle = workspaceReady
     ? workspaceReady.path
     : selectedItem?.path ?? selectedEvidence?.path ?? "No file selected";
@@ -103,6 +115,12 @@ export function SessionFilesPanel({
     autoOpenedWorkspaceRef.current = workspaceBrowser.workspacePath;
     onOpenWorkspacePath(".");
   }, [defaultOpen, onOpenWorkspacePath, workspaceBrowser]);
+
+  useEffect(() => {
+    if (workspaceReady?.kind === "directory") {
+      setLastWorkspaceDirectory(workspaceReady);
+    }
+  }, [workspaceReady]);
 
   function openEvidenceItem(item: SessionFileEvidence) {
     setSelectedEvidencePath(item.path);
@@ -156,40 +174,68 @@ export function SessionFilesPanel({
     });
   }
 
+  async function uploadWorkspaceFile(file: File | undefined) {
+    if (!file || !onUploadWorkspaceFile) return;
+    const base = workspaceUploadDirectory(workspaceReady, workspaceCurrentPath);
+    const targetPath = joinWorkspacePath(base, file.name);
+    setUploadStatus({ tone: "ready", text: `Uploading ${targetPath}...` });
+    try {
+      const text = await readUploadFileText(file);
+      await onUploadWorkspaceFile(targetPath, text);
+      setWorkspaceQuery(targetPath);
+      setUploadStatus({ tone: "ready", text: `Uploaded ${targetPath}` });
+    } catch (err) {
+      setUploadStatus({ tone: "error", text: compactError(err instanceof Error ? err.message : String(err)) });
+    } finally {
+      if (uploadInputRef.current) uploadInputRef.current.value = "";
+    }
+  }
+
   return (
     <details className="session-skills-panel session-files-panel" data-testid="session-files-panel" open={defaultOpen}>
       <summary className="session-skills-summary">
         <span className="session-skills-kicker">Files</span>
-        <strong>{files.summary}</strong>
-        <span>{files.detail}</span>
+        <strong>{panelSummary}</strong>
+        <span>{panelDetail}</span>
       </summary>
       <div className="session-skills-body">
-        {primaryFileAttention ? (
-          <FileAttentionStrip
-            attention={primaryFileAttention}
-            onOpenWorkspacePath={onOpenWorkspacePath}
-            onOpenWorkspacePanel={onOpenWorkspacePanel}
-            onUseAsDraft={onUseAsDraft}
-            onViewEvidence={openEvidenceItem}
-          />
-        ) : null}
         <div className="session-files-ide" data-testid="session-files-ide">
           <aside className="session-files-explorer" aria-label="File explorer">
             <div className="session-files-explorer-head">
               <div>
                 <span>Explorer</span>
-                <strong>{canOpenWorkspacePath ? workspaceBrowserTitle(workspaceBrowser ?? { state: "idle" }) : "Agent file evidence"}</strong>
-                <small>{canOpenWorkspacePath ? workspaceBrowserDetail(workspaceBrowser ?? { state: "idle" }) : "Workspace not bound; showing recorded file actions."}</small>
+                <strong>{explorerTitle}</strong>
+                <small>{explorerDetail}</small>
               </div>
               {canOpenWorkspacePath ? (
-                <button
-                  type="button"
-                  className="ghost-action"
-                  disabled={workspaceBrowser?.state === "loading"}
-                  onClick={() => onOpenWorkspacePath?.(".")}
-                >
-                  Root
-                </button>
+                <span className="session-files-explorer-actions">
+                  <button
+                    type="button"
+                    className="ghost-action"
+                    disabled={workspaceBrowser?.state === "loading"}
+                    onClick={() => onOpenWorkspacePath?.(".")}
+                  >
+                    Root
+                  </button>
+                  {canUploadWorkspaceFile ? (
+                    <>
+                      <input
+                        ref={uploadInputRef}
+                        className="visually-hidden"
+                        type="file"
+                        onChange={(event) => void uploadWorkspaceFile(event.target.files?.[0])}
+                      />
+                      <button
+                        type="button"
+                        className="ghost-action primary-run-action"
+                        disabled={workspaceBrowser?.state === "loading"}
+                        onClick={() => uploadInputRef.current?.click()}
+                      >
+                        Upload
+                      </button>
+                    </>
+                  ) : null}
+                </span>
               ) : null}
             </div>
             {canOpenWorkspacePath ? (
@@ -224,11 +270,13 @@ export function SessionFilesPanel({
             )}
             {workspaceBrowser?.state === "loading" ? <div className="session-skills-empty">Loading {workspaceBrowser.path}...</div> : null}
             {workspaceBrowser?.state === "error" ? <div className="session-skills-empty">{workspaceBrowserErrorMessage(workspaceBrowser)}</div> : null}
-            {workspaceReady?.kind === "directory" ? (
+            {uploadStatus ? <div className="session-files-upload-status" data-tone={uploadStatus.tone}>{uploadStatus.text}</div> : null}
+            {workspaceDirectory ? (
               <WorkspaceDirectory
-                file={workspaceReady}
-                parent={workspaceParent}
+                file={workspaceDirectory}
+                parent={workspaceDirectoryParent}
                 query={trimmedQuery}
+                selectedPath={workspaceReady?.kind === "file" ? workspaceReady.path : undefined}
                 onOpenPath={onOpenWorkspacePath}
                 onUseAsDraft={onUseAsDraft}
               />
@@ -244,28 +292,43 @@ export function SessionFilesPanel({
                 </button>
               ) : null}
             </div>
-            <div className="session-files-filterbar" role="group" aria-label="File filters">
-              <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
-              <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
-              <FileFilterButton label="Snapshot" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
-              <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
-              <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
-            </div>
-            <FileEvidenceTree
-              nodes={treeNodes}
-              selectedPath={selectedEvidence?.path}
-              collapsedPaths={collapsedPaths}
-              onToggleDirectory={toggleTreePath}
-              onOpenDirectory={(path) => onOpenWorkspacePath?.(path)}
-              onOpenItem={openEvidenceItem}
-            />
-            {visibleItems.length === 0 ? (
-              files.items.length > 0 ? (
-                <div className="session-skills-empty">No {filter === "all" ? "file evidence" : filter} result matching "{trimmedQuery}".</div>
-              ) : (
-                <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
-              )
-            ) : null}
+            <details className="session-files-evidence-drawer" open={!canOpenWorkspacePath}>
+              <summary>
+                <span>Agent evidence</span>
+                <strong>{files.items.length}</strong>
+              </summary>
+              {primaryFileAttention ? (
+                <FileAttentionStrip
+                  attention={primaryFileAttention}
+                  onOpenWorkspacePath={onOpenWorkspacePath}
+                  onOpenWorkspacePanel={onOpenWorkspacePanel}
+                  onUseAsDraft={onUseAsDraft}
+                  onViewEvidence={openEvidenceItem}
+                />
+              ) : null}
+              <div className="session-files-filterbar" role="group" aria-label="File filters">
+                <FileFilterButton label="All" value={stats.total} active={filter === "all"} onClick={() => setFilter("all")} />
+                <FileFilterButton label="Changed" value={stats.changed} active={filter === "changed"} onClick={() => setFilter("changed")} />
+                <FileFilterButton label="Snapshot" value={stats.snapshots} active={filter === "snapshots"} onClick={() => setFilter("snapshots")} />
+                <FileFilterButton label="Issues" value={stats.failed + stats.running} active={filter === "issues"} onClick={() => setFilter("issues")} />
+                <FileFilterButton label="Dirs" value={stats.listed} active={filter === "listed"} onClick={() => setFilter("listed")} />
+              </div>
+              <FileEvidenceTree
+                nodes={treeNodes}
+                selectedPath={selectedEvidence?.path}
+                collapsedPaths={collapsedPaths}
+                onToggleDirectory={toggleTreePath}
+                onOpenDirectory={(path) => onOpenWorkspacePath?.(path)}
+                onOpenItem={openEvidenceItem}
+              />
+              {visibleItems.length === 0 ? (
+                files.items.length > 0 ? (
+                  <div className="session-skills-empty">No {filter === "all" ? "file evidence" : filter} result matching "{trimmedQuery}".</div>
+                ) : (
+                  <div className="session-skills-empty">No read, list, write, or edit actions in this chat.</div>
+                )
+              ) : null}
+            </details>
           </aside>
           <section className="session-files-editor" aria-label="File editor preview">
             <div className="session-files-editor-chrome" data-testid="session-files-editor-chrome">
@@ -507,16 +570,48 @@ function workspaceCrumbs(path: string): Array<{ label: string; path: string }> {
   return crumbs;
 }
 
+function workspaceUploadDirectory(file: WorkspaceFileView | undefined, currentPath: string): string {
+  if (file?.kind === "directory") return file.path;
+  if (file?.kind === "file") return parentWorkspacePath(file.path) ?? ".";
+  return parentWorkspacePath(currentPath) ?? ".";
+}
+
+function joinWorkspacePath(base: string | undefined, name: string): string {
+  const cleanName = name.replace(/\\/g, "/").split("/").filter(Boolean).at(-1) ?? "upload.txt";
+  const cleanBase = (base ?? ".").replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "") || ".";
+  return cleanBase === "." ? cleanName : `${cleanBase}/${cleanName}`;
+}
+
+function workspaceFileDownloadHref(file: WorkspaceFileView): string {
+  return `data:text/plain;charset=utf-8,${encodeURIComponent(file.text ?? "")}`;
+}
+
+function workspaceDownloadName(path: string): string {
+  return path.split("/").filter(Boolean).at(-1) ?? "workspace-file.txt";
+}
+
+function readUploadFileText(file: File): Promise<string> {
+  if (typeof file.text === "function") return file.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read file"));
+    reader.readAsText(file);
+  });
+}
+
 function WorkspaceDirectory({
   file,
   parent,
   query,
+  selectedPath,
   onOpenPath,
   onUseAsDraft,
 }: {
   file: WorkspaceFileView;
   parent?: string;
   query?: string;
+  selectedPath?: string;
   onOpenPath?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
@@ -539,7 +634,7 @@ function WorkspaceDirectory({
       {entries.length > 0 ? (
         <ol className="session-workspace-browser-list" data-testid="session-workspace-browser-list" aria-label="Workspace directory tree">
           {entries.map((entry) => (
-            <WorkspaceEntry key={entry.path} entry={entry} onOpenPath={onOpenPath} />
+            <WorkspaceEntry key={entry.path} entry={entry} selected={selectedPath === entry.path} onOpenPath={onOpenPath} />
           ))}
         </ol>
       ) : (
@@ -636,9 +731,9 @@ function WorkspaceDirectoryPreviewEntry({ entry, onOpenPath }: { entry: Workspac
   );
 }
 
-function WorkspaceEntry({ entry, onOpenPath }: { entry: WorkspaceFileEntryView; onOpenPath?: (path: string) => void }) {
+function WorkspaceEntry({ entry, selected, onOpenPath }: { entry: WorkspaceFileEntryView; selected?: boolean; onOpenPath?: (path: string) => void }) {
   return (
-    <li className="session-workspace-browser-entry" data-kind={entry.kind}>
+    <li className="session-workspace-browser-entry" data-kind={entry.kind} data-selected={selected ? "true" : "false"}>
       <button type="button" onClick={() => onOpenPath?.(entry.path)} disabled={!onOpenPath}>
         <strong title={entry.path}>{entry.name}</strong>
         <span>{entry.kind === "directory" ? "Directory" : entry.size ?? "File"}</span>
@@ -728,6 +823,9 @@ function WorkspaceFilePreview({
         ) : null}
         <CopyButton label="Copy file" value={file.text ?? ""} className="ghost-action" />
         <CopyButton label="Copy path" value={file.path} className="ghost-action" />
+        <a className="ghost-action" href={workspaceFileDownloadHref(file)} download={workspaceDownloadName(file.path)}>
+          Download
+        </a>
         <button type="button" className="ghost-action" aria-pressed={wrapLines} onClick={() => setWrapLines((value) => !value)}>
           Wrap
         </button>

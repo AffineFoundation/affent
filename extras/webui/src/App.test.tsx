@@ -2705,7 +2705,8 @@ describe("App", () => {
     await selectWorkbenchTab(user, "Files");
     const files = await screen.findByTestId("session-files-panel");
     expect(files).toHaveAttribute("open");
-    expect(files).toHaveTextContent("2 file references");
+    expect(files).toHaveTextContent("File evidence");
+    expect(files).toHaveTextContent("1 read · 1 listed");
     expect(within(screen.getByTestId("session-files-list")).getByRole("button", { name: /payments\.ts/ })).toBeVisible();
     expect(screen.getByTestId("session-file-preview")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-file-preview-content")).toHaveTextContent("checkout route handler");
@@ -2759,6 +2760,17 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/workspace-1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/workspace-1/files?path=.&limit=65536") {
+        return jsonResponse({
+          session_id: "workspace-1",
+          path: ".",
+          kind: "directory",
+          entries: [
+            { name: "README.md", path: "README.md", kind: "file", bytes: 1200 },
+            { name: "src", path: "src", kind: "directory" },
+          ],
+        });
+      }
       if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
       if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
       if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
@@ -2778,19 +2790,12 @@ describe("App", () => {
 
     await user.click(screen.getByTestId("workspace-status-pill"));
 
-    const workspace = await screen.findByTestId("session-workspace-panel");
-    expect(workspace).toHaveAttribute("open");
-    expect(workspace).toHaveTextContent("Workspace mismatch");
-    expect(workspace).toHaveTextContent("Latest command cwd is outside the session workspace.");
-    expect(workspace).toHaveTextContent("affent");
-    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Session workspace");
-    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/repo/affent");
-    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Latest command cwd");
-    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/tmp/outside");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Branch");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("main");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("State");
-    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("dirty");
+    const files = await screen.findByTestId("session-files-panel");
+    expect(files).toHaveAttribute("open");
+    expect(files).toHaveTextContent("Workspace files");
+    expect(screen.getByTestId("session-workspace-directory-preview")).toHaveTextContent("Workspace root");
+    expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("README.md");
+    expect(screen.queryByTestId("session-workspace-panel")).toBeNull();
   });
 
   it("surfaces command failures inside Workbench without adding default Chat noise", async () => {

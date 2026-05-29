@@ -426,6 +426,11 @@ export interface SessionFileReadOptions {
   signal?: AbortSignal;
 }
 
+export interface SessionFileWriteRequest {
+  path: string;
+  text: string;
+}
+
 export interface SessionCapabilities {
   eval_mode: boolean;
   eval_tools?: string;
@@ -906,6 +911,19 @@ export function readSessionFile(
     withQuery(`/v1/sessions/${encodeURIComponent(sessionId)}/files`, q),
     { signal: opts.signal },
   );
+}
+
+export function writeSessionFile(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionFileWriteRequest,
+  signal?: AbortSignal,
+): Promise<SessionFileResponse> {
+  return client.json<SessionFileResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/files`, {
+    method: "POST",
+    body,
+    signal,
+  });
 }
 
 export function cancelSessionTurn(

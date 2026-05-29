@@ -239,6 +239,40 @@ describe("SessionFilesPanel", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("- file README.md (2 KiB)"), "file_snapshot");
   });
 
+  it("uploads a local text file into the current workspace directory", async () => {
+    const user = userEvent.setup();
+    const onUploadWorkspaceFile = vi.fn().mockResolvedValue(undefined);
+
+    render(
+      <SessionFilesPanel
+        defaultOpen
+        files={files}
+        workspaceBrowser={{
+          state: "ready",
+          workspacePath: "/work/affent",
+          file: {
+            path: "src",
+            kind: "directory",
+            title: "src",
+            detail: "empty directory",
+            entries: [],
+            lines: [],
+            hasMore: false,
+          },
+        }}
+        onOpenWorkspacePath={vi.fn()}
+        onUploadWorkspaceFile={onUploadWorkspaceFile}
+      />,
+    );
+
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    await user.upload(input!, new File(["hello upload\n"], "new-file.txt", { type: "text/plain" }));
+
+    await waitFor(() => expect(onUploadWorkspaceFile).toHaveBeenCalledWith("src/new-file.txt", "hello upload\n"));
+    expect(screen.getByText("Uploaded src/new-file.txt")).toBeInTheDocument();
+  });
+
   it("shows loaded workspace file content", async () => {
     const user = userEvent.setup();
     const onOpenWorkspacePath = vi.fn();

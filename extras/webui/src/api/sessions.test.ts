@@ -23,6 +23,7 @@ import {
   streamSessionEvents,
   updateSessionLoopProtocol,
   updateSessionSchedule,
+  writeSessionFile,
 } from "./sessions";
 
 describe("session API helpers", () => {
@@ -72,6 +73,7 @@ describe("session API helpers", () => {
     await readSkill(client, "skill/1");
     await installSkill(client, { name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" });
     await deleteSkill(client, "skill/1");
+    await writeSessionFile(client, "s/1", { path: "src/upload.txt", text: "hello" });
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
@@ -115,6 +117,9 @@ describe("session API helpers", () => {
     expect((fetchImpl.mock.calls[14][1] as RequestInit).body).toBe(JSON.stringify({ name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" }));
     expect(fetchImpl.mock.calls[15][0]).toBe("/v1/skills/skill%2F1");
     expect((fetchImpl.mock.calls[15][1] as RequestInit).method).toBe("DELETE");
+    expect(fetchImpl.mock.calls[16][0]).toBe("/v1/sessions/s%2F1/files");
+    expect((fetchImpl.mock.calls[16][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[16][1] as RequestInit).body).toBe(JSON.stringify({ path: "src/upload.txt", text: "hello" }));
   });
 
   it("streams native affent session events", async () => {

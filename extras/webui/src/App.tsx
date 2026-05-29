@@ -28,6 +28,7 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   updateSessionSchedule,
+  writeSessionFile,
   type SessionScheduleDeleteResponse,
   type SessionSchedule,
   type SessionSchedulesResponse,
@@ -1589,6 +1590,20 @@ export function App() {
     }
   }
 
+  async function handleUploadWorkspaceFile(path: string, text: string) {
+    const cleanPath = path.trim();
+    if (!cleanPath || !selectedSessionId || !sessionWorkspace.path) return;
+    const workspacePath = sessionWorkspace.path;
+    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath });
+    try {
+      const resp = await writeSessionFile(client, selectedSessionId, { path: cleanPath, text });
+      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath });
+    } catch (err) {
+      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath });
+      throw err;
+    }
+  }
+
   function handleArtifactSearch(query: string) {
     setArtifact((current) => (current.state === "ready" ? { ...current, query } : current));
   }
@@ -1924,29 +1939,16 @@ export function App() {
     }
     if (workbenchTab === "files") {
       return (
-        <>
-          {selectedSessionId && (sessionWorkspace.hasData || sessionWorkspace.issue || sessionWorkspace.path) ? (
-            <SessionWorkspacePanel
-              workspace={sessionWorkspace}
-              defaultOpen={Boolean(sessionWorkspace.issue)}
-              onOpenWorkspacePath={sessionWorkspace.path ? (path) => {
-                setWorkbenchTab("files");
-                void handleOpenWorkspacePath(path);
-              } : undefined}
-              onVerifyWorkspace={handleRunCommandRequest}
-              onUseAsDraft={handleUseAsDraft}
-            />
-          ) : null}
-          <SessionFilesPanel
-            files={sessionFiles}
-            workspaceBrowser={workspaceFileBrowser}
-            defaultOpen
-            onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
-            onOpenWorkspacePanel={() => setWorkbenchTab("files")}
-            onOpenArtifact={(path) => void handleOpenArtifact(path)}
-            onUseAsDraft={handleUseAsDraft}
-          />
-        </>
+        <SessionFilesPanel
+          files={sessionFiles}
+          workspaceBrowser={workspaceFileBrowser}
+          defaultOpen
+          onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
+          onUploadWorkspaceFile={sessionWorkspace.path ? (path, text) => handleUploadWorkspaceFile(path, text) : undefined}
+          onOpenWorkspacePanel={() => setWorkbenchTab("files")}
+          onOpenArtifact={(path) => void handleOpenArtifact(path)}
+          onUseAsDraft={handleUseAsDraft}
+        />
       );
     }
     if (workbenchTab === "workspace") {
