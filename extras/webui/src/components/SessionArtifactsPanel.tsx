@@ -63,7 +63,7 @@ export function SessionArtifactsPanel({
         {artifacts.length > 0 ? (
           <div className="session-artifacts-overview" aria-label="Artifact evidence summary">
             <div>
-              <span>Evidence files</span>
+              <span>Stored outputs</span>
               <strong>{artifactReviewSummary(artifacts)}</strong>
               <small>{artifactReviewDetail(artifacts)}</small>
             </div>

@@ -170,8 +170,8 @@ describe("sessionArtifacts", () => {
     expect(artifactFailed(buildWorkbenchArtifacts(session)[1])).toBe(true);
     expect(artifactReviewFocus(buildWorkbenchArtifacts(session))?.path).toBe(".affent/artifacts/tool-results/000002-c2.txt");
     expect(artifactReviewQueue(buildWorkbenchArtifacts(session)).map((item) => [item.label, item.title])).toEqual([
-      ["Failure evidence", "000002-c2.txt"],
-      ["Deliverable", "report.md"],
+      ["Debug failure", "000002-c2.txt"],
+      ["Review deliverable", "report.md"],
     ]);
     expect(artifactSourceGroups(buildWorkbenchArtifacts(session)).map((group) => [group.label, group.count, group.kindLabel])).toEqual([
       ["read_file: report.md", 1, "Full output"],

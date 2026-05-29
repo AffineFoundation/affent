@@ -53,7 +53,7 @@ describe("SessionArtifactsPanel", () => {
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("1 deliverable · 1 full output");
     expect(panel).toHaveTextContent("2 files · 10 KiB recorded");
-    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Evidence files");
+    expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Stored outputs");
     expect(screen.getByLabelText("Artifact evidence summary")).toHaveTextContent("Full output");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Latest turn");
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("4");
@@ -61,9 +61,9 @@ describe("SessionArtifactsPanel", () => {
     expect(screen.getByLabelText("Artifact review facts")).toHaveTextContent("Partial");
     const reviewQueue = screen.getByTestId("session-artifacts-review-queue");
     expect(reviewQueue).toHaveTextContent("Review queue");
-    expect(reviewQueue).toHaveTextContent("Failure evidence");
+    expect(reviewQueue).toHaveTextContent("Debug failure");
     expect(reviewQueue).toHaveTextContent("failed · exit 1 · 1.5 s");
-    await user.click(within(reviewQueue).getByRole("button", { name: /Failure evidence/ }));
+    await user.click(within(reviewQueue).getByRole("button", { name: /Debug failure/ }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
     const sourceIndex = screen.getByLabelText("Artifact source index");
     expect(sourceIndex).toHaveTextContent("Sources");

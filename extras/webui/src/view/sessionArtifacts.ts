@@ -265,7 +265,7 @@ function artifactReviewItem(artifact: TurnArtifact): SessionArtifactReviewItem |
   if (artifactFailed(artifact)) {
     return {
       id: `${artifact.path}:failed`,
-      label: "Failure evidence",
+      label: "Debug failure",
       title: artifact.name,
       detail: [artifactOutcomeLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
       artifact,
@@ -275,7 +275,7 @@ function artifactReviewItem(artifact: TurnArtifact): SessionArtifactReviewItem |
   if (artifact.truncated || (artifact.omittedBytes ?? 0) > 0) {
     return {
       id: `${artifact.path}:partial`,
-      label: "Full output",
+      label: "Open omitted output",
       title: artifact.name,
       detail: [artifactSizeLabel(artifact), "Open the artifact to inspect omitted output"].filter(Boolean).join(" · "),
       artifact,
@@ -285,7 +285,7 @@ function artifactReviewItem(artifact: TurnArtifact): SessionArtifactReviewItem |
   if (artifactKind(artifact) === "deliverable") {
     return {
       id: `${artifact.path}:deliverable`,
-      label: "Deliverable",
+      label: "Review deliverable",
       title: artifact.name,
       detail: [artifactLineageLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
       artifact,
@@ -295,7 +295,7 @@ function artifactReviewItem(artifact: TurnArtifact): SessionArtifactReviewItem |
   if (artifactKind(artifact) === "full_output") {
     return {
       id: `${artifact.path}:output`,
-      label: "Output evidence",
+      label: "Inspect tool output",
       title: artifact.name,
       detail: [artifactOutcomeLabel(artifact), artifactSummaryPreview(artifact, 110)].filter(Boolean).join(" · "),
       artifact,
