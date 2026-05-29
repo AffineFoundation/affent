@@ -34,7 +34,7 @@ func TestSessionRuntimeContractSurfacesMissingExpectedCapabilities(t *testing.T)
 	if !stringSliceContains(contract.Expected, "loop protocol") || !stringSliceContains(contract.Missing, "loop protocol") {
 		t.Fatalf("contract = %+v, want loop protocol expected and missing", contract)
 	}
-	if !stringSliceContains(contract.Available, "schedules") {
-		t.Fatalf("available = %+v, want schedules", contract.Available)
+	if !stringSliceContains(contract.Available, "schedules") || !stringSliceContains(contract.Available, "schedule runner") {
+		t.Fatalf("available = %+v, want schedules and schedule runner", contract.Available)
 	}
 }

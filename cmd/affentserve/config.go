@@ -482,32 +482,34 @@ func (c *Config) Resolve() error {
 }
 
 type serveRuntimeCapabilities struct {
-	Builtins          bool
-	Memory            bool
-	Browser           bool
-	BrowserScreenshot bool
-	Web               bool
-	WebSearch         bool
-	Subagent          bool
-	FocusedTasks      bool
-	WorkflowTools     bool
-	LoopProtocol      bool
-	SessionSchedule   bool
+	Builtins              bool
+	Memory                bool
+	Browser               bool
+	BrowserScreenshot     bool
+	Web                   bool
+	WebSearch             bool
+	Subagent              bool
+	FocusedTasks          bool
+	WorkflowTools         bool
+	LoopProtocol          bool
+	SessionSchedule       bool
+	SessionScheduleRunner bool
 }
 
 func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 	caps := serveRuntimeCapabilities{
-		Builtins:          c.EnableBuiltins,
-		Memory:            c.EnableMemory,
-		Browser:           c.EnableBrowser,
-		BrowserScreenshot: c.EnableBrowser && c.BrowserScreenshot,
-		Web:               c.EnableWeb,
-		WebSearch:         c.EnableWeb && c.EnableWebSearch,
-		Subagent:          c.EnableSubagent,
-		FocusedTasks:      c.EnableFocusedTasks,
-		WorkflowTools:     true,
-		LoopProtocol:      c.EnableLoopProtocol,
-		SessionSchedule:   true,
+		Builtins:              c.EnableBuiltins,
+		Memory:                c.EnableMemory,
+		Browser:               c.EnableBrowser,
+		BrowserScreenshot:     c.EnableBrowser && c.BrowserScreenshot,
+		Web:                   c.EnableWeb,
+		WebSearch:             c.EnableWeb && c.EnableWebSearch,
+		Subagent:              c.EnableSubagent,
+		FocusedTasks:          c.EnableFocusedTasks,
+		WorkflowTools:         true,
+		LoopProtocol:          c.EnableLoopProtocol,
+		SessionSchedule:       true,
+		SessionScheduleRunner: true,
 	}
 	if !serveEvalModeEnabled(c) {
 		return caps
@@ -524,6 +526,7 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 		caps.WorkflowTools = true
 		caps.LoopProtocol = false
 		caps.SessionSchedule = false
+		caps.SessionScheduleRunner = false
 		return caps
 	}
 	allowed, _ := serveEvalToolAllowlist(c)
@@ -543,6 +546,7 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 	caps.WorkflowTools = allowed[agent.SkillToolName] || allowed[agent.PlanToolName] || allowed[agent.SessionSearchToolName]
 	caps.LoopProtocol = false
 	caps.SessionSchedule = false
+	caps.SessionScheduleRunner = false
 	return caps
 }
 

@@ -1363,7 +1363,7 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	if !stringSliceContains(task.Constraints, "workspace path mode: workspace_relative") {
 		t.Fatalf("constraints = %+v, want workspace path mode", task.Constraints)
 	}
-	if !stringSliceContains(task.Constraints, "unavailable capabilities: live sources, nested work, skills, loop protocol, schedules") {
+	if !stringSliceContains(task.Constraints, "unavailable capabilities: live sources, nested work, skills, loop protocol, schedules, schedule runner") {
 		t.Fatalf("constraints = %+v, want runtime capability gaps", task.Constraints)
 	}
 	if !stringSliceContains(task.KnownFacts, "available capabilities: workspace, memory/history") {

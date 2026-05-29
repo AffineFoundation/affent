@@ -124,6 +124,19 @@ var toolSurfaceCapabilityAxes = []toolSurfaceCapabilityAxis{
 			return caps.SessionSchedule || index.Tools[agent.SessionScheduleToolName]
 		},
 	},
+	{
+		Label:          "schedule runner",
+		DisabledReason: "Background schedule runner is off.",
+		ConfigExpected: func(cfg Config) bool {
+			return resolveServeRuntimeCapabilities(cfg).SessionScheduleRunner
+		},
+		Enabled: func(caps sessionCapabilities, _ map[string]bool) bool {
+			return caps.SessionScheduleRunner
+		},
+		RuntimeEnabled: func(caps sse.RuntimeCapabilities, _ runtimeToolSurfaceIndex) bool {
+			return caps.SessionScheduleRunner
+		},
+	},
 }
 
 func toolSurfaceGroupIndex(tools []toolInfo) map[string]bool {
