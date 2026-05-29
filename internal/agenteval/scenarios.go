@@ -24,6 +24,10 @@ const (
 	contextCompactionDomain  = "context_compaction"
 )
 
+func intPtr(value int) *int {
+	return &value
+}
+
 var defaultForbiddenCommands = []string{
 	"find /",
 	"apt-get",
@@ -2218,14 +2222,15 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 			sse.TypeRuntimeSurface:        1,
 			sse.TypeContextCompactSkipped: 1,
 		},
-		RequiredCompactScopeActive: 1,
-		ForbiddenTools:             []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
-		MaxParentToolCalls:         0,
-		MaxTurns:                   2,
-		CompactTrigger:             240,
-		ModelContextWindowTokens:   200,
-		CompactTriggerInputPercent: 80,
-		CompactKeepLast:            1,
+		RequiredCompactScopeActive:      1,
+		MaxCompactScopedPressurePercent: intPtr(0),
+		ForbiddenTools:                  []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
+		MaxParentToolCalls:              0,
+		MaxTurns:                        2,
+		CompactTrigger:                  240,
+		ModelContextWindowTokens:        200,
+		CompactTriggerInputPercent:      80,
+		CompactKeepLast:                 1,
 	}
 }
 

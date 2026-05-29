@@ -985,6 +985,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if compactions.Count != 1 || compactions.Reactive != 1 || compactions.Proactive != 0 || compactions.RemovedMessages != 32 || compactions.ReducedBytes != 96000 || compactions.SummaryBytes != 2048 || compactions.CompactScopeActive != 1 || compactions.MaxCompactScopedInputTokens != 0 || compactions.MaxCompactHardInputLimit != 70000 || compactions.MaxCompactScopedPressure != 0 {
 		t.Fatalf("ContextCompactionStats = %+v", compactions)
 	}
+	if res := ContextCompactionScopedPressureAtMost(0).Eval(trace); !res.Pass {
+		t.Fatalf("expected compact scoped pressure reset: %+v", res)
+	}
 	if len(compactions.Examples) != 1 ||
 		compactions.Examples[0].Reason != "context_overflow" ||
 		!compactions.Examples[0].SummaryPresent ||
@@ -1695,9 +1698,10 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredContextCompactionReasons: map[string]int{
 			"context_overflow": 1,
 		},
-		RequiredCompactionRemovedMsgs: 20,
-		RequiredCompactScopeActive:    1,
-		RequiredContextSummaryText:    []string{"HRO market marker"},
+		RequiredCompactionRemovedMsgs:   20,
+		RequiredCompactScopeActive:      1,
+		MaxCompactScopedPressurePercent: intPtr(0),
+		RequiredContextSummaryText:      []string{"HRO market marker"},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -1775,6 +1779,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"context_compaction_reason_at_least:context_overflow:1",
 		"context_compaction_removed_messages_at_least:20",
 		"context_maintenance_compact_scope_active_at_least:1",
+		"context_compaction_scoped_pressure_at_most:0",
 		"context_compaction_summary_contains:HRO market marker",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
@@ -3508,13 +3513,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if modelWindowPolicy.RequiredContextCompactions != 0 ||
 		modelWindowPolicy.RequiredCompactScopeActive != 1 ||
+		modelWindowPolicy.MaxCompactScopedPressurePercent == nil ||
+		*modelWindowPolicy.MaxCompactScopedPressurePercent != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 1 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 1 ||
 		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-3") {
-		t.Fatalf("model-window policy requirements = compactions:%d compact_scope:%d trace:%#v final:%#v",
+		t.Fatalf("model-window policy requirements = compactions:%d compact_scope:%d scoped_pressure:%#v trace:%#v final:%#v",
 			modelWindowPolicy.RequiredContextCompactions,
 			modelWindowPolicy.RequiredCompactScopeActive,
+			modelWindowPolicy.MaxCompactScopedPressurePercent,
 			modelWindowPolicy.RequiredTraceEventCounts,
 			modelWindowPolicy.RequiredFinalText,
 		)
@@ -3526,6 +3534,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		"runtime_surface_compact_summary_prompt_matches_model_policy",
 		"runtime_surface_tool_schema_within_budget",
 		"context_maintenance_compact_scope_active_at_least:1",
+		"context_compaction_scoped_pressure_at_most:0",
 	} {
 		if !stringSliceContains(modelWindowChecks, want) {
 			t.Fatalf("model-window policy checks missing %q: %#v", want, modelWindowChecks)

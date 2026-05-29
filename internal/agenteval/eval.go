@@ -241,6 +241,7 @@ type BatchScenario struct {
 	RequiredCompactionRemovedMsgs                  int
 	RequiredCompactionReducedBytes                 int
 	RequiredCompactScopeActive                     int
+	MaxCompactScopedPressurePercent                *int
 	RequiredContextSummaryText                     []string
 	RequiredContextLoopProtocolAnchorText          []string
 	RequiredCommandBeforeTool                      []CommandToolOrderRequirement
@@ -531,6 +532,7 @@ type DebugScenarioExpectations struct {
 	RequiredCompactionRemovedMsgs                  int                                    `json:"required_compaction_removed_messages,omitempty"`
 	RequiredCompactionReducedBytes                 int                                    `json:"required_compaction_reduced_bytes,omitempty"`
 	RequiredCompactScopeActive                     int                                    `json:"required_compact_scope_active,omitempty"`
+	MaxCompactScopedPressurePercent                *int                                   `json:"max_compact_scoped_pressure_percent,omitempty"`
 	RequiredContextSummaryText                     []string                               `json:"required_context_summary_text,omitempty"`
 	RequiredContextLoopProtocolAnchorText          []string                               `json:"required_context_loop_protocol_anchor_text,omitempty"`
 	ProtectedFiles                                 []string                               `json:"protected_files,omitempty"`
@@ -637,6 +639,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		exp.RequiredCompactionRemovedMsgs > 0 ||
 		exp.RequiredCompactionReducedBytes > 0 ||
 		exp.RequiredCompactScopeActive > 0 ||
+		exp.MaxCompactScopedPressurePercent != nil ||
 		len(exp.RequiredContextSummaryText) > 0 ||
 		len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		caps["context_compaction"] = true
@@ -2391,6 +2394,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredCompactionRemovedMsgs:                  s.RequiredCompactionRemovedMsgs,
 		RequiredCompactionReducedBytes:                 s.RequiredCompactionReducedBytes,
 		RequiredCompactScopeActive:                     s.RequiredCompactScopeActive,
+		MaxCompactScopedPressurePercent:                cloneIntPtr(s.MaxCompactScopedPressurePercent),
 		RequiredContextSummaryText:                     append([]string(nil), s.RequiredContextSummaryText...),
 		RequiredContextLoopProtocolAnchorText:          append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
 		ProtectedFiles:                                 append([]string(nil), s.ProtectedFiles...),
@@ -3492,6 +3496,14 @@ func cloneBoolPtr(value *bool) *bool {
 	return &clone
 }
 
+func cloneIntPtr(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
+}
+
 // BatchScenarioChecks returns the Check slice derived from the
 // declarative fields of a BatchScenario: RequiredCommands become
 // ShellCommandMatching checks, ForbiddenCommands become
@@ -3686,6 +3698,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredCompactScopeActive > 0 {
 		checks = append(checks, ContextMaintenanceCompactScopeActiveAtLeast(scenario.RequiredCompactScopeActive))
+	}
+	if scenario.MaxCompactScopedPressurePercent != nil {
+		checks = append(checks, ContextCompactionScopedPressureAtMost(*scenario.MaxCompactScopedPressurePercent))
 	}
 	for _, substr := range scenario.RequiredContextSummaryText {
 		checks = append(checks, ContextCompactionSummaryContains(substr))

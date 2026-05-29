@@ -1282,6 +1282,44 @@ func ContextMaintenanceCompactScopeActiveAtLeast(min int) Check {
 	}
 }
 
+func ContextCompactionScopedPressureAtMost(maxPressure int) Check {
+	if maxPressure < 0 {
+		maxPressure = 0
+	}
+	return Check{
+		Name: fmt.Sprintf("context_compaction_scoped_pressure_at_most:%d", maxPressure),
+		Eval: func(t Trace) CheckResult {
+			observedMax := 0
+			observedAny := false
+			var observed []string
+			for _, compaction := range t.ContextCompactions {
+				if !compaction.CompactScopeActive {
+					observed = append(observed, fmt.Sprintf("turn=%s active=false", compaction.TurnID))
+					continue
+				}
+				pressure := contextCompactionPolicyPressurePercent(compaction.CompactScopedInputTokens, compaction.TriggerInputTokens)
+				if pressure > observedMax {
+					observedMax = pressure
+				}
+				observedAny = true
+				observed = append(observed, fmt.Sprintf("turn=%s scoped=%d trigger=%d pressure=%d%%",
+					compaction.TurnID,
+					compaction.CompactScopedInputTokens,
+					compaction.TriggerInputTokens,
+					pressure,
+				))
+			}
+			if observedAny && observedMax <= maxPressure {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("max_scoped_pressure=%d%%", observedMax)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("max_scoped_pressure=%d%%, want <= %d%%; observed=%v", observedMax, maxPressure, observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceCompactTriggerMatchesModelPolicy() Check {
 	return Check{
 		Name: "runtime_surface_compact_trigger_matches_model_policy",
