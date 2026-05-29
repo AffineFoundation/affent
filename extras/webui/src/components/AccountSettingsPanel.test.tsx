@@ -63,6 +63,9 @@ describe("AccountSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Copy full key" }));
     expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
 
+    await user.click(within(screen.getByRole("group", { name: "Git host presets" })).getByRole("button", { name: "GitLab" }));
+    expect(screen.getByPlaceholderText("github.com or gitlab.com")).toHaveValue("gitlab.com");
+    await user.clear(screen.getByPlaceholderText("github.com or gitlab.com"));
     await user.type(screen.getByPlaceholderText("github.com or gitlab.com"), "git@gitlab.com:team/repo.git");
     await user.click(screen.getByRole("button", { name: "Check host" }));
     expect(onVerifyGitAccess).toHaveBeenCalledWith({ kind: "host", target: "gitlab.com" });
@@ -73,6 +76,7 @@ describe("AccountSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Check repository" }));
     expect(onVerifyGitAccess).toHaveBeenCalledWith({ kind: "remote", target: "git@github.com:team/private-repo.git" });
     expect(screen.getByText("repo reachable")).toBeInTheDocument();
+    expect(screen.getByText("successfully authenticated")).toBeInTheDocument();
   });
 
   it("saves and confirms deletion for environment variables without displaying the value", async () => {

@@ -5588,6 +5588,19 @@ button.workbench-context-runtime-item:focus-visible {
   line-height: 1.35;
 }
 
+.account-config-host-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.account-config-host-presets button {
+  width: auto;
+  min-height: 28px;
+  padding-inline: 10px;
+}
+
 .account-config-verify label {
   display: grid;
   gap: 4px;
@@ -5622,6 +5635,10 @@ button.workbench-context-runtime-item:focus-visible {
 .account-config-verify button {
   justify-content: center;
   width: 100%;
+}
+
+.account-config-verify .account-config-host-presets button {
+  width: auto;
 }
 
 .account-config-check-result {

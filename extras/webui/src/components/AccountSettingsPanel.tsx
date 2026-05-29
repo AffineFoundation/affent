@@ -403,18 +403,20 @@ function AccountConfigFocus({
   setGitRemote: (value: string) => void;
   onVerifyGitAccess?: (request: AccountGitCheckRequest) => Promise<AccountGitCheckResponse> | AccountGitCheckResponse;
 }) {
-  const [gitCheck, setGitCheck] = useState<GitCheckState | undefined>();
+  const [hostGitCheck, setHostGitCheck] = useState<GitCheckState | undefined>();
+  const [remoteGitCheck, setRemoteGitCheck] = useState<GitCheckState | undefined>();
   const review = accountConfigReview(settings);
   const canVerifyGit = Boolean(settings.ssh.public_key && onVerifyGitAccess);
-  const canVerifyHost = canVerifyGit && gitHost.trim().length > 0 && gitCheck?.status !== "running";
-  const canVerifyRemote = canVerifyGit && gitRemote.trim().length > 0 && gitCheck?.status !== "running";
+  const canVerifyHost = canVerifyGit && gitHost.trim().length > 0 && hostGitCheck?.status !== "running";
+  const canVerifyRemote = canVerifyGit && gitRemote.trim().length > 0 && remoteGitCheck?.status !== "running";
 
   async function verify(kind: AccountGitCheckRequest["kind"], request: AccountGitCheckRequest) {
     if (!onVerifyGitAccess) return;
-    setGitCheck({ kind, status: "running" });
+    const setCheck = kind === "host" ? setHostGitCheck : setRemoteGitCheck;
+    setCheck({ kind, status: "running" });
     try {
       const result = await onVerifyGitAccess(request);
-      setGitCheck({
+      setCheck({
         kind,
         status: result.status,
         target: result.host || result.target,
@@ -423,7 +425,7 @@ function AccountConfigFocus({
         durationMs: result.duration_ms,
       });
     } catch (err) {
-      setGitCheck({ kind, status: "error", message: formatPanelError(err) });
+      setCheck({ kind, status: "error", message: formatPanelError(err) });
     }
   }
 
@@ -457,6 +459,14 @@ function AccountConfigFocus({
               <strong>SSH host reachability</strong>
               <span>Checks this runtime key against a Git SSH host. This does not create a chat turn.</span>
             </div>
+            <div className="account-config-host-presets" role="group" aria-label="Git host presets">
+              <button type="button" className="ghost-action" disabled={!!busy || !canVerifyGit} onClick={() => setGitHost("github.com")}>
+                GitHub
+              </button>
+              <button type="button" className="ghost-action" disabled={!!busy || !canVerifyGit} onClick={() => setGitHost("gitlab.com")}>
+                GitLab
+              </button>
+            </div>
             <label>
               <span>Host</span>
               <input value={gitHost} onChange={(event) => setGitHost(event.target.value)} placeholder="github.com or gitlab.com" disabled={!!busy || !canVerifyGit} />
@@ -467,9 +477,9 @@ function AccountConfigFocus({
               disabled={!!busy || !canVerifyHost}
               onClick={() => void verify("host", accountGitAccessVerifyRequest(gitHost))}
             >
-              {gitCheck?.kind === "host" && gitCheck.status === "running" ? "Checking host" : "Check host"}
+              {hostGitCheck?.status === "running" ? "Checking host" : "Check host"}
             </button>
-            <GitCheckResult state={gitCheck} kind="host" />
+            <GitCheckResult state={hostGitCheck} kind="host" />
           </div>
           <div className="account-config-verify">
             <div className="account-config-verify-title">
@@ -486,9 +496,9 @@ function AccountConfigFocus({
               disabled={!!busy || !canVerifyRemote}
               onClick={() => void verify("remote", accountGitRemoteVerifyRequest(gitRemote))}
             >
-              {gitCheck?.kind === "remote" && gitCheck.status === "running" ? "Checking repository" : "Check repository"}
+              {remoteGitCheck?.status === "running" ? "Checking repository" : "Check repository"}
             </button>
-            <GitCheckResult state={gitCheck} kind="remote" />
+            <GitCheckResult state={remoteGitCheck} kind="remote" />
           </div>
         </div>
       ) : null}
