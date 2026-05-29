@@ -253,4 +253,74 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).toHaveTextContent("loop_guard_no_budget");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("3 admitted / 1 skipped");
   });
+
+  it("keeps the issue navigator aligned with structured trace filters and query aliases", async () => {
+    const user = userEvent.setup();
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "git",
+          tool: "shell",
+          args: { command: "git ls-remote git@github.com:team/private.git HEAD" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "git",
+          exit_code: 128,
+          failure_kind: "command_failed",
+          result_summary: "git command failed\nFailure: kind=command_failed\nNext: inspect configured repository credentials before retrying",
+          result: "git command failed\nFailure: kind=command_failed\nNext: inspect configured repository credentials before retrying",
+        },
+      },
+      {
+        id: 4,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "read",
+          tool: "read_file",
+          args: { path: "missing.md" },
+        },
+      },
+      {
+        id: 5,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "read",
+          exit_code: 0,
+          failure_kind: "not_found",
+          result_summary: "missing.md not found\nFailure: kind=not_found\nNext: list files before retrying",
+          result: "missing.md not found\nFailure: kind=not_found\nNext: list files before retrying",
+        },
+      },
+    ]);
+
+    render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
+
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("2 issues across 2 tools");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · shell");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · read_file");
+
+    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "exit:1" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: exit:1");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · shell");
+    expect(screen.getByTestId("session-trace-issues")).not.toHaveTextContent("read_file");
+
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    await user.type(screen.getByLabelText("Search trace"), "tool:read_file not_found");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: tool:read_file not_found");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
+    expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("Request 1 · read_file");
+    expect(screen.getByTestId("session-trace-issues")).not.toHaveTextContent("shell");
+  });
 });

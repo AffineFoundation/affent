@@ -24,9 +24,6 @@ export function SessionTracePanel({
   const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(() => traceFilters(events, trace.toolIssueCount), [events, trace.toolIssueCount]);
-  const issueGroups = useMemo(() => traceToolIssueGroups(trace.toolIssues), [trace.toolIssues]);
-  const activeIssue = trace.toolIssues.find((issue) => issue.id === activeIssueId)
-    ?? (filter === "issues" ? trace.toolIssues[0] : undefined);
   const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(
     () => {
@@ -35,6 +32,11 @@ export function SessionTracePanel({
     },
     [events, filter, trimmedQuery],
   );
+  const visibleIssues = useMemo(() => filterTraceIssues(trace.toolIssues, filter, trimmedQuery), [filter, trace.toolIssues, trimmedQuery]);
+  const issueGroups = useMemo(() => traceToolIssueGroups(visibleIssues), [visibleIssues]);
+  const activeIssue = visibleIssues.find((issue) => issue.id === activeIssueId)
+    ?? (visibleIssues.length > 0 ? visibleIssues[0] : undefined);
+  const visibleIssueCount = visibleIssues.reduce((sum, issue) => sum + issue.occurrences, 0);
   const selectionSummary = useMemo(() => traceSelectionSummary(events, visibleEvents), [events, visibleEvents]);
   const applySearch = (nextQuery: string, nextFilter: TraceFilter = "all") => {
     setFilter(nextFilter);
@@ -127,47 +129,53 @@ export function SessionTracePanel({
               <div className="session-trace-issues" data-testid="session-trace-issues">
                 <div className="session-trace-issues-head">
                   <strong>Issue navigator</strong>
-                  <span>{trace.toolIssueCount} {trace.toolIssueCount === 1 ? "issue" : "issues"} across {issueGroups.length} {issueGroups.length === 1 ? "tool" : "tools"}</span>
+                  <span>{visibleIssueCount} {visibleIssueCount === 1 ? "issue" : "issues"} across {issueGroups.length} {issueGroups.length === 1 ? "tool" : "tools"}</span>
                 </div>
-                <div className="session-trace-issue-groups" role="group" aria-label="Tool issue groups">
-                  {issueGroups.map((group) => (
-                    <button
-                      key={group.tool}
-                      type="button"
-                      onClick={() => {
-                        setFilter("issues");
-                        setQuery(`tool:${group.tool}`);
-                        setActiveIssueId(trace.toolIssues.find((issue) => issue.tool === group.tool)?.id);
-                      }}
-                    >
-                      <strong>{group.tool}</strong>
-                      <span>{group.count}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="session-trace-issue-list">
-                  {trace.toolIssues.map((issue) => (
-                    <button
-                      key={`${issue.id}:${issue.title}`}
-                      type="button"
-                      className="session-trace-issue"
-                      data-selected={activeIssue?.id === issue.id ? "true" : "false"}
-                      onClick={() => {
-                        setActiveIssueId(issue.id);
-                        setFilter("issues");
-                        setQuery(issue.query);
-                      }}
-                    >
-                      <span>{issue.title}</span>
-                      <small>{issue.detail}</small>
-                      {issue.badges.length > 0 ? (
-                        <span className="session-trace-issue-badges" aria-hidden="true">
-                          {issue.badges.slice(0, 3).map((badge) => <b key={badge}>{badge}</b>)}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
+                {visibleIssues.length > 0 ? (
+                  <>
+                    <div className="session-trace-issue-groups" role="group" aria-label="Tool issue groups">
+                      {issueGroups.map((group) => (
+                        <button
+                          key={group.tool}
+                          type="button"
+                          onClick={() => {
+                            setFilter("issues");
+                            setQuery(`tool:${group.tool}`);
+                            setActiveIssueId(trace.toolIssues.find((issue) => issue.tool === group.tool)?.id);
+                          }}
+                        >
+                          <strong>{group.tool}</strong>
+                          <span>{group.count}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="session-trace-issue-list">
+                      {visibleIssues.map((issue) => (
+                        <button
+                          key={`${issue.id}:${issue.title}`}
+                          type="button"
+                          className="session-trace-issue"
+                          data-selected={activeIssue?.id === issue.id ? "true" : "false"}
+                          onClick={() => {
+                            setActiveIssueId(issue.id);
+                            setFilter("issues");
+                            setQuery(issue.query);
+                          }}
+                        >
+                          <span>{issue.title}</span>
+                          <small>{issue.detail}</small>
+                          {issue.badges.length > 0 ? (
+                            <span className="session-trace-issue-badges" aria-hidden="true">
+                              {issue.badges.slice(0, 3).map((badge) => <b key={badge}>{badge}</b>)}
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="session-skills-empty">No tool issues matching the current trace filter.</div>
+                )}
                 {activeIssue ? (
                   <div className="session-trace-issue-focus" data-testid="session-trace-issue-focus">
                     <div className="session-trace-issue-focus-head">
@@ -280,6 +288,51 @@ function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceTool
 function traceToolRequestStatsLabel(stats: SessionTraceView["toolRequests"]): string {
   if (stats.admitted == null && stats.skipped == null) return String(stats.total);
   return `${stats.total} · ${stats.admitted ?? 0} admitted · ${stats.skipped ?? 0} skipped`;
+}
+
+function filterTraceIssues(
+  issues: SessionTraceView["toolIssues"],
+  filter: TraceFilter,
+  query: string,
+): SessionTraceView["toolIssues"] {
+  const narrowed = issues.filter((issue) => issueMatchesTraceFilter(issue, filter));
+  const terms = traceIssueSearchTerms(query);
+  if (terms.length === 0) return narrowed;
+  return narrowed.filter((issue) => {
+    const text = traceIssueSearchText(issue);
+    return terms.every((term) => text.includes(term));
+  });
+}
+
+function issueMatchesTraceFilter(issue: SessionTraceView["toolIssues"][number], filter: TraceFilter): boolean {
+  if (filter === "commands") return issue.tool === "shell";
+  if (filter === "files") return issue.tool === "read_file" || issue.tool === "write_file" || issue.tool === "edit_file" || issue.tool === "list_files";
+  if (filter === "memory") return issue.tool === "memory" || issue.tool === "session_search";
+  if (filter === "loop") return issue.tool.startsWith("loop");
+  return true;
+}
+
+function traceIssueSearchText(issue: SessionTraceView["toolIssues"][number]): string {
+  return [
+    issue.id,
+    issue.query,
+    issue.requestQuery,
+    `tool:${issue.tool}`,
+    `request:${issue.turnNumber}`,
+    issue.exitCode != null ? `exit:${issue.exitCode}` : undefined,
+    "status:failed",
+    issue.title,
+    issue.tool,
+    issue.detail,
+    issue.next,
+    ...issue.badges,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function traceIssueSearchTerms(query: string): string[] {
+  return (query.toLowerCase().match(/"[^"]+"|\S+/g) ?? [])
+    .map((term) => term.replace(/^"|"$/g, "").trim())
+    .filter(Boolean);
 }
 
 function TraceSelectionSummaryView({ summary }: { summary: TraceSelectionSummary }) {
