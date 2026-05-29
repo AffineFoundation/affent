@@ -24,6 +24,7 @@ import (
 	"github.com/affinefoundation/affent/internal/sessionsearch"
 	"github.com/affinefoundation/affent/internal/sessionstate"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/taskstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
 )
@@ -131,53 +132,11 @@ type sessionContextCompactionSummary struct {
 	TailOnly           bool   `json:"tail_only,omitempty"`
 }
 
-type sessionTaskStateSummary struct {
-	Objective         string                     `json:"objective,omitempty"`
-	Status            string                     `json:"status,omitempty"`
-	CurrentStep       string                     `json:"current_step,omitempty"`
-	RequestMode       string                     `json:"request_mode,omitempty"`
-	RequestSource     string                     `json:"request_source,omitempty"`
-	ScheduleID        string                     `json:"schedule_id,omitempty"`
-	ScheduleKind      string                     `json:"schedule_kind,omitempty"`
-	Constraints       []string                   `json:"constraints,omitempty"`
-	KnownFacts        []string                   `json:"known_facts,omitempty"`
-	ChangedFiles      []sessionTaskStateFile     `json:"changed_files,omitempty"`
-	AttemptedActions  []sessionTaskStateAction   `json:"attempted_actions,omitempty"`
-	FailedActions     []sessionTaskStateFailure  `json:"failed_actions,omitempty"`
-	Evidence          []sessionTaskStateEvidence `json:"evidence,omitempty"`
-	VerificationState string                     `json:"verification_state,omitempty"`
-	OpenQuestions     []string                   `json:"open_questions,omitempty"`
-	NextStep          string                     `json:"next_step,omitempty"`
-	Sources           []string                   `json:"sources,omitempty"`
-}
-
-type sessionTaskStateFile struct {
-	Path   string `json:"path"`
-	Action string `json:"action,omitempty"`
-}
-
-type sessionTaskStateAction struct {
-	Tool    string `json:"tool"`
-	Summary string `json:"summary,omitempty"`
-	TurnID  string `json:"turn_id,omitempty"`
-	CallID  string `json:"call_id,omitempty"`
-}
-
-type sessionTaskStateFailure struct {
-	Tool    string   `json:"tool"`
-	Summary string   `json:"summary,omitempty"`
-	Kinds   []string `json:"kinds,omitempty"`
-	Next    string   `json:"next,omitempty"`
-	TurnID  string   `json:"turn_id,omitempty"`
-	CallID  string   `json:"call_id,omitempty"`
-}
-
-type sessionTaskStateEvidence struct {
-	Source  string `json:"source"`
-	Summary string `json:"summary,omitempty"`
-	TurnID  string `json:"turn_id,omitempty"`
-	CallID  string `json:"call_id,omitempty"`
-}
+type sessionTaskStateSummary = taskstate.Snapshot
+type sessionTaskStateFile = taskstate.File
+type sessionTaskStateAction = taskstate.Action
+type sessionTaskStateFailure = taskstate.Failure
+type sessionTaskStateEvidence = taskstate.Evidence
 
 type sessionArtifactsSummary struct {
 	Count         int    `json:"count"`

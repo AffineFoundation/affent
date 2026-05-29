@@ -11,50 +11,11 @@ const (
 	taskStateSummaryMaxRune = 180
 )
 
-type TaskStateSnapshot struct {
-	Objective         string              `json:"objective,omitempty"`
-	Status            string              `json:"status,omitempty"`
-	CurrentStep       string              `json:"current_step,omitempty"`
-	RequestMode       string              `json:"request_mode,omitempty"`
-	RequestSource     string              `json:"request_source,omitempty"`
-	ScheduleID        string              `json:"schedule_id,omitempty"`
-	ScheduleKind      string              `json:"schedule_kind,omitempty"`
-	NextStep          string              `json:"next_step,omitempty"`
-	VerificationState string              `json:"verification_state,omitempty"`
-	ChangedFiles      []TaskStateFile     `json:"changed_files,omitempty"`
-	AttemptedActions  []TaskStateAction   `json:"attempted_actions,omitempty"`
-	FailedActions     []TaskStateFailure  `json:"failed_actions,omitempty"`
-	Evidence          []TaskStateEvidence `json:"evidence,omitempty"`
-	Sources           []string            `json:"sources,omitempty"`
-}
-
-type TaskStateFile struct {
-	Path   string `json:"path"`
-	Action string `json:"action,omitempty"`
-}
-
-type TaskStateAction struct {
-	Tool    string `json:"tool"`
-	Summary string `json:"summary,omitempty"`
-	TurnID  string `json:"turn_id,omitempty"`
-	CallID  string `json:"call_id,omitempty"`
-}
-
-type TaskStateFailure struct {
-	Tool    string   `json:"tool"`
-	Summary string   `json:"summary,omitempty"`
-	Kinds   []string `json:"kinds,omitempty"`
-	Next    string   `json:"next,omitempty"`
-	TurnID  string   `json:"turn_id,omitempty"`
-	CallID  string   `json:"call_id,omitempty"`
-}
-
-type TaskStateEvidence struct {
-	Source  string `json:"source"`
-	Summary string `json:"summary,omitempty"`
-	TurnID  string `json:"turn_id,omitempty"`
-	CallID  string `json:"call_id,omitempty"`
-}
+type TaskStateSnapshot = taskstate.Snapshot
+type TaskStateFile = taskstate.File
+type TaskStateAction = taskstate.Action
+type TaskStateFailure = taskstate.Failure
+type TaskStateEvidence = taskstate.Evidence
 
 func DeriveTaskState(trace Trace) TaskStateSnapshot {
 	task := TaskStateSnapshot{
@@ -151,19 +112,7 @@ func latestTaskRequest(trace Trace) *UserMessage {
 }
 
 func CloneTaskStateSnapshotPtr(in TaskStateSnapshot) *TaskStateSnapshot {
-	if taskStateEmpty(in) {
-		return nil
-	}
-	out := in
-	out.ChangedFiles = append([]TaskStateFile(nil), in.ChangedFiles...)
-	out.AttemptedActions = append([]TaskStateAction(nil), in.AttemptedActions...)
-	out.FailedActions = append([]TaskStateFailure(nil), in.FailedActions...)
-	for i := range out.FailedActions {
-		out.FailedActions[i].Kinds = append([]string(nil), in.FailedActions[i].Kinds...)
-	}
-	out.Evidence = append([]TaskStateEvidence(nil), in.Evidence...)
-	out.Sources = append([]string(nil), in.Sources...)
-	return &out
+	return taskstate.CloneSnapshotPtr(in)
 }
 
 func traceTaskObjective(trace Trace) string {
@@ -359,18 +308,5 @@ func compactTaskStateSummary(text string) string {
 }
 
 func taskStateEmpty(task TaskStateSnapshot) bool {
-	return task.Objective == "" &&
-		(task.Status == "" || task.Status == "unknown") &&
-		task.CurrentStep == "" &&
-		task.RequestMode == "" &&
-		task.RequestSource == "" &&
-		task.ScheduleID == "" &&
-		task.ScheduleKind == "" &&
-		task.NextStep == "" &&
-		(task.VerificationState == "" || task.VerificationState == "unknown") &&
-		len(task.ChangedFiles) == 0 &&
-		len(task.AttemptedActions) == 0 &&
-		len(task.FailedActions) == 0 &&
-		len(task.Evidence) == 0 &&
-		len(task.Sources) == 0
+	return taskstate.IsEmpty(task)
 }

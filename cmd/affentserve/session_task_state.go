@@ -552,21 +552,5 @@ func compactTaskSummary(text string) string {
 }
 
 func sessionTaskStateEmpty(task sessionTaskStateSummary) bool {
-	return task.Objective == "" &&
-		(task.Status == "" || task.Status == "unknown") &&
-		task.CurrentStep == "" &&
-		task.RequestMode == "" &&
-		task.RequestSource == "" &&
-		task.ScheduleID == "" &&
-		task.ScheduleKind == "" &&
-		len(task.Constraints) == 0 &&
-		len(task.KnownFacts) == 0 &&
-		len(task.ChangedFiles) == 0 &&
-		len(task.AttemptedActions) == 0 &&
-		len(task.FailedActions) == 0 &&
-		len(task.Evidence) == 0 &&
-		(task.VerificationState == "" || task.VerificationState == "unknown") &&
-		len(task.OpenQuestions) == 0 &&
-		task.NextStep == "" &&
-		len(task.Sources) == 0
+	return taskstate.IsEmpty(task)
 }
