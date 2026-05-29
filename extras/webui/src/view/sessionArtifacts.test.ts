@@ -113,7 +113,7 @@ describe("sessionArtifacts", () => {
     ]);
     expect(artifactEvidenceText(artifacts[0])).toBe(
       [
-        "Artifact evidence for .affent/artifacts/tool-results/000001-c1.txt",
+        "Artifact evidence for Saved full tool output",
         "Source: cat big.log",
         "Origin: turn 1 · shell · call 1",
         "Size: (8 KiB, cap 256 KiB, 1 MiB omitted)",

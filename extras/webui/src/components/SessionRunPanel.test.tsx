@@ -63,7 +63,7 @@ describe("SessionRunPanel", () => {
         "Working directory: extras/webui",
         "Output: checkout spec failed",
         "Next: update payment route then rerun",
-        "Output artifact: .affent/artifacts/tool-results/test.txt",
+        "Full output: captured",
       ].join("\n"),
       "run_command",
     );

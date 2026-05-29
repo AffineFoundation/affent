@@ -1,6 +1,6 @@
 import type { SessionState } from "../store/sessionState";
 import { formatByteCount } from "./byteFormat";
-import { showsWorkbenchArtifact } from "./toolResultDisplay";
+import { isToolResultStoragePath, showsWorkbenchArtifact } from "./toolResultDisplay";
 import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, chatVisibleTurnArtifacts, type TurnArtifact } from "./turnArtifacts";
 
 export type SessionArtifactKind = "deliverable" | "full_output";
@@ -74,7 +74,7 @@ export function sessionChatArtifactLabel(session: SessionState): string | undefi
 }
 
 export function artifactEvidenceText(artifact: TurnArtifact): string {
-  const lines = [`Artifact evidence for ${artifact.path}`, `Source: ${artifact.source}`];
+  const lines = [`Artifact evidence for ${artifactEvidenceReference(artifact)}`, `Source: ${artifact.source}`];
   const lineage = artifactLineageLabel(artifact);
   if (lineage) lines.push(`Origin: ${lineage}`);
   const size = artifactSizeLabel(artifact);
@@ -84,6 +84,10 @@ export function artifactEvidenceText(artifact: TurnArtifact): string {
   if (outcome) lines.push(`Outcome: ${outcome}`);
   if (artifact.summary) lines.push(`Summary: ${artifact.summary}`);
   return lines.join("\n");
+}
+
+function artifactEvidenceReference(artifact: TurnArtifact): string {
+  return artifactKind(artifact) === "full_output" || isToolResultStoragePath(artifact.path) ? "Saved full tool output" : artifact.path;
 }
 
 export function artifactSummaryPreview(artifact: TurnArtifact, maxLength = 180): string | undefined {

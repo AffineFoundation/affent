@@ -63,7 +63,7 @@ describe("buildSessionRun", () => {
         "Working directory: extras/webui",
         "Output: checkout spec failed",
         "Next: update payment route then rerun",
-        "Output artifact: .affent/artifacts/tool-results/test.txt",
+        "Full output: captured",
       ].join("\n"),
     );
     expect(runCommandDraft(run.commands[0])).toContain("Run evidence for npm test -- checkout.spec.ts");

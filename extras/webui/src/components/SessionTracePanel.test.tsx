@@ -128,7 +128,8 @@ describe("SessionTracePanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Artifacts 1" }));
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Artifacts");
-    expect(screen.getByTestId("event-trace")).toHaveTextContent("artifact 000001-shell.txt");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("full output");
+    expect(screen.getByTestId("event-trace")).not.toHaveTextContent("000001-shell.txt");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("SourceAccess");
     await user.click(screen.getByRole("button", { name: "Artifacts 1" }));
 

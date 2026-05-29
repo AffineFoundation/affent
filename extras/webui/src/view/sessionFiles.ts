@@ -1,5 +1,6 @@
 import type { SessionState, ToolCallState } from "../store/sessionState";
 import { summarizePreview } from "./textPreview";
+import { isToolResultStoragePath } from "./toolResultDisplay";
 
 export type SessionFileStatus = "running" | "available" | "failed";
 export type SessionFileAction = "read" | "listed" | "changed";
@@ -97,7 +98,7 @@ export function fileEvidenceText(item: SessionFileEvidence): string {
   const lines = [`File evidence for ${item.path}`, `Actions: ${item.actions.join(", ")}`, `Status: ${item.status}`];
   if (item.detail) lines.push(`Detail: ${item.detail}`);
   if (item.next) lines.push(`Next: ${item.next}`);
-  if (item.artifactPath) lines.push(`Evidence artifact: ${item.artifactPath}`);
+  if (item.artifactPath) lines.push(`Evidence output: ${fileEvidenceOutputReference(item.artifactPath)}`);
   if (item.contentPreview) {
     lines.push(`Loaded snapshot: ${item.contentTruncated ? "partial read_file output" : "read_file output"}`);
     if (item.contentStale) lines.push("Snapshot freshness: predates the latest write/edit action");
@@ -417,6 +418,10 @@ function fileEvidenceFromCall(
     contentBytes: contentPreview ? call.resultBytes : undefined,
     contentSequence: contentPreview ? sequence : undefined,
   };
+}
+
+function fileEvidenceOutputReference(path: string): string {
+  return isToolResultStoragePath(path) ? "captured" : path;
 }
 
 function mergeEvidence(

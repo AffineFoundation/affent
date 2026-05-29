@@ -24,6 +24,8 @@ describe("buildSessionChanges", () => {
       expect.objectContaining({ path: "tests/payments.spec.ts", operation: "write", status: "changed", artifactPath: ".affent/artifacts/tool-results/write.txt" }),
       expect.objectContaining({ path: "src/payments.ts", operation: "edit", status: "changed", turnNumber: 1, detail: "Updated payment route" }),
     ]);
+    expect(changedFileDraft(changes.files[0])).toContain("Evidence output: captured");
+    expect(changedFileDraft(changes.files[0])).not.toContain(".affent/artifacts/tool-results/write.txt");
   });
 
   it("keeps the latest status for repeated changes to the same file", () => {

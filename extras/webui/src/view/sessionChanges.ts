@@ -1,6 +1,7 @@
 import type { SessionState, ToolCallState } from "../store/sessionState";
 import type { ChangeDiffLine } from "../store/changeDiff";
 import { summarizePreview } from "./textPreview";
+import { isToolResultStoragePath } from "./toolResultDisplay";
 
 export type SessionChangeStatus = "running" | "changed" | "failed";
 
@@ -96,7 +97,7 @@ export function changedFileDraft(file: SessionChangedFile): string {
       `Operation: ${file.operation}`,
       `Status: ${file.status}`,
       file.detail ? `Latest evidence: ${file.detail}` : undefined,
-      file.artifactPath ? `Evidence artifact: ${file.artifactPath}` : undefined,
+      file.artifactPath ? `Evidence output: ${changeEvidenceOutputReference(file.artifactPath)}` : undefined,
       "",
       "No diff preview was captured, so read the current file before making changes.",
     ].filter((line): line is string => Boolean(line)).join("\n");
@@ -235,6 +236,10 @@ function changeFromCall(call: ToolCallState, turnNumber: number, sequence: numbe
     detail: changeDetail(call),
     artifactPath: call.resultArtifactPath,
   };
+}
+
+function changeEvidenceOutputReference(path: string): string {
+  return isToolResultStoragePath(path) ? "captured" : path;
 }
 
 function mergeChange(previous: SessionChangedFileInternal, next: SessionChangedFileInternal): SessionChangedFileInternal {

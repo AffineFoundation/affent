@@ -1,5 +1,6 @@
 import type { SessionState, ToolCallState } from "../store/sessionState";
 import { summarizePreview } from "./textPreview";
+import { isToolResultStoragePath } from "./toolResultDisplay";
 
 export type SessionRunStatus = "running" | "passed" | "failed";
 export type SessionRunCommandKind = "test" | "build" | "lint" | "typecheck" | "git" | "shell";
@@ -108,7 +109,7 @@ export function runCommandEvidenceText(command: SessionRunCommand): string {
     command.cwd ? `Working directory: ${command.cwd}` : undefined,
     command.detail ? `Output: ${command.detail}` : undefined,
     command.next ? `Next: ${command.next}` : undefined,
-    command.artifactPath ? `Output artifact: ${command.artifactPath}` : undefined,
+    command.artifactPath ? `Full output: ${runCommandOutputReference(command.artifactPath)}` : undefined,
   ];
   return lines.filter((line): line is string => Boolean(line)).join("\n");
 }
@@ -369,6 +370,10 @@ function commandFromCall(call: ToolCallState, turnNumber: number, sequence: numb
     next: nextHint(call.resultSummary, call.result),
     artifactPath: call.resultArtifactPath,
   };
+}
+
+function runCommandOutputReference(path: string): string {
+  return isToolResultStoragePath(path) ? "captured" : path;
 }
 
 function commandStatus(call: ToolCallState): SessionRunStatus {

@@ -3515,13 +3515,14 @@ describe("App", () => {
     await selectWorkbenchTab(user, "Artifacts");
     const artifactsPanel = await screen.findByTestId("session-artifacts-panel");
     await user.click(within(screen.getByTestId("session-artifacts-focus")).getByRole("button", { name: "Open artifact" }));
-    expect(artifactsPanel).toHaveTextContent("000001-c1.txt");
+    expect(artifactsPanel).toHaveTextContent("Stored full output");
+    expect(artifactsPanel).not.toHaveTextContent("000001-c1.txt");
     await user.click(await screen.findByRole("button", { name: "Use text" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       [
         "Use this loaded file text in the next step:",
-        "File: .affent/artifacts/tool-results/000001-c1.txt",
+        "File: Saved full tool output",
         "Text:\nartifact payload",
       ].join("\n"),
     );

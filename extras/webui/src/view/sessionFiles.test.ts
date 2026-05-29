@@ -195,7 +195,8 @@ describe("buildSessionFiles", () => {
     expect(fileEvidenceText(item)).toContain("Loaded snapshot: read_file output");
     expect(fileEvidenceText(item)).not.toContain("Snapshot freshness");
     expect(fileEvidenceDraft(item)).toContain("Use this file evidence in the next step");
-    expect(fileEvidenceDraft(item)).toContain("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    expect(fileEvidenceDraft(item)).toContain("Evidence output: captured");
+    expect(fileEvidenceDraft(item)).not.toContain(".affent/artifacts/tool-results/read.txt");
     expect(filesEvidenceText(buildSessionFiles(session))).toContain("Session file evidence");
     expect(filesEvidenceText(buildSessionFiles(session))).toContain("File evidence for src/payments.ts");
     expect(filesEvidenceDraft(buildSessionFiles(session))).toContain("decide what to inspect, fix, or review next");
