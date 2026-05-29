@@ -16,8 +16,8 @@ import (
 
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
-	"github.com/affinefoundation/affent/internal/taskstate"
 	"github.com/affinefoundation/affent/internal/textutil"
+	"github.com/affinefoundation/affent/internal/verification"
 )
 
 // looksBinary returns true when buf has a NUL byte in the first 8 KiB.
@@ -759,10 +759,10 @@ func rejectBroadShellScan(command string, indicators []string) error {
 	return nil
 }
 
-var verificationCommandIndicators = taskstate.DefaultVerificationCommandIndicators
+var verificationCommandIndicators = verification.DefaultCommandIndicators
 
 func shellCommandLooksLikeVerification(command string, indicators []string) bool {
-	return taskstate.ShellCommandLooksLikeVerificationWithIndicators(command, indicators)
+	return verification.CommandLooksLikeVerificationWithIndicators(command, indicators)
 }
 
 // ShellCommandLooksLikeVerification reports whether a shell command is a

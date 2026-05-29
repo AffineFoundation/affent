@@ -40,7 +40,8 @@ const modulePath = "github.com/affinefoundation/affent"
 // The contract is layered:
 //
 //	leaves      - jsonl, netguard, sessionstate, sourceaccess, sse,
-//	              textutil, toolfailure, toolrepair, websource, workspaceignore
+//	              textutil, toolfailure, toolrepair, verification, websource,
+//	              workspaceignore
 //	leaf-deps   - gosymbols, loopstate, memory, metrictext, planstate,
 //	              projectcontext, sessionsearch, taskstate
 //	exec        - executor
@@ -70,6 +71,7 @@ var allowedDeps = map[string]map[string]bool{
 	"internal/textutil":        {},
 	"internal/toolfailure":     {},
 	"internal/toolrepair":      {},
+	"internal/verification":    {},
 	"internal/websource":       {},
 	"internal/workspaceignore": {},
 
@@ -106,10 +108,11 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/textutil":  true,
 	},
 	"internal/taskstate": {
-		"internal/jsonl":       true,
-		"internal/sse":         true,
-		"internal/textutil":    true,
-		"internal/toolfailure": true,
+		"internal/jsonl":        true,
+		"internal/sse":          true,
+		"internal/textutil":     true,
+		"internal/toolfailure":  true,
+		"internal/verification": true,
 	},
 
 	// --- exec ---
@@ -148,6 +151,7 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/textutil":        true,
 		"internal/toolfailure":     true,
 		"internal/toolrepair":      true,
+		"internal/verification":    true,
 		"internal/websource":       true,
 		"internal/workspaceignore": true,
 	},
