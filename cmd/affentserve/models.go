@@ -24,16 +24,18 @@ func handleModels(cfg Config) http.HandlerFunc {
 		if model == "" {
 			model = "default"
 		}
+		modelInfo := map[string]any{
+			"id":       model,
+			"object":   "model",
+			"owned_by": "affent",
+			"created":  created,
+		}
+		if cfg.ModelContextWindowTokens > 0 {
+			modelInfo["context_window"] = cfg.ModelContextWindowTokens
+		}
 		body := map[string]any{
 			"object": "list",
-			"data": []map[string]any{
-				{
-					"id":       model,
-					"object":   "model",
-					"owned_by": "affent",
-					"created":  created,
-				},
-			},
+			"data":   []map[string]any{modelInfo},
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(body)

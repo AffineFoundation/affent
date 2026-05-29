@@ -54,15 +54,19 @@ import (
 // except /healthz (which must stay reachable for load balancers).
 func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handler {
 	mux := http.NewServeMux()
+	runtimeCfg := cfg
+	if pool != nil {
+		runtimeCfg = pool.cfg
+	}
 
 	mux.Handle("/healthz", http.HandlerFunc(handleHealth(pool)))
 
 	authed := func(h http.Handler) http.Handler {
-		return requireAuth(cfg.AuthToken, logRequests(logger, h))
+		return requireAuth(runtimeCfg.AuthToken, logRequests(logger, h))
 	}
 
-	mux.Handle("/v1/models", authed(http.HandlerFunc(handleModels(cfg))))
-	mux.Handle("/v1/chat/completions", authed(http.HandlerFunc(handleChatCompletions(cfg, pool))))
+	mux.Handle("/v1/models", authed(http.HandlerFunc(handleModels(runtimeCfg))))
+	mux.Handle("/v1/chat/completions", authed(http.HandlerFunc(handleChatCompletions(runtimeCfg, pool))))
 	mux.Handle("/v1/settings", authed(http.HandlerFunc(handleAccountSettings(pool))))
 	mux.Handle("/v1/settings/", authed(http.HandlerFunc(handleAccountSettingsRoutes(pool))))
 	mux.Handle("/v1/skills", authed(http.HandlerFunc(handleAccountSkills(pool))))
@@ -72,7 +76,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 	})))
 	mux.Handle("/v1/sessions", authed(http.HandlerFunc(handleSessionsCollection(pool))))
 	mux.Handle("/v1/sessions/", authed(http.HandlerFunc(handleSessionRoutes(pool))))
-	mux.Handle("/v1/stats", authed(http.HandlerFunc(handleStats(cfg, pool))))
+	mux.Handle("/v1/stats", authed(http.HandlerFunc(handleStats(runtimeCfg, pool))))
 
 	if web := webUIHandler(); web != nil {
 		mux.Handle("/", logRequests(logger, web))

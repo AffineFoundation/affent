@@ -75,6 +75,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		compactTrigger            = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier. Env: AFFENTSERVE_COMPACT_TRIGGER.")
 		compactTriggerInputTokens = fs.Int("compact-trigger-input-tokens", 0, "Estimated request input-token trigger for proactive compaction. 0 = runtime-derived default; negative disables request-pressure compaction. Env: AFFENTSERVE_COMPACT_TRIGGER_INPUT_TOKENS.")
 		modelContextWindowTokens  = fs.Int("model-context-window-tokens", 0, "Effective model context window in tokens. 0 = unknown; when set, proactive compaction defaults to a percentage of this window. Env: AFFENTSERVE_MODEL_CONTEXT_WINDOW_TOKENS.")
+		modelContextWindowAuto    = fs.Bool("model-context-window-auto", false, "Best-effort discovery of model context window from upstream /models metadata when explicit window is unset. Env: AFFENTSERVE_MODEL_CONTEXT_WINDOW_AUTO.")
 		compactTriggerPercent     = fs.Int("compact-trigger-input-percent", 0, "Percent of --model-context-window-tokens used for proactive compaction when --compact-trigger-input-tokens is unset. 0 = runtime default. Env: AFFENTSERVE_COMPACT_TRIGGER_INPUT_PERCENT.")
 		compactKeepLast           = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10). Env: AFFENTSERVE_COMPACT_KEEP_LAST.")
 		enableBrowser             = fs.Bool("browser", false, "Register the extras/browser tool family for each new session. Env: AFFENTSERVE_BROWSER.")
@@ -188,6 +189,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if setFlags["model-context-window-tokens"] {
 		cfg.ModelContextWindowTokens = *modelContextWindowTokens
+	}
+	if setFlags["model-context-window-auto"] {
+		cfg.ModelContextWindowAuto = *modelContextWindowAuto
 	}
 	if setFlags["compact-trigger-input-percent"] {
 		cfg.CompactTriggerInputPercent = *compactTriggerPercent
@@ -330,6 +334,7 @@ func run(cfg Config, logger zerolog.Logger) error {
 	}
 	defer pool.Shutdown()
 
+	cfg = pool.cfg
 	mux := newRouter(cfg, pool, logger)
 	srv := &http.Server{
 		Addr:              cfg.Listen,
@@ -412,6 +417,8 @@ func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string)
 		Strs("focused_task_profiles", focusedTaskProfilesForLog(cfg)).
 		Bool("memory", cfg.EnableMemory).
 		Bool("shared_user_memory", cfg.SharedUserMemory).
+		Bool("model_context_window_auto", cfg.ModelContextWindowAuto).
+		Int("model_context_window_tokens", cfg.ModelContextWindowTokens).
 		Bool("browser", cfg.EnableBrowser).
 		Bool("web", cfg.EnableWeb).
 		Bool("web_search", cfg.EnableWebSearch).

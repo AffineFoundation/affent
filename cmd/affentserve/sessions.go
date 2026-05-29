@@ -202,6 +202,7 @@ func workflowToolsEnabled(cfg Config) bool {
 // NewSessionPool constructs a pool with the idle-GC goroutine running.
 func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 	cfg.ApplyEvalMode()
+	cfg = resolveModelContextWindowFromProvider(cfg, logger)
 	ttl, err := cfg.IdleTTL()
 	if err != nil {
 		return nil, err

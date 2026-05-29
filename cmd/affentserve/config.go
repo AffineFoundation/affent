@@ -125,6 +125,12 @@ type Config struct {
 	// set. Zero means unknown and keeps the conservative byte-derived default.
 	ModelContextWindowTokens int `json:"model_context_window_tokens"`
 
+	// ModelContextWindowAuto enables best-effort discovery from the upstream
+	// OpenAI-compatible /models endpoint when ModelContextWindowTokens is zero.
+	// Discovery is advisory: failures or missing metadata keep the window
+	// unknown instead of failing startup.
+	ModelContextWindowAuto bool `json:"model_context_window_auto"`
+
 	// CompactTriggerInputPercent derives request-input compaction from
 	// ModelContextWindowTokens. Zero uses the agent runtime default.
 	CompactTriggerInputPercent int `json:"compact_trigger_input_percent"`
@@ -426,6 +432,7 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_WEB_SEARCH", &c.EnableWebSearch},
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
 		{"AFFENTSERVE_SHARED_USER_MEMORY", &c.SharedUserMemory},
+		{"AFFENTSERVE_MODEL_CONTEXT_WINDOW_AUTO", &c.ModelContextWindowAuto},
 		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
 		{"AFFENTSERVE_EVAL_MODE", &c.EvalMode},
 		{"AFFENTSERVE_EVAL_ALL_TOOLS", &c.EvalAllTools},

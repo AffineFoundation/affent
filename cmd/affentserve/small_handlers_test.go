@@ -79,6 +79,26 @@ func TestHandleModels_FallsBackToDefault(t *testing.T) {
 	}
 }
 
+func TestHandleModels_IncludesContextWindowWhenKnown(t *testing.T) {
+	h := handleModels(Config{Model: "known-window", ModelContextWindowTokens: 128000})
+	r := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	w := httptest.NewRecorder()
+	h(w, r)
+
+	var resp struct {
+		Data []struct {
+			ID            string `json:"id"`
+			ContextWindow int    `json:"context_window"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v\n%s", err, w.Body.String())
+	}
+	if len(resp.Data) != 1 || resp.Data[0].ID != "known-window" || resp.Data[0].ContextWindow != 128000 {
+		t.Fatalf("models response = %+v, want context_window=128000", resp.Data)
+	}
+}
+
 // TestHandleSessionDelete_AlwaysReturns204 pins the idempotent
 // contract: DELETE on a known or unknown session id returns 204
 // either way. The handler doc says "clients calling 'make sure

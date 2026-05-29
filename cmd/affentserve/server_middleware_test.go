@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -177,6 +178,36 @@ func TestNewRouter_RegistersExpectedRoutes(t *testing.T) {
 				t.Errorf("router didn't recognize %s %s (got default-mux html 404)", c.method, c.path)
 			}
 		})
+	}
+}
+
+func TestNewRouter_UsesResolvedPoolConfigForModels(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.Model = "resolved-model"
+	pool.cfg.ModelContextWindowTokens = 128000
+	router := newRouter(Config{Model: "stale-model"}, pool, zerolog.New(io.Discard))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rr.Code, rr.Body.String())
+	}
+
+	var body struct {
+		Data []struct {
+			ID            string `json:"id"`
+			ContextWindow int    `json:"context_window"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Data) != 1 {
+		t.Fatalf("models len = %d, want 1", len(body.Data))
+	}
+	if body.Data[0].ID != "resolved-model" || body.Data[0].ContextWindow != 128000 {
+		t.Fatalf("model = %+v, want resolved-model/128000", body.Data[0])
 	}
 }
 
