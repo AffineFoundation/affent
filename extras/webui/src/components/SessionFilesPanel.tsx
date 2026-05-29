@@ -60,7 +60,7 @@ export function SessionFilesPanel({
     : snapshotItems.find((item) => item.path === selectedPath) ?? (selectedEvidenceCandidate ? undefined : snapshotItems[0]);
   const selectedEvidence = selectedEvidenceCandidate
     ?? selectedItem
-    ?? visibleItems[0];
+    ?? preferredFileEvidence(visibleItems);
   const snapshotLines = selectedItem ? fileLines(selectedItem) : [];
   const activeRange = selectedItem && selectedRange?.path === selectedItem.path ? selectedRange : undefined;
   const workspaceReady = workspaceBrowser?.state === "ready" ? workspaceBrowser.file : undefined;
@@ -164,8 +164,9 @@ export function SessionFilesPanel({
                 </button>
               </div>
             ) : (
-              <div className="session-workspace-unavailable">
-                <strong>Workspace path unavailable</strong>
+              <div className="session-files-explorer-status" data-state="unbound">
+                <span>Workspace unavailable</span>
+                <strong>Recorded evidence only</strong>
                 {onOpenWorkspacePanel ? <button type="button" className="ghost-action" onClick={onOpenWorkspacePanel}>Open Workspace</button> : null}
               </div>
             )}
@@ -545,9 +546,12 @@ function FileEvidenceInspector({
   return (
     <div className="session-file-inspector" data-testid="session-file-inspector" data-status={item.status}>
       <div className="session-file-inspector-head">
-        <span>{item.status === "failed" ? "Path issue" : item.actions.includes("changed") ? "Changed file" : item.contentPreview ? "Loaded snapshot" : "File evidence"}</span>
-        <strong title={item.path}>{item.path === "." ? "workspace root" : item.path}</strong>
-        <small>{compactFileMeta(item)}</small>
+        <div>
+          <span>{item.status === "failed" ? "Path issue" : item.actions.includes("changed") ? "Changed file" : item.contentPreview ? "Loaded snapshot" : "File evidence"}</span>
+          <strong title={item.path}>{item.path === "." ? "workspace root" : item.path}</strong>
+          <small>{compactFileMeta(item)}</small>
+        </div>
+        <b>{statusLabel(item.status)}</b>
       </div>
       {facts.length > 0 ? (
         <dl className="session-file-inspector-facts">
@@ -713,6 +717,14 @@ function fileStats(files: SessionFilesView) {
     snapshots: files.items.filter((item) => item.contentPreview).length,
     staleSnapshots: files.items.filter((item) => item.contentStale).length,
   };
+}
+
+function preferredFileEvidence(items: readonly SessionFileEvidence[]): SessionFileEvidence | undefined {
+  return items.find((item) => item.contentPreview)
+    ?? items.find((item) => item.actions.includes("changed"))
+    ?? items.find((item) => item.status === "failed")
+    ?? items.find((item) => item.path === ".")
+    ?? items[0];
 }
 
 function compactFileMeta(item: SessionFileEvidence): string {

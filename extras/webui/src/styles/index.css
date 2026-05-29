@@ -2657,16 +2657,16 @@ button.workbench-context-runtime-item:focus-visible {
 .session-files-explorer {
   display: grid;
   align-content: start;
-  gap: 8px;
+  gap: 7px;
   max-height: min(72vh, 780px);
   overflow: auto;
-  padding: 9px;
+  padding: 8px;
 }
 
 .session-files-editor {
   display: grid;
   overflow: hidden;
-  padding: 9px;
+  padding: 8px;
 }
 
 .session-files-explorer-head {
@@ -2723,45 +2723,77 @@ button.workbench-context-runtime-item:focus-visible {
   justify-content: flex-start;
 }
 
-.session-workspace-unavailable {
-  display: flex;
+.session-files-explorer-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 3px 8px;
   min-width: 0;
   border: 1px solid rgba(189, 199, 211, 0.72);
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.58);
   color: var(--text-muted);
-  padding: 7px 8px;
+  padding: 6px 7px;
 }
 
-.session-workspace-unavailable strong {
+.session-files-explorer-status[data-state="unbound"] {
+  border-color: rgba(148, 163, 184, 0.38);
+  background: rgba(248, 250, 252, 0.72);
+}
+
+.session-files-explorer-status span,
+.session-files-explorer-status strong {
   min-width: 0;
   overflow: hidden;
-  font-size: 12px;
-  font-weight: 720;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-files-explorer-status span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.session-files-explorer-status strong {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 680;
+}
+
+.session-files-explorer-status .ghost-action {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  min-height: 26px;
+  padding: 4px 7px;
 }
 
 .session-file-inspector {
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 9px;
   min-width: 0;
   border: 1px solid rgba(20, 184, 166, 0.22);
   border-radius: var(--radius-sm);
-  background: rgba(240, 253, 250, 0.62);
-  padding: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 9px;
 }
 
 .session-file-inspector[data-status="failed"] {
-  border-color: rgba(248, 113, 113, 0.28);
-  background: rgba(254, 242, 242, 0.66);
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(255, 251, 251, 0.82);
 }
 
 .session-file-inspector-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-file-inspector-head > div {
   display: grid;
   gap: 2px;
   min-width: 0;
@@ -2800,20 +2832,40 @@ button.workbench-context-runtime-item:focus-visible {
   white-space: nowrap;
 }
 
+.session-file-inspector-head b {
+  border: 1px solid rgba(20, 184, 166, 0.22);
+  border-radius: 999px;
+  background: rgba(240, 253, 250, 0.78);
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 7px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.session-file-inspector[data-status="failed"] .session-file-inspector-head b {
+  border-color: rgba(248, 113, 113, 0.26);
+  background: rgba(254, 242, 242, 0.82);
+  color: var(--c-error);
+}
+
 .session-file-inspector-facts {
   display: grid;
-  gap: 6px;
+  gap: 0;
   min-width: 0;
   margin: 0;
+  border-top: 1px solid rgba(189, 199, 211, 0.54);
 }
 
 .session-file-inspector-facts > div {
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   gap: 8px;
   min-width: 0;
-  border-top: 1px solid rgba(20, 184, 166, 0.16);
-  padding-top: 6px;
+  border-bottom: 1px solid rgba(189, 199, 211, 0.34);
+  padding: 6px 0;
 }
 
 .session-file-inspector-facts dt,
@@ -2871,8 +2923,8 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-files-tree-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 2px 7px;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 7px;
   align-items: center;
   width: 100%;
   min-width: 0;
@@ -2882,7 +2934,7 @@ button.workbench-context-runtime-item:focus-visible {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  padding: 5px 7px 5px calc(7px + (var(--depth, 0) * 16px));
+  padding: 4px 7px 4px calc(7px + (var(--depth, 0) * 16px));
   text-align: left;
 }
 
@@ -2980,8 +3032,9 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-files-tree-row small {
-  grid-column: 2;
+  grid-column: 3;
   min-width: 0;
+  max-width: 132px;
   overflow: hidden;
   color: var(--text-muted);
   font-size: 10.5px;
@@ -15142,7 +15195,7 @@ html[data-theme="dark"] .session-files-explorer,
 html[data-theme="dark"] .session-file-inspector,
 html[data-theme="dark"] .session-files-editor,
 html[data-theme="dark"] .session-workspace-browser,
-html[data-theme="dark"] .session-workspace-unavailable,
+html[data-theme="dark"] .session-files-explorer-status,
 html[data-theme="dark"] .session-workspace-browser-entry button,
 html[data-theme="dark"] .session-changes-overview,
 html[data-theme="dark"] .session-changes-item,
@@ -15161,12 +15214,12 @@ html[data-theme="dark"] .session-schedule-item {
 
 html[data-theme="dark"] .session-file-inspector {
   border-color: rgba(45, 212, 191, 0.24);
-  background: rgba(13, 40, 38, 0.28);
+  background: rgba(13, 40, 38, 0.2);
 }
 
 html[data-theme="dark"] .session-file-inspector[data-status="failed"] {
   border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(127, 29, 29, 0.18);
+  background: rgba(127, 29, 29, 0.12);
 }
 
 html[data-theme="dark"] .session-workspace-browser-path input {

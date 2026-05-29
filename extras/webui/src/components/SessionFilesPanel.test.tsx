@@ -123,7 +123,7 @@ describe("SessionFilesPanel", () => {
 
     expect(screen.queryByLabelText("Workspace path")).toBeNull();
     expect(screen.getByLabelText("File explorer")).toHaveTextContent("Agent file evidence");
-    expect(screen.getByText("Workspace path unavailable")).toBeInTheDocument();
+    expect(screen.getByText("Workspace unavailable")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Open Workspace" }));
     expect(onOpenWorkspacePanel).toHaveBeenCalledTimes(1);
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: /src Listed/ }));
