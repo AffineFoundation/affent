@@ -3846,6 +3846,8 @@ type batchResultRecord struct {
 	TaskStateVerification                  string                                     `json:"task_state_verification,omitempty"`
 	TaskStateRequestMode                   string                                     `json:"task_state_request_mode,omitempty"`
 	TaskStateRequestSource                 string                                     `json:"task_state_request_source,omitempty"`
+	TaskStateScheduleID                    string                                     `json:"task_state_schedule_id,omitempty"`
+	TaskStateScheduleKind                  string                                     `json:"task_state_schedule_kind,omitempty"`
 	TaskStateChangedFiles                  int                                        `json:"task_state_changed_files,omitempty"`
 	TaskStateFailedActions                 int                                        `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                      int                                        `json:"task_state_evidence,omitempty"`
@@ -4244,6 +4246,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		TaskStateVerification:                  res.TaskState.VerificationState,
 		TaskStateRequestMode:                   res.TaskState.RequestMode,
 		TaskStateRequestSource:                 res.TaskState.RequestSource,
+		TaskStateScheduleID:                    res.TaskState.ScheduleID,
+		TaskStateScheduleKind:                  res.TaskState.ScheduleKind,
 		TaskStateChangedFiles:                  len(res.TaskState.ChangedFiles),
 		TaskStateFailedActions:                 len(res.TaskState.FailedActions),
 		TaskStateEvidence:                      len(res.TaskState.Evidence),

@@ -3959,6 +3959,8 @@ func TestPrintBatchResultJSONLIncludesTaskState(t *testing.T) {
 		got["task_state_verification"] != "last_shell_passed" ||
 		got["task_state_request_mode"] != "execute_plan" ||
 		got["task_state_request_source"] != "schedule" ||
+		got["task_state_schedule_id"] != "sched_clamp" ||
+		got["task_state_schedule_kind"] != "checkin" ||
 		got["task_state_changed_files"] != float64(1) ||
 		got["task_state_failed_actions"] != float64(1) ||
 		got["task_state_evidence"] != float64(1) {
