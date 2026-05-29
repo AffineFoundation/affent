@@ -3474,6 +3474,10 @@ func toolFailureKindHint(kind string) string {
 		return "SSRF guard blocked a private or local network URL; use public sources or explicitly configure trusted local access"
 	case "invalid_args":
 		return "the model called a tool with invalid arguments; inspect tool repair and prompt pressure if this is frequent"
+	case "command_failed":
+		return "a shell command exited non-zero without a more specific Failure kind; inspect the command, cwd, exit code, and result excerpt before changing model guidance"
+	case "tool_failed":
+		return "a tool failed without a more specific Failure kind; inspect the tool result and add structured Failure/Next metadata at the tool boundary if recovery is ambiguous"
 	case "loop_guard_repeated_failed_input":
 		return "loop guard blocked a repeat of the same failed URL/query; change the source/query instead of retrying the identical input"
 	case "loop_guard_repeated_call":

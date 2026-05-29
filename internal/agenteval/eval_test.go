@@ -5587,6 +5587,39 @@ func TestBuildDebugRecoveryGuideAddsUnclassifiedToolFailureAction(t *testing.T) 
 	}
 }
 
+func TestBuildDebugRecoveryGuideAddsGenericToolFailureActions(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/generic-tool-failures",
+		TimelinePath:      "/tmp/affent-eval/generic-tool-failures/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/generic-tool-failures/affenteval-debug.json",
+		ToolStats: ToolRuntimeStats{
+			ToolFailureByKind: map[string]int{
+				"command_failed": 1,
+				"tool_failed":    1,
+			},
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"tool_failure:command_failed",
+		"tool_failure:tool_failed",
+		"exact shell command",
+		"cwd",
+		"tool boundary",
+		"structured Failure/Next",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) {
+			t.Fatalf("continue prompt missing %q:\n%s", want, guide.ContinuePrompt)
+		}
+	}
+	if !stringSliceContains(guide.Inspect, "tool_failure_examples") {
+		t.Fatalf("recovery guide inspect = %#v, want tool_failure_examples", guide.Inspect)
+	}
+}
+
 func TestBuildDebugRecoveryGuideAddsAvailableUnusedSessionSearchAction(t *testing.T) {
 	res := BatchResult{
 		Workspace:         "/tmp/affent-eval/session-search-unused",

@@ -232,10 +232,12 @@ Scenario records describe one eval case:
   this field to distinguish blocked pages, empty responses, non-text
   responses, timeouts, search no-results, stale or non-interactable browser
   refs, argument errors, HTTP/network classes, and loop-guard rejections such
-  as repeated failed URL/query inputs. This field can count Web no-evidence
-  results whose `tool.result.exit_code` is `0`; it is the right field for
-  retrieval quality diagnostics, while `tool_errors` is the right field for
-  non-zero tool exits.
+  as repeated failed URL/query inputs. Failed shell commands without a more
+  specific structured kind are grouped as `command_failed`; other failed tools
+  without structured metadata are grouped as `tool_failed`. This field can
+  count Web no-evidence results whose `tool.result.exit_code` is `0`; it is
+  the right field for retrieval quality diagnostics, while `tool_errors` is the
+  right field for non-zero tool exits.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
 - `tool_failure_examples`: optional map of failure kind to bounded sample tool

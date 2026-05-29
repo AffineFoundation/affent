@@ -2369,7 +2369,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolArgsRepaired:        2,
 			ToolNameCanonicalized:   1,
 			ToolErrors:              1,
-			ToolFailureByKind:       map[string]int{"invalid_args": 1, "timeout": 2},
+			ToolFailureByKind:       map[string]int{"command_failed": 1, "invalid_args": 1, "timeout": 2, "tool_failed": 1},
 			ToolDurationMS:          40,
 			LoopGuardInterventions:  2,
 			ForcedNoTools:           1,
@@ -2531,7 +2531,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "loop_protocol_calibration=scenarios:1/1,requests:1,answers:1") {
 		t.Fatalf("summary output missing loop calibration rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,memory_search_miss:1,memory_update:1,memory_update:missing:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:memory_topic_anchors:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,memory_search_miss:1,memory_update:1,memory_update:missing:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:memory_topic_anchors:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:command_failed:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_failure:tool_failed:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
@@ -2557,7 +2557,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "tool_failure_kinds=invalid_args:1,timeout:2") {
+	if !strings.Contains(out.String(), "tool_failure_kinds=command_failed:1,invalid_args:1,timeout:2,tool_failed:1") {
 		t.Fatalf("summary output missing tool failure kind rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "runtime_error_kinds=context_overflow:1,llm_timeout:2") {
@@ -2602,7 +2602,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "trace_event_scenarios=1,rate=50.0%") {
 		t.Fatalf("summary output missing trace event scenario rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "tool_failure_hint[invalid_args]") || !strings.Contains(out.String(), "tool_failure_hint[timeout]") {
+	if !strings.Contains(out.String(), "tool_failure_hint[command_failed]") ||
+		!strings.Contains(out.String(), "tool_failure_hint[invalid_args]") ||
+		!strings.Contains(out.String(), "tool_failure_hint[timeout]") ||
+		!strings.Contains(out.String(), "tool_failure_hint[tool_failed]") {
 		t.Fatalf("summary output missing tool failure hints:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "hint[context_overflow]") || !strings.Contains(out.String(), "hint[llm_timeout]") {
@@ -2679,7 +2682,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
 		t.Fatalf("ToolRepairByKind = %#v, want %#v", summary.ToolRepairByKind, wantRepairKinds)
 	}
-	if !reflect.DeepEqual(summary.ToolFailureByKind, map[string]int{"invalid_args": 1, "timeout": 2}) {
+	if !reflect.DeepEqual(summary.ToolFailureByKind, map[string]int{"command_failed": 1, "invalid_args": 1, "timeout": 2, "tool_failed": 1}) {
 		t.Fatalf("ToolFailureByKind = %#v", summary.ToolFailureByKind)
 	}
 	if !reflect.DeepEqual(summary.RuntimeErrorByKind, map[string]int{"llm_timeout": 2, "context_overflow": 1}) {
@@ -5443,6 +5446,8 @@ func TestToolFailureKindHintIncludesWebSearchRecovery(t *testing.T) {
 		{kind: "dynamic_shell", want: "client-rendered loading/app shell"},
 		{kind: "stale_ref", want: "browser_snapshot"},
 		{kind: "not_interactable", want: "hidden, disabled, or covered"},
+		{kind: "command_failed", want: "shell command exited non-zero"},
+		{kind: "tool_failed", want: "tool failed without a more specific Failure kind"},
 		{kind: "loop_guard_repeated_failed_input", want: "same failed URL/query"},
 		{kind: "loop_guard_direct_reader_warning", want: "direct-reader trap"},
 		{kind: "loop_guard_repeated_call", want: "repeated identical tool arguments"},

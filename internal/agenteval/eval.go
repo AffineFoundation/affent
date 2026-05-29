@@ -1854,6 +1854,12 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "tool_failure:invalid_args") {
 		add("For tool_failure:invalid_args, inspect tool_failure_examples and the exact tool schema; fix malformed arguments or schema guidance before treating the task result as model reasoning failure.")
 	}
+	if containsString(tags, "tool_failure:command_failed") {
+		add("For tool_failure:command_failed, inspect tool_failure_examples and the exact shell command, cwd, exit code, and output before changing prompts or retrying the same command.")
+	}
+	if containsString(tags, "tool_failure:tool_failed") {
+		add("For tool_failure:tool_failed, inspect tool_failure_examples and add a more specific structured Failure/Next classification at the tool boundary if recovery remains ambiguous.")
+	}
 	if containsString(tags, "tool_failure:loop_guard_no_budget") {
 		add("For tool_failure:loop_guard_no_budget, inspect the requested-but-unrun tools and rerun the scenario with a smaller tool sequence or a higher turn budget before trusting the final synthesis.")
 	}
@@ -1916,6 +1922,8 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"tool_failure:loop_guard_call_cap",
 		"tool_failure:loop_guard_no_budget",
 		"tool_failure:invalid_args",
+		"tool_failure:command_failed",
+		"tool_failure:tool_failed",
 		"tool_failure:blocked",
 		"plan_error",
 		"delegation_error",
