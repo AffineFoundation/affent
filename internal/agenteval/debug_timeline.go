@@ -425,7 +425,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if len(exp.Domains) > 0 {
 		fmt.Fprintf(b, "- domains: `%s`\n", strings.Join(exp.Domains, "`, `"))
 	}
-	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.RuntimeMaxTurnInputTokens > 0 || exp.MaxLoopTurnInputTokens > 0 || exp.MaxLoopTurnTotalTokens > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
+	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.RuntimeMaxTurnInputTokens > 0 || exp.MaxLoopTurnInputTokens > 0 || exp.MaxLoopTurnTotalTokens > 0 || exp.CompactTrigger > 0 || exp.CompactTriggerInputTokens != 0 || exp.CompactKeepLast > 0 {
 		var parts []string
 		if exp.SessionID != "" {
 			parts = append(parts, fmt.Sprintf("session_id=%s", exp.SessionID))
@@ -453,6 +453,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if exp.CompactTrigger > 0 {
 			parts = append(parts, fmt.Sprintf("compact_trigger=%d", exp.CompactTrigger))
+		}
+		if exp.CompactTriggerInputTokens != 0 {
+			parts = append(parts, fmt.Sprintf("compact_trigger_input_tokens=%d", exp.CompactTriggerInputTokens))
 		}
 		if exp.CompactKeepLast > 0 {
 			parts = append(parts, fmt.Sprintf("compact_keep_last=%d", exp.CompactKeepLast))
@@ -843,6 +846,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.MaxLoopTurnTotalTokens > 0 ||
 		exp.MaxTurns > 0 ||
 		exp.CompactTrigger > 0 ||
+		exp.CompactTriggerInputTokens != 0 ||
 		exp.CompactKeepLast > 0
 }
 

@@ -125,7 +125,7 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 		"workspace": "./from-config",
 		"model": "config-model",
 		"max_call_timeout": "9s",
-		"compact": {"trigger": 10, "keep_last": 4}
+		"compact": {"trigger": 10, "trigger_input_tokens": 1234, "keep_last": 4}
 	}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -155,6 +155,9 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 	}
 	if cf.compactTrigger != 10 {
 		t.Fatalf("compact.trigger not loaded from config: %d", cf.compactTrigger)
+	}
+	if cf.compactTriggerInputTokens != 1234 {
+		t.Fatalf("compact.trigger_input_tokens not loaded from config: %d", cf.compactTriggerInputTokens)
 	}
 	if cf.compactKeepLast != 7 {
 		t.Fatalf("CLI compact-keep-last did not override config: %d", cf.compactKeepLast)
@@ -532,6 +535,7 @@ func TestPortableEnvConfigOverridesConfig(t *testing.T) {
 		"project_context": true,
 		"compact": {
 			"trigger": 120,
+			"trigger_input_tokens": 1000,
 			"keep_last": 8
 		}
 	}`), 0o644); err != nil {
@@ -547,6 +551,7 @@ func TestPortableEnvConfigOverridesConfig(t *testing.T) {
 	t.Setenv("AFFENTCTL_MEMORY_MAX_TOPICS", "32")
 	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "false")
 	t.Setenv("AFFENTCTL_COMPACT_TRIGGER", "240")
+	t.Setenv("AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS", "48000")
 	t.Setenv("AFFENTCTL_COMPACT_KEEP_LAST", "10")
 
 	var cf commonFlags
@@ -569,8 +574,8 @@ func TestPortableEnvConfigOverridesConfig(t *testing.T) {
 	if cf.projectContext {
 		t.Fatal("project context env should disable project context")
 	}
-	if cf.compactTrigger != 240 || cf.compactKeepLast != 10 {
-		t.Fatalf("compact env not applied: trigger=%d keep_last=%d", cf.compactTrigger, cf.compactKeepLast)
+	if cf.compactTrigger != 240 || cf.compactTriggerInputTokens != 48000 || cf.compactKeepLast != 10 {
+		t.Fatalf("compact env not applied: trigger=%d trigger_input_tokens=%d keep_last=%d", cf.compactTrigger, cf.compactTriggerInputTokens, cf.compactKeepLast)
 	}
 }
 

@@ -106,7 +106,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 		add("ok", "sampling", "valid")
 	}
 	trigger, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
-	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d keep_last=%d", trigger, agent.DefaultSummaryTriggerBytes, keepLast))
+	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d trigger_input_tokens=%d keep_last=%d", trigger, agent.DefaultSummaryTriggerBytes, c.compactTriggerInputTokens, keepLast))
 	add("ok", "boundaries", doctorBoundarySummary(c))
 	add("ok", "capabilities", doctorCapabilitySummary(c))
 	if status, msg := doctorSystemPrompt(c.systemPromptPath); status != "" {

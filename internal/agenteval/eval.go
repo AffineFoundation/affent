@@ -235,6 +235,7 @@ type BatchScenario struct {
 	MaxLoopTurnTotalTokens                         int
 	MaxTurns                                       int
 	CompactTrigger                                 int
+	CompactTriggerInputTokens                      int
 	CompactKeepLast                                int
 }
 
@@ -484,6 +485,7 @@ type DebugScenarioExpectations struct {
 	MaxLoopTurnTotalTokens                         int                                   `json:"max_loop_turn_total_tokens,omitempty"`
 	MaxTurns                                       int                                   `json:"max_turns,omitempty"`
 	CompactTrigger                                 int                                   `json:"compact_trigger,omitempty"`
+	CompactTriggerInputTokens                      int                                   `json:"compact_trigger_input_tokens,omitempty"`
 	CompactKeepLast                                int                                   `json:"compact_keep_last,omitempty"`
 }
 
@@ -1118,6 +1120,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCrashMissingToolResultResumeScenario(),
 		longRunCrashDuplicateToolResultResumeScenario(),
 		longRunContextCompactionRetentionScenario(),
+		longRunRequestInputPressureCompactionScenario(),
 		longRunInputBudgetPressureScenario(),
 		longRunLoopActivationCalibrationScenario(),
 		longRunLoopActivationCompletedDraftScenario(),
@@ -2216,6 +2219,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		MaxLoopTurnTotalTokens:                         s.MaxLoopTurnTotalTokens,
 		MaxTurns:                                       s.MaxTurns,
 		CompactTrigger:                                 s.CompactTrigger,
+		CompactTriggerInputTokens:                      s.CompactTriggerInputTokens,
 		CompactKeepLast:                                s.CompactKeepLast,
 	}
 }
@@ -2400,6 +2404,9 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if scenario.CompactTrigger > 0 {
 		args = append(args, "--compact-trigger", fmt.Sprint(scenario.CompactTrigger))
+	}
+	if scenario.CompactTriggerInputTokens != 0 {
+		args = append(args, "--compact-trigger-input-tokens", fmt.Sprint(scenario.CompactTriggerInputTokens))
 	}
 	if scenario.CompactKeepLast > 0 {
 		args = append(args, "--compact-keep-last", fmt.Sprint(scenario.CompactKeepLast))

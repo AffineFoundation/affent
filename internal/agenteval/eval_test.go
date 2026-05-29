@@ -2144,8 +2144,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 30 {
-		t.Fatalf("long-run suite size = %d, want 30", len(scenarios))
+	if len(scenarios) != 31 {
+		t.Fatalf("long-run suite size = %d, want 31", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -3198,6 +3198,38 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if _, ok := inputBudget.Files[".affent/loops/longrun-input-budget-pressure/LOOP.md"]; !ok {
 		t.Fatalf("input budget scenario missing seeded LOOP.md")
+	}
+
+	requestPressure, ok := seen["longrun-request-input-pressure-compaction"]
+	if !ok {
+		t.Fatalf("long-run suite missing request input pressure compaction scenario")
+	}
+	if requestPressure.SessionID != "longrun-request-input-pressure-compaction" ||
+		len(requestPressure.Prompts) != 3 ||
+		requestPressure.CompactTrigger != 240 ||
+		requestPressure.CompactTriggerInputTokens != 1 ||
+		requestPressure.CompactKeepLast != 1 {
+		t.Fatalf("request pressure scenario fields = session:%q prompts:%d compact:%d input:%d keep:%d",
+			requestPressure.SessionID,
+			len(requestPressure.Prompts),
+			requestPressure.CompactTrigger,
+			requestPressure.CompactTriggerInputTokens,
+			requestPressure.CompactKeepLast,
+		)
+	}
+	if requestPressure.RequiredContextCompactions != 1 ||
+		requestPressure.RequiredContextCompactionReasons["estimated_context_pressure"] != 1 ||
+		requestPressure.MaxParentToolCalls != 0 ||
+		!stringSliceContains(requestPressure.RequiredFinalText, "REQUEST-PRESSURE-OK-3") {
+		t.Fatalf("request pressure requirements = compactions:%d reasons:%#v max_tools:%d final:%#v",
+			requestPressure.RequiredContextCompactions,
+			requestPressure.RequiredContextCompactionReasons,
+			requestPressure.MaxParentToolCalls,
+			requestPressure.RequiredFinalText,
+		)
+	}
+	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_compaction_reason_at_least:estimated_context_pressure:1") {
+		t.Fatalf("request pressure checks missing compaction reason assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
 	}
 
 	loopCalibration, ok := seen["longrun-loop-activation-calibration"]
@@ -4743,10 +4775,11 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		ForbiddenFileSubstrings: map[string][]string{
 			"notes.md": {"uncited taostats metric"},
 		},
-		MaxLoopTurnInputTokens: 300000,
-		MaxLoopTurnTotalTokens: 320000,
-		CompactTrigger:         6,
-		CompactKeepLast:        3,
+		MaxLoopTurnInputTokens:    300000,
+		MaxLoopTurnTotalTokens:    320000,
+		CompactTrigger:            6,
+		CompactTriggerInputTokens: 5,
+		CompactKeepLast:           3,
 	}
 	err := writeScenarioDebugArtifacts(&res, scenario, "partial answer\n", "runtime log\n", &trace)
 	if err != nil {
@@ -4816,6 +4849,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.MaxLoopTurnInputTokens != 300000 ||
 		manifest.Expectations.MaxLoopTurnTotalTokens != 320000 ||
 		manifest.Expectations.CompactTrigger != 6 ||
+		manifest.Expectations.CompactTriggerInputTokens != 5 ||
 		manifest.Expectations.CompactKeepLast != 3 ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "turn_ended_cleanly") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "tool_called:web_fetch") ||
@@ -5152,7 +5186,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"expectation_capabilities: `browser`, `context_compaction`, `context_injection`, `delegated_source_evidence`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `source_repo`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"domains: `market`, `web_evidence`",
-		"runtime: `max_turns=12 max_loop_turn_input_tokens=300000 max_loop_turn_total_tokens=320000 compact_trigger=6 compact_keep_last=3`",
+		"runtime: `max_turns=12 max_loop_turn_input_tokens=300000 max_loop_turn_total_tokens=320000 compact_trigger=6 compact_trigger_input_tokens=5 compact_keep_last=3`",
 		"source_repo: `url=remote.git ref=main dir=app`",
 		"checks: `turn_ended_cleanly`",
 		"required_tools: `web_fetch`, `browser_network_read`",
@@ -5967,6 +6001,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		MaxTurns:                  3,
 		RuntimeMaxTurnInputTokens: 7,
 		CompactTrigger:            6,
+		CompactTriggerInputTokens: 5,
 		CompactKeepLast:           3,
 	}, "fix it")
 	joined := strings.Join(args, "\x00")
@@ -5980,6 +6015,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--max-turns\x003",
 		"--max-turn-input-tokens\x007",
 		"--compact-trigger\x006",
+		"--compact-trigger-input-tokens\x005",
 		"--compact-keep-last\x003",
 		"--temperature\x000",
 		"--top-p\x000.9",

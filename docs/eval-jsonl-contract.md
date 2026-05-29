@@ -158,7 +158,8 @@ Scenario records describe one eval case:
   plan/delegation constraints, protected files, optional
   `required_turn_end_reason` for intentional non-completed endings, optional
   `setup_commands` that prepared the workspace before the agent ran, and related
-  max-turn/compaction settings. This
+  max-turn/compaction settings such as `compact_trigger` and
+  `compact_trigger_input_tokens`. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
   Loop-decision checks can assert route-control events such as

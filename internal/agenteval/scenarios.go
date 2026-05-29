@@ -2168,6 +2168,32 @@ func longRunInputBudgetPressureScenario() BatchScenario {
 	}
 }
 
+func longRunRequestInputPressureCompactionScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-request-input-pressure-compaction",
+		Suites:    []string{longRunSuite},
+		Domains:   []string{contextCompactionDomain, longRunRecoveryDomain},
+		SessionID: "longrun-request-input-pressure-compaction",
+		Prompt:    "Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-1",
+		Prompts: []string{
+			"Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-1",
+			"Continue the same session. Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-2",
+			"Continue the same session after any runtime context maintenance. Do not call tools. Reply with exactly: REQUEST-PRESSURE-OK-3",
+		},
+		RequiredContextCompactions: 1,
+		RequiredContextCompactionReasons: map[string]int{
+			"estimated_context_pressure": 1,
+		},
+		RequiredFinalText:         []string{"REQUEST-PRESSURE-OK-3"},
+		ForbiddenTools:            []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
+		MaxParentToolCalls:        0,
+		MaxTurns:                  2,
+		CompactTrigger:            240,
+		CompactTriggerInputTokens: 1,
+		CompactKeepLast:           1,
+	}
+}
+
 func longRunResearchCheckpointScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-research-checkpoint",
