@@ -80,7 +80,7 @@ func symbolContextTool(deps BuiltinDeps) *Tool {
 			info, err := os.Stat(root)
 			if err != nil {
 				if os.IsNotExist(err) {
-					return "", fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find a valid path, then retry symbol_context", p.Path, parentForToolPath(p.Path))
+					return "", fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find a valid path, then retry symbol_context", displayFileToolPath(deps, p.Path), parentForToolPath(deps, p.Path))
 				}
 				return "", err
 			}

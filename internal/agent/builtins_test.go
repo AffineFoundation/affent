@@ -1622,6 +1622,67 @@ func TestBuiltinFileOpsResultsUseWorkspaceRelativePaths(t *testing.T) {
 	}
 }
 
+func TestBuiltinFileToolErrorsUseWorkspaceRelativePaths(t *testing.T) {
+	ctx := context.Background()
+	ws := filepath.Join(t.TempDir(), "workspace")
+	target := filepath.Join(ws, "app", "main.py")
+	deps := BuiltinDeps{HostWorkspaceDir: ws}
+
+	read := readFileTool(deps)
+	_, err := read.Execute(ctx, json.RawMessage(fmt.Sprintf(`{"path":%q}`, target)))
+	if err == nil {
+		t.Fatal("expected read_file missing file error")
+	}
+	if strings.Contains(err.Error(), ws) || !strings.Contains(err.Error(), "app/main.py") || !strings.Contains(err.Error(), "list_files on app") {
+		t.Fatalf("read_file error should use workspace-relative paths, got:\n%s", err.Error())
+	}
+
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	edit := editFileTool(deps)
+	_, err = edit.Execute(ctx, json.RawMessage(fmt.Sprintf(`{"path":%q,"old":"missing","new":"x"}`, target)))
+	if err == nil {
+		t.Fatal("expected edit_file old-not-found error")
+	}
+	if strings.Contains(err.Error(), ws) || !strings.Contains(err.Error(), "app/main.py") {
+		t.Fatalf("edit_file error should use workspace-relative paths, got:\n%s", err.Error())
+	}
+}
+
+func TestBuiltinFileOpsErrorsUseWorkspaceRelativePaths(t *testing.T) {
+	fake := newFakeFileOpsExecutor()
+	ctx := context.Background()
+	ws := filepath.Join(t.TempDir(), "workspace")
+	target := filepath.Join(ws, "app", "main.py")
+	fake.files[target] = "package main\n"
+	deps := BuiltinDeps{
+		Executor:         fake,
+		HostWorkspaceDir: ws,
+	}
+
+	read := readFileTool(deps)
+	_, err := read.Execute(ctx, json.RawMessage(fmt.Sprintf(`{"path":%q}`, filepath.Join(ws, "docs", "missing.md"))))
+	if err == nil {
+		t.Fatal("expected read_file missing file error")
+	}
+	if strings.Contains(err.Error(), ws) || !strings.Contains(err.Error(), "docs/missing.md") || !strings.Contains(err.Error(), "list_files on docs") {
+		t.Fatalf("read_file FileOps error should use workspace-relative paths, got:\n%s", err.Error())
+	}
+
+	edit := editFileTool(deps)
+	_, err = edit.Execute(ctx, json.RawMessage(fmt.Sprintf(`{"path":%q,"old":"missing","new":"x"}`, target)))
+	if err == nil {
+		t.Fatal("expected edit_file old-not-found error")
+	}
+	if strings.Contains(err.Error(), ws) || !strings.Contains(err.Error(), "app/main.py") {
+		t.Fatalf("edit_file FileOps error should use workspace-relative paths, got:\n%s", err.Error())
+	}
+}
+
 func TestBuiltinFileToolsTrimPathBeforeFileOps(t *testing.T) {
 	fake := newFakeFileOpsExecutor()
 	ctx := context.Background()

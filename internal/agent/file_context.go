@@ -181,7 +181,7 @@ func readWorkspaceTextForContext(ctx context.Context, deps BuiltinDeps, path str
 	if fo := fileOps(deps); fo != nil {
 		body, err := fo.ReadFile(ctx, path, maxBytes)
 		if err != nil {
-			return "", false, recoverableFileToolError("file_context", path, err)
+			return "", false, recoverableFileToolError(deps, "file_context", path, err)
 		}
 		truncated := strings.Contains(body, "[truncated")
 		if idx := strings.Index(body, "\n... [truncated"); idx >= 0 {
@@ -199,7 +199,7 @@ func readWorkspaceTextForContext(ctx context.Context, deps BuiltinDeps, path str
 	f, err := os.Open(full)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", false, fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry file_context", path, parentForToolPath(path))
+			return "", false, fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry file_context", displayFileToolPath(deps, path), parentForToolPath(deps, path))
 		}
 		return "", false, err
 	}
@@ -209,7 +209,8 @@ func readWorkspaceTextForContext(ctx context.Context, deps BuiltinDeps, path str
 		return "", false, err
 	}
 	if looksBinary(buf) {
-		return "", false, recoverableFileToolError("file_context", path, fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", path))
+		displayPath := displayFileToolPath(deps, path)
+		return "", false, recoverableFileToolError(deps, "file_context", path, fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", displayPath))
 	}
 	truncated := len(buf) > maxBytes
 	if truncated {

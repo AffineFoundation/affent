@@ -825,7 +825,7 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	}
 	rel, err := filepath.Rel(wsAbs, resolved)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q escapes workspace %q\nNext: retry with a workspace-relative path under the workspace, or call list_files on . to discover valid paths", p, deps.HostWorkspaceDir)
+		return "", fmt.Errorf("path %q escapes workspace\nNext: retry with a workspace-relative path under the workspace, or call list_files on . to discover valid paths", p)
 	}
 	return full, nil
 }
@@ -892,6 +892,17 @@ func workspaceRelativeDisplayPath(deps BuiltinDeps, full, fallback string) strin
 		return "."
 	}
 	return filepath.ToSlash(rel)
+}
+
+func displayFileToolPath(deps BuiltinDeps, p string) string {
+	p = strings.TrimSpace(p)
+	if p == "" {
+		return "."
+	}
+	if filepath.IsAbs(p) {
+		return workspaceRelativeDisplayPath(deps, p, p)
+	}
+	return filepath.ToSlash(filepath.Clean(p))
 }
 
 // resolveAncestorSymlinks walks up `full` to the longest existing
@@ -1014,9 +1025,9 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			if fo := fileOps(deps); fo != nil {
 				body, err := fo.ReadFile(ctx, p.Path, p.MaxBytes)
 				if err != nil {
-					return "", recoverableFileToolError("read_file", p.Path, err)
+					return "", recoverableFileToolError(deps, "read_file", p.Path, err)
 				}
-				return sanitizeReadFileOutput(p.Path, body), nil
+				return sanitizeReadFileOutput(displayFileToolPath(deps, p.Path), body), nil
 			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
@@ -1025,7 +1036,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			f, err := os.Open(full)
 			if err != nil {
 				if errors.Is(err, os.ErrNotExist) {
-					return "", fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry read_file", p.Path, parentForToolPath(p.Path))
+					return "", fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry read_file", displayFileToolPath(deps, p.Path), parentForToolPath(deps, p.Path))
 				}
 				return "", err
 			}
@@ -1048,7 +1059,8 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			// Heuristic matches file(1) / git / grep -I: any NUL in
 			// the first 8 KiB.
 			if looksBinary(buf) {
-				return "", recoverableFileToolError("read_file", p.Path, fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", p.Path))
+				displayPath := displayFileToolPath(deps, p.Path)
+				return "", recoverableFileToolError(deps, "read_file", p.Path, fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", displayPath))
 			}
 			if len(buf) > p.MaxBytes {
 				// Snap back to a UTF-8 rune boundary so a CJK / accented
@@ -1056,9 +1068,9 @@ func readFileTool(deps BuiltinDeps) *Tool {
 				// bytes to the model.
 				cut := textutil.AlignBackward(string(buf), p.MaxBytes)
 				body := string(buf[:cut]) + fmt.Sprintf("\n... [truncated; %d-byte cap]", p.MaxBytes)
-				return sanitizeReadFileOutput(p.Path, body), nil
+				return sanitizeReadFileOutput(displayFileToolPath(deps, p.Path), body), nil
 			}
-			return sanitizeReadFileOutput(p.Path, string(buf)), nil
+			return sanitizeReadFileOutput(displayFileToolPath(deps, p.Path), string(buf)), nil
 		},
 	}
 }
@@ -1098,8 +1110,8 @@ func shellCommandNotFound(res executor.ExecResult) bool {
 	return strings.Contains(stderr, "not found") || strings.Contains(stderr, "command not found")
 }
 
-func parentForToolPath(p string) string {
-	p = strings.TrimSpace(p)
+func parentForToolPath(deps BuiltinDeps, p string) string {
+	p = displayFileToolPath(deps, p)
 	if p == "" || p == "." {
 		return "."
 	}
@@ -1110,29 +1122,32 @@ func parentForToolPath(p string) string {
 	return parent
 }
 
-func recoverableFileToolError(tool, path string, err error) error {
+func recoverableFileToolError(deps BuiltinDeps, tool, path string, err error) error {
 	if err == nil {
 		return nil
 	}
 	if strings.Contains(err.Error(), "\nNext:") {
-		return err
+		return errors.New(relativizeWorkspacePathsInText(err.Error(), deps.HostWorkspaceDir))
 	}
+	displayPath := displayFileToolPath(deps, path)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, executor.ErrNotFoundInContainer) {
 		switch tool {
 		case "read_file":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry read_file", path, parentForToolPath(path))
+			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry read_file", displayPath, parentForToolPath(deps, path))
 		case "list_files":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find an existing directory, then retry list_files with that path", path, parentForToolPath(path))
+			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find an existing directory, then retry list_files with that path", displayPath, parentForToolPath(deps, path))
 		case "edit_file":
-			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then call read_file before retrying edit_file", path, parentForToolPath(path))
+			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then call read_file before retrying edit_file", displayPath, parentForToolPath(deps, path))
+		case "file_context":
+			return fmt.Errorf("%s not found\nNext: call list_files on %s or the workspace root to find the correct path, then retry file_context", displayPath, parentForToolPath(deps, path))
 		}
 	}
-	msg := err.Error()
+	msg := relativizeWorkspacePathsInText(err.Error(), deps.HostWorkspaceDir)
 	switch {
 	case tool == "edit_file" && strings.Contains(msg, "old string not found"):
-		return fmt.Errorf("%s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", msg, path)
+		return fmt.Errorf("%s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", msg, displayPath)
 	case tool == "edit_file" && strings.Contains(msg, "old string occurs"):
-		return fmt.Errorf("%s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", msg, path)
+		return fmt.Errorf("%s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", msg, displayPath)
 	case tool == "edit_file" && strings.Contains(msg, "supports files up to"):
 		return fmt.Errorf("%s\nNext: use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing", msg)
 	case strings.Contains(msg, "appears to be binary"):
@@ -1175,7 +1190,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			}
 			if fo := fileOps(deps); fo != nil {
 				if err := fo.WriteFile(ctx, p.Path, p.Content); err != nil {
-					return "", recoverableFileToolError("write_file", p.Path, err)
+					return "", recoverableFileToolError(deps, "write_file", p.Path, err)
 				}
 				return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), workspaceRelativeDisplayPath(deps, p.Path, p.Path)), nil
 			}
@@ -1230,7 +1245,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			if fo := fileOps(deps); fo != nil {
 				n, err := fo.EditFile(ctx, p.Path, p.Old, p.New, p.ReplaceAll)
 				if err != nil {
-					return "", recoverableFileToolError("edit_file", p.Path, err)
+					return "", recoverableFileToolError(deps, "edit_file", p.Path, err)
 				}
 				return fmt.Sprintf("replaced %d occurrence(s) in %s", n, workspaceRelativeDisplayPath(deps, p.Path, p.Path)), nil
 			}
@@ -1240,22 +1255,23 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			}
 			info, err := os.Stat(full)
 			if err != nil {
-				return "", recoverableFileToolError("edit_file", p.Path, err)
+				return "", recoverableFileToolError(deps, "edit_file", p.Path, err)
 			}
 			if info.Size() > MaxEditFileBytes {
 				return "", fmt.Errorf("%s is %d bytes; edit_file supports files up to %d bytes\nNext: use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing", p.Path, info.Size(), MaxEditFileBytes)
 			}
 			raw, err := os.ReadFile(full)
 			if err != nil {
-				return "", recoverableFileToolError("edit_file", p.Path, err)
+				return "", recoverableFileToolError(deps, "edit_file", p.Path, err)
 			}
 			body := string(raw)
 			n := strings.Count(body, p.Old)
+			displayPath := displayFileToolPath(deps, p.Path)
 			if n == 0 {
-				return "", fmt.Errorf("old string not found in %s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", p.Path, p.Path)
+				return "", fmt.Errorf("old string not found in %s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", displayPath, displayPath)
 			}
 			if n > 1 && !p.ReplaceAll {
-				return "", fmt.Errorf("old string occurs %d times in %s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", n, p.Path, p.Path)
+				return "", fmt.Errorf("old string occurs %d times in %s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", n, displayPath, displayPath)
 			}
 			var updated string
 			if p.ReplaceAll {
@@ -1319,7 +1335,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			if fo := fileOps(deps); fo != nil {
 				entries, err := fo.ListFiles(ctx, p.Path, p.MaxEntries+1)
 				if err != nil {
-					return "", recoverableFileToolError("list_files", p.Path, err)
+					return "", recoverableFileToolError(deps, "list_files", p.Path, err)
 				}
 				var b strings.Builder
 				for i, e := range entries {
@@ -1344,7 +1360,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			}
 			f, err := os.Open(full)
 			if err != nil {
-				return "", recoverableFileToolError("list_files", p.Path, err)
+				return "", recoverableFileToolError(deps, "list_files", p.Path, err)
 			}
 			defer f.Close()
 			entries, err := readSortedListFileEntries(f, p.MaxEntries+1)
