@@ -468,6 +468,8 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			metrics["recent"] = res.ToolStats.SessionSearchRecent
 		}
 		add(kind, severity, message, []string{"session_search_examples", "session_search_results", "tool_timeline"}, metrics, tags...)
+	} else if counts, ok := absentLongRunSessionSearchCounts(res); ok {
+		add("session_recall_unused", "warn", "long-running session had session_search available but never called it; inspect whether resume/recovery decisions skipped durable session history", []string{"runtime_surface", "tool_timeline", "loop_turn_checkpoint_examples", "loop_protocol_feed_examples", "session_search_examples"}, counts, "recall", "recall:session_search_available_unused")
 	}
 	if res.ToolStats.MemoryUpdates > 0 ||
 		res.ToolStats.MemoryUpdateAdd > 0 ||
@@ -866,6 +868,35 @@ func absentLongRunMemoryUpdateCounts(res BatchResult) (map[string]int, []string,
 		counts["total_tokens"] = totalTokens
 	}
 	return counts, tags, true
+}
+
+func absentLongRunSessionSearchCounts(res BatchResult) (map[string]int, bool) {
+	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 || res.ToolStats.SessionSearchRecent > 0 {
+		return nil, false
+	}
+	if res.RuntimeSurface == nil || (!res.RuntimeSurface.Capabilities.SessionSearch && !runtimeSurfaceHasTool(res.RuntimeSurface, "session_search")) {
+		return nil, false
+	}
+	toolRequests := res.ToolStats.ToolRequests
+	if toolRequests == 0 {
+		toolRequests = res.ToolCalls
+	}
+	loopSignals := res.LoopTurnCheckpoints.Count + res.LoopProtocolFeeds.Count
+	totalTokens := res.Usage.InputTokens + res.Usage.OutputTokens
+	longRun := loopSignals > 0 && (toolRequests >= 10 || totalTokens >= 100000)
+	if !longRun {
+		return nil, false
+	}
+	counts := map[string]int{
+		"session_search_available": 1,
+		"tool_requests":            toolRequests,
+		"loop_turn_checkpoints":    res.LoopTurnCheckpoints.Count,
+		"loop_protocol_feeds":      res.LoopProtocolFeeds.Count,
+	}
+	if totalTokens > 0 {
+		counts["total_tokens"] = totalTokens
+	}
+	return counts, true
 }
 
 func researchCheckpointHasExternalEvidence(res BatchResult) bool {

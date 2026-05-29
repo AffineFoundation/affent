@@ -1665,6 +1665,58 @@ func TestBuildDebugBriefClassifiesAbsentLongRunMemoryUpdate(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesAvailableUnusedSessionSearch(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			ToolRequests: 16,
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{Count: 2},
+		LoopProtocolFeeds:   LoopProtocolFeedStats{Count: 1},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Capabilities: sse.RuntimeCapabilities{SessionSearch: true},
+			Tools:        []sse.RuntimeSurfaceTool{{Name: "session_search"}},
+		},
+		Usage: Usage{InputTokens: 140000, OutputTokens: 3000},
+	})
+	item := debugBriefItemByKind(brief, "session_recall_unused")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["session_search_available"] != 1 ||
+		item.Counts["tool_requests"] != 16 ||
+		item.Counts["loop_turn_checkpoints"] != 2 ||
+		item.Counts["loop_protocol_feeds"] != 1 ||
+		!stringSliceContains(item.Inspect, "runtime_surface") ||
+		!stringSliceContains(item.Inspect, "loop_turn_checkpoint_examples") ||
+		!stringSliceContains(brief.Tags, "recall:session_search_available_unused") {
+		t.Fatalf("available but unused session_search item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			ToolRequests:       16,
+			SessionSearchCalls: 1,
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{Count: 2},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Capabilities: sse.RuntimeCapabilities{SessionSearch: true},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "session_recall_unused"); item != nil {
+		t.Fatalf("used session_search should not be tagged as unused: %+v tags=%+v", item, brief.Tags)
+	}
+
+	if clean := BuildDebugBrief(BatchResult{
+		OK: true,
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Capabilities: sse.RuntimeCapabilities{SessionSearch: true},
+		},
+	}); clean != nil {
+		t.Fatalf("short run should not emit unused session_search item: %+v", clean)
+	}
+}
+
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {
 	if brief == nil {
 		return nil

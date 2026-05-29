@@ -1780,7 +1780,7 @@ func debugRecoveryFailurePreview(failures []string) string {
 func debugRecoveryPriorityAction(tags []string) string {
 	var actions []string
 	add := func(action string) {
-		if action != "" && len(actions) < 3 {
+		if action != "" && len(actions) < 4 {
 			actions = append(actions, action)
 		}
 	}
@@ -1816,6 +1816,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	}
 	if containsString(tags, "memory_update:available_unused") {
 		add("For memory_update:available_unused, inspect runtime_surface and tool_timeline; memory was available but never called, so diagnose recall/write decision triggers before changing storage semantics.")
+	}
+	if containsString(tags, "recall:session_search_available_unused") {
+		add("For recall:session_search_available_unused, inspect runtime_surface, tool_timeline, and loop checkpoints; session_search was available but never called, so diagnose resume/recovery decision triggers before changing session storage.")
 	}
 	if containsString(tags, "memory_update:absent_longrun") {
 		add("For memory_update:absent_longrun, inspect tool_timeline, loop checkpoints, and stable verified decisions; add memory only for durable future-use facts, not transient task state.")
@@ -1886,6 +1889,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"loop_protocol:setup_tool_overrun",
 		"memory_update:missing",
 		"memory_update:available_unused",
+		"recall:session_search_available_unused",
 		"memory_update:absent_longrun",
 		"tool_budget:turn_overrun",
 		"research_checkpoint:no_external_evidence",
