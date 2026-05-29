@@ -3468,42 +3468,79 @@ func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string
 }
 
 func (l *Loop) maybeCompactForRequestPressureWithKeepFirst(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) bool {
+	return l.compactForRequestPressure(ctx, turnID, toolDefs, emergencyKeepFirst).Compacted
+}
+
+type requestPressureCompactionResult struct {
+	Compacted                 bool
+	EstimatedInputTokens      int
+	AfterEstimatedInputTokens int
+	TriggerInputTokens        int
+}
+
+func (l *Loop) compactForRequestPressure(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) requestPressureCompactionResult {
 	limit := l.compactTriggerInputTokens()
 	if limit <= 0 {
-		return false
+		return requestPressureCompactionResult{}
 	}
 	estimated := estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+	result := requestPressureCompactionResult{
+		EstimatedInputTokens: estimated,
+		TriggerInputTokens:   limit,
+	}
 	if estimated < limit {
-		return false
+		return result
 	}
 	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst, &contextCompactPolicy{
 		EstimatedInputTokens: estimated,
 		TriggerInputTokens:   limit,
 	}, toolDefs)
+	result.Compacted = compacted
 	if compacted {
+		result.AfterEstimatedInputTokens = estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
 		l.Log.Info().
 			Int("estimated_input_tokens", estimated).
+			Int("after_estimated_input_tokens", result.AfterEstimatedInputTokens).
 			Int("trigger_input_tokens", limit).
 			Msg("conversation compacted before request input pressure")
 	}
-	return compacted
+	return result
 }
 
 func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs []ToolDef) {
 	// Proactive compaction is one pre-call phase with two inputs:
 	// persisted conversation pressure and whole-request pressure
-	// (conversation + tool schemas). Run the request-pressure check
-	// even after a threshold compaction because the first pass may reduce
-	// old conversation while the next request is still too large.
-	thresholdCompacted := l.maybeCompactWithToolDefs(ctx, turnID, false, toolDefs)
-
-	const maxRequestPressureCompactions = 2
-	emergencyKeepFirst := 0
-	if thresholdCompacted {
-		emergencyKeepFirst = 1
+	// (conversation + tool schemas). Prefer request-pressure compaction
+	// when the whole request is already over policy so traces name the real
+	// trigger and the loop avoids threshold-plus-pressure double work.
+	if l.requestPressureOverLimit(toolDefs) {
+		l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 0)
+		return
 	}
+	if !l.maybeCompactWithToolDefs(ctx, turnID, false, toolDefs) {
+		return
+	}
+	l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 1)
+}
+
+func (l *Loop) requestPressureOverLimit(toolDefs []ToolDef) bool {
+	limit := l.compactTriggerInputTokens()
+	return limit > 0 && estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs) >= limit
+}
+
+func (l *Loop) compactRequestPressureUntilDiminishing(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) {
+	const maxRequestPressureCompactions = 2
 	for i := 0; i < maxRequestPressureCompactions; i++ {
-		if !l.maybeCompactForRequestPressureWithKeepFirst(ctx, turnID, toolDefs, emergencyKeepFirst) {
+		result := l.compactForRequestPressure(ctx, turnID, toolDefs, emergencyKeepFirst)
+		if !result.Compacted {
+			return
+		}
+		if result.AfterEstimatedInputTokens <= 0 || result.AfterEstimatedInputTokens >= result.EstimatedInputTokens {
+			l.Log.Info().
+				Int("estimated_input_tokens", result.EstimatedInputTokens).
+				Int("after_estimated_input_tokens", result.AfterEstimatedInputTokens).
+				Int("trigger_input_tokens", result.TriggerInputTokens).
+				Msg("stopped request-pressure compaction after diminishing returns")
 			return
 		}
 	}
@@ -3543,7 +3580,7 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		return false
 	}
 	beforeBytes := ApproximateConversationBytes(before)
-	effectivePolicy := l.contextCompactPolicy(before, nil)
+	effectivePolicy := l.contextCompactPolicy(before, toolDefs)
 	if policy != nil {
 		if policy.EstimatedInputTokens > 0 {
 			effectivePolicy.EstimatedInputTokens = policy.EstimatedInputTokens

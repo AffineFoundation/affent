@@ -1147,7 +1147,77 @@ func (c *stagedPreRequestCompactor) Compact(context.Context, []ChatMessage) ([]C
 	}
 }
 
-func TestLoopCompactBeforeRequestChecksPressureAfterThresholdCompaction(t *testing.T) {
+type worseningRequestPressureCompactor struct {
+	calls int32
+}
+
+func (c *worseningRequestPressureCompactor) Compact(context.Context, []ChatMessage) ([]ChatMessage, error) {
+	call := atomic.AddInt32(&c.calls, 1)
+	if call > 1 {
+		return nil, fmt.Errorf("unexpected compaction call %d", call)
+	}
+	return []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: summaryPrefix + strings.Repeat("LARGER_SUMMARY ", 700)},
+		{Role: "assistant", Content: "tail"},
+	}, nil
+}
+
+func TestLoopCompactBeforeRequestStopsAfterDiminishingPressureReturn(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("OLD_CONTEXT ", 256)},
+		{Role: "assistant", Content: "historical progress"},
+		{Role: "user", Content: "continue"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var toolDef ToolDef
+	toolDef.Type = "function"
+	toolDef.Function.Name = "pressure_tool"
+	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
+	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
+	events := make(chan sse.Event, 8)
+	compactor := &worseningRequestPressureCompactor{}
+	loop := &Loop{
+		Conv:                      conv,
+		Events:                    events,
+		CompactTriggerInputTokens: 500,
+		Compactor:                 compactor,
+	}
+
+	loop.compactBeforeRequest(context.Background(), "turn-diminishing", []ToolDef{toolDef})
+
+	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
+		t.Fatalf("compaction calls = %d, want one call after diminishing return", got)
+	}
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeContextCompact {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompact)
+		}
+		var payload sse.ContextCompactPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode context.compacted: %v", err)
+		}
+		if payload.AfterEstimatedInputTokens < payload.EstimatedInputTokens {
+			t.Fatalf("payload = %+v, want non-improving pressure for diminishing-return guard", payload)
+		}
+	default:
+		t.Fatal("missing context.compacted event")
+	}
+	select {
+	case ev := <-events:
+		t.Fatalf("unexpected second compaction event: %+v", ev)
+	default:
+	}
+}
+
+func TestLoopCompactBeforeRequestPrioritizesRequestPressure(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
 	if err != nil {
 		t.Fatal(err)
@@ -1178,13 +1248,13 @@ func TestLoopCompactBeforeRequestChecksPressureAfterThresholdCompaction(t *testi
 	loop.compactBeforeRequest(context.Background(), "turn-preflight", []ToolDef{toolDef})
 
 	if got := atomic.LoadInt32(&compactor.calls); got != 2 {
-		t.Fatalf("compaction calls = %d, want threshold pass plus request-pressure pass", got)
+		t.Fatalf("compaction calls = %d, want bounded request-pressure passes", got)
 	}
 	got := conv.Snapshot()
 	if len(got) != 3 || !strings.Contains(got[1].Content, "FINAL_SMALL_SUMMARY") || strings.Contains(got[1].Content, "STILL_PRESSURE") {
 		t.Fatalf("conversation after pre-request compaction = %+v, want final compact summary", got)
 	}
-	wantReasons := []string{"threshold", "estimated_context_pressure"}
+	wantReasons := []string{"estimated_context_pressure", "estimated_context_pressure"}
 	for i, want := range wantReasons {
 		select {
 		case ev := <-events:

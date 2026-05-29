@@ -223,16 +223,12 @@ func TestRunner_MultiTurnRequestPressureCompaction(t *testing.T) {
 	}
 }
 
-func TestRunner_PreRequestCompactionRechecksPressureAfterThreshold(t *testing.T) {
+func TestRunner_PreRequestCompactionPrioritizesRequestPressure(t *testing.T) {
 	final := func(text string) []string {
 		return []string{
 			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, text),
 			`[DONE]`,
 		}
-	}
-	thresholdSummary := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: threshold summary still carries request pressure. CURRENT_STATE: STILL-PRESSURE-MARKER. ` + strings.Repeat("pressure ", 80) + `"},"finish_reason":"stop"}]}`,
-		`[DONE]`,
 	}
 	requestPressureSummary := []string{
 		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: compact request-pressure recovery. NEXT_ACTION: answer the third turn."},"finish_reason":"stop"}]}`,
@@ -241,7 +237,6 @@ func TestRunner_PreRequestCompactionRechecksPressureAfterThreshold(t *testing.T)
 	srv := newScriptedLLM(t, [][]string{
 		final("PREFLIGHT-COMPACTION-OK-1"),
 		final("PREFLIGHT-COMPACTION-OK-2"),
-		thresholdSummary,
 		requestPressureSummary,
 		final("PREFLIGHT-COMPACTION-OK-3"),
 	})
@@ -257,8 +252,7 @@ func TestRunner_PreRequestCompactionRechecksPressureAfterThreshold(t *testing.T)
 		Checks: []Check{
 			TurnEndedCleanly(),
 			FinalTextContains("PREFLIGHT-COMPACTION-OK-3"),
-			ContextCompactionsAtLeast(2),
-			ContextCompactionReasonAtLeast("threshold", 1),
+			ContextCompactionsAtLeast(1),
 			ContextCompactionReasonAtLeast("estimated_context_pressure", 1),
 		},
 	}
@@ -280,14 +274,14 @@ func TestRunner_PreRequestCompactionRechecksPressureAfterThreshold(t *testing.T)
 	if !out.Pass {
 		t.Fatalf("expected all checks to pass; failed: %v final=%q compactions=%+v", out.FailedChecks(), out.Trace.FinalText, out.Trace.ContextCompactions)
 	}
-	if out.Trace.RawTypes["context.compacted"] != 2 {
-		t.Fatalf("context.compacted events = %d, want 2; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
+	if out.Trace.RawTypes["context.compacted"] != 1 {
+		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
 	}
 	reasons := map[string]int{}
 	for _, compaction := range out.Trace.ContextCompactions {
 		reasons[compaction.Reason]++
 	}
-	if reasons["threshold"] != 1 || reasons["estimated_context_pressure"] != 1 {
+	if reasons["estimated_context_pressure"] != 1 {
 		t.Fatalf("context compaction reasons = %+v; compactions=%+v", reasons, out.Trace.ContextCompactions)
 	}
 }
@@ -299,18 +293,13 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 			`[DONE]`,
 		}
 	}
-	thresholdSummary := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: preserve model-window policy markers. NEXT_ACTION: answer the third turn."},"finish_reason":"stop"}]}`,
-		`[DONE]`,
-	}
 	requestPressureSummary := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: compact model-window request pressure. NEXT_ACTION: answer the third turn."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: preserve model-window policy markers. NEXT_ACTION: answer the third turn."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{
 		final("MODEL-WINDOW-POLICY-OK-1"),
 		final("MODEL-WINDOW-POLICY-OK-2"),
-		thresholdSummary,
 		requestPressureSummary,
 		final("MODEL-WINDOW-POLICY-OK-3"),
 	})
@@ -327,7 +316,6 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 			TurnEndedCleanly(),
 			FinalTextContains("MODEL-WINDOW-POLICY-OK-3"),
 			ContextCompactionsAtLeast(1),
-			ContextCompactionReasonAtLeast("threshold", 1),
 			ContextCompactionReasonAtLeast("estimated_context_pressure", 1),
 			RuntimeSurfaceModelContextWindowTokens(200),
 			RuntimeSurfaceCompactTriggerInputTokens(160),
@@ -358,8 +346,8 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 	if latestSurface.ModelContextWindowTokens != 200 || latestSurface.CompactTriggerInputTokens != 160 {
 		t.Fatalf("runtime surface policy = window:%d trigger:%d", latestSurface.ModelContextWindowTokens, latestSurface.CompactTriggerInputTokens)
 	}
-	if out.Trace.RawTypes["context.compacted"] != 2 {
-		t.Fatalf("context.compacted events = %d, want 2; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
+	if out.Trace.RawTypes["context.compacted"] != 1 {
+		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)
 	}
 }
 
