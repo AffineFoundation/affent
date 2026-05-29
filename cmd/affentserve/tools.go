@@ -84,21 +84,11 @@ func buildToolSurface(sess *Session, cfg Config, tools []toolInfo) toolSurface {
 	for _, tool := range tools {
 		groupSeen[tool.Group] = true
 	}
-	disabledReasons := make([]string, 0, 4)
-	if !caps.Builtins && !groupSeen["Workspace"] {
-		disabledReasons = append(disabledReasons, "Workspace tools are off.")
-	}
-	if !caps.Memory && !caps.SessionSearch && !groupSeen["Memory"] && !groupSeen["History"] {
-		disabledReasons = append(disabledReasons, "Memory and history tools are off.")
-	}
-	if !caps.WebSearch && !caps.Web && !caps.Browser && !caps.BrowserScreenshot && !groupSeen["Research"] {
-		disabledReasons = append(disabledReasons, "Live sources are off.")
-	}
-	if !caps.Subagent && !caps.FocusedTasks && !groupSeen["Subtasks"] {
-		disabledReasons = append(disabledReasons, "Nested work tools are off.")
-	}
-	if !caps.SkillInstall && !groupSeen["Skills"] {
-		disabledReasons = append(disabledReasons, "Skill install tools are off.")
+	disabledReasons := make([]string, 0, len(toolSurfaceCapabilityAxes))
+	for _, axis := range toolSurfaceCapabilityAxes {
+		if !axis.Enabled(caps, groupSeen) {
+			disabledReasons = append(disabledReasons, axis.DisabledReason)
+		}
 	}
 	warnings := make([]string, 0, 2)
 	if caps.EvalMode {
@@ -137,6 +127,50 @@ func buildToolSurface(sess *Session, cfg Config, tools []toolInfo) toolSurface {
 		DisabledReasons: disabledReasons,
 		Warnings:        warnings,
 	}
+}
+
+type toolSurfaceCapabilityAxis struct {
+	DisabledReason string
+	Enabled        func(sessionCapabilities, map[string]bool) bool
+}
+
+var toolSurfaceCapabilityAxes = []toolSurfaceCapabilityAxis{
+	{
+		DisabledReason: "Workspace tools are off.",
+		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
+			return caps.Builtins || groupSeen["Workspace"]
+		},
+	},
+	{
+		DisabledReason: "Memory and history tools are off.",
+		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
+			return caps.Memory || caps.SessionSearch || groupSeen["Memory"] || groupSeen["History"]
+		},
+	},
+	{
+		DisabledReason: "Live sources are off.",
+		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
+			return caps.WebSearch || caps.Web || caps.Browser || caps.BrowserScreenshot || groupSeen["Research"]
+		},
+	},
+	{
+		DisabledReason: "Nested work tools are off.",
+		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
+			return caps.Subagent || caps.FocusedTasks || groupSeen["Subtasks"]
+		},
+	},
+	{
+		DisabledReason: "Skill install tools are off.",
+		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
+			return caps.SkillInstall || groupSeen["Skills"]
+		},
+	},
+	{
+		DisabledReason: "Session schedules are off.",
+		Enabled: func(caps sessionCapabilities, _ map[string]bool) bool {
+			return caps.SessionSchedule
+		},
+	},
 }
 
 func toneForToolSurface(disabledReasons, warnings []string) string {

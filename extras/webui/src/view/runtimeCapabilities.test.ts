@@ -44,6 +44,7 @@ describe("buildRuntimeCapabilityView", () => {
     expect(view?.chips).toEqual([
       { group: "Research", label: "Web search + browser", detail: "Can find and inspect current sources.", tone: "ready" },
       { group: "Skills", label: "Skill install", detail: "Can install and activate runtime skills without restarting.", tone: "ready" },
+      { group: "Automation", label: "Schedules unavailable", detail: "Future and recurring turns cannot be created from this tool surface.", tone: "muted" },
       { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
       { group: "Discovery", label: "Symbol index + repo search", detail: "Can locate declarations and search workspace text before broad file reads.", tone: "ready" },
       { group: "Subtasks", label: "Nested work", detail: "Can delegate focused work (2 levels, 4 focused task types).", tone: "ready" },
@@ -183,6 +184,7 @@ describe("buildRuntimeCapabilityView", () => {
     });
     expect(view?.chips).toEqual([
       { group: "Research", label: "Direct URLs", detail: "Can inspect provided URLs; discovery may be limited.", tone: "warning" },
+      { group: "Automation", label: "Schedules unavailable", detail: "Future and recurring turns cannot be created from this tool surface.", tone: "muted" },
       { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
       { group: "Subtasks", label: "Single thread", detail: "No delegated workers for parallel or focused work.", tone: "muted" },
       { group: "Context", label: "No saved context", detail: "No memory or past chat search is available.", tone: "muted" },

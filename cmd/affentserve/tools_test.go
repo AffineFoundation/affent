@@ -94,6 +94,23 @@ func TestHandleSessionTools_ReportsFilteredSurfaceDiagnostics(t *testing.T) {
 	}
 }
 
+func TestBuildToolSurfaceReportsMissingSessionSchedule(t *testing.T) {
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{Name: "shell", CatalogGroup: "Workspace"})
+	reg.Add(&agent.Tool{Name: agent.LoopProtocolToolName, CatalogGroup: "Core"})
+	surface := buildToolSurface(
+		&Session{registry: reg},
+		Config{},
+		[]toolInfo{
+			{Name: "shell", Group: "Workspace"},
+			{Name: agent.LoopProtocolToolName, Group: "Core"},
+		},
+	)
+	if !containsString(surface.DisabledReasons, "Session schedules are off.") {
+		t.Fatalf("disabled reasons = %#v, want session schedule reason", surface.DisabledReasons)
+	}
+}
+
 func TestHandleSessionTools_ExposesBrowserFindSchema(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	reg := agent.NewRegistry()

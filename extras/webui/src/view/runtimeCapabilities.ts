@@ -36,8 +36,7 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
   ];
   const skills = skillsChip(caps);
   if (skills) chips.push(skills);
-  const schedule = scheduleChip(caps);
-  if (schedule) chips.push(schedule);
+  chips.push(scheduleChip(caps));
   chips.push(workChip(caps));
   const discovery = discoveryChip(caps);
   if (discovery) chips.push(discovery);
@@ -122,10 +121,10 @@ function skillsChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefine
     : undefined;
 }
 
-function scheduleChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefined {
+function scheduleChip(caps: SessionCapabilities): RuntimeCapabilityChip {
   return caps.session_schedule
     ? { group: "Automation", label: "Session schedules", detail: "Can create future and recurring turns without requiring LOOP.md.", tone: "ready" }
-    : undefined;
+    : { group: "Automation", label: "Schedules unavailable", detail: "Future and recurring turns cannot be created from this tool surface.", tone: "muted" };
 }
 
 function discoveryChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefined {
