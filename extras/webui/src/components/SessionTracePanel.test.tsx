@@ -39,7 +39,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByLabelText("Trace search shortcuts")).toHaveTextContent("exit:1");
     expect(screen.queryByTestId("session-trace-focus")).toBeNull();
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Tool issues");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Span");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("#5-#6");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Request 1");
@@ -74,16 +74,16 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
 
     await user.click(screen.getByRole("button", { name: "Tool issues 1" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Tool issues");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Inspect trace");
     await user.click(screen.getByRole("button", { name: "Tool issues 1" }));
 
     await user.click(within(screen.getByTestId("session-trace-issues")).getByRole("button", { name: /Request 1/ }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Tool issues");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
-    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Selected issue");
+    expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Issue detail");
     expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Tool");
     expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("shell");
     expect(screen.getByTestId("session-trace-issue-focus")).toHaveTextContent("Exit");
@@ -108,26 +108,26 @@ describe("SessionTracePanel", () => {
     await user.click(screen.getByRole("button", { name: "Tool issues 1" }));
 
     await user.click(within(screen.getByTestId("session-trace-issues")).getByRole("button", { name: "shell 1" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Tool issues");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
     await user.click(screen.getByRole("button", { name: "Commands 2" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Commands");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Commands");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Started action");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Inspect trace");
     await user.click(screen.getByRole("button", { name: "Commands 2" }));
 
     await user.click(screen.getByRole("button", { name: "Sources 2" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Sources");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Sources");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("verified source");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("https://example.test/source");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("npm test");
     await user.click(screen.getByRole("button", { name: "Sources 2" }));
 
     await user.click(screen.getByRole("button", { name: "Artifacts 1" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Artifacts");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Artifacts");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("artifact 000001-shell.txt");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("SourceAccess");
     await user.click(screen.getByRole("button", { name: "Artifacts 1" }));
@@ -145,7 +145,7 @@ describe("SessionTracePanel", () => {
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
     await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "exit:1" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Tool issues");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("1");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -200,7 +200,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByRole("button", { name: "Truncated 1" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Repairs 1" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Repairs");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Repairs");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Repairs");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("1");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("repaired");
@@ -208,7 +208,7 @@ describe("SessionTracePanel", () => {
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
     await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "truncated" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Truncated");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Truncated");
     expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Truncated");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("truncated");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started request");
@@ -247,8 +247,8 @@ describe("SessionTracePanel", () => {
 
     render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
 
-    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("Actions");
-    expect(screen.getByTestId("session-trace-metrics")).toHaveTextContent("4 · 3 admitted · 1 skipped");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("Actions");
+    expect(screen.getByTestId("session-trace-selection")).toHaveTextContent("4 · 3 admitted · 1 skipped");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("not dispatched");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("loop_guard_no_budget");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("3 admitted / 1 skipped");
@@ -360,7 +360,7 @@ describe("SessionTracePanel", () => {
     expect(shortcuts).toHaveTextContent("github");
 
     await user.click(within(shortcuts).getByRole("button", { name: "permission denied" }));
-    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Commands");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Commands");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Search: permission denied");
     expect(screen.getByTestId("session-trace-issues")).toHaveTextContent("1 issue across 1 tool");
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Permission denied");

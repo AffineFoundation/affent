@@ -5,7 +5,6 @@ import { filterEventTraceEvents } from "../view/eventTrace";
 import {
   type SessionTraceView,
 } from "../view/sessionTrace";
-import { CopyButton } from "./CopyButton";
 import { EventTrace } from "./EventTrace";
 
 export function SessionTracePanel({
@@ -107,10 +106,12 @@ export function SessionTracePanel({
             <div className="session-trace-resultbar" data-testid="session-trace-resultbar">
               <div>
                 <strong>{visibleEvents.length}</strong>
-                <span>{resultCountLabel(visibleEvents.length, hasActiveNarrowing)}</span>
+                <span>{resultCountLabel(visibleEvents.length, hasActiveNarrowing, events.length)}</span>
               </div>
-              {filter !== "all" ? <span>Filter: {filterLabel(filter)}</span> : null}
-              {trimmedQuery ? <span>Search: {trimmedQuery}</span> : null}
+              <div className="session-trace-active-scopes" aria-label="Active trace scopes">
+                {filter !== "all" ? <span>{filterLabel(filter)}</span> : null}
+                {trimmedQuery ? <span>Search: {trimmedQuery}</span> : null}
+              </div>
               {hasActiveNarrowing ? (
                 <button
                   type="button"
@@ -124,17 +125,11 @@ export function SessionTracePanel({
                 </button>
               ) : null}
             </div>
-            <TraceSelectionSummaryView summary={selectionSummary} />
-            <div className="session-trace-metrics" data-testid="session-trace-metrics">
-              <span><strong>Records</strong>{trace.recordCount}</span>
-              {trace.toolRequests.total > 0 ? <span><strong>Actions</strong>{traceToolRequestStatsLabel(trace.toolRequests)}</span> : null}
-              {trace.schemaVersion ? <span><strong>Schema</strong>v{trace.schemaVersion}</span> : null}
-              {trace.unknownCount > 0 ? <span data-tone="warning"><strong>Unclassified</strong>{trace.unknownCount}</span> : null}
-            </div>
+            <TraceScopeSummaryView summary={selectionSummary} trace={trace} />
             {trace.toolIssues.length > 0 ? (
               <div className="session-trace-issues" data-testid="session-trace-issues">
                 <div className="session-trace-issues-head">
-                  <strong>Issue navigator</strong>
+                  <strong>Tool issues</strong>
                   <span>{visibleIssueCount} {visibleIssueCount === 1 ? "issue" : "issues"} across {issueGroups.length} {issueGroups.length === 1 ? "tool" : "tools"}</span>
                 </div>
                 {visibleIssues.length > 0 ? (
@@ -185,7 +180,7 @@ export function SessionTracePanel({
                 {activeIssue ? (
                   <div className="session-trace-issue-focus" data-testid="session-trace-issue-focus">
                     <div className="session-trace-issue-focus-head">
-                      <span>Selected issue</span>
+                      <span>Issue detail</span>
                       <strong>{activeIssue.title}</strong>
                       <small>{activeIssue.detail}</small>
                     </div>
@@ -197,7 +192,7 @@ export function SessionTracePanel({
                     </div>
                     {activeIssue.next ? (
                       <div className="session-trace-issue-next">
-                        <span>Next from trace</span>
+                        <span>Observed next step</span>
                         <p>{activeIssue.next}</p>
                       </div>
                     ) : null}
@@ -227,7 +222,6 @@ export function SessionTracePanel({
                           Open artifact
                         </button>
                       ) : null}
-                      <CopyButton label="Copy query" value={activeIssue.query} className="ghost-action" />
                     </div>
                   </div>
                 ) : null}
@@ -278,13 +272,10 @@ interface TraceSelectionSummary {
   eventSpan: string;
   requestSpan: string;
   failedActions: number;
-  actionResults: number;
   repairCount: number;
   truncatedCount: number;
   toolCount: number;
   topTools: string[];
-  artifactCount: number;
-  unclassifiedCount: number;
 }
 
 function traceToolIssueGroups(issues: SessionTraceView["toolIssues"]): TraceToolIssueGroup[] {
@@ -362,18 +353,20 @@ function traceDynamicSearches(issues: SessionTraceView["toolIssues"]): TraceSear
   return shortcuts;
 }
 
-function TraceSelectionSummaryView({ summary }: { summary: TraceSelectionSummary }) {
+function TraceScopeSummaryView({ summary, trace }: { summary: TraceSelectionSummary; trace: SessionTraceView }) {
+  const actionStats = trace.toolRequests.total > 0 ? traceToolRequestStatsLabel(trace.toolRequests) : undefined;
+
   return (
     <div className="session-trace-selection" data-testid="session-trace-selection">
       <TraceSelectionMetric label="Span" value={summary.eventSpan} />
       <TraceSelectionMetric label="Requests" value={summary.requestSpan} />
       <TraceSelectionMetric label="Failures" value={String(summary.failedActions)} />
-      {summary.repairCount > 0 ? <TraceSelectionMetric label="Repairs" value={String(summary.repairCount)} /> : null}
-      {summary.truncatedCount > 0 ? <TraceSelectionMetric label="Truncated" value={String(summary.truncatedCount)} /> : null}
-      <TraceSelectionMetric label="Results" value={String(summary.actionResults)} />
       <TraceSelectionMetric label="Tools" value={summary.toolCount ? `${summary.toolCount} · ${summary.topTools.join(", ")}` : "0"} kind="tools" />
-      <TraceSelectionMetric label="Artifacts" value={String(summary.artifactCount)} />
-      {summary.unclassifiedCount > 0 ? <TraceSelectionMetric label="Unclassified" value={String(summary.unclassifiedCount)} /> : null}
+      {actionStats ? <TraceSelectionMetric label="Actions" value={actionStats} kind="actions" /> : null}
+      {summary.truncatedCount > 0 ? <TraceSelectionMetric label="Truncated" value={String(summary.truncatedCount)} /> : null}
+      {summary.repairCount > 0 ? <TraceSelectionMetric label="Repairs" value={String(summary.repairCount)} /> : null}
+      {trace.unknownCount > 0 ? <TraceSelectionMetric label="Unclassified" value={String(trace.unknownCount)} /> : null}
+      {trace.schemaVersion ? <TraceSelectionMetric label="Schema" value={`v${trace.schemaVersion}`} /> : null}
     </div>
   );
 }
@@ -402,11 +395,8 @@ function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEve
   const callTools = toolNamesByCallId(allEvents);
   const requestSet = new Set<string>();
   let failedActions = 0;
-  let actionResults = 0;
   let repairCount = 0;
   let truncatedCount = 0;
-  let artifactCount = 0;
-  let unclassifiedCount = 0;
   let firstId: number | undefined;
   let lastId: number | undefined;
 
@@ -416,16 +406,13 @@ function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEve
       lastId = lastId == null ? event.id : Math.max(lastId, event.id);
     }
     if (event.turnId) requestSet.add(event.turnId);
-    if (!event.known) unclassifiedCount += 1;
     if (eventHasRepair(event)) repairCount += 1;
     if (eventHasTruncation(event)) truncatedCount += 1;
-    if (eventHasArtifact(event)) artifactCount += 1;
     if (event.type === EventType.ToolRequest || event.type === EventType.ToolResult) {
       const tool = toolName(event, callTools);
       if (tool) toolCounts.set(tool, (toolCounts.get(tool) ?? 0) + 1);
     }
     if (event.type === EventType.ToolResult) {
-      actionResults += 1;
       const data = event.data as ToolResultPayload;
       if ((data.exit_code ?? 0) !== 0 || data.failure_kind || data.failure_kinds?.length) failedActions += 1;
     }
@@ -448,13 +435,10 @@ function traceSelectionSummary(allEvents: readonly NormalizedEvent[], visibleEve
         ? `Request ${requestNumbers[0]}`
         : `Request ${requestNumbers[0]}-${requestNumbers[requestNumbers.length - 1]} · ${requestNumbers.length}`,
     failedActions,
-    actionResults,
     repairCount,
     truncatedCount,
     toolCount: toolCounts.size,
     topTools,
-    artifactCount,
-    unclassifiedCount,
   };
 }
 
@@ -527,8 +511,8 @@ function emptyStateLabel(filter: TraceFilter, query: string): string {
   return filterText || "the selected filter";
 }
 
-function resultCountLabel(count: number, narrowed: boolean): string {
-  if (narrowed) return count === 1 ? "matching entry" : "matching entries";
+function resultCountLabel(count: number, narrowed: boolean, total: number): string {
+  if (narrowed) return `${count === 1 ? "matching entry" : "matching entries"} of ${total}`;
   return count === 1 ? "trace entry loaded" : "trace entries loaded";
 }
 

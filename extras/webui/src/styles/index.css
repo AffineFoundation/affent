@@ -13705,7 +13705,10 @@ pre.code {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  margin-top: -2px;
+  margin-top: -4px;
+  max-height: 58px;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .session-trace-query-tools span {
@@ -13738,7 +13741,6 @@ pre.code {
 
 .session-trace-resultbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   min-width: 0;
@@ -13773,8 +13775,17 @@ pre.code {
   white-space: nowrap;
 }
 
-.session-trace-resultbar > span {
-  max-width: 210px;
+.session-trace-active-scopes {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.session-trace-active-scopes span {
+  max-width: min(260px, 38vw);
   border: 1px solid rgba(20, 184, 166, 0.18);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.66);
@@ -13801,32 +13812,26 @@ pre.code {
   background: rgba(255, 255, 255, 0.96);
 }
 
-.session-trace-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 12px;
-  min-width: 0;
-  padding: 2px 0;
-}
-
 .session-trace-selection {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 6px;
   min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.48);
+  padding: 6px;
 }
 
 .session-trace-selection span {
   display: grid;
   gap: 2px;
   min-width: 0;
-  border: 1px solid rgba(217, 224, 232, 0.76);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.66);
-  padding: 6px 7px;
+  padding: 2px 4px;
 }
 
-.session-trace-selection span[data-kind="tools"] {
+.session-trace-selection span[data-kind="tools"],
+.session-trace-selection span[data-kind="actions"] {
   grid-column: span 2;
 }
 
@@ -13858,23 +13863,6 @@ pre.code {
   border-radius: calc(var(--radius) - 2px);
   background: rgba(248, 250, 252, 0.74);
   padding: 7px 8px;
-}
-
-.session-trace-metrics span {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.session-trace-metrics span[data-tone="warning"] {
-  color: #a16207;
-}
-
-.session-trace-metrics span[data-tone="error"] {
-  color: var(--c-error);
 }
 
 .session-trace-filter {
@@ -13909,7 +13897,6 @@ pre.code {
   line-height: 1.35;
 }
 
-.session-trace-metrics strong,
 .session-trace-latest strong {
   color: var(--text);
   font-size: 11px;
@@ -13933,17 +13920,16 @@ pre.code {
 
 .session-trace-issues {
   display: grid;
-  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  grid-template-columns: minmax(180px, 0.75fr) minmax(0, 1.25fr);
   flex: 0 0 auto;
   gap: 6px;
   min-width: 0;
-  max-height: 250px;
-  overflow: auto;
+  max-height: 330px;
+  overflow: hidden;
   border: 1px solid rgba(217, 224, 232, 0.78);
   border-radius: calc(var(--radius) - 2px);
   background: rgba(255, 255, 255, 0.66);
-  padding: 7px 8px;
-  scrollbar-width: thin;
+  padding: 8px;
 }
 
 .session-trace-issues-head {
@@ -14029,7 +14015,7 @@ pre.code {
 }
 
 .session-trace-issue-list {
-  max-height: 168px;
+  max-height: 238px;
   overflow: auto;
   padding-right: 2px;
   scrollbar-width: thin;
@@ -14104,6 +14090,9 @@ pre.code {
   background:
     linear-gradient(180deg, rgba(240, 253, 250, 0.76), rgba(255, 255, 255, 0.58));
   padding: 9px;
+  max-height: 282px;
+  overflow: auto;
+  scrollbar-width: thin;
 }
 
 .session-trace-issue-focus-head {
@@ -15451,9 +15440,9 @@ html[data-theme="dark"] .session-trace-issue-groups button:focus-visible {
 
 html[data-theme="dark"] .session-trace-query-tools button,
 html[data-theme="dark"] .session-trace-resultbar,
-html[data-theme="dark"] .session-trace-resultbar > span,
+html[data-theme="dark"] .session-trace-active-scopes span,
 html[data-theme="dark"] .session-trace-resultbar button,
-html[data-theme="dark"] .session-trace-selection span,
+html[data-theme="dark"] .session-trace-selection,
 html[data-theme="dark"] .session-trace-issues,
 html[data-theme="dark"] .session-trace-issue,
 html[data-theme="dark"] .session-trace-issue-focus,
