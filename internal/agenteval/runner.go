@@ -272,6 +272,7 @@ func defaultBuildRuntime(workspaceDir string, exec executor.Executor, conv *agen
 			return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 		},
 	})
+	registerEvalSessionScheduleTool(reg, workspaceDir)
 	return runnerRuntime{Registry: reg, SkillProvider: agent.SkillProviderForTools(skillReg, reg)}, nil
 }
 

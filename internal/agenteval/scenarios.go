@@ -12,14 +12,15 @@ const (
 	longRunSuite         = "long-run"
 	liveWebSuite         = "live-web"
 
-	marketDomain            = "market"
-	bittensorDomain         = "bittensor"
-	codePRDomain            = "code_pr"
-	webEvidenceDomain       = "web_evidence"
-	longRunRecoveryDomain   = "longrun_recovery"
-	sessionRecoveryDomain   = "session_recovery"
-	memoryDomain            = "memory"
-	contextCompactionDomain = "context_compaction"
+	marketDomain             = "market"
+	bittensorDomain          = "bittensor"
+	codePRDomain             = "code_pr"
+	webEvidenceDomain        = "web_evidence"
+	longRunRecoveryDomain    = "longrun_recovery"
+	scheduleAutomationDomain = "schedule_automation"
+	sessionRecoveryDomain    = "session_recovery"
+	memoryDomain             = "memory"
+	contextCompactionDomain  = "context_compaction"
 )
 
 var defaultForbiddenCommands = []string{
@@ -2254,6 +2255,50 @@ func longRunResearchCheckpointScenario() BatchScenario {
 			"browser_network_read": 0,
 		},
 		MaxParentToolCalls: 0,
+		MaxTurns:           4,
+	}
+}
+
+func longRunSessionScheduleRecurringFollowupScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-session-schedule-recurring-followup",
+		Suites:    []string{longRunSuite},
+		Domains:   []string{longRunRecoveryDomain, scheduleAutomationDomain},
+		SessionID: "longrun-session-schedule",
+		Prompt:    "Set up a recurring session follow-up for launch metrics. The scheduled turn must ask the agent to inspect docs/launch-metrics.md and report whether the launch error budget remains under 2%. Use next_run_at exactly 2030-01-02T15:04:05Z, repeat every 1800 seconds, and use a compact display label. This is an ordinary timer, not durable loop state. After creating it, reply with SCHEDULE-READY-91 and the schedule id.",
+		Files: map[string]string{
+			"docs/launch-metrics.md": "# Launch Metrics\n\n- Error budget target: under 2%.\n- The scheduled follow-up should inspect this file before reporting.\n",
+		},
+		RequiredTools: []string{agent.SessionScheduleToolName},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+			{Tool: agent.SessionScheduleToolName, Arg: "kind", Substring: "custom"},
+			{Tool: agent.SessionScheduleToolName, Arg: "prompt", Substring: "docs/launch-metrics.md"},
+			{Tool: agent.SessionScheduleToolName, Arg: "prompt", Substring: "under 2%"},
+			{Tool: agent.SessionScheduleToolName, Arg: "next_run_at", Substring: "2030-01-02T15:04:05Z"},
+			{Tool: agent.SessionScheduleToolName, Arg: "repeat_interval_seconds", Substring: "1800"},
+		},
+		ForbiddenTools: []string{
+			agent.LoopProtocolToolName,
+			"shell",
+			"write_file",
+			"edit_file",
+		},
+		RequiredToolResultText: map[string][]string{
+			agent.SessionScheduleToolName: {
+				"next_schedule_id",
+				"2030-01-02T15:04:05Z",
+			},
+		},
+		RequiredFinalText: []string{"SCHEDULE-READY-91", "sched_"},
+		ProtectedFiles:    []string{"docs/launch-metrics.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.LoopProtocolToolName: 0,
+			"shell":                    0,
+			"write_file":               0,
+			"edit_file":                0,
+		},
+		MaxParentToolCalls: 2,
 		MaxTurns:           4,
 	}
 }

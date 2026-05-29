@@ -902,6 +902,8 @@ func addExpectationToolCapabilities(caps map[string]bool, tool string) {
 		caps["memory"] = true
 	case tool == agent.SessionSearchToolName:
 		caps["session_search"] = true
+	case tool == agent.SessionScheduleToolName:
+		caps["session_schedule"] = true
 	case tool == agent.PlanToolName:
 		caps["plan"] = true
 	case tool == agent.SkillToolName:
@@ -1214,6 +1216,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunLoopActivationCalibrationScenario(),
 		longRunLoopActivationCompletedDraftScenario(),
 		longRunResearchCheckpointScenario(),
+		longRunSessionScheduleRecurringFollowupScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		memoryAutonomousDurableRuleScenario(),
 		memoryIgnoreTransientTaskStatusScenario(),

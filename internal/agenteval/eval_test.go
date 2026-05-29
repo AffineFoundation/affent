@@ -93,6 +93,16 @@ func TestExpectationCapabilityNamesIncludesSkillInstall(t *testing.T) {
 	}
 }
 
+func TestExpectationCapabilityNamesIncludesSessionSchedule(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		RequiredTools: []string{agent.SessionScheduleToolName},
+	})
+	want := []string{"session_schedule"}
+	if !reflect.DeepEqual(caps, want) {
+		t.Fatalf("ExpectationCapabilityNames = %#v, want %#v", caps, want)
+	}
+}
+
 func TestExpectationCapabilityNamesIgnoresMaxOnlyToolCaps(t *testing.T) {
 	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
 		MaxSuccessfulToolCallsByTool: map[string]int{
@@ -114,6 +124,36 @@ func TestExpectationCapabilityNamesIncludesTaskStateProvenance(t *testing.T) {
 	want := []string{"session", "trace"}
 	if !reflect.DeepEqual(caps, want) {
 		t.Fatalf("ExpectationCapabilityNames = %#v, want %#v", caps, want)
+	}
+}
+
+func TestEvalSessionScheduleToolCreatePersistsSchedule(t *testing.T) {
+	workspace := t.TempDir()
+	result, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
+		"action":"create",
+		"kind":"custom",
+		"prompt":"Inspect docs/launch-metrics.md and report whether launch error budget remains under 2%.",
+		"display_text":"Launch metrics",
+		"next_run_at":"2030-01-02T15:04:05Z",
+		"repeat_interval_seconds":1800,
+		"enabled":true
+	}`))
+	if err != nil {
+		t.Fatalf("executeEvalSessionScheduleTool create: %v", err)
+	}
+	for _, want := range []string{"sched_eval_001", "next_schedule_id", "2030-01-02T15:04:05Z", "Launch metrics"} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("schedule create result missing %q:\n%s", want, result)
+		}
+	}
+	raw, err := os.ReadFile(filepath.Join(workspace, evalSessionSchedulesRelPath))
+	if err != nil {
+		t.Fatalf("read persisted eval schedules: %v", err)
+	}
+	for _, want := range []string{"sched_eval_001", "docs/launch-metrics.md", `"repeat_interval_seconds": 1800`} {
+		if !strings.Contains(string(raw), want) {
+			t.Fatalf("persisted schedule missing %q:\n%s", want, raw)
+		}
 	}
 }
 
@@ -2224,8 +2264,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 33 {
-		t.Fatalf("long-run suite size = %d, want 33", len(scenarios))
+	if len(scenarios) != 34 {
+		t.Fatalf("long-run suite size = %d, want 34", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2252,6 +2292,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		"plan",
 		"research_checkpoint",
 		"session",
+		"session_schedule",
 		"session_search",
 		"skill",
 		"trace",
@@ -2262,7 +2303,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("long-run suite expectation capabilities missing %q: %#v", want, suiteCapabilities)
 		}
 	}
-	for _, want := range []string{bittensorDomain, codePRDomain, contextCompactionDomain, longRunRecoveryDomain, marketDomain, memoryDomain, sessionRecoveryDomain} {
+	for _, want := range []string{bittensorDomain, codePRDomain, contextCompactionDomain, longRunRecoveryDomain, marketDomain, memoryDomain, scheduleAutomationDomain, sessionRecoveryDomain} {
 		if !suiteDomains[want] {
 			t.Fatalf("long-run suite domains missing %q: %#v", want, suiteDomains)
 		}
@@ -3505,6 +3546,35 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(researchCheckpoint.ForbiddenTools, "run_task") || !stringSliceContains(researchCheckpoint.ForbiddenTools, "web_fetch") {
 		t.Fatalf("research checkpoint ForbiddenTools = %#v, want no research tools in smoke scenario", researchCheckpoint.ForbiddenTools)
+	}
+
+	scheduleFollowup, ok := seen["longrun-session-schedule-recurring-followup"]
+	if !ok {
+		t.Fatalf("long-run suite missing session schedule follow-up scenario")
+	}
+	if scheduleFollowup.SessionID != "longrun-session-schedule" {
+		t.Fatalf("session schedule SessionID = %q, want longrun-session-schedule", scheduleFollowup.SessionID)
+	}
+	if !stringSliceContains(scheduleFollowup.RequiredTools, agent.SessionScheduleToolName) ||
+		!stringSliceContains(scheduleFollowup.ForbiddenTools, agent.LoopProtocolToolName) {
+		t.Fatalf("session schedule tools = required:%#v forbidden:%#v, want schedule without loop protocol", scheduleFollowup.RequiredTools, scheduleFollowup.ForbiddenTools)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+		{Tool: agent.SessionScheduleToolName, Arg: "next_run_at", Substring: "2030-01-02T15:04:05Z"},
+		{Tool: agent.SessionScheduleToolName, Arg: "repeat_interval_seconds", Substring: "1800"},
+		{Tool: agent.SessionScheduleToolName, Arg: "prompt", Substring: "docs/launch-metrics.md"},
+	} {
+		if !toolArgRequirementContains(scheduleFollowup.RequiredToolArgContains, want) {
+			t.Fatalf("session schedule RequiredToolArgContains = %#v, want %#v", scheduleFollowup.RequiredToolArgContains, want)
+		}
+	}
+	scheduleCaps := ExpectationCapabilityNames(debugScenarioExpectations(scheduleFollowup))
+	if !stringSliceContains(scheduleCaps, "session_schedule") || !stringSliceContains(scheduleCaps, "session") {
+		t.Fatalf("session schedule expectation capabilities = %#v, want session_schedule and session", scheduleCaps)
+	}
+	if !stringSliceContains(scheduleFollowup.Domains, scheduleAutomationDomain) || !stringSliceContains(scheduleFollowup.Domains, longRunRecoveryDomain) {
+		t.Fatalf("session schedule Domains = %#v, want schedule automation and longrun recovery", scheduleFollowup.Domains)
 	}
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]

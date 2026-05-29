@@ -81,9 +81,9 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=source_repo:setup=0.000",
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
-		"require-expectation-capability=context_compaction,delegation,input_budget,longrun_recovery,loop_protocol,memory,plan,research_checkpoint,session,session_search,skill,skill_install,source_repo,trace,verifier,workspace",
+		"require-expectation-capability=context_compaction,delegation,input_budget,longrun_recovery,loop_protocol,memory,plan,research_checkpoint,session,session_schedule,session_search,skill,skill_install,source_repo,trace,verifier,workspace",
 		"require-expectation-capability=browser,delegated_source_evidence,source_access,web",
-		"require-expectation-domain=bittensor,code_pr,context_compaction,longrun_recovery,market,memory,session_recovery",
+		"require-expectation-domain=bittensor,code_pr,context_compaction,longrun_recovery,market,memory,schedule_automation,session_recovery",
 		"require-expectation-domain=web_evidence",
 	} {
 		if !strings.Contains(out, want) {
@@ -188,7 +188,9 @@ func TestRunListCoverageShowsQualityProfilePreflight(t *testing.T) {
 	for _, want := range []string{
 		"COVERAGE_PREFLIGHT status=failed profile=longrun",
 		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
+		"expectation_capability[session_schedule] unavailable, want >= 1 selected scenario",
 		"expectation_capability[skill_install] unavailable, want >= 1 selected scenario",
+		"expectation_domain[schedule_automation] unavailable, want >= 1 selected scenario",
 		"expectation_domain[session_recovery] unavailable, want >= 1 selected scenario",
 	} {
 		if !strings.Contains(out, want) {
@@ -209,8 +211,10 @@ func TestRunQualityProfilePreflightRejectsNarrowScenarioSelection(t *testing.T) 
 		"expectation_capability[memory] unavailable, want >= 1 selected scenario",
 		"expectation_capability[skill] unavailable, want >= 1 selected scenario",
 		"expectation_capability[skill_install] unavailable, want >= 1 selected scenario",
+		"expectation_capability[session_schedule] unavailable, want >= 1 selected scenario",
 		"expectation_capability[source_repo] unavailable, want >= 1 selected scenario",
 		"expectation_domain[memory] unavailable, want >= 1 selected scenario",
+		"expectation_domain[schedule_automation] unavailable, want >= 1 selected scenario",
 	} {
 		if !strings.Contains(errOut, want) {
 			t.Fatalf("preflight stderr missing %q:\n%s", want, errOut)
@@ -1409,10 +1413,10 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinEachExpectationDomainPassRate == nil || *gates.MinEachExpectationDomainPassRate != 0.50 {
 		t.Fatalf("longrun min each expectation domain pass rate = %#v, want 0.50", gates.MinEachExpectationDomainPassRate)
 	}
-	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"context_compaction", "delegation", "input_budget", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"}) {
+	if !reflect.DeepEqual(gates.RequiredExpectationCapabilities, []string{"context_compaction", "delegation", "input_budget", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_schedule", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"}) {
 		t.Fatalf("longrun required expectation capabilities = %#v", gates.RequiredExpectationCapabilities)
 	}
-	if !reflect.DeepEqual(gates.RequiredExpectationDomains, []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "session_recovery"}) {
+	if !reflect.DeepEqual(gates.RequiredExpectationDomains, []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "schedule_automation", "session_recovery"}) {
 		t.Fatalf("longrun required expectation domains = %#v", gates.RequiredExpectationDomains)
 	}
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
