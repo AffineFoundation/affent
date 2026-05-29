@@ -20,6 +20,7 @@ type TaskStateSnapshot struct {
 	NextStep          string              `json:"next_step,omitempty"`
 	VerificationState string              `json:"verification_state,omitempty"`
 	ChangedFiles      []TaskStateFile     `json:"changed_files,omitempty"`
+	AttemptedActions  []TaskStateAction   `json:"attempted_actions,omitempty"`
 	FailedActions     []TaskStateFailure  `json:"failed_actions,omitempty"`
 	Evidence          []TaskStateEvidence `json:"evidence,omitempty"`
 	Sources           []string            `json:"sources,omitempty"`
@@ -28,6 +29,13 @@ type TaskStateSnapshot struct {
 type TaskStateFile struct {
 	Path   string `json:"path"`
 	Action string `json:"action,omitempty"`
+}
+
+type TaskStateAction struct {
+	Tool    string `json:"tool"`
+	Summary string `json:"summary,omitempty"`
+	TurnID  string `json:"turn_id,omitempty"`
+	CallID  string `json:"call_id,omitempty"`
 }
 
 type TaskStateFailure struct {
@@ -74,6 +82,12 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		task.Sources = appendUniqueTaskString(task.Sources, "runtime_surface", taskStateMaxItems)
 	}
 	for _, tool := range trace.Tools {
+		task.AttemptedActions = appendTaskAction(task.AttemptedActions, TaskStateAction{
+			Tool:    tool.Tool,
+			Summary: compactTaskStateSummary(taskStateToolSummary(tool)),
+			TurnID:  tool.TurnID,
+			CallID:  tool.CallID,
+		})
 		if file := taskStateChangedFile(tool); file.Path != "" {
 			task.ChangedFiles = appendTaskFile(task.ChangedFiles, file)
 		}
@@ -138,6 +152,7 @@ func CloneTaskStateSnapshotPtr(in TaskStateSnapshot) *TaskStateSnapshot {
 	}
 	out := in
 	out.ChangedFiles = append([]TaskStateFile(nil), in.ChangedFiles...)
+	out.AttemptedActions = append([]TaskStateAction(nil), in.AttemptedActions...)
 	out.FailedActions = append([]TaskStateFailure(nil), in.FailedActions...)
 	for i := range out.FailedActions {
 		out.FailedActions[i].Kinds = append([]string(nil), in.FailedActions[i].Kinds...)
@@ -301,6 +316,18 @@ func taskStateGitSubcommand(command string) string {
 	return ""
 }
 
+func appendTaskAction(items []TaskStateAction, item TaskStateAction) []TaskStateAction {
+	item.Tool = strings.TrimSpace(item.Tool)
+	if item.Tool == "" {
+		return items
+	}
+	item.Summary = strings.TrimSpace(item.Summary)
+	if len(items) >= taskStateMaxItems {
+		items = items[1:]
+	}
+	return append(items, item)
+}
+
 func appendTaskFile(items []TaskStateFile, item TaskStateFile) []TaskStateFile {
 	item.Path = strings.TrimSpace(item.Path)
 	if item.Path == "" {
@@ -375,6 +402,7 @@ func taskStateEmpty(task TaskStateSnapshot) bool {
 		task.NextStep == "" &&
 		(task.VerificationState == "" || task.VerificationState == "unknown") &&
 		len(task.ChangedFiles) == 0 &&
+		len(task.AttemptedActions) == 0 &&
 		len(task.FailedActions) == 0 &&
 		len(task.Evidence) == 0 &&
 		len(task.Sources) == 0

@@ -2,6 +2,7 @@ package agenteval
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/sse"
@@ -72,6 +73,9 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	}
 	if !reflect.DeepEqual(got.ChangedFiles, []TaskStateFile{{Path: "app/mathutil/clamp.go", Action: "edit"}}) {
 		t.Fatalf("changed files = %+v", got.ChangedFiles)
+	}
+	if !taskStateHasAttemptedAction(got, "edit_file", "app/mathutil/clamp.go") || !taskStateHasAttemptedAction(got, "shell", "go test ./...") {
+		t.Fatalf("attempted actions = %+v, want edit and shell actions", got.AttemptedActions)
 	}
 	if len(got.FailedActions) != 1 ||
 		got.FailedActions[0].Tool != "shell" ||
@@ -177,8 +181,9 @@ func TestDeriveTaskStateIncludesRuntimeOwnedToolEvidence(t *testing.T) {
 
 func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 	original := TaskStateSnapshot{
-		Objective:    "ship task",
-		ChangedFiles: []TaskStateFile{{Path: "main.go", Action: "edit"}},
+		Objective:        "ship task",
+		ChangedFiles:     []TaskStateFile{{Path: "main.go", Action: "edit"}},
+		AttemptedActions: []TaskStateAction{{Tool: "shell", Summary: "go test ./..."}},
 		FailedActions: []TaskStateFailure{{
 			Tool:  "shell",
 			Kinds: []string{"test_failed"},
@@ -191,15 +196,26 @@ func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 		t.Fatal("clone is nil")
 	}
 	original.ChangedFiles[0].Path = "changed.go"
+	original.AttemptedActions[0].Summary = "changed"
 	original.FailedActions[0].Kinds[0] = "changed"
 	original.Evidence[0].Source = "changed"
 	original.Sources[0] = "changed"
 	if clone.ChangedFiles[0].Path != "main.go" ||
+		clone.AttemptedActions[0].Summary != "go test ./..." ||
 		clone.FailedActions[0].Kinds[0] != "test_failed" ||
 		clone.Evidence[0].Source != "shell" ||
 		clone.Sources[0] != "runtime_surface" {
 		t.Fatalf("clone shared mutable slices: %+v", clone)
 	}
+}
+
+func taskStateHasAttemptedAction(task TaskStateSnapshot, tool, summaryPart string) bool {
+	for _, action := range task.AttemptedActions {
+		if action.Tool == tool && (summaryPart == "" || strings.Contains(action.Summary, summaryPart)) {
+			return true
+		}
+	}
+	return false
 }
 
 func taskStateHasEvidence(task TaskStateSnapshot, source string) bool {

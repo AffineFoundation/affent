@@ -1118,6 +1118,7 @@ type batchSummary struct {
 	TaskStateByRequestSource                map[string]int
 	TaskStateByScheduleKind                 map[string]int
 	TaskStateChangedFiles                   int
+	TaskStateAttemptedActions               int
 	TaskStateFailedActions                  int
 	TaskStateEvidence                       int
 	LoopDecisions                           int
@@ -1370,6 +1371,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.TaskStateByScheduleKind[kind]++
 		}
 		s.TaskStateChangedFiles += len(task.ChangedFiles)
+		s.TaskStateAttemptedActions += len(task.AttemptedActions)
 		s.TaskStateFailedActions += len(task.FailedActions)
 		s.TaskStateEvidence += len(task.Evidence)
 	}
@@ -2012,9 +2014,10 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 	}
 	if s.TaskStateScenarios > 0 {
-		fmt.Fprintf(w, " task_state=scenarios:%d,changed_files:%d,failed_actions:%d,evidence:%d",
+		fmt.Fprintf(w, " task_state=scenarios:%d,changed_files:%d,attempted_actions:%d,failed_actions:%d,evidence:%d",
 			s.TaskStateScenarios,
 			s.TaskStateChangedFiles,
+			s.TaskStateAttemptedActions,
 			s.TaskStateFailedActions,
 			s.TaskStateEvidence,
 		)
@@ -3859,6 +3862,7 @@ type batchResultRecord struct {
 	TaskStateScheduleID                    string                                     `json:"task_state_schedule_id,omitempty"`
 	TaskStateScheduleKind                  string                                     `json:"task_state_schedule_kind,omitempty"`
 	TaskStateChangedFiles                  int                                        `json:"task_state_changed_files,omitempty"`
+	TaskStateAttemptedActions              int                                        `json:"task_state_attempted_actions,omitempty"`
 	TaskStateFailedActions                 int                                        `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                      int                                        `json:"task_state_evidence,omitempty"`
 	RuntimeSurfaceScenarios                int                                        `json:"runtime_surface_scenarios,omitempty"`
@@ -4047,6 +4051,7 @@ type batchSummaryRecord struct {
 	TaskStateByRequestSource                map[string]int                                   `json:"task_state_by_request_source,omitempty"`
 	TaskStateByScheduleKind                 map[string]int                                   `json:"task_state_by_schedule_kind,omitempty"`
 	TaskStateChangedFiles                   int                                              `json:"task_state_changed_files,omitempty"`
+	TaskStateAttemptedActions               int                                              `json:"task_state_attempted_actions,omitempty"`
 	TaskStateFailedActions                  int                                              `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                       int                                              `json:"task_state_evidence,omitempty"`
 	LoopDecisions                           int                                              `json:"loop_decisions,omitempty"`
@@ -4260,6 +4265,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		TaskStateScheduleID:                    res.TaskState.ScheduleID,
 		TaskStateScheduleKind:                  res.TaskState.ScheduleKind,
 		TaskStateChangedFiles:                  len(res.TaskState.ChangedFiles),
+		TaskStateAttemptedActions:              len(res.TaskState.AttemptedActions),
 		TaskStateFailedActions:                 len(res.TaskState.FailedActions),
 		TaskStateEvidence:                      len(res.TaskState.Evidence),
 		LoopDecisions:                          res.LoopDecisionStats.Count,
@@ -4561,6 +4567,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		TaskStateByRequestSource:                cloneStringIntMap(s.TaskStateByRequestSource),
 		TaskStateByScheduleKind:                 cloneStringIntMap(s.TaskStateByScheduleKind),
 		TaskStateChangedFiles:                   s.TaskStateChangedFiles,
+		TaskStateAttemptedActions:               s.TaskStateAttemptedActions,
 		TaskStateFailedActions:                  s.TaskStateFailedActions,
 		TaskStateEvidence:                       s.TaskStateEvidence,
 		LoopDecisions:                           s.LoopDecisions,

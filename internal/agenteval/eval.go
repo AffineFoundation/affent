@@ -1079,6 +1079,7 @@ type DebugMetrics struct {
 	TaskStateStatus                 string         `json:"task_state_status,omitempty"`
 	TaskStateVerification           string         `json:"task_state_verification,omitempty"`
 	TaskStateChangedFiles           int            `json:"task_state_changed_files,omitempty"`
+	TaskStateAttemptedActions       int            `json:"task_state_attempted_actions,omitempty"`
 	TaskStateFailedActions          int            `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence               int            `json:"task_state_evidence,omitempty"`
 }
@@ -1585,6 +1586,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			TaskStateStatus:                 res.TaskState.Status,
 			TaskStateVerification:           res.TaskState.VerificationState,
 			TaskStateChangedFiles:           len(res.TaskState.ChangedFiles),
+			TaskStateAttemptedActions:       len(res.TaskState.AttemptedActions),
 			TaskStateFailedActions:          len(res.TaskState.FailedActions),
 			TaskStateEvidence:               len(res.TaskState.Evidence),
 		},

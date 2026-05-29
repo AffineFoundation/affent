@@ -2599,7 +2599,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1 task_state_schedule_kinds=checkin:1") {
+	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,attempted_actions:0,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1 task_state_schedule_kinds=checkin:1") {
 		t.Fatalf("summary output missing task state rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
