@@ -2989,6 +2989,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		messages = l.Conv.Snapshot()
 	}
 	inputEstimate := EstimateRequestInput(messages, toolSurface.Defs)
+	requestPressure := l.requestPressureStatusForMessages(messages, toolSurface.Defs)
 	payload := sse.RuntimeSurfacePayload{
 		TurnID:                             turnID,
 		MaxTurnSteps:                       l.maxTurnStepsForSurface(),
@@ -3000,6 +3001,11 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		ReservedOutputTokens:               l.reservedOutputTokens(),
 		CompactTriggerInputTokens:          l.compactTriggerInputTokens(),
 		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
+		CompactScopeActive:                 requestPressure.ScopedWindowActivated,
+		CompactWindowOrdinal:               requestPressure.WindowOrdinal,
+		CompactWindowPrefillInputTokens:    requestPressure.PrefillInputTokens,
+		CompactScopedInputTokens:           requestPressure.ScopedInputTokens,
+		CompactHardInputLimitTokens:        requestPressure.HardInputLimitTokens,
 		CompactSummaryPromptMaxBytes:       l.compactSummaryPromptMaxBytes(),
 		ConversationBytes:                  inputEstimate.ConversationBytes,
 		ToolSchemaBytes:                    inputEstimate.ToolSchemaBytes,
@@ -3618,6 +3624,11 @@ func (l *Loop) compactForRequestPressure(ctx context.Context, turnID string, too
 	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst, &contextCompactPolicy{
 		EstimatedInputTokens:       status.EstimatedInputTokens,
 		TriggerInputTokens:         status.TriggerInputTokens,
+		ScopedInputTokens:          status.ScopedInputTokens,
+		PrefillInputTokens:         status.PrefillInputTokens,
+		WindowOrdinal:              status.WindowOrdinal,
+		HardInputLimitTokens:       status.HardInputLimitTokens,
+		ScopedWindowActivated:      status.ScopedWindowActivated,
 		RequireInputTokenReduction: true,
 	}, toolDefs)
 	result.Compacted = compacted
@@ -3657,28 +3668,33 @@ type requestPressureStatus struct {
 	TriggerInputTokens    int
 	ScopedInputTokens     int
 	PrefillInputTokens    int
+	WindowOrdinal         int64
 	HardInputLimitTokens  int
 	LimitReached          bool
 	ScopedWindowActivated bool
 }
 
 func (l *Loop) requestPressureStatus(toolDefs []ToolDef) requestPressureStatus {
+	return l.requestPressureStatusForMessages(l.Conv.Snapshot(), toolDefs)
+}
+
+func (l *Loop) requestPressureStatusForMessages(msgs []ChatMessage, toolDefs []ToolDef) requestPressureStatus {
+	estimated := estimateRequestInputTokens(msgs, toolDefs)
 	trigger := l.compactTriggerInputTokens()
-	if trigger <= 0 {
-		return requestPressureStatus{}
-	}
-	estimated := estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
 	status := requestPressureStatus{
 		EstimatedInputTokens: estimated,
 		TriggerInputTokens:   trigger,
-		ScopedInputTokens:    estimated,
 		HardInputLimitTokens: l.modelInputCapacityTokens(),
+	}
+	if trigger <= 0 {
+		return status
 	}
 	if status.HardInputLimitTokens > 0 && estimated >= status.HardInputLimitTokens {
 		status.LimitReached = true
 		return status
 	}
-	if prefill, ok := l.autoCompactWindowPrefillTokens(); ok && l.autoCompactWindowScopeEnabled() {
+	if ordinal, prefill, ok := l.autoCompactWindowPrefillTokens(); ok && l.autoCompactWindowScopeEnabled() {
+		status.WindowOrdinal = ordinal
 		status.PrefillInputTokens = prefill
 		status.ScopedInputTokens = max(0, estimated-prefill)
 		status.ScopedWindowActivated = true
@@ -3758,6 +3774,13 @@ type contextCompactPolicy struct {
 	EstimatedInputTokens       int
 	AfterEstimatedInputTokens  int
 	TriggerInputTokens         int
+	ScopedInputTokens          int
+	PrefillInputTokens         int
+	WindowOrdinal              int64
+	HardInputLimitTokens       int
+	ScopedWindowActivated      bool
+	WindowPrefillAfterCompact  int
+	WindowOrdinalAfterCompact  int64
 	RequireInputTokenReduction bool
 }
 
@@ -3780,6 +3803,21 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		}
 		if policy.TriggerInputTokens > 0 {
 			effectivePolicy.TriggerInputTokens = policy.TriggerInputTokens
+		}
+		if policy.ScopedInputTokens > 0 {
+			effectivePolicy.ScopedInputTokens = policy.ScopedInputTokens
+		}
+		if policy.PrefillInputTokens > 0 {
+			effectivePolicy.PrefillInputTokens = policy.PrefillInputTokens
+		}
+		if policy.WindowOrdinal > 0 {
+			effectivePolicy.WindowOrdinal = policy.WindowOrdinal
+		}
+		if policy.HardInputLimitTokens > 0 {
+			effectivePolicy.HardInputLimitTokens = policy.HardInputLimitTokens
+		}
+		if policy.ScopedWindowActivated {
+			effectivePolicy.ScopedWindowActivated = true
 		}
 		if policy.RequireInputTokenReduction {
 			effectivePolicy.RequireInputTokenReduction = true
@@ -3827,6 +3865,10 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 		return false
 	}
 	l.startNextAutoCompactWindow(effectivePolicy.AfterEstimatedInputTokens)
+	if ordinal, prefill, ok := l.autoCompactWindowPrefillTokens(); ok {
+		effectivePolicy.WindowOrdinalAfterCompact = ordinal
+		effectivePolicy.WindowPrefillAfterCompact = prefill
+	}
 	l.publishContextCompacted(turnID, len(before), len(after), beforeBytes, afterBytes, reactive, reason, after, effectivePolicy)
 	l.markLoopProtocolCompacted(reactive, reason)
 	l.Log.Info().
@@ -3865,22 +3907,29 @@ func (l *Loop) observeAutoCompactWindowInputTokens(inputTokens int) {
 	l.autoCompactWindow.observed = true
 }
 
-func (l *Loop) autoCompactWindowPrefillTokens() (int, bool) {
+func (l *Loop) autoCompactWindowPrefillTokens() (int64, int, bool) {
 	if !l.autoCompactWindowScopeEnabled() {
-		return 0, false
+		return 0, 0, false
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.prefillTokens <= 0 {
-		return 0, false
+		return 0, 0, false
 	}
-	return l.autoCompactWindow.prefillTokens, true
+	return l.autoCompactWindow.ordinal, l.autoCompactWindow.prefillTokens, true
 }
 
 func (l *Loop) contextCompactPolicy(msgs []ChatMessage, toolDefs []ToolDef) contextCompactPolicy {
+	status := l.requestPressureStatusForMessages(msgs, toolDefs)
 	return contextCompactPolicy{
-		EstimatedInputTokens: estimateRequestInputTokens(msgs, toolDefs),
-		TriggerInputTokens:   l.compactTriggerInputTokens(),
+		EstimatedInputTokens:      status.EstimatedInputTokens,
+		TriggerInputTokens:        status.TriggerInputTokens,
+		ScopedInputTokens:         status.ScopedInputTokens,
+		PrefillInputTokens:        status.PrefillInputTokens,
+		WindowOrdinal:             status.WindowOrdinal,
+		HardInputLimitTokens:      status.HardInputLimitTokens,
+		ScopedWindowActivated:     status.ScopedWindowActivated,
+		WindowPrefillAfterCompact: 0,
 	}
 }
 
@@ -3932,6 +3981,11 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               l.reservedOutputTokens(),
 		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
+		CompactScopeActive:                 policy.ScopedWindowActivated || policy.WindowPrefillAfterCompact > 0,
+		CompactWindowOrdinal:               compactWindowOrdinalForEvent(policy),
+		CompactWindowPrefillInputTokens:    compactWindowPrefillForEvent(policy),
+		CompactScopedInputTokens:           policy.ScopedInputTokens,
+		CompactHardInputLimitTokens:        policy.HardInputLimitTokens,
 		Reactive:                           reactive,
 		Reason:                             reason,
 		SummaryPresent:                     summaryBytes > 0,
@@ -3965,7 +4019,26 @@ func (l *Loop) publishContextCompactSkipped(turnID, cause string, before, candid
 		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               l.reservedOutputTokens(),
 		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
+		CompactScopeActive:                 policy.ScopedWindowActivated,
+		CompactWindowOrdinal:               policy.WindowOrdinal,
+		CompactWindowPrefillInputTokens:    policy.PrefillInputTokens,
+		CompactScopedInputTokens:           policy.ScopedInputTokens,
+		CompactHardInputLimitTokens:        policy.HardInputLimitTokens,
 	})
+}
+
+func compactWindowOrdinalForEvent(policy contextCompactPolicy) int64 {
+	if policy.WindowOrdinalAfterCompact > 0 {
+		return policy.WindowOrdinalAfterCompact
+	}
+	return policy.WindowOrdinal
+}
+
+func compactWindowPrefillForEvent(policy contextCompactPolicy) int {
+	if policy.WindowPrefillAfterCompact > 0 {
+		return policy.WindowPrefillAfterCompact
+	}
+	return policy.PrefillInputTokens
 }
 
 func (l *Loop) perCallTimeout() time.Duration {

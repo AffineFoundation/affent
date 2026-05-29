@@ -60,6 +60,13 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 				TurnID:  latest.TurnID,
 			})
 		}
+		if summary := taskstate.RuntimeSurfaceCompactScopeSummary(&latest); summary != "" {
+			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+				Source:  "runtime_surface",
+				Summary: compactTaskStateSummary(summary),
+				TurnID:  latest.TurnID,
+			})
+		}
 		if summary := taskstate.RuntimeSurfaceRequestPressureSummary(&latest); summary != "" {
 			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
 				Source:  "runtime_surface",

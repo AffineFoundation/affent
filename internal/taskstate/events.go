@@ -123,6 +123,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				addSource(state, "runtime_surface", opts.MaxItems)
 				seen = true
 			}
+			if summary := RuntimeSurfaceCompactScopeSummary(&p); summary != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "runtime_surface",
+					Summary: compactSummary(summary, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+				addSource(state, "runtime_surface", opts.MaxItems)
+				seen = true
+			}
 			if summary := RuntimeSurfaceRequestPressureSummary(&p); summary != "" {
 				state.Evidence = appendEvidence(state.Evidence, Evidence{
 					Source:  "runtime_surface",
@@ -167,6 +176,13 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				Summary: compactSummary(summary, opts.SummaryMaxChar),
 				TurnID:  p.TurnID,
 			}, opts.MaxItems)
+			if scope := contextCompactionScopeSummary(p); scope != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "context_compaction",
+					Summary: compactSummary(scope, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+			}
 			addSource(state, "context_compaction", opts.MaxItems)
 			seen = true
 		case sse.TypeContextCompactSkipped:
@@ -179,6 +195,13 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				Summary: compactSummary(contextCompactionSkippedSummary(p), opts.SummaryMaxChar),
 				TurnID:  p.TurnID,
 			}, opts.MaxItems)
+			if scope := contextCompactionSkippedScopeSummary(p); scope != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "context_compaction_skipped",
+					Summary: compactSummary(scope, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+			}
 			addSource(state, "context_compaction_skipped", opts.MaxItems)
 			seen = true
 		case sse.TypeToolRequest:
@@ -430,6 +453,10 @@ func contextCompactionSummary(p sse.ContextCompactPayload) string {
 	return strings.Join(fields, " ")
 }
 
+func contextCompactionScopeSummary(p sse.ContextCompactPayload) string {
+	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
+}
+
 func contextCompactionSkippedSummary(p sse.ContextCompactSkippedPayload) string {
 	var fields []string
 	cause := strings.TrimSpace(p.Cause)
@@ -470,6 +497,33 @@ func contextCompactionSkippedSummary(p sse.ContextCompactSkippedPayload) string 
 		fields = append(fields, fmt.Sprintf("compact_trigger_input_percent=%d", p.CompactTriggerInputPercent))
 	}
 	return strings.Join(fields, " ")
+}
+
+func contextCompactionSkippedScopeSummary(p sse.ContextCompactSkippedPayload) string {
+	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
+}
+
+func compactScopeSummaryFields(active bool, ordinal int64, prefill, scoped, hardLimit int) string {
+	var fields []string
+	if active {
+		fields = append(fields, "compact_scope_active=true")
+	}
+	if ordinal > 0 {
+		fields = append(fields, fmt.Sprintf("compact_window_ordinal=%d", ordinal))
+	}
+	if prefill > 0 {
+		fields = append(fields, fmt.Sprintf("compact_window_prefill_input_tokens=%d", prefill))
+	}
+	if scoped > 0 {
+		fields = append(fields, fmt.Sprintf("compact_scoped_input_tokens=%d", scoped))
+	}
+	if hardLimit > 0 {
+		fields = append(fields, fmt.Sprintf("compact_hard_input_limit_tokens=%d", hardLimit))
+	}
+	if len(fields) == 0 {
+		return ""
+	}
+	return "compact_scope " + strings.Join(fields, " ")
 }
 
 func ToolFailureKinds(result ToolResult, limit int) []string {
@@ -764,6 +818,13 @@ func RuntimeSurfaceCompactionPolicySummary(p *sse.RuntimeSurfacePayload) string 
 		return ""
 	}
 	return strings.Join(fields, " ")
+}
+
+func RuntimeSurfaceCompactScopeSummary(p *sse.RuntimeSurfacePayload) string {
+	if p == nil {
+		return ""
+	}
+	return compactScopeSummaryFields(p.CompactScopeActive, p.CompactWindowOrdinal, p.CompactWindowPrefillInputTokens, p.CompactScopedInputTokens, p.CompactHardInputLimitTokens)
 }
 
 func RuntimeSurfaceRequestPressureSummary(p *sse.RuntimeSurfacePayload) string {

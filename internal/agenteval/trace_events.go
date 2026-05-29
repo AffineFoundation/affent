@@ -404,6 +404,11 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			ModelContextWindowEffectivePercent: p.ModelContextWindowEffectivePercent,
 			ReservedOutputTokens:               p.ReservedOutputTokens,
 			CompactTriggerInputPercent:         p.CompactTriggerInputPercent,
+			CompactScopeActive:                 p.CompactScopeActive,
+			CompactWindowOrdinal:               p.CompactWindowOrdinal,
+			CompactWindowPrefillInputTokens:    p.CompactWindowPrefillInputTokens,
+			CompactScopedInputTokens:           p.CompactScopedInputTokens,
+			CompactHardInputLimitTokens:        p.CompactHardInputLimitTokens,
 			Reactive:                           p.Reactive,
 			Reason:                             p.Reason,
 			SummaryPresent:                     p.SummaryPresent,
@@ -435,6 +440,11 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			ModelContextWindowEffectivePercent: p.ModelContextWindowEffectivePercent,
 			ReservedOutputTokens:               p.ReservedOutputTokens,
 			CompactTriggerInputPercent:         p.CompactTriggerInputPercent,
+			CompactScopeActive:                 p.CompactScopeActive,
+			CompactWindowOrdinal:               p.CompactWindowOrdinal,
+			CompactWindowPrefillInputTokens:    p.CompactWindowPrefillInputTokens,
+			CompactScopedInputTokens:           p.CompactScopedInputTokens,
+			CompactHardInputLimitTokens:        p.CompactHardInputLimitTokens,
 		})
 	case sse.TypeError:
 		var p sse.ErrorPayload

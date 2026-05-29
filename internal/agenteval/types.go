@@ -804,6 +804,11 @@ type ContextCompaction struct {
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
+	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
+	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 	Reactive                           bool   `json:"reactive"`
 	Reason                             string `json:"reason"`
 	SummaryPresent                     bool   `json:"summary_present,omitempty"`
@@ -847,6 +852,11 @@ type ContextCompactionSkip struct {
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
+	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
+	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 }
 
 type ContextCompactionSkipStats struct {
@@ -2129,6 +2139,11 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			ModelContextWindowEffectivePercent: compaction.ModelContextWindowEffectivePercent,
 			ReservedOutputTokens:               compaction.ReservedOutputTokens,
 			CompactTriggerInputPercent:         compaction.CompactTriggerInputPercent,
+			CompactScopeActive:                 compaction.CompactScopeActive,
+			CompactWindowOrdinal:               compaction.CompactWindowOrdinal,
+			CompactWindowPrefillInputTokens:    compaction.CompactWindowPrefillInputTokens,
+			CompactScopedInputTokens:           compaction.CompactScopedInputTokens,
+			CompactHardInputLimitTokens:        compaction.CompactHardInputLimitTokens,
 			Reactive:                           compaction.Reactive,
 			Reason:                             compaction.Reason,
 			SummaryPresent:                     compaction.SummaryPresent,

@@ -2140,6 +2140,45 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeSurfaceReportsAutoCompactWindowScope(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("baseline ", 1000)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "shell"})
+	loop := &Loop{
+		Tools:                      reg,
+		Conv:                       conv,
+		Events:                     events,
+		ModelContextWindowTokens:   100_000,
+		CompactTriggerInputPercent: 80,
+	}
+	loop.startNextAutoCompactWindow(1_000)
+
+	loop.publishRuntimeSurface("turn_scope", TurnOptions{})
+
+	ev := <-events
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if !payload.CompactScopeActive ||
+		payload.CompactWindowOrdinal != 1 ||
+		payload.CompactWindowPrefillInputTokens != 1_000 ||
+		payload.CompactScopedInputTokens <= 0 ||
+		payload.CompactHardInputLimitTokens != 100_000 {
+		t.Fatalf("compact scope surface = %+v", payload)
+	}
+}
+
 func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	reg := NewRegistry()

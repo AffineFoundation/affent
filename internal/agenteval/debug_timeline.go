@@ -1190,6 +1190,11 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		surface.ReservedOutputTokens > 0 ||
 		surface.CompactTriggerInputTokens > 0 ||
 		surface.CompactTriggerInputPercent > 0 ||
+		surface.CompactScopeActive ||
+		surface.CompactWindowOrdinal > 0 ||
+		surface.CompactWindowPrefillInputTokens > 0 ||
+		surface.CompactScopedInputTokens > 0 ||
+		surface.CompactHardInputLimitTokens > 0 ||
 		surface.CompactSummaryPromptMaxBytes > 0 {
 		var parts []string
 		if surface.ModelContextWindowTokens > 0 {
@@ -1209,6 +1214,21 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		}
 		if surface.CompactTriggerInputPercent > 0 {
 			parts = append(parts, fmt.Sprintf("compact_trigger_input_percent=`%d`", surface.CompactTriggerInputPercent))
+		}
+		if surface.CompactScopeActive {
+			parts = append(parts, "compact_scope_active=`true`")
+		}
+		if surface.CompactWindowOrdinal > 0 {
+			parts = append(parts, fmt.Sprintf("compact_window_ordinal=`%d`", surface.CompactWindowOrdinal))
+		}
+		if surface.CompactWindowPrefillInputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("compact_window_prefill_input_tokens=`%d`", surface.CompactWindowPrefillInputTokens))
+		}
+		if surface.CompactScopedInputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("compact_scoped_input_tokens=`%d`", surface.CompactScopedInputTokens))
+		}
+		if surface.CompactHardInputLimitTokens > 0 {
+			parts = append(parts, fmt.Sprintf("compact_hard_input_limit_tokens=`%d`", surface.CompactHardInputLimitTokens))
 		}
 		if surface.CompactSummaryPromptMaxBytes > 0 {
 			parts = append(parts, fmt.Sprintf("compact_summary_prompt_max_bytes=`%d`", surface.CompactSummaryPromptMaxBytes))
@@ -1539,6 +1559,21 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 		if c.CompactTriggerInputPercent > 0 {
 			policy = append(policy, fmt.Sprintf("compact_trigger_input_percent=%d", c.CompactTriggerInputPercent))
 		}
+		if c.CompactScopeActive {
+			policy = append(policy, "compact_scope_active=true")
+		}
+		if c.CompactWindowOrdinal > 0 {
+			policy = append(policy, fmt.Sprintf("compact_window_ordinal=%d", c.CompactWindowOrdinal))
+		}
+		if c.CompactWindowPrefillInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("compact_window_prefill_input_tokens=%d", c.CompactWindowPrefillInputTokens))
+		}
+		if c.CompactScopedInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("compact_scoped_input_tokens=%d", c.CompactScopedInputTokens))
+		}
+		if c.CompactHardInputLimitTokens > 0 {
+			policy = append(policy, fmt.Sprintf("compact_hard_input_limit_tokens=%d", c.CompactHardInputLimitTokens))
+		}
 		if len(policy) > 0 {
 			fmt.Fprintf(b, " policy=%s", strings.Join(policy, ","))
 		}
@@ -1597,6 +1632,21 @@ func renderTimelineCompactionSkips(b *strings.Builder, trace *Trace) {
 		}
 		if skipped.CompactTriggerInputPercent > 0 {
 			policy = append(policy, fmt.Sprintf("compact_trigger_input_percent=%d", skipped.CompactTriggerInputPercent))
+		}
+		if skipped.CompactScopeActive {
+			policy = append(policy, "compact_scope_active=true")
+		}
+		if skipped.CompactWindowOrdinal > 0 {
+			policy = append(policy, fmt.Sprintf("compact_window_ordinal=%d", skipped.CompactWindowOrdinal))
+		}
+		if skipped.CompactWindowPrefillInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("compact_window_prefill_input_tokens=%d", skipped.CompactWindowPrefillInputTokens))
+		}
+		if skipped.CompactScopedInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("compact_scoped_input_tokens=%d", skipped.CompactScopedInputTokens))
+		}
+		if skipped.CompactHardInputLimitTokens > 0 {
+			policy = append(policy, fmt.Sprintf("compact_hard_input_limit_tokens=%d", skipped.CompactHardInputLimitTokens))
 		}
 		if len(policy) > 0 {
 			fmt.Fprintf(b, " policy=%s", strings.Join(policy, ","))

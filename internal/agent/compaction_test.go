@@ -1297,9 +1297,10 @@ func TestLoopRequestPressureUsesAutoCompactWindowBaseline(t *testing.T) {
 	toolDef.Function.Description = strings.Repeat("schema pressure ", 80)
 	toolDef.Function.Parameters = json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`)
 	compactor := &stagedPreRequestCompactor{}
+	events := make(chan sse.Event, 8)
 	loop := &Loop{
 		Conv:                        conv,
-		Events:                      make(chan sse.Event, 8),
+		Events:                      events,
 		ModelContextWindowTokens:    10_000,
 		CompactTriggerInputPercent:  5,
 		Compactor:                   compactor,
@@ -1311,6 +1312,17 @@ func TestLoopRequestPressureUsesAutoCompactWindowBaseline(t *testing.T) {
 
 	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
 		t.Fatalf("compaction calls = %d, want one pass before starting a scoped auto-compact window", got)
+	}
+	ev := <-events
+	var payload sse.ContextCompactPayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode context.compacted: %v", err)
+	}
+	if !payload.CompactScopeActive ||
+		payload.CompactWindowOrdinal != 1 ||
+		payload.CompactWindowPrefillInputTokens <= 0 ||
+		payload.CompactHardInputLimitTokens != 10_000 {
+		t.Fatalf("compact window payload = %+v", payload)
 	}
 	afterFirst := EstimateRequestInputTokens(conv.Snapshot(), []ToolDef{toolDef})
 	if trigger := loop.compactTriggerInputTokens(); afterFirst < trigger {

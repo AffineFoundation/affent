@@ -1210,6 +1210,31 @@ func RuntimeSurfaceCompactTriggerInputTokens(expected int) Check {
 	}
 }
 
+func RuntimeSurfaceCompactScopeActive() Check {
+	return Check{
+		Name: "runtime_surface_compact_scope_active",
+		Eval: func(t Trace) CheckResult {
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.CompactScopeActive {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_window_ordinal=%d compact_scoped_input_tokens=%d", surface.CompactWindowOrdinal, surface.CompactScopedInputTokens)}
+				}
+				observed = append(observed, fmt.Sprintf("active=%t ordinal=%d prefill=%d scoped=%d hard_limit=%d",
+					surface.CompactScopeActive,
+					surface.CompactWindowOrdinal,
+					surface.CompactWindowPrefillInputTokens,
+					surface.CompactScopedInputTokens,
+					surface.CompactHardInputLimitTokens,
+				))
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface compact scope to be active; observed=%v", observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceCompactTriggerMatchesModelPolicy() Check {
 	return Check{
 		Name: "runtime_surface_compact_trigger_matches_model_policy",

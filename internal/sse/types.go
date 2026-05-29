@@ -92,6 +92,11 @@ type RuntimeSurfacePayload struct {
 	ReservedOutputTokens               int                  `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens          int                  `json:"compact_trigger_input_tokens,omitempty"`
 	CompactTriggerInputPercent         int                  `json:"compact_trigger_input_percent,omitempty"`
+	CompactScopeActive                 bool                 `json:"compact_scope_active,omitempty"`
+	CompactWindowOrdinal               int64                `json:"compact_window_ordinal,omitempty"`
+	CompactWindowPrefillInputTokens    int                  `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactScopedInputTokens           int                  `json:"compact_scoped_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int                  `json:"compact_hard_input_limit_tokens,omitempty"`
 	CompactSummaryPromptMaxBytes       int                  `json:"compact_summary_prompt_max_bytes,omitempty"`
 	ConversationBytes                  int                  `json:"conversation_bytes,omitempty"`
 	ToolSchemaBytes                    int                  `json:"tool_schema_bytes,omitempty"`
@@ -496,6 +501,11 @@ type ContextCompactPayload struct {
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
+	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
+	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 	Reactive                           bool   `json:"reactive"`
 	Reason                             string `json:"reason"`
 	SummaryPresent                     bool   `json:"summary_present"`
@@ -521,6 +531,11 @@ type ContextCompactSkippedPayload struct {
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	CompactScopeActive                 bool   `json:"compact_scope_active,omitempty"`
+	CompactWindowOrdinal               int64  `json:"compact_window_ordinal,omitempty"`
+	CompactWindowPrefillInputTokens    int    `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactScopedInputTokens           int    `json:"compact_scoped_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int    `json:"compact_hard_input_limit_tokens,omitempty"`
 }
 
 type ToolRuntimeStats struct {

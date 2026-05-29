@@ -4471,6 +4471,11 @@ type runtimeSurfaceSummary struct {
 	ReservedOutputTokens               int                      `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens          int                      `json:"compact_trigger_input_tokens,omitempty"`
 	CompactTriggerInputPercent         int                      `json:"compact_trigger_input_percent,omitempty"`
+	CompactScopeActive                 bool                     `json:"compact_scope_active,omitempty"`
+	CompactWindowOrdinal               int64                    `json:"compact_window_ordinal,omitempty"`
+	CompactWindowPrefillInputTokens    int                      `json:"compact_window_prefill_input_tokens,omitempty"`
+	CompactScopedInputTokens           int                      `json:"compact_scoped_input_tokens,omitempty"`
+	CompactHardInputLimitTokens        int                      `json:"compact_hard_input_limit_tokens,omitempty"`
 	ConversationBytes                  int                      `json:"conversation_bytes,omitempty"`
 	ToolSchemaBytes                    int                      `json:"tool_schema_bytes,omitempty"`
 	ToolSchemaBudgetTokens             int                      `json:"tool_schema_budget_tokens,omitempty"`
@@ -4677,6 +4682,11 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 		ReservedOutputTokens:               surface.ReservedOutputTokens,
 		CompactTriggerInputTokens:          surface.CompactTriggerInputTokens,
 		CompactTriggerInputPercent:         surface.CompactTriggerInputPercent,
+		CompactScopeActive:                 surface.CompactScopeActive,
+		CompactWindowOrdinal:               surface.CompactWindowOrdinal,
+		CompactWindowPrefillInputTokens:    surface.CompactWindowPrefillInputTokens,
+		CompactScopedInputTokens:           surface.CompactScopedInputTokens,
+		CompactHardInputLimitTokens:        surface.CompactHardInputLimitTokens,
 		ConversationBytes:                  surface.ConversationBytes,
 		ToolSchemaBytes:                    surface.ToolSchemaBytes,
 		ToolSchemaBudgetTokens:             surface.ToolSchemaBudgetTokens,
