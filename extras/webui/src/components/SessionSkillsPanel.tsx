@@ -272,7 +272,6 @@ export function SessionSkillsPanel({
         ) : null}
         {!loading && !error ? (
           <>
-            <SkillsDashboard skills={allSkills} installEnabled={installEnabled} />
             {hasSearch ? (
               <SkillActivationCheck
                 value={activationProbe}
@@ -609,41 +608,43 @@ function SkillActivationCheck({
 }) {
   const trimmed = value.trim();
   return (
-    <section className="session-skills-activation" data-testid="session-skills-activation" aria-label="Skill activation check">
-      <div className="session-skills-activation-head">
+    <details className="session-skills-activation" data-testid="session-skills-activation">
+      <summary className="session-skills-activation-head">
         <div>
-          <span>Activation check</span>
+          <span>Activation test</span>
           <strong>{trimmed ? `${matches.length} ${matches.length === 1 ? "match" : "matches"}` : "Test a task"}</strong>
         </div>
+      </summary>
+      <div className="session-skills-activation-body">
         {trimmed ? (
           <button type="button" className="ghost-action" onClick={onClear}>
             Clear
           </button>
         ) : null}
+        <label className="session-skills-activation-input">
+          <span>Task text</span>
+          <input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            placeholder="Paste a task to see which skills would activate"
+          />
+        </label>
+        {trimmed ? (
+          matches.length > 0 ? (
+            <div className="session-skills-activation-matches">
+              {matches.slice(0, 6).map((match) => (
+                <button key={match.skill.name} type="button" onClick={() => onFocusSkill(match.skill.name)} title={match.reason}>
+                  <strong>{match.skill.name}</strong>
+                  <span>{match.reason}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="session-skills-activation-empty">No automatic skill match for this task.</p>
+          )
+        ) : null}
       </div>
-      <label className="session-skills-activation-input">
-        <span>Task text</span>
-        <input
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          placeholder="Paste a task to see which skills would activate"
-        />
-      </label>
-      {trimmed ? (
-        matches.length > 0 ? (
-          <div className="session-skills-activation-matches">
-            {matches.slice(0, 6).map((match) => (
-              <button key={match.skill.name} type="button" onClick={() => onFocusSkill(match.skill.name)} title={match.reason}>
-                <strong>{match.skill.name}</strong>
-                <span>{match.reason}</span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="session-skills-activation-empty">No automatic skill match for this task.</p>
-        )
-      ) : null}
-    </section>
+    </details>
   );
 }
 
@@ -755,47 +756,6 @@ function summarizeSkillPreview(value: string): string {
     .join(" ");
   if (!normalized) return "No content preview.";
   return normalized.length > 180 ? `${normalized.slice(0, 179).trimEnd()}...` : normalized;
-}
-
-function SkillsDashboard({ skills, installEnabled }: { skills: readonly SessionSkillInfo[]; installEnabled: boolean }) {
-  const runtime = skills.filter((skill) => skill.runtime).length;
-  const builtIn = skills.length - runtime;
-  const triggerable = skills.filter((skill) => (skill.triggers?.length ?? skill.auto_activation?.any?.length ?? 0) > 0).length;
-  const manualOnly = skills.filter((skill) => skillTriggers(skill).length === 0).length;
-  const missingSummary = skills.filter((skill) => !skill.description?.trim()).length;
-  const reviewCount = manualOnly + missingSummary;
-  return (
-    <div className="session-skills-dashboard" data-testid="session-skills-dashboard">
-      <div className="session-skills-stat">
-        <span>Available</span>
-        <strong>{skills.length}</strong>
-        <small>{builtIn} built in · {runtime} custom</small>
-      </div>
-      <div className="session-skills-stat">
-        <span>Activation</span>
-        <strong>{triggerable}</strong>
-        <small>{triggerable === 1 ? "triggerable skill" : "triggerable skills"}</small>
-      </div>
-      <div className="session-skills-stat" data-tone={reviewCount > 0 ? "action" : "normal"}>
-        <span>Review</span>
-        <strong>{reviewCount}</strong>
-        <small>{skillsReviewSummary(manualOnly, missingSummary)}</small>
-      </div>
-      <div className="session-skills-stat">
-        <span>Install</span>
-        <strong>{installEnabled ? "Enabled" : "Read only"}</strong>
-        <small>{installEnabled ? "custom skills allowed" : "runtime install disabled"}</small>
-      </div>
-    </div>
-  );
-}
-
-function skillsReviewSummary(manualOnly: number, missingSummary: number): string {
-  if (manualOnly === 0 && missingSummary === 0) return "No review gaps";
-  return [
-    manualOnly > 0 ? `Manual-only ${manualOnly}` : undefined,
-    missingSummary > 0 ? `No summary ${missingSummary}` : undefined,
-  ].filter((item): item is string => Boolean(item)).join(" · ");
 }
 
 type SkillFormState = { name: string; description: string; triggers: string; requiredTools: string; body: string };

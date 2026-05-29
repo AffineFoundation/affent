@@ -44,10 +44,10 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Repair code by reproducing failures first.");
     expect(screen.queryByTestId("session-skills-coverage")).toBeNull();
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Review");
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("No review gaps");
-    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("Activation check");
+    expect(screen.queryByTestId("session-skills-dashboard")).toBeNull();
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("Activation test");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
+    await user.click(within(screen.getByTestId("session-skills-activation")).getByText("Activation test"));
     await user.type(screen.getByPlaceholderText("Paste a task to see which skills would activate"), "repair the failing workspace tests");
     expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("1 match");
     expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("trigger: repair");
@@ -115,7 +115,6 @@ describe("SessionSkillsPanel", () => {
       required_tools: ["workspace", "browser"],
     });
     expect(screen.getByRole("status")).toHaveTextContent("manual_demo saved.");
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("1");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("manual_demo");
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("Manual workflow.");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_demo");
@@ -340,10 +339,7 @@ describe("SessionSkillsPanel", () => {
     );
 
     const filterGroup = screen.getByRole("group", { name: "Filter skills" });
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Review");
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("2");
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("Manual-only 1");
-    expect(screen.getByTestId("session-skills-dashboard")).toHaveTextContent("No summary 1");
+    expect(screen.queryByTestId("session-skills-dashboard")).toBeNull();
     expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Skill maintenance");
     expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Manual-only 1");
     expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Needs summary 1");

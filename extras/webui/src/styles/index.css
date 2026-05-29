@@ -6523,7 +6523,7 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 @media (max-width: 640px) {
-  .session-skills-activation {
+  .session-skills-activation-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -7485,16 +7485,8 @@ button.workbench-context-runtime-item:focus-visible {
   color: var(--c-error);
 }
 
-.session-skills-dashboard {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
-  gap: 8px;
-}
-
 .session-skills-activation {
   display: grid;
-  grid-template-columns: minmax(0, 0.78fr) minmax(220px, 1fr);
-  gap: 8px;
   min-width: 0;
   border: 1px solid rgba(20, 184, 166, 0.2);
   border-radius: var(--radius-sm);
@@ -7509,9 +7501,45 @@ button.workbench-context-runtime-item:focus-visible {
   justify-content: space-between;
   gap: 8px;
   min-width: 0;
+  cursor: pointer;
+  list-style: none;
 }
 
-.session-skills-activation-head > div,
+.session-skills-activation-head::-webkit-details-marker {
+  display: none;
+}
+
+.session-skills-activation-head::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-top: 4px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  color: var(--text-faint);
+  transform: rotate(45deg);
+  transition: transform 140ms ease;
+}
+
+.session-skills-activation[open] > .session-skills-activation-head::after {
+  transform: translateY(2px) rotate(225deg);
+}
+
+.session-skills-activation-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-skills-activation-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+  padding-top: 8px;
+}
+
 .session-skills-activation-input {
   display: grid;
   gap: 4px;
@@ -7711,50 +7739,6 @@ button.workbench-context-runtime-item:focus-visible {
   color: var(--text-faint);
   font-size: 11.5px;
   font-style: normal;
-}
-
-.session-skills-stat {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  border: 1px solid rgba(217, 224, 232, 0.78);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.64);
-  padding: 8px 9px;
-}
-
-.session-skills-stat[data-tone="action"] {
-  border-color: rgba(20, 184, 166, 0.28);
-  background: rgba(240, 253, 250, 0.72);
-}
-
-.session-skills-stat span,
-.session-skills-stat small {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-faint);
-  font-size: 11px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-}
-
-.session-skills-stat span {
-  white-space: nowrap;
-}
-
-.session-skills-stat small {
-  line-height: 1.25;
-  white-space: normal;
-}
-
-.session-skills-stat strong {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .session-skill-item {
@@ -14695,7 +14679,6 @@ html[data-theme="dark"] .account-public-key-row,
 html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
-html[data-theme="dark"] .session-skills-stat,
 html[data-theme="dark"] .session-skills-activation,
 html[data-theme="dark"] .session-skills-coverage,
 html[data-theme="dark"] .session-skills-focus,
@@ -14745,11 +14728,6 @@ html[data-theme="dark"] .workbench-panel {
 html[data-theme="dark"] .session-skills-focus {
   border-color: rgba(45, 212, 191, 0.28);
   background: rgba(13, 40, 38, 0.42);
-}
-
-html[data-theme="dark"] .session-skills-stat[data-tone="action"] {
-  border-color: rgba(45, 212, 191, 0.32);
-  background: rgba(20, 83, 80, 0.28);
 }
 
 html[data-theme="dark"] .account-config-focus {
