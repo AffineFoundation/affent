@@ -755,7 +755,7 @@ describe("Timeline", () => {
     const editor = screen.getByRole("textbox", { name: "Edit message" });
 
     expect(editor).toHaveValue("list the files");
-    expect(screen.getByTestId("message-edit-form")).toHaveTextContent("Saving will remove this reply");
+    expect(screen.getByTestId("message-edit-form")).toHaveTextContent("Saving will discard the current answer");
     await user.clear(editor);
     await user.type(editor, "list src files");
     await user.click(screen.getByRole("button", { name: "Save edit" }));

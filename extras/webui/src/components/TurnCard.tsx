@@ -1638,8 +1638,8 @@ function MessageOptions({
 }
 
 function editMessageWarning(messagesAfterCount: number): string {
-  if (messagesAfterCount <= 0) return "Saving will remove this reply and rerun the chat from the edited message.";
-  return `Saving will remove this reply plus ${messagesAfterCount} later message${messagesAfterCount === 1 ? "" : "s"}.`;
+  if (messagesAfterCount <= 0) return "Saving will discard the current answer and rerun the chat from this edited message.";
+  return `Saving will discard the current answer plus ${messagesAfterCount} later message${messagesAfterCount === 1 ? "" : "s"}.`;
 }
 
 function formatMessageEditError(err: unknown): string {
