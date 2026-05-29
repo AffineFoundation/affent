@@ -2548,6 +2548,54 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-workspace-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid rgba(189, 199, 211, 0.58);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.58);
+  padding: 3px;
+}
+
+.session-workspace-breadcrumbs button {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 24px;
+  max-width: 150px;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 650;
+  padding: 3px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-workspace-breadcrumbs button + button::before {
+  content: "/";
+  position: absolute;
+  left: -4px;
+  color: var(--text-faint);
+  font-family: var(--font-sans);
+}
+
+.session-workspace-breadcrumbs button:hover,
+.session-workspace-breadcrumbs button:focus-visible {
+  background: rgba(20, 184, 166, 0.1);
+  color: var(--accent-strong);
+  outline: none;
+}
+
 .session-workspace-browser-path input {
   min-width: 0;
   height: 32px;
@@ -2626,6 +2674,73 @@ button.workbench-context-runtime-item:focus-visible {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+}
+
+.session-workspace-directory-preview {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.session-workspace-directory-table {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  min-height: 180px;
+  max-height: min(48vh, 540px);
+  margin: 0;
+  overflow: auto;
+  padding: 0;
+  list-style: none;
+}
+
+.session-workspace-directory-row {
+  min-width: 0;
+}
+
+.session-workspace-directory-row button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 5px 7px;
+  text-align: left;
+}
+
+.session-workspace-directory-row button:hover,
+.session-workspace-directory-row button:focus-visible {
+  border-color: rgba(20, 184, 166, 0.24);
+  background: rgba(240, 253, 250, 0.7);
+  outline: none;
+}
+
+.session-workspace-directory-row strong,
+.session-workspace-directory-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-workspace-directory-row strong {
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.session-workspace-directory-row small {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
 }
 
 .session-workspace-browser-more {
@@ -3178,6 +3293,10 @@ button.workbench-context-runtime-item:focus-visible {
 .session-files-editor-empty strong {
   color: var(--text);
   font-size: 13px;
+}
+
+.session-files-editor-empty.compact {
+  min-height: 160px;
 }
 
 .session-changes-overview {
@@ -15298,8 +15417,10 @@ html[data-theme="dark"] .session-file-inspector,
 html[data-theme="dark"] .session-files-editor,
 html[data-theme="dark"] .session-files-editor-chrome,
 html[data-theme="dark"] .session-workspace-browser,
+html[data-theme="dark"] .session-workspace-breadcrumbs,
 html[data-theme="dark"] .session-files-explorer-status,
 html[data-theme="dark"] .session-workspace-browser-entry button,
+html[data-theme="dark"] .session-workspace-directory-row button,
 html[data-theme="dark"] .session-changes-overview,
 html[data-theme="dark"] .session-changes-item,
 html[data-theme="dark"] .session-run-item,
@@ -15348,9 +15469,17 @@ html[data-theme="dark"] .session-files-tree-node[data-kind="directory"] > .sessi
 }
 
 html[data-theme="dark"] .session-workspace-browser-entry button:hover,
-html[data-theme="dark"] .session-workspace-browser-entry button:focus-visible {
+html[data-theme="dark"] .session-workspace-browser-entry button:focus-visible,
+html[data-theme="dark"] .session-workspace-directory-row button:hover,
+html[data-theme="dark"] .session-workspace-directory-row button:focus-visible {
   border-color: rgba(45, 212, 191, 0.36);
   background: rgba(45, 212, 191, 0.1);
+}
+
+html[data-theme="dark"] .session-workspace-breadcrumbs button:hover,
+html[data-theme="dark"] .session-workspace-breadcrumbs button:focus-visible {
+  background: rgba(45, 212, 191, 0.1);
+  color: #5eead4;
 }
 
 html[data-theme="dark"] .session-artifacts-overview {

@@ -187,19 +187,22 @@ describe("SessionFilesPanel", () => {
       />,
     );
 
-    await user.click(within(screen.getByTestId("session-file-preview")).getByRole("button", { name: "Open current" }));
-    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
-
     expect(screen.getByLabelText("File explorer")).toHaveTextContent("Workspace root");
+    expect(screen.getByTestId("session-files-editor-chrome")).toHaveTextContent("Workspace directory");
+    expect(screen.getByTestId("session-workspace-directory-preview")).toHaveTextContent("Workspace root");
+    expect(screen.getByTestId("session-workspace-directory-table")).toHaveTextContent("README.md");
+    expect(screen.getByLabelText("Workspace path breadcrumbs")).toHaveTextContent(".");
     expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("src");
     expect(screen.getByTestId("session-workspace-browser-list")).toHaveTextContent("README.md");
     await user.click(within(screen.getByTestId("session-workspace-browser-list")).getByRole("button", { name: /src/ }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src");
+    await user.click(within(screen.getByTestId("session-workspace-directory-table")).getByRole("button", { name: /README.md/ }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("README.md");
     await user.clear(screen.getByLabelText("Workspace path"));
     await user.type(screen.getByLabelText("Workspace path"), "src/main.go");
     await user.click(screen.getByRole("button", { name: "Open" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/main.go");
-    await user.click(screen.getByRole("button", { name: "Reference listing" }));
+    await user.click(within(screen.getByTestId("session-workspace-directory-preview")).getByRole("button", { name: "Reference listing" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("- file README.md (2 KiB)"), "file_snapshot");
   });
 
@@ -237,6 +240,9 @@ describe("SessionFilesPanel", () => {
     const preview = screen.getByTestId("session-workspace-file-preview");
     expect(preview).toHaveTextContent("src/main.go");
     expect(preview).toHaveTextContent("package main");
+    expect(screen.getByLabelText("Workspace path breadcrumbs")).toHaveTextContent(".srcmain.go");
+    await user.click(within(screen.getByLabelText("Workspace path breadcrumbs")).getByRole("button", { name: "src" }));
+    expect(onOpenWorkspacePath).toHaveBeenCalledWith("src");
     await user.click(within(preview).getByRole("button", { name: "Up" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src");
     await user.click(within(preview).getByRole("button", { name: "Copy file" }));

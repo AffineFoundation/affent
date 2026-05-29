@@ -74,11 +74,11 @@ export function SessionFilesPanel({
   const canOpenWorkspacePath = Boolean(onOpenWorkspacePath);
   const previewCodeRef = useRef<HTMLDivElement | null>(null);
   const autoOpenedWorkspaceRef = useRef<string | undefined>(undefined);
-  const editorTitle = workspaceReady?.kind === "file"
+  const editorTitle = workspaceReady
     ? workspaceReady.path
     : selectedItem?.path ?? selectedEvidence?.path ?? "No file selected";
-  const editorDetail = workspaceReady?.kind === "file"
-    ? `Workspace file · ${workspaceReady.detail}`
+  const editorDetail = workspaceReady
+    ? `${workspaceReady.kind === "directory" ? "Workspace directory" : "Workspace file"} · ${workspaceReady.detail}`
     : selectedItem
       ? snapshotEditorDetail(selectedItem, snapshotLines.length)
       : selectedEvidence
@@ -173,25 +173,28 @@ export function SessionFilesPanel({
               ) : null}
             </div>
             {canOpenWorkspacePath ? (
-              <div className="session-workspace-browser-path">
-                <input
-                  aria-label="Workspace path"
-                  value={workspaceQuery}
-                  onChange={(event) => setWorkspaceQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") openTypedWorkspacePath();
-                  }}
-                  placeholder={workspaceCurrentPath === "." ? "src/main.go" : workspaceCurrentPath}
-                />
-                <button
-                  type="button"
-                  className="ghost-action"
-                  disabled={workspaceBrowser?.state === "loading"}
-                  onClick={openTypedWorkspacePath}
-                >
-                  Open
-                </button>
-              </div>
+              <>
+                <WorkspaceBreadcrumbs path={workspaceCurrentPath} onOpenPath={onOpenWorkspacePath} />
+                <div className="session-workspace-browser-path">
+                  <input
+                    aria-label="Workspace path"
+                    value={workspaceQuery}
+                    onChange={(event) => setWorkspaceQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") openTypedWorkspacePath();
+                    }}
+                    placeholder={workspaceCurrentPath === "." ? "src/main.go" : workspaceCurrentPath}
+                  />
+                  <button
+                    type="button"
+                    className="ghost-action"
+                    disabled={workspaceBrowser?.state === "loading"}
+                    onClick={openTypedWorkspacePath}
+                  >
+                    Open
+                  </button>
+                </div>
+              </>
             ) : (
               <div className="session-files-explorer-status" data-state="unbound">
                 <span>Workspace unavailable</span>
@@ -251,7 +254,14 @@ export function SessionFilesPanel({
               </div>
               <small>{editorDetail}</small>
             </div>
-            {workspaceReady?.kind === "file" ? (
+            {workspaceReady?.kind === "directory" ? (
+              <WorkspaceDirectoryPreview
+                file={workspaceReady}
+                parent={workspaceParent}
+                onOpenPath={onOpenWorkspacePath}
+                onUseAsDraft={onUseAsDraft}
+              />
+            ) : workspaceReady?.kind === "file" ? (
               <WorkspaceFilePreview
                 file={workspaceReady}
                 parent={workspaceParent}
@@ -394,6 +404,32 @@ export function SessionFilesPanel({
   );
 }
 
+function WorkspaceBreadcrumbs({ path, onOpenPath }: { path: string; onOpenPath?: (path: string) => void }) {
+  const crumbs = workspaceCrumbs(path);
+  return (
+    <nav className="session-workspace-breadcrumbs" aria-label="Workspace path breadcrumbs">
+      {crumbs.map((crumb, index) => (
+        <button key={`${crumb.path}:${index}`} type="button" onClick={() => onOpenPath?.(crumb.path)} disabled={!onOpenPath}>
+          {crumb.label}
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function workspaceCrumbs(path: string): Array<{ label: string; path: string }> {
+  const clean = path.replace(/\\/g, "/").replace(/^\/+/, "").trim();
+  if (!clean || clean === ".") return [{ label: ".", path: "." }];
+  const parts = clean.split("/").filter(Boolean);
+  const crumbs = [{ label: ".", path: "." }];
+  let current = "";
+  for (const part of parts) {
+    current = current ? `${current}/${part}` : part;
+    crumbs.push({ label: part, path: current });
+  }
+  return crumbs;
+}
+
 function WorkspaceDirectory({
   file,
   parent,
@@ -432,6 +468,78 @@ function WorkspaceDirectory({
       )}
       {file.hasMore ? <small className="session-workspace-browser-more">More entries are available; open a narrower path.</small> : null}
     </div>
+  );
+}
+
+function WorkspaceDirectoryPreview({
+  file,
+  parent,
+  onOpenPath,
+  onUseAsDraft,
+}: {
+  file: WorkspaceFileView;
+  parent?: string;
+  onOpenPath?: (path: string) => void;
+  onUseAsDraft?: UseAsDraft;
+}) {
+  const entries = [...file.entries].sort(compareWorkspaceEntries);
+  return (
+    <div className="session-file-preview session-workspace-directory-preview" data-testid="session-workspace-directory-preview">
+      <div className="session-file-preview-head">
+        <div>
+          <span>Workspace directory</span>
+          <strong title={file.path}>{file.path === "." ? "Workspace root" : file.path}</strong>
+        </div>
+        <small>{file.detail}</small>
+      </div>
+      <div className="session-file-preview-toolbar">
+        {parent ? (
+          <button type="button" className="ghost-action" onClick={() => onOpenPath?.(parent)}>
+            Up
+          </button>
+        ) : null}
+        <CopyButton label="Copy path" value={file.path} className="ghost-action" />
+        {onUseAsDraft ? (
+          <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceFileDraft(file), "file_snapshot")}>
+            Reference listing
+          </button>
+        ) : null}
+      </div>
+      {entries.length > 0 ? (
+        <ol className="session-workspace-directory-table" data-testid="session-workspace-directory-table" aria-label="Workspace directory entries">
+          {entries.map((entry) => (
+            <WorkspaceDirectoryPreviewEntry key={entry.path} entry={entry} onOpenPath={onOpenPath} />
+          ))}
+        </ol>
+      ) : (
+        <div className="session-files-editor-empty compact">
+          <strong>Empty directory</strong>
+          <span>{file.path === "." ? "Workspace root has no visible entries." : `${file.path} has no visible entries.`}</span>
+        </div>
+      )}
+      <FileEditorStatus
+        source="directory"
+        path={file.path}
+        lines={entries.length}
+        countLabel={entries.length === 1 ? "entry" : "entries"}
+        detail={file.hasMore ? "more entries available" : file.detail}
+      />
+      {file.hasMore ? <small className="session-workspace-browser-more">More entries are available; open a narrower path.</small> : null}
+    </div>
+  );
+}
+
+function WorkspaceDirectoryPreviewEntry({ entry, onOpenPath }: { entry: WorkspaceFileEntryView; onOpenPath?: (path: string) => void }) {
+  return (
+    <li className="session-workspace-directory-row" data-kind={entry.kind}>
+      <button type="button" onClick={() => onOpenPath?.(entry.path)} disabled={!onOpenPath}>
+        <span className="session-files-tree-icon" aria-hidden="true">
+          <span data-icon={entry.kind === "directory" ? "directory" : "file"} />
+        </span>
+        <strong title={entry.path}>{entry.name}</strong>
+        <small>{entry.kind === "directory" ? "Directory" : entry.size ?? "File"}</small>
+      </button>
+    </li>
   );
 }
 
@@ -672,18 +780,20 @@ function FileEditorStatus({
   source,
   path,
   lines,
+  countLabel,
   detail,
 }: {
   source: string;
   path: string;
   lines?: number;
+  countLabel?: string;
   detail?: string;
 }) {
   return (
     <div className="session-files-editor-status" data-testid="session-files-editor-status">
       <span>{source}</span>
       <strong title={path}>{path === "." ? "workspace root" : path}</strong>
-      {Number.isFinite(lines) ? <span>{lines} {lines === 1 ? "line" : "lines"}</span> : null}
+      {Number.isFinite(lines) ? <span>{lines} {countLabel ?? (lines === 1 ? "line" : "lines")}</span> : null}
       {detail ? <span>{detail}</span> : null}
     </div>
   );
