@@ -28,6 +28,9 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 			ReservedOutputTokens:         30000,
 			CompactTriggerInputTokens:    70000,
 			CompactSummaryPromptMaxBytes: defaultSummaryPromptMaxBytesForTaskStateTest,
+			ToolSchemaBudgetTokens:       3000,
+			EstimatedToolSchemaTokens:    2000,
+			EstimatedRequestInputTokens:  5000,
 		}) +
 		taskStateEventLine(t, sse.TypeContextInjected, sse.ContextInjectedPayload{
 			TurnID:  "t1",
@@ -106,12 +109,14 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_auto=true") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "reserved_output_tokens=30000") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") ||
-		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_summary_prompt_max_bytes=196608") {
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_summary_prompt_max_bytes=196608") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "tool_schema_budget_tokens=3000") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "estimated_tool_schema_tokens=2000") {
 		t.Fatalf("evidence = %+v, want runtime surface limits", state.Evidence)
 	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "reserved_output_tokens=30000", "compact_summary_prompt_max_bytes=196608"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "reserved_output_tokens=30000", "compact_summary_prompt_max_bytes=196608", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}

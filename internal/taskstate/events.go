@@ -114,6 +114,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				addSource(state, "runtime_surface", opts.MaxItems)
 				seen = true
 			}
+			if summary := RuntimeSurfaceRequestPressureSummary(&p); summary != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "runtime_surface",
+					Summary: compactSummary(summary, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+				addSource(state, "runtime_surface", opts.MaxItems)
+				seen = true
+			}
 			if runtimeSurfaceHasCapabilityData(&p) {
 				addSource(state, "runtime_surface", opts.MaxItems)
 				seen = true
@@ -719,13 +728,31 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
 	addIntField("available_tool_count", p.AvailableToolCount)
 	addIntField("excluded_tool_count", p.ExcludedToolCount)
-	addIntField("tool_schema_budget_tokens", p.ToolSchemaBudgetTokens)
-	addIntField("estimated_tool_schema_tokens", p.EstimatedToolSchemaTokens)
-	addIntField("estimated_request_input_tokens", p.EstimatedRequestInputTokens)
 	if len(fields) == 0 {
 		return ""
 	}
 	return strings.Join(fields, " ")
+}
+
+func RuntimeSurfaceRequestPressureSummary(p *sse.RuntimeSurfacePayload) string {
+	if p == nil {
+		return ""
+	}
+	var fields []string
+	addIntField := func(name string, value int) {
+		if value > 0 {
+			fields = append(fields, fmt.Sprintf("%s=%d", name, value))
+		}
+	}
+	addIntField("tool_schema_budget_tokens", p.ToolSchemaBudgetTokens)
+	addIntField("estimated_tool_schema_tokens", p.EstimatedToolSchemaTokens)
+	addIntField("estimated_request_input_tokens", p.EstimatedRequestInputTokens)
+	addIntField("available_tool_count", p.AvailableToolCount)
+	addIntField("excluded_tool_count", p.ExcludedToolCount)
+	if len(fields) == 0 {
+		return ""
+	}
+	return "request_pressure " + strings.Join(fields, " ")
 }
 
 func appendTextLine(b *strings.Builder, label, value string) {
