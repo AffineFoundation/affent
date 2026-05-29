@@ -760,6 +760,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		MaxTurnSteps:               p.cfg.MaxTurnSteps,
 		MaxTurnInputTokens:         p.cfg.MaxTurnInputTokens,
 		ModelContextWindowTokens:   p.cfg.ModelContextWindowTokens,
+		ModelContextWindowAuto:     p.cfg.ModelContextWindowAuto,
 		CompactTriggerInputPercent: p.cfg.CompactTriggerInputPercent,
 		FinalNoToolsOnMaxTurns:     true,
 		SessionScheduleRunner:      !p.cfg.EvalMode,

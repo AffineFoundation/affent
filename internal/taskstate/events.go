@@ -576,6 +576,9 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	addIntField("max_tool_calls", p.MaxToolCalls)
 	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
 	addIntField("model_context_window_tokens", p.ModelContextWindowTokens)
+	if p.ModelContextWindowAuto {
+		fields = append(fields, "model_context_window_auto=true")
+	}
 	addIntField("reserved_output_tokens", p.ReservedOutputTokens)
 	addIntField("compact_trigger_input_tokens", p.CompactTriggerInputTokens)
 	addIntField("compact_trigger_input_percent", p.CompactTriggerInputPercent)

@@ -1833,6 +1833,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		SessionScheduleRunner:        true,
 		MaxTurnInputTokens:           12345,
 		ModelContextWindowTokens:     100000,
+		ModelContextWindowAuto:       true,
 		CompactTriggerInputPercent:   80,
 		ToolResultMaxBytesInContext:  1234,
 		ToolResultContextBudgetBytes: 5678,
@@ -1874,6 +1875,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	if payload.MaxTurnSteps != 7 || payload.MaxToolCalls != 5 ||
 		payload.MaxTurnInputTokens != 12345 ||
 		payload.ModelContextWindowTokens != 100000 ||
+		!payload.ModelContextWindowAuto ||
 		payload.CompactTriggerInputTokens != 80000 ||
 		payload.CompactTriggerInputPercent != 80 ||
 		payload.ToolResultEventCapBytes != MaxToolResultBytesInEvent ||

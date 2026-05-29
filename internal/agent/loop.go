@@ -130,6 +130,9 @@ type Loop struct {
 	// Zero means unknown. When set and CompactTriggerInputTokens is zero, the
 	// proactive compaction trigger is derived from this window.
 	ModelContextWindowTokens int
+	// ModelContextWindowAuto reports whether the effective model context window
+	// was resolved from provider metadata rather than only explicit config.
+	ModelContextWindowAuto bool
 	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
 	// used for the derived request-input compaction trigger. Zero uses the
 	// runtime default.
@@ -2898,6 +2901,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		MaxToolCalls:                 l.maxToolCallsForTurn(opts),
 		MaxTurnInputTokens:           l.maxTurnInputTokensForTurn(opts),
 		ModelContextWindowTokens:     l.ModelContextWindowTokens,
+		ModelContextWindowAuto:       l.ModelContextWindowAuto,
 		ReservedOutputTokens:         l.reservedOutputTokens(),
 		CompactTriggerInputTokens:    l.compactTriggerInputTokens(),
 		CompactTriggerInputPercent:   l.compactTriggerInputPercent(),

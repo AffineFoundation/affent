@@ -22,6 +22,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 			MaxTurnSteps:              12,
 			MaxTurnInputTokens:        300000,
 			ModelContextWindowTokens:  100000,
+			ModelContextWindowAuto:    true,
 			ReservedOutputTokens:      30000,
 			CompactTriggerInputTokens: 70000,
 		}) +
@@ -99,7 +100,8 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	if !taskStateEvidenceContains(state.Evidence, GitPushEvidenceSource, "git push origin main") {
 		t.Fatalf("evidence = %+v, want git push handoff", state.Evidence)
 	}
-	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "reserved_output_tokens=30000") ||
+	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_auto=true") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "reserved_output_tokens=30000") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") {
 		t.Fatalf("evidence = %+v, want runtime surface limits", state.Evidence)
 	}

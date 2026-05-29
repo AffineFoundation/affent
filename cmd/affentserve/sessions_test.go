@@ -1255,6 +1255,7 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 		CompactTrigger:             120,
 		CompactTriggerInputTokens:  4096,
 		ModelContextWindowTokens:   100000,
+		ModelContextWindowAuto:     true,
 		CompactTriggerInputPercent: 75,
 		CompactKeepLast:            4,
 	}
@@ -1286,6 +1287,9 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	}
 	if s.loop.ModelContextWindowTokens != 100000 {
 		t.Errorf("ModelContextWindowTokens = %d, want 100000 from config", s.loop.ModelContextWindowTokens)
+	}
+	if !s.loop.ModelContextWindowAuto {
+		t.Error("ModelContextWindowAuto = false, want true from config")
 	}
 	if s.loop.CompactTriggerInputPercent != 75 {
 		t.Errorf("CompactTriggerInputPercent = %d, want 75 from config", s.loop.CompactTriggerInputPercent)

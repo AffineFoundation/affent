@@ -1615,6 +1615,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		MaxTurnSteps:               c.maxTurns,
 		MaxTurnInputTokens:         c.maxTurnInputTokens,
 		ModelContextWindowTokens:   c.modelContextWindowTokens,
+		ModelContextWindowAuto:     c.modelContextWindowAuto,
 		CompactTriggerInputPercent: c.compactTriggerPercent,
 		FinalNoToolsOnMaxTurns:     true,
 		PerCallTimeout:             c.callTimeout,

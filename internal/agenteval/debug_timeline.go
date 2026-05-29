@@ -1164,12 +1164,16 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		fmt.Fprintf(b, "- max_turn_input_tokens: `%d`\n", surface.MaxTurnInputTokens)
 	}
 	if surface.ModelContextWindowTokens > 0 ||
+		surface.ModelContextWindowAuto ||
 		surface.ReservedOutputTokens > 0 ||
 		surface.CompactTriggerInputTokens > 0 ||
 		surface.CompactTriggerInputPercent > 0 {
 		var parts []string
 		if surface.ModelContextWindowTokens > 0 {
 			parts = append(parts, fmt.Sprintf("model_context_window_tokens=`%d`", surface.ModelContextWindowTokens))
+		}
+		if surface.ModelContextWindowAuto {
+			parts = append(parts, "model_context_window_auto=`true`")
 		}
 		if surface.ReservedOutputTokens > 0 {
 			parts = append(parts, fmt.Sprintf("reserved_output_tokens=`%d`", surface.ReservedOutputTokens))

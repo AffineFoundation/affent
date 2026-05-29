@@ -83,6 +83,7 @@ type RuntimeSurfacePayload struct {
 	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`
 	MaxTurnInputTokens           int                  `json:"max_turn_input_tokens,omitempty"`
 	ModelContextWindowTokens     int                  `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowAuto       bool                 `json:"model_context_window_auto,omitempty"`
 	ReservedOutputTokens         int                  `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens    int                  `json:"compact_trigger_input_tokens,omitempty"`
 	CompactTriggerInputPercent   int                  `json:"compact_trigger_input_percent,omitempty"`

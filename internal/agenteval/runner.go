@@ -60,6 +60,10 @@ type Runner struct {
 	// derive request-input compaction pressure when no explicit trigger is set.
 	ModelContextWindowTokens int
 
+	// ModelContextWindowAuto reports whether the context window was resolved
+	// from provider metadata rather than only explicit runner config.
+	ModelContextWindowAuto bool
+
 	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
 	// used for derived request-input pressure. Zero uses the runtime default.
 	CompactTriggerInputPercent int
@@ -195,6 +199,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		},
 		CompactTriggerInputTokens:  r.CompactTriggerInputTokens,
 		ModelContextWindowTokens:   r.ModelContextWindowTokens,
+		ModelContextWindowAuto:     r.ModelContextWindowAuto,
 		CompactTriggerInputPercent: r.CompactTriggerInputPercent,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,

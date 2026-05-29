@@ -711,7 +711,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"user.message","data":{"turn_id":"t1","text":"Proceed with the active persisted plan.","display_text":"Run plan step 2","mode":"execute_plan"}}`,
 		`{"type":"conversation.repaired","data":{"session_id":"resume","missing_tool_results":1,"failure_kind":"resume_missing_tool_result","next":"do not assume the tool succeeded"}}`,
-		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":3,"tools":[{"name":"read_file","group":"Workspace","arg_policy":{"workspace_path_args":["path"]}},{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"tool_call_caps":[{"tool":"web_fetch","max":8},{"tool":"web_search","max":4}],"completion_guards":["active_plan_unfinished","loop_protocol_running"],"capabilities":{"workspace_tools":["read_file"],"web_fetch":true,"web_search":true,"session_schedule":true,"session_schedule_runner":true,"session_search":true,"skill":true,"mcp":true},"max_turn_steps":12,"max_tool_calls":7,"max_turn_input_tokens":300000,"model_context_window_tokens":100000,"reserved_output_tokens":30000,"compact_trigger_input_tokens":70000,"compact_trigger_input_percent":80,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results","turn_tool_override":true}}`,
+		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":3,"tools":[{"name":"read_file","group":"Workspace","arg_policy":{"workspace_path_args":["path"]}},{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"tool_call_caps":[{"tool":"web_fetch","max":8},{"tool":"web_search","max":4}],"completion_guards":["active_plan_unfinished","loop_protocol_running"],"capabilities":{"workspace_tools":["read_file"],"web_fetch":true,"web_search":true,"session_schedule":true,"session_schedule_runner":true,"session_search":true,"skill":true,"mcp":true},"max_turn_steps":12,"max_tool_calls":7,"max_turn_input_tokens":300000,"model_context_window_tokens":100000,"model_context_window_auto":true,"reserved_output_tokens":30000,"compact_trigger_input_tokens":70000,"compact_trigger_input_percent":80,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results","turn_tool_override":true}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"account_access","title":"Account access context injected","summary":"Account-level environment and SSH access hints were made available for this turn.","preview":"Configured environment variables available to shell commands: GITHUB_TOKEN.","bytes":240,"estimated_tokens":60}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"active_plan","title":"Active plan context injected","summary":"Current step: 2. Execute this step before broadening.","preview":"Current step: 2. Execute this step before broadening. - [ ] verify browser network evidence","bytes":360,"estimated_tokens":90}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
@@ -760,6 +760,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(trace.RuntimeSurfaces[0].Tools[0].ArgPolicy.WorkspacePathArgs, []string{"path"}) ||
 		trace.RuntimeSurfaces[0].MaxTurnSteps != 12 ||
 		trace.RuntimeSurfaces[0].ReservedOutputTokens != 30000 ||
+		!trace.RuntimeSurfaces[0].ModelContextWindowAuto ||
 		trace.RuntimeSurfaces[0].CompactTriggerInputTokens != 70000 ||
 		len(trace.RuntimeSurfaces[0].ToolCallCaps) != 2 ||
 		trace.RuntimeSurfaces[0].ToolCallCaps[0].Tool != "web_fetch" ||
@@ -787,7 +788,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		"- max_turn_steps: `12`",
 		"- max_tool_calls: `7`",
 		"- max_turn_input_tokens: `300000`",
-		"- context_policy: model_context_window_tokens=`100000`, reserved_output_tokens=`30000`, compact_trigger_input_tokens=`70000`, compact_trigger_input_percent=`80`",
+		"- context_policy: model_context_window_tokens=`100000`, model_context_window_auto=`true`, reserved_output_tokens=`30000`, compact_trigger_input_tokens=`70000`, compact_trigger_input_percent=`80`",
 		"- tool_result_limits: event_cap_bytes=`262144`, context_max_bytes=`5120`, context_budget_bytes=`32768`",
 		"- tool_result_artifacts: `.affent/artifacts/tool-results`",
 		"- turn_tool_override: `true`",
