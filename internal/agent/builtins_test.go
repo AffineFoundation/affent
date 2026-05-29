@@ -53,6 +53,9 @@ func TestSafeWorkspacePath(t *testing.T) {
 				if !strings.Contains(err.Error(), "escape") {
 					t.Errorf("error %q should mention escape", err)
 				}
+				if !strings.Contains(err.Error(), "Failure: kind=workspace_path_escape") {
+					t.Errorf("escape error %q should include a structured failure kind", err)
+				}
 				if !strings.Contains(err.Error(), "Next:") {
 					t.Errorf("escape error %q should include recovery guidance", err)
 				}
@@ -99,6 +102,9 @@ func TestSafeWorkspacePath_RejectsSymlinkEscape(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "escape") {
 			t.Errorf("error %q should mention escape", err)
+		}
+		if !strings.Contains(err.Error(), "Failure: kind=workspace_path_escape") {
+			t.Errorf("escape error %q should include a structured failure kind", err)
 		}
 		if !strings.Contains(err.Error(), "Next:") {
 			t.Errorf("escape error %q should include recovery guidance", err)

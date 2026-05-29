@@ -1560,6 +1560,19 @@ func TestFinalTextContains(t *testing.T) {
 	})
 }
 
+func TestFinalTextContainsFold(t *testing.T) {
+	trace := Trace{FinalText: "Git status: Clean working tree\nPush result: main -> main"}
+	if res := FinalTextContainsFold("clean").Eval(trace); !res.Pass {
+		t.Fatalf("case-insensitive clean evidence should pass: %+v", res)
+	}
+	if res := FinalTextContainsFold("push").Eval(trace); !res.Pass {
+		t.Fatalf("case-insensitive push evidence should pass: %+v", res)
+	}
+	if res := FinalTextContainsFold("missing").Eval(trace); res.Pass {
+		t.Fatalf("missing evidence should fail")
+	}
+}
+
 func TestFinalTextLacks(t *testing.T) {
 	t.Run("passes when forbidden absent", func(t *testing.T) {
 		trace := Trace{FinalText: "All checks passed."}
@@ -1959,6 +1972,14 @@ func TestShellCommandLacksUnguarded(t *testing.T) {
 			t.Errorf("unguarded | head should fail; got pass")
 		}
 	})
+	t.Run("allows bounded inspection pipe", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "shell", Args: map[string]any{"command": `pwd && ls -la remote.git 2>/dev/null || find . -name "remote.git" -type d 2>/dev/null | head -5`}, ExitCode: 0},
+		}}
+		if res := ShellCommandLacksUnguarded("| head").Eval(trace); !res.Pass {
+			t.Errorf("bounded inspection pipe should pass: %+v", res)
+		}
+	})
 	t.Run("ignores guard-rejected attempt", func(t *testing.T) {
 		// This is the key contract: the model tried `pytest | head`,
 		// the runtime shell guard refused. The check must NOT
@@ -1992,7 +2013,7 @@ func TestShellCommandLacksUnguarded(t *testing.T) {
 	})
 	t.Run("case-insensitive substring", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{
-			{Tool: "shell", Args: map[string]any{"command": "echo XYZ || True"}, ExitCode: 0},
+			{Tool: "shell", Args: map[string]any{"command": "go test ./... || True"}, ExitCode: 0},
 		}}
 		// Forbidden written lowercase; command uses "True". Match should still fire.
 		res := ShellCommandLacksUnguarded("|| true").Eval(trace)

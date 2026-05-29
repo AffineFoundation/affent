@@ -733,20 +733,33 @@ var verificationCommandIndicators = []string{
 }
 
 func rejectMaskedVerificationCommand(command string, indicators []string) error {
+	if !shellCommandMasksVerification(command, indicators) {
+		return nil
+	}
+	return errors.New("shell command masks a test/build exit code. Run the verification command directly, rely on tool truncation, or redirect output to a file and inspect chunks after it finishes\nNext: retry the verification command without | head, | tail, || true, or echo $?")
+}
+
+// ShellCommandMasksVerification reports whether a shell command combines a
+// test/build verifier with a shell shape that can hide its exit status.
+func ShellCommandMasksVerification(command string) bool {
+	return shellCommandMasksVerification(command, verificationCommandIndicators)
+}
+
+func shellCommandMasksVerification(command string, indicators []string) bool {
 	lower := strings.ToLower(command)
 	masksExit := strings.Contains(lower, "| head") ||
 		strings.Contains(lower, "| tail") ||
 		strings.Contains(lower, "|| true") ||
 		(strings.Contains(lower, "echo") && strings.Contains(lower, "$?"))
 	if !masksExit {
-		return nil
+		return false
 	}
 	for _, indicator := range indicators {
 		if strings.Contains(lower, indicator) {
-			return errors.New("shell command masks a test/build exit code. Run the verification command directly, rely on tool truncation, or redirect output to a file and inspect chunks after it finishes\nNext: retry the verification command without | head, | tail, || true, or echo $?")
+			return true
 		}
 	}
-	return nil
+	return false
 }
 
 func formatShellOutput(res executor.ExecResult) string {
@@ -932,9 +945,17 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	}
 	rel, err := filepath.Rel(wsAbs, resolved)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q escapes workspace\nNext: retry with a workspace-relative path under the workspace, or call list_files on . to discover valid paths", p)
+		return "", workspacePathEscapeToolError(p)
 	}
 	return full, nil
+}
+
+func workspacePathEscapeToolError(p string) error {
+	return structuredToolError(
+		fmt.Sprintf("path %q escapes workspace", p),
+		"workspace_path_escape",
+		"retry with a workspace-relative path under the workspace, or call list_files on . to discover valid paths",
+	)
 }
 
 func normalizeWorkspacePathAlias(deps BuiltinDeps, p string) string {

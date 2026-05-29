@@ -3238,7 +3238,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, ToolNotCalled(tool, nil))
 	}
 	for _, substr := range scenario.RequiredFinalText {
-		checks = append(checks, FinalTextContains(substr))
+		checks = append(checks, FinalTextContainsFold(substr))
 	}
 	for _, substr := range scenario.ForbiddenFinalText {
 		checks = append(checks, FinalTextLacks(substr))

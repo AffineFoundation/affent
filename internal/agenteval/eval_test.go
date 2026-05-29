@@ -1600,7 +1600,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"turn_ended_cleanly",
 		"tool_called:read_file",
 		"tool_not_called:write_file",
-		"final_text_contains:done",
+		"final_text_contains_fold:done",
 		"tool_result_contains:skill:AFFENT ACTIVE SKILL",
 		"tool_result_contains:subagent_run:report",
 		"tool_arg_contains_at_least:web_search:query:Bittensor:2",

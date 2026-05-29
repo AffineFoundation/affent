@@ -2164,6 +2164,24 @@ func FinalTextContains(substr string) Check {
 	}
 }
 
+// FinalTextContainsFold is for batch scenario evidence snippets that are
+// natural-language labels rather than exact literals. Exact casing should use
+// FinalTextContains or a custom check.
+func FinalTextContainsFold(substr string) Check {
+	return Check{
+		Name: "final_text_contains_fold:" + previewSubstr(substr, 32),
+		Eval: func(t Trace) CheckResult {
+			if strings.Contains(strings.ToLower(t.FinalText), strings.ToLower(substr)) {
+				return CheckResult{Pass: true}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("final text did not contain %q (case-insensitive); got %q", substr, previewSubstr(t.FinalText, 200)),
+			}
+		},
+	}
+}
+
 // FinalTextLacks passes when the final assistant message does NOT
 // contain the substring. Used for refusal/anti-leak assertions:
 // "the answer must not include the raw stack trace", "the answer
@@ -2600,6 +2618,9 @@ func ShellCommandLacksUnguarded(forbidden string) Check {
 				if guardRejected(c) {
 					continue
 				}
+				if allowedForbiddenShellShape(lower, cmd) {
+					continue
+				}
 				return CheckResult{
 					Pass:   false,
 					Detail: fmt.Sprintf("forbidden command substring %q in %q", forbidden, cmd),
@@ -2607,6 +2628,15 @@ func ShellCommandLacksUnguarded(forbidden string) Check {
 			}
 			return CheckResult{Pass: true}
 		},
+	}
+}
+
+func allowedForbiddenShellShape(forbidden, command string) bool {
+	switch strings.TrimSpace(forbidden) {
+	case "| head", "| tail", "|| true", `; echo "exit:$?"`:
+		return !agent.ShellCommandMasksVerification(command)
+	default:
+		return false
 	}
 }
 
