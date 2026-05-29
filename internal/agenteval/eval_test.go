@@ -3196,12 +3196,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 		loopActivation.RequiredLoopProtocolCalibrationRequestStatuses["draft"] != 1 ||
 		loopActivation.RequiredLoopProtocolCalibrationStatuses["draft"] != 1 ||
 		loopActivation.RequiredTraceEventCounts["loop.protocol_calibration_request"] != 1 ||
-		loopActivation.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 {
+		loopActivation.RequiredTraceEventCounts["loop.protocol_calibration"] != 1 ||
+		loopActivation.RequiredTraceEventCounts["context.injected"] != 1 ||
+		loopActivation.RequiredContextInjectionSources["loop_protocol_activation"] != 1 ||
+		!stringSliceContains(loopActivation.RequiredContextInjectionText["loop_protocol_activation"], "complete_activation without protocol") {
 		t.Fatalf("loop activation expectations = prompts:%d modes:%#v requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopActivation.Prompts), loopActivation.RequiredUserMessageModes, loopActivation.RequiredLoopProtocolCalibrationRequests, loopActivation.RequiredLoopProtocolCalibrations, loopActivation.RequiredLoopProtocolCalibrationRequestStatuses, loopActivation.RequiredLoopProtocolCalibrationStatuses, loopActivation.RequiredTraceEventCounts)
 	}
 	if loopActivation.RequiredToolCounts["loop_protocol"] != 3 ||
-		loopActivation.MaxParentToolCalls != 4 ||
-		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 4 {
+		loopActivation.MaxParentToolCalls != 3 ||
+		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 3 {
 		t.Fatalf("loop activation tool counts = required:%#v max_parent:%d max_by_tool:%#v, want bounded activation calls", loopActivation.RequiredToolCounts, loopActivation.MaxParentToolCalls, loopActivation.MaxSuccessfulToolCallsByTool)
 	}
 	if !toolArgRequirementContains(loopActivation.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "patch_draft"}) {
@@ -3223,7 +3226,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("loop activation RequiredToolResultText = %#v, want %q", loopActivation.RequiredToolResultText, want)
 		}
 	}
-	for _, kind := range []string{"loop_protocol_calibration_required", "loop_protocol_activation_status", "loop_protocol_activation_unready", "loop_protocol_activation_invalid"} {
+	for _, kind := range []string{"loop_protocol_calibration_required", "tool_failed", "loop_protocol_activation_status", "loop_protocol_activation_unready", "loop_protocol_activation_invalid"} {
 		if max, ok := loopActivation.MaxToolFailureKindCounts[kind]; !ok || max != 0 {
 			t.Fatalf("loop activation MaxToolFailureKindCounts = %#v, want %s=0", loopActivation.MaxToolFailureKindCounts, kind)
 		}

@@ -936,6 +936,8 @@ func describeContextInjectedSection(section string) (source, title, summary, pre
 	switch {
 	case strings.HasPrefix(first, "AFFENT LOOP PROTOCOL:"):
 		return "", "", "", "", false
+	case strings.HasPrefix(first, "AFFENT LOOP DRAFT ACTIVATION:"):
+		return "loop_protocol_activation", "Loop draft activation context injected", "Draft LOOP.md context was injected so the agent can patch_draft, then complete_activation without protocol.", safeContextInjectedPreview(section), true
 	case strings.HasPrefix(first, "AFFENT ACCOUNT ACCESS:"):
 		return "account_access", "Account access context injected", "Account-level environment and SSH access hints were made available for this turn.", accountAccessContextPreview(section), true
 	case strings.HasPrefix(first, "AFFENT ACTIVE PLAN:"):
@@ -1668,6 +1670,19 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 				forceNoToolsPrompt = loopProtocolCalibrationNoToolsPrompt
 				stopToolBatchForCalibration = true
+			}
+			if l.loopProtocolActivationCompleted(toolName, args, isErr) {
+				opts.FinalNoToolsOnMaxTurns = true
+				if !forceNoToolsNext {
+					toolStats.ForcedNoTools++
+				}
+				forceNoToolsNext = true
+				forceNoToolsReason = skippedToolResultReason{
+					Message:     "(loop protocol activation completed; final answer required before more tools)",
+					FailureKind: "loop_protocol_activation_completed",
+					Next:        "answer with the activated loop status from the tool result without calling more tools",
+				}
+				forceNoToolsPrompt = loopProtocolActivationNoToolsPrompt
 			}
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
@@ -2911,6 +2926,10 @@ Do not call tools again. ` + finalEvidenceDiscipline + ` Start the final answer 
 var loopProtocolCalibrationNoToolsPrompt = `Loop protocol draft setup is complete and the active loop is waiting for user calibration.
 
 Do not call tools. Ask exactly one concise calibration question about stop conditions, pause conditions, or missing intent, then stop.`
+
+var loopProtocolActivationNoToolsPrompt = `Loop protocol activation is complete.
+
+Do not call tools. Answer with the activated LOOP.md status and the compact evidence from the activation tool result, then stop.`
 
 func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string, opts TurnOptions) (*FinishInfo, string, error) {
 	if digest := finalEvidenceDigest(l.Conv.Snapshot()); digest != "" {

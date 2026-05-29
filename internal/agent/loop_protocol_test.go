@@ -152,6 +152,49 @@ func TestLoopProtocolStartSetupForcesCalibrationOnlyForFreshDraft(t *testing.T) 
 	}
 }
 
+func TestLoopProtocolActivationCompletedDetectedFromStateTransition(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Build a CLI puzzle game.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	loop := &Loop{LoopProtocolPath: protocolPath}
+	args := json.RawMessage(`{"action":"complete_activation"}`)
+	if loop.loopProtocolActivationCompleted(LoopProtocolToolName, args, false) {
+		t.Fatal("draft protocol should not report activation completed")
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(protocolPath, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(protocolPath, "Pause when evidence is unavailable."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	protocol, _, err := loopstate.PrepareProtocolActivation(protocolPath, "")
+	if err != nil {
+		t.Fatalf("PrepareProtocolActivation: %v", err)
+	}
+	if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loopstate.RecordProtocolActivation(protocolPath, "activate"); err != nil {
+		t.Fatalf("RecordProtocolActivation: %v", err)
+	}
+	if !loop.loopProtocolActivationCompleted(LoopProtocolToolName, args, false) {
+		t.Fatal("running protocol activation event should report activation completed")
+	}
+	if loop.loopProtocolActivationCompleted(LoopProtocolToolName, json.RawMessage(`{"action":"patch_draft"}`), false) {
+		t.Fatal("non-activation action should not report activation completed")
+	}
+	if loop.loopProtocolActivationCompleted(LoopProtocolToolName, args, true) {
+		t.Fatal("failed activation action should not report activation completed")
+	}
+}
+
 func TestRunTurnDoesNotRecordProcessTextAsExtraLoopCalibration(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "answered")
@@ -901,6 +944,80 @@ func TestWithLoopProtocolSkillProviderSkipsDraftProtocolWithoutState(t *testing.
 	got := WithLoopProtocolSkillProvider(path, func(string) string { return "next" })("continue")
 	if got != "next" {
 		t.Fatalf("draft protocol without sidecar state should not be injected; got:\n%s", got)
+	}
+}
+
+func TestWithLoopProtocolDraftActivationProviderInjectsAnsweredDraft(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID: "longrun",
+		Goal:   "Keep loop setup compact and recoverable.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Pause when evidence is unavailable."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+
+	got := WithLoopProtocolDraftActivationProvider(path, func(string) string { return "next" })("continue")
+	for _, want := range []string{
+		"AFFENT LOOP DRAFT ACTIVATION:",
+		"status=draft",
+		"calibration_questions=1",
+		"calibration_answers=1",
+		"last_calibration_answer: Pause when evidence is unavailable.",
+		"next_action: patch_draft compact existing sections, then complete_activation without protocol",
+		"patchable_sections: ## 1. North Star",
+		"section_digest:",
+		"next",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("draft activation provider missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "## 0. Metadata") {
+		t.Fatalf("draft activation context should not expose metadata as patch target:\n%s", got)
+	}
+}
+
+func TestWithLoopProtocolDraftActivationProviderSkipsUnansweredOrRunning(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID: "longrun",
+		Goal:   "Keep loop setup compact and recoverable.",
+		Status: "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	provider := WithLoopProtocolDraftActivationProvider(path, func(string) string { return "next" })
+	if got := provider("continue"); got != "next" {
+		t.Fatalf("unanswered draft should not inject activation context:\n%s", got)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Pause when evidence is unavailable."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	if err := loopstate.WriteProtocol(path, protocol); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loopstate.RecordProtocolActivation(path, "activated"); err != nil {
+		t.Fatalf("RecordProtocolActivation: %v", err)
+	}
+	if got := provider("continue"); got != "next" {
+		t.Fatalf("running protocol should not inject draft activation context:\n%s", got)
 	}
 }
 

@@ -2143,6 +2143,13 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 || state.LastEventType != "loop.protocol_calibration" || !strings.Contains(state.LastCalibrationQuestion, "stop condition") || !strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
 		t.Fatalf("calibration state = %+v", state)
 	}
+	if s.loop.SkillProvider == nil {
+		t.Fatal("draft activation provider should be installed")
+	}
+	if got := s.loop.SkillProvider("continue"); !strings.Contains(got, "AFFENT LOOP DRAFT ACTIVATION:") ||
+		!strings.Contains(got, "complete_activation without protocol") {
+		t.Fatalf("draft activation context = %q", got)
+	}
 	tracePath := filepath.Join(pool.sessionDirPath("loop-calibration"), "events.jsonl")
 	waitForFileSubstring(t, tracePath, `"type":"loop.protocol_calibration"`)
 	history, err := readSessionHistory(pool.sessionDirPath("loop-calibration"), "loop-calibration", -1, 100)

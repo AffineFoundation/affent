@@ -1823,6 +1823,13 @@ func TestSetupLoopInstallsLoopActivationCompletionGuardForDraft(t *testing.T) {
 	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(b.loopProtocolPath, "Pause when evidence is unavailable."); err != nil {
 		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
 	}
+	if b.loop.SkillProvider == nil {
+		t.Fatal("draft activation provider should be installed")
+	}
+	if got := b.loop.SkillProvider("continue"); !strings.Contains(got, "AFFENT LOOP DRAFT ACTIVATION:") ||
+		!strings.Contains(got, "complete_activation without protocol") {
+		t.Fatalf("draft activation context = %q", got)
+	}
 	var blocked agent.CompletionGuardResult
 	for _, guard := range b.loop.CompletionGuards {
 		if result := guard(); result.Trigger == "loop_protocol_activation_pending" {

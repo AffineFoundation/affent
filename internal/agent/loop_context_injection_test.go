@@ -68,6 +68,42 @@ func TestAppendUserMessagePublishesContextInjectedEvents(t *testing.T) {
 	}
 }
 
+func TestAppendUserMessagePublishesLoopDraftActivationContext(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 2)
+	loop := &Loop{
+		Conv:   conv,
+		Events: events,
+		SkillProvider: func(string) string {
+			return "AFFENT LOOP DRAFT ACTIVATION:\nstatus=draft protocol_path=.affent/loops/demo/LOOP.md calibration_questions=1 calibration_answers=1\nnext_action: patch_draft compact existing sections, then complete_activation without protocol"
+		},
+	}
+
+	if err := loop.appendUserMessage("turn_loop_draft", "activation answer", TurnOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeContextInjected {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextInjected)
+		}
+		var payload sse.ContextInjectedPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload.Source != "loop_protocol_activation" ||
+			payload.Title != "Loop draft activation context injected" ||
+			!strings.Contains(payload.Preview, "status=draft") {
+			t.Fatalf("loop draft activation payload = %+v", payload)
+		}
+	default:
+		t.Fatal("expected loop draft activation context event")
+	}
+}
+
 func TestAppendUserMessagePrunesPreviousTransientContext(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
 	if err != nil {

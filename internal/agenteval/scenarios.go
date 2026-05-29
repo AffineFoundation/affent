@@ -2323,6 +2323,7 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 		},
 		MaxToolFailureKindCounts: map[string]int{
 			"loop_protocol_calibration_required": 0,
+			"tool_failed":                        0,
 			"loop_protocol_activation_status":    0,
 			"loop_protocol_activation_unready":   0,
 			"loop_protocol_activation_invalid":   0,
@@ -2338,6 +2339,15 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 		RequiredTraceEventCounts: map[string]int{
 			"loop.protocol_calibration_request": 1,
 			"loop.protocol_calibration":         1,
+			"context.injected":                  1,
+		},
+		RequiredContextInjectionSources: map[string]int{
+			"loop_protocol_activation": 1,
+		},
+		RequiredContextInjectionText: map[string][]string{
+			"loop_protocol_activation": {
+				"complete_activation without protocol",
+			},
 		},
 		RequiredLoopProtocolFinalStatus: "running",
 		RequiredFinalText: []string{
@@ -2349,9 +2359,9 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			"browser_find", "browser_network", "browser_network_read",
 			"run_task", "subagent_run",
 		},
-		MaxParentToolCalls: 4,
+		MaxParentToolCalls: 3,
 		MaxSuccessfulToolCallsByTool: map[string]int{
-			"loop_protocol": 4,
+			"loop_protocol": 3,
 		},
 		MaxTurns: 8,
 	}

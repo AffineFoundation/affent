@@ -804,6 +804,7 @@ type loopBundle struct {
 
 	loopProtocolPath           string
 	loopProtocolSkillInstalled bool
+	loopProtocolDraftInstalled bool
 	loopProtocolInitialized    bool
 
 	// turnsSeen / inputTokens / outputTokens accumulate across every
@@ -1570,6 +1571,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolActivationCompletionGuard(loopProtocolPath))
 		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_activation_pending")
+		loop.SkillProvider = agent.WithLoopProtocolDraftActivationProvider(loopProtocolPath, loop.SkillProvider)
 	}
 	if loopProtocolActive {
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
@@ -1577,6 +1579,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
 	loopProtocolSkillInstalled := loopProtocolActive
+	loopProtocolDraftInstalled := c.loopProtocol || loopProtocolExists || loopProtocolActive
 	if caps.Subagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
@@ -1614,6 +1617,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		resumeRepair:               resumeRepair,
 		loopProtocolPath:           loopProtocolPath,
 		loopProtocolSkillInstalled: loopProtocolSkillInstalled,
+		loopProtocolDraftInstalled: loopProtocolDraftInstalled,
 		loopProtocolInitialized:    loopProtocolInitialized,
 		mcpClients:                 mcpClients,
 	}, 0

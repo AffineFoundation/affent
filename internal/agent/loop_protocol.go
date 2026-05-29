@@ -16,6 +16,8 @@ import (
 const (
 	maxActiveLoopProtocolFullBytes   = 12 * 1024
 	maxActiveLoopProtocolDigestBytes = 4 * 1024
+	maxDraftLoopActivationBytes      = 2600
+	maxDraftLoopActivationSection    = 320
 	loopProtocolFullFirstFeeds       = 1
 	loopProtocolFullEveryFeeds       = 6
 )
@@ -25,6 +27,25 @@ const (
 // and let explicit loop activation decide whether extra context is spent.
 func WithLoopProtocolSkillProvider(protocolPath string, next SkillProvider) SkillProvider {
 	return WithLoopProtocolSkillProviderWithCheckpoint(protocolPath, nil, next)
+}
+
+// WithLoopProtocolDraftActivationProvider injects a compact activation surface
+// only after the user has answered loop calibration and the protocol is still a
+// draft. This gives the model enough saved-state context to patch and activate
+// the draft without reading the full LOOP.md in the ordinary activation turn.
+func WithLoopProtocolDraftActivationProvider(protocolPath string, next SkillProvider) SkillProvider {
+	return func(userText string) string {
+		parts := make([]string, 0, 2)
+		if block := draftLoopProtocolActivationBlock(protocolPath); block != "" {
+			parts = append(parts, block)
+		}
+		if next != nil {
+			if block := strings.TrimSpace(next(userText)); block != "" {
+				parts = append(parts, block)
+			}
+		}
+		return strings.Join(parts, "\n\n")
+	}
 }
 
 type LoopProtocolCheckpointProvider func() loopstate.PlanCheckpoint
@@ -50,6 +71,63 @@ func WithLoopProtocolSkillProviderWithCheckpoint(protocolPath string, checkpoint
 
 func activeLoopProtocolSkillBlock(protocolPath string) string {
 	return activeLoopProtocolSkillBlockWithCheckpoint(protocolPath, nil)
+}
+
+func draftLoopProtocolActivationBlock(protocolPath string) string {
+	protocolPath = strings.TrimSpace(protocolPath)
+	if protocolPath == "" {
+		return ""
+	}
+	content, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found || strings.TrimSpace(content) == "" {
+		return ""
+	}
+	if status := loopstate.ProtocolStatus(content); status != "draft" {
+		return ""
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found || strings.ToLower(strings.TrimSpace(state.Status)) != "draft" {
+		return ""
+	}
+	if state.CalibrationQuestions == 0 || state.CalibrationAnswers < state.CalibrationQuestions {
+		return ""
+	}
+	headings := loopProtocolPatchableHeadings(content)
+	var lines []string
+	lines = append(lines, "AFFENT LOOP DRAFT ACTIVATION:")
+	lines = append(lines, fmt.Sprintf(
+		"status=draft protocol_path=%s calibration_questions=%d calibration_answers=%d",
+		loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath))),
+		state.CalibrationQuestions,
+		state.CalibrationAnswers,
+	))
+	if answer := strings.TrimSpace(state.LastCalibrationAnswer); answer != "" {
+		lines = append(lines, "last_calibration_answer: "+textutil.Preview(strings.Join(strings.Fields(answer), " "), 260))
+	}
+	lines = append(lines, "next_action: patch_draft compact existing sections, then complete_activation without protocol. The saved draft is available; ordinary activation should not require loop_protocol read.")
+	lines = append(lines, "patchable_sections: "+strings.Join(headings, "; "))
+	if digest := draftLoopProtocolActivationDigest(content); digest != "" {
+		lines = append(lines, "section_digest:")
+		lines = append(lines, digest)
+	}
+	return textutil.Preview(strings.Join(lines, "\n"), maxDraftLoopActivationBytes)
+}
+
+func draftLoopProtocolActivationDigest(content string) string {
+	var lines []string
+	for _, section := range splitMarkdownSections(content) {
+		heading := firstNonEmptyLine(section.text)
+		if !strings.HasPrefix(strings.TrimSpace(heading), "## ") || loopProtocolMetadataPatchHeading(heading) {
+			continue
+		}
+		body := markdownSectionBody(section.text)
+		if body == "" {
+			continue
+		}
+		lines = append(lines, heading)
+		lines = append(lines, textutil.Preview(body, maxDraftLoopActivationSection))
+	}
+	return strings.TrimSpace(strings.Join(lines, "\n"))
 }
 
 func loopProtocolFeedMode(feedNumber int) string {
@@ -460,6 +538,24 @@ func (l *Loop) loopProtocolStartSetupCreatedDraft(toolName string, args json.Raw
 		state.Status == "draft" &&
 		state.LastEventType == "loop.protocol_init" &&
 		state.CalibrationQuestions == 0
+}
+
+func (l *Loop) loopProtocolActivationCompleted(toolName string, args json.RawMessage, isErr bool) bool {
+	if l == nil || isErr || toolName != LoopProtocolToolName || strings.TrimSpace(l.LoopProtocolPath) == "" {
+		return false
+	}
+	var parsed loopProtocolToolArgs
+	if err := json.Unmarshal(args, &parsed); err != nil {
+		return false
+	}
+	if strings.ToLower(strings.TrimSpace(parsed.Action)) != "complete_activation" {
+		return false
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(l.LoopProtocolPath), loopstate.StateFileName))
+	return err == nil &&
+		found &&
+		strings.ToLower(strings.TrimSpace(state.Status)) == "running" &&
+		state.LastEventType == "loop.protocol_activate"
 }
 
 func loopProtocolPlanStateLine(checkpoint loopstate.PlanCheckpoint) string {

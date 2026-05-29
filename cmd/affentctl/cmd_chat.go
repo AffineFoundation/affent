@@ -549,6 +549,10 @@ func createCurrentSessionLoopDraft(b *loopBundle, goal string) error {
 		}
 		b.loop.CompletionGuards = append(b.loop.CompletionGuards, agent.LoopProtocolActivationCompletionGuard(path))
 		b.loop.CompletionGuardLabels = append(b.loop.CompletionGuardLabels, "loop_protocol_activation_pending")
+		if !b.loopProtocolDraftInstalled {
+			b.loop.SkillProvider = agent.WithLoopProtocolDraftActivationProvider(path, b.loop.SkillProvider)
+			b.loopProtocolDraftInstalled = true
+		}
 	}
 	return nil
 }
