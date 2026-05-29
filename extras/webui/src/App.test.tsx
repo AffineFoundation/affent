@@ -1624,6 +1624,71 @@ describe("App", () => {
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/messages", expect.objectContaining({ method: "POST" })));
   });
 
+  it("sends inline user message edits with the source turn id", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/session/s1");
+    let postedBody: unknown;
+    let historyCalls = 0;
+    const editedHistory = [
+      { id: 0, type: "trace.meta", data: { schema_version: 1 } },
+      { id: 1, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 2, type: "user.message", data: { turn_id: "t2", text: "list src files" } },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "s1",
+              active: false,
+              durable: true,
+              latest_user_message: "list the files",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        historyCalls++;
+        return jsonResponse({
+          session_id: "s1",
+          events: historyCalls > 1 ? editedHistory : completedTurn,
+          next_after: historyCalls > 1 ? 2 : 11,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/messages" && init?.method === "POST") {
+        postedBody = JSON.parse(String(init.body));
+        return jsonResponse({ session_id: "s1", turn_id: "t2" }, 202);
+      }
+      if (url === "/v1/sessions/s1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/s1/plan") return jsonResponse({ error: { message: "no plan" } }, 404);
+      if (url === "/v1/sessions/s1/memory") return jsonResponse({ session_id: "s1", has_memory: false, topics: [] });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await openMessageOptions(user, await screen.findByTestId("msg-user"));
+    await user.click(screen.getByRole("button", { name: "Edit message" }));
+    const editor = screen.getByRole("textbox", { name: "Edit message" });
+    await user.clear(editor);
+    await user.type(editor, "list src files");
+    await user.click(screen.getByRole("button", { name: "Save edit" }));
+
+    await waitFor(() => expect(postedBody).toEqual({ content: "list src files", edit_turn_id: "t1" }));
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("");
+  });
+
   it("subscribes to live events after resuming a saved chat", async () => {
     const user = userEvent.setup();
     const live = [

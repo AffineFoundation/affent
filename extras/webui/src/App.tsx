@@ -1509,6 +1509,36 @@ export function App() {
     setComposerDraft((current) => ({ id: (current?.id ?? 0) + 1, content, source }));
   }
 
+  async function handleEditUserMessage(turnId: string, content: string) {
+    const targetSessionId = selectedSessionIdRef.current;
+    const trimmed = content.trim();
+    if (!targetSessionId || !trimmed || actionBusy || session.status === "running" || pendingMessage) return;
+    sendInFlightRef.current = true;
+    sendFailedRef.current = false;
+    streamClosedRef.current = false;
+    streamSessionIdRef.current = undefined;
+    setPendingMessage({ text: trimmed, kind: "task" });
+    setGuidanceReceipts([]);
+    setActionBusy(true);
+    setStatus({ state: "loading", label: "Editing message", detail: "Rebuilding chat from the edited message" });
+    try {
+      await sendSessionMessage(client, targetSessionId, { content: trimmed, edit_turn_id: turnId });
+      sendInFlightRef.current = false;
+      markSessionLive(targetSessionId, trimmed);
+      const reconciled = await loadHistory(targetSessionId);
+      releaseAcceptedPendingTurn(reconciled.session);
+      setLiveConnectTick((current) => current + 1);
+      setStatus((current) => ({ ...current, state: "live", label: "Running", detail: "Edited message sent" }));
+    } catch (err) {
+      sendInFlightRef.current = false;
+      sendFailedRef.current = true;
+      setPendingMessage(undefined);
+      setActionBusy(false);
+      setStatus({ state: "error", label: "Edit failed", detail: formatError(err) });
+      throw err;
+    }
+  }
+
   async function handleRunCommandRequest(request: SessionCommandRequest) {
     if (!selectedSessionId) {
       handleUseAsDraft(manualRunDraft(request.command, request.cwd), "run_command");
@@ -2182,6 +2212,7 @@ export function App() {
                 scrollRootRef={conversationScrollRef}
                 onOpenArtifact={(path) => void handleOpenArtifact(path)}
                 onUseAsDraft={handleUseAsDraft}
+                onEditUserMessage={handleEditUserMessage}
                 savedChatCount={sessions.length}
                 latestChat={latestChatShortcut}
                 onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}

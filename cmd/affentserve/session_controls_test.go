@@ -11,6 +11,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestHandleSessionMessage_StartsTurn(t *testing.T) {
@@ -43,6 +44,70 @@ func TestHandleSessionMessage_ReopensDurableSession(t *testing.T) {
 	}
 	if activeSessionByID(pool, "message-durable") == nil {
 		t.Fatal("POST messages should reopen durable session")
+	}
+}
+
+func TestHandleSessionMessage_EditTurnTruncatesHistoryAndConversation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"edited answer\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	createDurableSessionDir(t, pool, "edit-message")
+	dir := pool.sessionDirPath("edit-message")
+	conv, err := agent.OpenConversationAt(filepath.Join(dir, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]agent.ChatMessage{
+		{Role: "system", Content: "test"},
+		{Role: "user", Content: "first prompt"},
+		{Role: "assistant", Content: "first answer"},
+		{Role: "user", Content: "second prompt"},
+		{Role: "assistant", Content: "second answer"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body := sessionEventLine(t, sse.TypeTraceMeta, sse.TraceMetaPayload{SchemaVersion: sse.TraceSchemaVersion}) +
+		sessionEventLine(t, sse.TypeTurnStart, sse.TurnStartPayload{TurnID: "t1"}) +
+		sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t1", Text: "first prompt"}) +
+		sessionEventLine(t, sse.TypeMessageDone, sse.MessageDonePayload{TurnID: "t1", Text: "first answer"}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t1", Reason: sse.TurnEndCompleted}) +
+		sessionEventLine(t, sse.TypeTurnStart, sse.TurnStartPayload{TurnID: "t2"}) +
+		sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t2", Text: "second prompt"}) +
+		sessionEventLine(t, sse.TypeMessageDone, sse.MessageDonePayload{TurnID: "t2", Text: "second answer"}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t2", Reason: sse.TurnEndCompleted})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/edit-message/messages", strings.NewReader(`{"content":"edited second prompt","edit_turn_id":"t2"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+	waitForFileSubstring(t, filepath.Join(dir, "conversation.jsonl"), "edited second prompt")
+	waitForFileSubstring(t, filepath.Join(dir, "events.jsonl"), "edited second prompt")
+
+	rawConv, err := os.ReadFile(filepath.Join(dir, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(rawConv), `"content":"second prompt"`) || strings.Contains(string(rawConv), "second answer") {
+		t.Fatalf("conversation still contains discarded turn:\n%s", rawConv)
+	}
+	rawEvents, err := os.ReadFile(filepath.Join(dir, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(rawEvents), `"turn_id":"t2"`) || strings.Contains(string(rawEvents), "second answer") {
+		t.Fatalf("events still contain discarded turn:\n%s", rawEvents)
 	}
 }
 

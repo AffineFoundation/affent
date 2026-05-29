@@ -17,6 +17,7 @@ export function Timeline({
   scrollRootRef,
   onOpenArtifact,
   onUseAsDraft,
+  onEditUserMessage,
   savedChatCount = 0,
   latestChat,
   onOpenLatestChat,
@@ -29,6 +30,7 @@ export function Timeline({
   scrollRootRef?: RefObject<HTMLElement | null>;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
+  onEditUserMessage?: (turnId: string, content: string) => Promise<void> | void;
   savedChatCount?: number;
   latestChat?: LatestChatShortcut;
   onOpenLatestChat?: () => void;
@@ -269,6 +271,8 @@ export function Timeline({
               showBoundary={false}
               onOpenArtifact={onOpenArtifact}
               onUseAsDraft={onUseAsDraft}
+              onEditUserMessage={onEditUserMessage}
+              messagesAfterCount={Math.max(0, session.turns.length - turnIndex - 1)}
             />
           </div>
         );

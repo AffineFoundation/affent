@@ -13,9 +13,18 @@ function renderTimeline(
   sessionId?: string,
   onOpenArtifact?: (path: string) => void,
   onUseAsDraft?: (content: string, source?: string) => void,
+  onEditUserMessage?: (turnId: string, content: string) => Promise<void> | void,
 ) {
   const session = reduceRawEvents(raws);
-  return render(<Timeline session={session} sessionId={sessionId} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
+  return render(
+    <Timeline
+      session={session}
+      sessionId={sessionId}
+      onOpenArtifact={onOpenArtifact}
+      onUseAsDraft={onUseAsDraft}
+      onEditUserMessage={onEditUserMessage}
+    />,
+  );
 }
 
 async function openMessageOptions(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement) {
@@ -733,6 +742,41 @@ describe("Timeline", () => {
 
     expect(screen.queryByRole("button", { name: "Edit prompt" })).toBeNull();
     expect(onUseAsDraft).not.toHaveBeenCalled();
+  });
+
+  it("edits a user message inline instead of copying it to the composer", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    const onEditUserMessage = vi.fn().mockResolvedValue(undefined);
+    renderTimeline(completedTurn, "s1", undefined, onUseAsDraft, onEditUserMessage);
+
+    await openMessageOptions(user, screen.getByTestId("msg-user"));
+    await user.click(screen.getByRole("button", { name: "Edit message" }));
+    const editor = screen.getByRole("textbox", { name: "Edit message" });
+
+    expect(editor).toHaveValue("list the files");
+    expect(screen.getByTestId("message-edit-form")).toHaveTextContent("Saving will remove this reply");
+    await user.clear(editor);
+    await user.type(editor, "list src files");
+    await user.click(screen.getByRole("button", { name: "Save edit" }));
+
+    expect(onUseAsDraft).not.toHaveBeenCalled();
+    expect(onEditUserMessage).toHaveBeenCalledWith("t1", "list src files");
+  });
+
+  it("cancels inline message editing without changing the displayed message", async () => {
+    const user = userEvent.setup();
+    renderTimeline(completedTurn, "s1", undefined, undefined, vi.fn());
+
+    await openMessageOptions(user, screen.getByTestId("msg-user"));
+    await user.click(screen.getByRole("button", { name: "Edit message" }));
+    await user.clear(screen.getByRole("textbox", { name: "Edit message" }));
+    await user.type(screen.getByRole("textbox", { name: "Edit message" }), "temporary edit");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByTestId("message-edit-form")).toBeNull();
+    expect(screen.getByTestId("msg-user")).toHaveTextContent("list the files");
+    expect(screen.getByTestId("msg-user")).not.toHaveTextContent("temporary edit");
   });
 
   it("expands a tool card inline on click", async () => {

@@ -35,6 +35,8 @@ export function TurnCard({
   forceWorkDetails = false,
   onOpenArtifact,
   onUseAsDraft,
+  onEditUserMessage,
+  messagesAfterCount = 0,
 }: {
   turn: TurnState;
   turnNumber: number;
@@ -48,6 +50,8 @@ export function TurnCard({
   forceWorkDetails?: boolean;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
+  onEditUserMessage?: (turnId: string, content: string) => Promise<void> | void;
+  messagesAfterCount?: number;
 }) {
   const relatedEvents = events.filter((ev) => eventBelongsToTurn(ev, turn));
   const title = turnTitle(turn);
@@ -132,7 +136,8 @@ export function TurnCard({
             text={turn.userText}
             variant="user"
             searchQuery={searchQuery}
-            onReuse={onUseAsDraft}
+            onEdit={onEditUserMessage ? (content) => onEditUserMessage(turn.id, content) : undefined}
+            editWarning={editMessageWarning(messagesAfterCount)}
           />
         ) : null}
         <div className="assistant-cluster">
@@ -1458,6 +1463,8 @@ function MessageStep({
   onContinue,
   onRetry,
   onReuse,
+  onEdit,
+  editWarning,
 }: {
   label: string;
   text: string;
@@ -1467,7 +1474,45 @@ function MessageStep({
   onContinue?: UseAsDraft;
   onRetry?: UseAsDraft;
   onReuse?: UseAsDraft;
+  onEdit?: (content: string) => Promise<void> | void;
+  editWarning?: string;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+
+  function startEditing() {
+    setDraft(text);
+    setError(undefined);
+    setEditing(true);
+  }
+
+  function cancelEditing() {
+    setDraft(text);
+    setError(undefined);
+    setEditing(false);
+  }
+
+  async function saveEdit() {
+    if (!onEdit || saving) return;
+    const next = draft.trim();
+    if (!next) {
+      setError("Message cannot be empty.");
+      return;
+    }
+    setSaving(true);
+    setError(undefined);
+    try {
+      await onEdit(next);
+      setEditing(false);
+    } catch (err) {
+      setError(formatMessageEditError(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div
       className={`flow-step flow-step-${variant}`}
@@ -1487,14 +1532,34 @@ function MessageStep({
           />
         ) : null}
         <div className={`flow-text${streaming ? " streaming-caret" : ""}`}>
-          {variant === "assistant" ? (
+          {editing && variant === "user" ? (
+            <div className="message-edit-form" data-testid="message-edit-form">
+              <textarea
+                value={draft}
+                aria-label="Edit message"
+                onChange={(event) => setDraft(event.currentTarget.value)}
+                disabled={saving}
+                rows={Math.min(10, Math.max(3, draft.split("\n").length))}
+              />
+              <div className="message-edit-warning">{editWarning ?? "Saving will remove later replies and actions from this chat."}</div>
+              {error ? <div className="message-edit-error" role="alert">{error}</div> : null}
+              <div className="message-edit-actions">
+                <button type="button" className="message-edit-primary" disabled={saving} onClick={() => void saveEdit()}>
+                  {saving ? "Saving..." : "Save edit"}
+                </button>
+                <button type="button" className="message-edit-secondary" disabled={saving} onClick={cancelEditing}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : variant === "assistant" ? (
             <MarkdownText text={text} query={searchQuery} />
           ) : (
             <HighlightText text={text} query={searchQuery} />
           )}
         </div>
-        {variant === "user" && onReuse ? (
-          <MessageOptions text={text} onReuse={onReuse} />
+        {variant === "user" && !editing ? (
+          <MessageOptions text={text} onReuse={onReuse} onStartEdit={onEdit ? startEditing : undefined} />
         ) : null}
       </div>
       {variant === "assistant" && streaming ? (
@@ -1518,6 +1583,7 @@ function MessageOptions({
   onContinue,
   onRetry,
   onReuse,
+  onStartEdit,
 }: {
   text: string;
   markdown?: boolean;
@@ -1525,6 +1591,7 @@ function MessageOptions({
   onContinue?: UseAsDraft;
   onRetry?: UseAsDraft;
   onReuse?: UseAsDraft;
+  onStartEdit?: () => void;
 }) {
   const side = markdown ? "assistant" : "user";
   return (
@@ -1554,9 +1621,13 @@ function MessageOptions({
         ) : (
           <>
             <CopyButton label="Copy" value={text} className="message-action" />
-            {onReuse ? (
-              <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
+            {onStartEdit ? (
+              <button type="button" className="message-action" onClick={onStartEdit}>
                 Edit message
+              </button>
+            ) : onReuse ? (
+              <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
+                Use as draft
               </button>
             ) : null}
           </>
@@ -1564,6 +1635,16 @@ function MessageOptions({
       </CopyMenu>
     </div>
   );
+}
+
+function editMessageWarning(messagesAfterCount: number): string {
+  if (messagesAfterCount <= 0) return "Saving will remove this reply and rerun the chat from the edited message.";
+  return `Saving will remove this reply plus ${messagesAfterCount} later message${messagesAfterCount === 1 ? "" : "s"}.`;
+}
+
+function formatMessageEditError(err: unknown): string {
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return "Could not save the edit.";
 }
 
 function answerDraft(text: string): string {

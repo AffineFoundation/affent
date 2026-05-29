@@ -32,6 +32,7 @@ type sessionMessageRequest struct {
 	Content     string `json:"content"`
 	DisplayText string `json:"display_text,omitempty"`
 	Mode        string `json:"mode,omitempty"`
+	EditTurnID  string `json:"edit_turn_id,omitempty"`
 }
 
 type sessionMessageResponse struct {
@@ -73,6 +74,13 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONErrorTyped(w, http.StatusBadRequest, "content is required", nil, "bad_request")
 		return
 	}
+	editTurnID := strings.TrimSpace(req.EditTurnID)
+	if editTurnID != "" {
+		if err := validateSessionTurnID(editTurnID); err != nil {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "invalid edit turn id", err, "bad_request")
+			return
+		}
+	}
 	loopSetupGoal := ""
 	if mode == sessionMessageModeLoopSetup {
 		loopSetupGoal = compactSessionLoopSetupGoal(content)
@@ -102,6 +110,22 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 	} else if mode == sessionMessageModeLoopSetup && loopSetupGoal == "" {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "loop setup", errors.New("loop setup goal is required"), "bad_request")
 		return
+	}
+	if editTurnID != "" {
+		if _, err := truncateSessionForMessageEdit(pool, sessionID, editTurnID); err != nil {
+			switch {
+			case errors.Is(err, errSessionEditBusy):
+				w.Header().Set("Retry-After", "1")
+				writeJSONErrorTyped(w, http.StatusConflict, "session busy", err, "session_busy")
+			case errors.Is(err, errSessionEditTurnNotFound):
+				writeJSONErrorTyped(w, http.StatusNotFound, "edit target not found", err, "not_found")
+			case errors.Is(err, errSessionEditConversationMismatch):
+				writeJSONErrorTyped(w, http.StatusConflict, "edit target is no longer editable", err, "edit_unavailable")
+			default:
+				writeJSONError(w, http.StatusInternalServerError, "prepare message edit", err)
+			}
+			return
+		}
 	}
 	sess, err := pool.GetOrCreate(sessionID)
 	if err != nil {
