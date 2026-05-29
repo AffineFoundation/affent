@@ -585,7 +585,7 @@ Summary records aggregate all scenario records from the same process:
 - `scenarios`, `passed`, `failed`, `duration_ms`, `avg_duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
   `memory_update_rate`, `loop_turn_checkpoint_rate`,
-  `loop_protocol_feed_rate`, `runtime_surface_rate`,
+  `loop_protocol_feed_rate`, `runtime_surface_rate`, `task_state_rate`,
   `loop_protocol_calibration_request_rate`,
   `loop_protocol_calibration_rate`, `trace_event_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
@@ -801,6 +801,12 @@ Summary records aggregate all scenario records from the same process:
   per-scenario surface presence, not model call counts; use them to group pass
   rates and failures by the actual tool/capability surface exposed during the
   run. Partial workspace surfaces are counted as `workspace_partial`.
+- Task-state coverage totals: `task_state_rate`, `task_state_scenarios`,
+  `task_state_by_status`, `task_state_by_verification`,
+  `task_state_changed_files`, `task_state_failed_actions`, and
+  `task_state_evidence`. These summarize derived task-state snapshots so
+  long-run dashboards can verify scenario traces are reviewable at the task
+  level, not only as low-level tool timelines.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.
 
 ## Compatibility

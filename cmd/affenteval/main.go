@@ -1111,6 +1111,12 @@ type batchSummary struct {
 	RuntimeSurfaceScenarios                 int
 	RuntimeSurfaceTools                     map[string]int
 	RuntimeSurfaceCapabilities              map[string]int
+	TaskStateScenarios                      int
+	TaskStateByStatus                       map[string]int
+	TaskStateByVerification                 map[string]int
+	TaskStateChangedFiles                   int
+	TaskStateFailedActions                  int
+	TaskStateEvidence                       int
 	LoopDecisions                           int
 	LoopDecisionByKind                      map[string]int
 	LoopDecisionByDecision                  map[string]int
@@ -1327,6 +1333,24 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		for _, cap := range runtimeSurfaceCapabilityNames(res.RuntimeSurface.Capabilities) {
 			s.RuntimeSurfaceCapabilities[cap]++
 		}
+	}
+	if task := agenteval.CloneTaskStateSnapshotPtr(res.TaskState); task != nil {
+		s.TaskStateScenarios++
+		if status := strings.TrimSpace(task.Status); status != "" {
+			if s.TaskStateByStatus == nil {
+				s.TaskStateByStatus = map[string]int{}
+			}
+			s.TaskStateByStatus[status]++
+		}
+		if verification := strings.TrimSpace(task.VerificationState); verification != "" {
+			if s.TaskStateByVerification == nil {
+				s.TaskStateByVerification = map[string]int{}
+			}
+			s.TaskStateByVerification[verification]++
+		}
+		s.TaskStateChangedFiles += len(task.ChangedFiles)
+		s.TaskStateFailedActions += len(task.FailedActions)
+		s.TaskStateEvidence += len(task.Evidence)
 	}
 	s.LoopDecisions += res.LoopDecisionStats.Count
 	for k, v := range res.LoopDecisionStats.ByKind {
@@ -1964,6 +1988,20 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 		if len(s.RuntimeSurfaceTools) > 0 {
 			fmt.Fprintf(w, " runtime_tools=%s", formatStringIntCounts(s.RuntimeSurfaceTools))
+		}
+	}
+	if s.TaskStateScenarios > 0 {
+		fmt.Fprintf(w, " task_state=scenarios:%d,changed_files:%d,failed_actions:%d,evidence:%d",
+			s.TaskStateScenarios,
+			s.TaskStateChangedFiles,
+			s.TaskStateFailedActions,
+			s.TaskStateEvidence,
+		)
+		if len(s.TaskStateByStatus) > 0 {
+			fmt.Fprintf(w, " task_state_status=%s", formatStringIntCounts(s.TaskStateByStatus))
+		}
+		if len(s.TaskStateByVerification) > 0 {
+			fmt.Fprintf(w, " task_state_verification=%s", formatStringIntCounts(s.TaskStateByVerification))
 		}
 	}
 	if s.LoopDecisions > 0 {
@@ -3967,6 +4005,13 @@ type batchSummaryRecord struct {
 	RuntimeSurfaceScenarios                 int                                              `json:"runtime_surface_scenarios,omitempty"`
 	RuntimeSurfaceTools                     map[string]int                                   `json:"runtime_surface_tools,omitempty"`
 	RuntimeSurfaceCapabilities              map[string]int                                   `json:"runtime_surface_capabilities,omitempty"`
+	TaskStateRate                           float64                                          `json:"task_state_rate"`
+	TaskStateScenarios                      int                                              `json:"task_state_scenarios,omitempty"`
+	TaskStateByStatus                       map[string]int                                   `json:"task_state_by_status,omitempty"`
+	TaskStateByVerification                 map[string]int                                   `json:"task_state_by_verification,omitempty"`
+	TaskStateChangedFiles                   int                                              `json:"task_state_changed_files,omitempty"`
+	TaskStateFailedActions                  int                                              `json:"task_state_failed_actions,omitempty"`
+	TaskStateEvidence                       int                                              `json:"task_state_evidence,omitempty"`
 	LoopDecisions                           int                                              `json:"loop_decisions,omitempty"`
 	LoopDecisionByKind                      map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision                  map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
@@ -4467,6 +4512,13 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		RuntimeSurfaceScenarios:                 s.RuntimeSurfaceScenarios,
 		RuntimeSurfaceTools:                     cloneStringIntMap(s.RuntimeSurfaceTools),
 		RuntimeSurfaceCapabilities:              cloneStringIntMap(s.RuntimeSurfaceCapabilities),
+		TaskStateRate:                           batchRatio(s.TaskStateScenarios, s.Total),
+		TaskStateScenarios:                      s.TaskStateScenarios,
+		TaskStateByStatus:                       cloneStringIntMap(s.TaskStateByStatus),
+		TaskStateByVerification:                 cloneStringIntMap(s.TaskStateByVerification),
+		TaskStateChangedFiles:                   s.TaskStateChangedFiles,
+		TaskStateFailedActions:                  s.TaskStateFailedActions,
+		TaskStateEvidence:                       s.TaskStateEvidence,
 		LoopDecisions:                           s.LoopDecisions,
 		LoopDecisionByKind:                      cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:                  cloneStringIntMap(s.LoopDecisionByDecision),

@@ -2330,6 +2330,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			},
 			Capabilities: sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file"}, WebFetch: true, Browser: true},
 		},
+		TaskState: agenteval.TaskStateSnapshot{
+			Status:            "completed",
+			VerificationState: "last_shell_passed",
+			ChangedFiles:      []agenteval.TaskStateFile{{Path: "app/main.go", Action: "edit"}},
+			Evidence:          []agenteval.TaskStateEvidence{{Source: "shell", Summary: "go test ./..."}},
+		},
 		Verifier: agenteval.VerifierResult{Ran: true, OK: true, ExitCode: 0, OutputBytes: 64, OutputCapBytes: 1024},
 		Usage:    agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
@@ -2498,6 +2504,19 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			},
 			Capabilities: sse.RuntimeCapabilities{WebFetch: true, WebSearch: true, Browser: true},
 		},
+		TaskState: agenteval.TaskStateSnapshot{
+			Status:            "blocked",
+			VerificationState: "failed",
+			ChangedFiles: []agenteval.TaskStateFile{
+				{Path: "report.md", Action: "write"},
+				{Path: "notes.md", Action: "edit"},
+			},
+			FailedActions: []agenteval.TaskStateFailure{{Tool: "web_fetch", Summary: "timed out", Kinds: []string{"timeout"}}},
+			Evidence: []agenteval.TaskStateEvidence{
+				{Source: "runtime_workspace", Summary: "workspace context"},
+				{Source: "shell", Summary: "go test ./..."},
+			},
+		},
 		Verifier: agenteval.VerifierResult{
 			Ran:                true,
 			OK:                 false,
@@ -2574,6 +2593,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1") {
+		t.Fatalf("summary output missing task state rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
 		t.Fatalf("summary output missing loop decision rollup:\n%s", out.String())
@@ -2702,6 +2724,21 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.RuntimeSurfaceTools, map[string]int{"web_fetch": 2, "web_search": 1, "browser_find": 2}) {
 		t.Fatalf("RuntimeSurfaceTools = %#v", summary.RuntimeSurfaceTools)
+	}
+	if summary.TaskStateScenarios != 2 ||
+		summary.TaskStateChangedFiles != 3 ||
+		summary.TaskStateFailedActions != 1 ||
+		summary.TaskStateEvidence != 3 ||
+		!reflect.DeepEqual(summary.TaskStateByStatus, map[string]int{"completed": 1, "blocked": 1}) ||
+		!reflect.DeepEqual(summary.TaskStateByVerification, map[string]int{"last_shell_passed": 1, "failed": 1}) {
+		t.Fatalf("task state summary = scenarios:%d status:%#v verification:%#v changed:%d failed:%d evidence:%d",
+			summary.TaskStateScenarios,
+			summary.TaskStateByStatus,
+			summary.TaskStateByVerification,
+			summary.TaskStateChangedFiles,
+			summary.TaskStateFailedActions,
+			summary.TaskStateEvidence,
+		)
 	}
 	if len(summary.SourceAccessExamples) != 1 ||
 		summary.SourceAccessExamples[0].CallID != "source-1" ||
@@ -4343,6 +4380,12 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		RuntimeSurfaceScenarios:    2,
 		RuntimeSurfaceTools:        map[string]int{"web_fetch": 2, "browser_find": 1},
 		RuntimeSurfaceCapabilities: map[string]int{"web_fetch": 2, "browser": 1},
+		TaskStateScenarios:         2,
+		TaskStateByStatus:          map[string]int{"completed": 1, "blocked": 1},
+		TaskStateByVerification:    map[string]int{"last_shell_passed": 1, "failed": 1},
+		TaskStateChangedFiles:      3,
+		TaskStateFailedActions:     1,
+		TaskStateEvidence:          4,
 		LoopDecisions:              1,
 		LoopDecisionByKind:         map[string]int{"evidence_quality": 1},
 		LoopDecisionByDecision:     map[string]int{"defer": 1},
@@ -4787,10 +4830,23 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"loop_protocol_calibrations":                  float64(1),
 		"runtime_surface_rate":                        float64(1),
 		"runtime_surface_scenarios":                   float64(2),
+		"task_state_rate":                             float64(1),
+		"task_state_scenarios":                        float64(2),
+		"task_state_changed_files":                    float64(3),
+		"task_state_failed_actions":                   float64(1),
+		"task_state_evidence":                         float64(4),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
 		}
+	}
+	taskStateStatus, ok := got["task_state_by_status"].(map[string]any)
+	if !ok || taskStateStatus["completed"] != float64(1) || taskStateStatus["blocked"] != float64(1) {
+		t.Fatalf("task_state_by_status = %#v\njson=%s", got["task_state_by_status"], out.String())
+	}
+	taskStateVerification, ok := got["task_state_by_verification"].(map[string]any)
+	if !ok || taskStateVerification["last_shell_passed"] != float64(1) || taskStateVerification["failed"] != float64(1) {
+		t.Fatalf("task_state_by_verification = %#v\njson=%s", got["task_state_by_verification"], out.String())
 	}
 	if got["avg_reactive_context_compactions"] != float64(0.5) {
 		t.Fatalf("avg_reactive_context_compactions = %v, want 0.5\njson=%s", got["avg_reactive_context_compactions"], out.String())
