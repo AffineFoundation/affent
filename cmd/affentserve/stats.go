@@ -17,34 +17,36 @@ import (
 // passes who want a quick "is the browser cache actually helping?"
 // signal without standing up Prometheus.
 type statsResponse struct {
-	Listen             string                 `json:"listen"`
-	Model              string                 `json:"model"`
-	Build              buildInfo              `json:"build"`
-	MaxSessions        int                    `json:"max_sessions"`
-	ActiveSessions     int                    `json:"active_sessions"`
-	RunningTurns       int                    `json:"running_turns"`
-	ExecutorMode       string                 `json:"executor_mode"`
-	EnableBrowser      bool                   `json:"enable_browser"`
-	EnableWeb          bool                   `json:"enable_web"`
-	EnableWebSearch    bool                   `json:"enable_web_search"`
-	EnableMemory       bool                   `json:"enable_memory"`
-	SharedUserMemory   bool                   `json:"shared_user_memory"`
-	EnableBuiltins     bool                   `json:"enable_builtins"`
-	EnableSubagent     bool                   `json:"enable_subagent"`
-	EnableFocusedTasks bool                   `json:"enable_focused_tasks"`
-	EvalMode           bool                   `json:"eval_mode"`
-	EvalTools          string                 `json:"eval_tools,omitempty"`
-	EvalAllTools       bool                   `json:"eval_all_tools,omitempty"`
-	ShuttingDown       bool                   `json:"shutting_down"`
-	WorkspaceRoot      string                 `json:"workspace_root,omitempty"`
-	MemoryRoot         string                 `json:"memory_root,omitempty"`
-	SessionStateRoot   string                 `json:"session_state_root"`
-	BrowserCacheDir    string                 `json:"browser_cache_dir,omitempty"`
-	WebSearchBackend   string                 `json:"web_search_backend,omitempty"`
-	ServerTime         string                 `json:"server_time"`
-	Sessions           []sessionStatsResponse `json:"sessions"`
-	Aggregate          aggregateStats         `json:"aggregate"`
-	Boundaries         statsBoundaries        `json:"boundaries"`
+	Listen             string                    `json:"listen"`
+	Model              string                    `json:"model"`
+	Build              buildInfo                 `json:"build"`
+	MaxSessions        int                       `json:"max_sessions"`
+	ActiveSessions     int                       `json:"active_sessions"`
+	RunningTurns       int                       `json:"running_turns"`
+	ExecutorMode       string                    `json:"executor_mode"`
+	EnableBrowser      bool                      `json:"enable_browser"`
+	EnableWeb          bool                      `json:"enable_web"`
+	EnableWebSearch    bool                      `json:"enable_web_search"`
+	EnableMemory       bool                      `json:"enable_memory"`
+	SharedUserMemory   bool                      `json:"shared_user_memory"`
+	EnableBuiltins     bool                      `json:"enable_builtins"`
+	EnableSubagent     bool                      `json:"enable_subagent"`
+	EnableFocusedTasks bool                      `json:"enable_focused_tasks"`
+	EnableLoopProtocol bool                      `json:"enable_loop_protocol"`
+	EvalMode           bool                      `json:"eval_mode"`
+	EvalTools          string                    `json:"eval_tools,omitempty"`
+	EvalAllTools       bool                      `json:"eval_all_tools,omitempty"`
+	ShuttingDown       bool                      `json:"shutting_down"`
+	WorkspaceRoot      string                    `json:"workspace_root,omitempty"`
+	MemoryRoot         string                    `json:"memory_root,omitempty"`
+	SessionStateRoot   string                    `json:"session_state_root"`
+	BrowserCacheDir    string                    `json:"browser_cache_dir,omitempty"`
+	WebSearchBackend   string                    `json:"web_search_backend,omitempty"`
+	ServerTime         string                    `json:"server_time"`
+	Sessions           []sessionStatsResponse    `json:"sessions"`
+	Aggregate          aggregateStats            `json:"aggregate"`
+	Boundaries         statsBoundaries           `json:"boundaries"`
+	RuntimeContract    runtimeCapabilityContract `json:"runtime_contract"`
 }
 
 type statsBoundaries struct {
@@ -129,13 +131,14 @@ type statsBoundaries struct {
 }
 
 type sessionStatsResponse struct {
-	ID         string               `json:"id"`
-	CreatedAt  string               `json:"created_at"`
-	LastUsedAt string               `json:"last_used_at"`
-	Usage      UsageSnapshot        `json:"usage"`
-	Tools      ToolStatsSnapshot    `json:"tools"`
-	Runtime    RuntimeStatsSnapshot `json:"runtime"`
-	Browser    BrowserStatsSnapshot `json:"browser"`
+	ID              string                    `json:"id"`
+	CreatedAt       string                    `json:"created_at"`
+	LastUsedAt      string                    `json:"last_used_at"`
+	Usage           UsageSnapshot             `json:"usage"`
+	Tools           ToolStatsSnapshot         `json:"tools"`
+	Runtime         RuntimeStatsSnapshot      `json:"runtime"`
+	Browser         BrowserStatsSnapshot      `json:"browser"`
+	RuntimeContract runtimeCapabilityContract `json:"runtime_contract"`
 }
 
 type aggregateStats struct {
@@ -182,13 +185,14 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			tools := s.ToolStatsSnapshot()
 			runtime := s.RuntimeStatsSnapshot()
 			sess = append(sess, sessionStatsResponse{
-				ID:         s.ID,
-				CreatedAt:  created.UTC().Format(time.RFC3339),
-				LastUsedAt: lastUsed.UTC().Format(time.RFC3339),
-				Usage:      u,
-				Tools:      tools,
-				Runtime:    runtime,
-				Browser:    b,
+				ID:              s.ID,
+				CreatedAt:       created.UTC().Format(time.RFC3339),
+				LastUsedAt:      lastUsed.UTC().Format(time.RFC3339),
+				Usage:           u,
+				Tools:           tools,
+				Runtime:         runtime,
+				Browser:         b,
+				RuntimeContract: buildSessionRuntimeContract(s, cfg),
 			})
 			agg.BlockedByType += b.BlockedByType
 			agg.BlockedByDomain += b.BlockedByDomain
@@ -219,6 +223,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			EnableBuiltins:     cfg.EnableBuiltins,
 			EnableSubagent:     cfg.EnableSubagent,
 			EnableFocusedTasks: cfg.EnableFocusedTasks,
+			EnableLoopProtocol: cfg.EnableLoopProtocol,
 			EvalMode:           cfg.EvalMode,
 			EvalTools:          cfg.EvalTools,
 			EvalAllTools:       cfg.EvalAllTools,
@@ -232,6 +237,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			Sessions:           sess,
 			Aggregate:          agg,
 			Boundaries:         statsBoundarySnapshot(cfg),
+			RuntimeContract:    buildServeRuntimeContract(cfg),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)

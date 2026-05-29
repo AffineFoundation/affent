@@ -111,6 +111,7 @@ export interface RuntimeCapabilities {
   workspace_tools?: string[];
   memory?: boolean;
   plan?: boolean;
+  loop_protocol?: boolean;
   session_schedule?: boolean;
   session_search?: boolean;
   web_fetch?: boolean;

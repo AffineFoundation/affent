@@ -85,6 +85,8 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   const tools = aggregate?.tools;
   const runtime = aggregate?.runtime;
   const metrics: RuntimeMetric[] = [];
+  const contract = runtimeContractMetric(stats);
+  if (contract) metrics.push(contract);
   if (stats.eval_mode || stats.eval_all_tools) {
     metrics.push({ label: "Mode", value: evalModeDetail(stats), tone: "warning" });
     metrics.push({ label: "Tools", value: toolSurface(stats), tone: stats.eval_all_tools ? "warning" : "muted" });
@@ -127,6 +129,12 @@ function toolSurface(stats: ServerStatsResponse): string {
     stats.enable_focused_tasks ? "focused" : undefined,
   ].filter((item): item is string => !!item);
   return enabled.length > 0 ? enabled.join(" · ") : "minimal";
+}
+
+function runtimeContractMetric(stats: ServerStatsResponse): RuntimeMetric | undefined {
+  const missing = stats.runtime_contract?.missing?.filter(Boolean) ?? [];
+  if (missing.length === 0) return undefined;
+  return { label: "Capabilities", value: `missing ${missing.join(" · ")}`, tone: "warning" };
 }
 
 function tokenMetric(aggregate?: ServerAggregateStats): RuntimeMetric | undefined {

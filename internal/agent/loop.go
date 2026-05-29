@@ -2842,6 +2842,7 @@ func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
 		WorkspaceTools:  workspaceTools,
 		Memory:          hasRegisteredTool(reg, MemoryToolName),
 		Plan:            hasRegisteredTool(reg, PlanToolName),
+		LoopProtocol:    hasRegisteredTool(reg, LoopProtocolToolName),
 		SessionSchedule: hasRegisteredTool(reg, SessionScheduleToolName),
 		SessionSearch:   hasRegisteredTool(reg, SessionSearchToolName),
 		WebFetch:        hasRegisteredTool(reg, "web_fetch"),

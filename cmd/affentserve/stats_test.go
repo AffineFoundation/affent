@@ -52,6 +52,12 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.EnableBrowser || resp.EnableWeb || resp.EnableWebSearch || resp.EnableMemory || resp.EnableBuiltins || resp.EnableSubagent || resp.EnableFocusedTasks {
 		t.Fatalf("runtime switches should default to off: %+v", resp)
 	}
+	if resp.EnableLoopProtocol {
+		t.Fatalf("EnableLoopProtocol = true, want test config default off")
+	}
+	if resp.RuntimeContract.Status == "" || !stringSliceContains(resp.RuntimeContract.Expected, "schedules") {
+		t.Fatalf("runtime_contract = %+v, want configured schedule expectation", resp.RuntimeContract)
+	}
 	if resp.EvalMode || resp.EvalTools != "" || resp.EvalAllTools {
 		t.Fatalf("eval stats should default to off: %+v", resp)
 	}
@@ -257,6 +263,14 @@ func TestHandleStats_ListsSessionsSorted(t *testing.T) {
 	}
 	if resp.ActiveSessions != 3 {
 		t.Fatalf("ActiveSessions = %d, want 3", resp.ActiveSessions)
+	}
+	for _, sess := range resp.Sessions {
+		if sess.RuntimeContract.Status != "ok" {
+			t.Fatalf("session %s runtime_contract = %+v, want ok", sess.ID, sess.RuntimeContract)
+		}
+		if !stringSliceContains(sess.RuntimeContract.Available, "schedules") {
+			t.Fatalf("session %s available capabilities = %+v, want schedules", sess.ID, sess.RuntimeContract.Available)
+		}
 	}
 	if resp.RunningTurns != 0 {
 		t.Fatalf("RunningTurns = %d, want 0 for idle sessions", resp.RunningTurns)

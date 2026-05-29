@@ -199,6 +199,7 @@ type sessionCapabilities struct {
 	Builtins          bool     `json:"builtins"`
 	SkillInstall      bool     `json:"skill_install"`
 	Plan              bool     `json:"plan"`
+	LoopProtocol      bool     `json:"loop_protocol"`
 	SessionSchedule   bool     `json:"session_schedule"`
 	Memory            bool     `json:"memory"`
 	SessionSearch     bool     `json:"session_search"`
@@ -670,6 +671,7 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		Builtins:          hasAllWorkspaceTools(workspaceTools),
 		SkillInstall:      hasTool("skill"),
 		Plan:              hasTool(agent.PlanToolName),
+		LoopProtocol:      hasTool(agent.LoopProtocolToolName),
 		SessionSchedule:   hasTool(agent.SessionScheduleToolName),
 		Memory:            hasTool("memory"),
 		SessionSearch:     hasTool("session_search"),

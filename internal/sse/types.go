@@ -125,6 +125,7 @@ type RuntimeCapabilities struct {
 	WorkspaceTools  []string `json:"workspace_tools,omitempty"`
 	Memory          bool     `json:"memory,omitempty"`
 	Plan            bool     `json:"plan,omitempty"`
+	LoopProtocol    bool     `json:"loop_protocol,omitempty"`
 	SessionSchedule bool     `json:"session_schedule,omitempty"`
 	SessionSearch   bool     `json:"session_search,omitempty"`
 	WebFetch        bool     `json:"web_fetch,omitempty"`

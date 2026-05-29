@@ -682,6 +682,13 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		}
 		return nil, err
 	}
+	if err := validateSessionRuntimeContract(reg, p.cfg); err != nil {
+		_ = os.RemoveAll(workspace)
+		if browser != nil {
+			_ = browser.Close()
+		}
+		return nil, err
+	}
 
 	// Generous event buffer — chat handler subscribes and drains, but
 	// during turn execution we don't want to block the loop on a slow

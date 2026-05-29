@@ -146,6 +146,29 @@ describe("RuntimeStatsPanel", () => {
     expect(panel).not.toHaveTextContent("1.5k");
   });
 
+  it("surfaces runtime capability contract gaps", () => {
+    render(
+      <RuntimeStatsPanel
+        defaultOpen
+        stats={{
+          model: "qwen-small",
+          active_sessions: 1,
+          running_turns: 0,
+          runtime_contract: {
+            status: "degraded",
+            expected: ["schedules", "loop protocol"],
+            available: ["workspace"],
+            missing: ["schedules", "loop protocol"],
+          },
+        }}
+      />,
+    );
+
+    const grid = screen.getByTestId("runtime-stats-grid");
+    expect(grid).toHaveTextContent("Capabilities");
+    expect(grid).toHaveTextContent("missing schedules · loop protocol");
+  });
+
   it("shows browser policy blocks that promote Runtime into Workbench", () => {
     render(
       <RuntimeStatsPanel

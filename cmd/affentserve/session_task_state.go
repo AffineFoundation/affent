@@ -22,6 +22,7 @@ const (
 
 type sessionTaskEventState struct {
 	LatestTurnStatus  string
+	RuntimeSurface    *sse.RuntimeSurfacePayload
 	RuntimeWorkspace  *sse.RuntimeWorkspace
 	ChangedFiles      []sessionTaskStateFile
 	AttemptedActions  []sessionTaskStateAction
@@ -125,9 +126,13 @@ func scanSessionTaskStateFromEvents(r *bufio.Reader) (*sessionTaskEventState, er
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
 				continue
 			}
+			state.RuntimeSurface = &p
+			if runtimeSurfaceHasCapabilityData(&p) {
+				addTaskStateSource(state, "runtime_surface")
+				seen = true
+			}
 			if p.Workspace != nil {
 				state.RuntimeWorkspace = p.Workspace
-				addTaskStateSource(state, "runtime_surface")
 				seen = true
 			}
 		case sse.TypeContextInjected:
@@ -279,6 +284,9 @@ func sessionTaskConstraints(summary sessionSummary, eventState sessionTaskEventS
 	if summary.LoopState != nil && strings.EqualFold(strings.TrimSpace(summary.LoopState.Status), "running") {
 		out = appendUniqueLimited(out, "loop protocol is running", sessionTaskStateMaxItems)
 	}
+	if _, unavailable := runtimeSurfaceCapabilityLabels(eventState.RuntimeSurface); len(unavailable) > 0 {
+		out = appendUniqueLimited(out, "unavailable capabilities: "+strings.Join(unavailable, ", "), sessionTaskStateMaxItems)
+	}
 	return out
 }
 
@@ -303,6 +311,9 @@ func sessionTaskKnownFacts(summary sessionSummary, eventState sessionTaskEventSt
 	}
 	if summary.LatestRecoveryHint != "" {
 		out = appendUniqueLimited(out, "latest recovery hint: "+summary.LatestRecoveryHint, sessionTaskStateMaxItems)
+	}
+	if available, _ := runtimeSurfaceCapabilityLabels(eventState.RuntimeSurface); len(available) > 0 {
+		out = appendUniqueLimited(out, "available capabilities: "+strings.Join(available, ", "), sessionTaskStateMaxItems)
 	}
 	return out
 }

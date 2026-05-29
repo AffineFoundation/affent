@@ -80,10 +80,7 @@ func buildToolSurface(sess *Session, cfg Config, tools []toolInfo) toolSurface {
 		}
 	}
 	caps := summarizeActiveCapabilities(sess, cfg)
-	groupSeen := map[string]bool{}
-	for _, tool := range tools {
-		groupSeen[tool.Group] = true
-	}
+	groupSeen := toolSurfaceGroupIndex(tools)
 	disabledReasons := make([]string, 0, len(toolSurfaceCapabilityAxes))
 	for _, axis := range toolSurfaceCapabilityAxes {
 		if !axis.Enabled(caps, groupSeen) {
@@ -127,50 +124,6 @@ func buildToolSurface(sess *Session, cfg Config, tools []toolInfo) toolSurface {
 		DisabledReasons: disabledReasons,
 		Warnings:        warnings,
 	}
-}
-
-type toolSurfaceCapabilityAxis struct {
-	DisabledReason string
-	Enabled        func(sessionCapabilities, map[string]bool) bool
-}
-
-var toolSurfaceCapabilityAxes = []toolSurfaceCapabilityAxis{
-	{
-		DisabledReason: "Workspace tools are off.",
-		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
-			return caps.Builtins || groupSeen["Workspace"]
-		},
-	},
-	{
-		DisabledReason: "Memory and history tools are off.",
-		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
-			return caps.Memory || caps.SessionSearch || groupSeen["Memory"] || groupSeen["History"]
-		},
-	},
-	{
-		DisabledReason: "Live sources are off.",
-		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
-			return caps.WebSearch || caps.Web || caps.Browser || caps.BrowserScreenshot || groupSeen["Research"]
-		},
-	},
-	{
-		DisabledReason: "Nested work tools are off.",
-		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
-			return caps.Subagent || caps.FocusedTasks || groupSeen["Subtasks"]
-		},
-	},
-	{
-		DisabledReason: "Skill install tools are off.",
-		Enabled: func(caps sessionCapabilities, groupSeen map[string]bool) bool {
-			return caps.SkillInstall || groupSeen["Skills"]
-		},
-	},
-	{
-		DisabledReason: "Session schedules are off.",
-		Enabled: func(caps sessionCapabilities, _ map[string]bool) bool {
-			return caps.SessionSchedule
-		},
-	},
 }
 
 func toneForToolSurface(disabledReasons, warnings []string) string {

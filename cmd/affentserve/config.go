@@ -491,6 +491,8 @@ type serveRuntimeCapabilities struct {
 	Subagent          bool
 	FocusedTasks      bool
 	WorkflowTools     bool
+	LoopProtocol      bool
+	SessionSchedule   bool
 }
 
 func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
@@ -504,6 +506,8 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 		Subagent:          c.EnableSubagent,
 		FocusedTasks:      c.EnableFocusedTasks,
 		WorkflowTools:     true,
+		LoopProtocol:      c.EnableLoopProtocol,
+		SessionSchedule:   true,
 	}
 	if !serveEvalModeEnabled(c) {
 		return caps
@@ -518,6 +522,8 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 		caps.Subagent = true
 		caps.FocusedTasks = true
 		caps.WorkflowTools = true
+		caps.LoopProtocol = false
+		caps.SessionSchedule = false
 		return caps
 	}
 	allowed, _ := serveEvalToolAllowlist(c)
@@ -535,6 +541,8 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 	caps.Subagent = (c.enableSubagentSet && c.EnableSubagent) || allowed[agent.SubagentToolName]
 	caps.FocusedTasks = (c.enableFocusedTasksSet && c.EnableFocusedTasks) || allowed[agent.FocusedTaskToolName]
 	caps.WorkflowTools = allowed[agent.SkillToolName] || allowed[agent.PlanToolName] || allowed[agent.SessionSearchToolName]
+	caps.LoopProtocol = false
+	caps.SessionSchedule = false
 	return caps
 }
 

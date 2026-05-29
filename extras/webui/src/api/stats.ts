@@ -65,6 +65,14 @@ export interface StatsRuntimeSnapshot {
   context_compaction_summary_empty?: number;
 }
 
+export interface RuntimeCapabilityContract {
+  status?: string;
+  expected?: string[];
+  available?: string[];
+  missing?: string[];
+  warnings?: string[];
+}
+
 export interface ServerSessionStats {
   id: string;
   created_at: string;
@@ -73,6 +81,7 @@ export interface ServerSessionStats {
   tools: StatsToolSnapshot;
   runtime: StatsRuntimeSnapshot;
   browser: StatsBrowserSnapshot;
+  runtime_contract?: RuntimeCapabilityContract;
 }
 
 export interface ServerAggregateStats {
@@ -105,6 +114,7 @@ export interface ServerStatsResponse {
   enable_builtins?: boolean;
   enable_subagent?: boolean;
   enable_focused_tasks?: boolean;
+  enable_loop_protocol?: boolean;
   eval_mode?: boolean;
   eval_tools?: string;
   eval_all_tools?: boolean;
@@ -118,6 +128,7 @@ export interface ServerStatsResponse {
   sessions?: ServerSessionStats[];
   aggregate?: ServerAggregateStats;
   boundaries?: Record<string, number | string>;
+  runtime_contract?: RuntimeCapabilityContract;
 }
 
 export function getServerStats(client: ApiClient, signal?: AbortSignal): Promise<ServerStatsResponse> {

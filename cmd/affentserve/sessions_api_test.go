@@ -1249,7 +1249,18 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 		Text:   "Fix clamp behavior, verify it, and push the code",
 	}) +
 		sessionEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
-			TurnID: "t1",
+			TurnID:    "t1",
+			ToolCount: 3,
+			Tools: []sse.RuntimeSurfaceTool{
+				{Name: "read_file", Group: "Workspace"},
+				{Name: "memory", Group: "Memory"},
+				{Name: "session_search", Group: "History"},
+			},
+			Capabilities: sse.RuntimeCapabilities{
+				WorkspaceTools: []string{"read_file"},
+				Memory:         true,
+				SessionSearch:  true,
+			},
 			Workspace: &sse.RuntimeWorkspace{
 				DefaultCWD: "workspace_root",
 				PathMode:   "workspace_relative",
@@ -1339,6 +1350,12 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	}
 	if !stringSliceContains(task.Constraints, "workspace path mode: workspace_relative") {
 		t.Fatalf("constraints = %+v, want workspace path mode", task.Constraints)
+	}
+	if !stringSliceContains(task.Constraints, "unavailable capabilities: live sources, nested work, skills, loop protocol, schedules") {
+		t.Fatalf("constraints = %+v, want runtime capability gaps", task.Constraints)
+	}
+	if !stringSliceContains(task.KnownFacts, "available capabilities: workspace, memory/history") {
+		t.Fatalf("known_facts = %+v, want available runtime capabilities", task.KnownFacts)
 	}
 	if !stringSliceContains(task.Sources, "runtime_surface") || !stringSliceContains(task.Sources, "runtime_workspace") {
 		t.Fatalf("sources = %+v, want runtime workspace sources", task.Sources)
