@@ -457,6 +457,50 @@ func TestSessionContextSnapshotShrinksSummaryPromptForSmallModelContext(t *testi
 	}
 }
 
+func TestSummarizeActiveSessionBudgetsToolSchemaAgainstConversationPressure(t *testing.T) {
+	dir := t.TempDir()
+	conv, err := agent.OpenConversationAt(filepath.Join(dir, "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := strings.Repeat("x", 800)
+	if err := conv.Append(agent.ChatMessage{Role: "user", Content: message}); err != nil {
+		t.Fatal(err)
+	}
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{Name: "shell", Description: "run commands", Schema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string","description":"` + strings.Repeat("s", 1200) + `"}}}`)})
+	reg.Add(&agent.Tool{Name: "read_file", Description: "read files", Schema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)})
+	reg.Add(&agent.Tool{Name: agent.PlanToolName, Description: "manage plan", Schema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"}}}`)})
+	reg.Add(&agent.Tool{Name: "web_fetch", Description: "fetch web", Schema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string","description":"` + strings.Repeat("w", 1200) + `"}}}`)})
+
+	messages := []agent.ChatMessage{{Role: "user", Content: message}}
+	all := reg.SelectModelTools(agent.ToolSurfacePolicy{})
+	firstTwoToolTokens := agent.EstimateRequestInput(nil, all.Defs[:2]).ToolSchemaTokens
+	conversationTokens := agent.EstimateRequestInput(messages, nil).ConversationTokens
+	cfg := Config{CompactTriggerInputTokens: conversationTokens + firstTwoToolTokens}
+	summary := summarizeActiveSession(&Session{
+		ID:        "active-context-budget",
+		conv:      conv,
+		registry:  reg,
+		workspace: "/tmp/workspace",
+		createdAt: time.Now(),
+		lastUsed:  time.Now(),
+	}, cfg)
+	if summary.Context == nil {
+		t.Fatal("summary.Context is nil")
+	}
+	if summary.Context.ToolSchemaBudgetTokens != firstTwoToolTokens {
+		t.Fatalf("tool schema budget = %d, want remaining request budget %d", summary.Context.ToolSchemaBudgetTokens, firstTwoToolTokens)
+	}
+	if summary.Context.EstimatedRequestInputTokens > cfg.CompactTriggerInputTokens {
+		t.Fatalf("estimated request input tokens = %d, want <= compact trigger %d", summary.Context.EstimatedRequestInputTokens, cfg.CompactTriggerInputTokens)
+	}
+	fullEstimate := agent.EstimateRequestInput(messages, reg.Defs())
+	if fullEstimate.EstimatedInputTokens <= cfg.CompactTriggerInputTokens {
+		t.Fatalf("test setup invalid: full unbudgeted estimate = %d, want over compact trigger %d", fullEstimate.EstimatedInputTokens, cfg.CompactTriggerInputTokens)
+	}
+}
+
 func testRequestInputEstimate(conversationBytes, estimatedInputTokens int) agent.RequestInputEstimate {
 	return agent.RequestInputEstimate{
 		ConversationBytes:    conversationBytes,

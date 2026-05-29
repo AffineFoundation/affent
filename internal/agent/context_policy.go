@@ -107,3 +107,18 @@ func SummaryPromptMaxBytesForModelPolicy(modelContextWindowTokens, percent, rese
 	}
 	return limit
 }
+
+// ToolSchemaBudgetTokensForRequestPolicy returns the model-visible tool-schema
+// budget remaining after the current conversation has consumed part of the
+// request-input compaction trigger. It keeps tool selection aligned with the
+// same whole-request pressure policy used by proactive compaction.
+func ToolSchemaBudgetTokensForRequestPolicy(inputTriggerTokens, conversationTokens int) int {
+	if inputTriggerTokens <= 0 {
+		return 0
+	}
+	remaining := inputTriggerTokens - conversationTokens
+	if remaining <= 0 {
+		return 1
+	}
+	return remaining
+}

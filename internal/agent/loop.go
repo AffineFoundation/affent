@@ -3258,16 +3258,8 @@ func (l *Loop) selectToolSurface(opts TurnOptions) ToolSurfaceSelection {
 }
 
 func (l *Loop) toolSchemaBudgetTokens(msgs []ChatMessage) int {
-	limit := l.compactTriggerInputTokens()
-	if limit <= 0 {
-		return 0
-	}
 	conversationTokens := EstimateRequestInput(msgs, nil).ConversationTokens
-	remaining := limit - conversationTokens
-	if remaining <= 0 {
-		return 1
-	}
-	return remaining
+	return ToolSchemaBudgetTokensForRequestPolicy(l.compactTriggerInputTokens(), conversationTokens)
 }
 
 func (l *Loop) toolsForTurn(opts TurnOptions) *Registry {

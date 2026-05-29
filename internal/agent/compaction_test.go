@@ -1326,6 +1326,15 @@ func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	if got := SummaryPromptMaxBytesForModelPolicy(0, 80, 30, DefaultSummaryPromptMaxBytes); got != DefaultSummaryPromptMaxBytes {
 		t.Fatalf("unknown-window summary prompt cap = %d, want default %d", got, DefaultSummaryPromptMaxBytes)
 	}
+	if got := ToolSchemaBudgetTokensForRequestPolicy(1_000, 600); got != 400 {
+		t.Fatalf("tool schema budget = %d, want remaining 400", got)
+	}
+	if got := ToolSchemaBudgetTokensForRequestPolicy(1_000, 1_000); got != 1 {
+		t.Fatalf("exhausted tool schema budget = %d, want one-token minimum", got)
+	}
+	if got := ToolSchemaBudgetTokensForRequestPolicy(-1, 600); got != 0 {
+		t.Fatalf("disabled tool schema budget = %d, want 0", got)
+	}
 }
 
 // Rolling: a second compaction pass should detect the existing summary

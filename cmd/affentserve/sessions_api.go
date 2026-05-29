@@ -118,6 +118,7 @@ type sessionContextSummary struct {
 	EstimatedRequestInputTokens    int  `json:"estimated_request_input_tokens,omitempty"`
 	EstimatedConversationTokens    int  `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens      int  `json:"estimated_tool_schema_tokens,omitempty"`
+	ToolSchemaBudgetTokens         int  `json:"tool_schema_budget_tokens,omitempty"`
 	ModelContextWindowTokens       int  `json:"model_context_window_tokens,omitempty"`
 	ModelContextWindowAuto         bool `json:"model_context_window_auto,omitempty"`
 	ReservedOutputTokens           int  `json:"reserved_output_tokens,omitempty"`
@@ -535,12 +536,15 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			}
 		}
 	}
-	toolDefs := []agent.ToolDef(nil)
+	toolSurface := agent.ToolSurfaceSelection{}
 	if s.registry != nil {
-		toolDefs = s.registry.Defs()
+		toolSurface = s.registry.SelectModelTools(agent.ToolSurfacePolicy{
+			SchemaTokenBudget: sessionToolSchemaBudgetTokens(messages, cfg),
+		})
 	}
-	inputEstimate := agent.EstimateRequestInput(messages, toolDefs)
+	inputEstimate := agent.EstimateRequestInput(messages, toolSurface.Defs)
 	context := sessionContextSnapshot(len(messages), inputEstimate, cfg)
+	context.ToolSchemaBudgetTokens = toolSurface.SchemaBudgetTokens
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
 	runtime := s.RuntimeStatsSnapshot()
@@ -1497,6 +1501,11 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		RequestInputCompactPercent:     inputPercent,
 		RequestInputTokensUntilCompact: inputTokensUntilCompact,
 	}
+}
+
+func sessionToolSchemaBudgetTokens(messages []agent.ChatMessage, cfg Config) int {
+	conversationTokens := agent.EstimateRequestInput(messages, nil).ConversationTokens
+	return agent.ToolSchemaBudgetTokensForRequestPolicy(compactTriggerInputTokensForConfig(cfg), conversationTokens)
 }
 
 func compactTriggerInputTokensForConfig(cfg Config) int {
