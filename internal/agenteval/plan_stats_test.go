@@ -11,19 +11,20 @@ func TestTrace_PlanStats_Aggregation(t *testing.T) {
 			{Tool: "plan", Args: map[string]any{"action": "set"}},
 			{Tool: "plan", Args: map[string]any{"action": " update "}, Result: `{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"pending"}]}`},
 			{Tool: "plan", Args: map[string]any{"action": "UPDATE"}, ExitCode: 1, IsErr: true},
+			{Tool: "plan", Args: map[string]any{"index": float64(3)}, Result: "(max_turns reached before this tool ran)\nFailure: kind=loop_guard_no_budget", ExitCode: 1, FailureKinds: []string{"loop_guard_no_budget"}},
 			{Tool: "plan", Args: map[string]any{"action": 3}},
 			{Tool: "read_file", Args: map[string]any{"action": "view"}},
 		},
 	}
 
 	got := tr.PlanStats()
-	if got.Calls != 4 {
-		t.Fatalf("Calls = %d, want 4", got.Calls)
+	if got.Calls != 5 {
+		t.Fatalf("Calls = %d, want 5", got.Calls)
 	}
 	if got.Errors != 1 {
 		t.Fatalf("Errors = %d, want 1", got.Errors)
 	}
-	wantActions := map[string]int{"set": 1, "update": 2, "unknown": 1}
+	wantActions := map[string]int{"set": 1, "update": 2, "unknown": 2}
 	if !reflect.DeepEqual(got.ByAction, wantActions) {
 		t.Fatalf("ByAction = %#v, want %#v", got.ByAction, wantActions)
 	}
@@ -68,11 +69,18 @@ func TestTrace_PlanExamples(t *testing.T) {
 		Result:   "unused field(s) for action=set: index",
 		ExitCode: 1,
 		IsErr:    true,
+	}, {
+		CallID:       "plan-3",
+		Tool:         "plan",
+		Args:         map[string]any{"index": float64(2), "status": "completed"},
+		Result:       "(max_turns reached before this tool ran)\nFailure: kind=loop_guard_no_budget",
+		ExitCode:     1,
+		FailureKinds: []string{"loop_guard_no_budget"},
 	}}}
 
 	got := tr.PlanExamples(4)
-	if len(got) != 2 {
-		t.Fatalf("PlanExamples len = %d, want 2: %+v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("PlanExamples len = %d, want 3: %+v", len(got), got)
 	}
 	if got[0].CallID != "plan-1" ||
 		got[0].Action != "update" ||
@@ -91,5 +99,12 @@ func TestTrace_PlanExamples(t *testing.T) {
 	}
 	if !got[1].Error || got[1].ResultSummary != "unused field(s) for action=set: index" {
 		t.Fatalf("PlanExamples[1] = %+v", got[1])
+	}
+	if !got[2].Error ||
+		!got[2].Skipped ||
+		got[2].Action != "unknown" ||
+		!reflect.DeepEqual(got[2].FailureKinds, []string{"loop_guard_no_budget"}) ||
+		got[2].ResultSummary != "(max_turns reached before this tool ran) Failure: kind=loop_guard_no_budget" {
+		t.Fatalf("PlanExamples[2] = %+v", got[2])
 	}
 }

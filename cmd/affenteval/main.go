@@ -3280,6 +3280,12 @@ func printPlanExampleLines(w io.Writer, examples []agenteval.PlanExample, indent
 		if ex.Error {
 			fmt.Fprintf(w, " error=true")
 		}
+		if ex.Skipped {
+			fmt.Fprintf(w, " skipped=true")
+		}
+		if len(ex.FailureKinds) > 0 {
+			fmt.Fprintf(w, " failure_kinds=%s", strings.Join(ex.FailureKinds, ","))
+		}
 		if ex.ResultMessage != "" {
 			fmt.Fprintf(w, " message=%q", ex.ResultMessage)
 		}

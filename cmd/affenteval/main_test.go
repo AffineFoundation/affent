@@ -1939,6 +1939,31 @@ func TestPrintBatchResultIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 	}
 }
 
+func TestPrintPlanExampleLinesIncludesSkippedFailureKinds(t *testing.T) {
+	var out bytes.Buffer
+	printPlanExampleLines(&out, []agenteval.PlanExample{{
+		Action:       "unknown",
+		Index:        3,
+		Status:       "completed",
+		Error:        true,
+		Skipped:      true,
+		FailureKinds: []string{"loop_guard_no_budget"},
+		Evidence:     []string{"CLI rendering implemented"},
+	}}, "")
+	got := out.String()
+	for _, want := range []string{
+		"plan_example:",
+		"action=unknown",
+		"error=true",
+		"skipped=true",
+		"failure_kinds=loop_guard_no_budget",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("plan example output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestPrintBatchResultIncludesMemorySearchMissExamples(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResult(&out, agenteval.BatchResult{

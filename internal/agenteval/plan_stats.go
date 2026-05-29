@@ -37,7 +37,7 @@ func (t Trace) PlanStats() PlanStats {
 			continue
 		}
 		s.Calls++
-		if c.IsErr || c.ExitCode != 0 {
+		if planCallCountsAsError(c) {
 			s.Errors++
 		}
 		action := planActionFromArgs(c.Args)
@@ -85,6 +85,8 @@ type PlanExample struct {
 	CurrentStepStatus string   `json:"current_step_status,omitempty"`
 	CurrentStep       string   `json:"current_step,omitempty"`
 	Error             bool     `json:"error,omitempty"`
+	Skipped           bool     `json:"skipped,omitempty"`
+	FailureKinds      []string `json:"failure_kinds,omitempty"`
 	ResultSummary     string   `json:"result_summary,omitempty"`
 }
 
@@ -120,6 +122,8 @@ func planExampleForTool(index int, c ToolCall) PlanExample {
 		Evidence:  compactStringSlice(stringSliceArg(c.Args, "evidence"), 6, 160),
 		Error:     c.IsErr || c.ExitCode != 0,
 	}
+	ex.FailureKinds = toolFailureKindsForCall(c)
+	ex.Skipped = planCallSkippedBeforeExecution(c)
 	ex.NotePreview = compactOneLine(stringArg(c.Args, "note"), 220)
 	if ex.Action == "set" && ex.StepText == "" {
 		ex.StepText = compactOneLine(firstPlanStepTextArg(c.Args), 220)
@@ -157,6 +161,17 @@ func planExampleForTool(index int, c ToolCall) PlanExample {
 		}
 	}
 	return ex
+}
+
+func planCallCountsAsError(c ToolCall) bool {
+	if !(c.IsErr || c.ExitCode != 0) {
+		return false
+	}
+	return !planCallSkippedBeforeExecution(c)
+}
+
+func planCallSkippedBeforeExecution(c ToolCall) bool {
+	return containsString(toolFailureKindsForCall(c), "loop_guard_no_budget")
 }
 
 type evalPlanState struct {

@@ -1545,6 +1545,12 @@ func renderTimelinePlan(b *strings.Builder, trace *Trace) {
 		if ex.Error {
 			fmt.Fprintf(b, " error=`true`")
 		}
+		if ex.Skipped {
+			fmt.Fprintf(b, " skipped=`true`")
+		}
+		if len(ex.FailureKinds) > 0 {
+			fmt.Fprintf(b, " failure_kinds=`%s`", strings.Join(ex.FailureKinds, ","))
+		}
 		b.WriteByte('\n')
 		if ex.StepText != "" {
 			fmt.Fprintf(b, "   step: %s\n", timelineInline(ex.StepText, timelineMemoryPreviewBytes))
