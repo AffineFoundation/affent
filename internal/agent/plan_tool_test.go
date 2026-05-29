@@ -52,6 +52,42 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 	}
 }
 
+func TestPlanToolRejectsSetOverUnfinishedPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"in_progress"}]}`)); err != nil {
+		t.Fatalf("initial set: %v", err)
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"start over"}]}`))
+	if err == nil ||
+		!strings.Contains(err.Error(), "action=set would replace persisted task state") ||
+		!strings.Contains(err.Error(), "Failure: kind=plan_active_replacement") {
+		t.Fatalf("replacement set error = %v", err)
+	}
+	out, viewErr := tool.Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
+	if viewErr != nil {
+		t.Fatalf("view: %v", viewErr)
+	}
+	if strings.Contains(out, "start over") || !strings.Contains(out, "ship") {
+		t.Fatalf("replacement set should leave existing plan unchanged:\n%s", out)
+	}
+}
+
+func TestPlanToolAllowsSetAfterCompletedPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect","status":"completed"}]}`)); err != nil {
+		t.Fatalf("initial set: %v", err)
+	}
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"new task","status":"in_progress"}]}`))
+	if err != nil {
+		t.Fatalf("set after completed plan: %v", err)
+	}
+	if !strings.Contains(out, "new task") || strings.Contains(out, "inspect") {
+		t.Fatalf("completed plan should be replaceable:\n%s", out)
+	}
+}
+
 func TestPlanToolViewNormalizesPersistedPlanState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
 	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"  Ship  ","status":" IN_PROGRESS ","evidence":[" file ","file"," test "]},{"text":" ship ","status":"pending"},{"text":"Finish","status":"in_progress"}]}`), 0o644); err != nil {

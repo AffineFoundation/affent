@@ -63,7 +63,7 @@ func planTool(path string) *Tool {
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "enum": ["view", "set", "update", "clear"], "description": "view returns the current plan; set replaces all steps; update changes one step by 1-based index; clear removes the active plan."},
+            "action": {"type": "string", "enum": ["view", "set", "update", "clear"], "description": "view returns the current plan; set creates a plan when no active unfinished plan exists; update changes one step by 1-based index; clear removes the active plan."},
             "steps": {"type": "array", "minItems": 1, "maxItems": %d, "items": {"type": "object", "additionalProperties": false, "required": ["text"], "properties": {"text": {"type": "string", "minLength": 1, "maxLength": %d}, "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"]}, "evidence": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}}, "note": {"type": "string", "maxLength": %d}}}},
             "index": {"type": "integer", "minimum": 1, "maximum": %d, "description": "1-based step index for update."},
             "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "blocked"], "description": "Replacement status for update."},
@@ -109,6 +109,13 @@ func planTool(path string) *Tool {
 				}
 				return marshalPlanState(st)
 			case "set":
+				existing, err := readPlanState(path)
+				if err != nil {
+					return "", err
+				}
+				if planHasOpenWork(existing) {
+					return "", errors.New("active plan already has unfinished work; action=set would replace persisted task state\nNext: use action=update for the current step, action=view to inspect the plan, or action=clear only when the user explicitly wants to discard the current plan.\nFailure: kind=plan_active_replacement")
+				}
 				steps, err := normalizePlanSteps(p.Steps)
 				if err != nil {
 					return "", err
@@ -207,6 +214,18 @@ func rejectUnusedPlanArgs(action string, present map[string]bool) error {
 		return fmt.Errorf("unused field(s) for action=%s: %s\nNext: remove fields that action does not use", action, strings.Join(unused, ", "))
 	}
 	return nil
+}
+
+func planHasOpenWork(st planState) bool {
+	for _, step := range st.Steps {
+		if strings.TrimSpace(step.Text) == "" {
+			continue
+		}
+		if step.Status != "completed" {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizePlanSteps(steps []planStep) ([]planStep, error) {
