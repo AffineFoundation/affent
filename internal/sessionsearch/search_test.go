@@ -396,6 +396,51 @@ func TestSearchFindsTaskStateAnchorsFromEvents(t *testing.T) {
 	}
 }
 
+func TestSearchFindsContextCompactionTaskStateAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "compacted-session",
+		mustEvent(t, sse.TypeUserMessage, map[string]any{
+			"turn_id": "t1",
+			"text":    "Continue the durable loop after context pressure.",
+		}),
+		mustEvent(t, sse.TypeContextCompact, map[string]any{
+			"turn_id":              "t1",
+			"before_messages":      90,
+			"after_messages":       18,
+			"removed_messages":     72,
+			"before_bytes":         120000,
+			"after_bytes":          42000,
+			"reduced_bytes":        78000,
+			"reactive":             true,
+			"reason":               "context_overflow",
+			"summary_present":      true,
+			"summary_bytes":        1400,
+			"loop_protocol_anchor": "LOOP_PROTOCOL: id=durable-loop status=running step=verify package output",
+		}),
+		mustEvent(t, sse.TypeTurnEnd, map[string]any{
+			"turn_id": "t1",
+			"reason":  sse.TurnEndMaxTurns,
+		}),
+	)
+
+	hits, err := Search(context.Background(), dir, "current", "context_overflow durable-loop verify package", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected context compaction task_state hit")
+	}
+	hit := hits[0]
+	if hit.SessionID != "compacted-session" || hit.Role != "task_state" {
+		t.Fatalf("expected task_state hit, got %+v", hit)
+	}
+	for _, want := range []string{"source=context_compaction", "context_overflow", "reactive=true", "LOOP_PROTOCOL: id=durable-loop"} {
+		if !strings.Contains(hit.Snippet, want) {
+			t.Fatalf("compaction task_state hit missing %q:\n%+v", want, hit)
+		}
+	}
+}
+
 func TestSearchFindsLoopTurnCheckpointRecoveryEventAnchors(t *testing.T) {
 	dir := t.TempDir()
 	writeDurableEvents(t, dir, "checkpoint-loop",
@@ -842,6 +887,49 @@ func TestRecentSessionsIncludesTaskStateAnchorsFromEvents(t *testing.T) {
 	for _, want := range []string{"task_state:", "status=blocked", "objective: Continue queue priority repair", "failed_action:", "inspect queue ordering regression"} {
 		if !strings.Contains(got.TaskState, want) {
 			t.Fatalf("task_state preview missing %q: %+v", want, got)
+		}
+	}
+}
+
+func TestRecentSessionsIncludesContextCompactionTaskStateAnchors(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableEvents(t, dir, "compacted-recent",
+		mustEvent(t, sse.TypeUserMessage, map[string]any{
+			"turn_id": "t1",
+			"text":    "Continue package release loop",
+		}),
+		mustEvent(t, sse.TypeContextCompact, map[string]any{
+			"turn_id":              "t1",
+			"removed_messages":     44,
+			"reduced_bytes":        50000,
+			"reason":               "estimated_context_pressure",
+			"summary_present":      true,
+			"loop_protocol_anchor": "LOOP_PROTOCOL: id=release-loop status=running step=rerun tests",
+		}),
+		mustEvent(t, sse.TypeTurnEnd, map[string]any{
+			"turn_id": "t1",
+			"reason":  sse.TurnEndMaxTurns,
+		}),
+	)
+	newTime := time.Date(2026, 5, 27, 13, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "compacted-recent", "events.jsonl"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	recent, err := RecentSessions(context.Background(), dir, "current", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(recent) != 1 {
+		t.Fatalf("expected one recent compaction anchor, got %+v", recent)
+	}
+	got := recent[0]
+	if got.SessionID != "compacted-recent" || got.TaskState == "" {
+		t.Fatalf("compaction task_state recent anchor missing: %+v", got)
+	}
+	for _, want := range []string{"source=context_compaction", "estimated_context_pressure", "removed_messages=44", "LOOP_PROTOCOL: id=release-loop"} {
+		if !strings.Contains(got.TaskState, want) {
+			t.Fatalf("compaction task_state preview missing %q: %+v", want, got)
 		}
 	}
 }
