@@ -3379,14 +3379,18 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 	if reactive {
 		reason = "context_overflow"
 	}
-	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason)
+	return l.maybeCompactWithReason(ctx, turnID, reactive, reactive, reason, 0)
 }
 
 func (l *Loop) maybeCompactForBudgetPressure(ctx context.Context, turnID string) bool {
-	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure")
+	return l.maybeCompactWithReason(ctx, turnID, false, true, "input_budget_pressure", 0)
 }
 
 func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string, toolDefs []ToolDef) bool {
+	return l.maybeCompactForRequestPressureWithKeepFirst(ctx, turnID, toolDefs, 0)
+}
+
+func (l *Loop) maybeCompactForRequestPressureWithKeepFirst(ctx context.Context, turnID string, toolDefs []ToolDef, emergencyKeepFirst int) bool {
 	limit := l.compactTriggerInputTokens()
 	if limit <= 0 {
 		return false
@@ -3395,7 +3399,7 @@ func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string
 	if estimated < limit {
 		return false
 	}
-	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure")
+	compacted := l.maybeCompactWithReason(ctx, turnID, false, true, "estimated_context_pressure", emergencyKeepFirst)
 	if compacted {
 		l.Log.Info().
 			Int("estimated_input_tokens", estimated).
@@ -3411,11 +3415,15 @@ func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs
 	// (conversation + tool schemas). Run the request-pressure check
 	// even after a threshold compaction because the first pass may reduce
 	// old conversation while the next request is still too large.
-	l.maybeCompact(ctx, turnID, false)
+	thresholdCompacted := l.maybeCompact(ctx, turnID, false)
 
 	const maxRequestPressureCompactions = 2
+	emergencyKeepFirst := 0
+	if thresholdCompacted {
+		emergencyKeepFirst = 1
+	}
 	for i := 0; i < maxRequestPressureCompactions; i++ {
-		if !l.maybeCompactForRequestPressure(ctx, turnID, toolDefs) {
+		if !l.maybeCompactForRequestPressureWithKeepFirst(ctx, turnID, toolDefs, emergencyKeepFirst) {
 			return
 		}
 	}
@@ -3433,7 +3441,7 @@ func (l *Loop) compactTriggerInputTokens() int {
 	return CompactTriggerInputTokensForPolicy(l.CompactTriggerInputTokens, l.ModelContextWindowTokens, l.CompactTriggerInputPercent, fallback)
 }
 
-func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string) bool {
+func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string, emergencyKeepFirst int) bool {
 	if l.Compactor == nil {
 		return false
 	}
@@ -3448,6 +3456,9 @@ func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reacti
 			emergency := *c
 			emergency.TriggerMsgs = 0
 			emergency.TriggerBytes = 0
+			if emergencyKeepFirst > 0 && (emergency.KeepFirst <= 0 || emergency.KeepFirst > emergencyKeepFirst) {
+				emergency.KeepFirst = emergencyKeepFirst
+			}
 			if emergency.KeepLast > 4 {
 				emergency.KeepLast /= 2
 			}
