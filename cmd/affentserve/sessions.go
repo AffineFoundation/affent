@@ -128,6 +128,11 @@ type Session struct {
 	contextCompactionLastReason       string
 	contextCompactionLastReactive     bool
 	contextCompactionLastSummaryState string
+	contextCompactionLastEstimated    int64
+	contextCompactionLastTrigger      int64
+	contextCompactionLastModelWindow  int64
+	contextCompactionLastReserve      int64
+	contextCompactionLastPercent      int64
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -1950,18 +1955,23 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 // a missing final answer can be a turn budget outcome, while LLM stream
 // failures are runtime errors, not browser/web_fetch failures.
 type RuntimeStatsSnapshot struct {
-	TurnEndByReason                  map[string]int64 `json:"turn_end_by_reason,omitempty"`
-	RuntimeErrors                    int64            `json:"runtime_errors"`
-	RuntimeErrorByKind               map[string]int64 `json:"runtime_error_by_kind,omitempty"`
-	ContextCompactions               int64            `json:"context_compactions,omitempty"`
-	ContextCompactionsReactive       int64            `json:"context_compactions_reactive,omitempty"`
-	ContextCompactionRemovedMessages int64            `json:"context_compaction_removed_messages,omitempty"`
-	ContextCompactionSummaryBytes    int64            `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionSummaryMissing  int64            `json:"context_compaction_summary_missing,omitempty"`
-	ContextCompactionSummaryEmpty    int64            `json:"context_compaction_summary_empty,omitempty"`
-	ContextCompactionLatestReason    string           `json:"context_compaction_latest_reason,omitempty"`
-	ContextCompactionLatestReactive  bool             `json:"context_compaction_latest_reactive,omitempty"`
-	ContextCompactionLatestState     string           `json:"context_compaction_latest_summary_state,omitempty"`
+	TurnEndByReason                                 map[string]int64 `json:"turn_end_by_reason,omitempty"`
+	RuntimeErrors                                   int64            `json:"runtime_errors"`
+	RuntimeErrorByKind                              map[string]int64 `json:"runtime_error_by_kind,omitempty"`
+	ContextCompactions                              int64            `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive                      int64            `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemovedMessages                int64            `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummaryBytes                   int64            `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing                 int64            `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty                   int64            `json:"context_compaction_summary_empty,omitempty"`
+	ContextCompactionLatestReason                   string           `json:"context_compaction_latest_reason,omitempty"`
+	ContextCompactionLatestReactive                 bool             `json:"context_compaction_latest_reactive,omitempty"`
+	ContextCompactionLatestState                    string           `json:"context_compaction_latest_summary_state,omitempty"`
+	ContextCompactionLatestEstimatedInputTokens     int64            `json:"context_compaction_latest_estimated_input_tokens,omitempty"`
+	ContextCompactionLatestTriggerInputTokens       int64            `json:"context_compaction_latest_trigger_input_tokens,omitempty"`
+	ContextCompactionLatestModelContextWindowTokens int64            `json:"context_compaction_latest_model_context_window_tokens,omitempty"`
+	ContextCompactionLatestReservedOutputTokens     int64            `json:"context_compaction_latest_reserved_output_tokens,omitempty"`
+	ContextCompactionLatestTriggerInputPercent      int64            `json:"context_compaction_latest_trigger_input_percent,omitempty"`
 }
 
 func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
@@ -1974,20 +1984,30 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 	latestReason := s.contextCompactionLastReason
 	latestReactive := s.contextCompactionLastReactive
 	latestState := s.contextCompactionLastSummaryState
+	latestEstimated := s.contextCompactionLastEstimated
+	latestTrigger := s.contextCompactionLastTrigger
+	latestModelWindow := s.contextCompactionLastModelWindow
+	latestReserve := s.contextCompactionLastReserve
+	latestPercent := s.contextCompactionLastPercent
 	s.runtimeStatsMu.Unlock()
 	return RuntimeStatsSnapshot{
-		TurnEndByReason:                  turnEndByReason,
-		RuntimeErrors:                    s.runtimeErrors.Load(),
-		RuntimeErrorByKind:               errorByKind,
-		ContextCompactions:               s.contextCompactions.Load(),
-		ContextCompactionsReactive:       s.contextCompactionReact.Load(),
-		ContextCompactionRemovedMessages: s.contextCompactionRmMsg.Load(),
-		ContextCompactionSummaryBytes:    s.contextCompactionBytes.Load(),
-		ContextCompactionSummaryMissing:  s.contextCompactionMiss.Load(),
-		ContextCompactionSummaryEmpty:    s.contextCompactionEmpty.Load(),
-		ContextCompactionLatestReason:    latestReason,
-		ContextCompactionLatestReactive:  latestReactive,
-		ContextCompactionLatestState:     latestState,
+		TurnEndByReason:                                 turnEndByReason,
+		RuntimeErrors:                                   s.runtimeErrors.Load(),
+		RuntimeErrorByKind:                              errorByKind,
+		ContextCompactions:                              s.contextCompactions.Load(),
+		ContextCompactionsReactive:                      s.contextCompactionReact.Load(),
+		ContextCompactionRemovedMessages:                s.contextCompactionRmMsg.Load(),
+		ContextCompactionSummaryBytes:                   s.contextCompactionBytes.Load(),
+		ContextCompactionSummaryMissing:                 s.contextCompactionMiss.Load(),
+		ContextCompactionSummaryEmpty:                   s.contextCompactionEmpty.Load(),
+		ContextCompactionLatestReason:                   latestReason,
+		ContextCompactionLatestReactive:                 latestReactive,
+		ContextCompactionLatestState:                    latestState,
+		ContextCompactionLatestEstimatedInputTokens:     latestEstimated,
+		ContextCompactionLatestTriggerInputTokens:       latestTrigger,
+		ContextCompactionLatestModelContextWindowTokens: latestModelWindow,
+		ContextCompactionLatestReservedOutputTokens:     latestReserve,
+		ContextCompactionLatestTriggerInputPercent:      latestPercent,
 	}
 }
 
@@ -2131,6 +2151,11 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	s.contextCompactionLastReason = p.Reason
 	s.contextCompactionLastReactive = p.Reactive
 	s.contextCompactionLastSummaryState = state
+	s.contextCompactionLastEstimated = int64(p.EstimatedInputTokens)
+	s.contextCompactionLastTrigger = int64(p.TriggerInputTokens)
+	s.contextCompactionLastModelWindow = int64(p.ModelContextWindowTokens)
+	s.contextCompactionLastReserve = int64(p.ReservedOutputTokens)
+	s.contextCompactionLastPercent = int64(p.CompactTriggerInputPercent)
 	s.runtimeStatsMu.Unlock()
 }
 
@@ -2161,6 +2186,11 @@ func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 		s.contextCompactionLastReason = stats.ContextCompactionLatestReason
 		s.contextCompactionLastReactive = stats.ContextCompactionLatestReactive
 		s.contextCompactionLastSummaryState = stats.ContextCompactionLatestState
+		s.contextCompactionLastEstimated = stats.ContextCompactionLatestEstimatedInputTokens
+		s.contextCompactionLastTrigger = stats.ContextCompactionLatestTriggerInputTokens
+		s.contextCompactionLastModelWindow = stats.ContextCompactionLatestModelContextWindowTokens
+		s.contextCompactionLastReserve = stats.ContextCompactionLatestReservedOutputTokens
+		s.contextCompactionLastPercent = stats.ContextCompactionLatestTriggerInputPercent
 	}
 }
 

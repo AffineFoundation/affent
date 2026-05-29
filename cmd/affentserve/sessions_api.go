@@ -128,16 +128,21 @@ type sessionContextSummary struct {
 }
 
 type sessionContextCompactionSummary struct {
-	Count              int    `json:"count"`
-	Reactive           int    `json:"reactive"`
-	RemovedMessages    int    `json:"removed_messages"`
-	SummaryBytes       int    `json:"summary_bytes,omitempty"`
-	SummaryMissing     int    `json:"summary_missing,omitempty"`
-	SummaryEmpty       int    `json:"summary_empty,omitempty"`
-	LatestReason       string `json:"latest_reason,omitempty"`
-	LatestReactive     bool   `json:"latest_reactive,omitempty"`
-	LatestSummaryState string `json:"latest_summary_state,omitempty"`
-	TailOnly           bool   `json:"tail_only,omitempty"`
+	Count                          int    `json:"count"`
+	Reactive                       int    `json:"reactive"`
+	RemovedMessages                int    `json:"removed_messages"`
+	SummaryBytes                   int    `json:"summary_bytes,omitempty"`
+	SummaryMissing                 int    `json:"summary_missing,omitempty"`
+	SummaryEmpty                   int    `json:"summary_empty,omitempty"`
+	LatestReason                   string `json:"latest_reason,omitempty"`
+	LatestReactive                 bool   `json:"latest_reactive,omitempty"`
+	LatestSummaryState             string `json:"latest_summary_state,omitempty"`
+	LatestEstimatedInputTokens     int    `json:"latest_estimated_input_tokens,omitempty"`
+	LatestTriggerInputTokens       int    `json:"latest_trigger_input_tokens,omitempty"`
+	LatestModelContextWindowTokens int    `json:"latest_model_context_window_tokens,omitempty"`
+	LatestReservedOutputTokens     int    `json:"latest_reserved_output_tokens,omitempty"`
+	LatestTriggerInputPercent      int    `json:"latest_trigger_input_percent,omitempty"`
+	TailOnly                       bool   `json:"tail_only,omitempty"`
 }
 
 type sessionTaskStateSummary = taskstate.Snapshot
@@ -630,15 +635,20 @@ func contextCompactionSummaryFromRuntimeStats(stats RuntimeStatsSnapshot) *sessi
 		return nil
 	}
 	return &sessionContextCompactionSummary{
-		Count:              int(stats.ContextCompactions),
-		Reactive:           int(stats.ContextCompactionsReactive),
-		RemovedMessages:    int(stats.ContextCompactionRemovedMessages),
-		SummaryBytes:       int(stats.ContextCompactionSummaryBytes),
-		SummaryMissing:     int(stats.ContextCompactionSummaryMissing),
-		SummaryEmpty:       int(stats.ContextCompactionSummaryEmpty),
-		LatestReason:       stats.ContextCompactionLatestReason,
-		LatestReactive:     stats.ContextCompactionLatestReactive,
-		LatestSummaryState: stats.ContextCompactionLatestState,
+		Count:                          int(stats.ContextCompactions),
+		Reactive:                       int(stats.ContextCompactionsReactive),
+		RemovedMessages:                int(stats.ContextCompactionRemovedMessages),
+		SummaryBytes:                   int(stats.ContextCompactionSummaryBytes),
+		SummaryMissing:                 int(stats.ContextCompactionSummaryMissing),
+		SummaryEmpty:                   int(stats.ContextCompactionSummaryEmpty),
+		LatestReason:                   stats.ContextCompactionLatestReason,
+		LatestReactive:                 stats.ContextCompactionLatestReactive,
+		LatestSummaryState:             stats.ContextCompactionLatestState,
+		LatestEstimatedInputTokens:     int(stats.ContextCompactionLatestEstimatedInputTokens),
+		LatestTriggerInputTokens:       int(stats.ContextCompactionLatestTriggerInputTokens),
+		LatestModelContextWindowTokens: int(stats.ContextCompactionLatestModelContextWindowTokens),
+		LatestReservedOutputTokens:     int(stats.ContextCompactionLatestReservedOutputTokens),
+		LatestTriggerInputPercent:      int(stats.ContextCompactionLatestTriggerInputPercent),
 	}
 }
 
@@ -1380,7 +1390,12 @@ func runtimeStatsSnapshotEvidence(s *RuntimeStatsSnapshot) int64 {
 		positiveInt64(s.ContextCompactionRemovedMessages) +
 		positiveInt64(s.ContextCompactionSummaryBytes) +
 		positiveInt64(s.ContextCompactionSummaryMissing) +
-		positiveInt64(s.ContextCompactionSummaryEmpty)
+		positiveInt64(s.ContextCompactionSummaryEmpty) +
+		positiveInt64(s.ContextCompactionLatestEstimatedInputTokens) +
+		positiveInt64(s.ContextCompactionLatestTriggerInputTokens) +
+		positiveInt64(s.ContextCompactionLatestModelContextWindowTokens) +
+		positiveInt64(s.ContextCompactionLatestReservedOutputTokens) +
+		positiveInt64(s.ContextCompactionLatestTriggerInputPercent)
 	for _, count := range s.TurnEndByReason {
 		total += positiveInt64(count)
 	}
@@ -1746,6 +1761,11 @@ func scanContextCompactionsFromEvents(r *bufio.Reader) (sessionContextCompaction
 		summary.SummaryBytes += p.SummaryBytes
 		summary.LatestReason = p.Reason
 		summary.LatestReactive = p.Reactive
+		summary.LatestEstimatedInputTokens = p.EstimatedInputTokens
+		summary.LatestTriggerInputTokens = p.TriggerInputTokens
+		summary.LatestModelContextWindowTokens = p.ModelContextWindowTokens
+		summary.LatestReservedOutputTokens = p.ReservedOutputTokens
+		summary.LatestTriggerInputPercent = p.CompactTriggerInputPercent
 		state := contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, raw.SummaryPresent != nil)
 		switch state {
 		case "missing":
@@ -1984,6 +2004,11 @@ func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCom
 	summary.ContextCompactionLatestReason = p.Reason
 	summary.ContextCompactionLatestReactive = p.Reactive
 	summary.ContextCompactionLatestState = state
+	summary.ContextCompactionLatestEstimatedInputTokens = int64(p.EstimatedInputTokens)
+	summary.ContextCompactionLatestTriggerInputTokens = int64(p.TriggerInputTokens)
+	summary.ContextCompactionLatestModelContextWindowTokens = int64(p.ModelContextWindowTokens)
+	summary.ContextCompactionLatestReservedOutputTokens = int64(p.ReservedOutputTokens)
+	summary.ContextCompactionLatestTriggerInputPercent = int64(p.CompactTriggerInputPercent)
 }
 
 func scanToolStatsFromEvents(r *bufio.Reader) (*ToolStatsSnapshot, error) {

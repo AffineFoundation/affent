@@ -2118,13 +2118,18 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t2", Reason: sse.TurnEndError}) +
 		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t2", Code: "llm_timeout", FailureKind: "llm_timeout", Recoverable: true}) +
 		sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
-			TurnID:          "t2",
-			BeforeMessages:  120,
-			AfterMessages:   80,
-			RemovedMessages: 40,
-			Reactive:        true,
-			Reason:          "context_overflow",
-			SummaryPresent:  false,
+			TurnID:                     "t2",
+			BeforeMessages:             120,
+			AfterMessages:              80,
+			RemovedMessages:            40,
+			Reactive:                   true,
+			Reason:                     "context_overflow",
+			SummaryPresent:             false,
+			EstimatedInputTokens:       120000,
+			TriggerInputTokens:         70000,
+			ModelContextWindowTokens:   100000,
+			ReservedOutputTokens:       30000,
+			CompactTriggerInputPercent: 80,
 		})
 	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -2148,10 +2153,22 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		summary.Runtime.ContextCompactionsReactive != 1 ||
 		summary.Runtime.ContextCompactionRemovedMessages != 40 ||
 		summary.Runtime.ContextCompactionLatestReason != "context_overflow" ||
+		summary.Runtime.ContextCompactionLatestEstimatedInputTokens != 120000 ||
+		summary.Runtime.ContextCompactionLatestTriggerInputTokens != 70000 ||
+		summary.Runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
+		summary.Runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
+		summary.Runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
 		summary.Runtime.ContextCompactionLatestState != "missing" {
 		t.Fatalf("durable runtime stats = %+v, want aggregated runtime events", summary.Runtime)
 	}
-	if summary.ContextCompactions == nil || summary.ContextCompactions.Count != 1 || summary.ContextCompactions.LatestSummaryState != "missing" {
+	if summary.ContextCompactions == nil ||
+		summary.ContextCompactions.Count != 1 ||
+		summary.ContextCompactions.LatestEstimatedInputTokens != 120000 ||
+		summary.ContextCompactions.LatestTriggerInputTokens != 70000 ||
+		summary.ContextCompactions.LatestModelContextWindowTokens != 100000 ||
+		summary.ContextCompactions.LatestReservedOutputTokens != 30000 ||
+		summary.ContextCompactions.LatestTriggerInputPercent != 80 ||
+		summary.ContextCompactions.LatestSummaryState != "missing" {
 		t.Fatalf("context compaction summary = %+v, want existing durable summary preserved", summary.ContextCompactions)
 	}
 }
