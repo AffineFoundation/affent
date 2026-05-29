@@ -1081,6 +1081,7 @@ func liveWebSkillURLInstallActivationScenario() BatchScenario {
 		SessionID: "skill-url-install-activation",
 		Prompts: []string{
 			"Install this GitHub skill URL, but only prepare the install proposal in this turn; do not confirm installation yet: " + source + ". You must call skill with action=propose_url and source set to this URL. The triggers field must contain only playwright_eval; do not pass name, description, or required_tools. The final answer must include proposal_id=" + proposalID + ", playwright, and propose_url. Do not read or write files, and do not run shell.",
+			"Review the pending skill proposal before installation. Call skill with action=review_proposal using exactly proposal_id=" + proposalID + ". The final answer must include pending skill, body_sha256, proposal_id=" + proposalID + ", and Playwright CLI Skill. Do not confirm installation yet, do not read or write files, and do not run shell.",
 			"Confirm installation for proposal_id=" + proposalID + ". Call skill with action=confirm_install using exactly this proposal_id. The final answer must include installed skill, active_now=true, proposal_id=" + proposalID + ", and playwright. Do not read or write files, and do not run shell.",
 			"playwright_eval: Do not call any tools. Answer only from the currently active skill: what is this skill's title, and what is the first command in its prerequisite check? The final answer must include Playwright CLI Skill and command -v npx.",
 		},
@@ -1089,18 +1090,21 @@ func liveWebSkillURLInstallActivationScenario() BatchScenario {
 		},
 		RequiredTools: []string{"skill"},
 		RequiredToolCounts: map[string]int{
-			"skill": 2,
+			"skill": 3,
 		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "skill", Arg: "action", Substring: "propose_url"},
 			{Tool: "skill", Arg: "source", Substring: source},
 			{Tool: "skill", Arg: "triggers", Substring: "playwright_eval"},
+			{Tool: "skill", Arg: "action", Substring: "review_proposal"},
 			{Tool: "skill", Arg: "action", Substring: "confirm_install"},
 			{Tool: "skill", Arg: "proposal_id", Substring: proposalID},
 		},
 		RequiredToolResultText: map[string][]string{
 			"skill": {
 				"prepared skill install proposal_id=" + proposalID,
+				"pending skill proposal_id=" + proposalID,
+				"body_sha256=",
 				"source=" + source,
 				"installed skill \"playwright\"",
 				"active_now=true",
@@ -1122,7 +1126,7 @@ func liveWebSkillURLInstallActivationScenario() BatchScenario {
 			"run_task", "subagent_run",
 		},
 		ProtectedFiles:     []string{"README.md"},
-		MaxParentToolCalls: 2,
+		MaxParentToolCalls: 3,
 		MaxTurns:           8,
 		ForbiddenFinalText: []string{"proposal is still pending explicit user confirmation"},
 		RequiredTraceEventCounts: map[string]int{

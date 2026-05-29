@@ -2020,6 +2020,27 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "reviewed_demo", "SKILL.md")); !os.IsNotExist(err) {
 		t.Fatalf("proposed skill should not be installed yet, stat err=%v", err)
 	}
+	if !strings.Contains(out, "body_sha256="+runtimeSkillBodySHA256(body)) ||
+		!strings.Contains(out, "action=review_proposal") {
+		t.Fatalf("proposal output should expose digest and review action:\n%s", out)
+	}
+
+	reviewArgs, err := json.Marshal(map[string]any{
+		"action":      "review_proposal",
+		"proposal_id": proposalID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := tool.Execute(context.Background(), reviewArgs)
+	if err != nil {
+		t.Fatalf("skill review_proposal: %v", err)
+	}
+	if !strings.Contains(review, "pending skill proposal_id="+proposalID) ||
+		!strings.Contains(review, "body_sha256="+runtimeSkillBodySHA256(body)) ||
+		!strings.Contains(review, body) {
+		t.Fatalf("review_proposal should expose exact pending body and digest:\n%s", review)
+	}
 
 	confirmArgs, err := json.Marshal(map[string]any{
 		"action":      "confirm_install",
@@ -2216,6 +2237,11 @@ func TestSkillToolRejectsUnknownAndUnusedArgs(t *testing.T) {
 			name: "confirm ignores install payload",
 			args: `{"action":"confirm_install","proposal_id":"1234567890abcdef","name":"demo","body":"AFFENT ACTIVE SKILL: demo"}`,
 			want: "body, name are not used when action=confirm_install",
+		},
+		{
+			name: "review proposal ignores install payload",
+			args: `{"action":"review_proposal","proposal_id":"1234567890abcdef","body":"AFFENT ACTIVE SKILL: demo"}`,
+			want: "body is not used when action=review_proposal",
 		},
 		{
 			name: "propose_url ignores body",

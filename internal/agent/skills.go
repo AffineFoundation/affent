@@ -360,6 +360,7 @@ type RuntimeSkillProposal struct {
 	Name           string              `json:"name"`
 	Description    string              `json:"description,omitempty"`
 	Source         string              `json:"source,omitempty"`
+	BodySHA256     string              `json:"body_sha256,omitempty"`
 	Body           string              `json:"body"`
 	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
 	RequiredTools  []string            `json:"required_tools,omitempty"`
@@ -734,6 +735,7 @@ func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error)
 		Name:           normalized.Name,
 		Description:    normalized.Description,
 		Source:         normalized.Source,
+		BodySHA256:     runtimeSkillBodySHA256(normalized.Body),
 		Body:           normalized.Body,
 		AutoActivation: normalized.AutoActivation,
 		RequiredTools:  normalized.RequiredTools,
@@ -758,6 +760,40 @@ func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error)
 	return proposal, nil
 }
 
+func ReadRuntimeSkillProposal(root, id string) (RuntimeSkillProposal, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return RuntimeSkillProposal{}, fmt.Errorf("runtime skill directory is not configured")
+	}
+	if err := rejectRuntimeSkillRootSymlink(root); err != nil {
+		return RuntimeSkillProposal{}, err
+	}
+	id = strings.ToLower(strings.TrimSpace(id))
+	if !validRuntimeSkillProposalID(id) {
+		return RuntimeSkillProposal{}, fmt.Errorf("skill proposal id %q is invalid", id)
+	}
+	pendingDir := filepath.Join(root, ".pending")
+	if err := rejectRuntimeSkillDirSymlinkIfExists(pendingDir); err != nil {
+		return RuntimeSkillProposal{}, err
+	}
+	path := filepath.Join(pendingDir, id+".json")
+	raw, err := readRuntimeSkillFile(path, maxRuntimeSkillProposalBytes)
+	if err != nil {
+		return RuntimeSkillProposal{}, fmt.Errorf("load pending skill proposal: %w", err)
+	}
+	var proposal RuntimeSkillProposal
+	if err := json.Unmarshal(raw, &proposal); err != nil {
+		return RuntimeSkillProposal{}, fmt.Errorf("parse pending skill proposal: %w", err)
+	}
+	if proposal.ID != id {
+		return RuntimeSkillProposal{}, fmt.Errorf("pending skill proposal id mismatch: file has %q", proposal.ID)
+	}
+	if strings.TrimSpace(proposal.BodySHA256) == "" {
+		proposal.BodySHA256 = runtimeSkillBodySHA256(proposal.Body)
+	}
+	return proposal, nil
+}
+
 func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
@@ -770,21 +806,9 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	if !validRuntimeSkillProposalID(id) {
 		return Skill{}, fmt.Errorf("skill proposal id %q is invalid", id)
 	}
-	pendingDir := filepath.Join(root, ".pending")
-	if err := rejectRuntimeSkillDirSymlinkIfExists(pendingDir); err != nil {
-		return Skill{}, err
-	}
-	path := filepath.Join(pendingDir, id+".json")
-	raw, err := readRuntimeSkillFile(path, maxRuntimeSkillProposalBytes)
+	proposal, err := ReadRuntimeSkillProposal(root, id)
 	if err != nil {
-		return Skill{}, fmt.Errorf("load pending skill proposal: %w", err)
-	}
-	var proposal RuntimeSkillProposal
-	if err := json.Unmarshal(raw, &proposal); err != nil {
-		return Skill{}, fmt.Errorf("parse pending skill proposal: %w", err)
-	}
-	if proposal.ID != id {
-		return Skill{}, fmt.Errorf("pending skill proposal id mismatch: file has %q", proposal.ID)
+		return Skill{}, err
 	}
 	installed, err := InstallRuntimeSkill(root, Skill{
 		Name:           proposal.Name,
@@ -797,7 +821,7 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	if err != nil {
 		return Skill{}, err
 	}
-	_ = os.Remove(path)
+	_ = os.Remove(filepath.Join(root, ".pending", id+".json"))
 	return installed, nil
 }
 
@@ -1147,6 +1171,11 @@ func runtimeSkillProposalID(skill Skill) string {
 	}
 	sum := h.Sum(nil)
 	return fmt.Sprintf("%x", sum[:8])
+}
+
+func runtimeSkillBodySHA256(body string) string {
+	sum := sha256.Sum256([]byte(strings.TrimSpace(body)))
+	return fmt.Sprintf("%x", sum[:])
 }
 
 func validRuntimeSkillProposalID(id string) bool {

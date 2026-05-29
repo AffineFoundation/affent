@@ -32,6 +32,9 @@ func TestProposeRuntimeSkillFromGitHubTreeURL(t *testing.T) {
 	if !strings.Contains(proposal.Body, "AFFENT ACTIVE SKILL: playwright_web_verification") {
 		t.Fatalf("proposal body = %q", proposal.Body)
 	}
+	if proposal.BodySHA256 != runtimeSkillBodySHA256(proposal.Body) {
+		t.Fatalf("proposal.BodySHA256 = %q, want body digest", proposal.BodySHA256)
+	}
 	if len(proposal.AutoActivation.Any) != 2 || proposal.AutoActivation.Any[0] != "playwright" {
 		t.Fatalf("proposal activation = %+v", proposal.AutoActivation)
 	}

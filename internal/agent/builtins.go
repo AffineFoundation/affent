@@ -210,7 +210,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["list", "read", "propose_url", "propose_install", "confirm_install", "install"], "description": "Use list to inspect skills, read to load one body, propose_url to fetch a GitHub SKILL.md and prepare a candidate for user confirmation, propose_install to prepare an already reviewed body, confirm_install after explicit user confirmation, or install only for exact user-provided skill bodies."},
+            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["list", "read", "propose_url", "propose_install", "review_proposal", "confirm_install", "install"], "description": "Use list to inspect skills, read to load one body, propose_url to fetch a GitHub SKILL.md and prepare a candidate for user confirmation, propose_install to prepare an already reviewed body, review_proposal to inspect a pending proposal, confirm_install after explicit user confirmation, or install only for exact user-provided skill bodies."},
             "name": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Skill name for read/propose_url/propose_install/install."},
             "description": {"type": "string", "maxLength": %d, "description": "One-line skill catalog description for install."},
             "body": {"type": "string", "maxLength": %d, "description": "Full SKILL.md body for install."},
@@ -222,7 +222,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
     }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillRequiredTools, maxRuntimeSkillRequiredToolBytes, maxRuntimeSkillSourceBytes, runtimeSkillProposalIDBytes, runtimeSkillProposalIDBytes))
 	return &Tool{
 		Name:        SkillToolName,
-		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. For GitHub skill URLs, use propose_url to fetch and prepare a reviewed proposal, then confirm_install only after the user confirms that proposal_id. For other remote or searched candidates, first retrieve and review the exact SKILL.md body with available web/shell/file tools, then use propose_install with source and body. Use install only when the user explicitly provides an exact skill body to install.",
+		Description: "List, read, review, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. For GitHub skill URLs, use propose_url to fetch and prepare a proposal, review_proposal to inspect the exact pending body/digest when needed, then confirm_install only after the user confirms that proposal_id. For other remote or searched candidates, first retrieve and review the exact SKILL.md body with available web/shell/file tools, then use propose_install with source and body. Use install only when the user explicitly provides an exact skill body to install.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, present, err := decodeSkillToolArgs(args)
@@ -234,7 +234,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				return "", errors.New("action is required\nNext: retry skill with action=list to inspect skills, or action=read with a valid name")
 			}
 			if len(action) > maxSkillActionBytes {
-				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes\nNext: retry skill with action=list, action=read, action=propose_url, action=propose_install, action=confirm_install, or action=install", len(action), maxSkillActionBytes)
+				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes\nNext: retry skill with action=list, action=read, action=propose_url, action=propose_install, action=review_proposal, action=confirm_install, or action=install", len(action), maxSkillActionBytes)
 			}
 			if err := rejectUnusedSkillArgs(action, present); err != nil {
 				return "", err
@@ -307,6 +307,19 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 					return "", fmt.Errorf("%s\nNext: retry with a GitHub tree/blob/raw URL that resolves to a single SKILL.md under %d bytes, or fetch/review the body manually and use action=propose_install", err, maxRuntimeSkillBodyBytes)
 				}
 				return skillProposalPreparedMessage(proposal), nil
+			case "review_proposal":
+				if strings.TrimSpace(skillDir) == "" {
+					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
+				}
+				proposalID := strings.ToLower(strings.TrimSpace(p.ProposalID))
+				if proposalID == "" {
+					return "", errors.New("proposal_id is required when action=review_proposal\nNext: call skill with action=propose_url or action=propose_install first, then retry with the returned proposal_id")
+				}
+				proposal, err := ReadRuntimeSkillProposal(skillDir, proposalID)
+				if err != nil {
+					return "", fmt.Errorf("%s\nNext: call skill with action=propose_url or action=propose_install to prepare a fresh proposal, then retry action=review_proposal", err)
+				}
+				return skillProposalReviewMessage(proposal), nil
 			case "confirm_install":
 				if strings.TrimSpace(skillDir) == "" {
 					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
@@ -359,7 +372,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				}
 				return skillInstallSuccessMessage(installed, runtimeTools), nil
 			default:
-				return "", fmt.Errorf("unsupported action %q (valid: list, read, propose_url, propose_install, confirm_install, install)\nNext: retry skill with action=list, action=read, action=propose_url, action=propose_install, action=confirm_install, or action=install", action)
+				return "", fmt.Errorf("unsupported action %q (valid: list, read, propose_url, propose_install, review_proposal, confirm_install, install)\nNext: retry skill with action=list, action=read, action=propose_url, action=propose_install, action=review_proposal, action=confirm_install, or action=install", action)
 			}
 		},
 	}
@@ -395,7 +408,7 @@ func formatSkillDecodeArgsError(err error) error {
 	if strings.Contains(msg, "unknown field") {
 		return fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry skill with only documented fields: action, name, description, body, triggers, required_tools, source, proposal_id. Put external URLs or local provenance in source, not url; use action=propose_url for direct GitHub skill URLs or include the exact reviewed SKILL.md text in body before propose_install", err)
 	}
-	return fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry skill with a single JSON object matching the skill tool schema. For direct GitHub skill URLs, use action=propose_url with source; for other remote candidates, use source for the URL/path and body for the reviewed SKILL.md text", err)
+	return fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry skill with a single JSON object matching the skill tool schema. For direct GitHub skill URLs, use action=propose_url with source; inspect pending proposals with action=review_proposal; for other remote candidates, use source for the URL/path and body for the reviewed SKILL.md text", err)
 }
 
 func decodeBuiltinToolArgs[T any](tool string, args json.RawMessage, fields string, guidance string) (T, error) {
@@ -441,7 +454,7 @@ func rejectUnusedSkillArgs(action string, present map[string]bool) error {
 		allowed["triggers"] = true
 		allowed["required_tools"] = true
 		allowed["source"] = true
-	case "confirm_install":
+	case "review_proposal", "confirm_install":
 		allowed["proposal_id"] = true
 	default:
 		return nil
@@ -467,7 +480,15 @@ func skillProposalPreparedMessage(proposal RuntimeSkillProposal) string {
 	if len(proposal.AutoActivation.Any) > 0 {
 		triggerSummary = strings.Join(proposal.AutoActivation.Any, ", ")
 	}
-	return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d\n\nReview this proposal with the user and ask for explicit confirmation before installing. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.ID, textutil.Preview(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent))
+	return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d body_sha256=%s\n\nReview this proposal with the user and ask for explicit confirmation before installing. If the preview is insufficient, call skill with action=review_proposal and proposal_id=%q to inspect the exact pending body. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.BodySHA256, proposal.ID, proposal.ID, textutil.Preview(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent))
+}
+
+func skillProposalReviewMessage(proposal RuntimeSkillProposal) string {
+	triggerSummary := "none"
+	if len(proposal.AutoActivation.Any) > 0 {
+		triggerSummary = strings.Join(proposal.AutoActivation.Any, ", ")
+	}
+	return fmt.Sprintf("pending skill proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d body_sha256=%s\n\nbody:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.BodySHA256, strings.TrimSpace(proposal.Body))
 }
 
 func skillInstallSuccessMessage(installed Skill, runtimeTools *Registry) string {
