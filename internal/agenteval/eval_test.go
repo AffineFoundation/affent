@@ -315,6 +315,24 @@ func TestDebugRecoveryPriorityTagsIncludesLoopProtocolActivationFailures(t *test
 	}
 }
 
+func TestDebugRecoveryPriorityTagsIncludesUnclassifiedToolFailures(t *testing.T) {
+	got := debugRecoveryPriorityTags(&DebugBrief{Tags: []string{
+		"tool_failure:unclassified",
+		"tool_failure:blocked",
+		"outcome:failed",
+		"misc:later",
+	}})
+	want := []string{
+		"outcome:failed",
+		"tool_failure:unclassified",
+		"tool_failure:blocked",
+		"misc:later",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("debugRecoveryPriorityTags = %#v, want %#v", got, want)
+	}
+}
+
 func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{{
 		Tool:     "session_search",
@@ -5481,6 +5499,33 @@ func TestBuildDebugRecoveryGuideAddsLoopProtocolActivationFailureAction(t *testi
 		"patch_draft",
 		"complete_activation",
 		"tool_failure_examples",
+	} {
+		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
+			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)
+		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsUnclassifiedToolFailureAction(t *testing.T) {
+	res := BatchResult{
+		Workspace:         "/tmp/affent-eval/unclassified-tools",
+		TimelinePath:      "/tmp/affent-eval/unclassified-tools/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/unclassified-tools/affenteval-debug.json",
+		ToolStats: ToolRuntimeStats{
+			ToolErrors:             2,
+			ToolUnclassifiedErrors: 1,
+		},
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	for _, want := range []string{
+		"tool_failure:unclassified",
+		"structured Failure: kind metadata",
+		"runtime/tool boundary",
+		"tool_timeline",
+		"trace_events",
 	} {
 		if !strings.Contains(guide.ContinuePrompt, want) && !stringSliceContains(guide.Inspect, want) {
 			t.Fatalf("recovery guide missing %q: prompt=%s inspect=%#v", want, guide.ContinuePrompt, guide.Inspect)

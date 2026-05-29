@@ -507,6 +507,7 @@ func mergeToolRuntimeStats(a, b ToolRuntimeStats) ToolRuntimeStats {
 	a.ToolRepairByKind = mergeStringIntMap(a.ToolRepairByKind, b.ToolRepairByKind)
 	a.ToolFailureByKind = mergeStringIntMap(a.ToolFailureByKind, b.ToolFailureByKind)
 	a.ToolErrors += b.ToolErrors
+	a.ToolUnclassifiedErrors += b.ToolUnclassifiedErrors
 	a.ToolDurationMS += b.ToolDurationMS
 	a.LoopGuardInterventions += b.LoopGuardInterventions
 	a.ForcedNoTools += b.ForcedNoTools

@@ -1665,6 +1665,25 @@ func TestBuildDebugBriefClassifiesAbsentLongRunMemoryUpdate(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesUnclassifiedToolFailures(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			ToolErrors:             3,
+			ToolUnclassifiedErrors: 2,
+		},
+	})
+	item := debugBriefItemByKind(brief, "tool_failure_unclassified")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["unclassified_errors"] != 2 ||
+		item.Counts["tool_errors"] != 3 ||
+		!stringSliceContains(item.Inspect, "tool_timeline") ||
+		!stringSliceContains(brief.Tags, "tool_failure:unclassified") {
+		t.Fatalf("unclassified tool failure item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesAvailableUnusedSessionSearch(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

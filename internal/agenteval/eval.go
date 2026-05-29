@@ -984,6 +984,7 @@ type DebugMetrics struct {
 	ToolRepairNotes                 int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind                map[string]int `json:"tool_repair_by_kind,omitempty"`
 	ToolFailureByKind               map[string]int `json:"tool_failure_by_kind,omitempty"`
+	ToolUnclassifiedErrors          int            `json:"tool_unclassified_errors,omitempty"`
 	FocusedTaskCalls                int            `json:"focused_task_calls,omitempty"`
 	FocusedTaskByType               map[string]int `json:"focused_task_by_type,omitempty"`
 	FocusedTaskSources              map[string]int `json:"focused_task_sources,omitempty"`
@@ -1476,6 +1477,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ToolRepairNotes:                 res.Repair.Notes,
 			ToolRepairByKind:                cloneStringIntMap(res.Repair.ByKind),
 			ToolFailureByKind:               cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+			ToolUnclassifiedErrors:          res.ToolStats.ToolUnclassifiedErrors,
 			FocusedTaskCalls:                res.Delegation.FocusedTaskCalls,
 			FocusedTaskByType:               cloneStringIntMap(res.Delegation.FocusedTaskByType),
 			FocusedTaskSources:              cloneStringIntMap(res.Delegation.FocusedTaskSourceFindingsByType),
@@ -1589,6 +1591,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.ToolCalls = len(trace.Tools)
 	res.ToolStats = trace.ToolStats
 	res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
+	res.ToolStats.ToolUnclassifiedErrors = trace.UnclassifiedToolErrorCount()
 	res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
 	res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 	res.ConversationRepairs = append([]sse.ConversationRepairedPayload(nil), trace.ConversationRepairs...)
@@ -1814,6 +1817,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "tool_failure:loop_protocol_activation_status") || containsString(tags, "tool_failure:loop_protocol_activation_invalid") {
 		add("For loop protocol activation failures, inspect tool_failure_examples, saved LOOP.md status, and calibration events; recover through patch_draft for compact draft fixes and complete_activation for the draft-to-running transition.")
 	}
+	if containsString(tags, "tool_failure:unclassified") {
+		add("For tool_failure:unclassified, inspect tool_timeline and trace_events; add structured Failure: kind metadata at the runtime/tool boundary before tuning model behavior or quality thresholds.")
+	}
 	if containsString(tags, "memory_update:missing") {
 		add("For memory_update:missing, inspect memory tool calls and result metadata; either fix the autonomous write decision or make the scenario expectation explicit about why no durable update should occur.")
 	}
@@ -1892,6 +1898,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"loop_protocol:setup_tool_overrun",
 		"tool_failure:loop_protocol_activation_status",
 		"tool_failure:loop_protocol_activation_invalid",
+		"tool_failure:unclassified",
 		"memory_update:missing",
 		"memory_update:available_unused",
 		"recall:session_search_available_unused",

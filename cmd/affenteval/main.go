@@ -727,6 +727,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"recall:weak_matched_terms":          0,
 					"source_repo:setup":                  0,
 					"tool_budget:turn_overrun":           0,
+					"tool_failure:unclassified":          0,
 					"tool_repair:failed":                 0,
 					"truncation:missing_artifact":        0,
 					"verifier:abnormal":                  0,
@@ -5719,6 +5720,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	if len(res.ToolStats.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(res.ToolStats.ToolFailureByKind))
+	}
+	if res.ToolStats.ToolUnclassifiedErrors > 0 {
+		fmt.Fprintf(w, " unclassified_tool_errors=%d", res.ToolStats.ToolUnclassifiedErrors)
 	}
 	if hasSourceAccessStats(res.ToolStats) {
 		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d,dynamic_partial:%d",

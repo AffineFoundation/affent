@@ -47,6 +47,26 @@ func TestApplyTraceEventKeepsLegacyToolResultsWithoutTurnID(t *testing.T) {
 	}
 }
 
+func TestTraceUnclassifiedToolErrorCount(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		Tool:     "read_file",
+		ExitCode: 1,
+		Result:   "file not found",
+	}, {
+		Tool:         "plan",
+		ExitCode:     1,
+		Result:       "(max_turns reached before this tool ran)\nFailure: kind=loop_guard_no_budget",
+		FailureKinds: []string{"loop_guard_no_budget"},
+	}, {
+		Tool:     "shell",
+		ExitCode: 0,
+		Result:   "Failure: kind=not_a_failure",
+	}}}
+	if got := trace.UnclassifiedToolErrorCount(); got != 1 {
+		t.Fatalf("UnclassifiedToolErrorCount = %d, want 1", got)
+	}
+}
+
 func TestApplyTraceEventAggregatesDiskParsedTurnStats(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

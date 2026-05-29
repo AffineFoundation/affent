@@ -125,6 +125,12 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		add("tool_failure_by_kind", "warn", "structured tool failures observed", []string{"tool_timeline", "tool_failure_examples"}, counts, tags...)
 	}
+	if res.ToolStats.ToolUnclassifiedErrors > 0 {
+		add("tool_failure_unclassified", "fail", "tool failures without structured failure kind were observed; runtime/tool errors need machine-readable classification before Workbench can route recovery reliably", []string{"tool_timeline", "trace_events", "timeline"}, map[string]int{
+			"unclassified_errors": res.ToolStats.ToolUnclassifiedErrors,
+			"tool_errors":         res.ToolStats.ToolErrors,
+		}, "tool_failure", "tool_failure:unclassified")
+	}
 	if res.Repair.HasAny() {
 		severity := "info"
 		message := "tool calls were repaired or canonicalized; inspect examples for small-model tool drift"

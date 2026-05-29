@@ -328,6 +328,7 @@ type ToolRuntimeStats struct {
 	ToolRepairByKind           map[string]int
 	ToolFailureByKind          map[string]int
 	ToolErrors                 int
+	ToolUnclassifiedErrors     int
 	ToolDurationMS             int64
 	LoopGuardInterventions     int
 	ForcedNoTools              int
@@ -894,6 +895,17 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 		}
 	}
 	return out
+}
+
+func (t Trace) UnclassifiedToolErrorCount() int {
+	var count int
+	for _, c := range t.Tools {
+		if c.ExitCode == 0 || len(toolFailureKindsForCall(c)) > 0 {
+			continue
+		}
+		count++
+	}
+	return count
 }
 
 func (t Trace) ToolFailureExamples(maxPerKind int) map[string][]ToolFailureExample {

@@ -1436,12 +1436,13 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		gates.MaxDebugBriefTagRates["recall:no_matched_terms"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_context"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_matched_terms"] != 0 ||
+		gates.MaxDebugBriefTagRates["tool_failure:unclassified"] != 0 ||
 		gates.MaxDebugBriefTagRates["tool_repair:failed"] != 0 ||
 		gates.MaxDebugBriefTagRates["verifier:failed"] != 0 ||
 		gates.MaxDebugBriefTagRates["verifier:not_run"] != 0 ||
 		gates.MaxDebugBriefTagRates["verifier:abnormal"] != 0 ||
 		gates.MaxDebugBriefTagRates["workspace_path:absolute"] != 0 {
-		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, repair, verifier, workspace path, and truncation artifact gates", gates.MaxDebugBriefTagRates)
+		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, tool-failure classification, repair, verifier, workspace path, and truncation artifact gates", gates.MaxDebugBriefTagRates)
 	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}
