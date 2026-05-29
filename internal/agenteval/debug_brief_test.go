@@ -208,6 +208,22 @@ func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
 	if item := debugBriefItemByKind(brief, "loop_protocol_state"); item != nil {
 		t.Fatalf("completed loop should not produce running-state warning: %+v", item)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Expectations: &DebugScenarioExpectations{
+			RequiredLoopProtocolFinalStatus: "running",
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 1,
+			Latest: LoopTurnCheckpoint{
+				Status: "running",
+			},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "loop_protocol_state"); item != nil {
+		t.Fatalf("expected-running loop should not produce running-state warning: %+v", item)
+	}
 }
 
 func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T) {
@@ -264,6 +280,20 @@ func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T
 	})
 	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
 		t.Fatalf("closed durable state should not produce durable completion warning: %+v", item)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK:        true,
+		FinalText: "LOOP-ACTIVATED-23 status running.",
+		Expectations: &DebugScenarioExpectations{
+			RequiredLoopProtocolFinalStatus: "running",
+		},
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Latest: LoopTurnCheckpoint{Status: "running"},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
+		t.Fatalf("expected-running loop should not produce durable completion warning: %+v", item)
 	}
 }
 

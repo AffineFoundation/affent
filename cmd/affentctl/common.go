@@ -1568,6 +1568,8 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	loopProtocolActive := affentctlLoopProtocolAvailable(loopProtocolPath)
 	if c.loopProtocol || loopProtocolExists || loopProtocolActive {
 		loop.LoopProtocolPath = loopProtocolPath
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolActivationCompletionGuard(loopProtocolPath))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_activation_pending")
 	}
 	if loopProtocolActive {
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))

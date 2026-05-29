@@ -144,6 +144,47 @@ func LoopProtocolCompletionGuard(protocolPath string) CompletionGuard {
 	}
 }
 
+// LoopProtocolActivationCompletionGuard prevents a final answer from claiming
+// loop setup is complete while a calibrated, activation-ready LOOP.md is still
+// only a draft. It keeps activation as an explicit state transition instead of
+// hiding it inside draft edits.
+func LoopProtocolActivationCompletionGuard(protocolPath string) CompletionGuard {
+	return func() CompletionGuardResult {
+		if strings.TrimSpace(protocolPath) == "" {
+			return CompletionGuardResult{}
+		}
+		relPath := loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))
+		summary, found, err := loopstate.SummarizeFile(protocolPath, relPath)
+		if err != nil || !found || strings.TrimSpace(summary.Status) != "draft" {
+			return CompletionGuardResult{}
+		}
+		if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
+			return CompletionGuardResult{}
+		}
+		protocol, _, err := loopstate.PrepareProtocolActivation(protocolPath, "")
+		if err != nil || loopstate.ValidateProtocolActivation(protocol) != nil {
+			return CompletionGuardResult{}
+		}
+		reason := "Loop protocol draft is calibrated and ready but not active."
+		if summary.LoopID != "" {
+			reason = fmt.Sprintf("Loop protocol %s is calibrated and ready but not active.", summary.LoopID)
+		}
+		required := "Call loop_protocol action=complete_activation without a protocol body before finalizing."
+		prompt := "AFFENT COMPLETION GUARD:\n" +
+			reason + "\n" +
+			required + "\n" +
+			"Do not claim the loop is running until the tool returns activated LOOP.md status=running."
+		return CompletionGuardResult{
+			Blocked:        true,
+			ID:             "loop-protocol-activation-pending",
+			Trigger:        "loop_protocol_activation_pending",
+			Reason:         reason,
+			RequiredAction: required,
+			Prompt:         prompt,
+		}
+	}
+}
+
 func loopProtocolStateLine(protocolPath string, livePlanCheckpoint loopstate.PlanCheckpoint) string {
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 	if err != nil || !found {

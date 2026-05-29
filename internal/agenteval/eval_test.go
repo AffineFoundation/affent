@@ -3200,8 +3200,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("loop activation expectations = prompts:%d modes:%#v requests:%d answers:%d request_statuses:%#v answer_statuses:%#v trace:%#v", len(loopActivation.Prompts), loopActivation.RequiredUserMessageModes, loopActivation.RequiredLoopProtocolCalibrationRequests, loopActivation.RequiredLoopProtocolCalibrations, loopActivation.RequiredLoopProtocolCalibrationRequestStatuses, loopActivation.RequiredLoopProtocolCalibrationStatuses, loopActivation.RequiredTraceEventCounts)
 	}
 	if loopActivation.RequiredToolCounts["loop_protocol"] != 2 ||
-		loopActivation.MaxParentToolCalls != 3 ||
-		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 3 {
+		loopActivation.MaxParentToolCalls != 4 ||
+		loopActivation.MaxSuccessfulToolCallsByTool["loop_protocol"] != 4 {
 		t.Fatalf("loop activation tool counts = required:%#v max_parent:%d max_by_tool:%#v, want bounded activation calls", loopActivation.RequiredToolCounts, loopActivation.MaxParentToolCalls, loopActivation.MaxSuccessfulToolCallsByTool)
 	}
 	if !toolArgRequirementContains(loopActivation.RequiredToolArgContains, ToolArgContainsRequirement{Tool: "loop_protocol", Arg: "action", Substring: "patch_draft"}) {

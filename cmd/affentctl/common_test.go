@@ -1787,6 +1787,56 @@ func TestSetupLoop_SkillProviderInjectsActivePlan(t *testing.T) {
 	}
 }
 
+func TestSetupLoopInstallsLoopActivationCompletionGuardForDraft(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	workspace := t.TempDir()
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--loop-protocol",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if !slices.Contains(b.loop.CompletionGuardLabels, "loop_protocol_activation_pending") {
+		t.Fatalf("completion guard labels = %#v, want loop_protocol_activation_pending", b.loop.CompletionGuardLabels)
+	}
+	for _, guard := range b.loop.CompletionGuards {
+		if result := guard(); result.Blocked {
+			t.Fatalf("uncalibrated draft should not block completion: %+v", result)
+		}
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(b.loopProtocolPath, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(b.loopProtocolPath, "Pause when evidence is unavailable."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	var blocked agent.CompletionGuardResult
+	for _, guard := range b.loop.CompletionGuards {
+		if result := guard(); result.Trigger == "loop_protocol_activation_pending" {
+			blocked = result
+			break
+		}
+	}
+	if !blocked.Blocked ||
+		!strings.Contains(blocked.RequiredAction, "complete_activation") ||
+		!strings.Contains(blocked.Prompt, "activated LOOP.md status=running") {
+		t.Fatalf("loop activation completion guard = %+v", blocked)
+	}
+}
+
 func TestAPIKeyEnvDoesNotLeakIntoFlagDefaults(t *testing.T) {
 	t.Setenv("AFFENTCTL_API_KEY", "sk-test-secret")
 

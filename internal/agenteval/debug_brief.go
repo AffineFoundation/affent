@@ -656,6 +656,9 @@ func loopProtocolStillRunningCounts(res BatchResult) (map[string]int, []string, 
 	if strings.ToLower(strings.TrimSpace(latest.Status)) != "running" {
 		return nil, nil, false
 	}
+	if loopProtocolRunningExpected(res) {
+		return nil, nil, false
+	}
 	counts := map[string]int{
 		"running":          1,
 		"checkpoints":      res.LoopTurnCheckpoints.Count,
@@ -701,7 +704,7 @@ func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string
 	if strings.TrimSpace(res.FinalText) == "" {
 		return nil, nil, false
 	}
-	loopRunning := strings.ToLower(strings.TrimSpace(res.LoopTurnCheckpoints.Latest.Status)) == "running"
+	loopRunning := strings.ToLower(strings.TrimSpace(res.LoopTurnCheckpoints.Latest.Status)) == "running" && !loopProtocolRunningExpected(res)
 	planUnfinished := res.Plan.TotalSteps > 0 && res.Plan.CompletedSteps < res.Plan.TotalSteps
 	if !loopRunning && !planUnfinished {
 		return nil, nil, false
@@ -732,6 +735,13 @@ func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string
 		}
 	}
 	return counts, tags, true
+}
+
+func loopProtocolRunningExpected(res BatchResult) bool {
+	if res.Expectations == nil {
+		return false
+	}
+	return strings.EqualFold(strings.TrimSpace(res.Expectations.RequiredLoopProtocolFinalStatus), "running")
 }
 
 func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {

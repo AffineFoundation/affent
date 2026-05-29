@@ -43,6 +43,36 @@ func TestWithLoopProtocolSkillProviderInjectsWhenFileExists(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolActivationCompletionGuardBlocksReadyDraft(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Keep loop setup explicit and recoverable.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	if blocked := LoopProtocolActivationCompletionGuard(path)(); blocked.Blocked {
+		t.Fatalf("uncalibrated draft should not block final answer: %+v", blocked)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationQuestion(path, "When should this loop pause?"); err != nil {
+		t.Fatalf("RecordProtocolCalibrationQuestion: %v", err)
+	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Pause when evidence is unavailable."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+
+	blocked := LoopProtocolActivationCompletionGuard(path)()
+	if !blocked.Blocked ||
+		blocked.Trigger != "loop_protocol_activation_pending" ||
+		!strings.Contains(blocked.RequiredAction, "complete_activation") ||
+		!strings.Contains(blocked.Prompt, "activated LOOP.md status=running") {
+		t.Fatalf("activation completion guard = %+v", blocked)
+	}
+}
+
 func TestLoopProtocolForcedCalibrationQuestionDoesNotDependOnTextHeuristics(t *testing.T) {
 	tmp := t.TempDir()
 	protocolPath := loopstate.ProtocolPath(tmp, "longrun")

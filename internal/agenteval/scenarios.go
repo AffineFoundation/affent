@@ -2348,9 +2348,9 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			"browser_find", "browser_network", "browser_network_read",
 			"run_task", "subagent_run",
 		},
-		MaxParentToolCalls: 3,
+		MaxParentToolCalls: 4,
 		MaxSuccessfulToolCallsByTool: map[string]int{
-			"loop_protocol": 3,
+			"loop_protocol": 4,
 		},
 		MaxTurns: 8,
 	}

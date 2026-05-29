@@ -742,6 +742,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if !p.cfg.EvalMode {
 		loop.LoopProtocolPath = loopProtocolPath
+		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolActivationCompletionGuard(loopProtocolPath))
+		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_activation_pending")
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
 		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_running")
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
