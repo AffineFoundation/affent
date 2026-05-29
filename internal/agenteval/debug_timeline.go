@@ -1163,6 +1163,25 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	if surface.MaxTurnInputTokens > 0 {
 		fmt.Fprintf(b, "- max_turn_input_tokens: `%d`\n", surface.MaxTurnInputTokens)
 	}
+	if surface.ModelContextWindowTokens > 0 ||
+		surface.ReservedOutputTokens > 0 ||
+		surface.CompactTriggerInputTokens > 0 ||
+		surface.CompactTriggerInputPercent > 0 {
+		var parts []string
+		if surface.ModelContextWindowTokens > 0 {
+			parts = append(parts, fmt.Sprintf("model_context_window_tokens=`%d`", surface.ModelContextWindowTokens))
+		}
+		if surface.ReservedOutputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("reserved_output_tokens=`%d`", surface.ReservedOutputTokens))
+		}
+		if surface.CompactTriggerInputTokens > 0 {
+			parts = append(parts, fmt.Sprintf("compact_trigger_input_tokens=`%d`", surface.CompactTriggerInputTokens))
+		}
+		if surface.CompactTriggerInputPercent > 0 {
+			parts = append(parts, fmt.Sprintf("compact_trigger_input_percent=`%d`", surface.CompactTriggerInputPercent))
+		}
+		fmt.Fprintf(b, "- context_policy: %s\n", strings.Join(parts, ", "))
+	}
 	if surface.ToolResultEventCapBytes > 0 || surface.ToolResultContextMaxBytes > 0 || surface.ToolResultContextBudgetBytes > 0 {
 		fmt.Fprintf(b, "- tool_result_limits: event_cap_bytes=`%d`, context_max_bytes=`%d`, context_budget_bytes=`%d`\n",
 			surface.ToolResultEventCapBytes,
