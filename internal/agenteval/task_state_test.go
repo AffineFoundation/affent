@@ -19,7 +19,14 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 			ScheduleID:   "sched_clamp",
 			ScheduleKind: "checkin",
 		}},
-		RuntimeSurfaces: []sse.RuntimeSurfacePayload{{ToolCount: 3}},
+		RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+			TurnID:                    "turn-1",
+			ToolCount:                 3,
+			MaxTurnInputTokens:        300000,
+			ModelContextWindowTokens:  100000,
+			ReservedOutputTokens:      30000,
+			CompactTriggerInputTokens: 70000,
+		}},
 		ContextInjections: []ContextInjection{{
 			TurnID:  "turn-1",
 			Source:  "runtime_workspace",
@@ -87,6 +94,10 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	}
 	if !taskStateHasEvidence(got, "runtime_workspace") || !taskStateHasEvidence(got, "shell") {
 		t.Fatalf("evidence = %+v", got.Evidence)
+	}
+	if !taskStateHasEvidenceSummary(got, "runtime_surface", "reserved_output_tokens=30000") ||
+		!taskStateHasEvidenceSummary(got, "runtime_surface", "compact_trigger_input_tokens=70000") {
+		t.Fatalf("evidence = %+v, want runtime surface policy limits", got.Evidence)
 	}
 	if !taskStateHasSource(got, "runtime_workspace") || !taskStateHasSource(got, "runtime_surface") || !taskStateHasSource(got, "schedule") {
 		t.Fatalf("sources = %+v", got.Sources)
@@ -304,6 +315,15 @@ func taskStateHasAttemptedAction(task TaskStateSnapshot, tool, summaryPart strin
 func taskStateHasEvidence(task TaskStateSnapshot, source string) bool {
 	for _, evidence := range task.Evidence {
 		if evidence.Source == source {
+			return true
+		}
+	}
+	return false
+}
+
+func taskStateHasEvidenceSummary(task TaskStateSnapshot, source, summaryPart string) bool {
+	for _, evidence := range task.Evidence {
+		if evidence.Source == source && strings.Contains(evidence.Summary, summaryPart) {
 			return true
 		}
 	}

@@ -17,6 +17,14 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		ScheduleID:   "sched_clamp",
 		ScheduleKind: "checkin",
 	}) +
+		taskStateEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
+			TurnID:                    "t1",
+			MaxTurnSteps:              12,
+			MaxTurnInputTokens:        300000,
+			ModelContextWindowTokens:  100000,
+			ReservedOutputTokens:      30000,
+			CompactTriggerInputTokens: 70000,
+		}) +
 		taskStateEventLine(t, sse.TypeContextInjected, sse.ContextInjectedPayload{
 			TurnID:  "t1",
 			Source:  "runtime_workspace",
@@ -91,9 +99,13 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	if !taskStateEvidenceContains(state.Evidence, GitPushEvidenceSource, "git push origin main") {
 		t.Fatalf("evidence = %+v, want git push handoff", state.Evidence)
 	}
+	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "reserved_output_tokens=30000") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") {
+		t.Fatalf("evidence = %+v, want runtime surface limits", state.Evidence)
+	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "reserved_output_tokens=30000"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}

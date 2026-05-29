@@ -45,6 +45,14 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 	}
 	if len(trace.RuntimeSurfaces) > 0 {
 		task.Sources = appendUniqueTaskString(task.Sources, "runtime_surface", taskStateMaxItems)
+		latest := trace.RuntimeSurfaces[len(trace.RuntimeSurfaces)-1]
+		if summary := taskstate.RuntimeSurfaceSummary(&latest); summary != "" {
+			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+				Source:  "runtime_surface",
+				Summary: compactTaskStateSummary(summary),
+				TurnID:  latest.TurnID,
+			})
+		}
 	}
 	for _, compaction := range trace.ContextCompactions {
 		summary := traceContextCompactionSummary(compaction)

@@ -105,6 +105,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				continue
 			}
 			state.RuntimeSurface = &p
+			if summary := RuntimeSurfaceSummary(&p); summary != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "runtime_surface",
+					Summary: compactSummary(summary, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+				addSource(state, "runtime_surface", opts.MaxItems)
+				seen = true
+			}
 			if runtimeSurfaceHasCapabilityData(&p) {
 				addSource(state, "runtime_surface", opts.MaxItems)
 				seen = true
@@ -551,6 +560,29 @@ func runtimeSurfaceHasCapabilityData(p *sse.RuntimeSurfacePayload) bool {
 		p.Capabilities.FocusedTasks ||
 		p.Capabilities.Skill ||
 		p.Capabilities.MCP
+}
+
+func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
+	if p == nil {
+		return ""
+	}
+	var fields []string
+	addIntField := func(name string, value int) {
+		if value > 0 {
+			fields = append(fields, fmt.Sprintf("%s=%d", name, value))
+		}
+	}
+	addIntField("max_turn_steps", p.MaxTurnSteps)
+	addIntField("max_tool_calls", p.MaxToolCalls)
+	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
+	addIntField("model_context_window_tokens", p.ModelContextWindowTokens)
+	addIntField("reserved_output_tokens", p.ReservedOutputTokens)
+	addIntField("compact_trigger_input_tokens", p.CompactTriggerInputTokens)
+	addIntField("compact_trigger_input_percent", p.CompactTriggerInputPercent)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Join(fields, " ")
 }
 
 func appendTextLine(b *strings.Builder, label, value string) {
