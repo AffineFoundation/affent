@@ -139,6 +139,7 @@ export function SessionChangesPanel({
                   type="button"
                   className="session-changes-main session-changes-select"
                   data-selected={focusFile?.path === file.path ? "true" : "false"}
+                  aria-label={`Review ${file.path}`}
                   onClick={() => setSelectedPath(file.path)}
                 >
                   <strong title={file.path}>{displayPath(file.path)}</strong>

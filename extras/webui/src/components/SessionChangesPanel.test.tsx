@@ -50,6 +50,12 @@ describe("SessionChangesPanel", () => {
     await user.click(within(screen.getByTestId("session-change-diff-panel")).getByRole("button", { name: "Changed lines" }));
     expect(screen.getByTestId("session-change-diff-panel")).toHaveTextContent("9/9 shown");
 
+    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Review tests/payments.spec.ts" }));
+    expect(screen.getByTestId("session-changes-focus")).toHaveTextContent("tests/payments.spec.ts");
+    expect(screen.queryByTestId("session-change-diff")).toBeNull();
+    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Review src/payments.ts" }));
+    expect(screen.getByTestId("session-change-diff")).toHaveAccessibleName("Diff preview for src/payments.ts");
+
     await user.click(within(screen.getByTestId("session-changes-focus")).getByRole("button", { name: "Open current" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("src/payments.ts");
 
