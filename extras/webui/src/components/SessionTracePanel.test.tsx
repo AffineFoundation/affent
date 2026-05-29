@@ -36,6 +36,7 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("7 trace entries");
     expect(screen.getByLabelText("Search trace")).toBeInTheDocument();
     expect(screen.getByLabelText("Trace search shortcuts")).toHaveTextContent("status:failed");
+    expect(screen.getByLabelText("Trace search shortcuts")).toHaveTextContent("exit:1");
     expect(screen.queryByTestId("session-trace-focus")).toBeNull();
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("2");
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
@@ -142,6 +143,12 @@ describe("SessionTracePanel", () => {
     expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
     expect(screen.getByTestId("event-trace")).not.toHaveTextContent("Started action");
     await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    await user.click(within(screen.getByLabelText("Trace search shortcuts")).getByRole("button", { name: "exit:1" }));
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Filter: Tool issues");
+    expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("1");
+    expect(screen.getByTestId("event-trace")).toHaveTextContent("Action failed");
+    await user.click(screen.getByRole("button", { name: "Reset" }));
 
     await user.type(screen.getByLabelText("Search trace"), "missing event");
     expect(screen.queryByTestId("event-trace")).toBeNull();

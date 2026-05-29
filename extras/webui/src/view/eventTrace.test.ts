@@ -270,6 +270,7 @@ describe("eventTrace view model", () => {
     expect(filterEventTraceEvents(events, "read_file").map((event) => event.id)).toEqual([1, 2]);
     expect(filterEventTraceEvents(events, "README.md").map((event) => event.id)).toEqual([1]);
     expect(filterEventTraceEvents(events, "file missing").map((event) => event.id)).toEqual([2]);
+    expect(filterEventTraceEvents(events, "exit:1").map((event) => event.id)).toEqual([2]);
     expect(filterEventTraceEvents(events, "schema v1").map((event) => event.id)).toEqual([0]);
     expect(filterEventTraceEvents(events, "unclassified").map((event) => event.id)).toEqual([3]);
     expect(filterEventTraceEvents(events, "request:1").map((event) => event.id)).toEqual([4, 1, 2]);

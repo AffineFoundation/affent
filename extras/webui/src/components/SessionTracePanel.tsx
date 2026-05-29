@@ -58,7 +58,7 @@ export function SessionTracePanel({
                   <input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder="plain text, tool:shell, status:failed, turn:t1"
+                    placeholder="plain text, tool:shell, status:failed, exit:1, turn:t1"
                     aria-describedby="session-trace-search-help"
                   />
                 </label>
@@ -87,6 +87,7 @@ export function SessionTracePanel({
               <div className="session-trace-query-tools" id="session-trace-search-help" aria-label="Trace search shortcuts">
                 <span>Quick search</span>
                 <button type="button" onClick={() => applySearch("status:failed", "all")}>status:failed</button>
+                <button type="button" onClick={() => applySearch("exit:1", "issues")}>exit:1</button>
                 <button type="button" onClick={() => applySearch("tool:shell", "commands")}>tool:shell</button>
                 <button type="button" onClick={() => applySearch("repaired", "repairs")}>repaired</button>
                 <button type="button" onClick={() => applySearch("truncated", "truncated")}>truncated</button>

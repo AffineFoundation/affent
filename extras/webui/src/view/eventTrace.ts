@@ -372,6 +372,9 @@ function eventTraceFieldMatches(
       return (event.turnId ?? "").toLowerCase().includes(value);
     case "id":
       return String(event.id) === value || String(event.id).includes(value);
+    case "exit":
+    case "exit_code":
+      return String(readNumber(event.data, "exit_code") ?? "").includes(value);
     case "status":
       return eventStatusWords(event, display).some((word) => word.includes(value));
     case "artifact":
