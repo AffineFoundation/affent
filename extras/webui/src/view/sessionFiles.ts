@@ -130,7 +130,7 @@ export function filesEvidenceDraft(files: SessionFilesView): string {
 
 export function fileEvidenceDraft(item: SessionFileEvidence): string {
   const lead = item.status === "failed"
-    ? "Recover this file path before continuing"
+    ? "Check this missing file path before continuing"
     : item.actions.includes("changed")
       ? "Review this changed file in the next step"
       : item.actions.includes("listed")
@@ -219,7 +219,7 @@ export function filesReviewFocus(items: readonly SessionFileEvidence[]): Session
     return {
       label: "Path issue",
       title: failed.path,
-      detail: failed.next ? `Suggested recovery: ${failed.next}` : failed.detail ?? "A file action failed and needs path recovery.",
+      detail: failed.next ? `Next check: ${failed.next}` : failed.detail ?? "A file action failed; verify the path before retrying.",
       tone: "danger",
     };
   }
@@ -321,7 +321,7 @@ function fileReviewItem(item: SessionFileEvidence): SessionFilesReviewItem | und
   if (item.status === "failed") {
     return {
       id: `${item.path}:failed`,
-      label: "Recover path",
+      label: "Check path",
       title: item.path,
       detail: item.next ?? item.detail ?? "The last file action failed; verify the path before retrying.",
       tone: "danger",

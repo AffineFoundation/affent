@@ -571,7 +571,7 @@ function fileMatchesFilter(item: SessionFileEvidence, filter: FileFilter): boole
 }
 
 function fileDraftActionLabel(item: SessionFileEvidence): string {
-  if (item.status === "failed") return "Recover path";
+  if (item.status === "failed") return "Check path";
   if (item.status === "running") return "Check status";
   if (item.actions.includes("changed")) return "Review file";
   if (item.actions.includes("listed")) return "Use listing";

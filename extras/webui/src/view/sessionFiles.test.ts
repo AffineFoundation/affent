@@ -73,7 +73,7 @@ describe("buildSessionFiles", () => {
     ]);
   });
 
-  it("keeps path recovery evidence when a file action fails", () => {
+  it("keeps path failure evidence when a file action fails", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "read", tool: "read_file", args: { filename: "docs/missing.md" } } },
@@ -108,7 +108,7 @@ describe("buildSessionFiles", () => {
       expect.objectContaining({ label: "Issues", value: "1", detail: "path failures", tone: "danger" }),
     ]));
     expect(filesReviewQueue(files.items)[0]).toMatchObject({
-      label: "Recover path",
+      label: "Check path",
       title: "docs/missing.md",
       action: "recover_path",
       tone: "danger",
