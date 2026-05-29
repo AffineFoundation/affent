@@ -1,7 +1,7 @@
 import type { UseAsDraft } from "../view/draftSource";
 import type { RunCommandExecutionRequest } from "../view/sessionRun";
 import type { SessionWorkspaceFact, SessionWorkspaceView } from "../view/sessionWorkspace";
-import { workspaceCwdBrowserPath, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
+import { workspaceActiveCwd, workspaceCwdBrowserPath, workspaceDraft, workspaceEvidenceText, workspaceReviewFacts, workspaceVerifyDraft, workspaceVerifyRequest } from "../view/sessionWorkspace";
 import { CopyButton } from "./CopyButton";
 
 type WorkspaceVerifyAction = (request: RunCommandExecutionRequest) => Promise<void> | void;
@@ -22,6 +22,7 @@ export function SessionWorkspacePanel({
   const canVerify = workspace.hasData && (onVerifyWorkspace || onUseAsDraft);
   const reviewFacts = workspaceReviewFacts(workspace);
   const cwdBrowserPath = workspaceCwdBrowserPath(workspace);
+  const activeCwd = workspaceActiveCwd(workspace);
   const tone = workspace.tone ?? (workspace.verification === "mismatch" || workspace.verification === "missing_binding" ? "warning" : undefined);
   return (
     <details className="session-skills-panel session-workspace-panel" data-testid="session-workspace-panel" open={defaultOpen}>
@@ -35,7 +36,7 @@ export function SessionWorkspacePanel({
           <div className="session-workspace-main">
             <div className="session-workspace-hero" data-tone={tone ?? "ok"}>
               <span>{verificationLabel(workspace.verification)}</span>
-              <strong title={workspace.path ?? workspace.lastAgentCwd ?? workspace.label}>{workspace.label ?? workspaceNameFromPath(workspace.path ?? workspace.lastAgentCwd) ?? "Workspace evidence"}</strong>
+              <strong title={workspace.path ?? workspace.lastAgentCwd ?? workspace.label}>{workspaceHeroTitle(workspace)}</strong>
               <small>{workspace.issue ?? verificationDetail(workspace.verification)}</small>
             </div>
             <div className="session-workspace-boundary" data-testid="session-workspace-boundary">
@@ -46,9 +47,9 @@ export function SessionWorkspacePanel({
                 tone={workspace.verification === "mismatch" ? "warning" : undefined}
               />
               <BoundaryField
-                label="Latest command cwd"
-                value={workspace.lastAgentCwd}
-                fallback={workspace.lastAgentCwd ? undefined : "No shell cwd recorded"}
+                label={agentCwdLabel(workspace)}
+                value={activeCwd}
+                fallback={activeCwd ? undefined : "No shell cwd recorded"}
                 tone={workspace.issue ? "warning" : undefined}
               />
             </div>
@@ -58,8 +59,8 @@ export function SessionWorkspacePanel({
               ))}
             </div>
             <div className="session-workspace-fields" aria-label="Workspace fields">
-              {workspace.latestCommandCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
-                <WorkspaceField label="Command cwd" value={displayPath(workspace.latestCommandCwd)} title={workspace.latestCommandCwd} mono />
+              {workspace.latestCommandCwd && workspace.lastAgentCwd && workspace.latestCommandCwd !== workspace.lastAgentCwd ? (
+                <WorkspaceField label="Recorded agent cwd" value={displayPath(workspace.lastAgentCwd)} title={workspace.lastAgentCwd} mono />
               ) : null}
               {workspace.branch ? <WorkspaceField label="Branch" value={workspace.branch} /> : null}
               {workspace.dirtyState ? <WorkspaceField label="State" value={workspace.dirtyState} /> : null}
@@ -67,7 +68,7 @@ export function SessionWorkspacePanel({
           </div>
           <span className="session-evidence-actions">
             {workspace.path ? <CopyButton label="Copy path" value={workspace.path} className="ghost-action" /> : null}
-            {workspace.lastAgentCwd ? <CopyButton label="Copy cwd" value={workspace.lastAgentCwd} className="ghost-action" /> : null}
+            {activeCwd ? <CopyButton label="Copy cwd" value={activeCwd} className="ghost-action" /> : null}
             <CopyButton label="Copy workspace evidence" value={workspaceEvidenceText(workspace)} className="ghost-action" />
             {workspace.path && onOpenWorkspacePath ? (
               <button type="button" className="ghost-action primary-run-action" onClick={() => onOpenWorkspacePath(".")}>
@@ -171,6 +172,16 @@ function workspaceNameFromPath(path: string | undefined): string | undefined {
   const normalized = path.replace(/\\/g, "/");
   const parts = normalized.split("/").filter(Boolean);
   return parts.at(-1) ?? path;
+}
+
+function workspaceHeroTitle(workspace: SessionWorkspaceView): string {
+  if (workspace.verification === "missing_binding") return "Historical cwd only";
+  if (workspace.verification === "unknown") return "Workspace evidence";
+  return workspace.label ?? workspaceNameFromPath(workspace.path ?? workspace.lastAgentCwd) ?? "Workspace evidence";
+}
+
+function agentCwdLabel(workspace: SessionWorkspaceView): string {
+  return workspace.latestCommandCwd ? "Latest command cwd" : "Last agent cwd";
 }
 
 function verificationLabel(verification: SessionWorkspaceView["verification"]): string {

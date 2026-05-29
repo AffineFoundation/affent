@@ -33,9 +33,10 @@ export function buildSessionWorkspace(
   const branch = clean(session?.default_branch);
   const dirtyState = clean(session?.dirty_state);
   const latestCommandCwd = clean(run.latestCommandCwd) ?? clean(run.commands.find((command) => command.cwd)?.cwd);
-  const lastAgentCwd = latestCommandCwd ?? clean(session?.last_agent_cwd);
-  const issue = workspaceIssue(path, lastAgentCwd);
-  const hasData = !!(path || label || branch || dirtyState || lastAgentCwd || latestCommandCwd);
+  const recordedAgentCwd = clean(session?.last_agent_cwd);
+  const activeCwd = latestCommandCwd ?? recordedAgentCwd;
+  const issue = workspaceIssue(path, activeCwd, latestCommandCwd ? "Latest command cwd" : "Recorded agent cwd");
+  const hasData = !!(path || label || branch || dirtyState || activeCwd);
 
   if (!hasData) {
     return {
@@ -47,20 +48,20 @@ export function buildSessionWorkspace(
     };
   }
 
-  const verification = workspaceVerification(path, lastAgentCwd, issue);
+  const verification = workspaceVerification(path, activeCwd, issue);
   const summary = workspaceSummary(verification, label);
   return {
     hasData: true,
     summary,
     shortStatus: workspaceShortStatus({ summary, label, path, branch, dirtyState }),
-    detail: workspaceDetail({ path, branch, dirtyState, lastAgentCwd }),
+    detail: workspaceDetail({ path, branch, dirtyState, cwd: activeCwd }),
     verification,
     tone: issue || verification === "missing_binding" ? "warning" : undefined,
     label,
     path,
     branch,
     dirtyState,
-    lastAgentCwd,
+    lastAgentCwd: recordedAgentCwd,
     latestCommandCwd,
     issue,
   };
@@ -78,7 +79,7 @@ export function workspaceReviewFacts(workspace: SessionWorkspaceView): SessionWo
       label: "Agent cwd",
       value: agentCwdValue(workspace),
       detail: agentCwdDetail(workspace),
-      tone: workspace.verification === "mismatch" ? "danger" : workspace.lastAgentCwd ? "ok" : "neutral",
+      tone: workspace.verification === "mismatch" ? "danger" : workspaceActiveCwd(workspace) ? "ok" : "neutral",
     },
     {
       label: "Branch",
@@ -112,13 +113,15 @@ export function workspaceEvidenceText(workspace: SessionWorkspaceView): string {
 
 function agentCwdValue(workspace: SessionWorkspaceView): string {
   if (workspace.verification === "mismatch") return "Outside";
-  if (workspace.lastAgentCwd) return workspace.path ? "Inside" : "Recorded";
+  if (workspaceActiveCwd(workspace)) return workspace.path ? "Inside" : "Recorded";
   return "Missing";
 }
 
 function agentCwdDetail(workspace: SessionWorkspaceView): string {
   if (workspace.verification === "mismatch") return "outside session";
-  if (workspace.lastAgentCwd && workspace.path) return "inside session";
+  if (workspace.latestCommandCwd && workspace.path) return "latest command";
+  if (workspace.latestCommandCwd) return "latest command cwd";
+  if (workspace.lastAgentCwd && workspace.path) return "recorded agent cwd";
   if (workspace.lastAgentCwd) return "historical cwd";
   return "no shell cwd";
 }
@@ -139,7 +142,7 @@ export function workspaceDraft(workspace: SessionWorkspaceView): string {
 export function workspaceVerifyRequest(workspace: SessionWorkspaceView): RunCommandExecutionRequest {
   return {
     command: "pwd; git status --short --branch 2>/dev/null || true",
-    cwd: workspace.path ?? workspace.lastAgentCwd,
+    cwd: workspace.path ?? workspaceActiveCwd(workspace),
   };
 }
 
@@ -156,7 +159,7 @@ export function workspaceVerifyDraft(workspace: SessionWorkspaceView): string {
 
 export function workspaceCwdBrowserPath(workspace: SessionWorkspaceView): string | undefined {
   if (!workspace.path) return undefined;
-  const cwd = workspace.latestCommandCwd ?? workspace.lastAgentCwd;
+  const cwd = workspaceActiveCwd(workspace);
   if (!cwd) return undefined;
   const workspacePath = normalizePath(workspace.path);
   const cwdPath = normalizePath(cwd);
@@ -194,25 +197,29 @@ function workspaceDetail({
   path,
   branch,
   dirtyState,
-  lastAgentCwd,
+  cwd,
 }: {
   path?: string;
   branch?: string;
   dirtyState?: string;
-  lastAgentCwd?: string;
+  cwd?: string;
 }): string {
   return [
     path ? compactPath(path) : undefined,
     branch ? `branch ${branch}` : undefined,
     dirtyState,
-    lastAgentCwd ? `cwd ${compactPath(lastAgentCwd)}` : undefined,
+    cwd ? `cwd ${compactPath(cwd)}` : undefined,
   ].filter(Boolean).join(" · ");
 }
 
-function workspaceIssue(path?: string, cwd?: string): string | undefined {
+export function workspaceActiveCwd(workspace: SessionWorkspaceView): string | undefined {
+  return workspace.latestCommandCwd ?? workspace.lastAgentCwd;
+}
+
+function workspaceIssue(path?: string, cwd?: string, source = "Latest command cwd"): string | undefined {
   if (!path || !cwd || !isAbsolutePath(path) || !isAbsolutePath(cwd)) return undefined;
   if (cwd === path || cwd.startsWith(`${path.replace(/\/+$/, "")}/`)) return undefined;
-  return "Latest command cwd is outside the session workspace.";
+  return `${source} is outside the session workspace.`;
 }
 
 function workspaceVerification(
@@ -220,7 +227,7 @@ function workspaceVerification(
   cwd?: string,
   issue?: string,
 ): SessionWorkspaceView["verification"] {
-  if (issue === "Latest command cwd is outside the session workspace.") return "mismatch";
+  if (issue) return "mismatch";
   if (!path && cwd) return "missing_binding";
   if (path && cwd) return "verified";
   if (path) return "bound";

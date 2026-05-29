@@ -24,11 +24,11 @@ describe("buildSessionWorkspace", () => {
       detail: "/repo/affent · branch main · dirty · cwd extras/webui",
       verification: "verified",
       path: "/repo/affent",
-      lastAgentCwd: "extras/webui",
+      latestCommandCwd: "extras/webui",
     });
     expect(workspaceReviewFacts(workspace)).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Binding", value: "Recorded", tone: "ok" }),
-      expect.objectContaining({ label: "Agent cwd", value: "Inside", detail: "inside session", tone: "ok" }),
+      expect.objectContaining({ label: "Agent cwd", value: "Inside", detail: "latest command", tone: "ok" }),
     ]));
     expect(workspaceCwdBrowserPath(workspace)).toBe("extras/webui");
   });
@@ -45,12 +45,12 @@ describe("buildSessionWorkspace", () => {
       shortStatus: "Workspace mismatch",
       verification: "mismatch",
       tone: "warning",
-      issue: "Latest command cwd is outside the session workspace.",
+      issue: "Recorded agent cwd is outside the session workspace.",
     });
     expect(workspaceEvidenceText(workspace)).toBe([
       "Workspace evidence",
       "Status: Workspace mismatch",
-      "Issue: Latest command cwd is outside the session workspace.",
+      "Issue: Recorded agent cwd is outside the session workspace.",
       "Label: affent",
       "Workspace path: /repo/affent",
       "Last agent cwd: /tmp",
@@ -108,7 +108,6 @@ describe("buildSessionWorkspace", () => {
       run,
     )).toMatchObject({
       summary: "affent",
-      lastAgentCwd: "/repo/affent/extras/webui",
       latestCommandCwd: "/repo/affent/extras/webui",
       issue: undefined,
     });
@@ -116,6 +115,31 @@ describe("buildSessionWorkspace", () => {
       session({ workspace_path: "/repo/affent", workspace_label: "affent" }),
       run,
     ))).toBe("extras/webui");
+  });
+
+  it("keeps recorded agent cwd while validating against the latest command cwd", () => {
+    const workspace = buildSessionWorkspace(
+      session({ workspace_path: "/repo/affent", workspace_label: "affent", last_agent_cwd: "/repo/affent" }),
+      run({ cwd: "/tmp/outside" }),
+    );
+
+    expect(workspace).toMatchObject({
+      summary: "Workspace mismatch",
+      verification: "mismatch",
+      lastAgentCwd: "/repo/affent",
+      latestCommandCwd: "/tmp/outside",
+      issue: "Latest command cwd is outside the session workspace.",
+    });
+    expect(workspaceEvidenceText(workspace)).toBe([
+      "Workspace evidence",
+      "Status: Workspace mismatch",
+      "Issue: Latest command cwd is outside the session workspace.",
+      "Label: affent",
+      "Workspace path: /repo/affent",
+      "Last agent cwd: /repo/affent",
+      "Latest command cwd: /tmp/outside",
+    ].join("\n"));
+    expect(workspaceCwdBrowserPath(workspace)).toBeUndefined();
   });
 
   it("stays absent when no workspace evidence exists", () => {
