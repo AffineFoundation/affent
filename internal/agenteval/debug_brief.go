@@ -62,6 +62,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if counts, tags, ok := loopProtocolStillRunningCounts(res); ok {
 		add("loop_protocol_state", "warn", "loop protocol remained running at the latest checkpoint; inspect closure guard and close/plan state before treating the session as complete", []string{"loop_turn_checkpoint_examples", "runtime_surface", "message_rejected_examples", "timeline"}, counts, tags...)
 	}
+	if counts, tags, ok := durableCompletionOpenStateCounts(res); ok {
+		add("durable_completion", "fail", "final answer was accepted while durable control state remained unfinished; inspect completion guards before treating the session as complete", []string{"final_text", "runtime_surface", "message_rejected_examples", "loop_turn_checkpoint_examples", "plan_calls", "timeline"}, counts, tags...)
+	}
 	expectedTurnEndReason := expectedTurnEndReasonFromExpectations(res.Expectations)
 	if res.TurnEndReason != "" && res.TurnEndReason != expectedTurnEndReason {
 		add("turn_end", "fail", fmt.Sprintf("turn ended with reason %q; expected %q", res.TurnEndReason, expectedTurnEndReason), []string{"final_text", "tool_timeline"}, map[string]int{res.TurnEndReason: 1}, "turn_end:"+res.TurnEndReason)
@@ -662,6 +665,43 @@ func runtimeSurfaceHasCompletionGuard(surface *sse.RuntimeSurfacePayload, guard 
 		}
 	}
 	return false
+}
+
+func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string, bool) {
+	if strings.TrimSpace(res.FinalText) == "" {
+		return nil, nil, false
+	}
+	loopRunning := strings.ToLower(strings.TrimSpace(res.LoopTurnCheckpoints.Latest.Status)) == "running"
+	planUnfinished := res.Plan.TotalSteps > 0 && res.Plan.CompletedSteps < res.Plan.TotalSteps
+	if !loopRunning && !planUnfinished {
+		return nil, nil, false
+	}
+	counts := map[string]int{
+		"final_answer":     1,
+		"message_rejected": res.MessageRejectedStats.Count,
+	}
+	tags := []string{"durable_completion", "durable_completion:final_before_state_closed"}
+	if loopRunning {
+		counts["loop_running"] = 1
+		counts["loop_checkpoints"] = res.LoopTurnCheckpoints.Count
+		tags = append(tags, "loop_protocol", "loop_protocol:still_running")
+		if !runtimeSurfaceHasCompletionGuard(res.RuntimeSurface, "loop_protocol_running") {
+			counts["missing_loop_completion_guard"] = 1
+			tags = append(tags, "completion_guard:missing_loop_protocol")
+		}
+	}
+	if planUnfinished {
+		counts["plan_unfinished"] = 1
+		counts["plan_total_steps"] = res.Plan.TotalSteps
+		counts["plan_completed_steps"] = res.Plan.CompletedSteps
+		counts["plan_current_step_index"] = res.Plan.CurrentStepIndex
+		tags = append(tags, "plan", "plan:unfinished")
+		if !runtimeSurfaceHasCompletionGuard(res.RuntimeSurface, "active_plan_unfinished") {
+			counts["missing_plan_completion_guard"] = 1
+			tags = append(tags, "completion_guard:missing_active_plan")
+		}
+	}
+	return counts, tags, true
 }
 
 func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {

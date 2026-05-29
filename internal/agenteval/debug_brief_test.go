@@ -174,6 +174,63 @@ func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK:        true,
+		FinalText: "Pushed commit b53cb8b.",
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 5,
+			Latest: LoopTurnCheckpoint{
+				Status:       "running",
+				ToolRequests: 5,
+			},
+		},
+		Plan: PlanStats{
+			Calls:            4,
+			TotalSteps:       8,
+			CompletedSteps:   7,
+			CurrentStepIndex: 8,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			Tools: []sse.RuntimeSurfaceTool{{Name: "loop_protocol"}, {Name: "plan"}},
+		},
+	})
+	item := debugBriefItemByKind(brief, "durable_completion")
+	if item == nil ||
+		item.Severity != "fail" ||
+		item.Counts["final_answer"] != 1 ||
+		item.Counts["loop_running"] != 1 ||
+		item.Counts["plan_unfinished"] != 1 ||
+		item.Counts["plan_total_steps"] != 8 ||
+		item.Counts["plan_completed_steps"] != 7 ||
+		item.Counts["missing_loop_completion_guard"] != 1 ||
+		item.Counts["missing_plan_completion_guard"] != 1 ||
+		!stringSliceContains(item.Inspect, "final_text") ||
+		!stringSliceContains(brief.Tags, "durable_completion:final_before_state_closed") ||
+		!stringSliceContains(brief.Tags, "loop_protocol:still_running") ||
+		!stringSliceContains(brief.Tags, "plan:unfinished") ||
+		!stringSliceContains(brief.Tags, "completion_guard:missing_loop_protocol") ||
+		!stringSliceContains(brief.Tags, "completion_guard:missing_active_plan") {
+		t.Fatalf("durable completion item=%+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK:        true,
+		FinalText: "Done.",
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Latest: LoopTurnCheckpoint{Status: "completed"},
+		},
+		Plan: PlanStats{
+			Calls:          1,
+			TotalSteps:     2,
+			CompletedSteps: 2,
+		},
+	})
+	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
+		t.Fatalf("closed durable state should not produce durable completion warning: %+v", item)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSourceRepoSetupFailures(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: false,
