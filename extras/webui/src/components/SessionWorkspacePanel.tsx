@@ -175,7 +175,7 @@ function workspaceNameFromPath(path: string | undefined): string | undefined {
 }
 
 function workspaceHeroTitle(workspace: SessionWorkspaceView): string {
-  if (workspace.verification === "missing_binding") return "Historical cwd only";
+  if (workspace.verification === "missing_binding") return workspace.latestCommandCwd ? "Command cwd only" : "Recorded cwd only";
   if (workspace.verification === "unknown") return "Workspace evidence";
   return workspace.label ?? workspaceNameFromPath(workspace.path ?? workspace.lastAgentCwd) ?? "Workspace evidence";
 }

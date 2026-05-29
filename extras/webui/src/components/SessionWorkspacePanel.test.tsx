@@ -69,7 +69,7 @@ describe("SessionWorkspacePanel", () => {
 
     const panel = screen.getByTestId("session-workspace-panel");
     expect(panel).toHaveTextContent("Binding missing");
-    expect(panel).toHaveTextContent("Historical cwd only");
+    expect(panel).toHaveTextContent("Recorded cwd only");
     expect(screen.getByTestId("session-workspace-card")).toHaveAttribute("data-tone", "warning");
     expect(panel).not.toHaveTextContent("Boundary verified");
     expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Session workspace");
@@ -85,6 +85,25 @@ describe("SessionWorkspacePanel", () => {
       expect.stringContaining("Working directory: /workspace/sessions/sess_123"),
       "run_command",
     );
+  });
+
+  it("labels missing bindings with latest command cwd evidence as command cwd only", () => {
+    render(<SessionWorkspacePanel defaultOpen workspace={{
+      hasData: true,
+      summary: "Workspace binding missing",
+      shortStatus: "Workspace binding missing",
+      detail: "cwd /workspace/sessions/sess_123",
+      verification: "missing_binding",
+      lastAgentCwd: "/tmp/old",
+      latestCommandCwd: "/workspace/sessions/sess_123",
+    }} />);
+
+    const panel = screen.getByTestId("session-workspace-panel");
+    expect(panel).toHaveTextContent("Command cwd only");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("Latest command cwd");
+    expect(screen.getByTestId("session-workspace-boundary")).toHaveTextContent("/workspace/sessions/sess_123");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("Recorded agent cwd");
+    expect(screen.getByLabelText("Workspace fields")).toHaveTextContent("/tmp/old");
   });
 
   it("opens the latest in-workspace command cwd from the workspace boundary", async () => {
