@@ -13,6 +13,7 @@ import {
   buildWorkbenchContextEvidence,
   latestWorkbenchRequestMode,
   workbenchContextUsageSummary,
+  type WorkbenchContextEvidenceItem,
   type WorkbenchRequestModeView,
   type WorkbenchContextUsageView,
   workbenchContextStatusDetail,
@@ -61,7 +62,8 @@ export function WorkbenchContextPanel({
   const contextInput = { overview, hasSelectedSession, attention, workspace, changes, artifacts, files, run, usage, requestMode, taskState, automationTitle, automationDetail };
   const statusDetail = workbenchContextStatusDetail(contextInput);
   const evidence = buildWorkbenchContextEvidence(contextInput);
-  const hasEvidence = evidence.length > 0;
+  const sourceLinks = taskSourceLinks(evidence, taskState);
+  const hasSourceLinks = sourceLinks.length > 0;
   const brief = hasSelectedSession ? buildContextBrief({
     overview,
     statusDetail,
@@ -78,9 +80,9 @@ export function WorkbenchContextPanel({
   const snapshot = hasSelectedSession ? contextSnapshotCards({
     metrics: displaySessionOverviewMetrics(overview.metrics),
     run,
-    requestMode,
     session,
   }) : [];
+  const actionSnapshots = brief?.drilldown ? [] : snapshot;
 
   return (
     <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
@@ -102,14 +104,14 @@ export function WorkbenchContextPanel({
         ) : null}
         {brief ? <ContextBriefCard brief={brief} onSelectSection={onSelectSection} /> : null}
         {hasTaskState(taskState) ? <TaskStateCard taskState={taskState} onSelectSection={onSelectSection} /> : null}
-        {snapshot.length > 0 ? (
+        {actionSnapshots.length > 0 ? (
           <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Action needed">
             <div className="workbench-context-snapshot-head">
               <strong>Action needed</strong>
               <span>Open the source tab</span>
             </div>
             <div className="workbench-context-snapshot-grid">
-              {snapshot.map((item) => {
+              {actionSnapshots.map((item) => {
                 const target = item.target;
                 const content = (
                   <>
@@ -140,9 +142,9 @@ export function WorkbenchContextPanel({
           </section>
         ) : null}
         {hasSelectedSession && shouldShowTaskUsageCard(usage, contextSummary) ? <WorkbenchUsageCard usage={usage} contextSummary={contextSummary} /> : null}
-        {hasEvidence ? (
+        {hasSourceLinks ? (
           <div className="workbench-context-evidence" data-testid="workbench-context-evidence">
-            {evidence.map((item) => (
+            {sourceLinks.map((item) => (
               <button
                 key={`${item.target}:${item.label}`}
                 type="button"
@@ -462,7 +464,7 @@ function TaskStateCard({
     <section className="workbench-task-state" data-tone={tone} data-testid="workbench-task-state" aria-label="Task state">
       <header className="workbench-task-state-head">
         <div>
-          <span>Task state</span>
+          <span>Execution record</span>
           <strong>{taskState.objective || taskStatusLabel(taskState.status)}</strong>
         </div>
         <b data-tone={tone}>{taskStatusLabel(taskState.status)}</b>
@@ -667,29 +669,16 @@ function sourceLabel(source?: string): string | undefined {
 function contextSnapshotCards({
   metrics,
   run,
-  requestMode,
   session,
 }: {
   metrics: ReturnType<typeof displaySessionOverviewMetrics>;
   run?: SessionRunView;
-  requestMode?: WorkbenchRequestModeView;
   session?: SessionState;
 }): ContextSnapshotCard[] {
   const cards: ContextSnapshotCard[] = [];
 
   const attention = concreteAttentionSnapshot(metrics, run, session);
   if (attention) cards.push(attention);
-
-  if (requestMode) {
-    cards.push({
-      key: "request",
-      label: "Request mode",
-      title: requestMode.label,
-      detail: requestMode.detail,
-      meta: requestMode.source === "schedule" ? "scheduled" : undefined,
-      target: "trace",
-    });
-  }
 
   return cards.slice(0, 5);
 }
@@ -771,6 +760,47 @@ function failureKindLabel(kind: string): string {
   if (normalized === "loop_guard_no_new_evidence") return "no new evidence";
   if (normalized === "loop_guard_direct_reader_warning") return "source warning";
   return normalized.replace(/^loop_guard_/, "").replace(/_/g, " ");
+}
+
+function taskSourceLinks(items: readonly WorkbenchContextEvidenceItem[], taskState?: SessionTaskStateSummary): WorkbenchContextEvidenceItem[] {
+  const links = [...items];
+  if (!hasTaskState(taskState)) return links;
+
+  const changedFileCount = taskState.changed_files?.length ?? 0;
+  if (changedFileCount > 0 && !hasSourceTarget(links, "changes")) {
+    links.push({
+      target: "changes",
+      label: "Changed files",
+      summary: `${changedFileCount} ${changedFileCount === 1 ? "file" : "files"}`,
+      detail: taskState.changed_files?.slice(-3).map((item) => [item.action, item.path].filter(Boolean).join(" ")).join(" · ") || "Task state recorded changed files.",
+    });
+  }
+
+  const actionCount = taskState.attempted_actions?.length ?? 0;
+  const failureCount = taskState.failed_actions?.length ?? 0;
+  const evidenceCount = taskState.evidence?.length ?? 0;
+  if (actionCount + failureCount + evidenceCount > 0 && !hasSourceTarget(links, "trace")) {
+    const latestFailure = taskState.failed_actions?.at(-1);
+    const latestAction = taskState.attempted_actions?.at(-1);
+    const latestEvidence = taskState.evidence?.at(-1);
+    links.push({
+      target: "trace",
+      label: "Execution record",
+      summary: compact([
+        actionCount > 0 ? `${actionCount} ${actionCount === 1 ? "action" : "actions"}` : undefined,
+        failureCount > 0 ? `${failureCount} ${failureCount === 1 ? "failure" : "failures"}` : undefined,
+        evidenceCount > 0 ? `${evidenceCount} evidence` : undefined,
+      ]).join(" · "),
+      detail: latestFailure ? taskStateFailureSummary(latestFailure) : latestAction ? taskStateActionSummary(latestAction) : taskStateEvidenceSummary(latestEvidence ?? {}),
+      tone: taskStateHasCurrentFailure(taskState) ? "error" : failureCount > 0 ? "warning" : undefined,
+    });
+  }
+
+  return links;
+}
+
+function hasSourceTarget(items: readonly WorkbenchContextEvidenceItem[], target: WorkbenchTab): boolean {
+  return items.some((item) => item.target === target);
 }
 
 function shouldShowTaskUsageCard(usage?: WorkbenchContextUsageView, contextSummary?: SessionContextSummary): boolean {

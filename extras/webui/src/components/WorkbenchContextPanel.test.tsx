@@ -205,10 +205,22 @@ describe("WorkbenchContextPanel", () => {
     expect(taskState).toHaveTextContent("git push");
     expect(taskState).toHaveTextContent("go test ./...");
 
+    const sourceLinks = screen.getByTestId("workbench-context-evidence");
+    expect(sourceLinks).toHaveTextContent("Changed files");
+    expect(sourceLinks).toHaveTextContent("app/mathutil/clamp.go");
+    expect(sourceLinks).toHaveTextContent("Execution record");
+    expect(sourceLinks).toHaveTextContent("2 actions");
+    expect(sourceLinks).toHaveTextContent("1 failure");
+    expect(sourceLinks).toHaveTextContent("test failed");
+
     await user.click(within(taskState).getByRole("button", { name: "Open trace" }));
     expect(onSelectSection).toHaveBeenCalledWith("trace");
     await user.click(within(taskState).getByRole("button", { name: "Open changes" }));
     expect(onSelectSection).toHaveBeenCalledWith("changes");
+    await user.click(within(sourceLinks).getByRole("button", { name: "Open Changed files" }));
+    expect(onSelectSection).toHaveBeenCalledWith("changes");
+    await user.click(within(sourceLinks).getByRole("button", { name: "Open Execution record" }));
+    expect(onSelectSection).toHaveBeenCalledWith("trace");
   });
 
   it("links tool issue cards to concrete run evidence and suppresses generic next-step templates", async () => {
@@ -239,13 +251,13 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    const statusCards = screen.getByTestId("workbench-context-snapshot");
-    expect(statusCards).toHaveTextContent("Tool issue");
-    expect(statusCards).toHaveTextContent("checkout assertion failed");
-    expect(statusCards).toHaveTextContent("Next: update payment route then rerun");
-    expect(statusCards).not.toHaveTextContent("continue from the current plan state");
+    const brief = screen.getByTestId("workbench-context-brief");
+    expect(brief).toHaveTextContent("Verification");
+    expect(brief).toHaveTextContent("update payment route then rerun");
+    expect(brief).not.toHaveTextContent("continue from the current plan state");
+    expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
 
-    await user.click(within(statusCards).getByRole("button", { name: "Open Tool issue" }));
+    await user.click(within(brief).getByRole("button", { name: "Open Run" }));
     expect(onSelectSection).toHaveBeenCalledWith("run");
   });
 
@@ -388,12 +400,13 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    const statusCards = screen.getByTestId("workbench-context-snapshot");
-    expect(statusCards).toHaveTextContent("Request mode");
-    expect(statusCards).toHaveTextContent("Loop setup");
-    expect(statusCards).toHaveTextContent("latest request · t1");
+    const brief = screen.getByTestId("workbench-context-brief");
+    expect(brief).toHaveTextContent("Request");
+    expect(brief).toHaveTextContent("Loop setup");
+    expect(brief).toHaveTextContent("latest request · t1");
+    expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
 
-    await user.click(within(statusCards).getByRole("button", { name: "Open Request mode" }));
+    await user.click(within(brief).getByRole("button", { name: "Open Request" }));
     expect(onSelectSection).toHaveBeenCalledWith("trace");
   });
 
