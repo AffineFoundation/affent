@@ -156,23 +156,96 @@ func (r *Registry) Defs() []ToolDef {
 	return out
 }
 
+// ToolSurfacePolicy constrains the model-visible tool surface for one request.
+// It is intentionally budget-shaped rather than task-keyword-shaped: callers
+// decide the request budget, Registry applies the existing modelToolRank order.
+type ToolSurfacePolicy struct {
+	SchemaTokenBudget int
+}
+
+// ToolSurfaceSelection is the concrete model-visible tool surface for a turn.
+type ToolSurfaceSelection struct {
+	Defs               []ToolDef
+	Catalog            []ToolCatalogEntry
+	ExcludedCatalog    []ToolCatalogEntry
+	AvailableCount     int
+	SchemaBytes        int
+	SchemaTokens       int
+	SchemaBudgetTokens int
+}
+
 // ModelDefs returns the tool definitions in model-facing priority order.
 // Defs and Catalog preserve registration order for UI/API stability; model
 // calls should see durable state/control tools before broad execution tools so
 // scheduling, planning, memory, or loop maintenance requests are less likely
 // to be routed through shell or file edits first.
 func (r *Registry) ModelDefs() []ToolDef {
+	return r.SelectModelTools(ToolSurfacePolicy{}).Defs
+}
+
+// SelectModelTools returns the model-facing tools after applying an optional
+// schema-token budget. When the full schema fits, the registry exposes every
+// tool. When it does not, it keeps the highest-priority prefix by modelToolRank
+// and always exposes at least one tool so the model still has a valid surface.
+func (r *Registry) SelectModelTools(policy ToolSurfacePolicy) ToolSurfaceSelection {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	names := r.modelOrderedNamesLocked()
+	allDefs := make([]ToolDef, 0, len(names))
+	for _, n := range names {
+		allDefs = append(allDefs, r.tools[n].AsDef())
+	}
+	allEstimate := EstimateRequestInput(nil, allDefs)
+	budget := policy.SchemaTokenBudget
+	selected := allDefs
+	if budget > 0 && allEstimate.ToolSchemaTokens > budget {
+		selected = selected[:0]
+		for _, n := range names {
+			candidate := append(append([]ToolDef(nil), selected...), r.tools[n].AsDef())
+			if len(selected) > 0 && EstimateRequestInput(nil, candidate).ToolSchemaTokens > budget {
+				break
+			}
+			selected = candidate
+		}
+		if len(selected) == 0 && len(names) > 0 {
+			selected = []ToolDef{r.tools[names[0]].AsDef()}
+		}
+	}
+	selectedNames := map[string]bool{}
+	for _, def := range selected {
+		selectedNames[def.Function.Name] = true
+	}
+	catalog := make([]ToolCatalogEntry, 0, len(selected))
+	excluded := make([]ToolCatalogEntry, 0, len(r.order)-len(selected))
+	for _, n := range r.order {
+		entry := r.tools[n].CatalogEntry()
+		if selectedNames[n] {
+			catalog = append(catalog, entry)
+		} else {
+			excluded = append(excluded, entry)
+		}
+	}
+	estimate := EstimateRequestInput(nil, selected)
+	if budget <= 0 || allEstimate.ToolSchemaTokens <= budget {
+		budget = 0
+	}
+	return ToolSurfaceSelection{
+		Defs:               append([]ToolDef(nil), selected...),
+		Catalog:            catalog,
+		ExcludedCatalog:    excluded,
+		AvailableCount:     len(r.order),
+		SchemaBytes:        estimate.ToolSchemaBytes,
+		SchemaTokens:       estimate.ToolSchemaTokens,
+		SchemaBudgetTokens: budget,
+	}
+}
+
+func (r *Registry) modelOrderedNamesLocked() []string {
 	names := append([]string(nil), r.order...)
 	sort.SliceStable(names, func(i, j int) bool {
 		return modelToolRank(r.tools[names[i]]) < modelToolRank(r.tools[names[j]])
 	})
-	out := make([]ToolDef, 0, len(names))
-	for _, n := range names {
-		out = append(out, r.tools[n].AsDef())
-	}
-	return out
+	return names
 }
 
 func (r *Registry) Catalog() []ToolCatalogEntry {

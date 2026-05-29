@@ -597,6 +597,9 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	addIntField("reserved_output_tokens", p.ReservedOutputTokens)
 	addIntField("compact_trigger_input_tokens", p.CompactTriggerInputTokens)
 	addIntField("compact_trigger_input_percent", p.CompactTriggerInputPercent)
+	addIntField("available_tool_count", p.AvailableToolCount)
+	addIntField("excluded_tool_count", p.ExcludedToolCount)
+	addIntField("tool_schema_budget_tokens", p.ToolSchemaBudgetTokens)
 	addIntField("estimated_tool_schema_tokens", p.EstimatedToolSchemaTokens)
 	addIntField("estimated_request_input_tokens", p.EstimatedRequestInputTokens)
 	if len(fields) == 0 {

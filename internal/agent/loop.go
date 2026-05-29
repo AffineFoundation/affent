@@ -2894,12 +2894,12 @@ func (l *Loop) publish(t string, payload any) {
 }
 
 func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
-	tools := l.toolsForTurn(opts)
+	toolSurface := l.selectToolSurface(opts)
 	var messages []ChatMessage
 	if l.Conv != nil {
 		messages = l.Conv.Snapshot()
 	}
-	inputEstimate := EstimateRequestInput(messages, l.toolDefs(opts))
+	inputEstimate := EstimateRequestInput(messages, toolSurface.Defs)
 	payload := sse.RuntimeSurfacePayload{
 		TurnID:                       turnID,
 		MaxTurnSteps:                 l.maxTurnStepsForSurface(),
@@ -2915,6 +2915,9 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		EstimatedConversationTokens:  inputEstimate.ConversationTokens,
 		EstimatedToolSchemaTokens:    inputEstimate.ToolSchemaTokens,
 		EstimatedRequestInputTokens:  inputEstimate.EstimatedInputTokens,
+		AvailableToolCount:           toolSurface.AvailableCount,
+		ExcludedToolCount:            len(toolSurface.ExcludedCatalog),
+		ToolSchemaBudgetTokens:       toolSurface.SchemaBudgetTokens,
 		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,
 		ToolResultContextMaxBytes:    l.toolResultMaxBytesInContext(),
 		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),
@@ -2929,11 +2932,10 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 	if payload.ToolResultArtifactPrefix == "" {
 		payload.ToolResultArtifactPrefix = defaultArtifactPathPrefix
 	}
-	if tools != nil {
-		catalog := tools.Catalog()
-		payload.ToolCount = len(catalog)
-		payload.Tools = make([]sse.RuntimeSurfaceTool, 0, len(catalog))
-		for _, tool := range catalog {
+	if toolSurface.AvailableCount > 0 {
+		payload.ToolCount = len(toolSurface.Catalog)
+		payload.Tools = make([]sse.RuntimeSurfaceTool, 0, len(toolSurface.Catalog))
+		for _, tool := range toolSurface.Catalog {
 			surfaceTool := sse.RuntimeSurfaceTool{
 				Name:    tool.Name,
 				RawName: tool.RawName,
@@ -2947,8 +2949,9 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 			}
 			payload.Tools = append(payload.Tools, surfaceTool)
 		}
-		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(catalog)
-		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)
+		payload.ExcludedTools = runtimeSurfaceToolsForCatalog(toolSurface.ExcludedCatalog)
+		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(toolSurface.Catalog)
+		payload.Capabilities = runtimeCapabilitiesForCatalog(toolSurface.Catalog)
 		payload.Capabilities.SessionScheduleRunner = payload.Capabilities.SessionSchedule && l.SessionScheduleRunner
 		if len(payload.Capabilities.WorkspaceTools) > 0 {
 			payload.Workspace = runtimeWorkspaceSurface(l.workspaceRoot())
@@ -2958,8 +2961,8 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 }
 
 func (l *Loop) runtimeWorkspaceSurfaceForTurn(opts TurnOptions) *sse.RuntimeWorkspace {
-	tools := l.toolsForTurn(opts)
-	if tools == nil || len(runtimeWorkspaceToolsForRegistry(tools)) == 0 {
+	toolSurface := l.selectToolSurface(opts)
+	if len(runtimeWorkspaceToolsForCatalog(toolSurface.Catalog)) == 0 {
 		return nil
 	}
 	return runtimeWorkspaceSurface(l.workspaceRoot())
@@ -2988,22 +2991,26 @@ func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
 	if reg == nil {
 		return sse.RuntimeCapabilities{}
 	}
-	workspaceTools := runtimeWorkspaceToolsForRegistry(reg)
+	return runtimeCapabilitiesForCatalog(reg.Catalog())
+}
+
+func runtimeCapabilitiesForCatalog(catalog []ToolCatalogEntry) sse.RuntimeCapabilities {
+	workspaceTools := runtimeWorkspaceToolsForCatalog(catalog)
 	return sse.RuntimeCapabilities{
 		Builtins:        runtimeHasCoreWorkspaceTools(workspaceTools),
 		WorkspaceTools:  workspaceTools,
-		Memory:          hasRegisteredTool(reg, MemoryToolName),
-		Plan:            hasRegisteredTool(reg, PlanToolName),
-		LoopProtocol:    hasRegisteredTool(reg, LoopProtocolToolName),
-		SessionSchedule: hasRegisteredTool(reg, SessionScheduleToolName),
-		SessionSearch:   hasRegisteredTool(reg, SessionSearchToolName),
-		WebFetch:        hasRegisteredTool(reg, "web_fetch"),
-		WebSearch:       hasRegisteredTool(reg, "web_search"),
-		Browser:         hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
-		Subagent:        hasRegisteredTool(reg, SubagentToolName),
-		FocusedTasks:    hasRegisteredTool(reg, FocusedTaskToolName),
-		Skill:           hasRegisteredTool(reg, SkillToolName),
-		MCP:             registryHasMCPTools(reg),
+		Memory:          catalogHasTool(catalog, MemoryToolName),
+		Plan:            catalogHasTool(catalog, PlanToolName),
+		LoopProtocol:    catalogHasTool(catalog, LoopProtocolToolName),
+		SessionSchedule: catalogHasTool(catalog, SessionScheduleToolName),
+		SessionSearch:   catalogHasTool(catalog, SessionSearchToolName),
+		WebFetch:        catalogHasTool(catalog, "web_fetch"),
+		WebSearch:       catalogHasTool(catalog, "web_search"),
+		Browser:         catalogHasAnyTool(catalog, "browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read"),
+		Subagent:        catalogHasTool(catalog, SubagentToolName),
+		FocusedTasks:    catalogHasTool(catalog, FocusedTaskToolName),
+		Skill:           catalogHasTool(catalog, SkillToolName),
+		MCP:             catalogHasMCPTools(catalog),
 	}
 }
 
@@ -3020,10 +3027,30 @@ func runtimeToolCallCapsForCatalog(catalog []ToolCatalogEntry) []sse.RuntimeTool
 	return caps
 }
 
+func runtimeSurfaceToolsForCatalog(catalog []ToolCatalogEntry) []sse.RuntimeSurfaceTool {
+	if len(catalog) == 0 {
+		return nil
+	}
+	out := make([]sse.RuntimeSurfaceTool, 0, len(catalog))
+	for _, tool := range catalog {
+		out = append(out, sse.RuntimeSurfaceTool{
+			Name:    tool.Name,
+			RawName: tool.RawName,
+			Group:   tool.Group,
+			Source:  tool.Source,
+		})
+	}
+	return out
+}
+
 func runtimeWorkspaceToolsForRegistry(reg *Registry) []string {
 	if reg == nil {
 		return nil
 	}
+	return runtimeWorkspaceToolsForCatalog(reg.Catalog())
+}
+
+func runtimeWorkspaceToolsForCatalog(catalog []ToolCatalogEntry) []string {
 	candidates := []string{
 		"shell",
 		"read_file",
@@ -3036,11 +3063,38 @@ func runtimeWorkspaceToolsForRegistry(reg *Registry) []string {
 	}
 	tools := make([]string, 0, len(candidates))
 	for _, name := range candidates {
-		if hasRegisteredTool(reg, name) {
+		if catalogHasTool(catalog, name) {
 			tools = append(tools, name)
 		}
 	}
 	return tools
+}
+
+func catalogHasTool(catalog []ToolCatalogEntry, name string) bool {
+	for _, tool := range catalog {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func catalogHasAnyTool(catalog []ToolCatalogEntry, names ...string) bool {
+	for _, name := range names {
+		if catalogHasTool(catalog, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func catalogHasMCPTools(catalog []ToolCatalogEntry) bool {
+	for _, tool := range catalog {
+		if tool.Group == "MCP" || strings.TrimSpace(tool.Source) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func runtimeHasCoreWorkspaceTools(names []string) bool {
@@ -3093,11 +3147,15 @@ var ErrTurnInFlight = errors.New("turn already in flight")
 // stale; the persisted ChatMessage only reflects the successful
 // attempt.
 func (l *Loop) toolDefs(opts TurnOptions) []ToolDef {
+	return l.selectToolSurface(opts).Defs
+}
+
+func (l *Loop) selectToolSurface(opts TurnOptions) ToolSurfaceSelection {
 	tools := l.toolsForTurn(opts)
 	if tools == nil {
-		return nil
+		return ToolSurfaceSelection{}
 	}
-	return tools.ModelDefs()
+	return tools.SelectModelTools(ToolSurfacePolicy{SchemaTokenBudget: l.compactTriggerInputTokens()})
 }
 
 func (l *Loop) toolsForTurn(opts TurnOptions) *Registry {

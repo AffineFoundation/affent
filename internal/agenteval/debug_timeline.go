@@ -1203,6 +1203,12 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		if surface.ToolSchemaBytes > 0 {
 			parts = append(parts, fmt.Sprintf("tool_schema_bytes=`%d`", surface.ToolSchemaBytes))
 		}
+		if surface.ToolSchemaBudgetTokens > 0 {
+			parts = append(parts, fmt.Sprintf("tool_schema_budget_tokens=`%d`", surface.ToolSchemaBudgetTokens))
+		}
+		if surface.ExcludedToolCount > 0 {
+			parts = append(parts, fmt.Sprintf("excluded_tools=`%d/%d`", surface.ExcludedToolCount, surface.AvailableToolCount))
+		}
 		fmt.Fprintf(b, "- request_pressure: %s\n", strings.Join(parts, ", "))
 	}
 	if surface.ToolResultEventCapBytes > 0 || surface.ToolResultContextMaxBytes > 0 || surface.ToolResultContextBudgetBytes > 0 {

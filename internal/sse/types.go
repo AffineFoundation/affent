@@ -75,6 +75,9 @@ type RuntimeSurfacePayload struct {
 	TurnID                       string               `json:"turn_id"`
 	ToolCount                    int                  `json:"tool_count"`
 	Tools                        []RuntimeSurfaceTool `json:"tools,omitempty"`
+	AvailableToolCount           int                  `json:"available_tool_count,omitempty"`
+	ExcludedToolCount            int                  `json:"excluded_tool_count,omitempty"`
+	ExcludedTools                []RuntimeSurfaceTool `json:"excluded_tools,omitempty"`
 	ToolCallCaps                 []RuntimeToolCallCap `json:"tool_call_caps,omitempty"`
 	CompletionGuards             []string             `json:"completion_guards,omitempty"`
 	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
@@ -89,6 +92,7 @@ type RuntimeSurfacePayload struct {
 	CompactTriggerInputPercent   int                  `json:"compact_trigger_input_percent,omitempty"`
 	ConversationBytes            int                  `json:"conversation_bytes,omitempty"`
 	ToolSchemaBytes              int                  `json:"tool_schema_bytes,omitempty"`
+	ToolSchemaBudgetTokens       int                  `json:"tool_schema_budget_tokens,omitempty"`
 	EstimatedConversationTokens  int                  `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens    int                  `json:"estimated_tool_schema_tokens,omitempty"`
 	EstimatedRequestInputTokens  int                  `json:"estimated_request_input_tokens,omitempty"`

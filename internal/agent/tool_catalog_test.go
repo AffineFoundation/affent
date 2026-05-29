@@ -79,3 +79,34 @@ func TestRegistryModelDefsPrioritizeDurableControlTools(t *testing.T) {
 		t.Fatalf("catalog order = %#v, want registration order preserved", catalog[:2])
 	}
 }
+
+func TestRegistrySelectModelToolsAppliesSchemaBudgetByModelRank(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "shell", Description: "run commands", Schema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: "read_file", Description: "read files", Schema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: PlanToolName, Description: "manage plan", Schema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: "web_fetch", Description: "fetch web", Schema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`)})
+
+	all := reg.SelectModelTools(ToolSurfacePolicy{})
+	if len(all.Defs) != 4 || all.SchemaBudgetTokens != 0 || len(all.ExcludedCatalog) != 0 {
+		t.Fatalf("unbudgeted selection = %+v, want all tools without exclusions", all)
+	}
+	budget := EstimateRequestInput(nil, all.Defs[:2]).ToolSchemaTokens
+	got := reg.SelectModelTools(ToolSurfacePolicy{SchemaTokenBudget: budget})
+	names := make([]string, 0, len(got.Defs))
+	for _, def := range got.Defs {
+		names = append(names, def.Function.Name)
+	}
+	if !reflect.DeepEqual(names, []string{PlanToolName, "read_file"}) {
+		t.Fatalf("budgeted model tools = %#v, want plan/read_file", names)
+	}
+	if got.AvailableCount != 4 || len(got.Catalog) != 2 || len(got.ExcludedCatalog) != 2 {
+		t.Fatalf("budgeted counts = available:%d catalog:%d excluded:%d", got.AvailableCount, len(got.Catalog), len(got.ExcludedCatalog))
+	}
+	if got.SchemaBudgetTokens != budget || got.SchemaTokens > budget {
+		t.Fatalf("budget/tokens = %d/%d, want <= %d", got.SchemaTokens, got.SchemaBudgetTokens, budget)
+	}
+	if got.Catalog[0].Name != "read_file" || got.Catalog[1].Name != PlanToolName {
+		t.Fatalf("catalog order = %#v, want selected tools in registration order", got.Catalog)
+	}
+}

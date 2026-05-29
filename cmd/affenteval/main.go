@@ -1132,6 +1132,7 @@ type batchSummary struct {
 	RuntimeSurfaceMaxToolSchemaTokens       int
 	RuntimeSurfaceMaxRequestInputTokens     int
 	RuntimeSurfaceMaxToolSchemaPressure     int
+	RuntimeSurfaceMaxExcludedTools          int
 	TaskStateScenarios                      int
 	TaskStateByStatus                       map[string]int
 	TaskStateByVerification                 map[string]int
@@ -1359,6 +1360,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		if pressure := runtimeSurfaceToolSchemaPressurePercent(res.RuntimeSurface); pressure > s.RuntimeSurfaceMaxToolSchemaPressure {
 			s.RuntimeSurfaceMaxToolSchemaPressure = pressure
+		}
+		if res.RuntimeSurface.ExcludedToolCount > s.RuntimeSurfaceMaxExcludedTools {
+			s.RuntimeSurfaceMaxExcludedTools = res.RuntimeSurface.ExcludedToolCount
 		}
 		if s.RuntimeSurfaceTools == nil {
 			s.RuntimeSurfaceTools = map[string]int{}
@@ -2065,6 +2069,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " tool_schema=max_tokens:%d,max_request_tokens:%d", s.RuntimeSurfaceMaxToolSchemaTokens, s.RuntimeSurfaceMaxRequestInputTokens)
 			if s.RuntimeSurfaceMaxToolSchemaPressure > 0 {
 				fmt.Fprintf(w, ",max_pressure:%d%%", s.RuntimeSurfaceMaxToolSchemaPressure)
+			}
+			if s.RuntimeSurfaceMaxExcludedTools > 0 {
+				fmt.Fprintf(w, ",max_excluded_tools:%d", s.RuntimeSurfaceMaxExcludedTools)
 			}
 		}
 	}
@@ -4159,6 +4166,7 @@ type batchSummaryRecord struct {
 	RuntimeSurfaceMaxToolSchemaTokens       int                                              `json:"runtime_surface_max_tool_schema_tokens,omitempty"`
 	RuntimeSurfaceMaxRequestInputTokens     int                                              `json:"runtime_surface_max_request_input_tokens,omitempty"`
 	RuntimeSurfaceMaxToolSchemaPressure     int                                              `json:"runtime_surface_max_tool_schema_pressure_percent,omitempty"`
+	RuntimeSurfaceMaxExcludedTools          int                                              `json:"runtime_surface_max_excluded_tools,omitempty"`
 	TaskStateRate                           float64                                          `json:"task_state_rate"`
 	TaskStateScenarios                      int                                              `json:"task_state_scenarios,omitempty"`
 	TaskStateByStatus                       map[string]int                                   `json:"task_state_by_status,omitempty"`
@@ -4316,6 +4324,9 @@ type batchSummaryRecord struct {
 type runtimeSurfaceSummary struct {
 	ToolCount                    int                      `json:"tool_count"`
 	Tools                        []string                 `json:"tools,omitempty"`
+	AvailableToolCount           int                      `json:"available_tool_count,omitempty"`
+	ExcludedToolCount            int                      `json:"excluded_tool_count,omitempty"`
+	ExcludedTools                []string                 `json:"excluded_tools,omitempty"`
 	WorkspacePathArgs            map[string][]string      `json:"workspace_path_args,omitempty"`
 	ToolCallCaps                 map[string]int           `json:"tool_call_caps,omitempty"`
 	Capabilities                 *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
@@ -4329,6 +4340,7 @@ type runtimeSurfaceSummary struct {
 	CompactTriggerInputPercent   int                      `json:"compact_trigger_input_percent,omitempty"`
 	ConversationBytes            int                      `json:"conversation_bytes,omitempty"`
 	ToolSchemaBytes              int                      `json:"tool_schema_bytes,omitempty"`
+	ToolSchemaBudgetTokens       int                      `json:"tool_schema_budget_tokens,omitempty"`
 	EstimatedConversationTokens  int                      `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens    int                      `json:"estimated_tool_schema_tokens,omitempty"`
 	EstimatedRequestInputTokens  int                      `json:"estimated_request_input_tokens,omitempty"`
@@ -4508,6 +4520,9 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 	return &runtimeSurfaceSummary{
 		ToolCount:                    surface.ToolCount,
 		Tools:                        tools,
+		AvailableToolCount:           surface.AvailableToolCount,
+		ExcludedToolCount:            surface.ExcludedToolCount,
+		ExcludedTools:                runtimeSurfaceExcludedToolNames(surface),
 		WorkspacePathArgs:            runtimeSurfaceWorkspacePathArgs(surface),
 		ToolCallCaps:                 runtimeSurfaceToolCallCaps(surface),
 		Capabilities:                 &caps,
@@ -4521,6 +4536,7 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 		CompactTriggerInputPercent:   surface.CompactTriggerInputPercent,
 		ConversationBytes:            surface.ConversationBytes,
 		ToolSchemaBytes:              surface.ToolSchemaBytes,
+		ToolSchemaBudgetTokens:       surface.ToolSchemaBudgetTokens,
 		EstimatedConversationTokens:  surface.EstimatedConversationTokens,
 		EstimatedToolSchemaTokens:    surface.EstimatedToolSchemaTokens,
 		EstimatedRequestInputTokens:  surface.EstimatedRequestInputTokens,
@@ -4544,9 +4560,20 @@ func runtimeSurfaceToolNames(surface *sse.RuntimeSurfacePayload) []string {
 	if surface == nil {
 		return nil
 	}
-	tools := make([]string, 0, len(surface.Tools))
+	return runtimeSurfaceToolNamesFromList(surface.Tools)
+}
+
+func runtimeSurfaceExcludedToolNames(surface *sse.RuntimeSurfacePayload) []string {
+	if surface == nil {
+		return nil
+	}
+	return runtimeSurfaceToolNamesFromList(surface.ExcludedTools)
+}
+
+func runtimeSurfaceToolNamesFromList(in []sse.RuntimeSurfaceTool) []string {
+	tools := make([]string, 0, len(in))
 	seen := map[string]bool{}
-	for _, tool := range surface.Tools {
+	for _, tool := range in {
 		name := strings.TrimSpace(tool.Name)
 		if name == "" || seen[name] {
 			continue
@@ -4717,6 +4744,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		RuntimeSurfaceMaxToolSchemaTokens:       s.RuntimeSurfaceMaxToolSchemaTokens,
 		RuntimeSurfaceMaxRequestInputTokens:     s.RuntimeSurfaceMaxRequestInputTokens,
 		RuntimeSurfaceMaxToolSchemaPressure:     s.RuntimeSurfaceMaxToolSchemaPressure,
+		RuntimeSurfaceMaxExcludedTools:          s.RuntimeSurfaceMaxExcludedTools,
 		TaskStateRate:                           batchRatio(s.TaskStateScenarios, s.Total),
 		TaskStateScenarios:                      s.TaskStateScenarios,
 		TaskStateByStatus:                       cloneStringIntMap(s.TaskStateByStatus),

@@ -1904,6 +1904,57 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeSurfaceReflectsBudgetedToolSurface(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "shell", Description: "run commands", Schema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: "read_file", Description: "read files", Schema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: PlanToolName, Description: "manage plan", Schema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: "web_fetch", Description: "fetch web", Schema: json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`)})
+	all := reg.SelectModelTools(ToolSurfacePolicy{})
+	budget := EstimateRequestInput(nil, all.Defs[:2]).ToolSchemaTokens
+	loop := &Loop{
+		Tools:                     reg,
+		Events:                    events,
+		CompactTriggerInputTokens: budget,
+	}
+	defs := loop.toolDefs(TurnOptions{})
+	gotDefs := []string{defs[0].Function.Name, defs[1].Function.Name}
+	if !reflect.DeepEqual(gotDefs, []string{PlanToolName, "read_file"}) {
+		t.Fatalf("model tool defs = %#v, want plan/read_file", gotDefs)
+	}
+
+	loop.publishRuntimeSurface("turn_budgeted_surface", TurnOptions{})
+	ev := <-events
+	if ev.Type != sse.TypeRuntimeSurface {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeRuntimeSurface)
+	}
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if payload.ToolCount != 2 || payload.AvailableToolCount != 4 || payload.ExcludedToolCount != 2 {
+		t.Fatalf("tool counts = visible:%d available:%d excluded:%d", payload.ToolCount, payload.AvailableToolCount, payload.ExcludedToolCount)
+	}
+	if payload.ToolSchemaBudgetTokens != budget || payload.EstimatedToolSchemaTokens > budget {
+		t.Fatalf("tool schema budget = tokens:%d budget:%d want <= %d", payload.EstimatedToolSchemaTokens, payload.ToolSchemaBudgetTokens, budget)
+	}
+	gotVisible := []string{payload.Tools[0].Name, payload.Tools[1].Name}
+	if !reflect.DeepEqual(gotVisible, []string{"read_file", PlanToolName}) {
+		t.Fatalf("visible tools = %#v, want read_file/plan", gotVisible)
+	}
+	gotExcluded := []string{payload.ExcludedTools[0].Name, payload.ExcludedTools[1].Name}
+	if !reflect.DeepEqual(gotExcluded, []string{"shell", "web_fetch"}) {
+		t.Fatalf("excluded tools = %#v, want shell/web_fetch", gotExcluded)
+	}
+	if payload.Capabilities.WebFetch || payload.Capabilities.Builtins {
+		t.Fatalf("capabilities should reflect visible tools only: %+v", payload.Capabilities)
+	}
+	if !payload.Capabilities.Plan || len(payload.Capabilities.WorkspaceTools) != 1 || payload.Capabilities.WorkspaceTools[0] != "read_file" {
+		t.Fatalf("visible capabilities = %+v, want plan and read_file only", payload.Capabilities)
+	}
+}
+
 func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	maxTokens := 30_000
