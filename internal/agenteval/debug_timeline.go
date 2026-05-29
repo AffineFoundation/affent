@@ -97,6 +97,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineToolRepair(&b, trace)
 	renderTimelineLoopGuard(&b, trace)
 	renderTimelineCompactions(&b, trace)
+	renderTimelineCompactionSkips(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineMessageRejections(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
@@ -252,6 +253,13 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ContextCompactions.SummaryEmpty,
 		))
 	}
+	if res.ContextCompactionSkips.Count > 0 {
+		parts = append(parts, fmt.Sprintf("compaction_skips=%d,post_policy_over=%d,max_post_pressure=%d%%",
+			res.ContextCompactionSkips.Count,
+			res.ContextCompactionSkips.PostPolicyStillOverTrigger,
+			res.ContextCompactionSkips.MaxPostPolicyPressurePercent,
+		))
+	}
 	if res.ContextInjections.Count > 0 {
 		parts = append(parts, fmt.Sprintf("context_injections=%d,bytes=%d,est_tokens=%d",
 			res.ContextInjections.Count,
@@ -373,6 +381,13 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			res.ContextCompactions.ReducedBytes,
 			res.ContextCompactions.SummaryBytes,
 			extra,
+		)
+	}
+	if res.ContextCompactionSkips.Count > 0 {
+		fmt.Fprintf(b, "- context: compaction_skips=`%d`, post_policy_over_trigger=`%d`, max_post_policy_pressure_percent=`%d`; inspect Context Compaction Skips before changing token limits.\n",
+			res.ContextCompactionSkips.Count,
+			res.ContextCompactionSkips.PostPolicyStillOverTrigger,
+			res.ContextCompactionSkips.MaxPostPolicyPressurePercent,
 		)
 	}
 	if hasDebugBriefTruncation(res) {
@@ -1524,6 +1539,49 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 			b.WriteString(indentTimelineText(timelineBlock(c.SummaryPreview, timelineResultPreviewBytes), "   "))
 			b.WriteString("\n   ```\n")
 		}
+	}
+}
+
+func renderTimelineCompactionSkips(b *strings.Builder, trace *Trace) {
+	if len(trace.ContextCompactionSkips) == 0 {
+		return
+	}
+	b.WriteString("\n## Context Compaction Skips\n\n")
+	for i, skipped := range trace.ContextCompactionSkips {
+		fmt.Fprintf(b, "%d. turn=`%s` cause=`%s` reason=`%s` messages=%d->%d",
+			i+1,
+			skipped.TurnID,
+			timelineInline(skipped.Cause, 200),
+			timelineInline(skipped.Reason, 200),
+			skipped.BeforeMessages,
+			skipped.CandidateMessages,
+		)
+		if skipped.BeforeBytes > 0 || skipped.CandidateBytes > 0 {
+			fmt.Fprintf(b, " bytes=%d->%d", skipped.BeforeBytes, skipped.CandidateBytes)
+		}
+		var policy []string
+		if skipped.EstimatedInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("estimated_input_tokens=%d", skipped.EstimatedInputTokens))
+		}
+		if skipped.AfterEstimatedInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("after_estimated_input_tokens=%d", skipped.AfterEstimatedInputTokens))
+		}
+		if skipped.TriggerInputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("trigger_input_tokens=%d", skipped.TriggerInputTokens))
+		}
+		if skipped.ModelContextWindowTokens > 0 {
+			policy = append(policy, fmt.Sprintf("model_context_window_tokens=%d", skipped.ModelContextWindowTokens))
+		}
+		if skipped.ReservedOutputTokens > 0 {
+			policy = append(policy, fmt.Sprintf("reserved_output_tokens=%d", skipped.ReservedOutputTokens))
+		}
+		if skipped.CompactTriggerInputPercent > 0 {
+			policy = append(policy, fmt.Sprintf("compact_trigger_input_percent=%d", skipped.CompactTriggerInputPercent))
+		}
+		if len(policy) > 0 {
+			fmt.Fprintf(b, " policy=%s", strings.Join(policy, ","))
+		}
+		b.WriteByte('\n')
 	}
 }
 

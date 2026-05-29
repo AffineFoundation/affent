@@ -409,6 +409,29 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			SummaryPreview:             p.SummaryPreview,
 			LoopProtocolAnchor:         p.LoopProtocolAnchor,
 		})
+	case sse.TypeContextCompactSkipped:
+		var p sse.ContextCompactSkippedPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.ContextCompactionSkips = append(t.ContextCompactionSkips, ContextCompactionSkip{
+			TurnID:                     p.TurnID,
+			Cause:                      p.Cause,
+			Reason:                     p.Reason,
+			BeforeMessages:             p.BeforeMessages,
+			CandidateMessages:          p.CandidateMessages,
+			BeforeBytes:                p.BeforeBytes,
+			CandidateBytes:             p.CandidateBytes,
+			EstimatedInputTokens:       p.EstimatedInputTokens,
+			AfterEstimatedInputTokens:  p.AfterEstimatedInputTokens,
+			TriggerInputTokens:         p.TriggerInputTokens,
+			ModelContextWindowTokens:   p.ModelContextWindowTokens,
+			ReservedOutputTokens:       p.ReservedOutputTokens,
+			CompactTriggerInputPercent: p.CompactTriggerInputPercent,
+		})
 	case sse.TypeError:
 		var p sse.ErrorPayload
 		if err := json.Unmarshal(data, &p); err == nil && p.Message != "" {
@@ -467,6 +490,16 @@ func traceEventRefFromPayload(typ string, data json.RawMessage, turnID string) (
 			TurnID:          p.TurnID,
 			ContextReason:   p.Reason,
 			ContextReactive: p.Reactive,
+		}, true
+	case sse.TypeContextCompactSkipped:
+		var p sse.ContextCompactSkippedPayload
+		if err := json.Unmarshal(data, &p); err != nil || !traceEventMatchesTurn(p.TurnID, turnID) {
+			return TraceEventRef{}, false
+		}
+		return TraceEventRef{
+			Type:          typ,
+			TurnID:        p.TurnID,
+			ContextReason: p.Reason,
 		}, true
 	case sse.TypeLoopTurnCheckpoint:
 		var p sse.LoopTurnCheckpointPayload

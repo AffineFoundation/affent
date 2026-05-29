@@ -589,6 +589,23 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"max_post_policy_pressure_percent": res.ContextCompactions.MaxPostPolicyPressurePercent,
 		}, tags...)
 	}
+	if res.ContextCompactionSkips.Count > 0 {
+		tags := []string{"context_compaction:skipped"}
+		for _, cause := range sortedStringMapKeys(res.ContextCompactionSkips.ByCause) {
+			tags = append(tags, "context_compaction_skip:"+cause)
+		}
+		for _, reason := range sortedStringMapKeys(res.ContextCompactionSkips.ByReason) {
+			tags = append(tags, "context_compaction:"+reason)
+		}
+		add("context_compaction_skipped", "info", "context compaction candidate was discarded before replacing conversation state; inspect policy pressure before changing token limits", []string{"context_compaction_skip_examples", "runtime_surface", "trace_event_types"}, map[string]int{
+			"count":                            res.ContextCompactionSkips.Count,
+			"policy_observed":                  res.ContextCompactionSkips.PolicyObserved,
+			"post_policy_observed":             res.ContextCompactionSkips.PostPolicyObserved,
+			"post_policy_still_over_trigger":   res.ContextCompactionSkips.PostPolicyStillOverTrigger,
+			"max_policy_pressure_percent":      res.ContextCompactionSkips.MaxPolicyPressurePercent,
+			"max_post_policy_pressure_percent": res.ContextCompactionSkips.MaxPostPolicyPressurePercent,
+		}, tags...)
+	}
 	if hasDebugBriefTruncation(res) {
 		message := "tool or context output was truncated; inspect examples and artifacts before judging evidence"
 		tags := []string{"truncation"}

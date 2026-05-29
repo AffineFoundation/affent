@@ -220,6 +220,10 @@ type Trace struct {
 	// rolling compactor. The full user-visible trace remains in events.jsonl;
 	// these entries let long-run evals assert that context pressure was handled.
 	ContextCompactions []ContextCompaction
+	// ContextCompactionSkips records compaction candidates that were rejected
+	// before replacing conversation state. These are audit events, not task
+	// progress, and help explain token-pressure behavior without prompt bloat.
+	ContextCompactionSkips []ContextCompactionSkip
 	// EventOrder preserves a compact chronological index for trace assertions
 	// that depend on sequencing across event families, such as confirming a
 	// full LOOP.md feed occurred after context compaction.
@@ -822,6 +826,35 @@ type ContextCompactionStats struct {
 	MaxPostPolicyPressurePercent int
 	ByReason                     map[string]int
 	Examples                     []ContextCompaction
+}
+
+type ContextCompactionSkip struct {
+	Scenario                   string `json:"scenario,omitempty"`
+	TurnID                     string `json:"turn_id,omitempty"`
+	Cause                      string `json:"cause"`
+	Reason                     string `json:"reason,omitempty"`
+	BeforeMessages             int    `json:"before_messages,omitempty"`
+	CandidateMessages          int    `json:"candidate_messages,omitempty"`
+	BeforeBytes                int    `json:"before_bytes,omitempty"`
+	CandidateBytes             int    `json:"candidate_bytes,omitempty"`
+	EstimatedInputTokens       int    `json:"estimated_input_tokens,omitempty"`
+	AfterEstimatedInputTokens  int    `json:"after_estimated_input_tokens,omitempty"`
+	TriggerInputTokens         int    `json:"trigger_input_tokens,omitempty"`
+	ModelContextWindowTokens   int    `json:"model_context_window_tokens,omitempty"`
+	ReservedOutputTokens       int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent int    `json:"compact_trigger_input_percent,omitempty"`
+}
+
+type ContextCompactionSkipStats struct {
+	Count                        int
+	PolicyObserved               int
+	PostPolicyObserved           int
+	PostPolicyStillOverTrigger   int
+	MaxPolicyPressurePercent     int
+	MaxPostPolicyPressurePercent int
+	ByCause                      map[string]int
+	ByReason                     map[string]int
+	Examples                     []ContextCompactionSkip
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -2097,6 +2130,51 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			SummaryPreview:             compactOneLine(compaction.SummaryPreview, 600),
 			LoopProtocolAnchor:         compaction.LoopProtocolAnchor,
 		})
+	}
+	return stats
+}
+
+func (t Trace) ContextCompactionSkipStats(maxExamples int) ContextCompactionSkipStats {
+	stats := ContextCompactionSkipStats{}
+	for _, skipped := range t.ContextCompactionSkips {
+		stats.Count++
+		if stats.ByCause == nil {
+			stats.ByCause = map[string]int{}
+		}
+		if stats.ByReason == nil {
+			stats.ByReason = map[string]int{}
+		}
+		cause := strings.TrimSpace(skipped.Cause)
+		if cause == "" {
+			cause = "unknown"
+		}
+		reason := strings.TrimSpace(skipped.Reason)
+		if reason == "" {
+			reason = "unknown"
+		}
+		stats.ByCause[cause]++
+		stats.ByReason[reason]++
+		if skipped.EstimatedInputTokens > 0 && skipped.TriggerInputTokens > 0 {
+			stats.PolicyObserved++
+			pressure := contextCompactionPolicyPressurePercent(skipped.EstimatedInputTokens, skipped.TriggerInputTokens)
+			if pressure > stats.MaxPolicyPressurePercent {
+				stats.MaxPolicyPressurePercent = pressure
+			}
+		}
+		if skipped.AfterEstimatedInputTokens > 0 && skipped.TriggerInputTokens > 0 {
+			stats.PostPolicyObserved++
+			pressure := contextCompactionPolicyPressurePercent(skipped.AfterEstimatedInputTokens, skipped.TriggerInputTokens)
+			if pressure > stats.MaxPostPolicyPressurePercent {
+				stats.MaxPostPolicyPressurePercent = pressure
+			}
+			if skipped.AfterEstimatedInputTokens >= skipped.TriggerInputTokens {
+				stats.PostPolicyStillOverTrigger++
+			}
+		}
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, skipped)
 	}
 	return stats
 }

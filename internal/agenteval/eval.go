@@ -338,6 +338,7 @@ type BatchResult struct {
 	LoopTurnCheckpoints             LoopTurnCheckpointStats
 	ContextInjections               ContextInjectionStats
 	ContextCompactions              ContextCompactionStats
+	ContextCompactionSkips          ContextCompactionSkipStats
 	ToolRepairExamples              []ToolRepairExample
 	ToolFailureExamples             map[string][]ToolFailureExample
 	LoopGuardExamples               []LoopGuardExample
@@ -425,6 +426,7 @@ type DebugManifest struct {
 	PlanExamples                           []PlanExample                     `json:"plan_examples,omitempty"`
 	ToolTruncationExamples                 []ToolTruncationExample           `json:"tool_truncation_examples,omitempty"`
 	ContextCompactionExamples              []ContextCompaction               `json:"context_compaction_examples,omitempty"`
+	ContextCompactionSkipExamples          []ContextCompactionSkip           `json:"context_compaction_skip_examples,omitempty"`
 	ChildTranscripts                       []DebugTranscriptRef              `json:"child_transcripts,omitempty"`
 	Metrics                                DebugMetrics                      `json:"metrics"`
 	RuntimeSurface                         *sse.RuntimeSurfacePayload        `json:"runtime_surface,omitempty"`
@@ -1154,6 +1156,8 @@ type DebugMetrics struct {
 	ContextCompactionSummary        int            `json:"context_compaction_summary_bytes,omitempty"`
 	ContextCompactionMissing        int            `json:"context_compaction_summary_missing,omitempty"`
 	ContextCompactionEmpty          int            `json:"context_compaction_summary_empty,omitempty"`
+	ContextCompactionSkipped        int            `json:"context_compaction_skipped,omitempty"`
+	ContextCompactionSkippedByCause map[string]int `json:"context_compaction_skipped_by_cause,omitempty"`
 	ToolContextTruncated            int            `json:"tool_context_truncated,omitempty"`
 	ToolContextOmittedBytes         int            `json:"tool_context_omitted_bytes,omitempty"`
 	InputTokens                     int            `json:"input_tokens"`
@@ -1513,6 +1517,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if trace != nil && res.ContextCompactions.Count == 0 {
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 	}
+	if trace != nil && res.ContextCompactionSkips.Count == 0 {
+		res.ContextCompactionSkips = trace.ContextCompactionSkipStats(2)
+	}
 	if trace != nil {
 		if strings.TrimSpace(res.TraceWorkspace) == "" {
 			res.TraceWorkspace = strings.TrimSpace(trace.WorkspaceDir)
@@ -1595,6 +1602,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		PlanExamples:                           append([]PlanExample(nil), res.PlanExamples...),
 		ToolTruncationExamples:                 append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
 		ContextCompactionExamples:              append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
+		ContextCompactionSkipExamples:          append([]ContextCompactionSkip(nil), res.ContextCompactionSkips.Examples...),
 		ChildTranscripts:                       append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
 		RuntimeSurface:                         cloneRuntimeSurface(res.RuntimeSurface),
 		TaskState:                              CloneTaskStateSnapshotPtr(res.TaskState),
@@ -1665,6 +1673,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ContextCompactionSummary:        res.ContextCompactions.SummaryBytes,
 			ContextCompactionMissing:        res.ContextCompactions.SummaryMissing,
 			ContextCompactionEmpty:          res.ContextCompactions.SummaryEmpty,
+			ContextCompactionSkipped:        res.ContextCompactionSkips.Count,
+			ContextCompactionSkippedByCause: cloneStringIntMap(res.ContextCompactionSkips.ByCause),
 			ToolContextTruncated:            res.ToolStats.ToolContextTruncated,
 			ToolContextOmittedBytes:         res.ToolStats.ToolContextOmittedBytes,
 			InputTokens:                     res.Usage.InputTokens,
@@ -1746,6 +1756,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.LoopTurnCheckpoints = trace.LoopTurnCheckpointStats(2)
 	res.ContextInjections = trace.ContextInjectionStats(2)
 	res.ContextCompactions = trace.ContextCompactionStats(2)
+	res.ContextCompactionSkips = trace.ContextCompactionSkipStats(2)
 	res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 	res.ToolFailureExamples = trace.ToolFailureExamples(2)
 	res.LoopGuardExamples = trace.LoopGuardExamples(maxDebugLoopGuardExamples)

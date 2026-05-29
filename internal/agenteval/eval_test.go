@@ -725,6 +725,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","token_budget":300000,"observed_input_tokens":120000,"projected_input_tokens":250000,"visible_in_ui":true}}`,
 		`{"type":"loop.turn_checkpoint","data":{"turn_id":"t1","loop_id":"longrun","status":"running","protocol_path":".affent/loops/longrun/LOOP.md","event_seq":7,"turn_checkpoints":1,"end_reason":"max_turns","input_tokens":101,"output_tokens":17,"tool_requests":2,"tool_requests_admitted":1,"tool_requests_skipped":1,"tool_errors":1,"loop_guards":1,"forced_no_tools":1,"memory_updates":2,"memory_search_calls":2,"memory_search_misses":1,"session_search_calls":1}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"before_bytes":120000,"after_bytes":24000,"reduced_bytes":96000,"estimated_input_tokens":120000,"trigger_input_tokens":70000,"model_context_window_tokens":100000,"reserved_output_tokens":30000,"compact_trigger_input_percent":80,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
+		`{"type":"context.compaction_skipped","data":{"turn_id":"t1","cause":"request_pressure_not_reduced","reason":"estimated_context_pressure","before_messages":18,"candidate_messages":3,"before_bytes":24000,"candidate_bytes":32000,"estimated_input_tokens":90000,"after_estimated_input_tokens":91000,"trigger_input_tokens":70000,"model_context_window_tokens":100000,"reserved_output_tokens":30000,"compact_trigger_input_percent":80}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t2","loop_id":"longrun","status":"running","mode":"full","feed_number":5,"protocol_feeds":5,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
 		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"memory_search_calls":2,"memory_search_misses":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"session_search_recent_sessions":3,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
@@ -777,6 +778,24 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		trace.ContextCompactions[0].ReservedOutputTokens != 30000 ||
 		trace.ContextCompactions[0].CompactTriggerInputPercent != 80 {
 		t.Fatalf("ContextCompactions = %+v", trace.ContextCompactions)
+	}
+	if len(trace.ContextCompactionSkips) != 1 ||
+		trace.ContextCompactionSkips[0].Cause != "request_pressure_not_reduced" ||
+		trace.ContextCompactionSkips[0].Reason != "estimated_context_pressure" ||
+		trace.ContextCompactionSkips[0].AfterEstimatedInputTokens != 91000 ||
+		trace.ContextCompactionSkips[0].TriggerInputTokens != 70000 ||
+		trace.ContextCompactionSkips[0].ModelContextWindowTokens != 100000 ||
+		trace.RawTypes[sse.TypeContextCompactSkipped] != 1 {
+		t.Fatalf("ContextCompactionSkips = %+v raw=%#v", trace.ContextCompactionSkips, trace.RawTypes)
+	}
+	compactionSkips := trace.ContextCompactionSkipStats(1)
+	if compactionSkips.Count != 1 ||
+		compactionSkips.ByCause["request_pressure_not_reduced"] != 1 ||
+		compactionSkips.ByReason["estimated_context_pressure"] != 1 ||
+		compactionSkips.PostPolicyStillOverTrigger != 1 ||
+		compactionSkips.MaxPostPolicyPressurePercent != 130 ||
+		len(compactionSkips.Examples) != 1 {
+		t.Fatalf("ContextCompactionSkipStats = %+v", compactionSkips)
 	}
 	contextInjections := trace.ContextInjectionStats(1)
 	if contextInjections.Count != 2 ||
@@ -5126,6 +5145,14 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			SummaryBytes:    512,
 			SummaryPreview:  "USER_CONTEXT: debug run must preserve browser network evidence.",
 		}},
+		ContextCompactionSkips: []ContextCompactionSkip{{
+			TurnID:                    "turn-debug",
+			Cause:                     "request_pressure_not_reduced",
+			Reason:                    "estimated_context_pressure",
+			EstimatedInputTokens:      90000,
+			AfterEstimatedInputTokens: 91000,
+			TriggerInputTokens:        70000,
+		}},
 		FinalText:    "partial answer",
 		FinishReason: "stop",
 	}
@@ -5545,6 +5572,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!strings.Contains(manifest.ContextCompactionExamples[0].SummaryPreview, "browser network evidence") {
 		t.Fatalf("manifest context compaction examples = %+v", manifest.ContextCompactionExamples)
 	}
+	if len(manifest.ContextCompactionSkipExamples) != 1 ||
+		manifest.ContextCompactionSkipExamples[0].TurnID != "turn-debug" ||
+		manifest.ContextCompactionSkipExamples[0].Cause != "request_pressure_not_reduced" ||
+		manifest.ContextCompactionSkipExamples[0].Reason != "estimated_context_pressure" {
+		t.Fatalf("manifest context compaction skip examples = %+v", manifest.ContextCompactionSkipExamples)
+	}
 	if len(manifest.ChildTranscripts) != 2 ||
 		manifest.ChildTranscripts[0].Kind != "focused_task" ||
 		manifest.ChildTranscripts[0].Path != ".affentctl/focused-tasks/debug-session/focused_alpha.jsonl" ||
@@ -5564,6 +5597,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.ReactiveContextCompactions != 1 ||
 		manifest.Metrics.ContextCompactionRemoved != 12 ||
 		manifest.Metrics.ContextCompactionSummary != 512 ||
+		manifest.Metrics.ContextCompactionSkipped != 1 ||
+		manifest.Metrics.ContextCompactionSkippedByCause["request_pressure_not_reduced"] != 1 ||
 		manifest.Metrics.MemoryUpdates != 2 ||
 		manifest.Metrics.MemoryUpdateAdd != 1 ||
 		manifest.Metrics.MemoryUpdateReplace != 1 ||
@@ -5608,7 +5643,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) memory_search=calls:2,misses:1 session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,reduced_bytes=0,summary_bytes=512,summary_missing=0,summary_empty=0 loop_calibrations=1 loop_calibration_requests=1 tokens=100/20",
+		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) memory_search=calls:2,misses:1 session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,reduced_bytes=0,summary_bytes=512,summary_missing=0,summary_empty=0 compaction_skips=1,post_policy_over=1,max_post_pressure=130% loop_calibrations=1 loop_calibration_requests=1 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"## Tool Repair",
@@ -5697,12 +5732,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
 		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context or persisted task-state anchors; inspect Session Search examples for incomplete recovery.",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, reduced_bytes=`0`, summary_bytes=`512`",
+		"context: compaction_skips=`1`, post_policy_over_trigger=`1`, max_post_policy_pressure_percent=`130`; inspect Context Compaction Skips before changing token limits.",
 		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1 context_artifacts=0 missing_artifacts=0",
 		"## Trace Events",
 		"`conversation.repaired`: `1`",
 		"`message.delta`: `2`",
 		"## Conversation Repairs",
 		"repair#1 session=`debug-session` missing_tool_results=`1` failure_kind=`resume_missing_tool_result` next=do not assume the tool succeeded",
+		"## Context Compaction Skips",
+		"cause=`request_pressure_not_reduced` reason=`estimated_context_pressure`",
+		"policy=estimated_input_tokens=90000,after_estimated_input_tokens=91000,trigger_input_tokens=70000",
 		"## Source Evidence",
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
 		"preview: PAGE DIAGNOSTICS: - empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value PAGE TEXT: Affine SN120",
