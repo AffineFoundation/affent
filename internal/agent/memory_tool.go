@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -166,10 +167,18 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add. Next: retry with compact durable content, target=memory for project facts or target=user for stable user preferences."}
 					break
 				}
+				if issue := memoryContentQualityIssue(p.Content); issue != "" {
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: issue}
+					break
+				}
 				resp, storeErr = store.Add(target, p.Topic, p.Content)
 			case memoryActionReplace:
 				if p.OldText == "" || p.Content == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace. Next: search/list first, then retry with a unique old_text substring and the full replacement content."}
+					break
+				}
+				if issue := memoryContentQualityIssue(p.Content); issue != "" {
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: issue}
 					break
 				}
 				resp, storeErr = store.Replace(target, p.Topic, p.OldText, p.Content)
@@ -211,6 +220,49 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			return string(out), nil
 		},
 	}
+}
+
+func memoryContentQualityIssue(content string) string {
+	if memoryContentHasExclusionClause(content) {
+		return "memory content mixes a durable fact with non-memory/exclusion guidance. Next: retry with only the positive reusable fact as a compact atomic entry; do not include examples of transient facts, rejected facts, or things not to remember."
+	}
+	return ""
+}
+
+func memoryContentHasExclusionClause(content string) bool {
+	for _, clause := range memoryContentClauses(content) {
+		normalized := strings.ToLower(textutil.CompactWhitespace(clause))
+		switch {
+		case strings.Contains(normalized, "transient") && (strings.Contains(normalized, "not durable") || strings.Contains(normalized, "not a durable") || strings.Contains(normalized, "not memory") || strings.Contains(normalized, "not be remembered") || strings.Contains(normalized, "do not remember")):
+			return true
+		case strings.Contains(normalized, "one-off") && (strings.Contains(normalized, "not durable") || strings.Contains(normalized, "transient")):
+			return true
+		case strings.Contains(normalized, "do not save") || strings.Contains(normalized, "do not store") || strings.Contains(normalized, "do not remember"):
+			return true
+		case strings.Contains(normalized, "not durable convention") || strings.Contains(normalized, "not durable conventions"):
+			return true
+		}
+	}
+	return false
+}
+
+func memoryContentClauses(content string) []string {
+	fields := strings.FieldsFunc(content, func(r rune) bool {
+		switch r {
+		case '.', '!', '?', '\n', ';':
+			return true
+		default:
+			return false
+		}
+	})
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field != "" {
+			out = append(out, field)
+		}
+	}
+	return out
 }
 
 func formatMemoryDecodeArgsError(err error) error {

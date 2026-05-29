@@ -795,6 +795,34 @@ func TestRecordContextCompactionForcesNextFullProtocolFeed(t *testing.T) {
 	}
 }
 
+func TestRecordContextCompactionDoesNotForceFullFeedForProactivePressure(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := ProtocolPath(dir, "market-run")
+	if err := WriteProtocol(protocolPath, "# Loop\n\n## North Star\n\nKeep digest cadence under token pressure."); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := RecordProtocolFeed(protocolPath, "full"); err != nil {
+		t.Fatalf("RecordProtocolFeed: %v", err)
+	}
+	state, event, err := RecordContextCompaction(protocolPath, "input_budget_pressure", false)
+	if err != nil {
+		t.Fatalf("RecordContextCompaction: %v", err)
+	}
+	if event.Type != "context.compacted" || event.Reason != "input_budget_pressure" || event.Path != ProtocolRelPath("market-run") || event.Reactive {
+		t.Fatalf("compaction event = %+v", event)
+	}
+	if state.NeedsFullProtocolFeed || state.ContextCompactions != 1 || state.LastCompactionReason != "input_budget_pressure" || state.LastCompactionReactive {
+		t.Fatalf("state after proactive compaction = %+v", state)
+	}
+	state, event, err = RecordProtocolFeed(protocolPath, "digest")
+	if err != nil {
+		t.Fatalf("RecordProtocolFeed after proactive compaction: %v", err)
+	}
+	if state.LastProtocolFeedMode != "digest" || event.FeedNumber != 2 {
+		t.Fatalf("state after digest feed = %+v event=%+v", state, event)
+	}
+}
+
 func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 	dir := t.TempDir()
 	protocolPath := ProtocolPath(dir, "market-run")

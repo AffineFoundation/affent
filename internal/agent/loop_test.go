@@ -387,6 +387,109 @@ func TestFinalEvidenceDigestPreservesNetworkRef(t *testing.T) {
 	}
 }
 
+func TestFinalEvidenceDigestCarriesTaskStateForNoToolFinalization(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role:    "user",
+			Content: summaryPrefix + "USER_CONTEXT: fix budget recovery\nPENDING: push the latest commit\nNEXT_ACTION: verify git status",
+		},
+		{
+			Role: "tool",
+			Name: PlanToolName,
+			Content: `{"version":1,"message":"updated step","steps":[` +
+				`{"text":"Reproduce failure","status":"completed","evidence":["trace.jsonl"]},` +
+				`{"text":"Push latest commit","status":"in_progress","evidence":["commit 4a30cdc"]}` +
+				`]}`,
+		},
+		{
+			Role:    "tool",
+			Name:    "shell",
+			Content: "[exit 0]\n[main 4a30cdc] Stabilize budget recovery\n 2 files changed\n",
+		},
+		{
+			Role:    "tool",
+			Name:    "shell",
+			Content: "(projected turn input token budget would be exhausted; final no-tool answer requested)\nFailure: kind=turn_input_budget_exhausted\nNext: answer from compact evidence",
+		},
+	}
+
+	got := finalEvidenceDigest(msgs)
+	for _, want := range []string{
+		"Final evidence digest",
+		"Task-state digest:",
+		"compaction_summary:",
+		"PENDING: push the latest commit",
+		"plan:",
+		"plan_status:",
+		"Push latest commit",
+		"shell:",
+		"Stabilize budget recovery",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "turn_input_budget_exhausted") {
+		t.Fatalf("digest should not surface skipped budget tool results as task evidence:\n%s", got)
+	}
+	if strings.Contains(got, "Metric caution") || strings.Contains(got, "Source status caution") {
+		t.Fatalf("coding task-state digest should not spend tokens on web-source cautions:\n%s", got)
+	}
+}
+
+func TestFinalEvidenceDigestDoesNotRevivePreCompactionTaskState(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role:    "tool",
+			Name:    PlanToolName,
+			Content: `{"version":1,"updated_at":"2026-05-29T20:13:09Z","steps":[],"message":"no active plan"}`,
+		},
+		{
+			Role: "user",
+			Content: summaryPrefix + "TASK_TRACKING: {plan_step_5: in_progress}\n" +
+				"PENDING: update plan step 5 with git push and clean status evidence\n" +
+				"CURRENT_STATE: latest commit c3b3c86 pushed to origin main",
+		},
+		{
+			Role:    "tool",
+			Name:    "shell",
+			Content: "To .git/affent-eval-remote.git\n   7bc4eff..c3b3c86  main -> main\n\n[exit 0]",
+		},
+	}
+
+	got := finalEvidenceDigest(msgs)
+	for _, want := range []string{"compaction_summary:", "plan_step_5: in_progress", "c3b3c86", "shell:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "no active plan") {
+		t.Fatalf("digest should not revive task-state tool results that predate the rolling summary:\n%s", got)
+	}
+}
+
+func TestFinalEvidenceDigestSkipsStructuredToolFailuresAndKeepsSummaryTail(t *testing.T) {
+	longSummary := summaryPrefix +
+		"USER_CONTEXT: finish release\n" +
+		strings.Repeat("middle detail that should not hide the latest state. ", 80) +
+		"\nFINAL_STATE: commit d235340 pushed to origin main; git status --short clean; AUTO-MEM-64 and --summary verified."
+	msgs := []ChatMessage{
+		{Role: "user", Content: longSummary},
+		{Role: "tool", Name: PlanToolName, Content: "Error: active plan already has unfinished work\nFailure: kind=plan_active_replacement\nNext: view or update"},
+		{Role: "tool", Name: "shell", Content: "STDERR:\nTo .git/affent-eval-remote.git\n   693627d..d235340  main -> main\n\n[exit 0]"},
+	}
+
+	got := finalEvidenceDigest(msgs)
+	for _, want := range []string{"FINAL_STATE", "d235340", "git status --short clean", "AUTO-MEM-64", "shell:"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "plan_active_replacement") || strings.Contains(got, "active plan already has unfinished work") {
+		t.Fatalf("digest should not prioritize structured tool failures as task evidence:\n%s", got)
+	}
+}
+
 func TestFinalEvidenceDigestSkipsRenderedBrowserDiscoveryOnlyFallbacks(t *testing.T) {
 	msgs := []ChatMessage{
 		{

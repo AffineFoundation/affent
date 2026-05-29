@@ -316,36 +316,7 @@ func taskStateToolResult(tool ToolCall) taskstate.ToolResult {
 }
 
 func appendTaskAction(items []TaskStateAction, item TaskStateAction) []TaskStateAction {
-	item.Tool = strings.TrimSpace(item.Tool)
-	if item.Tool == "" {
-		return items
-	}
-	item.Summary = strings.TrimSpace(item.Summary)
-	if len(items) >= taskStateMaxItems {
-		items = removeOldestRepeatedTaskActionTool(items)
-	}
-	return append(items, item)
-}
-
-func removeOldestRepeatedTaskActionTool(items []TaskStateAction) []TaskStateAction {
-	if len(items) == 0 {
-		return items
-	}
-	counts := map[string]int{}
-	for _, item := range items {
-		counts[strings.TrimSpace(item.Tool)]++
-	}
-	remove := 0
-	for i, item := range items {
-		if counts[strings.TrimSpace(item.Tool)] > 1 {
-			remove = i
-			break
-		}
-	}
-	out := make([]TaskStateAction, 0, len(items)-1)
-	out = append(out, items[:remove]...)
-	out = append(out, items[remove+1:]...)
-	return out
+	return taskstate.AppendAction(items, item, taskStateMaxItems)
 }
 
 func appendTaskFile(items []TaskStateFile, item TaskStateFile) []TaskStateFile {

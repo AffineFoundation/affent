@@ -80,6 +80,7 @@ type toolLoopGuard struct {
 	// appear in perTurnCallCaps. Entries are created lazily so most
 	// turns pay no allocation for this layer.
 	perToolCounts              map[string]int
+	perToolCapOverrides        map[string]int
 	directReaderWarningURLs    map[string]bool
 	browserFindNoMatchURL      string
 	browserFindNoMatchCount    int
@@ -111,6 +112,26 @@ func newToolLoopGuard() *toolLoopGuard {
 	}
 }
 
+func (g *toolLoopGuard) setPerTurnCallCap(tool string, cap int) {
+	if g == nil || strings.TrimSpace(tool) == "" || cap <= 0 {
+		return
+	}
+	if g.perToolCapOverrides == nil {
+		g.perToolCapOverrides = map[string]int{}
+	}
+	g.perToolCapOverrides[tool] = cap
+}
+
+func (g *toolLoopGuard) perTurnCallCap(tool string) (int, bool) {
+	if g != nil && g.perToolCapOverrides != nil {
+		if cap := g.perToolCapOverrides[tool]; cap > 0 {
+			return cap, true
+		}
+	}
+	cap, ok := perTurnCallCaps[tool]
+	return cap, ok
+}
+
 func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string {
 	if g == nil {
 		return ""
@@ -126,7 +147,7 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	// gets the over-delegation message rather than the misleading
 	// "same effective arguments" message. The args-hash guard remains
 	// a secondary defense for repeats with identical inputs.
-	if cap, capped := perTurnCallCaps[tool]; capped && perTurnCallCapApplies(tool, args) {
+	if cap, capped := g.perTurnCallCap(tool); capped && perTurnCallCapApplies(tool, args) {
 		if g.perToolCounts[tool] >= cap {
 			return perTurnCapMessage(tool, cap)
 		}

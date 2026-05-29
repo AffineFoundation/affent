@@ -125,7 +125,7 @@ func planTool(path string) *Tool {
 					return "", err
 				}
 				if planHasOpenWork(existing) {
-					return "", errors.New("active plan already has unfinished work; action=set would replace persisted task state\nNext: use action=update for the current step, action=view to inspect the plan, or action=clear only when the user explicitly wants to discard the current plan.\nFailure: kind=plan_active_replacement")
+					return "", planActiveReplacementError(existing)
 				}
 				steps, err := normalizePlanSteps(p.Steps)
 				if err != nil {
@@ -332,6 +332,20 @@ func planHasOpenWork(st planState) bool {
 		}
 	}
 	return false
+}
+
+func planActiveReplacementError(existing planState) error {
+	existing.Message = "active plan unchanged"
+	current := activePlanCurrentStepIndex(existing.Steps)
+	next := "use action=update for the current step"
+	if current > 0 {
+		next = fmt.Sprintf("use action=update for step %d", current)
+	}
+	state := ""
+	if raw, err := marshalPlanState(existing); err == nil {
+		state = "\nCurrent plan state:\n" + raw
+	}
+	return fmt.Errorf("active plan already has unfinished work; action=set would replace persisted task state%s\nNext: %s, action=view to inspect the plan, or action=clear only when the user explicitly wants to discard the current plan.\nFailure: kind=plan_active_replacement", state, next)
 }
 
 func normalizePlanSteps(steps []planStep) ([]planStep, error) {

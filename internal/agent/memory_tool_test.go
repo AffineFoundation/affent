@@ -52,6 +52,25 @@ func TestMemoryTool_DispatchAdd(t *testing.T) {
 	}
 }
 
+func TestMemoryToolRejectsMixedDurableAndExclusionContent(t *testing.T) {
+	tool, store := newMemoryToolFixture(t)
+	out, err := tool.Execute(context.Background(), json.RawMessage(
+		`{"action":"add","target":"memory","topic":"conventions","content":"Durable CLI contract: every machine-readable JSON output must include marker AUTO-MEM-64. Transient facts, one-off test output, and other non-memory details are not durable conventions."}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "positive reusable fact") || !strings.Contains(out, "compact atomic entry") {
+		t.Fatalf("quality rejection should guide atomic rewrite:\n%s", out)
+	}
+	search, err := store.Search(memory.TargetMemory, "conventions", "AUTO-MEM-64", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Entries) != 0 {
+		t.Fatalf("rejected memory content should not be stored: %+v", search.Entries)
+	}
+}
+
 // TestMemoryTool_DispatchValidation pins the per-action required-arg
 // checks. The tool returns a structured response with a descriptive
 // Message instead of an opaque "decode args" error so the model can

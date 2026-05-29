@@ -146,6 +146,9 @@ func TestDeriveTaskStatePreservesDistinctActionAndEvidenceSourcesAtLimit(t *test
 	if !taskStateHasAttemptedAction(got, "session_workspace", "app") {
 		t.Fatalf("attempted actions = %+v, want session_workspace app preserved", got.AttemptedActions)
 	}
+	if !taskStateHasAttemptedAction(got, "shell", "git push") {
+		t.Fatalf("attempted actions = %+v, want git push handoff preserved", got.AttemptedActions)
+	}
 	if !taskStateHasEvidenceSummary(got, "git_commit", "git commit") ||
 		!taskStateHasEvidenceSummary(got, "git_push", "git push") {
 		t.Fatalf("evidence = %+v, want git commit and push sources preserved", got.Evidence)

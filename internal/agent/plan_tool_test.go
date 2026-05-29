@@ -125,7 +125,10 @@ func TestPlanToolRejectsSetOverUnfinishedPlan(t *testing.T) {
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"start over"}]}`))
 	if err == nil ||
 		!strings.Contains(err.Error(), "action=set would replace persisted task state") ||
-		!strings.Contains(err.Error(), "Failure: kind=plan_active_replacement") {
+		!strings.Contains(err.Error(), "Failure: kind=plan_active_replacement") ||
+		!strings.Contains(err.Error(), "Current plan state:") ||
+		!strings.Contains(err.Error(), `"message":"active plan unchanged"`) ||
+		!strings.Contains(err.Error(), "Next: use action=update for step 2") {
 		t.Fatalf("replacement set error = %v", err)
 	}
 	out, viewErr := tool.Execute(context.Background(), json.RawMessage(`{"action":"view"}`))

@@ -1538,6 +1538,7 @@ func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 		"latest actionable Next guidance",
 		"memory/session recall markers",
 		"verification commands",
+		"AFFENT REJECTED FINAL DRAFT",
 	} {
 		if !strings.Contains(defaultSummaryPrompt, phrase) {
 			t.Fatalf("default prompt missing Affent recovery phrase %q", phrase)

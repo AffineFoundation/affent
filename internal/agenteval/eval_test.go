@@ -2987,18 +2987,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("integrated memory recovery RequiredToolArgContains = %#v, want %#v", integrated.RequiredToolArgContains, want)
 		}
 	}
-	for _, want := range []ToolArgContainsRequirement{
-		{Tool: "memory", Arg: "content", Substring: "iteration 1"},
-		{Tool: "memory", Arg: "content", Substring: "iteration 2"},
-		{Tool: "memory", Arg: "content", Substring: "commit hash"},
-		{Tool: "memory", Arg: "content", Substring: "push result"},
-	} {
-		if !toolArgRequirementContains(integrated.ForbiddenToolArgContains, want) {
-			t.Fatalf("integrated memory recovery ForbiddenToolArgContains = %#v, want %#v", integrated.ForbiddenToolArgContains, want)
-		}
-	}
-	if !toolArgRequirementContains(integrated.MaxToolArgContains, ToolArgContainsRequirement{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64", Max: 1}) {
-		t.Fatalf("integrated memory recovery MaxToolArgContains = %#v, want AUTO-MEM-64 max=1", integrated.MaxToolArgContains)
+	if len(integrated.ForbiddenToolArgContains) != 0 || len(integrated.MaxToolArgContains) != 0 {
+		t.Fatalf("integrated memory recovery should validate durable memory through verifier/store state, not rejected candidate args: forbidden=%#v max=%#v", integrated.ForbiddenToolArgContains, integrated.MaxToolArgContains)
 	}
 	for _, field := range []string{"memory_updates", "memory_update_add", "memory_search_calls", "session_search_calls", "session_search_results"} {
 		if integrated.RequiredToolStatsAtLeast[field] != 1 {
@@ -4302,9 +4292,6 @@ func TestBuiltinMemoryWriteCommitPushScenariosKeepTransientProgressOutOfMemory(t
 			transientTerms = append(transientTerms, "iteration 1", "iteration 2")
 		}
 		for _, term := range transientTerms {
-			if !scenarioForbidsMemoryContent(scenario, term) {
-				t.Fatalf("%s writes memory during commit/push but does not forbid transient memory content %q; forbidden args=%#v", scenario.Name, term, scenario.ForbiddenToolArgContains)
-			}
 			if !scenarioVerifierRejectsMemoryText(scenario, term) {
 				t.Fatalf("%s writes memory during commit/push but verifier does not reject %q in memory files: %q", scenario.Name, term, scenario.VerifyCommand)
 			}

@@ -946,7 +946,7 @@ func serveLoopProtocolCurrentPlanCheckpoint(planPath string) loopstate.PlanCheck
 		summary.Label == planstate.LabelMissing ||
 		summary.Label == planstate.LabelEmpty ||
 		summary.Label == planstate.LabelError {
-		return loopstate.PlanCheckpoint{Valid: true}
+		return loopstate.PlanCheckpoint{}
 	}
 	return loopstate.PlanCheckpoint{
 		Valid:      true,

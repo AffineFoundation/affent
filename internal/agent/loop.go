@@ -1218,6 +1218,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	firstToolSatisfied := firstToolPolicy == nil
 	postToolPolicies := l.activePostToolPolicies(opts)
 	loopGuard := newToolLoopGuard()
+	loopGuard.setPerTurnCallCap(PlanToolName, planMutationCapForToolBudget(l.maxToolCallsForTurn(opts)))
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
 	// "done thinking" path). Falling out of the loop with this still
@@ -1337,12 +1338,25 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		if budget <= 0 || forceNoToolsNext {
 			return false
 		}
-		projected := totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+		finalReserve := func() int {
+			if totalIn <= 0 {
+				return 0
+			}
+			msgs := l.Conv.Snapshot()
+			prompt := forceNoToolsPrompt
+			if digest := finalEvidenceDigest(msgs); digest != "" {
+				digest = strings.TrimSpace(redactSecretValues(digest, l.SecretValuesProvider))
+				prompt = prompt + "\n\n" + digest
+			}
+			msgs = append(append([]ChatMessage(nil), msgs...), ChatMessage{Role: "user", Content: prompt})
+			return estimateRequestInputTokens(msgs, nil)
+		}
+		projected := totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs) + finalReserve()
 		if projected < budget {
 			return false
 		}
 		if l.maybeCompactForBudgetPressure(ctx, turnID) {
-			projected = totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs)
+			projected = totalIn + estimateRequestInputTokens(l.Conv.Snapshot(), toolDefs) + finalReserve()
 			if projected < budget {
 				return false
 			}
@@ -1929,7 +1943,7 @@ func (l *Loop) publishInputBudgetLoopDecision(turnID, trigger string, observed, 
 	visible := true
 	reason := fmt.Sprintf("Turn input token pressure reached %d token(s) against a %d-token budget.", observed, budget)
 	if projected > 0 {
-		reason = fmt.Sprintf("Projected next request would raise this turn to about %d input token(s) against a %d-token budget.", projected, budget)
+		reason = fmt.Sprintf("Projected next request plus no-tool finalization reserve would raise this turn to about %d input token(s) against a %d-token budget.", projected, budget)
 	}
 	l.publishLoopDecision(sse.LoopDecisionPayload{
 		TurnID:               turnID,
@@ -2996,7 +3010,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 			payload.Tools = append(payload.Tools, surfaceTool)
 		}
 		payload.ExcludedTools = runtimeSurfaceToolsForCatalog(toolSurface.ExcludedCatalog)
-		payload.ToolCallCaps = runtimeToolCallCapsForCatalog(toolSurface.Catalog)
+		payload.ToolCallCaps = l.runtimeToolCallCapsForTurn(toolSurface.Catalog, opts)
 		payload.Capabilities = runtimeCapabilitiesForCatalog(toolSurface.Catalog)
 		payload.Capabilities.SessionScheduleRunner = payload.Capabilities.SessionSchedule && l.SessionScheduleRunner
 		if len(payload.Capabilities.WorkspaceTools) > 0 {
@@ -3060,17 +3074,39 @@ func runtimeCapabilitiesForCatalog(catalog []ToolCatalogEntry) sse.RuntimeCapabi
 	}
 }
 
-func runtimeToolCallCapsForCatalog(catalog []ToolCatalogEntry) []sse.RuntimeToolCallCap {
+func (l *Loop) runtimeToolCallCapsForTurn(catalog []ToolCatalogEntry, opts TurnOptions) []sse.RuntimeToolCallCap {
+	return runtimeToolCallCapsForCatalog(catalog, planMutationCapForToolBudget(l.maxToolCallsForTurn(opts)))
+}
+
+func runtimeToolCallCapsForCatalog(catalog []ToolCatalogEntry, planMutationCap int) []sse.RuntimeToolCallCap {
 	if len(catalog) == 0 {
 		return nil
 	}
 	caps := make([]sse.RuntimeToolCallCap, 0, len(catalog))
 	for _, tool := range catalog {
 		if cap, ok := perTurnCallCaps[tool.Name]; ok && cap > 0 {
+			if tool.Name == PlanToolName && planMutationCap > 0 {
+				cap = planMutationCap
+			}
 			caps = append(caps, sse.RuntimeToolCallCap{Tool: tool.Name, Max: cap})
 		}
 	}
 	return caps
+}
+
+func planMutationCapForToolBudget(maxToolCalls int) int {
+	base := perTurnCallCaps[PlanToolName]
+	if maxToolCalls <= DefaultMaxTurnSteps {
+		return base
+	}
+	scaled := (maxToolCalls + 2) / 3
+	if scaled < base {
+		return base
+	}
+	if scaled > 16 {
+		return 16
+	}
+	return scaled
 }
 
 func runtimeSurfaceToolsForCatalog(catalog []ToolCatalogEntry) []sse.RuntimeSurfaceTool {

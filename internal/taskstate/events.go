@@ -170,7 +170,7 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 			}
 			req := ToolRequest{Tool: p.Tool, TurnID: p.TurnID, CallID: p.CallID, Args: p.Args}
 			requests[p.CallID] = req
-			state.AttemptedActions = appendAction(state.AttemptedActions, Action{
+			state.AttemptedActions = AppendAction(state.AttemptedActions, Action{
 				Tool:    p.Tool,
 				Summary: compactSummary(ToolActionSummary(req), opts.SummaryMaxChar),
 				TurnID:  p.TurnID,
@@ -464,35 +464,60 @@ func ToolFailed(result ToolResult, limit int) bool {
 	return result.ExitCode != 0 || len(ToolFailureKinds(result, limit)) > 0
 }
 
-func appendAction(items []Action, item Action, limit int) []Action {
+func AppendAction(items []Action, item Action, limit int) []Action {
+	item.Tool = strings.TrimSpace(item.Tool)
 	if item.Tool == "" {
 		return items
 	}
-	if limit > 0 && len(items) >= limit {
-		items = removeOldestRepeatedActionTool(items)
+	item.Summary = strings.TrimSpace(item.Summary)
+	items = append(items, item)
+	if limit <= 0 || len(items) <= limit {
+		return items
 	}
-	return append(items, item)
+	return removeLowestValueAction(items)
 }
 
-func removeOldestRepeatedActionTool(items []Action) []Action {
+func removeLowestValueAction(items []Action) []Action {
 	if len(items) == 0 {
 		return items
 	}
-	counts := map[string]int{}
-	for _, item := range items {
-		counts[strings.TrimSpace(item.Tool)]++
-	}
 	remove := 0
+	removeRank := ActionRetentionRank(items[0])
 	for i, item := range items {
-		if counts[strings.TrimSpace(item.Tool)] > 1 {
+		rank := ActionRetentionRank(item)
+		if rank < removeRank {
 			remove = i
-			break
+			removeRank = rank
 		}
 	}
 	out := make([]Action, 0, len(items)-1)
 	out = append(out, items[:remove]...)
 	out = append(out, items[remove+1:]...)
 	return out
+}
+
+func ActionRetentionRank(item Action) int {
+	tool := strings.TrimSpace(item.Tool)
+	summary := strings.TrimSpace(item.Summary)
+	if tool == "shell" && len(ShellHandoffEvidenceSources(summary)) > 0 {
+		return 100
+	}
+	if ToolEvidenceSource(tool) != "" {
+		return 80
+	}
+	switch tool {
+	case "edit_file", "write_file", "session_workspace":
+		return 70
+	case "file_context", "repo_search", "symbol_context", "read_file":
+		return 40
+	case "list_files":
+		return 20
+	default:
+		if summary != "" {
+			return 50
+		}
+		return 10
+	}
 }
 
 func appendFailure(items []Failure, item Failure, limit int) []Failure {

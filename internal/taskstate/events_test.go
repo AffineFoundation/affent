@@ -223,6 +223,31 @@ func TestToolSemanticsAreSharedTaskStateInputs(t *testing.T) {
 	}
 }
 
+func TestAppendActionRetentionKeepsHandoffOverRecentLowValueAction(t *testing.T) {
+	actions := []Action{
+		{Tool: "session_workspace", Summary: "app"},
+		{Tool: "shell", Summary: "go test ./..."},
+		{Tool: "read_file", Summary: "greet/greet_test.go"},
+		{Tool: "read_file", Summary: "greet/greet.go"},
+		{Tool: "edit_file", Summary: "greet/greet.go"},
+		{Tool: "shell", Summary: "git commit -m fix"},
+		{Tool: "shell", Summary: "git push origin main"},
+		{Tool: "shell", Summary: "git status --short"},
+	}
+	got := AppendAction(actions, Action{Tool: "list_files", Summary: "docs"}, DefaultMaxItems)
+	if len(got) != DefaultMaxItems {
+		t.Fatalf("actions len = %d, want %d: %+v", len(got), DefaultMaxItems, got)
+	}
+	for _, want := range []string{"git commit", "git push"} {
+		if !taskStateActionContains(got, "shell", want) {
+			t.Fatalf("actions = %+v, want shell action containing %q", got, want)
+		}
+	}
+	if taskStateActionContains(got, "list_files", "docs") {
+		t.Fatalf("actions = %+v, low-value overflow action should not displace stronger anchors", got)
+	}
+}
+
 func TestScanEventsKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
 	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
 		TurnID: "t1",

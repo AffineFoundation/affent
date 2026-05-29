@@ -157,6 +157,9 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 	}
 	feedNumber, mode := nextLoopProtocolFeedDecision(protocolPath)
 	planCheckpoint := loopProtocolPlanCheckpoint(checkpointProvider)
+	if !planCheckpoint.Valid {
+		planCheckpoint = loopProtocolPlanPointerCheckpoint(content)
+	}
 	if _, ev, err := loopstate.RecordProtocolFeedWithCheckpoint(protocolPath, mode, planCheckpoint); err == nil && ev.FeedNumber > 0 {
 		feedNumber = ev.FeedNumber
 		mode = ev.Mode
@@ -451,6 +454,53 @@ func loopProtocolPlanCheckpoint(provider LoopProtocolCheckpointProvider) loopsta
 		return loopstate.PlanCheckpoint{}
 	}
 	return provider()
+}
+
+func loopProtocolPlanPointerCheckpoint(content string) loopstate.PlanCheckpoint {
+	for _, section := range splitMarkdownSections(content) {
+		if !loopProtocolPlanPointerHeading(section.heading) {
+			continue
+		}
+		body := markdownSectionBody(section.text)
+		if body == "" {
+			return loopstate.PlanCheckpoint{}
+		}
+		step := loopProtocolCurrentStepFromBody(body)
+		if step == "" {
+			step = body
+		}
+		return loopstate.PlanCheckpoint{
+			Valid:      true,
+			Label:      "loop:plan-pointer",
+			StepStatus: "in_progress",
+			Step:       textutil.Preview(step, 240),
+		}
+	}
+	return loopstate.PlanCheckpoint{}
+}
+
+func loopProtocolPlanPointerHeading(heading string) bool {
+	heading = strings.ToLower(strings.TrimSpace(heading))
+	return strings.Contains(heading, "plan") || strings.Contains(heading, "step pointer")
+}
+
+func loopProtocolCurrentStepFromBody(body string) string {
+	for _, part := range strings.Split(body, ".") {
+		part = strings.TrimSpace(part)
+		if step, ok := strings.CutPrefix(strings.ToLower(part), "current step:"); ok {
+			start := strings.Index(strings.ToLower(part), step)
+			if start >= 0 {
+				return strings.TrimSpace(part[start:])
+			}
+			return strings.TrimSpace(step)
+		}
+	}
+	lower := strings.ToLower(body)
+	const marker = "current step:"
+	if idx := strings.Index(lower, marker); idx >= 0 {
+		return strings.TrimSpace(body[idx+len(marker):])
+	}
+	return ""
 }
 
 func loopProtocolCurrentSituationLine(content string) string {

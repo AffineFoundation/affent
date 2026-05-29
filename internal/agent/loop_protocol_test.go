@@ -1447,6 +1447,44 @@ func TestWithLoopProtocolSkillProviderIncludesPlanCheckpoint(t *testing.T) {
 	}
 }
 
+func TestWithLoopProtocolSkillProviderUsesProtocolPlanPointerFallback(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte(`# Loop Protocol
+
+## 1. Current Situation
+
+Tiny Python CLI with a failing JSON contract test.
+
+## 4. Plan/Step Pointer
+
+Current step: fix JSON mode, preserve durable convention state, then continue with summary mode.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := loopstate.WriteState(filepath.Join(dir, loopstate.StateFileName), loopstate.State{
+		Version:      1,
+		LoopID:       filepath.Base(dir),
+		Status:       "running",
+		ProtocolPath: loopstate.ProtocolRelPath(filepath.Base(dir)),
+	}); err != nil {
+		t.Fatalf("WriteState: %v", err)
+	}
+
+	got := WithLoopProtocolSkillProviderWithCheckpoint(path, func() loopstate.PlanCheckpoint {
+		return loopstate.PlanCheckpoint{}
+	}, nil)("continue")
+	for _, want := range []string{
+		"plan_label=loop:plan-pointer",
+		"plan_step_status=in_progress",
+		"plan_current_step: fix JSON mode",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("loop protocol feed missing plan pointer %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestWithLoopProtocolSkillProviderIncludesDurablePlanCheckpointFallback(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")

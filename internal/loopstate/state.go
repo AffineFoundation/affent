@@ -375,7 +375,9 @@ func RecordContextCompaction(protocolPath, reason string, reactive bool) (State,
 	state.LastCompactionAt = event.Time
 	state.LastCompactionReason = reason
 	state.LastCompactionReactive = reactive
-	state.NeedsFullProtocolFeed = true
+	if reactive {
+		state.NeedsFullProtocolFeed = true
+	}
 	state.UpdatedAt = event.Time
 	state.EventCount = event.Seq
 	state.LastEventType = event.Type

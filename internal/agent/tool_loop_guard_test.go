@@ -768,6 +768,20 @@ func TestToolLoopGuard_PerTurnCallCapForPlan(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_PlanMutationCapCanScaleForLongRuns(t *testing.T) {
+	g := newToolLoopGuard()
+	g.setPerTurnCallCap(PlanToolName, 8)
+	for i := 0; i < 8; i++ {
+		args := json.RawMessage(`{"action":"update","index":1,"note":"step-` + fmt.Sprintf("%d", i) + `"}`)
+		if got := g.recordAttempt(PlanToolName, args); got != "" {
+			t.Fatalf("scaled plan call %d should be allowed, got %q", i+1, got)
+		}
+	}
+	if got := g.recordAttempt(PlanToolName, json.RawMessage(`{"action":"update","index":1,"note":"over-cap"}`)); got == "" || !strings.Contains(got, "cap of 8 calls") {
+		t.Fatalf("scaled plan cap should block the 9th mutation with cap=8, got %q", got)
+	}
+}
+
 func TestToolLoopGuard_PerTurnCallCapForExternalResearchTools(t *testing.T) {
 	cases := []struct {
 		tool string

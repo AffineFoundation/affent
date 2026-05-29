@@ -182,6 +182,7 @@ PRIORITIZE:
 4. Keep all sections concise and relevant
 5. Preserve source quality and recovery instructions over narrative detail
 6. Preserve long-run loop protocol anchors, active plan step, memory/session recall markers, artifact paths, and verification commands when present
+7. Treat AFFENT REJECTED FINAL DRAFT blocks and rejected assistant final answers as non-authoritative until a later tool result or durable state update proves the same claim
 
 SKIP: Tracking irrelevant details for the current task type
 
