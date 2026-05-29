@@ -158,6 +158,7 @@ export function AccountSettingsPanel({
                   gitRemote={gitRemote}
                   setGitRemote={setGitRemote}
                   onVerifyGitAccess={onVerifyGitAccess}
+                  surface={surface}
                 />
                 <div className="account-settings-actions">
                   {onRefresh ? (
@@ -193,7 +194,7 @@ export function AccountSettingsPanel({
                 </div>
               </div>
             ) : null}
-            <details className="account-env-write" open={!settings || settings.env.length === 0}>
+            <details className="account-env-write" open={!settings || (settings.env.length === 0 && !settings.ssh.public_key)}>
               <summary>
                 <strong>Environment variables</strong>
                 <span>{settings?.env.length ? `${settings.env.length} configured` : "No variables configured"}</span>
@@ -380,6 +381,7 @@ function AccountConfigFocus({
   gitRemote,
   setGitRemote,
   onVerifyGitAccess,
+  surface = false,
 }: {
   settings: AccountSettingsResponse;
   busy?: string;
@@ -390,6 +392,7 @@ function AccountConfigFocus({
   gitRemote: string;
   setGitRemote: (value: string) => void;
   onVerifyGitAccess?: (request: AccountGitCheckRequest) => Promise<AccountGitCheckResponse> | AccountGitCheckResponse;
+  surface?: boolean;
 }) {
   const [hostGitCheck, setHostGitCheck] = useState<GitCheckState | undefined>();
   const [remoteGitCheck, setRemoteGitCheck] = useState<GitCheckState | undefined>();
@@ -443,7 +446,12 @@ function AccountConfigFocus({
         </div>
       ) : null}
       {settings.ssh.public_key ? (
-        <div className="account-config-verify-stack" data-testid="account-config-verify">
+        <details className="account-config-verify-panel" data-testid="account-config-verify" open={!surface || Boolean(hostGitCheck || remoteGitCheck) ? true : undefined}>
+          <summary>
+            <strong>Test Git access</strong>
+            <span>Check host reachability or repository permission only when a private clone fails.</span>
+          </summary>
+        <div className="account-config-verify-stack">
           <div className="account-config-verify">
             <div className="account-config-verify-title">
               <strong>SSH host reachability</strong>
@@ -491,6 +499,7 @@ function AccountConfigFocus({
             <GitCheckResult state={remoteGitCheck} kind="remote" />
           </div>
         </div>
+        </details>
       ) : null}
       <div className="account-config-focus-actions">
         {!settings.ssh.exists && onEnsureSSHKey ? (

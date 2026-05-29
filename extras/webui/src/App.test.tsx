@@ -2319,6 +2319,7 @@ describe("App", () => {
     await user.click(await screen.findByLabelText("Workbench"));
     await selectWorkbenchTab(user, "Config");
     await screen.findByTestId("account-settings-panel");
+    await user.click(screen.getByText("Test Git access"));
     await user.type(screen.getByPlaceholderText("github.com or gitlab.com"), "git@gitlab.com:team/repo.git");
     await user.click(screen.getByRole("button", { name: "Check host" }));
 
