@@ -46,6 +46,10 @@ type BuiltinDeps struct {
 	// match (e.g. the gateway bind-mounts it as /workspace inside the
 	// container), but file tools always operate via the host path.
 	HostWorkspaceDir string
+	// HostWorkspaceDirProvider, when set, overrides HostWorkspaceDir at tool
+	// execution time. Long-running server sessions use this for an active
+	// workspace that can move into a created or cloned project.
+	HostWorkspaceDirProvider func() string
 	// Memory enables the `memory` tool. Pass the same store assigned
 	// to Loop.Memory so the snapshot in the system prompt and the
 	// tool see the same on-disk state.
@@ -97,6 +101,15 @@ type BuiltinDeps struct {
 	// before SSE publication, conversation persistence, and tool-result
 	// artifact writes.
 	SecretValuesProvider func() []string
+}
+
+func (d BuiltinDeps) hostWorkspaceDir() string {
+	if d.HostWorkspaceDirProvider != nil {
+		if workspace := strings.TrimSpace(d.HostWorkspaceDirProvider()); workspace != "" {
+			return workspace
+		}
+	}
+	return strings.TrimSpace(d.HostWorkspaceDir)
 }
 
 // defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
@@ -535,7 +548,8 @@ func shellTool(deps BuiltinDeps) *Tool {
 			if strings.TrimSpace(p.Command) == "" {
 				return "", errors.New("command is required\nNext: retry shell with one concrete command, or use read_file/list_files for ordinary workspace inspection")
 			}
-			p.Command = normalizeShellCommandWorkspacePaths(p.Command, deps.HostWorkspaceDir)
+			workspace := deps.hostWorkspaceDir()
+			p.Command = normalizeShellCommandWorkspacePaths(p.Command, workspace)
 			p.Cwd = normalizeWorkspacePathAlias(deps, strings.TrimSpace(p.Cwd))
 			p.Cwd = normalizeWorkspaceAbsolutePathArg(deps, p.Cwd)
 			if len(p.Command) > maxShellCommandBytes {
@@ -573,7 +587,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 			// command. The Loop's dispatch wraps a non-nil err alongside
 			// res into "Error: <err>\n<res>" — exactly what we want.
 			out := redactSecretValues(formatShellOutput(res), deps.SecretValuesProvider)
-			out = relativizeWorkspacePathsInText(out, deps.HostWorkspaceDir)
+			out = relativizeWorkspacePathsInText(out, workspace)
 			if shellCommandNotFound(res) {
 				out += "\nNext: command not found. Check the executable name, run `which <command>` or inspect PATH, then retry with an installed tool."
 			}
@@ -584,7 +598,8 @@ func shellTool(deps BuiltinDeps) *Tool {
 
 func normalizeShellWorkspaceArgs(deps BuiltinDeps) func(json.RawMessage) (json.RawMessage, bool, []string) {
 	return func(args json.RawMessage) (json.RawMessage, bool, []string) {
-		if strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+		workspace := deps.hostWorkspaceDir()
+		if strings.TrimSpace(workspace) == "" {
 			return args, false, nil
 		}
 		var obj map[string]any
@@ -594,7 +609,7 @@ func normalizeShellWorkspaceArgs(deps BuiltinDeps) func(json.RawMessage) (json.R
 		changed := false
 		var notes []string
 		if value, ok := obj["command"].(string); ok {
-			next := normalizeShellCommandWorkspacePaths(value, deps.HostWorkspaceDir)
+			next := normalizeShellCommandWorkspacePaths(value, workspace)
 			if next != value {
 				obj["command"] = next
 				changed = true
@@ -920,25 +935,26 @@ func redactSecretError(err error, provider func() []string) error {
 // write. Defense-in-depth only; this isn't a substitute for trusting
 // the executor / container boundary.
 func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
-	if strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+	workspace := deps.hostWorkspaceDir()
+	if workspace == "" {
 		return "", errors.New("workspace is not configured; file tools require HostWorkspaceDir or a container FileOps executor\nNext: restart affent with a workspace root or a docker/sandbox executor before retrying file tools")
 	}
 	p = normalizeWorkspacePathAlias(deps, p)
 	if p == "" {
-		return deps.HostWorkspaceDir, nil
+		return workspace, nil
 	}
 	var full string
 	if filepath.IsAbs(p) {
 		full = filepath.Clean(p)
 	} else {
-		full = filepath.Join(deps.HostWorkspaceDir, p)
+		full = filepath.Join(workspace, p)
 	}
 	resolved, err := resolveAncestorSymlinks(full)
 	if err != nil {
 		return "", err
 	}
-	wsAbs := deps.HostWorkspaceDir
-	if r, err := filepath.EvalSymlinks(deps.HostWorkspaceDir); err == nil {
+	wsAbs := workspace
+	if r, err := filepath.EvalSymlinks(workspace); err == nil {
 		// Workspace itself may be a stable symlink in some deployments;
 		// resolve it so filepath.Rel below compares apples to apples.
 		wsAbs = r
@@ -959,15 +975,16 @@ func workspacePathEscapeToolError(p string) error {
 }
 
 func normalizeWorkspacePathAlias(deps BuiltinDeps, p string) string {
+	workspace := deps.hostWorkspaceDir()
 	p = strings.TrimSpace(p)
-	if p == "" || filepath.IsAbs(p) || strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+	if p == "" || filepath.IsAbs(p) || workspace == "" {
 		return p
 	}
 	aliasParts := pathComponents(filepath.ToSlash(filepath.Clean(p)))
 	if len(aliasParts) == 0 {
 		return p
 	}
-	ws := filepath.ToSlash(filepath.Clean(deps.HostWorkspaceDir))
+	ws := filepath.ToSlash(filepath.Clean(workspace))
 	ws = strings.TrimPrefix(ws, "/")
 	wsParts := pathComponents(ws)
 	if len(wsParts) == 0 || len(aliasParts) < len(wsParts) {
@@ -986,11 +1003,12 @@ func normalizeWorkspacePathAlias(deps BuiltinDeps, p string) string {
 }
 
 func normalizeWorkspaceAbsolutePathArg(deps BuiltinDeps, p string) string {
+	workspace := deps.hostWorkspaceDir()
 	p = strings.TrimSpace(p)
-	if p == "" || !filepath.IsAbs(p) || strings.TrimSpace(deps.HostWorkspaceDir) == "" {
+	if p == "" || !filepath.IsAbs(p) || workspace == "" {
 		return p
 	}
-	rel, err := filepath.Rel(filepath.Clean(deps.HostWorkspaceDir), filepath.Clean(p))
+	rel, err := filepath.Rel(filepath.Clean(workspace), filepath.Clean(p))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return p
 	}
@@ -1017,14 +1035,15 @@ func pathComponents(p string) []string {
 }
 
 func workspaceRelativeDisplayPath(deps BuiltinDeps, full, fallback string) string {
+	workspace := deps.hostWorkspaceDir()
 	fallback = strings.TrimSpace(fallback)
-	if strings.TrimSpace(deps.HostWorkspaceDir) == "" || strings.TrimSpace(full) == "" {
+	if workspace == "" || strings.TrimSpace(full) == "" {
 		if fallback == "" {
 			return "."
 		}
 		return fallback
 	}
-	rel, err := filepath.Rel(filepath.Clean(deps.HostWorkspaceDir), filepath.Clean(full))
+	rel, err := filepath.Rel(filepath.Clean(workspace), filepath.Clean(full))
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		if fallback == "" {
 			return "."
@@ -1319,13 +1338,13 @@ func recoverableFileToolError(deps BuiltinDeps, tool, path string, err error) er
 		return nil
 	}
 	if strings.Contains(err.Error(), "\nNext:") {
-		return errors.New(relativizeWorkspacePathsInText(err.Error(), deps.HostWorkspaceDir))
+		return errors.New(relativizeWorkspacePathsInText(err.Error(), deps.hostWorkspaceDir()))
 	}
 	displayPath := displayFileToolPath(deps, path)
 	if errors.Is(err, os.ErrNotExist) || errors.Is(err, executor.ErrNotFoundInContainer) {
 		return fileNotFoundToolError(deps, tool, path)
 	}
-	msg := relativizeWorkspacePathsInText(err.Error(), deps.HostWorkspaceDir)
+	msg := relativizeWorkspacePathsInText(err.Error(), deps.hostWorkspaceDir())
 	switch {
 	case tool == "edit_file" && errors.Is(err, executor.ErrEditNoMatch):
 		return structuredToolError(msg, "edit_no_match", fmt.Sprintf("call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", displayPath))

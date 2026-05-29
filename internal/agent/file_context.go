@@ -387,7 +387,7 @@ func goFileContextSymbols(ctx context.Context, deps BuiltinDeps, path, content s
 		// uses the workspace path and the contents we already read.
 		_ = fo
 	}
-	workspace := strings.TrimSpace(deps.HostWorkspaceDir)
+	workspace := deps.hostWorkspaceDir()
 	if workspace == "" {
 		return nil
 	}

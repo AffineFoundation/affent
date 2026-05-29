@@ -202,7 +202,8 @@ type Loop struct {
 	// runtime state. The model sees a compact transient block with relative
 	// path semantics and top-level entries; trace/UI see the same state through
 	// runtime.surface.
-	WorkspaceRoot string
+	WorkspaceRoot         string
+	WorkspaceRootProvider func() string
 
 	// FirstToolPolicy optionally forces a named tool to be used before
 	// other tools for turns matching Trigger. This is a generic runtime
@@ -2881,7 +2882,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)
 		payload.Capabilities.SessionScheduleRunner = payload.Capabilities.SessionSchedule && l.SessionScheduleRunner
 		if len(payload.Capabilities.WorkspaceTools) > 0 {
-			payload.Workspace = runtimeWorkspaceSurface(l.WorkspaceRoot)
+			payload.Workspace = runtimeWorkspaceSurface(l.workspaceRoot())
 		}
 	}
 	l.publish(sse.TypeRuntimeSurface, payload)
@@ -2892,7 +2893,19 @@ func (l *Loop) runtimeWorkspaceSurfaceForTurn(opts TurnOptions) *sse.RuntimeWork
 	if tools == nil || len(runtimeWorkspaceToolsForRegistry(tools)) == 0 {
 		return nil
 	}
-	return runtimeWorkspaceSurface(l.WorkspaceRoot)
+	return runtimeWorkspaceSurface(l.workspaceRoot())
+}
+
+func (l *Loop) workspaceRoot() string {
+	if l != nil && l.WorkspaceRootProvider != nil {
+		if root := strings.TrimSpace(l.WorkspaceRootProvider()); root != "" {
+			return root
+		}
+	}
+	if l == nil {
+		return ""
+	}
+	return strings.TrimSpace(l.WorkspaceRoot)
 }
 
 func (l *Loop) maxTurnStepsForSurface() int {

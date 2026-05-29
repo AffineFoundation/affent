@@ -11,7 +11,8 @@ func TestMetadataRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	want := Metadata{
 		SessionID:     "sess_meta",
-		WorkspacePath: "/workspace/sessions/sess_meta-123",
+		WorkspaceRoot: "/workspace",
+		WorkspacePath: "/workspace/project",
 	}
 	if err := WriteMetadata(dir, want); err != nil {
 		t.Fatalf("WriteMetadata: %v", err)
@@ -25,6 +26,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 	}
 	if got.SchemaVersion != MetadataSchemaVersion ||
 		got.SessionID != want.SessionID ||
+		got.WorkspaceRoot != want.WorkspaceRoot ||
 		got.WorkspacePath != want.WorkspacePath ||
 		strings.TrimSpace(got.UpdatedAt) == "" {
 		t.Fatalf("metadata = %+v, want session/workspace round trip", got)

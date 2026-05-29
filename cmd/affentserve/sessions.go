@@ -48,6 +48,7 @@ type Session struct {
 	browser          *affentbrowser.Session
 	sessionDir       string
 	workspace        string
+	workspaceState   *sessionWorkspaceState
 	workspaceOwned   bool
 	loopProtocolPath string
 	loopProtocolInit bool
@@ -335,12 +336,12 @@ func (p *SessionPool) newBrowserSession(workspace string) (*affentbrowser.Sessio
 	})
 }
 
-func (p *SessionPool) subagentChildToolRegistrar(workspace string) func(context.Context, *agent.Registry) (func(), error) {
+func (p *SessionPool) subagentChildToolRegistrar(workspaceProvider func() string) func(context.Context, *agent.Registry) (func(), error) {
 	if !p.cfg.EnableBrowser {
 		return nil
 	}
 	return func(ctx context.Context, reg *agent.Registry) (func(), error) {
-		bs, err := p.newBrowserSession(workspace)
+		bs, err := p.newBrowserSession(workspaceProvider())
 		if err != nil {
 			return nil, err
 		}
@@ -375,12 +376,12 @@ func (p *SessionPool) focusedTaskWebRegistrar() func(context.Context, *agent.Reg
 	}
 }
 
-func (p *SessionPool) focusedTaskBrowserRegistrar(workspace string) func(context.Context, *agent.Registry) (func(), error) {
+func (p *SessionPool) focusedTaskBrowserRegistrar(workspaceProvider func() string) func(context.Context, *agent.Registry) (func(), error) {
 	if !p.cfg.EnableBrowser {
 		return nil
 	}
 	return func(ctx context.Context, reg *agent.Registry) (func(), error) {
-		bs, err := p.newBrowserSession(workspace)
+		bs, err := p.newBrowserSession(workspaceProvider())
 		if err != nil {
 			return nil, err
 		}
@@ -522,9 +523,20 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		cleanupWorkspace()
 		return nil, fmt.Errorf("alloc session dir: %w", err)
 	}
+	meta, foundMeta, err := sessionstate.ReadMetadata(sessionDir)
+	if err != nil {
+		cleanupWorkspace()
+		return nil, fmt.Errorf("session metadata: %w", err)
+	}
+	currentWorkspace := workspace
+	if foundMeta {
+		currentWorkspace = restoreActiveWorkspace(workspace, meta.WorkspacePath)
+	}
+	workspaceState := newSessionWorkspaceState(id, sessionDir, workspace, currentWorkspace, workspaceAlloc.Owned)
 	if err := sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
 		SessionID:     id,
-		WorkspacePath: workspace,
+		WorkspaceRoot: workspace,
+		WorkspacePath: currentWorkspace,
 	}); err != nil {
 		cleanupWorkspace()
 		return nil, fmt.Errorf("session metadata: %w", err)
@@ -564,7 +576,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	planPath := ""
 	loopProtocolPath := ""
 	if p.cfg.EnableBuiltins {
-		localExec = executor.NewLocalExecutor(id, workspace)
+		localExec = executor.NewLocalExecutor(id, currentWorkspace)
+		localExec.WorkspaceDirProvider = workspaceState.Current
 		localExec.EnvProvider = p.accountEnvPairs
 		if workflowToolsEnabled(p.cfg) {
 			sessionSkillDir = agent.DefaultWorkspaceSkillDir(sessionDir)
@@ -585,21 +598,23 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			loopProtocolToolPath = loopProtocolPath
 		}
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
-			Executor:             localExec,
-			HostWorkspaceDir:     workspace,
-			Memory:               memStore,
-			SessionsDir:          p.sessionRootPath(),
-			SessionID:            id,
-			PlanPath:             planPath,
-			LoopProtocolPath:     loopProtocolToolPath,
-			SkillRegistry:        skillReg,
-			SkillDir:             accountSkillInstallDir,
-			SecretValuesProvider: p.accountSecretValues,
+			Executor:                 localExec,
+			HostWorkspaceDir:         currentWorkspace,
+			HostWorkspaceDirProvider: workspaceState.Current,
+			Memory:                   memStore,
+			SessionsDir:              p.sessionRootPath(),
+			SessionID:                id,
+			PlanPath:                 planPath,
+			LoopProtocolPath:         loopProtocolToolPath,
+			SkillRegistry:            skillReg,
+			SkillDir:                 accountSkillInstallDir,
+			SecretValuesProvider:     p.accountSecretValues,
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
 			DisableSkill: !workflowToolsEnabled(p.cfg),
 		})
+		reg.Add(sessionWorkspaceTool(workspaceState))
 	} else if memStore != nil {
 		// Memory tool without the shell/file builtins — common for
 		// remote-driven affentserve deployments that don't want shell
@@ -657,35 +672,37 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if p.cfg.EnableSubagent {
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
-			LLM:                  llm,
-			Executor:             childExec,
-			HostWorkspaceDir:     workspace,
-			Memory:               memStore,
-			SessionsDir:          p.sessionRootPath(),
-			ParentSessionID:      id,
-			TranscriptDir:        filepath.Join(sessionDir, "subagents", id),
-			RegisterChildTools:   p.subagentChildToolRegistrar(workspace),
-			Log:                  p.logger.With().Str("session_id", id).Logger(),
-			MaxDepth:             p.cfg.SubagentMaxDepth,
-			SecretValuesProvider: p.accountSecretValues,
+			LLM:                      llm,
+			Executor:                 childExec,
+			HostWorkspaceDir:         currentWorkspace,
+			HostWorkspaceDirProvider: workspaceState.Current,
+			Memory:                   memStore,
+			SessionsDir:              p.sessionRootPath(),
+			ParentSessionID:          id,
+			TranscriptDir:            filepath.Join(sessionDir, "subagents", id),
+			RegisterChildTools:       p.subagentChildToolRegistrar(workspaceState.Current),
+			Log:                      p.logger.With().Str("session_id", id).Logger(),
+			MaxDepth:                 p.cfg.SubagentMaxDepth,
+			SecretValuesProvider:     p.accountSecretValues,
 		})
 	}
 	if p.cfg.EnableFocusedTasks {
 		agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
-			LLM:                  llm,
-			Executor:             childExec,
-			HostWorkspaceDir:     workspace,
-			Memory:               memStore,
-			SessionsDir:          p.sessionRootPath(),
-			ParentSessionID:      id,
-			TranscriptDir:        filepath.Join(sessionDir, "focused-tasks", id),
-			Log:                  p.logger.With().Str("session_id", id).Logger(),
-			SecretValuesProvider: p.accountSecretValues,
+			LLM:                      llm,
+			Executor:                 childExec,
+			HostWorkspaceDir:         currentWorkspace,
+			HostWorkspaceDirProvider: workspaceState.Current,
+			Memory:                   memStore,
+			SessionsDir:              p.sessionRootPath(),
+			ParentSessionID:          id,
+			TranscriptDir:            filepath.Join(sessionDir, "focused-tasks", id),
+			Log:                      p.logger.With().Str("session_id", id).Logger(),
+			SecretValuesProvider:     p.accountSecretValues,
 			// Research profile needs external lookup tools; these hooks
 			// are nil unless the deployment has opted into web/browser, so
 			// availableProfiles() drops research cleanly when neither is on.
 			RegisterWebTools:     p.focusedTaskWebRegistrar(),
-			RegisterBrowserTools: p.focusedTaskBrowserRegistrar(workspace),
+			RegisterBrowserTools: p.focusedTaskBrowserRegistrar(workspaceState.Current),
 		})
 	}
 	if err := filterServeEvalModeTools(reg, p.cfg); err != nil {
@@ -740,7 +757,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		PerCallTimeout:         perCallTimeout,
 		MaxTransientRetries:    p.cfg.MaxTransientRetries,
 		TransientBackoff:       retryBackoff,
-		WorkspaceRoot:          workspace,
+		WorkspaceRoot:          currentWorkspace,
+		WorkspaceRootProvider:  workspaceState.Current,
 		ToolResultArtifactDir: filepath.Join(
 			sessionDir,
 			".affent",
@@ -853,7 +871,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		events:           events,
 		browser:          browser,
 		sessionDir:       sessionDir,
-		workspace:        workspace,
+		workspace:        currentWorkspace,
+		workspaceState:   workspaceState,
 		workspaceOwned:   workspaceAlloc.Owned,
 		loopProtocolPath: loopProtocolPath,
 		loopProtocolInit: p.cfg.EnableLoopProtocol && !p.cfg.EvalMode,
@@ -1283,8 +1302,8 @@ func (s *Session) Close() error {
 				s.closeErr = err
 			}
 		}
-		if s.workspace != "" && s.workspaceOwned {
-			_ = os.RemoveAll(s.workspace)
+		if s.workspaceOwned {
+			_ = os.RemoveAll(s.workspaceRoot())
 		}
 	})
 	return s.closeErr
@@ -2359,7 +2378,22 @@ func cloneStringInt64Map(in map[string]int64) map[string]int64 {
 	return out
 }
 
-// Workspace exposes the session's on-disk directory for tests that
-// want to inspect the JSONL conversation log. Not used by production
-// paths.
-func (s *Session) Workspace() string { return s.workspace }
+func (s *Session) workspaceRoot() string {
+	if s != nil && s.workspaceState != nil {
+		return s.workspaceState.Root()
+	}
+	if s == nil {
+		return ""
+	}
+	return s.workspace
+}
+
+func (s *Session) Workspace() string {
+	if s != nil && s.workspaceState != nil {
+		return s.workspaceState.Current()
+	}
+	if s == nil {
+		return ""
+	}
+	return s.workspace
+}

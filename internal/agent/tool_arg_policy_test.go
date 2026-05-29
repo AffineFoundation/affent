@@ -18,6 +18,7 @@ func TestWorkspacePathArgNames(t *testing.T) {
 		{tool: "file_context", want: []string{"path"}},
 		{tool: "repo_search", want: []string{"path"}},
 		{tool: SymbolContextToolName, want: []string{"path"}},
+		{tool: SessionWorkspaceToolName, want: []string{"path"}},
 		{tool: "browser_screenshot", want: []string{"save_path"}},
 		{tool: "web_fetch", want: nil},
 	}

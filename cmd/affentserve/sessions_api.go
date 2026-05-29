@@ -540,8 +540,8 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Active:            true,
 		CreatedAt:         formatTime(createdAt),
 		LastUsedAt:        formatTime(lastUsedAt),
-		WorkspacePath:     s.workspace,
-		WorkspaceLabel:    workspaceLabel(s.workspace),
+		WorkspacePath:     s.Workspace(),
+		WorkspaceLabel:    workspaceLabel(s.Workspace()),
 		LatestUserMessage: latestUser,
 		TopicUserMessage:  topicUser,
 		Capabilities:      &caps,
@@ -580,7 +580,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			if cwd != "" {
 				summary.LastAgentCWD = cwd
 			} else if hasShell {
-				summary.LastAgentCWD = s.workspace
+				summary.LastAgentCWD = s.Workspace()
 			}
 		}
 	}
@@ -593,7 +593,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 			if cwd != "" {
 				summary.LastAgentCWD = cwd
 			} else if hasShell {
-				summary.LastAgentCWD = s.workspace
+				summary.LastAgentCWD = s.Workspace()
 			}
 		}
 	}

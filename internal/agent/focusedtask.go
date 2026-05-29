@@ -167,17 +167,18 @@ var defaultFocusedTaskProfileRegistry = DefaultFocusedTaskProfileRegistry()
 // helpers such as session_search or shell should not hide a useful
 // read-only focused task in deployments that do not expose them.
 type FocusedTaskDeps struct {
-	LLM                  *LLMClient
-	Executor             executor.Executor
-	HostWorkspaceDir     string
-	Memory               memory.MemoryStore
-	SessionsDir          string
-	ParentSessionID      string
-	TranscriptDir        string
-	ProjectContextDir    string
-	Log                  zerolog.Logger
-	PerCallTimeout       time.Duration
-	SecretValuesProvider func() []string
+	LLM                      *LLMClient
+	Executor                 executor.Executor
+	HostWorkspaceDir         string
+	HostWorkspaceDirProvider func() string
+	Memory                   memory.MemoryStore
+	SessionsDir              string
+	ParentSessionID          string
+	TranscriptDir            string
+	ProjectContextDir        string
+	Log                      zerolog.Logger
+	PerCallTimeout           time.Duration
+	SecretValuesProvider     func() []string
 
 	// ProfileRegistry overrides the built-in profile set. nil → the
 	// package default applies. An empty (non-nil) registry falls back
@@ -195,6 +196,15 @@ type FocusedTaskDeps struct {
 	// research profile can use this as a rendered-page fallback or as
 	// the sole external lookup surface in browser-only deployments.
 	RegisterBrowserTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
+}
+
+func (d FocusedTaskDeps) hostWorkspaceDir() string {
+	if d.HostWorkspaceDirProvider != nil {
+		if workspace := strings.TrimSpace(d.HostWorkspaceDirProvider()); workspace != "" {
+			return workspace
+		}
+	}
+	return strings.TrimSpace(d.HostWorkspaceDir)
 }
 
 func (d FocusedTaskDeps) resolveProfileRegistry() *FocusedTaskProfileRegistry {
@@ -272,13 +282,13 @@ func (p FocusedTaskAvailabilityProbe) AvailableKinds(reg *FocusedTaskProfileRegi
 func (d FocusedTaskDeps) Probe() FocusedTaskAvailabilityProbe {
 	return FocusedTaskAvailabilityProbe{
 		HasLLM:           d.LLM != nil,
-		HasWorkspace:     d.HostWorkspaceDir != "",
+		HasWorkspace:     d.hostWorkspaceDir() != "",
 		HasExecutor:      d.Executor != nil,
 		HasMemory:        d.Memory != nil,
 		HasSessions:      d.SessionsDir != "",
 		HasWeb:           d.RegisterWebTools != nil,
 		HasBrowser:       d.RegisterBrowserTools != nil,
-		HasSymbolContext: d.HostWorkspaceDir != "",
+		HasSymbolContext: d.hostWorkspaceDir() != "",
 	}
 }
 
@@ -309,7 +319,7 @@ func (d FocusedTaskDeps) availableProfiles() []FocusedTaskProfile {
 // be satisfied by the deps, the tool is not registered at all — there
 // is no point exposing run_task with an empty enum.
 func RegisterFocusedTasks(r *Registry, deps FocusedTaskDeps) {
-	if r == nil || deps.LLM == nil || deps.HostWorkspaceDir == "" {
+	if r == nil || deps.LLM == nil || deps.hostWorkspaceDir() == "" {
 		return
 	}
 	available := deps.availableProfiles()
@@ -323,7 +333,7 @@ func RegisterFocusedTasks(r *Registry, deps FocusedTaskDeps) {
 // expose under these deps. Useful for doctor / startup reporting and
 // for tests that need to assert which profiles got filtered out.
 func AvailableFocusedTaskKinds(deps FocusedTaskDeps) []FocusedTaskKind {
-	if deps.LLM == nil || deps.HostWorkspaceDir == "" {
+	if deps.LLM == nil || deps.hostWorkspaceDir() == "" {
 		return nil
 	}
 	avail := deps.availableProfiles()
@@ -412,6 +422,7 @@ func decodeFocusedTaskArgs(args json.RawMessage) (focusedTaskArgs, error) {
 // structured FocusedTaskResult the parent will consume.
 func runFocusedTask(ctx context.Context, deps FocusedTaskDeps, profile FocusedTaskProfile, objective string, maxTurns int) (string, error) {
 	childID := "focused_" + uuid.NewString()
+	workspace := deps.hostWorkspaceDir()
 
 	reg, regCleanup, err := buildFocusedTaskRegistry(ctx, deps, profile)
 	if err != nil {
@@ -435,7 +446,7 @@ func runFocusedTask(ctx context.Context, deps FocusedTaskDeps, profile FocusedTa
 		Log:                         deps.Log.With().Str("focused_task_type", string(profile.Kind)).Logger(),
 		SecretValuesProvider:        deps.SecretValuesProvider,
 		SystemPrompt:                focusedTaskSystemPromptFor(profile, reg),
-		UserPrompt:                  focusedTaskUserPrompt(profile, objective, deps.HostWorkspaceDir, maxTurns),
+		UserPrompt:                  focusedTaskUserPrompt(profile, objective, workspace, maxTurns),
 	}
 
 	res := runChildLoop(ctx, spec)
@@ -467,9 +478,10 @@ func runFocusedTask(ctx context.Context, deps FocusedTaskDeps, profile FocusedTa
 func buildFocusedTaskRegistry(ctx context.Context, deps FocusedTaskDeps, profile FocusedTaskProfile) (*Registry, func(), error) {
 	reg := NewRegistry()
 	bd := BuiltinDeps{
-		Executor:             deps.Executor,
-		HostWorkspaceDir:     deps.HostWorkspaceDir,
-		SecretValuesProvider: deps.SecretValuesProvider,
+		Executor:                 deps.Executor,
+		HostWorkspaceDir:         deps.hostWorkspaceDir(),
+		HostWorkspaceDirProvider: deps.HostWorkspaceDirProvider,
+		SecretValuesProvider:     deps.SecretValuesProvider,
 	}
 	reg.Add(skillTool(builtinSkillProviderRegistry, "", nil))
 
@@ -480,10 +492,10 @@ func buildFocusedTaskRegistry(ctx context.Context, deps FocusedTaskDeps, profile
 	if profile.Tools.AllowListFiles {
 		reg.Add(subagentListFilesTool(bd))
 	}
-	if profile.Tools.AllowSymbolContext && deps.HostWorkspaceDir != "" {
+	if profile.Tools.AllowSymbolContext && deps.hostWorkspaceDir() != "" {
 		reg.Add(symbolContextTool(bd))
 	}
-	if profile.Tools.AllowRepoSearch && deps.HostWorkspaceDir != "" {
+	if profile.Tools.AllowRepoSearch && deps.hostWorkspaceDir() != "" {
 		reg.Add(repoSearchTool(bd))
 	}
 	if profile.Tools.AllowReadOnlyShell && deps.Executor != nil {

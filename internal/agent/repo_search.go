@@ -95,7 +95,8 @@ func repoSearchTool(deps BuiltinDeps) *Tool {
 			if p.MaxResults > maxRepoSearchMaxHits {
 				p.MaxResults = maxRepoSearchMaxHits
 			}
-			if deps.HostWorkspaceDir == "" {
+			workspace := deps.hostWorkspaceDir()
+			if workspace == "" {
 				return "", errors.New("workspace is not configured; repo_search requires HostWorkspaceDir\nNext: restart affent with a workspace root before retrying repo_search")
 			}
 			root, err := safeWorkspacePath(deps, p.Path)
@@ -113,8 +114,8 @@ func repoSearchTool(deps BuiltinDeps) *Tool {
 			if len(terms) == 0 {
 				return "", errors.New("query did not contain searchable terms\nNext: retry repo_search with at least one alphanumeric term")
 			}
-			wsAbs := deps.HostWorkspaceDir
-			if resolved, err := filepath.EvalSymlinks(deps.HostWorkspaceDir); err == nil && resolved != "" {
+			wsAbs := workspace
+			if resolved, err := filepath.EvalSymlinks(workspace); err == nil && resolved != "" {
 				wsAbs = resolved
 			}
 			ignore, err := workspaceignore.LoadGitignore(wsAbs)

@@ -18,6 +18,7 @@ const (
 type Metadata struct {
 	SchemaVersion int    `json:"schema_version"`
 	SessionID     string `json:"session_id"`
+	WorkspaceRoot string `json:"workspace_root,omitempty"`
 	WorkspacePath string `json:"workspace_path,omitempty"`
 	UpdatedAt     string `json:"updated_at,omitempty"`
 }

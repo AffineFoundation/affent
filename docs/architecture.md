@@ -186,13 +186,19 @@ This keeps local debugging simple and lets the HTTP server survive container
 restart when the state root is backed by a host volume.
 
 In server mode, the configured workspace root is the user/project-owned file
-space where shell and file tools start. It is not owned by an individual
-session and is not removed when a session closes. Each session separately has a
-stable session directory for durable identity: conversation log, event log,
-memory, plan, loop protocol state, runtime skills, child transcripts, and
-artifacts. LRU eviction may drop an in-memory session, but the stable session
-directory lets the same session id be reopened while the workspace remains the
-shared engineering surface.
+space where work begins. It is not owned by an individual session and is not
+removed when a session closes. Each session also has an active workspace,
+initially the root, that can move into an existing project directory through the
+runtime-owned `session_workspace` tool. Shell, file, repo search, symbol search,
+focused-task, and subagent surfaces read that active workspace dynamically, so a
+session can clone or create a project once and then operate from that project
+without repeating long absolute paths.
+
+Each session separately has a stable session directory for durable identity:
+conversation log, event log, memory, plan, loop protocol state, runtime skills,
+child transcripts, and artifacts. LRU eviction may drop an in-memory session,
+but the stable session directory lets the same session id be reopened while the
+workspace remains the shared engineering surface.
 
 ## Event Model
 

@@ -194,7 +194,7 @@ func (s *Session) RunWorkbenchCommand(ctx context.Context, req sessionCommandReq
 		ExitCode:    exitCode,
 		Result:      result,
 		DurationMS:  duration.Milliseconds(),
-		Workspace:   s.workspace,
+		Workspace:   s.Workspace(),
 		CompletedAt: time.Now().UTC().Format(time.RFC3339),
 	}, nil
 }

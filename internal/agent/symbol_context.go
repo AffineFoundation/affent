@@ -70,7 +70,8 @@ func symbolContextTool(deps BuiltinDeps) *Tool {
 			if p.MaxResults > maxSymbolContextMaxHits {
 				p.MaxResults = maxSymbolContextMaxHits
 			}
-			if deps.HostWorkspaceDir == "" {
+			workspace := deps.hostWorkspaceDir()
+			if workspace == "" {
 				return "", errors.New("workspace is not configured; symbol_context requires HostWorkspaceDir\nNext: restart affent with a workspace root before retrying symbol_context")
 			}
 			root, err := safeWorkspacePath(deps, p.Path)
@@ -84,7 +85,7 @@ func symbolContextTool(deps BuiltinDeps) *Tool {
 				}
 				return "", err
 			}
-			wsAbs := deps.HostWorkspaceDir
+			wsAbs := workspace
 			if resolved, err := filepath.EvalSymlinks(wsAbs); err == nil && resolved != "" {
 				wsAbs = resolved
 			}

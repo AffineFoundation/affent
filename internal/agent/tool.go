@@ -16,6 +16,10 @@ import (
 // but the name is shared so traces and capability summaries do not drift.
 const SessionScheduleToolName = "session_schedule"
 
+// SessionWorkspaceToolName is the optional serve-runtime tool that lets a
+// session inspect or switch its active workspace within the configured root.
+const SessionWorkspaceToolName = "session_workspace"
+
 // Tool is the in-process handler the loop dispatches to when the model
 // emits a tool_call. The schema is JSON Schema served verbatim to the
 // model alongside the tool name and description.
@@ -190,16 +194,18 @@ func modelToolRank(t *Tool) int {
 		return 0
 	case SessionScheduleToolName:
 		return 1
-	case LoopProtocolToolName:
+	case SessionWorkspaceToolName:
 		return 2
-	case MemoryToolName:
+	case LoopProtocolToolName:
 		return 3
-	case SessionSearchToolName:
+	case MemoryToolName:
 		return 4
-	case SkillToolName:
+	case SessionSearchToolName:
 		return 5
-	case FocusedTaskToolName, SubagentToolName:
+	case SkillToolName:
 		return 6
+	case FocusedTaskToolName, SubagentToolName:
+		return 7
 	case "file_context", SymbolContextToolName, "repo_search", "list_files", "read_file":
 		return 20
 	case "write_file", "edit_file":

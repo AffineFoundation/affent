@@ -518,14 +518,15 @@ var localWorkIndicators = []string{
 // fresh Loop with its own conversation log and a deliberately narrow tool set.
 // It is meant for bounded exploration/review, not autonomous worker swarms.
 type SubagentDeps struct {
-	LLM               *LLMClient
-	Executor          executor.Executor
-	HostWorkspaceDir  string
-	Memory            memory.MemoryStore
-	SessionsDir       string
-	ParentSessionID   string
-	TranscriptDir     string
-	ProjectContextDir string
+	LLM                      *LLMClient
+	Executor                 executor.Executor
+	HostWorkspaceDir         string
+	HostWorkspaceDirProvider func() string
+	Memory                   memory.MemoryStore
+	SessionsDir              string
+	ParentSessionID          string
+	TranscriptDir            string
+	ProjectContextDir        string
 
 	// RegisterChildTools optionally adds extra tools to each child
 	// registry. The callback runs once per subagent_run and may return
@@ -551,6 +552,15 @@ type SubagentDeps struct {
 	// MaxSubagentDepth are clamped. Set MaxDepth=1 to keep single-layer
 	// delegation.
 	MaxDepth int
+}
+
+func (d SubagentDeps) hostWorkspaceDir() string {
+	if d.HostWorkspaceDirProvider != nil {
+		if workspace := strings.TrimSpace(d.HostWorkspaceDirProvider()); workspace != "" {
+			return workspace
+		}
+	}
+	return strings.TrimSpace(d.HostWorkspaceDir)
 }
 
 // resolveModeRegistry returns the registry to use for this deps
@@ -585,7 +595,7 @@ func (d SubagentDeps) childDepth() int {
 }
 
 func (d SubagentDeps) childMayDelegate() bool {
-	return d.LLM != nil && d.HostWorkspaceDir != "" && d.childDepth() < d.resolvedMaxDepth()
+	return d.LLM != nil && d.hostWorkspaceDir() != "" && d.childDepth() < d.resolvedMaxDepth()
 }
 
 func (d SubagentDeps) childDeps() SubagentDeps {
@@ -598,7 +608,7 @@ func (d SubagentDeps) childDeps() SubagentDeps {
 // dependencies are present. Callers can skip this entirely for deployments that
 // do not want nested model calls.
 func RegisterSubagent(r *Registry, deps SubagentDeps) {
-	if deps.LLM == nil || deps.HostWorkspaceDir == "" {
+	if deps.LLM == nil || deps.hostWorkspaceDir() == "" {
 		return
 	}
 	r.Add(subagentTool(deps))
@@ -612,9 +622,10 @@ func RegisterSubagent(r *Registry, deps SubagentDeps) {
 func buildSubagentRegistry(deps SubagentDeps) *Registry {
 	reg := NewRegistry()
 	bd := BuiltinDeps{
-		Executor:             deps.Executor,
-		HostWorkspaceDir:     deps.HostWorkspaceDir,
-		SecretValuesProvider: deps.SecretValuesProvider,
+		Executor:                 deps.Executor,
+		HostWorkspaceDir:         deps.hostWorkspaceDir(),
+		HostWorkspaceDirProvider: deps.HostWorkspaceDirProvider,
+		SecretValuesProvider:     deps.SecretValuesProvider,
 	}
 	reg.Add(skillTool(builtinSkillProviderRegistry, "", nil))
 	reg.Add(subagentReadFileTool(bd))
@@ -720,6 +731,7 @@ func subagentToolSchema(reg *SubagentModeRegistry, maxDepth int) json.RawMessage
 func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task string, maxTurns int) (string, error) {
 	childID := "subagent_" + uuid.NewString()
 	childDepth := deps.childDepth()
+	workspace := deps.hostWorkspaceDir()
 
 	reg := buildSubagentRegistry(deps)
 	if deps.RegisterChildTools != nil {
@@ -746,7 +758,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		Log:                         deps.Log,
 		SecretValuesProvider:        deps.SecretValuesProvider,
 		SystemPrompt:                subagentSystemPromptFor(mode, reg),
-		UserPrompt:                  subagentUserPrompt(mode.Name, task, deps.HostWorkspaceDir, maxTurns, childDepth, deps.resolvedMaxDepth()),
+		UserPrompt:                  subagentUserPrompt(mode.Name, task, workspace, maxTurns, childDepth, deps.resolvedMaxDepth()),
 	}
 	if deps.childMayDelegate() {
 		spec.FirstToolPolicy = SubagentFirstToolPolicy()
@@ -1291,7 +1303,7 @@ func subagentReadFileTool(deps BuiltinDeps) *Tool {
 		if err != nil {
 			return "", err
 		}
-		if err := rejectSubagentPrivatePath(deps.HostWorkspaceDir, p.Path); err != nil {
+		if err := rejectSubagentPrivatePath(deps.hostWorkspaceDir(), p.Path); err != nil {
 			return "", err
 		}
 		return inner(ctx, args)
@@ -1310,7 +1322,7 @@ func subagentListFilesTool(deps BuiltinDeps) *Tool {
 		if err != nil {
 			return "", err
 		}
-		if err := rejectSubagentPrivatePath(deps.HostWorkspaceDir, p.Path); err != nil {
+		if err := rejectSubagentPrivatePath(deps.hostWorkspaceDir(), p.Path); err != nil {
 			return "", err
 		}
 		return inner(ctx, args)

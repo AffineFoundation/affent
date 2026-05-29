@@ -197,8 +197,8 @@ func handleSessionFileWrite(sessionID, workspace string, w http.ResponseWriter, 
 }
 
 func sessionWorkspaceForFiles(pool *SessionPool, sessionID string) (string, error) {
-	if sess, err := pool.Get(sessionID); err == nil && strings.TrimSpace(sess.workspace) != "" {
-		return sess.workspace, nil
+	if sess, err := pool.Get(sessionID); err == nil && strings.TrimSpace(sess.Workspace()) != "" {
+		return sess.Workspace(), nil
 	}
 	meta, found, err := sessionstate.ReadMetadata(pool.sessionDirPath(sessionID))
 	if err != nil {

@@ -23,6 +23,11 @@ type LocalExecutor struct {
 	id           string
 	workspaceDir string
 
+	// WorkspaceDirProvider, when set, overrides workspaceDir at exec time.
+	// Long-running server sessions use this to let their active workspace move
+	// from the root into a created or cloned project without rebuilding tools.
+	WorkspaceDirProvider func() string
+
 	// ExtraPathDirs are appended to the spawned process's PATH (in
 	// addition to whatever the inherited / opts.Env PATH already has).
 	// Controls the convenience "find tools the operator installed in
@@ -78,6 +83,15 @@ func NewLocalExecutor(sessionID, workspaceDir string) *LocalExecutor {
 
 func (h *LocalExecutor) SessionID() string { return h.id }
 
+func (h *LocalExecutor) defaultWorkspaceDir() string {
+	if h.WorkspaceDirProvider != nil {
+		if workspace := strings.TrimSpace(h.WorkspaceDirProvider()); workspace != "" {
+			return workspace
+		}
+	}
+	return h.workspaceDir
+}
+
 func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions) (ExecResult, error) {
 	if len(cmd) == 0 {
 		return ExecResult{}, errors.New("empty command")
@@ -89,7 +103,7 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 	}
 
 	c := exec.CommandContext(ctx, cmd[0], cmd[1:]...)
-	workingDir, err := resolveWorkingDir(h.workspaceDir, opts.WorkingDir)
+	workingDir, err := resolveWorkingDir(h.defaultWorkspaceDir(), opts.WorkingDir)
 	if err != nil {
 		return ExecResult{ExitCode: -1}, err
 	}

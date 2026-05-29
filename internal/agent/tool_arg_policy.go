@@ -33,6 +33,9 @@ var toolArgPolicies = map[string]ToolArgPolicy{
 	SymbolContextToolName: {
 		WorkspacePathArgs: []string{"path"},
 	},
+	SessionWorkspaceToolName: {
+		WorkspacePathArgs: []string{"path"},
+	},
 	"browser_screenshot": {
 		WorkspacePathArgs: []string{"save_path"},
 	},
