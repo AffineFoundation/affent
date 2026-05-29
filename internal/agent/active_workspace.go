@@ -1,4 +1,4 @@
-package main
+package agent
 
 import (
 	"bytes"
@@ -11,10 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
-
-	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/internal/sessionstate"
 )
 
 const (
@@ -22,31 +18,34 @@ const (
 	maxSessionWorkspacePathBytes   = 2048
 )
 
-type sessionWorkspaceState struct {
-	mu         sync.RWMutex
-	sessionID  string
-	sessionDir string
-	root       string
-	current    string
-	owned      bool
+// ActiveWorkspaceState tracks the workspace directory tools should treat as
+// current. The root is the configured workspace boundary; current may move to
+// an existing child project after clone/create workflows.
+type ActiveWorkspaceState struct {
+	mu        sync.RWMutex
+	sessionID string
+	root      string
+	current   string
+	owned     bool
+	onChange  func(current string) error
 }
 
-func newSessionWorkspaceState(sessionID, sessionDir, root, current string, owned bool) *sessionWorkspaceState {
+func NewActiveWorkspaceState(sessionID, root, current string, owned bool, onChange func(current string) error) *ActiveWorkspaceState {
 	root = strings.TrimSpace(root)
 	current = strings.TrimSpace(current)
 	if current == "" {
 		current = root
 	}
-	return &sessionWorkspaceState{
-		sessionID:  sessionID,
-		sessionDir: sessionDir,
-		root:       root,
-		current:    current,
-		owned:      owned,
+	return &ActiveWorkspaceState{
+		sessionID: sessionID,
+		root:      root,
+		current:   current,
+		owned:     owned,
+		onChange:  onChange,
 	}
 }
 
-func (s *sessionWorkspaceState) Root() string {
+func (s *ActiveWorkspaceState) Root() string {
 	if s == nil {
 		return ""
 	}
@@ -55,7 +54,7 @@ func (s *sessionWorkspaceState) Root() string {
 	return s.root
 }
 
-func (s *sessionWorkspaceState) Current() string {
+func (s *ActiveWorkspaceState) Current() string {
 	if s == nil {
 		return ""
 	}
@@ -64,7 +63,7 @@ func (s *sessionWorkspaceState) Current() string {
 	return s.current
 }
 
-func (s *sessionWorkspaceState) Owned() bool {
+func (s *ActiveWorkspaceState) Owned() bool {
 	if s == nil {
 		return false
 	}
@@ -73,15 +72,14 @@ func (s *sessionWorkspaceState) Owned() bool {
 	return s.owned
 }
 
-func (s *sessionWorkspaceState) Set(path string) (string, error) {
+func (s *ActiveWorkspaceState) Set(path string) (string, error) {
 	if s == nil {
 		return "", errors.New("workspace state is not configured")
 	}
-	path = strings.TrimSpace(path)
 	s.mu.RLock()
 	root := s.root
 	s.mu.RUnlock()
-	next, err := resolveActiveWorkspacePath(root, path)
+	next, err := ResolveActiveWorkspacePath(root, path)
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +89,7 @@ func (s *sessionWorkspaceState) Set(path string) (string, error) {
 	return next, nil
 }
 
-func (s *sessionWorkspaceState) Reset() (string, error) {
+func (s *ActiveWorkspaceState) Reset() (string, error) {
 	if s == nil {
 		return "", errors.New("workspace state is not configured")
 	}
@@ -104,22 +102,18 @@ func (s *sessionWorkspaceState) Reset() (string, error) {
 	return root, nil
 }
 
-func (s *sessionWorkspaceState) updateCurrent(next string) error {
+func (s *ActiveWorkspaceState) updateCurrent(next string) error {
 	next = strings.TrimSpace(next)
 	if next == "" {
 		return errors.New("workspace path is required")
 	}
 	s.mu.RLock()
-	meta := sessionstate.Metadata{
-		SessionID:     s.sessionID,
-		WorkspaceRoot: s.root,
-		WorkspacePath: next,
-		UpdatedAt:     time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	sessionDir := s.sessionDir
+	onChange := s.onChange
 	s.mu.RUnlock()
-	if err := sessionstate.WriteMetadata(sessionDir, meta); err != nil {
-		return err
+	if onChange != nil {
+		if err := onChange(next); err != nil {
+			return err
+		}
 	}
 	s.mu.Lock()
 	s.current = next
@@ -127,7 +121,7 @@ func (s *sessionWorkspaceState) updateCurrent(next string) error {
 	return nil
 }
 
-func resolveActiveWorkspacePath(root, raw string) (string, error) {
+func ResolveActiveWorkspacePath(root, raw string) (string, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return "", errors.New("workspace root is not configured")
@@ -150,7 +144,7 @@ func resolveActiveWorkspacePath(root, raw string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	inside, err := pathWithin(rootAbs, candidateAbs)
+	inside, err := activeWorkspacePathWithin(rootAbs, candidateAbs)
 	if err != nil {
 		return "", err
 	}
@@ -170,14 +164,30 @@ func resolveActiveWorkspacePath(root, raw string) (string, error) {
 	return candidateAbs, nil
 }
 
-func restoreActiveWorkspace(root, stored string) string {
+func RestoreActiveWorkspace(root, stored string) string {
 	if strings.TrimSpace(stored) == "" {
 		return root
 	}
-	if resolved, err := resolveActiveWorkspacePath(root, stored); err == nil {
+	if resolved, err := ResolveActiveWorkspacePath(root, stored); err == nil {
 		return resolved
 	}
 	return root
+}
+
+func activeWorkspacePathWithin(root, candidate string) (bool, error) {
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return false, err
+	}
+	candidateAbs, err := filepath.Abs(candidate)
+	if err != nil {
+		return false, err
+	}
+	rel, err := filepath.Rel(rootAbs, candidateAbs)
+	if err != nil {
+		return false, err
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))), nil
 }
 
 type sessionWorkspaceToolResponse struct {
@@ -189,7 +199,7 @@ type sessionWorkspaceToolResponse struct {
 	Summary        string `json:"summary"`
 }
 
-func sessionWorkspaceTool(state *sessionWorkspaceState) *agent.Tool {
+func SessionWorkspaceTool(state *ActiveWorkspaceState) *Tool {
 	schema := json.RawMessage(`{
 		"type": "object",
 		"additionalProperties": false,
@@ -199,8 +209,8 @@ func sessionWorkspaceTool(state *sessionWorkspaceState) *agent.Tool {
 			"path": {"type": "string", "maxLength": 2048, "description": "Workspace-root-relative or absolute directory path. Required for action=set."}
 		}
 	}`)
-	return &agent.Tool{
-		Name:        agent.SessionWorkspaceToolName,
+	return &Tool{
+		Name:        SessionWorkspaceToolName,
 		Description: "Inspect or switch this session's active workspace. Use action=set after creating or cloning a project directory so later shell/file/search tools default to that project. The path must be an existing directory inside the configured workspace root.",
 		Schema:      schema,
 		Execute: func(_ context.Context, args json.RawMessage) (string, error) {
@@ -227,6 +237,9 @@ func sessionWorkspaceTool(state *sessionWorkspaceState) *agent.Tool {
 			if len(req.Path) > maxSessionWorkspacePathBytes {
 				return "", fmt.Errorf("path is %d bytes; session_workspace path supports up to %d bytes", len(req.Path), maxSessionWorkspacePathBytes)
 			}
+			if state == nil {
+				return "", errors.New("workspace state is not configured")
+			}
 			before := state.Current()
 			switch action {
 			case "inspect":
@@ -249,9 +262,9 @@ func sessionWorkspaceTool(state *sessionWorkspaceState) *agent.Tool {
 				SessionID:      state.sessionID,
 				WorkspaceRoot:  state.Root(),
 				WorkspacePath:  current,
-				WorkspaceLabel: workspaceLabel(current),
+				WorkspaceLabel: activeWorkspaceLabel(current),
 				Changed:        current != before,
-				Summary:        fmt.Sprintf("active workspace is %s", workspaceLabel(current)),
+				Summary:        fmt.Sprintf("active workspace is %s", activeWorkspaceLabel(current)),
 			}
 			raw, err := json.MarshalIndent(resp, "", "  ")
 			if err != nil {
@@ -261,4 +274,15 @@ func sessionWorkspaceTool(state *sessionWorkspaceState) *agent.Tool {
 		},
 		CatalogGroup: "Core",
 	}
+}
+
+func activeWorkspaceLabel(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if base := filepath.Base(path); base != "." && base != string(filepath.Separator) {
+		return base
+	}
+	return path
 }

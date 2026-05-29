@@ -1300,6 +1300,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log.Error().Err(err).Msg("resolve session id")
 		return nil, exitRuntime
 	}
+	activeWorkspace := agent.NewActiveWorkspaceState(sid, workspace, workspace, false, nil)
 
 	systemPrompt, code := resolveSystemPrompt(c, workspace, caps)
 	if code != 0 {
@@ -1359,6 +1360,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			log.Error().Err(execErr).Msg("executor")
 			return nil, exitUsage
 		}
+		if localExec, ok := execBackend.(*executor.LocalExecutor); ok {
+			localExec.WorkspaceDirProvider = activeWorkspace.Current
+		}
 		skillDir := ""
 		if caps.Skill {
 			skillDir = agent.DefaultWorkspaceSkillDir(workspace)
@@ -1382,20 +1386,22 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			sessionsDir = ""
 		}
 		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
-			Executor:         execBackend,
-			HostWorkspaceDir: workspace,
-			Memory:           memStore,
-			SessionsDir:      sessionsDir,
-			SessionID:        sid,
-			PlanPath:         planPath,
-			LoopProtocolPath: loopProtocolToolPath,
-			SkillRegistry:    skillReg,
-			SkillDir:         skillDir,
+			Executor:                 execBackend,
+			HostWorkspaceDir:         workspace,
+			HostWorkspaceDirProvider: activeWorkspace.Current,
+			Memory:                   memStore,
+			SessionsDir:              sessionsDir,
+			SessionID:                sid,
+			PlanPath:                 planPath,
+			LoopProtocolPath:         loopProtocolToolPath,
+			SkillRegistry:            skillReg,
+			SkillDir:                 skillDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
 			DisableSkill: !caps.Skill,
 		})
+		tools.Add(agent.SessionWorkspaceTool(activeWorkspace))
 	} else if caps.Memory {
 		if memStore == nil {
 			log.Error().Msg("memory tool requires a usable memory store; check --memory-workspace-store / --memory-user-store")
@@ -1483,18 +1489,19 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if caps.Subagent {
 		agent.RegisterSubagent(tools, agent.SubagentDeps{
-			LLM:                llm,
-			Executor:           execBackend,
-			HostWorkspaceDir:   workspace,
-			Memory:             memStore,
-			SessionsDir:        convDir,
-			ParentSessionID:    sid,
-			TranscriptDir:      filepath.Join(convDir, "subagents", sid),
-			ProjectContextDir:  projectContextDir,
-			RegisterChildTools: affentctlSubagentBrowserRegistrar(caps.Browser, workspace),
-			Log:                log,
-			PerCallTimeout:     c.callTimeout,
-			MaxDepth:           c.subagentMaxDepth,
+			LLM:                      llm,
+			Executor:                 execBackend,
+			HostWorkspaceDir:         workspace,
+			HostWorkspaceDirProvider: activeWorkspace.Current,
+			Memory:                   memStore,
+			SessionsDir:              convDir,
+			ParentSessionID:          sid,
+			TranscriptDir:            filepath.Join(convDir, "subagents", sid),
+			ProjectContextDir:        projectContextDir,
+			RegisterChildTools:       affentctlSubagentBrowserRegistrar(caps.Browser, workspace),
+			Log:                      log,
+			PerCallTimeout:           c.callTimeout,
+			MaxDepth:                 c.subagentMaxDepth,
 		})
 	}
 	if caps.FocusedTasks {
@@ -1506,18 +1513,19 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		// run_task isn't available; we sniff registration to keep the
 		// prompt and the schema consistent.
 		agent.RegisterFocusedTasks(tools, agent.FocusedTaskDeps{
-			LLM:                  llm,
-			Executor:             execBackend,
-			HostWorkspaceDir:     workspace,
-			Memory:               memStore,
-			SessionsDir:          convDir,
-			ParentSessionID:      sid,
-			TranscriptDir:        filepath.Join(convDir, "focused-tasks", sid),
-			ProjectContextDir:    projectContextDir,
-			Log:                  log,
-			PerCallTimeout:       c.callTimeout,
-			RegisterWebTools:     affentctlFocusedTaskWebRegistrar(caps.WebFetch, caps.WebSearch),
-			RegisterBrowserTools: affentctlFocusedTaskBrowserRegistrar(caps.Browser, false, workspace, caps.WebFetch, caps.WebSearch),
+			LLM:                      llm,
+			Executor:                 execBackend,
+			HostWorkspaceDir:         workspace,
+			HostWorkspaceDirProvider: activeWorkspace.Current,
+			Memory:                   memStore,
+			SessionsDir:              convDir,
+			ParentSessionID:          sid,
+			TranscriptDir:            filepath.Join(convDir, "focused-tasks", sid),
+			ProjectContextDir:        projectContextDir,
+			Log:                      log,
+			PerCallTimeout:           c.callTimeout,
+			RegisterWebTools:         affentctlFocusedTaskWebRegistrar(caps.WebFetch, caps.WebSearch),
+			RegisterBrowserTools:     affentctlFocusedTaskBrowserRegistrar(caps.Browser, false, workspace, caps.WebFetch, caps.WebSearch),
 		})
 	}
 	if c.evalMode && !c.evalAllTools {
@@ -1548,6 +1556,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		TransientBackoff:          c.retryBackoff,
 		CompactTriggerInputTokens: c.compactTriggerInputTokens,
 		WorkspaceRoot:             workspace,
+		WorkspaceRootProvider:     activeWorkspace.Current,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",

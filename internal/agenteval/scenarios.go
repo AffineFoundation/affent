@@ -3286,7 +3286,7 @@ func longRunCodeCloneCommitPushScenario() BatchScenario {
 		Name:    "longrun-code-clone-modify-push-local-remote",
 		Suites:  []string{longRunSuite},
 		Domains: []string{codePRDomain},
-		Prompt:  "The workspace contains a local remote repository at remote.git and no checked-out working copy. Clone remote.git into app, enter the cloned repository, run go test ./... to reproduce the failure, fix only mathutil/clamp.go, and do not modify tests. After the fix, run go test ./... again, create a git commit, push it to origin main, and leave app with a clean git status. The final answer must include the clone command, the test command, the changed file, the commit hash, and the push result.",
+		Prompt:  "The workspace contains a local remote repository at remote.git and no checked-out working copy. Clone remote.git into app, use session_workspace to make app the active workspace, then run go test ./... to reproduce the failure. Fix only mathutil/clamp.go using paths relative to app, and do not modify tests. After the fix, run go test ./... again, create a git commit, push it to origin main, and leave app with a clean git status. The final answer must include the clone command, the active workspace, the test command, the changed file, the commit hash, and the push result.",
 		Files: map[string]string{
 			"README.md": `# Clone Modify Push Eval
 
@@ -3355,16 +3355,20 @@ func TestClampAboveRange(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
-		RequiredTools: []string{"read_file", "edit_file"},
+		RequiredTools: []string{"session_workspace", "read_file", "edit_file"},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
-			{Tool: "read_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
-			{Tool: "edit_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
+			{Tool: "session_workspace", Arg: "action", Substring: "set"},
+			{Tool: "session_workspace", Arg: "path", Substring: "app"},
+			{Tool: "read_file", Arg: "path", Substring: "mathutil/clamp.go"},
+			{Tool: "edit_file", Arg: "path", Substring: "mathutil/clamp.go"},
 		},
 		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `git clone`, Tool: "session_workspace"},
 			{Command: `git clone`, Tool: "read_file"},
 			{Command: `go test`, Tool: "edit_file"},
 		},
 		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "session_workspace"},
 			{Command: `go test`, Tool: "edit_file"},
 			{Command: `git status`, Tool: "edit_file"},
 			{Command: `git commit`, Tool: "edit_file"},
@@ -3374,16 +3378,18 @@ func TestClampAboveRange(t *testing.T) {
 			{Earlier: `git commit`, Later: `git push`},
 		},
 		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "session_workspace", SummaryContains: "app"},
 			{Tool: "shell", SummaryContains: "git push"},
 		},
 		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
-			{PathContains: "app/mathutil/clamp.go", Action: "edit"},
+			{PathContains: "mathutil/clamp.go", Action: "edit"},
 		},
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{Source: "git_commit"},
 			{Source: "git_push"},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "session_workspace", Later: "read_file"},
 			{Earlier: "read_file", Later: "edit_file"},
 		},
 		RequiredFileSubstrings: map[string][]string{
@@ -3396,6 +3402,7 @@ func TestClampAboveRange(t *testing.T) {
 		MaxLoopTurnTotalTokens:       320000,
 		RequiredFinalText: []string{
 			"git clone",
+			"active workspace",
 			"go test ./...",
 			"mathutil/clamp.go",
 			"clean",

@@ -126,6 +126,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 
 	var reg *agent.Registry
 	var skillProvider agent.SkillProvider
+	var workspaceProvider func() string
 	if r.BuildRegistry == nil {
 		rt, err := defaultBuildRuntime(workspace, exec, conv)
 		if err != nil {
@@ -133,6 +134,9 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		}
 		reg = rt.Registry
 		skillProvider = rt.SkillProvider
+		if rt.Workspace != nil {
+			workspaceProvider = rt.Workspace.Current
+		}
 	} else {
 		var err error
 		reg, err = r.BuildRegistry(ctx, workspace, exec)
@@ -161,15 +165,16 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		compactKeepLast = agent.DefaultSummaryKeepLast
 	}
 	loop := &agent.Loop{
-		LLM:            r.LLM,
-		Tools:          reg,
-		Conv:           conv,
-		Events:         events,
-		Log:            r.Log.With().Str("component", "agenteval").Str("scenario", s.Name).Logger(),
-		MaxTurnSteps:   maxTurns,
-		MaxToolCalls:   maxTurns,
-		PerCallTimeout: r.PerCallTimeout,
-		WorkspaceRoot:  workspace,
+		LLM:                   r.LLM,
+		Tools:                 reg,
+		Conv:                  conv,
+		Events:                events,
+		Log:                   r.Log.With().Str("component", "agenteval").Str("scenario", s.Name).Logger(),
+		MaxTurnSteps:          maxTurns,
+		MaxToolCalls:          maxTurns,
+		PerCallTimeout:        r.PerCallTimeout,
+		WorkspaceRoot:         workspace,
+		WorkspaceRootProvider: workspaceProvider,
 		Compactor: &agent.LLMSummaryCompactor{
 			LLM:          r.LLM,
 			TriggerMsgs:  compactTriggerMsgs,
@@ -258,6 +263,7 @@ func defaultBuildExecutor(scenarioName string) RunnerExecutorBuilder {
 type runnerRuntime struct {
 	Registry      *agent.Registry
 	SkillProvider agent.SkillProvider
+	Workspace     *agent.ActiveWorkspaceState
 }
 
 func defaultBuildRuntime(workspaceDir string, exec executor.Executor, conv *agent.Conversation) (runnerRuntime, error) {
@@ -267,18 +273,24 @@ func defaultBuildRuntime(workspaceDir string, exec executor.Executor, conv *agen
 	if err != nil {
 		return runnerRuntime{}, err
 	}
+	workspaceState := agent.NewActiveWorkspaceState("agenteval", workspaceDir, workspaceDir, false, nil)
+	if localExec, ok := exec.(*executor.LocalExecutor); ok {
+		localExec.WorkspaceDirProvider = workspaceState.Current
+	}
 	agent.RegisterBuiltins(reg, agent.BuiltinDeps{
-		Executor:         exec,
-		HostWorkspaceDir: workspaceDir,
-		PlanPath:         filepath.Join(workspaceDir, ".affent", "plan.json"),
-		SkillRegistry:    skillReg,
-		SkillDir:         skillDir,
+		Executor:                 exec,
+		HostWorkspaceDir:         workspaceDir,
+		HostWorkspaceDirProvider: workspaceState.Current,
+		PlanPath:                 filepath.Join(workspaceDir, ".affent", "plan.json"),
+		SkillRegistry:            skillReg,
+		SkillDir:                 skillDir,
 		SkillInstallConfirmer: func(proposalID string) bool {
 			return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 		},
 	})
+	reg.Add(agent.SessionWorkspaceTool(workspaceState))
 	registerEvalSessionScheduleTool(reg, workspaceDir)
-	return runnerRuntime{Registry: reg, SkillProvider: agent.SkillProviderForTools(skillReg, reg)}, nil
+	return runnerRuntime{Registry: reg, SkillProvider: agent.SkillProviderForTools(skillReg, reg), Workspace: workspaceState}, nil
 }
 
 func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {

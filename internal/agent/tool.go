@@ -16,8 +16,8 @@ import (
 // but the name is shared so traces and capability summaries do not drift.
 const SessionScheduleToolName = "session_schedule"
 
-// SessionWorkspaceToolName is the optional serve-runtime tool that lets a
-// session inspect or switch its active workspace within the configured root.
+// SessionWorkspaceToolName is the optional runtime tool that lets a session
+// inspect or switch its active workspace within the configured root.
 const SessionWorkspaceToolName = "session_workspace"
 
 // Tool is the in-process handler the loop dispatches to when the model

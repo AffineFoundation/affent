@@ -2479,15 +2479,22 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("clone/push RequiredCommandCounts = %#v, want go test=2", clonePush.RequiredCommandCounts)
 	}
 	for _, want := range []ToolArgContainsRequirement{
-		{Tool: "read_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
-		{Tool: "edit_file", Arg: "path", Substring: "app/mathutil/clamp.go"},
+		{Tool: "session_workspace", Arg: "action", Substring: "set"},
+		{Tool: "session_workspace", Arg: "path", Substring: "app"},
+		{Tool: "read_file", Arg: "path", Substring: "mathutil/clamp.go"},
+		{Tool: "edit_file", Arg: "path", Substring: "mathutil/clamp.go"},
 	} {
 		if !toolArgRequirementContains(clonePush.RequiredToolArgContains, want) {
 			t.Fatalf("clone/push RequiredToolArgContains = %#v, want %#v", clonePush.RequiredToolArgContains, want)
 		}
 	}
+	if !stringSliceContains(clonePush.RequiredTools, "session_workspace") {
+		t.Fatalf("clone/push RequiredTools = %#v, want session_workspace", clonePush.RequiredTools)
+	}
 	for _, want := range []CommandToolOrderRequirement{
+		{Command: `git clone`, Tool: "session_workspace"},
 		{Command: `git clone`, Tool: "read_file"},
+		{Command: `go test`, Tool: "session_workspace"},
 		{Command: `go test`, Tool: "edit_file"},
 		{Command: `git status`, Tool: "edit_file"},
 		{Command: `git commit`, Tool: "edit_file"},
@@ -2500,13 +2507,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if got := clonePush.RequiredFileSubstrings["app/mathutil/clamp.go"]; !stringSliceContains(got, "return max") {
 		t.Fatalf("clone/push RequiredFileSubstrings = %#v, want fixed clamp", clonePush.RequiredFileSubstrings)
 	}
-	if !taskStateChangedFileRequirementContains(clonePush.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "app/mathutil/clamp.go", Action: "edit"}) {
-		t.Fatalf("clone/push RequiredTaskStateChangedFiles = %#v, want app/mathutil/clamp.go edit", clonePush.RequiredTaskStateChangedFiles)
+	if !taskStateChangedFileRequirementContains(clonePush.RequiredTaskStateChangedFiles, TaskStateChangedFileRequirement{PathContains: "mathutil/clamp.go", Action: "edit"}) {
+		t.Fatalf("clone/push RequiredTaskStateChangedFiles = %#v, want mathutil/clamp.go edit", clonePush.RequiredTaskStateChangedFiles)
 	}
-	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") || !stringSliceContains(clonePush.RequiredFinalText, "clean") || !stringSliceContains(clonePush.RequiredFinalText, "hash") {
-		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command, changed file, clean status evidence, and commit hash evidence", clonePush.RequiredFinalText)
+	if !taskStateAttemptedActionRequirementContains(clonePush.RequiredTaskStateAttemptedActions, TaskStateAttemptedActionRequirement{Tool: "session_workspace", SummaryContains: "app"}) {
+		t.Fatalf("clone/push RequiredTaskStateAttemptedActions = %#v, want session_workspace app evidence", clonePush.RequiredTaskStateAttemptedActions)
 	}
-	if strings.Contains(clonePush.Prompt, "请") || !strings.Contains(clonePush.Prompt, "Clone remote.git into app") {
+	if !stringSliceContains(clonePush.RequiredFinalText, "git clone") || !stringSliceContains(clonePush.RequiredFinalText, "active workspace") || !stringSliceContains(clonePush.RequiredFinalText, "mathutil/clamp.go") || !stringSliceContains(clonePush.RequiredFinalText, "clean") || !stringSliceContains(clonePush.RequiredFinalText, "hash") {
+		t.Fatalf("clone/push RequiredFinalText = %#v, want clone command, active workspace, changed file, clean status evidence, and commit hash evidence", clonePush.RequiredFinalText)
+	}
+	if strings.Contains(clonePush.Prompt, "请") || !strings.Contains(clonePush.Prompt, "Clone remote.git into app") || !strings.Contains(clonePush.Prompt, "use session_workspace") {
 		t.Fatalf("clone/push prompt should be English and clone-specific: %q", clonePush.Prompt)
 	}
 	if !stringSliceContains(clonePush.Domains, codePRDomain) {
@@ -4407,6 +4417,15 @@ func toolArgRequirementContains(values []ToolArgContainsRequirement, want ToolAr
 }
 
 func taskStateChangedFileRequirementContains(values []TaskStateChangedFileRequirement, want TaskStateChangedFileRequirement) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func taskStateAttemptedActionRequirementContains(values []TaskStateAttemptedActionRequirement, want TaskStateAttemptedActionRequirement) bool {
 	for _, value := range values {
 		if value == want {
 			return true

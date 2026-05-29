@@ -48,7 +48,7 @@ type Session struct {
 	browser          *affentbrowser.Session
 	sessionDir       string
 	workspace        string
-	workspaceState   *sessionWorkspaceState
+	workspaceState   *agent.ActiveWorkspaceState
 	workspaceOwned   bool
 	loopProtocolPath string
 	loopProtocolInit bool
@@ -530,9 +530,15 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	currentWorkspace := workspace
 	if foundMeta {
-		currentWorkspace = restoreActiveWorkspace(workspace, meta.WorkspacePath)
+		currentWorkspace = agent.RestoreActiveWorkspace(workspace, meta.WorkspacePath)
 	}
-	workspaceState := newSessionWorkspaceState(id, sessionDir, workspace, currentWorkspace, workspaceAlloc.Owned)
+	workspaceState := agent.NewActiveWorkspaceState(id, workspace, currentWorkspace, workspaceAlloc.Owned, func(next string) error {
+		return sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
+			SessionID:     id,
+			WorkspaceRoot: workspace,
+			WorkspacePath: next,
+		})
+	})
 	if err := sessionstate.WriteMetadata(sessionDir, sessionstate.Metadata{
 		SessionID:     id,
 		WorkspaceRoot: workspace,
@@ -614,7 +620,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			},
 			DisableSkill: !workflowToolsEnabled(p.cfg),
 		})
-		reg.Add(sessionWorkspaceTool(workspaceState))
+		reg.Add(agent.SessionWorkspaceTool(workspaceState))
 	} else if memStore != nil {
 		// Memory tool without the shell/file builtins — common for
 		// remote-driven affentserve deployments that don't want shell
