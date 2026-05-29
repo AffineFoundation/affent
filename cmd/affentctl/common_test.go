@@ -54,6 +54,68 @@ func TestReadMaybeStdin_AtExistingFile(t *testing.T) {
 	}
 }
 
+func TestAffentctlRuntimeStateRoundTrip(t *testing.T) {
+	path := affentctlRuntimeStatePath(t.TempDir(), "sess_runtime")
+	want := affentctlRuntimeState{
+		AutoCompactWindow: agent.AutoCompactWindowState{
+			Ordinal:            3,
+			PrefillInputTokens: 1234,
+			Observed:           true,
+		},
+	}
+
+	if err := saveAffentctlRuntimeState(path, want); err != nil {
+		t.Fatalf("save runtime state: %v", err)
+	}
+	got, ok, err := loadAffentctlRuntimeState(path)
+	if err != nil {
+		t.Fatalf("load runtime state: %v", err)
+	}
+	if !ok {
+		t.Fatal("runtime state should exist")
+	}
+	if got.AutoCompactWindow != want.AutoCompactWindow {
+		t.Fatalf("runtime state = %+v, want %+v", got, want)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"prefill_input_tokens": 1234`) {
+		t.Fatalf("runtime state should use stable snake_case json: %s", data)
+	}
+}
+
+func TestLoopBundlePersistRuntimeStateUsesLoopSnapshot(t *testing.T) {
+	loop := &agent.Loop{
+		ModelContextWindowTokens:   10_000,
+		CompactTriggerInputPercent: 80,
+	}
+	loop.RestoreAutoCompactWindowState(agent.AutoCompactWindowState{
+		Ordinal:            7,
+		PrefillInputTokens: 2222,
+		Observed:           true,
+	})
+	path := affentctlRuntimeStatePath(t.TempDir(), "sess_runtime")
+	b := &loopBundle{loop: loop, runtimeStatePath: path}
+
+	if err := b.persistRuntimeState(); err != nil {
+		t.Fatalf("persist runtime state: %v", err)
+	}
+	got, ok, err := loadAffentctlRuntimeState(path)
+	if err != nil {
+		t.Fatalf("load runtime state: %v", err)
+	}
+	if !ok {
+		t.Fatal("runtime state should exist")
+	}
+	if got.AutoCompactWindow.Ordinal != 7 ||
+		got.AutoCompactWindow.PrefillInputTokens != 2222 ||
+		!got.AutoCompactWindow.Observed {
+		t.Fatalf("persisted compact window = %+v", got.AutoCompactWindow)
+	}
+}
+
 func TestReadMaybeStdin_AtFileRejectsOversize(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "huge.txt")

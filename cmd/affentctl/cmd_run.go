@@ -127,6 +127,9 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 	b.log.Info().Str("turn_id", turnID).Msg("turn started")
 
 	finalText, exit := drainBatch(ctx, b.loop, b.events, b.recorder, b.log)
+	if err := b.persistRuntimeState(); err != nil {
+		b.log.Warn().Err(err).Msg("persist runtime state")
+	}
 	// When the user routed the trace to stdout (--trace -), printing the
 	// final assistant text on stdout too would interleave plain markdown
 	// into the JSONL stream and break every batch-eval consumer that

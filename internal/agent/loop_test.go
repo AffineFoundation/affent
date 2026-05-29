@@ -2191,6 +2191,49 @@ func TestPublishRuntimeSurfaceReportsAutoCompactWindowScope(t *testing.T) {
 	}
 }
 
+func TestRestoreAutoCompactWindowStateSurfacesObservedScope(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("new context ", 400)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		Conv:                       conv,
+		Events:                     events,
+		ModelContextWindowTokens:   10_000,
+		CompactTriggerInputPercent: 80,
+	}
+	loop.RestoreAutoCompactWindowState(AutoCompactWindowState{
+		Ordinal:            4,
+		PrefillInputTokens: 900,
+		Observed:           true,
+	})
+
+	state := loop.AutoCompactWindowState()
+	if state.Ordinal != 4 || state.PrefillInputTokens != 900 || !state.Observed {
+		t.Fatalf("restored auto compact state = %+v", state)
+	}
+	loop.publishRuntimeSurface("turn_restored_scope", TurnOptions{})
+
+	ev := <-events
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if !payload.CompactScopeActive ||
+		payload.CompactWindowOrdinal != 4 ||
+		payload.CompactWindowPrefillInputTokens != 900 ||
+		payload.CompactWindowPrefillSource != "server_observed" {
+		t.Fatalf("restored compact scope surface = %+v", payload)
+	}
+}
+
 func TestPublishRuntimeSurfaceDoesNotInferScheduleRunnerFromTool(t *testing.T) {
 	events := make(chan sse.Event, 1)
 	reg := NewRegistry()

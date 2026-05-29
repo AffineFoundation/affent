@@ -300,6 +300,15 @@ type autoCompactWindowState struct {
 	observed      bool
 }
 
+// AutoCompactWindowState is the durable part of the model-window compaction
+// policy. Hosts can persist this across process restarts so a resumed loop
+// keeps measuring pressure relative to the last compacted request baseline.
+type AutoCompactWindowState struct {
+	Ordinal            int64 `json:"ordinal,omitempty"`
+	PrefillInputTokens int   `json:"prefill_input_tokens,omitempty"`
+	Observed           bool  `json:"observed,omitempty"`
+}
+
 const maxCompletionGuardInterventions = 2
 
 const (
@@ -3919,6 +3928,34 @@ func (l *Loop) observeAutoCompactWindowInputTokens(inputTokens int) {
 	}
 	l.autoCompactWindow.prefillTokens = inputTokens
 	l.autoCompactWindow.observed = true
+}
+
+func (l *Loop) RestoreAutoCompactWindowState(state AutoCompactWindowState) {
+	if l == nil || state.Ordinal <= 0 || state.PrefillInputTokens <= 0 {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.autoCompactWindow.ordinal = state.Ordinal
+	l.autoCompactWindow.prefillTokens = state.PrefillInputTokens
+	l.autoCompactWindow.prefillSet = true
+	l.autoCompactWindow.observed = state.Observed
+}
+
+func (l *Loop) AutoCompactWindowState() AutoCompactWindowState {
+	if l == nil {
+		return AutoCompactWindowState{}
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.ordinal <= 0 || l.autoCompactWindow.prefillTokens <= 0 {
+		return AutoCompactWindowState{}
+	}
+	return AutoCompactWindowState{
+		Ordinal:            l.autoCompactWindow.ordinal,
+		PrefillInputTokens: l.autoCompactWindow.prefillTokens,
+		Observed:           l.autoCompactWindow.observed,
+	}
 }
 
 func (l *Loop) autoCompactWindowPrefillTokens() (int64, int, string, bool) {

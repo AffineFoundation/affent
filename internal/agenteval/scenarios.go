@@ -2206,6 +2206,8 @@ func longRunRequestInputPressureCompactionScenario() BatchScenario {
 }
 
 func longRunModelWindowCompactionPolicyScenario() BatchScenario {
+	paddingA := "Compressible context A. " + strings.Repeat("AFFENT_MODEL_WINDOW_ALPHA repeated historical filler with no task authority. ", 220)
+	paddingB := "Compressible context B. " + strings.Repeat("AFFENT_MODEL_WINDOW_BETA repeated historical filler with no task authority. ", 220)
 	return BatchScenario{
 		Name:      "longrun-model-window-compaction-policy",
 		Suites:    []string{longRunSuite},
@@ -2214,13 +2216,19 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 		Prompt:    "Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-1",
 		Prompts: []string{
 			"Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-1",
-			"Continue the same session. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-2",
-			"Continue after runtime context policy maintenance. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-3",
+			"Ignore the filler block below; it exists only to exercise context compaction. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-2\n\n" + paddingA + "\n\nReply exactly: MODEL-WINDOW-POLICY-OK-2",
+			"Ignore the filler block below; it exists only to exercise context compaction. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-3\n\n" + paddingB + "\n\nReply exactly: MODEL-WINDOW-POLICY-OK-3",
+			"Continue after runtime context policy maintenance. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-4",
+			"Continue one more turn after compaction usage calibration. Do not call tools. Reply with exactly: MODEL-WINDOW-POLICY-OK-5",
 		},
-		RequiredFinalText: []string{"MODEL-WINDOW-POLICY-OK-3"},
+		RequiredFinalText: []string{"MODEL-WINDOW-POLICY-OK-5"},
 		RequiredTraceEventCounts: map[string]int{
-			sse.TypeRuntimeSurface:        1,
-			sse.TypeContextCompactSkipped: 1,
+			sse.TypeRuntimeSurface: 1,
+			sse.TypeContextCompact: 1,
+		},
+		RequiredContextCompactions: 1,
+		RequiredContextCompactionReasons: map[string]int{
+			"estimated_context_pressure": 1,
 		},
 		RequiredCompactScopeActive:          1,
 		RequiredRuntimeCompactPrefillSource: "server_observed",
@@ -2229,7 +2237,7 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 		MaxParentToolCalls:                  0,
 		MaxTurns:                            2,
 		CompactTrigger:                      240,
-		ModelContextWindowTokens:            200,
+		ModelContextWindowTokens:            6000,
 		CompactTriggerInputPercent:          80,
 		CompactKeepLast:                     1,
 	}

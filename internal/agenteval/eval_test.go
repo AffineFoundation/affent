@@ -3501,8 +3501,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("long-run suite missing model-window compaction policy scenario")
 	}
 	if modelWindowPolicy.SessionID != "longrun-model-window-compaction-policy" ||
-		len(modelWindowPolicy.Prompts) != 3 ||
-		modelWindowPolicy.ModelContextWindowTokens != 200 ||
+		len(modelWindowPolicy.Prompts) != 5 ||
+		modelWindowPolicy.ModelContextWindowTokens != 6000 ||
 		modelWindowPolicy.CompactTriggerInputPercent != 80 ||
 		modelWindowPolicy.CompactTriggerInputTokens != 0 ||
 		modelWindowPolicy.CompactKeepLast != 1 {
@@ -3515,17 +3515,19 @@ func TestSelectLongRunSuite(t *testing.T) {
 			modelWindowPolicy.CompactKeepLast,
 		)
 	}
-	if modelWindowPolicy.RequiredContextCompactions != 0 ||
+	if modelWindowPolicy.RequiredContextCompactions != 1 ||
+		modelWindowPolicy.RequiredContextCompactionReasons["estimated_context_pressure"] != 1 ||
 		modelWindowPolicy.RequiredCompactScopeActive != 1 ||
 		modelWindowPolicy.RequiredRuntimeCompactPrefillSource != "server_observed" ||
 		modelWindowPolicy.MaxCompactScopedPressurePercent == nil ||
 		*modelWindowPolicy.MaxCompactScopedPressurePercent != 0 ||
-		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 0 ||
+		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 1 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 1 ||
-		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 1 ||
-		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-3") {
-		t.Fatalf("model-window policy requirements = compactions:%d compact_scope:%d prefill_source:%q scoped_pressure:%#v trace:%#v final:%#v",
+		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 0 ||
+		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-5") {
+		t.Fatalf("model-window policy requirements = compactions:%d reasons:%#v compact_scope:%d prefill_source:%q scoped_pressure:%#v trace:%#v final:%#v",
 			modelWindowPolicy.RequiredContextCompactions,
+			modelWindowPolicy.RequiredContextCompactionReasons,
 			modelWindowPolicy.RequiredCompactScopeActive,
 			modelWindowPolicy.RequiredRuntimeCompactPrefillSource,
 			modelWindowPolicy.MaxCompactScopedPressurePercent,
@@ -3535,7 +3537,10 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	modelWindowChecks := checkNamesFor(BatchScenarioChecks(modelWindowPolicy))
 	for _, want := range []string{
-		"runtime_surface_model_context_window_tokens:200",
+		"context_compactions_at_least:1",
+		"context_compaction_policy_observed_at_least:1",
+		"context_compaction_reason_at_least:estimated_context_pressure:1",
+		"runtime_surface_model_context_window_tokens:6000",
 		"runtime_surface_compact_trigger_matches_model_policy",
 		"runtime_surface_compact_summary_prompt_matches_model_policy",
 		"runtime_surface_tool_schema_within_budget",
@@ -3547,9 +3552,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("model-window policy checks missing %q: %#v", want, modelWindowChecks)
 		}
 	}
-	if stringSliceContains(modelWindowChecks, "context_compactions_at_least:1") ||
-		taskStateEvidenceRequirementContains(modelWindowPolicy.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
-		t.Fatalf("model-window policy should not require ineffective compaction: checks=%#v evidence=%#v", modelWindowChecks, modelWindowPolicy.RequiredTaskStateEvidence)
+	if taskStateEvidenceRequirementContains(modelWindowPolicy.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{Source: "context_compaction", SummaryContains: "estimated_context_pressure"}) {
+		t.Fatalf("model-window policy should keep runtime compaction evidence in trace checks, not task-state evidence: %#v", modelWindowPolicy.RequiredTaskStateEvidence)
 	}
 
 	loopCalibration, ok := seen["longrun-loop-activation-calibration"]
@@ -4387,12 +4391,14 @@ func TestBuiltinContextCompactionScenariosRequireTaskStateEvidence(t *testing.T)
 			}
 		}
 		if scenario.RequiredContextCompactions > 0 {
-			if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", "") {
-				t.Fatalf("%s requires context compaction but lacks task_state context_compaction evidence requirement: %#v", scenario.Name, scenario.RequiredTaskStateEvidence)
-			}
-			for reason := range scenario.RequiredContextCompactionReasons {
-				if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", reason) {
-					t.Fatalf("%s requires context compaction reason %q but lacks matching task_state evidence requirement: %#v", scenario.Name, reason, scenario.RequiredTaskStateEvidence)
+			if !scenarioUsesRuntimeOnlyContextCompactionChecks(scenario) {
+				if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", "") {
+					t.Fatalf("%s requires context compaction but lacks task_state context_compaction evidence requirement: %#v", scenario.Name, scenario.RequiredTaskStateEvidence)
+				}
+				for reason := range scenario.RequiredContextCompactionReasons {
+					if !scenarioRequiresTaskStateEvidence(scenario, "context_compaction", reason) {
+						t.Fatalf("%s requires context compaction reason %q but lacks matching task_state evidence requirement: %#v", scenario.Name, reason, scenario.RequiredTaskStateEvidence)
+					}
 				}
 			}
 			for _, anchor := range scenario.RequiredContextLoopProtocolAnchorText {
@@ -4402,6 +4408,12 @@ func TestBuiltinContextCompactionScenariosRequireTaskStateEvidence(t *testing.T)
 			}
 		}
 	}
+}
+
+func scenarioUsesRuntimeOnlyContextCompactionChecks(scenario BatchScenario) bool {
+	return scenario.RequiredCompactScopeActive > 0 ||
+		scenario.RequiredRuntimeCompactPrefillSource != "" ||
+		scenario.MaxCompactScopedPressurePercent != nil
 }
 
 func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {

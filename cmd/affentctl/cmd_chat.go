@@ -197,6 +197,9 @@ Slash commands inside the REPL:
 		inTok, outTok := drainInteractive(turnCtx, b.loop, b.events, b.recorder)
 		b.inputTokens += inTok
 		b.outputTokens += outTok
+		if err := b.persistRuntimeState(); err != nil {
+			b.log.Warn().Err(err).Msg("persist runtime state")
+		}
 		if inTok > 0 || outTok > 0 {
 			b.turnsSeen++
 		}

@@ -870,17 +870,18 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 // resolved session id, MCP clients to keep alive, and a closer to call
 // before exit.
 type loopBundle struct {
-	loop         *agent.Loop
-	events       chan sse.Event
-	recorder     *eventlog.Recorder
-	traceClose   func() error
-	browser      *affentbrowser.Session
-	sessionID    string
-	resumed      bool // true if we loaded an existing conversation
-	workspace    string
-	log          zerolog.Logger
-	planPath     string
-	resumeRepair *sse.ConversationRepairedPayload
+	loop             *agent.Loop
+	events           chan sse.Event
+	recorder         *eventlog.Recorder
+	traceClose       func() error
+	browser          *affentbrowser.Session
+	sessionID        string
+	resumed          bool // true if we loaded an existing conversation
+	workspace        string
+	log              zerolog.Logger
+	planPath         string
+	runtimeStatePath string
+	resumeRepair     *sse.ConversationRepairedPayload
 
 	loopProtocolPath           string
 	loopProtocolSkillInstalled bool
@@ -1239,6 +1240,66 @@ func (b *loopBundle) writeStartupTraceEvents() error {
 	return b.recorder.Write(ev)
 }
 
+type affentctlRuntimeState struct {
+	AutoCompactWindow agent.AutoCompactWindowState `json:"auto_compact_window,omitempty"`
+}
+
+func affentctlRuntimeStatePath(convDir, sessionID string) string {
+	return filepath.Join(convDir, sessionID+".runtime.json")
+}
+
+func loadAffentctlRuntimeState(path string) (affentctlRuntimeState, bool, error) {
+	var state affentctlRuntimeState
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return state, false, nil
+		}
+		return state, false, err
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return state, false, err
+	}
+	return state, true, nil
+}
+
+func saveAffentctlRuntimeState(path string, state affentctlRuntimeState) error {
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
+}
+
+func (b *loopBundle) persistRuntimeState() error {
+	if b == nil || b.loop == nil {
+		return nil
+	}
+	return saveAffentctlRuntimeState(b.runtimeStatePath, affentctlRuntimeState{
+		AutoCompactWindow: b.loop.AutoCompactWindowState(),
+	})
+}
+
 func registerAffentctlWebTools(reg *agent.Registry, includeSearch bool) error {
 	if includeSearch {
 		return affentweb.RegisterAll(reg, affentweb.Options{Fetch: affentweb.FetchConfig{}})
@@ -1372,6 +1433,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log.Error().Err(err).Msg("resolve session id")
 		return nil, exitRuntime
 	}
+	runtimeStatePath := affentctlRuntimeStatePath(convDir, sid)
 	activeWorkspace := agent.NewActiveWorkspaceState(sid, workspace, workspace, false, nil)
 
 	systemPrompt, code := resolveSystemPrompt(c, workspace, caps)
@@ -1645,6 +1707,11 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		Memory:                       memStore,
 		ProjectContextDir:            projectContextDir,
 	}
+	if runtimeState, ok, err := loadAffentctlRuntimeState(runtimeStatePath); err != nil {
+		log.Warn().Err(err).Str("path", runtimeStatePath).Msg("load runtime state")
+	} else if ok {
+		loop.RestoreAutoCompactWindowState(runtimeState.AutoCompactWindow)
+	}
 	if agent.RegistrySupportsWorkspaceVerificationFreshnessGuard(tools) {
 		loop.CompletionGuards = append(loop.CompletionGuards, agent.WorkspaceVerificationFreshnessCompletionGuard(conv))
 		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, agent.WorkspaceVerificationFreshnessGuardLabel)
@@ -1739,6 +1806,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		workspace:                  workspace,
 		log:                        log,
 		planPath:                   planPath,
+		runtimeStatePath:           runtimeStatePath,
 		resumeRepair:               resumeRepair,
 		loopProtocolPath:           loopProtocolPath,
 		loopProtocolSkillInstalled: loopProtocolSkillInstalled,
