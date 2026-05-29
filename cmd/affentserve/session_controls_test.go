@@ -122,7 +122,7 @@ func TestHandleSessionMessageInjectsUnresolvedTaskStateIntoLLMRequest(t *testing
 			taskStateIndex = i
 			for _, want := range []string{
 				"status=completed",
-				"verification=failed",
+				"verification=unknown",
 				"next_step: call list_files on . or the workspace root to find the correct path, then retry read_file",
 				"failed_action: tool=read_file",
 			} {

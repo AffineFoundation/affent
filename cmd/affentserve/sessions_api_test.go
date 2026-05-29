@@ -1496,8 +1496,8 @@ func TestSummarizeDurableSessionKeepsFailureRecoveryAfterCompletedTurn(t *testin
 		t.Fatalf("task_state missing: found=%v summary=%+v", found, summary)
 	}
 	task := summary.TaskState
-	if task.Status != "completed" || task.VerificationState != "failed" {
-		t.Fatalf("task state status/verification = %q/%q, want completed/failed", task.Status, task.VerificationState)
+	if task.Status != "completed" || task.VerificationState != "unknown" {
+		t.Fatalf("task state status/verification = %q/%q, want completed/unknown", task.Status, task.VerificationState)
 	}
 	if task.NextStep != "call list_files on . or the workspace root to find the correct path, then retry read_file" {
 		t.Fatalf("next_step = %q, want latest failed tool recovery hint", task.NextStep)
@@ -1541,7 +1541,7 @@ func TestSessionTaskStateContextProviderInjectsRecoveryOnly(t *testing.T) {
 	for _, want := range []string{
 		"AFFENT TASK STATE:",
 		"status=completed",
-		"verification=failed",
+		"verification=unknown",
 		"next_step: call list_files on . or the workspace root to find the correct path, then retry read_file",
 		"failed_action: tool=read_file",
 	} {

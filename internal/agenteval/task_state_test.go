@@ -104,6 +104,32 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	}
 }
 
+func TestDeriveTaskStateVerificationIgnoresNonVerificationFailureAfterPass(t *testing.T) {
+	got := DeriveTaskState(Trace{
+		TurnEndReason: "completed",
+		Tools: []ToolCall{
+			{
+				Tool:     "shell",
+				Args:     map[string]any{"command": "python3 -m unittest discover -s tests"},
+				ExitCode: 0,
+			},
+			{
+				Tool:         "shell",
+				Args:         map[string]any{"command": "git status --short"},
+				ExitCode:     1,
+				FailureKinds: []string{"turn_input_budget_exhausted"},
+				Result:       "Failure: kind=turn_input_budget_exhausted",
+			},
+		},
+	})
+	if got.VerificationState != "last_shell_passed" {
+		t.Fatalf("verification state = %q, want last_shell_passed", got.VerificationState)
+	}
+	if len(got.FailedActions) != 1 || got.FailedActions[0].Tool != "shell" {
+		t.Fatalf("failed actions = %+v, want retained non-verification failure", got.FailedActions)
+	}
+}
+
 func TestDeriveTaskStateDefaultsBlankRequestModeToNormal(t *testing.T) {
 	got := DeriveTaskState(Trace{
 		Prompt:        "Run the scheduled check-in.",

@@ -88,7 +88,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		state.ScheduleID != "sched_clamp" ||
 		state.ScheduleKind != "checkin" ||
 		state.Status != "completed" ||
-		state.VerificationState != "last_shell_passed" {
+		state.VerificationState != "failed" {
 		t.Fatalf("unexpected task state: %+v", state.Snapshot)
 	}
 	if len(state.ChangedFiles) != 1 || state.ChangedFiles[0].Path != "app/mathutil/clamp.go" {
@@ -111,6 +111,49 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}
+	}
+}
+
+func TestScanEventsVerificationStateIgnoresNonVerificationFailuresAfterPassingTests(t *testing.T) {
+	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Run tests, then inspect status.",
+	}) +
+		taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "test-1",
+			Tool:   "shell",
+			Args:   map[string]any{"command": "python3 -m unittest discover -s tests"},
+		}) +
+		taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   "test-1",
+			ExitCode: 0,
+			Result:   "OK",
+		}) +
+		taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "status-1",
+			Tool:   "shell",
+			Args:   map[string]any{"command": "git status --short"},
+		}) +
+		taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:      "t1",
+			CallID:      "status-1",
+			ExitCode:    1,
+			FailureKind: "turn_input_budget_exhausted",
+			Result:      "Failure: kind=turn_input_budget_exhausted",
+		})
+
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.VerificationState != "last_shell_passed" {
+		t.Fatalf("verification state = %q, want last_shell_passed despite non-verification failure", state.VerificationState)
+	}
+	if len(state.FailedActions) != 1 || state.FailedActions[0].Tool != "shell" {
+		t.Fatalf("failed actions = %+v, want status failure retained", state.FailedActions)
 	}
 }
 
@@ -319,8 +362,8 @@ func TestScanEventsKeepsRecoveryNextStepAfterCompletedFailedTurn(t *testing.T) {
 	if state == nil {
 		t.Fatal("ScanEvents returned nil")
 	}
-	if state.Status != "completed" || state.VerificationState != "failed" {
-		t.Fatalf("status/verification = %q/%q, want completed/failed", state.Status, state.VerificationState)
+	if state.Status != "completed" || state.VerificationState != "unknown" {
+		t.Fatalf("status/verification = %q/%q, want completed/unknown", state.Status, state.VerificationState)
 	}
 	if state.NextStep != "call list_files on . before retrying read_file" {
 		t.Fatalf("next_step = %q, want failed tool recovery hint", state.NextStep)

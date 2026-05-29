@@ -185,10 +185,10 @@ func traceTaskCurrentStep(trace Trace) string {
 func traceTaskVerificationState(trace Trace) string {
 	state := ""
 	for _, tool := range trace.Tools {
-		if taskStateToolFailed(tool) {
+		if taskstate.ToolRequestLooksLikeVerification(taskStateToolRequest(tool)) && taskStateToolFailed(tool) {
 			state = "failed"
 		}
-		if tool.Tool == "shell" && tool.ExitCode == 0 {
+		if taskstate.ToolRequestLooksLikeVerification(taskStateToolRequest(tool)) && tool.ExitCode == 0 {
 			state = "last_shell_passed"
 		}
 	}

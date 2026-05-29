@@ -16,6 +16,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/taskstate"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -758,33 +759,10 @@ func rejectBroadShellScan(command string, indicators []string) error {
 	return nil
 }
 
-var verificationCommandIndicators = []string{
-	"pytest",
-	"python -m unittest",
-	"python3 -m unittest",
-	"go test",
-	"go build",
-	"go vet",
-	"npm test",
-	"npm run test",
-	"npm run build",
-	"pnpm test",
-	"yarn test",
-	"cargo test",
-	"mvn test",
-	"gradle test",
-	"make test",
-	"tsc",
-}
+var verificationCommandIndicators = taskstate.DefaultVerificationCommandIndicators
 
 func shellCommandLooksLikeVerification(command string, indicators []string) bool {
-	lower := strings.ToLower(command)
-	for _, indicator := range indicators {
-		if strings.Contains(lower, indicator) {
-			return true
-		}
-	}
-	return false
+	return taskstate.ShellCommandLooksLikeVerificationWithIndicators(command, indicators)
 }
 
 // ShellCommandLooksLikeVerification reports whether a shell command is a

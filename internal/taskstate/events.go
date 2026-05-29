@@ -205,9 +205,11 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 					TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
 					CallID:  p.CallID,
 				}, opts.MaxItems)
-				state.VerificationState = "failed"
+				if ToolRequestLooksLikeVerification(req) {
+					state.VerificationState = "failed"
+				}
 			} else if source := ToolEvidenceSource(req.Tool); source != "" {
-				if req.Tool == "shell" {
+				if ToolRequestLooksLikeVerification(req) {
 					state.VerificationState = "last_shell_passed"
 				}
 				action := ToolActionSummary(req)
