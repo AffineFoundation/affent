@@ -2977,6 +2977,141 @@ func TestRunTurn_ProjectedInputBudgetForcesNoToolBeforeNextToolRound(t *testing.
 	}
 }
 
+func TestRunTurn_BudgetFinalCanDeferCompletionGuardState(t *testing.T) {
+	var calls int32
+	var toolRan int32
+	var finalRequestHadTools atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"first","type":"function","function":{"name":"expensive","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":60,"completion_tokens":4}}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		default:
+			if strings.Contains(body, `"tools"`) {
+				finalRequestHadTools.Store(true)
+			}
+			w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"verified final from budget evidence"},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":2}}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "expensive", Description: "expensive", Schema: json.RawMessage(`{"type":"object","properties":{}}`), Execute: func(context.Context, json.RawMessage) (string, error) {
+		atomic.AddInt32(&toolRan, 1)
+		return "verified evidence\n" + strings.Repeat("x", 400), nil
+	}})
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, MaxTurnInputTokens: 55, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+		CompletionGuards: []CompletionGuard{
+			func() CompletionGuardResult {
+				return CompletionGuardResult{
+					Blocked:        true,
+					ID:             "plan-unfinished",
+					Trigger:        "active_plan_unfinished",
+					Reason:         "plan:4/5:active; current step 5 is in_progress",
+					RequiredAction: "update the plan before finalizing",
+					Prompt:         "The persisted plan is unfinished. Call the plan tool before finalizing.",
+				}
+			},
+		},
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawFinal bool
+	var sawInputBudget bool
+	var sawGuardDefer bool
+	var sawGuardBudgetFinal bool
+	var sawRejected bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.Text == "verified final from budget evidence" {
+					sawFinal = true
+				}
+			case sse.TypeMessageRejected:
+				sawRejected = true
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				switch {
+				case p.Kind == "input_budget" && p.Trigger == "turn_input_tokens_exhausted":
+					sawInputBudget = true
+				case p.Kind == "completion_guard" && p.Trigger == "active_plan_unfinished" && p.Decision == "defer":
+					sawGuardDefer = true
+				case p.Kind == "completion_guard" && p.Trigger == "active_plan_unfinished" && p.Decision == "accept_with_deferred_state":
+					sawGuardBudgetFinal = true
+					if !strings.Contains(p.RequiredAction, "tools are unavailable") {
+						t.Fatalf("budget final guard decision missing durable-state handoff: %+v", p)
+					}
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed", p.Reason)
+				}
+				if !sawFinal || !sawInputBudget || !sawGuardDefer || !sawGuardBudgetFinal {
+					t.Fatalf("sawFinal=%t inputBudget=%t guardDefer=%t guardBudgetFinal=%t", sawFinal, sawInputBudget, sawGuardDefer, sawGuardBudgetFinal)
+				}
+				if sawRejected {
+					t.Fatal("budget final should be accepted with a structured deferred-state decision, not rejected")
+				}
+				if finalRequestHadTools.Load() {
+					t.Fatal("budget final request must not expose tools")
+				}
+				if got := atomic.LoadInt32(&toolRan); got != 0 {
+					t.Fatalf("tool calls = %d, want skipped tool under input budget", got)
+				}
+				if got := atomic.LoadInt32(&calls); got != 2 {
+					t.Fatalf("LLM calls = %d, want initial tool call and one no-tool final", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_ProjectedInputBudgetChecksFirstRequest(t *testing.T) {
 	var calls int32
 	var requestHadTools atomic.Bool

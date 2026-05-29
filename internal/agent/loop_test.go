@@ -203,7 +203,7 @@ func TestDefaultSystemPromptSteersWorkspaceRelativeCommands(t *testing.T) {
 func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	once := WithMemorySystemGuidance(base)
-	for _, want := range []string{"Memory retrieval:", "action=list", "action=search", "target=user", "target=memory", "topic=core"} {
+	for _, want := range []string{"Memory retrieval:", "action=list", "action=search", "target=user", "target=memory", "topic=core", "explicitly asks to preserve a verified convention"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("memory guidance missing %q:\n%s", want, once)
 		}

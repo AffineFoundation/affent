@@ -514,7 +514,7 @@ const MemorySystemGuidance = `Memory retrieval:
 - Use the memory tool when the user asks what you remember, references prior work, or when durable project/user facts may constrain the answer.
 - To recall facts, call action=list when you need topic discovery, then action=search with 2-6 concrete keywords. If search returns no results but includes topics, retry once against the most relevant topic with fewer terms. Use target=user for stable user preferences/details and target=memory for workspace/project facts.
 - Search before replace/remove so old_text is a unique substring from the current entry. Do not guess old_text.
-- Save only durable facts, conventions, preferences, environment details, and lessons likely to matter in future sessions. Do not save transient task progress, raw dumps, secrets, or facts that are easy to re-read from project files.
+- Save only durable facts, conventions, preferences, environment details, and lessons likely to matter in future sessions. If the task explicitly asks to preserve a verified convention for future sessions, save a compact entry even when the source also exists in project files. Do not save transient task progress, raw dumps, secrets, or facts that are easy to re-read from project files.
 - Use topic=core sparingly for facts needed every turn. Prefer semantic topics such as stack, deploy, auth, conventions, or the default general topic.`
 
 func WithMemorySystemGuidance(prompt string) string {
@@ -1274,6 +1274,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 				if guard, blocked := l.completionGuardBlocker(turnID); blocked {
 					l.publishCompletionGuardDecision(turnID, guard)
+					if completionGuardCanDeferAfterBudgetFinal(nextSkippedReason) {
+						l.publishCompletionGuardBudgetFinalDecision(turnID, guard, nextSkippedReason)
+						l.publishAcceptedMessageDone(turnID, final, opts)
+						return true, "", nil
+					}
 					l.publishMessageRejectedForFinish(turnID, final, guard)
 					return false, "", nil
 				}
@@ -2023,6 +2028,34 @@ func (l *Loop) publishCompletionGuardDecision(turnID string, guard CompletionGua
 		Confidence:     "high",
 		Reason:         guard.Reason,
 		RequiredAction: guard.RequiredAction,
+		VisibleInUI:    &visible,
+	})
+}
+
+func completionGuardCanDeferAfterBudgetFinal(reason skippedToolResultReason) bool {
+	switch strings.TrimSpace(reason.FailureKind) {
+	case "turn_input_budget_exhausted", "tool_context_budget_exhausted":
+		return true
+	default:
+		return false
+	}
+}
+
+func (l *Loop) publishCompletionGuardBudgetFinalDecision(turnID string, guard CompletionGuardResult, reason skippedToolResultReason) {
+	visible := true
+	required := "Accept the no-tool final answer from gathered evidence and carry the unfinished durable state into the next turn; tools are unavailable because this turn hit a context budget boundary."
+	if next := strings.TrimSpace(reason.Next); next != "" {
+		required = required + " " + next
+	}
+	l.publishLoopDecision(sse.LoopDecisionPayload{
+		TurnID:         turnID,
+		DecisionID:     guard.ID + "-budget-final",
+		Kind:           "completion_guard",
+		Trigger:        guard.Trigger,
+		Decision:       "accept_with_deferred_state",
+		Confidence:     "medium",
+		Reason:         "Completion guard remained active after budget policy disabled tools: " + guard.Reason,
+		RequiredAction: required,
 		VisibleInUI:    &visible,
 	})
 }

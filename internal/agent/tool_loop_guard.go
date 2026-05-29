@@ -126,7 +126,7 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	// gets the over-delegation message rather than the misleading
 	// "same effective arguments" message. The args-hash guard remains
 	// a secondary defense for repeats with identical inputs.
-	if cap, capped := perTurnCallCaps[tool]; capped {
+	if cap, capped := perTurnCallCaps[tool]; capped && perTurnCallCapApplies(tool, args) {
 		if g.perToolCounts[tool] >= cap {
 			return perTurnCapMessage(tool, cap)
 		}
@@ -155,6 +155,19 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		)
 	}
 	return ""
+}
+
+func perTurnCallCapApplies(tool string, args json.RawMessage) bool {
+	if tool != PlanToolName {
+		return true
+	}
+	var raw struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &raw); err != nil {
+		return true
+	}
+	return strings.TrimSpace(raw.Action) != "view"
 }
 
 func perTurnCapMessage(tool string, cap int) string {

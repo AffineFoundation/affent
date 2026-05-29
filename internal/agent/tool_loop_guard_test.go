@@ -741,13 +741,19 @@ func TestToolLoopGuard_PerTurnCallCapForRunTask(t *testing.T) {
 
 func TestToolLoopGuard_PerTurnCallCapForPlan(t *testing.T) {
 	g := newToolLoopGuard()
+	if got := g.recordAttempt(PlanToolName, json.RawMessage(`{"action":"view"}`)); got != "" {
+		t.Fatalf("plan view should not consume the mutation cap, got %q", got)
+	}
 	for i := 0; i < perTurnCallCaps[PlanToolName]; i++ {
 		args := json.RawMessage(`{"action":"update","index":1,"note":"step-` + fmt.Sprintf("%d", i) + `"}`)
 		if got := g.recordAttempt(PlanToolName, args); got != "" {
 			t.Fatalf("plan call %d should be allowed, got %q", i+1, got)
 		}
 	}
-	got := g.recordAttempt(PlanToolName, json.RawMessage(`{"action":"view"}`))
+	if got := g.recordAttempt(PlanToolName, json.RawMessage(`{"action":"view"}`)); got != "" {
+		t.Fatalf("plan view after mutation cap should remain allowed, got %q", got)
+	}
+	got := g.recordAttempt(PlanToolName, json.RawMessage(`{"action":"update","index":1,"note":"over-cap"}`))
 	if got == "" {
 		t.Fatal("plan call over cap must be blocked")
 	}
