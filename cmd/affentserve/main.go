@@ -74,6 +74,8 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		retryBackoff              = fs.String("retry-backoff", "", "Initial backoff between transient-error retries (default 4s); each subsequent attempt doubles it. Go duration string. Env: AFFENTSERVE_RETRY_BACKOFF.")
 		compactTrigger            = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier. Env: AFFENTSERVE_COMPACT_TRIGGER.")
 		compactTriggerInputTokens = fs.Int("compact-trigger-input-tokens", 0, "Estimated request input-token trigger for proactive compaction. 0 = runtime-derived default; negative disables request-pressure compaction. Env: AFFENTSERVE_COMPACT_TRIGGER_INPUT_TOKENS.")
+		modelContextWindowTokens  = fs.Int("model-context-window-tokens", 0, "Effective model context window in tokens. 0 = unknown; when set, proactive compaction defaults to a percentage of this window. Env: AFFENTSERVE_MODEL_CONTEXT_WINDOW_TOKENS.")
+		compactTriggerPercent     = fs.Int("compact-trigger-input-percent", 0, "Percent of --model-context-window-tokens used for proactive compaction when --compact-trigger-input-tokens is unset. 0 = runtime default. Env: AFFENTSERVE_COMPACT_TRIGGER_INPUT_PERCENT.")
 		compactKeepLast           = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10). Env: AFFENTSERVE_COMPACT_KEEP_LAST.")
 		enableBrowser             = fs.Bool("browser", false, "Register the extras/browser tool family for each new session. Env: AFFENTSERVE_BROWSER.")
 		enableWeb                 = fs.Bool("web", false, "Register extras/web's web_fetch tool. Env: AFFENTSERVE_WEB.")
@@ -183,6 +185,12 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if setFlags["compact-trigger-input-tokens"] {
 		cfg.CompactTriggerInputTokens = *compactTriggerInputTokens
+	}
+	if setFlags["model-context-window-tokens"] {
+		cfg.ModelContextWindowTokens = *modelContextWindowTokens
+	}
+	if setFlags["compact-trigger-input-percent"] {
+		cfg.CompactTriggerInputPercent = *compactTriggerPercent
 	}
 	if setFlags["compact-keep-last"] {
 		cfg.CompactKeepLast = *compactKeepLast

@@ -751,20 +751,22 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 
 	events := make(chan sse.Event, 1024)
 	loop := &agent.Loop{
-		LLM:                    llm,
-		Tools:                  reg,
-		Conv:                   conv,
-		Events:                 events,
-		Log:                    p.logger.With().Str("session_id", id).Logger(),
-		MaxTurnSteps:           p.cfg.MaxTurnSteps,
-		MaxTurnInputTokens:     p.cfg.MaxTurnInputTokens,
-		FinalNoToolsOnMaxTurns: true,
-		SessionScheduleRunner:  !p.cfg.EvalMode,
-		PerCallTimeout:         perCallTimeout,
-		MaxTransientRetries:    p.cfg.MaxTransientRetries,
-		TransientBackoff:       retryBackoff,
-		WorkspaceRoot:          currentWorkspace,
-		WorkspaceRootProvider:  workspaceState.Current,
+		LLM:                        llm,
+		Tools:                      reg,
+		Conv:                       conv,
+		Events:                     events,
+		Log:                        p.logger.With().Str("session_id", id).Logger(),
+		MaxTurnSteps:               p.cfg.MaxTurnSteps,
+		MaxTurnInputTokens:         p.cfg.MaxTurnInputTokens,
+		ModelContextWindowTokens:   p.cfg.ModelContextWindowTokens,
+		CompactTriggerInputPercent: p.cfg.CompactTriggerInputPercent,
+		FinalNoToolsOnMaxTurns:     true,
+		SessionScheduleRunner:      !p.cfg.EvalMode,
+		PerCallTimeout:             perCallTimeout,
+		MaxTransientRetries:        p.cfg.MaxTransientRetries,
+		TransientBackoff:           retryBackoff,
+		WorkspaceRoot:              currentWorkspace,
+		WorkspaceRootProvider:      workspaceState.Current,
 		ToolResultArtifactDir: filepath.Join(
 			sessionDir,
 			".affent",
@@ -836,10 +838,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if keepLast <= 0 {
 		keepLast = agent.DefaultSummaryKeepLast
 	}
+	triggerBytes := agent.DefaultSummaryTriggerBytes
+	if p.cfg.ModelContextWindowTokens > 0 && p.cfg.CompactTriggerInputTokens == 0 {
+		triggerBytes = agent.CompactTriggerBytesForPolicy(0, p.cfg.ModelContextWindowTokens, p.cfg.CompactTriggerInputPercent, agent.DefaultSummaryTriggerBytes)
+	}
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:          llm,
 		TriggerMsgs:  triggerMsgs,
-		TriggerBytes: agent.DefaultSummaryTriggerBytes,
+		TriggerBytes: triggerBytes,
 		KeepLast:     keepLast,
 	}
 	loop.CompactTriggerInputTokens = p.cfg.CompactTriggerInputTokens

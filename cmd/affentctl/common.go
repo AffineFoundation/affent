@@ -103,6 +103,8 @@ type commonFlags struct {
 
 	compactTrigger            int // <=0 falls back to agent.DefaultSummaryTriggerMsgs
 	compactTriggerInputTokens int // 0 derives from byte trigger, <0 disables request-pressure compaction
+	modelContextWindowTokens  int // 0 means unknown; derives compaction trigger when set
+	compactTriggerPercent     int // 0 uses agent default
 	compactKeepLast           int
 
 	sessionID    string // explicit; empty means "use --continue or new"
@@ -188,6 +190,8 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", "", "path to MCP server config JSON ({\"servers\":[{...}]}) (env: AFFENTCTL_MCP_CONFIG)")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected. (env: AFFENTCTL_COMPACT_TRIGGER)")
 	fs.IntVar(&c.compactTriggerInputTokens, "compact-trigger-input-tokens", 0, "compact before a model call when estimated request input tokens reach this value. 0 derives from the byte trigger; negative disables request-pressure compaction. (env: AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS)")
+	fs.IntVar(&c.modelContextWindowTokens, "model-context-window-tokens", 0, "effective model context window in tokens; 0 = unknown. When set, proactive compaction derives from this window. (env: AFFENTCTL_MODEL_CONTEXT_WINDOW_TOKENS)")
+	fs.IntVar(&c.compactTriggerPercent, "compact-trigger-input-percent", 0, "percent of --model-context-window-tokens used for proactive compaction when --compact-trigger-input-tokens is unset. 0 = runtime default. (env: AFFENTCTL_COMPACT_TRIGGER_INPUT_PERCENT)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting (env: AFFENTCTL_COMPACT_KEEP_LAST)")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
@@ -319,20 +323,22 @@ func configPrecedenceEnvSources() map[string]string {
 		out[name] = env
 	}
 	for name, env := range map[string]string{
-		"max-turns":                    "AFFENTCTL_MAX_TURNS",
-		"max-turn-input-tokens":        "AFFENTCTL_MAX_TURN_INPUT_TOKENS",
-		"max-call-timeout":             "AFFENTCTL_MAX_CALL_TIMEOUT",
-		"retry-transient":              "AFFENTCTL_RETRY_TRANSIENT",
-		"retry-backoff":                "AFFENTCTL_RETRY_BACKOFF",
-		"memory":                       "AFFENTCTL_MEMORY",
-		"memory-only":                  "AFFENTCTL_MEMORY_ONLY",
-		"memory-max-chars":             "AFFENTCTL_MEMORY_MAX_CHARS",
-		"memory-topic-max-chars":       "AFFENTCTL_MEMORY_TOPIC_MAX_CHARS",
-		"memory-max-topics":            "AFFENTCTL_MEMORY_MAX_TOPICS",
-		"project-context":              "AFFENTCTL_PROJECT_CONTEXT",
-		"compact-trigger":              "AFFENTCTL_COMPACT_TRIGGER",
-		"compact-trigger-input-tokens": "AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS",
-		"compact-keep-last":            "AFFENTCTL_COMPACT_KEEP_LAST",
+		"max-turns":                     "AFFENTCTL_MAX_TURNS",
+		"max-turn-input-tokens":         "AFFENTCTL_MAX_TURN_INPUT_TOKENS",
+		"max-call-timeout":              "AFFENTCTL_MAX_CALL_TIMEOUT",
+		"retry-transient":               "AFFENTCTL_RETRY_TRANSIENT",
+		"retry-backoff":                 "AFFENTCTL_RETRY_BACKOFF",
+		"memory":                        "AFFENTCTL_MEMORY",
+		"memory-only":                   "AFFENTCTL_MEMORY_ONLY",
+		"memory-max-chars":              "AFFENTCTL_MEMORY_MAX_CHARS",
+		"memory-topic-max-chars":        "AFFENTCTL_MEMORY_TOPIC_MAX_CHARS",
+		"memory-max-topics":             "AFFENTCTL_MEMORY_MAX_TOPICS",
+		"project-context":               "AFFENTCTL_PROJECT_CONTEXT",
+		"compact-trigger":               "AFFENTCTL_COMPACT_TRIGGER",
+		"compact-trigger-input-tokens":  "AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS",
+		"model-context-window-tokens":   "AFFENTCTL_MODEL_CONTEXT_WINDOW_TOKENS",
+		"compact-trigger-input-percent": "AFFENTCTL_COMPACT_TRIGGER_INPUT_PERCENT",
+		"compact-keep-last":             "AFFENTCTL_COMPACT_KEEP_LAST",
 	} {
 		out[name] = env
 	}
@@ -368,9 +374,11 @@ type fileConfig struct {
 	} `json:"memory"`
 	ProjectContext *bool `json:"project_context"`
 	Compact        *struct {
-		Trigger            *int `json:"trigger"`
-		TriggerInputTokens *int `json:"trigger_input_tokens"`
-		KeepLast           *int `json:"keep_last"`
+		Trigger                  *int `json:"trigger"`
+		TriggerInputTokens       *int `json:"trigger_input_tokens"`
+		ModelContextWindowTokens *int `json:"model_context_window_tokens"`
+		TriggerInputPercent      *int `json:"trigger_input_percent"`
+		KeepLast                 *int `json:"keep_last"`
 	} `json:"compact"`
 	SessionID    *string `json:"session_id"`
 	Continue     *bool   `json:"continue"`
@@ -471,6 +479,12 @@ func normalizeRuntimeLimits(c *commonFlags) error {
 	}
 	if c.memoryMaxTopics < 0 {
 		return fmt.Errorf("--memory-max-topics must be zero or a positive integer")
+	}
+	if c.modelContextWindowTokens < 0 {
+		return fmt.Errorf("--model-context-window-tokens must be zero or a positive integer")
+	}
+	if c.compactTriggerPercent < 0 || c.compactTriggerPercent > 100 {
+		return fmt.Errorf("--compact-trigger-input-percent must be between 0 and 100")
 	}
 	if c.subagentMaxDepth < 1 || c.subagentMaxDepth > agent.MaxSubagentDepth {
 		return fmt.Errorf("--subagent-max-depth must be between 1 and %d", agent.MaxSubagentDepth)
@@ -589,6 +603,8 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	if cfg.Compact != nil {
 		setInt("compact-trigger", &c.compactTrigger, cfg.Compact.Trigger)
 		setInt("compact-trigger-input-tokens", &c.compactTriggerInputTokens, cfg.Compact.TriggerInputTokens)
+		setInt("model-context-window-tokens", &c.modelContextWindowTokens, cfg.Compact.ModelContextWindowTokens)
+		setInt("compact-trigger-input-percent", &c.compactTriggerPercent, cfg.Compact.TriggerInputPercent)
 		setInt("compact-keep-last", &c.compactKeepLast, cfg.Compact.KeepLast)
 	}
 	setString("session-id", &c.sessionID, cfg.SessionID)
@@ -764,6 +780,12 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setInt("compact-trigger-input-tokens", "AFFENTCTL_COMPACT_TRIGGER_INPUT_TOKENS", &c.compactTriggerInputTokens); err != nil {
+		return err
+	}
+	if err := setInt("model-context-window-tokens", "AFFENTCTL_MODEL_CONTEXT_WINDOW_TOKENS", &c.modelContextWindowTokens); err != nil {
+		return err
+	}
+	if err := setInt("compact-trigger-input-percent", "AFFENTCTL_COMPACT_TRIGGER_INPUT_PERCENT", &c.compactTriggerPercent); err != nil {
 		return err
 	}
 	if err := setInt("compact-keep-last", "AFFENTCTL_COMPACT_KEEP_LAST", &c.compactKeepLast); err != nil {
@@ -1543,20 +1565,22 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	loop := &agent.Loop{
-		LLM:                       llm,
-		Tools:                     tools,
-		Conv:                      conv,
-		Events:                    events,
-		Log:                       log,
-		MaxTurnSteps:              c.maxTurns,
-		MaxTurnInputTokens:        c.maxTurnInputTokens,
-		FinalNoToolsOnMaxTurns:    true,
-		PerCallTimeout:            c.callTimeout,
-		MaxTransientRetries:       c.retryTransient,
-		TransientBackoff:          c.retryBackoff,
-		CompactTriggerInputTokens: c.compactTriggerInputTokens,
-		WorkspaceRoot:             workspace,
-		WorkspaceRootProvider:     activeWorkspace.Current,
+		LLM:                        llm,
+		Tools:                      tools,
+		Conv:                       conv,
+		Events:                     events,
+		Log:                        log,
+		MaxTurnSteps:               c.maxTurns,
+		MaxTurnInputTokens:         c.maxTurnInputTokens,
+		ModelContextWindowTokens:   c.modelContextWindowTokens,
+		CompactTriggerInputPercent: c.compactTriggerPercent,
+		FinalNoToolsOnMaxTurns:     true,
+		PerCallTimeout:             c.callTimeout,
+		MaxTransientRetries:        c.retryTransient,
+		TransientBackoff:           c.retryBackoff,
+		CompactTriggerInputTokens:  c.compactTriggerInputTokens,
+		WorkspaceRoot:              workspace,
+		WorkspaceRootProvider:      activeWorkspace.Current,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",
@@ -1621,10 +1645,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		}
 	}
 	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
+	triggerBytes := agent.DefaultSummaryTriggerBytes
+	if c.modelContextWindowTokens > 0 && c.compactTriggerInputTokens == 0 {
+		triggerBytes = agent.CompactTriggerBytesForPolicy(0, c.modelContextWindowTokens, c.compactTriggerPercent, agent.DefaultSummaryTriggerBytes)
+	}
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:          llm,
 		TriggerMsgs:  triggerMsgs,
-		TriggerBytes: agent.DefaultSummaryTriggerBytes,
+		TriggerBytes: triggerBytes,
 		KeepLast:     keepLast,
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {

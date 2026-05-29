@@ -120,6 +120,15 @@ type Config struct {
 	// negative disables this proactive path.
 	CompactTriggerInputTokens int `json:"compact_trigger_input_tokens"`
 
+	// ModelContextWindowTokens is the effective model context window used to
+	// derive proactive compaction limits when CompactTriggerInputTokens is not
+	// set. Zero means unknown and keeps the conservative byte-derived default.
+	ModelContextWindowTokens int `json:"model_context_window_tokens"`
+
+	// CompactTriggerInputPercent derives request-input compaction from
+	// ModelContextWindowTokens. Zero uses the agent runtime default.
+	CompactTriggerInputPercent int `json:"compact_trigger_input_percent"`
+
 	// CompactKeepLast overrides how many trailing messages survive
 	// compaction verbatim. Zero falls back to
 	// agent.DefaultSummaryKeepLast (10). Smaller = more aggressive
@@ -392,6 +401,8 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_MAX_TRANSIENT_RETRIES", &c.MaxTransientRetries, nil},
 		{"AFFENTSERVE_COMPACT_TRIGGER", &c.CompactTrigger, nil},
 		{"AFFENTSERVE_COMPACT_TRIGGER_INPUT_TOKENS", &c.CompactTriggerInputTokens, nil},
+		{"AFFENTSERVE_MODEL_CONTEXT_WINDOW_TOKENS", &c.ModelContextWindowTokens, nil},
+		{"AFFENTSERVE_COMPACT_TRIGGER_INPUT_PERCENT", &c.CompactTriggerInputPercent, nil},
 		{"AFFENTSERVE_COMPACT_KEEP_LAST", &c.CompactKeepLast, nil},
 	} {
 		if v := os.Getenv(e.env); v != "" {
@@ -821,6 +832,12 @@ func (c Config) Validate() error {
 	}
 	if c.CompactTrigger < 0 {
 		return fmt.Errorf("compact_trigger must be zero or a positive integer")
+	}
+	if c.ModelContextWindowTokens < 0 {
+		return fmt.Errorf("model_context_window_tokens must be zero or a positive integer")
+	}
+	if c.CompactTriggerInputPercent < 0 || c.CompactTriggerInputPercent > 100 {
+		return fmt.Errorf("compact_trigger_input_percent must be between 0 and 100")
 	}
 	if c.CompactKeepLast < 0 {
 		return fmt.Errorf("compact_keep_last must be zero or a positive integer")

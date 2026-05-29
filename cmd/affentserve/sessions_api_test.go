@@ -396,6 +396,24 @@ func TestSessionContextSnapshotUsesConfiguredRequestInputTrigger(t *testing.T) {
 	}
 }
 
+func TestSessionContextSnapshotDerivesRequestInputTriggerFromModelContext(t *testing.T) {
+	got := sessionContextSnapshot(12, testRequestInputEstimate(16*1024, 60_000), Config{
+		CompactTrigger:             240,
+		ModelContextWindowTokens:   100_000,
+		CompactTriggerInputPercent: 80,
+	})
+	if got.ModelContextWindowTokens != 100_000 ||
+		got.CompactTriggerInputPercent != 80 ||
+		got.CompactTriggerInputTokens != 80_000 ||
+		got.RequestInputCompactPercent != 75 ||
+		got.RequestInputTokensUntilCompact != 20_000 {
+		t.Fatalf("context snapshot = %+v, want model-window-derived trigger at 75%% with 20000 remaining", got)
+	}
+	if got.CompactTriggerBytes != 320_000 {
+		t.Fatalf("byte trigger = %d, want 320000 aligned with model-window policy", got.CompactTriggerBytes)
+	}
+}
+
 func testRequestInputEstimate(conversationBytes, estimatedInputTokens int) agent.RequestInputEstimate {
 	return agent.RequestInputEstimate{
 		ConversationBytes:    conversationBytes,

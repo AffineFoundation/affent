@@ -1040,6 +1040,24 @@ func TestLoopMaybeCompactForRequestPressureIncludesToolSchemas(t *testing.T) {
 	}
 }
 
+func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
+	if got := CompactTriggerInputTokensForPolicy(4096, 100_000, 80, DefaultSummaryTriggerInputTokens); got != 4096 {
+		t.Fatalf("explicit trigger = %d, want 4096", got)
+	}
+	if got := CompactTriggerInputTokensForPolicy(-1, 100_000, 80, DefaultSummaryTriggerInputTokens); got != 0 {
+		t.Fatalf("disabled trigger = %d, want 0", got)
+	}
+	if got := CompactTriggerInputTokensForPolicy(0, 100_000, 80, DefaultSummaryTriggerInputTokens); got != 80_000 {
+		t.Fatalf("window-derived trigger = %d, want 80000", got)
+	}
+	if got := CompactTriggerInputTokensForPolicy(0, 100_000, 0, DefaultSummaryTriggerInputTokens); got != 80_000 {
+		t.Fatalf("default percent trigger = %d, want 80000", got)
+	}
+	if got := CompactTriggerInputTokensForPolicy(0, 0, 80, DefaultSummaryTriggerInputTokens); got != DefaultSummaryTriggerInputTokens {
+		t.Fatalf("fallback trigger = %d, want %d", got, DefaultSummaryTriggerInputTokens)
+	}
+}
+
 // Rolling: a second compaction pass should detect the existing summary
 // (left by the first pass), not start over from msg #1.
 func TestCompact_RollingDoesNotMultiplySummary(t *testing.T) {

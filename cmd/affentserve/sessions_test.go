@@ -1245,16 +1245,18 @@ func TestSessionPool_AttachesRollingCompactor(t *testing.T) {
 // the compactor stays on the 240/10 defaults forever.
 func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	cfg := Config{
-		Listen:                    "127.0.0.1:0",
-		MaxSessions:               4,
-		SessionIdleTTL:            "5m",
-		WorkspaceRoot:             t.TempDir(),
-		BaseURL:                   "http://127.0.0.1:0",
-		APIKey:                    "test",
-		Model:                     "fake",
-		CompactTrigger:            120,
-		CompactTriggerInputTokens: 4096,
-		CompactKeepLast:           4,
+		Listen:                     "127.0.0.1:0",
+		MaxSessions:                4,
+		SessionIdleTTL:             "5m",
+		WorkspaceRoot:              t.TempDir(),
+		BaseURL:                    "http://127.0.0.1:0",
+		APIKey:                     "test",
+		Model:                      "fake",
+		CompactTrigger:             120,
+		CompactTriggerInputTokens:  4096,
+		ModelContextWindowTokens:   100000,
+		CompactTriggerInputPercent: 75,
+		CompactKeepLast:            4,
 	}
 	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
 	if err != nil {
@@ -1281,6 +1283,46 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	}
 	if s.loop.CompactTriggerInputTokens != 4096 {
 		t.Errorf("CompactTriggerInputTokens = %d, want 4096 from config", s.loop.CompactTriggerInputTokens)
+	}
+	if s.loop.ModelContextWindowTokens != 100000 {
+		t.Errorf("ModelContextWindowTokens = %d, want 100000 from config", s.loop.ModelContextWindowTokens)
+	}
+	if s.loop.CompactTriggerInputPercent != 75 {
+		t.Errorf("CompactTriggerInputPercent = %d, want 75 from config", s.loop.CompactTriggerInputPercent)
+	}
+}
+
+func TestSessionPool_CompactorDerivesByteTriggerFromModelContextWindow(t *testing.T) {
+	cfg := Config{
+		Listen:                     "127.0.0.1:0",
+		MaxSessions:                4,
+		SessionIdleTTL:             "5m",
+		WorkspaceRoot:              t.TempDir(),
+		BaseURL:                    "http://127.0.0.1:0",
+		APIKey:                     "test",
+		Model:                      "fake",
+		ModelContextWindowTokens:   100000,
+		CompactTriggerInputPercent: 80,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("compact-window-policy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lc, ok := s.loop.Compactor.(*agent.LLMSummaryCompactor)
+	if !ok {
+		t.Fatalf("compactor type = %T, want *LLMSummaryCompactor", s.loop.Compactor)
+	}
+	if got := s.loop.CompactTriggerInputTokens; got != 0 {
+		t.Fatalf("explicit CompactTriggerInputTokens = %d, want 0", got)
+	}
+	if got := lc.TriggerBytes; got != 320000 {
+		t.Fatalf("TriggerBytes = %d, want 320000", got)
 	}
 }
 

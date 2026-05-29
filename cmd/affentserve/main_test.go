@@ -750,6 +750,8 @@ func TestParseFlagsAndConfig_RuntimeBoundaryEnv(t *testing.T) {
 	t.Setenv("AFFENTSERVE_RETRY_BACKOFF", "6s")
 	t.Setenv("AFFENTSERVE_COMPACT_TRIGGER", "120")
 	t.Setenv("AFFENTSERVE_COMPACT_TRIGGER_INPUT_TOKENS", "4096")
+	t.Setenv("AFFENTSERVE_MODEL_CONTEXT_WINDOW_TOKENS", "100000")
+	t.Setenv("AFFENTSERVE_COMPACT_TRIGGER_INPUT_PERCENT", "75")
 	t.Setenv("AFFENTSERVE_COMPACT_KEEP_LAST", "6")
 
 	cfg, err := parseFlagsAndConfig(nil)
@@ -782,6 +784,12 @@ func TestParseFlagsAndConfig_RuntimeBoundaryEnv(t *testing.T) {
 	}
 	if cfg.CompactTriggerInputTokens != 4096 {
 		t.Fatalf("CompactTriggerInputTokens = %d, want 4096", cfg.CompactTriggerInputTokens)
+	}
+	if cfg.ModelContextWindowTokens != 100000 {
+		t.Fatalf("ModelContextWindowTokens = %d, want 100000", cfg.ModelContextWindowTokens)
+	}
+	if cfg.CompactTriggerInputPercent != 75 {
+		t.Fatalf("CompactTriggerInputPercent = %d, want 75", cfg.CompactTriggerInputPercent)
 	}
 	if cfg.CompactKeepLast != 6 {
 		t.Fatalf("CompactKeepLast = %d, want 6", cfg.CompactKeepLast)

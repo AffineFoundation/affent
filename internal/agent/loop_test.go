@@ -1832,6 +1832,8 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		MaxToolCalls:                 5,
 		SessionScheduleRunner:        true,
 		MaxTurnInputTokens:           12345,
+		ModelContextWindowTokens:     100000,
+		CompactTriggerInputPercent:   80,
 		ToolResultMaxBytesInContext:  1234,
 		ToolResultContextBudgetBytes: 5678,
 		ToolResultArtifactPathPrefix: ".affent/custom",
@@ -1871,6 +1873,9 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	}
 	if payload.MaxTurnSteps != 7 || payload.MaxToolCalls != 5 ||
 		payload.MaxTurnInputTokens != 12345 ||
+		payload.ModelContextWindowTokens != 100000 ||
+		payload.CompactTriggerInputTokens != 80000 ||
+		payload.CompactTriggerInputPercent != 80 ||
 		payload.ToolResultEventCapBytes != MaxToolResultBytesInEvent ||
 		payload.ToolResultContextMaxBytes != 1234 ||
 		payload.ToolResultContextBudgetBytes != 5678 ||

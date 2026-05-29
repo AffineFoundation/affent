@@ -126,6 +126,14 @@ type Loop struct {
 	// Zero derives from the configured LLMSummaryCompactor byte trigger; negative
 	// disables this request-pressure trigger.
 	CompactTriggerInputTokens int
+	// ModelContextWindowTokens is the effective model context window when known.
+	// Zero means unknown. When set and CompactTriggerInputTokens is zero, the
+	// proactive compaction trigger is derived from this window.
+	ModelContextWindowTokens int
+	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
+	// used for the derived request-input compaction trigger. Zero uses the
+	// runtime default.
+	CompactTriggerInputPercent int
 
 	// ToolResultMaxBytesInContext caps the tool result bytes persisted
 	// into conversation history for subsequent LLM calls. Zero uses
@@ -2889,6 +2897,9 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		MaxTurnSteps:                 l.maxTurnStepsForSurface(),
 		MaxToolCalls:                 l.maxToolCallsForTurn(opts),
 		MaxTurnInputTokens:           l.maxTurnInputTokensForTurn(opts),
+		ModelContextWindowTokens:     l.ModelContextWindowTokens,
+		CompactTriggerInputTokens:    l.compactTriggerInputTokens(),
+		CompactTriggerInputPercent:   l.compactTriggerInputPercent(),
 		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,
 		ToolResultContextMaxBytes:    l.toolResultMaxBytesInContext(),
 		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),
@@ -3107,6 +3118,13 @@ func (l *Loop) maxTurnInputTokensForTurn(opts TurnOptions) int {
 		return l.MaxTurnInputTokens
 	}
 	return DefaultMaxTurnInputTokens
+}
+
+func (l *Loop) compactTriggerInputPercent() int {
+	if l.CompactTriggerInputPercent > 0 {
+		return l.CompactTriggerInputPercent
+	}
+	return DefaultCompactTriggerInputPercent
 }
 
 func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
@@ -3393,19 +3411,15 @@ func (l *Loop) maybeCompactForRequestPressure(ctx context.Context, turnID string
 }
 
 func (l *Loop) compactTriggerInputTokens() int {
-	if l.CompactTriggerInputTokens < 0 {
-		return 0
-	}
-	if l.CompactTriggerInputTokens > 0 {
-		return l.CompactTriggerInputTokens
-	}
+	fallback := 0
 	if c, ok := l.Compactor.(*LLMSummaryCompactor); ok && c.TriggerBytes > 0 {
 		if c.TriggerBytes == DefaultSummaryTriggerBytes {
-			return DefaultSummaryTriggerInputTokens
+			fallback = DefaultSummaryTriggerInputTokens
+		} else {
+			fallback = max(1, (c.TriggerBytes+3)/4)
 		}
-		return max(1, (c.TriggerBytes+3)/4)
 	}
-	return 0
+	return CompactTriggerInputTokensForPolicy(l.CompactTriggerInputTokens, l.ModelContextWindowTokens, l.CompactTriggerInputPercent, fallback)
 }
 
 func (l *Loop) maybeCompactWithReason(ctx context.Context, turnID string, reactive, bypassThreshold bool, reason string) bool {

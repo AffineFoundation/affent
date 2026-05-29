@@ -80,6 +80,9 @@ type scheduleRunnerStats struct {
 type statsBoundaries struct {
 	MaxTurnSteps                int    `json:"max_turn_steps"`
 	MaxTurnInputTokens          int    `json:"max_turn_input_tokens"`
+	ModelContextWindowTokens    int    `json:"model_context_window_tokens,omitempty"`
+	CompactTriggerInputTokens   int    `json:"compact_trigger_input_tokens,omitempty"`
+	CompactTriggerInputPercent  int    `json:"compact_trigger_input_percent,omitempty"`
 	PerCallTimeout              string `json:"per_call_timeout"`
 	LLMRequestBodyBytes         int    `json:"llm_request_body_bytes"`
 	LLMErrorBodyBytes           int    `json:"llm_error_body_bytes"`
@@ -508,6 +511,9 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 	return statsBoundaries{
 		MaxTurnSteps:                maxTurnSteps,
 		MaxTurnInputTokens:          maxTurnInputTokens,
+		ModelContextWindowTokens:    cfg.ModelContextWindowTokens,
+		CompactTriggerInputTokens:   compactTriggerInputTokensForConfig(cfg),
+		CompactTriggerInputPercent:  compactTriggerInputPercentForConfig(cfg),
 		PerCallTimeout:              perCallTimeout.String(),
 		LLMRequestBodyBytes:         ab.LLMRequestBodyBytes,
 		LLMErrorBodyBytes:           ab.LLMErrorBodyBytes,

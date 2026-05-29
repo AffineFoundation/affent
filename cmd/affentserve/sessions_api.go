@@ -118,6 +118,8 @@ type sessionContextSummary struct {
 	EstimatedRequestInputTokens    int `json:"estimated_request_input_tokens,omitempty"`
 	EstimatedConversationTokens    int `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens      int `json:"estimated_tool_schema_tokens,omitempty"`
+	ModelContextWindowTokens       int `json:"model_context_window_tokens,omitempty"`
+	CompactTriggerInputPercent     int `json:"compact_trigger_input_percent,omitempty"`
 	CompactTriggerInputTokens      int `json:"compact_trigger_input_tokens,omitempty"`
 	RequestInputCompactPercent     int `json:"request_input_compact_percent,omitempty"`
 	RequestInputTokensUntilCompact int `json:"request_input_tokens_until_compact,omitempty"`
@@ -1425,7 +1427,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 	}
 	contextBytes := inputEstimate.ConversationBytes
 	estimatedRequestInputTokens := inputEstimate.EstimatedInputTokens
-	byteTrigger := agent.DefaultSummaryTriggerBytes
+	byteTrigger := compactTriggerBytesForConfig(cfg)
 	bytesUntilCompact := byteTrigger - contextBytes
 	if bytesUntilCompact < 0 {
 		bytesUntilCompact = 0
@@ -1465,6 +1467,8 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		EstimatedRequestInputTokens:    estimatedRequestInputTokens,
 		EstimatedConversationTokens:    inputEstimate.ConversationTokens,
 		EstimatedToolSchemaTokens:      inputEstimate.ToolSchemaTokens,
+		ModelContextWindowTokens:       cfg.ModelContextWindowTokens,
+		CompactTriggerInputPercent:     compactTriggerInputPercentForConfig(cfg),
 		CompactTriggerInputTokens:      inputTrigger,
 		RequestInputCompactPercent:     inputPercent,
 		RequestInputTokensUntilCompact: inputTokensUntilCompact,
@@ -1472,13 +1476,21 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 }
 
 func compactTriggerInputTokensForConfig(cfg Config) int {
-	if cfg.CompactTriggerInputTokens < 0 {
-		return 0
+	return agent.CompactTriggerInputTokensForPolicy(cfg.CompactTriggerInputTokens, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, agent.DefaultSummaryTriggerInputTokens)
+}
+
+func compactTriggerBytesForConfig(cfg Config) int {
+	if cfg.ModelContextWindowTokens > 0 && cfg.CompactTriggerInputTokens == 0 {
+		return agent.CompactTriggerBytesForPolicy(0, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, agent.DefaultSummaryTriggerBytes)
 	}
-	if cfg.CompactTriggerInputTokens > 0 {
-		return cfg.CompactTriggerInputTokens
+	return agent.DefaultSummaryTriggerBytes
+}
+
+func compactTriggerInputPercentForConfig(cfg Config) int {
+	if cfg.CompactTriggerInputPercent > 0 {
+		return cfg.CompactTriggerInputPercent
 	}
-	return agent.DefaultSummaryTriggerInputTokens
+	return agent.DefaultCompactTriggerInputPercent
 }
 
 func durableSessionDirInfo(path string) (os.FileInfo, bool, error) {
