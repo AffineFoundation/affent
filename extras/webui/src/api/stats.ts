@@ -73,6 +73,24 @@ export interface RuntimeCapabilityContract {
   warnings?: string[];
 }
 
+export interface ScheduleRunnerStats {
+  enabled?: boolean;
+  active?: boolean;
+  frontend_independent?: boolean;
+  sweep_interval?: string;
+  durable_session_state_dir?: string;
+  sessions_with_schedules?: number;
+  schedules?: number;
+  enabled_schedules?: number;
+  due_schedules?: number;
+  error_schedules?: number;
+  next_run_at?: string;
+  next_session_id?: string;
+  next_schedule_id?: string;
+  last_error?: string;
+  disabled_reason?: string;
+}
+
 export interface ServerSessionStats {
   id: string;
   created_at: string;
@@ -124,6 +142,7 @@ export interface ServerStatsResponse {
   session_state_root?: string;
   browser_cache_dir?: string;
   web_search_backend?: string;
+  schedule_runner?: ScheduleRunnerStats;
   server_time?: string;
   sessions?: ServerSessionStats[];
   aggregate?: ServerAggregateStats;

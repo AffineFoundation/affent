@@ -169,6 +169,36 @@ describe("RuntimeStatsPanel", () => {
     expect(grid).toHaveTextContent("missing schedules · loop protocol");
   });
 
+  it("surfaces schedule runner queue state from server stats", () => {
+    render(
+      <RuntimeStatsPanel
+        defaultOpen
+        stats={{
+          model: "qwen-small",
+          active_sessions: 0,
+          running_turns: 0,
+          schedule_runner: {
+            enabled: true,
+            active: true,
+            frontend_independent: true,
+            sessions_with_schedules: 2,
+            schedules: 3,
+            enabled_schedules: 2,
+            due_schedules: 1,
+            error_schedules: 1,
+            next_session_id: "timers-a",
+            next_schedule_id: "sched_due",
+            last_error: "previous scheduled turn failed",
+          },
+        }}
+      />,
+    );
+
+    const grid = screen.getByTestId("runtime-stats-grid");
+    expect(grid).toHaveTextContent("Schedules2/3 enabled · 2 sessions · 1 due · next timers-a/sched_due · 1 errors · previous scheduled turn failed");
+    expect(within(grid).getByText("Schedules").closest(".session-tools-runtime-chip")).toHaveAttribute("data-tone", "warning");
+  });
+
   it("shows browser policy blocks that promote Runtime into Workbench", () => {
     render(
       <RuntimeStatsPanel

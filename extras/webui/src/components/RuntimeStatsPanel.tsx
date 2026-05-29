@@ -1,4 +1,4 @@
-import type { ServerAggregateStats, ServerStatsResponse, StatsRuntimeSnapshot, StatsToolSnapshot } from "../api/stats";
+import type { ScheduleRunnerStats, ServerAggregateStats, ServerStatsResponse, StatsRuntimeSnapshot, StatsToolSnapshot } from "../api/stats";
 import { formatByteCount } from "../view/byteFormat";
 import { panelErrorSummary } from "./panelErrorSummary";
 
@@ -103,6 +103,8 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   if (toolContext) metrics.push(toolContext);
   const loop = loopMetric(tools, runtime);
   if (loop) metrics.push(loop);
+  const schedules = scheduleRunnerMetric(stats.schedule_runner);
+  if (schedules) metrics.push(schedules);
   const errors = errorMetric(tools, runtime);
   if (errors) metrics.push(errors);
   const browser = browserMetric(aggregate);
@@ -211,6 +213,32 @@ function loopMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot): 
   if (interventions > 0) parts.push(`${interventions} guard${interventions === 1 ? "" : "s"}`);
   if ((tools?.forced_no_tools ?? 0) > 0) parts.push(`${tools?.forced_no_tools} no-tools`);
   return { label: "Loop", value: parts.join(" · "), tone: "warning" };
+}
+
+function scheduleRunnerMetric(runner?: ScheduleRunnerStats): RuntimeMetric | undefined {
+  if (!runner) return undefined;
+  const total = runner.schedules ?? 0;
+  const enabled = runner.enabled_schedules ?? 0;
+  const due = runner.due_schedules ?? 0;
+  const errors = runner.error_schedules ?? 0;
+  const disabledReason = runner.disabled_reason?.trim();
+  const lastError = runner.last_error?.trim();
+  if (total <= 0 && due <= 0 && errors <= 0 && !lastError && !disabledReason) return undefined;
+  const parts: string[] = [];
+  if (runner.enabled === false) {
+    parts.push("disabled");
+  } else if (runner.active === false) {
+    parts.push("inactive");
+  }
+  if (total > 0) parts.push(`${enabled}/${total} enabled`);
+  if ((runner.sessions_with_schedules ?? 0) > 0) parts.push(`${runner.sessions_with_schedules} sessions`);
+  if (due > 0) parts.push(`${due} due`);
+  if (runner.next_session_id && runner.next_schedule_id) parts.push(`next ${runner.next_session_id}/${runner.next_schedule_id}`);
+  if (errors > 0) parts.push(`${errors} errors`);
+  if (lastError) parts.push(lastError);
+  if (disabledReason && total > 0) parts.push(disabledReason);
+  if (parts.length === 0) return undefined;
+  return { label: "Schedules", value: parts.join(" · "), tone: due > 0 || errors > 0 || lastError || runner.active === false ? "warning" : "ready" };
 }
 
 function errorMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot): RuntimeMetric | undefined {
