@@ -224,6 +224,26 @@ func TestBuildDebugBriefClassifiesLoopProtocolStillRunning(t *testing.T) {
 	if item := debugBriefItemByKind(brief, "loop_protocol_state"); item != nil {
 		t.Fatalf("expected-running loop should not produce running-state warning: %+v", item)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 1,
+			Latest: LoopTurnCheckpoint{
+				Status: "running",
+			},
+		},
+		LoopProtocolCalibrations: LoopProtocolCalibrationStats{Count: 1},
+		TraceEventTypes: map[string]int{
+			sse.TypeLoopActivation: 1,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			CompletionGuards: []string{"loop_protocol_activation_pending"},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "loop_protocol_state"); item != nil {
+		t.Fatalf("setup activation transition should not produce running-state warning: %+v", item)
+	}
 }
 
 func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T) {
@@ -294,6 +314,27 @@ func TestBuildDebugBriefClassifiesAcceptedFinalWithOpenDurableState(t *testing.T
 	})
 	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
 		t.Fatalf("expected-running loop should not produce durable completion warning: %+v", item)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK:        true,
+		FinalText: "Calibration answer received.",
+		LoopTurnCheckpoints: LoopTurnCheckpointStats{
+			Count: 1,
+			Latest: LoopTurnCheckpoint{
+				Status: "running",
+			},
+		},
+		LoopProtocolCalibrations: LoopProtocolCalibrationStats{Count: 1},
+		TraceEventTypes: map[string]int{
+			sse.TypeLoopActivation: 1,
+		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			CompletionGuards: []string{"loop_protocol_activation_pending"},
+		},
+	})
+	if item := debugBriefItemByKind(brief, "durable_completion"); item != nil {
+		t.Fatalf("setup activation transition should not produce durable completion warning: %+v", item)
 	}
 }
 

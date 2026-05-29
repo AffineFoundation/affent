@@ -739,9 +739,17 @@ func durableCompletionOpenStateCounts(res BatchResult) (map[string]int, []string
 
 func loopProtocolRunningExpected(res BatchResult) bool {
 	if res.Expectations == nil {
-		return false
+		return loopProtocolSetupActivationTransition(res)
 	}
-	return strings.EqualFold(strings.TrimSpace(res.Expectations.RequiredLoopProtocolFinalStatus), "running")
+	return strings.EqualFold(strings.TrimSpace(res.Expectations.RequiredLoopProtocolFinalStatus), "running") ||
+		loopProtocolSetupActivationTransition(res)
+}
+
+func loopProtocolSetupActivationTransition(res BatchResult) bool {
+	return res.LoopProtocolCalibrations.Count > 0 &&
+		res.TraceEventTypes[sse.TypeLoopActivation] > 0 &&
+		res.LoopProtocolFeeds.Count == 0 &&
+		res.MessageRejectedStats.Count == 0
 }
 
 func toolBudgetRunawayCounts(res BatchResult) (map[string]int, bool) {
