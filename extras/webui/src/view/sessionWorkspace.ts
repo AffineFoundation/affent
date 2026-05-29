@@ -127,7 +127,9 @@ function agentCwdDetail(workspace: SessionWorkspaceView): string {
 }
 
 export function workspaceDraft(workspace: SessionWorkspaceView): string {
-  const lead = workspace.verification === "mismatch"
+  const lead = !workspace.hasData || workspace.verification === "unknown"
+    ? "Identify the current workspace before making file changes or running project commands:"
+    : workspace.verification === "mismatch"
     ? "Verify this workspace mismatch before making more file changes or running commands:"
     : workspace.verification === "missing_binding"
       ? "Use this historical command cwd as workspace evidence for the next step:"

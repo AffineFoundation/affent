@@ -147,6 +147,29 @@ describe("SessionWorkspacePanel", () => {
     await user.click(within(panel).getByRole("button", { name: "Open cwd" }));
     expect(onOpenWorkspacePath).toHaveBeenCalledWith("extras/webui");
   });
+
+  it("makes a missing workspace binding actionable without pretending it exists", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    render(<SessionWorkspacePanel defaultOpen workspace={{
+      hasData: false,
+      summary: "No workspace evidence",
+      shortStatus: "No workspace evidence",
+      detail: "No workspace binding or command cwd recorded.",
+      verification: "unknown",
+    }} onUseAsDraft={onUseAsDraft} />);
+
+    const panel = screen.getByTestId("session-workspace-panel");
+    expect(panel).toHaveTextContent("No workspace evidence");
+    expect(panel).toHaveTextContent("Not recorded");
+    expect(panel).toHaveTextContent("Locate workspace");
+    expect(panel).not.toHaveTextContent("Use workspace in chat");
+    await user.click(within(panel).getByRole("button", { name: "Locate workspace" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Identify the current workspace before making file changes or running project commands"),
+      "workspace",
+    );
+  });
 });
 
 const workspace: SessionWorkspaceView = {

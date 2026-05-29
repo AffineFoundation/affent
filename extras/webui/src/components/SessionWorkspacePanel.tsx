@@ -200,6 +200,7 @@ function verificationDetail(verification: SessionWorkspaceView["verification"]):
 }
 
 function workspaceActionLabel(workspace: SessionWorkspaceView): string {
+  if (!workspace.hasData || workspace.verification === "unknown") return "Locate workspace";
   if (workspace.verification === "mismatch") return "Ask to verify";
   if (workspace.verification === "missing_binding") return "Use cwd in chat";
   return "Use workspace in chat";

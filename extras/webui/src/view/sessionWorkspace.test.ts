@@ -91,6 +91,17 @@ describe("buildSessionWorkspace", () => {
     expect(workspaceCwdBrowserPath(workspace)).toBeUndefined();
   });
 
+  it("drafts a workspace location request when no boundary evidence exists", () => {
+    const workspace = buildSessionWorkspace(undefined, run());
+
+    expect(workspace).toMatchObject({
+      hasData: false,
+      verification: "unknown",
+      summary: "No workspace evidence",
+    });
+    expect(workspaceDraft(workspace)).toContain("Identify the current workspace before making file changes or running project commands");
+  });
+
   it("uses the chronologically latest command cwd instead of the prioritized Run list", () => {
     const run = buildSessionRun(reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

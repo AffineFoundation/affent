@@ -124,13 +124,13 @@ export function buildWorkbenchNavItems({
       tone: toneForAttention(attention?.target === "files" ? attention.tone : files.tone),
     });
   }
-  if (workspace.hasData || attention?.target === "workspace") {
+  if (workspace.hasData || hasCurrentWorkEvidence({ changes, run, artifacts, files, workspaceBrowserActive }) || attention?.target === "workspace") {
     currentItems.push({
       key: "workspace",
       label: "Workspace",
       scope: "current",
       detail: workspace.hasData ? workspace.summary : "No binding evidence",
-      badge: workspace.issue ? "!" : undefined,
+      badge: workspace.issue ? "!" : !workspace.hasData ? "?" : undefined,
       tone: toneForAttention(attention?.target === "workspace" ? attention.tone : workspace.tone),
     });
   }
@@ -182,6 +182,26 @@ export function buildWorkbenchNavItems({
         tone: runtimeState.state === "error" ? "error" as const : undefined,
       }]),
   ];
+}
+
+function hasCurrentWorkEvidence({
+  changes,
+  run,
+  artifacts,
+  files,
+  workspaceBrowserActive,
+}: {
+  changes: SessionChangesView;
+  run: SessionRunView;
+  artifacts: readonly TurnArtifact[];
+  files: SessionFilesView;
+  workspaceBrowserActive: boolean;
+}): boolean {
+  return changes.files.length > 0
+    || run.commands.length > 0
+    || artifacts.length > 0
+    || files.items.length > 0
+    || workspaceBrowserActive;
 }
 
 function contextNavDetail(usage?: WorkbenchContextUsageView): string {

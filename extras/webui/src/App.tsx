@@ -1983,7 +1983,7 @@ export function App() {
       );
     }
     if (workbenchTab === "workspace") {
-      return sessionWorkspace.hasData ? (
+      return selectedSessionId ? (
         <SessionWorkspacePanel
           workspace={sessionWorkspace}
           defaultOpen

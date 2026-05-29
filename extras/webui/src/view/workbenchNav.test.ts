@@ -193,6 +193,37 @@ describe("buildWorkbenchNavItems", () => {
     });
   });
 
+  it("keeps Workspace reachable when current work exists but no binding was recorded", () => {
+    const items = buildWorkbenchNavItems({
+      overview,
+      changes: { summary: "No changed files", detail: "No changes", files: [] },
+      run: {
+        summary: "1 command",
+        detail: "1 command",
+        commands: [{ command: "git ls-remote git@github.com:team/repo.git HEAD", status: "failed", turnNumber: 1, exitCode: 128 }],
+      },
+      files: { summary: "No files", detail: "No files", items: [] },
+      workspace: {
+        hasData: false,
+        summary: "No workspace evidence",
+        shortStatus: "No workspace evidence",
+        detail: "No workspace binding or command cwd recorded.",
+        verification: "unknown",
+      },
+      runtimeState: { state: "idle" },
+      configState: { state: "idle" },
+      memoryState: { state: "idle" },
+      skillsState: { state: "idle" },
+    });
+
+    expect(items.find((item) => item.key === "workspace")).toMatchObject({
+      label: "Workspace",
+      detail: "No binding evidence",
+      badge: "?",
+      scope: "current",
+    });
+  });
+
   it("maps attention targets to Workbench tabs", () => {
     expect(workbenchTabFromAttention("workspace")).toBe("workspace");
     expect(workbenchTabFromAttention("automation")).toBe("loop");
