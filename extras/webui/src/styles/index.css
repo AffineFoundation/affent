@@ -16881,16 +16881,14 @@ html[data-theme="dark"] ::selection {
     width: 15px;
   }
   .workbench-panel {
-    position: sticky;
+    position: relative;
     z-index: 14;
     top: 8px;
     order: 0;
     width: auto;
     min-height: 0;
-    height: min(68vh, calc(100vh - 84px));
-    height: min(68dvh, calc(100dvh - 84px));
-    max-height: min(68vh, calc(100vh - 84px));
-    max-height: min(68dvh, calc(100dvh - 84px));
+    height: auto;
+    max-height: none;
     align-content: stretch;
     border-radius: var(--radius);
     padding: 10px;
@@ -16968,6 +16966,13 @@ html[data-theme="dark"] ::selection {
   .workspace-shell[data-workbench="open"] .workbench-tab-surface {
     grid-column: 1;
     grid-row: auto;
+  }
+  .workspace-shell[data-workbench="open"] .workbench-tab-surface,
+  .workspace-shell[data-workbench="open"] .workbench-tab-surface > .session-skills-panel[open],
+  .workspace-shell[data-workbench="open"] .workbench-tab-surface > .session-skills-panel[open] > .session-skills-body {
+    height: auto;
+    max-height: none;
+    overflow: visible;
   }
   .workbench-resize-handle,
   .session-resize-handle {
