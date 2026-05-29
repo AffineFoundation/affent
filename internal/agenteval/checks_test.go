@@ -1243,7 +1243,7 @@ func TestContextCompactionChecks(t *testing.T) {
 		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, BeforeBytes: 9000, AfterBytes: 3000, ReducedBytes: 6000, EstimatedInputTokens: 90000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
 	}}
 	stats := trace.ContextCompactionStats(1)
-	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.ReducedBytes != 13000 || stats.SummaryBytes != 2100 {
+	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.ReducedBytes != 13000 || stats.SummaryBytes != 2100 || stats.PolicyObserved != 2 || stats.MaxPolicyPressurePercent != 129 {
 		t.Fatalf("ContextCompactionStats = %+v", stats)
 	}
 	if len(stats.Examples) != 1 || stats.Examples[0].Reason != "threshold" {

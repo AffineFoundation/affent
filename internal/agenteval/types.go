@@ -806,16 +806,18 @@ type ContextCompaction struct {
 }
 
 type ContextCompactionStats struct {
-	Count           int
-	Reactive        int
-	Proactive       int
-	RemovedMessages int
-	ReducedBytes    int
-	SummaryBytes    int
-	SummaryMissing  int
-	SummaryEmpty    int
-	ByReason        map[string]int
-	Examples        []ContextCompaction
+	Count                    int
+	Reactive                 int
+	Proactive                int
+	RemovedMessages          int
+	ReducedBytes             int
+	SummaryBytes             int
+	SummaryMissing           int
+	SummaryEmpty             int
+	PolicyObserved           int
+	MaxPolicyPressurePercent int
+	ByReason                 map[string]int
+	Examples                 []ContextCompaction
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -2043,6 +2045,13 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 		stats.RemovedMessages += compaction.RemovedMessages
 		stats.ReducedBytes += compaction.ReducedBytes
 		stats.SummaryBytes += compaction.SummaryBytes
+		if compaction.EstimatedInputTokens > 0 && compaction.TriggerInputTokens > 0 {
+			stats.PolicyObserved++
+			pressure := contextCompactionPolicyPressurePercent(compaction.EstimatedInputTokens, compaction.TriggerInputTokens)
+			if pressure > stats.MaxPolicyPressurePercent {
+				stats.MaxPolicyPressurePercent = pressure
+			}
+		}
 		if contextCompactionSummaryMissing(compaction) {
 			stats.SummaryMissing++
 		}
@@ -2075,6 +2084,13 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 		})
 	}
 	return stats
+}
+
+func contextCompactionPolicyPressurePercent(estimatedInputTokens, triggerInputTokens int) int {
+	if estimatedInputTokens <= 0 || triggerInputTokens <= 0 {
+		return 0
+	}
+	return (estimatedInputTokens*100 + triggerInputTokens - 1) / triggerInputTokens
 }
 
 func contextCompactionSummaryMissing(compaction ContextCompaction) bool {
