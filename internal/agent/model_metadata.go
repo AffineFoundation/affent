@@ -13,9 +13,10 @@ import (
 const maxModelMetadataBytes = 2 * 1024 * 1024
 
 type ModelMetadata struct {
-	ID                    string
-	ContextWindowTokens   int
-	AutoCompactTokenLimit int
+	ID                            string
+	ContextWindowTokens           int
+	EffectiveContextWindowPercent int
+	AutoCompactTokenLimit         int
 }
 
 // FetchModelMetadata reads OpenAI-compatible /models metadata for c.Model.
@@ -76,10 +77,13 @@ func ParseModelMetadata(raw []byte, model string) (ModelMetadata, error) {
 		if model != "" && id != model {
 			continue
 		}
+		window := modelContextWindowTokensFromMetadata(item)
+		effectivePercent := modelEffectiveContextWindowPercentFromMetadata(item)
 		return ModelMetadata{
-			ID:                    id,
-			ContextWindowTokens:   modelContextWindowTokensFromMetadata(item),
-			AutoCompactTokenLimit: modelAutoCompactTokenLimitFromMetadata(item),
+			ID:                            id,
+			ContextWindowTokens:           applyEffectiveContextWindowPercent(window, effectivePercent),
+			EffectiveContextWindowPercent: effectivePercent,
+			AutoCompactTokenLimit:         modelAutoCompactTokenLimitFromMetadata(item),
 		}, nil
 	}
 	return ModelMetadata{}, fmt.Errorf("model %q not found in models response", model)
@@ -112,6 +116,30 @@ func modelAutoCompactTokenLimitFromMetadata(item map[string]any) int {
 		"model_auto_compact_token_limit",
 		"auto_compact_context_limit",
 	)
+}
+
+func modelEffectiveContextWindowPercentFromMetadata(item map[string]any) int {
+	percent := firstPositiveModelMetadataInt(item,
+		"effective_context_window_percent",
+		"model_effective_context_window_percent",
+	)
+	if percent > 100 {
+		return 100
+	}
+	return percent
+}
+
+func applyEffectiveContextWindowPercent(tokens, percent int) int {
+	if tokens <= 0 {
+		return 0
+	}
+	if percent <= 0 {
+		return tokens
+	}
+	if percent > 100 {
+		percent = 100
+	}
+	return max(1, tokens*percent/100)
 }
 
 func firstPositiveModelMetadataInt(item map[string]any, keys ...string) int {

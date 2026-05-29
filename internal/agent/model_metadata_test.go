@@ -42,6 +42,45 @@ func TestParseModelMetadataNestedAndStringFields(t *testing.T) {
 	}
 }
 
+func TestParseModelMetadataAppliesEffectiveContextWindowPercent(t *testing.T) {
+	raw := []byte(`{
+		"data": [
+			{"id": "target", "context_window": 100000, "effective_context_window_percent": 95, "auto_compact_token_limit": 90000}
+		]
+	}`)
+	got, err := ParseModelMetadata(raw, "target")
+	if err != nil {
+		t.Fatalf("ParseModelMetadata: %v", err)
+	}
+	if got.ContextWindowTokens != 95000 {
+		t.Fatalf("ContextWindowTokens = %d, want effective 95000", got.ContextWindowTokens)
+	}
+	if got.EffectiveContextWindowPercent != 95 {
+		t.Fatalf("EffectiveContextWindowPercent = %d, want 95", got.EffectiveContextWindowPercent)
+	}
+	if got.AutoCompactTokenLimit != 90000 {
+		t.Fatalf("AutoCompactTokenLimit = %d, want 90000", got.AutoCompactTokenLimit)
+	}
+}
+
+func TestParseModelMetadataClampsEffectiveContextWindowPercent(t *testing.T) {
+	raw := []byte(`{
+		"data": [
+			{"id": "target", "context_window": 100000, "metadata": {"effective_context_window_percent": "120"}}
+		]
+	}`)
+	got, err := ParseModelMetadata(raw, "target")
+	if err != nil {
+		t.Fatalf("ParseModelMetadata: %v", err)
+	}
+	if got.ContextWindowTokens != 100000 {
+		t.Fatalf("ContextWindowTokens = %d, want clamped 100000", got.ContextWindowTokens)
+	}
+	if got.EffectiveContextWindowPercent != 100 {
+		t.Fatalf("EffectiveContextWindowPercent = %d, want clamped 100", got.EffectiveContextWindowPercent)
+	}
+}
+
 func TestFetchModelMetadataUsesModelsEndpoint(t *testing.T) {
 	var sawAuth bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

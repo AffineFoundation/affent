@@ -37,6 +37,7 @@ func resolveModelContextWindowFromProvider(cfg Config, logger zerolog.Logger) Co
 		Str("model", cfg.Model).
 		Str("metadata_model", meta.ID).
 		Int("model_context_window_tokens", cfg.ModelContextWindowTokens).
+		Int("effective_context_window_percent", meta.EffectiveContextWindowPercent).
 		Int("auto_compact_token_limit", cfg.CompactTriggerInputTokens).
 		Msg("model context window resolved from provider metadata")
 	return cfg

@@ -109,6 +109,36 @@ func TestNewSessionPoolModelContextWindowHonorsCompactPercent(t *testing.T) {
 	}
 }
 
+func TestNewSessionPoolUsesEffectiveModelContextWindowFromProvider(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[{"id":"ctx-model","context_window":100000,"effective_context_window_percent":95,"auto_compact_token_limit":90000}]}`))
+	}))
+	defer srv.Close()
+
+	cfg := Config{
+		Listen:                 "127.0.0.1:0",
+		MaxSessions:            4,
+		SessionIdleTTL:         "5m",
+		WorkspaceRoot:          t.TempDir(),
+		BaseURL:                srv.URL + "/v1",
+		APIKey:                 "test",
+		Model:                  "ctx-model",
+		ModelContextWindowAuto: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	if pool.cfg.ModelContextWindowTokens != 95000 {
+		t.Fatalf("ModelContextWindowTokens = %d, want effective 95000", pool.cfg.ModelContextWindowTokens)
+	}
+	if pool.cfg.CompactTriggerInputTokens != 76000 {
+		t.Fatalf("CompactTriggerInputTokens = %d, want provider limit clamped to 80%% of effective window", pool.cfg.CompactTriggerInputTokens)
+	}
+}
+
 func TestNewSessionPoolExplicitModelContextWindowSkipsProvider(t *testing.T) {
 	called := false
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
