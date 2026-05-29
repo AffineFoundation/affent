@@ -1,7 +1,7 @@
 import type { SessionState } from "../store/sessionState";
 import { formatByteCount } from "./byteFormat";
 import { showsWorkbenchArtifact } from "./toolResultDisplay";
-import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, type TurnArtifact } from "./turnArtifacts";
+import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, chatVisibleTurnArtifacts, type TurnArtifact } from "./turnArtifacts";
 
 export type SessionArtifactKind = "deliverable" | "full_output";
 
@@ -63,6 +63,12 @@ export function buildWorkbenchArtifacts(session: SessionState): TurnArtifact[] {
 
 export function sessionArtifactLabel(session: SessionState): string | undefined {
   const artifacts = buildSessionArtifacts(session);
+  if (artifacts.length === 0) return undefined;
+  return artifactCountLabel(artifacts) ?? `${artifacts.length} file${artifacts.length === 1 ? "" : "s"}`;
+}
+
+export function sessionChatArtifactLabel(session: SessionState): string | undefined {
+  const artifacts = session.turns.flatMap((turn, turnIndex) => chatVisibleTurnArtifacts(turn, { turnNumber: turnIndex + 1 }));
   if (artifacts.length === 0) return undefined;
   return artifactCountLabel(artifacts) ?? `${artifacts.length} file${artifacts.length === 1 ? "" : "s"}`;
 }

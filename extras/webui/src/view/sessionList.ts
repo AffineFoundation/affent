@@ -5,7 +5,7 @@ import { formatByteCount } from "./byteFormat";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
-import { sessionArtifactLabel } from "./sessionArtifacts";
+import { sessionChatArtifactLabel } from "./sessionArtifacts";
 import { summarizeAnswerPreview } from "./textPreview";
 import { buildTurnActivity } from "./turnActivity";
 
@@ -431,7 +431,7 @@ function currentSessionRecallStats(session: SessionState): Required<SessionSearc
 }
 
 function currentSessionArtifactMetric(session: SessionState): string | undefined {
-  return sessionArtifactLabel(session);
+  return sessionChatArtifactLabel(session);
 }
 
 function currentSessionCompactionMetric(session: SessionState): string | undefined {

@@ -423,7 +423,7 @@ describe("SessionList", () => {
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("review the changelog");
   });
 
-  it("keeps artifact size in the selected chat row", () => {
+  it("keeps raw tool-result storage size out of the selected chat row", () => {
     renderList([session({ id: "s1", durable: true, has_events: true })], {
       currentSession: reduceRawEvents([
         { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -465,7 +465,8 @@ describe("SessionList", () => {
     const launcher = screen.getByRole("button", { name: "Open chats" });
     const row = screen.getByRole("button", { name: /Saved chat/ });
     expect(launcher).not.toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
-    expect(row).toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
+    expect(row).not.toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
+    expect(row).not.toHaveTextContent("000001-c1.txt");
     expect(row).not.toHaveTextContent("1 message · 1 action");
   });
 

@@ -1,10 +1,12 @@
 export interface ToolResultSource {
+  path?: string;
   tool?: string;
   originalTool?: string;
   source?: string;
 }
 
 export function showsChatArtifact(source: ToolResultSource): boolean {
+  if (isToolResultStoragePath(source.path)) return false;
   return !isRawSourceCapture(source);
 }
 
@@ -22,6 +24,10 @@ export function showsToolContextChrome(source: ToolResultSource): boolean {
 
 function isRawSourceCapture(source: ToolResultSource): boolean {
   return toolNames(source).some((tool) => rawSourceCaptureTools.has(tool));
+}
+
+function isToolResultStoragePath(path: string | undefined): boolean {
+  return typeof path === "string" && /(?:^|\/)\.affent\/artifacts\/tool-results\//.test(path.replace(/\\/g, "/"));
 }
 
 function toolNames(source: ToolResultSource): string[] {

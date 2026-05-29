@@ -1156,7 +1156,7 @@ function buildFallbackAnswer(turn: TurnState, opts: { continuedAfterLimit?: bool
       ? "Action output was truncated"
       : "Action output";
   const artifactHint = latestResult.resultTruncated && latestResult.resultArtifactPath
-    ? "\nFull output is available below."
+    ? "\nFull output is available in Workbench."
     : "";
   return {
     title,

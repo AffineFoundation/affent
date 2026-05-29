@@ -1125,7 +1125,7 @@ describe("sessionList view model", () => {
     expect(rows[0].preview).not.toContain("Then I added");
   });
 
-  it("surfaces artifact output in the selected chat row stats", () => {
+  it("keeps raw tool-result storage files out of selected chat row stats", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -1167,8 +1167,8 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 file (8 KiB, 1 MiB omitted)");
-    expect(rows[0].searchText).toContain("1 file (8 kib, 1 mib omitted)");
+    expect(rows[0].stats).toBeUndefined();
+    expect(rows[0].searchText).not.toContain("1 file (8 kib, 1 mib omitted)");
   });
 
   it("surfaces context compactions in the selected chat row stats", () => {

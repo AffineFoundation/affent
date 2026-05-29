@@ -35,6 +35,13 @@ describe("buildTurnArtifacts", () => {
     expect(artifactSizeLabel(artifact)).toBe("(8 KiB, 1 MiB omitted)");
   });
 
+  it("keeps tool-result storage files out of the default chat artifact strip", () => {
+    const turn = reduceRawEvents(resultTruncated).turns[0];
+
+    expect(buildTurnArtifacts(turn)).toHaveLength(1);
+    expect(chatVisibleTurnArtifacts(turn)).toEqual([]);
+  });
+
   it("summarizes artifact groups compactly", () => {
     const turn = reduceRawEvents(resultTruncated).turns[0];
     const artifact = buildTurnArtifacts(turn)[0];

@@ -256,8 +256,8 @@ describe("Timeline", () => {
     ]);
 
     const digest = screen.getByTestId("agent-activity-digest");
-    expect(digest).toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
-    expect(digest.textContent?.replace(/\s+/g, " ").trim()).toContain("1 file (8 KiB, 1 MiB omitted)");
+    expect(digest).not.toHaveTextContent("000001-c1.txt");
+    expect(digest).not.toHaveTextContent("1 file");
   });
 
   it("compresses the turn header into a single visible summary line", () => {
@@ -265,7 +265,7 @@ describe("Timeline", () => {
 
     expect(screen.getByTestId("turn-head")).toHaveTextContent("cat big.log");
     expect(screen.getByTestId("turn-head")).not.toHaveTextContent("1 action");
-    expect(screen.getByTestId("turn-head")).toHaveTextContent("1 file");
+    expect(screen.getByTestId("turn-head")).not.toHaveTextContent("1 file");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("88ms");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("1 truncated");
     expect(screen.getByTestId("turn-head")).not.toHaveTextContent("+2 more");
@@ -852,9 +852,9 @@ describe("Timeline", () => {
     renderTimeline(resultTruncated);
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Action output was truncated");
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("line 1");
-    expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Full output is available below.");
+    expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Full output is available in Workbench.");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("1 truncated");
-    expect(screen.getByTestId("turn-head")).toHaveTextContent("1 file");
+    expect(screen.getByTestId("turn-head")).not.toHaveTextContent("1 file");
     expect(screen.getByTestId("turn-head")).not.toHaveTextContent("+2 more");
     fireEvent.click(screen.getByRole("button", { name: /What Affent did/ }));
     fireEvent.click(screen.getAllByRole("button", { name: /cat big.log/ })[0]);
@@ -876,12 +876,12 @@ describe("Timeline", () => {
 
     await user.click(screen.getByRole("button", { name: "Copy output" }));
     expect(writeText).toHaveBeenCalledWith(
-      "Action output was truncated\nline 1\nline 2\n…(truncated)\nFull output is available below.",
+      "Action output was truncated\nline 1\nline 2\n…(truncated)\nFull output is available in Workbench.",
     );
 
     await user.click(screen.getByRole("button", { name: "Ask follow-up" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Continue from this output: line 1 line 2 …(truncated) Full output is available below.",
+      "Continue from this output: line 1 line 2 …(truncated) Full output is available in Workbench.",
       "result",
     );
   });
@@ -894,7 +894,7 @@ describe("Timeline", () => {
     await user.click(screen.getByRole("button", { name: "Retry from here" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Retry from this reply:\n\nAction output was truncated\nline 1\nline 2\n…(truncated)\nFull output is available below.",
+      "Retry from this reply:\n\nAction output was truncated\nline 1\nline 2\n…(truncated)\nFull output is available in Workbench.",
       "retry_reply",
     );
   });
@@ -916,22 +916,17 @@ describe("Timeline", () => {
     expect(screen.getByText("coerced filename -> path")).toBeInTheDocument();
   });
 
-  it("surfaces output files in the chat without opening the work tree", async () => {
-    const user = userEvent.setup();
+  it("keeps raw tool-result output files out of the chat artifact strip", () => {
     const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
     renderTimeline(resultTruncated, "s1", onOpenArtifact, onUseAsDraft);
 
-    expect(screen.getByTestId("turn-artifacts")).toHaveTextContent("Full output");
-    expect(screen.getByTestId("turn-artifacts")).toHaveTextContent("000001-c1.txt");
-    expect(screen.getByTestId("turn-artifacts")).toHaveTextContent("cat big.log");
+    expect(screen.queryByTestId("turn-artifacts")).toBeNull();
+    expect(screen.queryByText("000001-c1.txt")).toBeNull();
+    expect(screen.queryByText("Full output")).toBeNull();
     expect(screen.queryByTestId("execution-tree")).toBeNull();
-    expect(within(screen.getByTestId("turn-artifacts")).queryByRole("button", { name: "Use artifact as draft" })).toBeNull();
-
+    expect(onOpenArtifact).not.toHaveBeenCalled();
     expect(onUseAsDraft).not.toHaveBeenCalled();
-
-    await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open artifact" }));
-    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");
   });
 
   it("does not show web fetch raw artifacts as chat download cards", () => {
@@ -1905,15 +1900,13 @@ describe("Timeline", () => {
     expect(source).toHaveAttribute("rel", "noreferrer");
   });
 
-  it("opens truncated result artifacts inside the current session surface", async () => {
-    const user = userEvent.setup();
+  it("does not render truncated tool-result storage artifacts as chat cards", () => {
     const onOpenArtifact = vi.fn();
     renderTimeline(resultTruncated, "s1", onOpenArtifact);
 
-    expect(screen.getByTestId("turn-artifacts")).toHaveTextContent("000001-c1.txt");
-    await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open artifact" }));
-
-    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");
+    expect(screen.queryByTestId("turn-artifacts")).toBeNull();
+    expect(screen.queryByText("000001-c1.txt")).toBeNull();
+    expect(onOpenArtifact).not.toHaveBeenCalled();
   });
 });
 

@@ -1004,11 +1004,12 @@ describe("buildTurnActivity", () => {
     });
   });
 
-  it("adds artifact summaries to the activity digest meta for file-bearing turns", () => {
+  it("keeps raw tool-result storage artifacts out of the activity digest meta", () => {
     const turn = reduceRawEvents(resultTruncated).turns[0];
     const activity = buildTurnActivity(turn);
 
-    expect(activity?.digest.meta).toContain("1 file (8 KiB, 1 MiB omitted)");
+    expect(activity?.digest.meta.join(" ")).not.toContain("1 file");
+    expect(activity?.digest.meta.join(" ")).not.toContain("000001-c1.txt");
     expect(activity?.items.map((item) => item.label)).not.toContain("Artifact");
   });
 
