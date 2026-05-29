@@ -1700,10 +1700,11 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredContextCompactionReasons: map[string]int{
 			"context_overflow": 1,
 		},
-		RequiredCompactionRemovedMsgs:   20,
-		RequiredCompactScopeActive:      1,
-		MaxCompactScopedPressurePercent: intPtr(0),
-		RequiredContextSummaryText:      []string{"HRO market marker"},
+		RequiredCompactionRemovedMsgs:       20,
+		RequiredCompactScopeActive:          1,
+		RequiredRuntimeCompactPrefillSource: "server_observed",
+		MaxCompactScopedPressurePercent:     intPtr(0),
+		RequiredContextSummaryText:          []string{"HRO market marker"},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -1781,6 +1782,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"context_compaction_reason_at_least:context_overflow:1",
 		"context_compaction_removed_messages_at_least:20",
 		"context_maintenance_compact_scope_active_at_least:1",
+		"runtime_surface_compact_prefill_source:server_observed",
 		"context_compaction_scoped_pressure_at_most:0",
 		"context_compaction_summary_contains:HRO market marker",
 		"focused_task_called_at_least:explore:1",

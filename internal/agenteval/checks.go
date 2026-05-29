@@ -1217,12 +1217,13 @@ func RuntimeSurfaceCompactScopeActive() Check {
 			var observed []string
 			for _, surface := range t.RuntimeSurfaces {
 				if surface.CompactScopeActive {
-					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_window_ordinal=%d compact_scoped_input_tokens=%d", surface.CompactWindowOrdinal, surface.CompactScopedInputTokens)}
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_window_ordinal=%d compact_window_prefill_source=%s compact_scoped_input_tokens=%d", surface.CompactWindowOrdinal, surface.CompactWindowPrefillSource, surface.CompactScopedInputTokens)}
 				}
-				observed = append(observed, fmt.Sprintf("active=%t ordinal=%d prefill=%d scoped=%d hard_limit=%d",
+				observed = append(observed, fmt.Sprintf("active=%t ordinal=%d prefill=%d prefill_source=%s scoped=%d hard_limit=%d",
 					surface.CompactScopeActive,
 					surface.CompactWindowOrdinal,
 					surface.CompactWindowPrefillInputTokens,
+					surface.CompactWindowPrefillSource,
 					surface.CompactScopedInputTokens,
 					surface.CompactHardInputLimitTokens,
 				))
@@ -1230,6 +1231,39 @@ func RuntimeSurfaceCompactScopeActive() Check {
 			return CheckResult{
 				Pass:   false,
 				Detail: fmt.Sprintf("expected runtime.surface compact scope to be active; observed=%v", observed),
+			}
+		},
+	}
+}
+
+func RuntimeSurfaceCompactPrefillSource(required string) Check {
+	required = strings.TrimSpace(required)
+	return Check{
+		Name: "runtime_surface_compact_prefill_source:" + required,
+		Eval: func(t Trace) CheckResult {
+			if required == "" {
+				return CheckResult{Pass: true}
+			}
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if !surface.CompactScopeActive {
+					continue
+				}
+				source := strings.TrimSpace(surface.CompactWindowPrefillSource)
+				observed = append(observed, fmt.Sprintf("turn=%s ordinal=%d source=%s prefill=%d scoped=%d",
+					surface.TurnID,
+					surface.CompactWindowOrdinal,
+					source,
+					surface.CompactWindowPrefillInputTokens,
+					surface.CompactScopedInputTokens,
+				))
+				if source == required {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_window_prefill_source=%s", required)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface compact_window_prefill_source=%s; observed=%v", required, observed),
 			}
 		},
 	}
@@ -1248,11 +1282,12 @@ func ContextMaintenanceCompactScopeActiveAtLeast(min int) Check {
 				if compaction.CompactScopeActive {
 					count++
 				}
-				observed = append(observed, fmt.Sprintf("compaction turn=%s active=%t ordinal=%d prefill=%d scoped=%d hard_limit=%d",
+				observed = append(observed, fmt.Sprintf("compaction turn=%s active=%t ordinal=%d prefill=%d prefill_source=%s scoped=%d hard_limit=%d",
 					compaction.TurnID,
 					compaction.CompactScopeActive,
 					compaction.CompactWindowOrdinal,
 					compaction.CompactWindowPrefillInputTokens,
+					compaction.CompactWindowPrefillSource,
 					compaction.CompactScopedInputTokens,
 					compaction.CompactHardInputLimitTokens,
 				))
@@ -1261,12 +1296,13 @@ func ContextMaintenanceCompactScopeActiveAtLeast(min int) Check {
 				if skipped.CompactScopeActive {
 					count++
 				}
-				observed = append(observed, fmt.Sprintf("skip turn=%s cause=%s active=%t ordinal=%d prefill=%d scoped=%d hard_limit=%d",
+				observed = append(observed, fmt.Sprintf("skip turn=%s cause=%s active=%t ordinal=%d prefill=%d prefill_source=%s scoped=%d hard_limit=%d",
 					skipped.TurnID,
 					skipped.Cause,
 					skipped.CompactScopeActive,
 					skipped.CompactWindowOrdinal,
 					skipped.CompactWindowPrefillInputTokens,
+					skipped.CompactWindowPrefillSource,
 					skipped.CompactScopedInputTokens,
 					skipped.CompactHardInputLimitTokens,
 				))
