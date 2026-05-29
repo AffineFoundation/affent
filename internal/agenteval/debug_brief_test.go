@@ -1547,6 +1547,22 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 		!stringSliceContains(brief.Tags, "context_compaction:post_pressure") {
 		t.Fatalf("post-pressure compaction item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ContextCompactions: ContextCompactionStats{
+			Count:                    1,
+			PolicyObserved:           1,
+			MaxCompactScopedPressure: 37,
+		},
+	})
+	item = debugBriefItemByKind(brief, "context_compaction")
+	if item == nil ||
+		item.Message != "context compaction did not reset scoped input pressure; inspect compact-window accounting before changing prompts or token limits" ||
+		item.Counts["max_compact_scoped_pressure"] != 37 ||
+		!stringSliceContains(brief.Tags, "context_compaction:scoped_pressure") {
+		t.Fatalf("scoped-pressure compaction item = %+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesTruncationArtifactQuality(t *testing.T) {

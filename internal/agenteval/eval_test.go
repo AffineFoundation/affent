@@ -6469,8 +6469,9 @@ func TestBuildDebugRecoveryGuideAddsLongRunRecallRecoveryActions(t *testing.T) {
 			MemorySearchMisses:       1,
 		},
 		ContextCompactions: ContextCompactionStats{
-			Count:          1,
-			SummaryMissing: 1,
+			Count:                    1,
+			SummaryMissing:           1,
+			MaxCompactScopedPressure: 42,
 		},
 		MemorySearchMissExamples: []MemorySearchMissExample{{
 			ToolIndex: 3,
@@ -6485,9 +6486,11 @@ func TestBuildDebugRecoveryGuideAddsLongRunRecallRecoveryActions(t *testing.T) {
 	}
 	for _, want := range []string{
 		"context_compaction:summary_missing",
+		"context_compaction:scoped_pressure",
 		"recall:no_context",
 		"recall:memory_no_topic_anchors",
 		"recover from persisted LOOP.md, plan state, session_search, memory, or authoritative files",
+		"the compaction event fired, but scoped input accounting did not reset",
 		"rerun with narrower identifiers, adjacent context, plan anchors, or loop anchors",
 		"retry with target/topic discovery or confirm the memory bucket is empty",
 	} {

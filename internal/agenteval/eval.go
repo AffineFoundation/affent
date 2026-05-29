@@ -2045,6 +2045,9 @@ func debugRecoveryPriorityAction(tags []string) string {
 	if containsString(tags, "context_compaction:summary_missing") || containsString(tags, "context_compaction:summary_empty") {
 		add("For context_compaction summary gaps, inspect context_compaction_examples and recover from persisted LOOP.md, plan state, session_search, memory, or authoritative files before trusting compressed context.")
 	}
+	if containsString(tags, "context_compaction:scoped_pressure") {
+		add("For context_compaction:scoped_pressure, inspect context_compaction_examples and compact-window policy telemetry; the compaction event fired, but scoped input accounting did not reset for the next long-run window.")
+	}
 	if containsString(tags, "empty_recall:recent_sessions") {
 		add("For empty_recall:recent_sessions, inspect session_search_examples and retry from recent_sessions plan, loop, or recovery anchors before saying prior history is missing.")
 	}
@@ -2103,6 +2106,7 @@ func debugRecoveryPriorityTags(brief *DebugBrief) []string {
 		"browser_scroll:stuck_without_network",
 		"source_network:missing_response_diagnostics",
 		"source_network:partial_read",
+		"context_compaction:scoped_pressure",
 		"context_compaction:summary_missing",
 		"context_compaction:summary_empty",
 		"truncation:missing_artifact",

@@ -564,6 +564,10 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "context_compaction:post_pressure")
 			message = "context compaction left estimated request input above the trigger; inspect tool-schema pressure and summary size before raising token limits"
 		}
+		if res.ContextCompactions.MaxCompactScopedPressure > 0 {
+			tags = append(tags, "context_compaction:scoped_pressure")
+			message = "context compaction did not reset scoped input pressure; inspect compact-window accounting before changing prompts or token limits"
+		}
 		for _, reason := range sortedStringMapKeys(res.ContextCompactions.ByReason) {
 			tags = append(tags, "context_compaction:"+reason)
 		}
@@ -587,6 +591,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"post_policy_observed":             res.ContextCompactions.PostPolicyObserved,
 			"post_policy_still_over_trigger":   res.ContextCompactions.PostPolicyStillOverTrigger,
 			"max_post_policy_pressure_percent": res.ContextCompactions.MaxPostPolicyPressurePercent,
+			"max_compact_scoped_pressure":      res.ContextCompactions.MaxCompactScopedPressure,
 		}, tags...)
 	}
 	if res.ContextCompactionSkips.Count > 0 {

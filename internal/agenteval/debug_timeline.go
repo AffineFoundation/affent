@@ -243,7 +243,7 @@ func timelineMetricsSummary(res BatchResult) string {
 		))
 	}
 	if res.ContextCompactions.Count > 0 {
-		parts = append(parts, fmt.Sprintf("compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
+		compactMetrics := fmt.Sprintf("compactions=%d,reactive=%d,removed=%d,reduced_bytes=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			res.ContextCompactions.Count,
 			res.ContextCompactions.Reactive,
 			res.ContextCompactions.RemovedMessages,
@@ -251,7 +251,11 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ContextCompactions.SummaryBytes,
 			res.ContextCompactions.SummaryMissing,
 			res.ContextCompactions.SummaryEmpty,
-		))
+		)
+		if res.ContextCompactions.MaxCompactScopedPressure > 0 {
+			compactMetrics += fmt.Sprintf(",max_scoped_pressure=%d%%", res.ContextCompactions.MaxCompactScopedPressure)
+		}
+		parts = append(parts, compactMetrics)
 	}
 	if res.ContextCompactionSkips.Count > 0 {
 		parts = append(parts, fmt.Sprintf("compaction_skips=%d,post_policy_over=%d,max_post_pressure=%d%%",
