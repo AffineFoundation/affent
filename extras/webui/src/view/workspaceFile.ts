@@ -64,6 +64,38 @@ export function workspaceFileDraft(file: WorkspaceFileView): string {
   ].filter((line): line is string => Boolean(line)).join("\n");
 }
 
+export function workspaceFileRangeText(file: WorkspaceFileView, startLine: number, endLine: number): string {
+  const start = Math.max(1, Math.min(startLine, endLine));
+  const end = Math.min(file.lines.length, Math.max(startLine, endLine));
+  return [
+    `Workspace file range for ${file.path}`,
+    `Lines: ${start}-${end}`,
+    "",
+    file.lines.slice(start - 1, end).join("\n"),
+  ].join("\n");
+}
+
+export function workspaceFileRangeDraft(
+  file: WorkspaceFileView,
+  startLine: number,
+  endLine: number,
+  intent: "ask" | "edit",
+): string {
+  const start = Math.max(1, Math.min(startLine, endLine));
+  const end = Math.min(file.lines.length, Math.max(startLine, endLine));
+  const lead = intent === "edit"
+    ? "Edit this selected workspace file range in the next step:"
+    : "Review this selected workspace file range in the next step:";
+  return [
+    lead,
+    `Path: ${file.path}`,
+    `Lines: ${start}-${end}`,
+    file.hasMore ? "Snapshot is truncated; read more before making broad edits." : undefined,
+    "",
+    file.lines.slice(start - 1, end).join("\n"),
+  ].filter((line): line is string => Boolean(line)).join("\n");
+}
+
 export function parentWorkspacePath(path: string): string | undefined {
   const clean = cleanPath(path);
   if (clean === ".") return undefined;

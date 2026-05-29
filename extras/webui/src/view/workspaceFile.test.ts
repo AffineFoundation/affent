@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWorkspaceFileView, parentWorkspacePath, workspaceFileDraft } from "./workspaceFile";
+import { buildWorkspaceFileView, parentWorkspacePath, workspaceFileDraft, workspaceFileRangeDraft, workspaceFileRangeText } from "./workspaceFile";
 
 describe("workspaceFile", () => {
   it("normalizes a workspace directory response for the Files panel", () => {
@@ -50,5 +50,9 @@ describe("workspaceFile", () => {
     expect(parentWorkspacePath("src")).toBe(".");
     expect(parentWorkspacePath(".")).toBeUndefined();
     expect(workspaceFileDraft(view)).toContain("Snapshot is truncated");
+    expect(workspaceFileRangeText(view, 2, 1)).toContain("Lines: 1-2");
+    expect(workspaceFileRangeText(view, 2, 1)).toContain("package main\nfunc main() {}");
+    expect(workspaceFileRangeDraft(view, 2, 2, "edit")).toContain("Edit this selected workspace file range");
+    expect(workspaceFileRangeDraft(view, 2, 2, "ask")).toContain("Path: src/main.go");
   });
 });

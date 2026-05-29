@@ -9,7 +9,15 @@ import {
   type SessionFileEvidence,
   type SessionFilesView,
 } from "../view/sessionFiles";
-import { parentWorkspacePath, workspaceFileDraft, type WorkspaceFileBrowserState, type WorkspaceFileEntryView, type WorkspaceFileView } from "../view/workspaceFile";
+import {
+  parentWorkspacePath,
+  workspaceFileDraft,
+  workspaceFileRangeDraft,
+  workspaceFileRangeText,
+  type WorkspaceFileBrowserState,
+  type WorkspaceFileEntryView,
+  type WorkspaceFileView,
+} from "../view/workspaceFile";
 import { CopyButton } from "./CopyButton";
 import { HighlightText } from "./HighlightText";
 
@@ -583,6 +591,35 @@ function WorkspaceFilePreview({
   onOpenPath?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
+  const [query, setQuery] = useState("");
+  const [lineJump, setLineJump] = useState("");
+  const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | undefined>();
+  const [wrapLines, setWrapLines] = useState(true);
+  const codeRef = useRef<HTMLDivElement | null>(null);
+  const activeRange = selectedRange;
+
+  function selectLine(lineNumber: number, scroll = false) {
+    setSelectedRange((current) => {
+      if (!current || current.start !== current.end) return { start: lineNumber, end: lineNumber };
+      return {
+        start: Math.min(current.start, lineNumber),
+        end: Math.max(current.end, lineNumber),
+      };
+    });
+    if (scroll) {
+      window.requestAnimationFrame(() => {
+        const target = codeRef.current?.querySelector<HTMLElement>(`[data-line-number="${lineNumber}"]`);
+        target?.scrollIntoView?.({ block: "center" });
+      });
+    }
+  }
+
+  function jumpToLine() {
+    const lineNumber = Number.parseInt(lineJump, 10);
+    if (!Number.isFinite(lineNumber) || file.lines.length === 0) return;
+    selectLine(Math.max(1, Math.min(file.lines.length, lineNumber)), true);
+  }
+
   return (
     <div className="session-file-preview session-workspace-file-preview" data-testid="session-workspace-file-preview">
       <div className="session-file-preview-head">
@@ -593,6 +630,30 @@ function WorkspaceFilePreview({
         <small>{file.detail}</small>
       </div>
       <div className="session-file-preview-toolbar">
+        <label className="session-skills-search">
+          <span>Search file</span>
+          <input
+            aria-label="Search workspace file"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="text in current file"
+          />
+        </label>
+        <span className="session-file-line-jump">
+          <input
+            aria-label="Go to workspace line"
+            inputMode="numeric"
+            value={lineJump}
+            onChange={(event) => setLineJump(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") jumpToLine();
+            }}
+            placeholder="line"
+          />
+          <button type="button" className="ghost-action" onClick={jumpToLine}>
+            Go
+          </button>
+        </span>
         {parent ? (
           <button type="button" className="ghost-action" onClick={() => onOpenPath?.(parent)}>
             Up
@@ -600,19 +661,61 @@ function WorkspaceFilePreview({
         ) : null}
         <CopyButton label="Copy file" value={file.text ?? ""} className="ghost-action" />
         <CopyButton label="Copy path" value={file.path} className="ghost-action" />
+        <button type="button" className="ghost-action" aria-pressed={wrapLines} onClick={() => setWrapLines((value) => !value)}>
+          Wrap
+        </button>
         {onUseAsDraft ? (
           <button type="button" className="ghost-action" onClick={() => onUseAsDraft(workspaceFileDraft(file), "file_snapshot")}>
-            Reference file
+            Ask about file
           </button>
         ) : null}
       </div>
-      <div className="code session-file-preview-code" role="list" aria-label="Workspace file content">
-        {file.lines.map((line, index) => (
-          <div key={index} className="session-file-code-line">
-            <span className="session-file-code-line-number">{index + 1}</span>
-            <span className="session-file-code-line-text">{line || " "}</span>
-          </div>
-        ))}
+      {activeRange ? (
+        <div className="session-file-range-actions" data-testid="session-workspace-file-range-actions">
+          <span>
+            Lines {activeRange.start}-{activeRange.end}
+          </span>
+          <CopyButton label="Copy range" value={workspaceFileRangeText(file, activeRange.start, activeRange.end)} className="ghost-action" />
+          {onUseAsDraft ? (
+            <>
+              <button
+                type="button"
+                className="ghost-action"
+                onClick={() => onUseAsDraft(workspaceFileRangeDraft(file, activeRange.start, activeRange.end, "ask"), "file_range")}
+              >
+                Ask about range
+              </button>
+              <button
+                type="button"
+                className="ghost-action"
+                onClick={() => onUseAsDraft(workspaceFileRangeDraft(file, activeRange.start, activeRange.end, "edit"), "file_range")}
+              >
+                Edit range
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="code session-file-preview-code" data-wrap={wrapLines ? "true" : "false"} role="list" aria-label="Workspace file content" ref={codeRef}>
+        {file.lines.map((line, index) => {
+          const lineNumber = index + 1;
+          const selected = activeRange ? lineNumber >= activeRange.start && lineNumber <= activeRange.end : false;
+          return (
+            <button
+              key={index}
+              type="button"
+              className="session-file-code-line"
+              data-line-number={lineNumber}
+              data-selected={selected ? "true" : "false"}
+              onClick={() => selectLine(lineNumber)}
+            >
+              <span className="session-file-code-line-number">{lineNumber}</span>
+              <span className="session-file-code-line-text">
+                <HighlightText text={line || " "} query={query} />
+              </span>
+            </button>
+          );
+        })}
       </div>
       <FileEditorStatus
         source="workspace"
