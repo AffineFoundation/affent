@@ -13071,16 +13071,22 @@ pre.code {
 
 .session-trace-issues {
   display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  flex: 0 0 auto;
   gap: 6px;
   min-width: 0;
+  max-height: 250px;
+  overflow: auto;
   border: 1px solid rgba(217, 224, 232, 0.78);
   border-radius: calc(var(--radius) - 2px);
   background: rgba(255, 255, 255, 0.66);
   padding: 7px 8px;
+  scrollbar-width: thin;
 }
 
 .session-trace-issues-head {
   display: flex;
+  grid-column: 1 / -1;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
@@ -13157,10 +13163,11 @@ pre.code {
 
 .session-trace-issues .session-trace-issue-groups {
   display: flex;
+  grid-column: 1 / -1;
 }
 
 .session-trace-issue-list {
-  max-height: 170px;
+  max-height: 168px;
   overflow: auto;
   padding-right: 2px;
   scrollbar-width: thin;
@@ -13227,6 +13234,7 @@ pre.code {
 
 .session-trace-issue-focus {
   display: grid;
+  align-self: start;
   gap: 8px;
   min-width: 0;
   border: 1px solid rgba(20, 184, 166, 0.24);
@@ -13262,10 +13270,15 @@ pre.code {
 }
 
 .session-trace-issue-focus-head small {
+  display: -webkit-box;
+  max-height: 3.2em;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 11.5px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .session-trace-issue-facts {
@@ -13302,6 +13315,8 @@ pre.code {
 
 .session-trace-issue-next p {
   margin: 0;
+  max-height: 58px;
+  overflow: auto;
   border: 1px solid rgba(217, 224, 232, 0.76);
   border-radius: var(--radius-sm);
   background: rgba(248, 250, 252, 0.74);
@@ -13310,6 +13325,7 @@ pre.code {
   line-height: 1.4;
   padding: 7px 8px;
   overflow-wrap: anywhere;
+  scrollbar-width: thin;
 }
 
 .session-trace-issue-actions {
@@ -13349,8 +13365,8 @@ pre.code {
 }
 
 .workbench-tab-surface > .session-trace-panel[open] .session-trace-results {
-  flex: 0 0 auto;
-  max-height: min(44vh, 520px);
+  flex: 1 1 220px;
+  max-height: none;
   min-height: 180px;
 }
 
@@ -15297,6 +15313,13 @@ html[data-theme="dark"] ::selection {
   }
   .session-trace-focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .session-trace-issues {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .session-trace-issues-head,
+  .session-trace-issues .session-trace-issue-groups {
+    grid-column: 1;
   }
   .session-trace-issue-list {
     max-height: 72px;
