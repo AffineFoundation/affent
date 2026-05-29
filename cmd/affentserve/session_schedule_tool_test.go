@@ -81,10 +81,11 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 		"repeat_interval_seconds":1800
 	}`, jsonStringLiteral(nextRunAt))
 	var calls atomic.Int32
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		switch calls.Add(1) {
 		case 1:
+			assertLLMRequestToolBefore(t, r, sessionScheduleToolName, "shell")
 			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"schedule_btc\",\"type\":\"function\",\"function\":{\"name\":\"session_schedule\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(createArgs))
 		case 2:
 			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Scheduled BTC price checks every 30 minutes.\"},\"finish_reason\":\"stop\"}]}\n\n")
@@ -194,6 +195,39 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 		case <-deadline:
 			t.Fatal("timeout waiting for BTC timer turn.end")
 		}
+	}
+}
+
+func assertLLMRequestToolBefore(t *testing.T, r *http.Request, earlier, later string) {
+	t.Helper()
+	var body struct {
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		t.Fatalf("read LLM request body: %v", err)
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("decode LLM request body: %v body=%s", err, string(raw))
+	}
+	earlierIdx, laterIdx := -1, -1
+	for idx, tool := range body.Tools {
+		switch tool.Function.Name {
+		case earlier:
+			earlierIdx = idx
+		case later:
+			laterIdx = idx
+		}
+	}
+	if earlierIdx < 0 {
+		t.Fatalf("LLM request tools missing %s", earlier)
+	}
+	if laterIdx >= 0 && earlierIdx > laterIdx {
+		t.Fatalf("LLM request tool order %s=%d %s=%d, want %s before %s", earlier, earlierIdx, later, laterIdx, earlier, later)
 	}
 }
 

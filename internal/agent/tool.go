@@ -152,6 +152,25 @@ func (r *Registry) Defs() []ToolDef {
 	return out
 }
 
+// ModelDefs returns the tool definitions in model-facing priority order.
+// Defs and Catalog preserve registration order for UI/API stability; model
+// calls should see durable state/control tools before broad execution tools so
+// scheduling, planning, memory, or loop maintenance requests are less likely
+// to be routed through shell or file edits first.
+func (r *Registry) ModelDefs() []ToolDef {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	names := append([]string(nil), r.order...)
+	sort.SliceStable(names, func(i, j int) bool {
+		return modelToolRank(r.tools[names[i]]) < modelToolRank(r.tools[names[j]])
+	})
+	out := make([]ToolDef, 0, len(names))
+	for _, n := range names {
+		out = append(out, r.tools[n].AsDef())
+	}
+	return out
+}
+
 func (r *Registry) Catalog() []ToolCatalogEntry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -160,6 +179,50 @@ func (r *Registry) Catalog() []ToolCatalogEntry {
 		out = append(out, r.tools[n].CatalogEntry())
 	}
 	return out
+}
+
+func modelToolRank(t *Tool) int {
+	if t == nil {
+		return 90
+	}
+	switch t.Name {
+	case PlanToolName:
+		return 0
+	case SessionScheduleToolName:
+		return 1
+	case LoopProtocolToolName:
+		return 2
+	case MemoryToolName:
+		return 3
+	case SessionSearchToolName:
+		return 4
+	case SkillToolName:
+		return 5
+	case FocusedTaskToolName, SubagentToolName:
+		return 6
+	case "file_context", SymbolContextToolName, "repo_search", "list_files", "read_file":
+		return 20
+	case "write_file", "edit_file":
+		return 30
+	case "shell":
+		return 40
+	case "web_fetch", "web_search", "browser_find", "browser_snapshot", "browser_network", "browser_network_read", "browser_navigate":
+		return 50
+	}
+	switch t.catalogGroup() {
+	case "Core":
+		return 10
+	case "Memory":
+		return 11
+	case "History":
+		return 12
+	case "Workspace":
+		return 35
+	case "Research":
+		return 50
+	default:
+		return 90
+	}
 }
 
 func (t *Tool) catalogGroup() string {

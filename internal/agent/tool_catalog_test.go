@@ -39,3 +39,43 @@ func TestRegistryCatalogGroupsByToolSource(t *testing.T) {
 		t.Fatalf("web_fetch arg policy = %+v, want nil", catalog[1].ArgPolicy)
 	}
 }
+
+func TestRegistryModelDefsPrioritizeDurableControlTools(t *testing.T) {
+	reg := NewRegistry()
+	for _, name := range []string{
+		"shell",
+		"write_file",
+		"read_file",
+		SkillToolName,
+		PlanToolName,
+		LoopProtocolToolName,
+		SessionScheduleToolName,
+		MemoryToolName,
+		SessionSearchToolName,
+		"web_fetch",
+	} {
+		reg.Add(&Tool{Name: name, Description: name, Schema: json.RawMessage(`{"type":"object"}`)})
+	}
+
+	defs := reg.ModelDefs()
+	got := make([]string, 0, len(defs))
+	for _, def := range defs {
+		got = append(got, def.Function.Name)
+	}
+	wantPrefix := []string{
+		PlanToolName,
+		SessionScheduleToolName,
+		LoopProtocolToolName,
+		MemoryToolName,
+		SessionSearchToolName,
+		SkillToolName,
+	}
+	if !reflect.DeepEqual(got[:len(wantPrefix)], wantPrefix) {
+		t.Fatalf("model tool prefix = %#v, want %#v (full order %#v)", got[:len(wantPrefix)], wantPrefix, got)
+	}
+
+	catalog := reg.Catalog()
+	if catalog[0].Name != "shell" || catalog[1].Name != "write_file" {
+		t.Fatalf("catalog order = %#v, want registration order preserved", catalog[:2])
+	}
+}

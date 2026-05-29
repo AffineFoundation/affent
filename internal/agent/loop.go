@@ -2946,7 +2946,7 @@ func (l *Loop) toolDefs(opts TurnOptions) []ToolDef {
 	if tools == nil {
 		return nil
 	}
-	return tools.Defs()
+	return tools.ModelDefs()
 }
 
 func (l *Loop) toolsForTurn(opts TurnOptions) *Registry {
