@@ -60,6 +60,13 @@ const DefaultSummaryTriggerInputTokens = DefaultSummaryTriggerBytes / 4
 // DefaultSummaryKeepLast is the OpenHands V1 keep_last value (10).
 const DefaultSummaryKeepLast = 10
 
+// DefaultSummaryPromptMaxBytes caps the compactor's own summarization request.
+// The normal request-pressure path can only help if compaction itself stays
+// inside the model window; keep this near the default conversation byte trigger
+// and select the newest middle events when the summarization prompt would grow
+// past it.
+const DefaultSummaryPromptMaxBytes = DefaultSummaryTriggerBytes
+
 const (
 	compactReasoningMaxChars  = 500
 	compactToolArgsMaxChars   = 300
@@ -120,6 +127,10 @@ type LLMSummaryCompactor struct {
 
 	// SummaryPrompt overrides the default summarization instruction.
 	SummaryPrompt string
+
+	// MaxPromptBytes caps the compactor prompt body, including rendered middle
+	// events. Zero uses DefaultSummaryPromptMaxBytes. Negative disables the cap.
+	MaxPromptBytes int
 }
 
 // defaultSummaryPrompt keeps the OpenHands V1 LLMSummarizingCondenser
@@ -367,26 +378,31 @@ func (c *LLMSummaryCompactor) summarize(ctx context.Context, prevSummary string,
 	if maxLen <= 0 {
 		maxLen = 10_000
 	}
-
-	var b strings.Builder
-	b.WriteString(prompt)
-	b.WriteString("\n\n")
-	// V1 prompt expects the previous summary inline as the first event,
-	// not in a dedicated <PREVIOUS SUMMARY> block. Match that shape.
-	if prevSummary != "" {
-		fmt.Fprintf(&b, "<EVENT>\nPrevious summary: %s\n</EVENT>\n",
-			truncateChars(prevSummary, maxLen))
+	maxPromptBytes := c.MaxPromptBytes
+	if maxPromptBytes == 0 {
+		maxPromptBytes = DefaultSummaryPromptMaxBytes
 	}
-	for _, ev := range events {
-		fmt.Fprintf(&b, "<EVENT>\n%s\n</EVENT>\n",
-			truncateChars(formatEvent(ev), maxLen))
-	}
-	b.WriteString("\nNow summarize the events using the rules above.")
 
-	// OpenHands sends the full prompt as a single user message rather
-	// than splitting system/user. Matching that shape avoids surprises
-	// from chat templates that treat system specially.
-	req := []ChatMessage{{Role: "user", Content: b.String()}}
+	attemptEvents := events
+	for attempts := 0; ; attempts++ {
+		s, err := c.summarizeOnce(ctx, prompt, prevSummary, attemptEvents, maxLen, maxPromptBytes)
+		if err == nil {
+			return s, nil
+		}
+		if !IsContextOverflow(err) {
+			return "", err
+		}
+		var ok bool
+		attemptEvents, maxLen, ok = shrinkSummaryInputsAfterOverflow(attemptEvents, maxLen)
+		if !ok || attempts >= 6 {
+			return "", err
+		}
+	}
+}
+
+func (c *LLMSummaryCompactor) summarizeOnce(ctx context.Context, prompt, prevSummary string, events []ChatMessage, maxLen, maxPromptBytes int) (string, error) {
+	body := renderSummaryPrompt(prompt, prevSummary, events, maxLen, maxPromptBytes)
+	req := []ChatMessage{{Role: "user", Content: body}}
 	stream, err := c.LLM.Chat(ctx, req, nil)
 	if err != nil {
 		return "", err
@@ -405,6 +421,98 @@ func (c *LLMSummaryCompactor) summarize(ctx context.Context, prevSummary string,
 		return "", errors.New("compactor: empty summary")
 	}
 	return s, nil
+}
+
+func renderSummaryPrompt(prompt, prevSummary string, events []ChatMessage, maxLen, maxPromptBytes int) string {
+	var b strings.Builder
+	b.WriteString(prompt)
+	b.WriteString("\n\n")
+	// V1 prompt expects the previous summary inline as the first event,
+	// not in a dedicated <PREVIOUS SUMMARY> block. Match that shape.
+	if prevSummary != "" {
+		fmt.Fprintf(&b, "<EVENT>\nPrevious summary: %s\n</EVENT>\n",
+			truncateChars(prevSummary, maxLen))
+	}
+	for _, block := range summaryEventBlocksWithinBudget(events, maxLen, summaryEventBudget(maxPromptBytes, b.Len())) {
+		b.WriteString(block)
+	}
+	b.WriteString("\nNow summarize the events using the rules above.")
+	return b.String()
+}
+
+func summaryEventBudget(maxPromptBytes, usedBytes int) int {
+	if maxPromptBytes < 0 {
+		return -1
+	}
+	if maxPromptBytes == 0 {
+		maxPromptBytes = DefaultSummaryPromptMaxBytes
+	}
+	const suffixReserve = 96
+	remaining := maxPromptBytes - usedBytes - suffixReserve
+	if remaining < 0 {
+		return 0
+	}
+	return remaining
+}
+
+func summaryEventBlocksWithinBudget(events []ChatMessage, maxEventLen, maxBytes int) []string {
+	if len(events) == 0 {
+		return nil
+	}
+	blocks := make([]string, 0, len(events))
+	remaining := maxBytes
+	for i := len(events) - 1; i >= 0; i-- {
+		eventText := truncateChars(formatEvent(events[i]), maxEventLen)
+		block := renderSummaryEventBlock(eventText)
+		if maxBytes >= 0 {
+			if remaining <= 0 {
+				break
+			}
+			if len(block) > remaining {
+				if len(blocks) == 0 {
+					eventBudget := remaining - summaryEventBlockOverhead()
+					if eventBudget <= 0 {
+						break
+					}
+					block = renderSummaryEventBlock(truncateChars(formatEvent(events[i]), min(maxEventLen, eventBudget)))
+				} else {
+					break
+				}
+			}
+			remaining -= len(block)
+		}
+		blocks = append(blocks, block)
+	}
+	for i, j := 0, len(blocks)-1; i < j; i, j = i+1, j-1 {
+		blocks[i], blocks[j] = blocks[j], blocks[i]
+	}
+	return blocks
+}
+
+func renderSummaryEventBlock(text string) string {
+	return fmt.Sprintf("<EVENT>\n%s\n</EVENT>\n", text)
+}
+
+func summaryEventBlockOverhead() int {
+	return len("<EVENT>\n\n</EVENT>\n")
+}
+
+func shrinkSummaryInputsAfterOverflow(events []ChatMessage, maxLen int) ([]ChatMessage, int, bool) {
+	if len(events) > 1 {
+		drop := len(events) / 2
+		if drop < 1 {
+			drop = 1
+		}
+		return events[drop:], maxLen, true
+	}
+	if maxLen > 1024 {
+		next := maxLen / 2
+		if next < 1024 {
+			next = 1024
+		}
+		return events, next, true
+	}
+	return events, maxLen, false
 }
 
 func ensureLoopProtocolSummaryAnchor(summary, prevSummary string, events []ChatMessage) string {

@@ -681,6 +681,81 @@ func TestLLMSummaryCompactor_Compact_Real(t *testing.T) {
 	})
 }
 
+func TestRenderSummaryPromptCapsMiddleEventsByPromptBudget(t *testing.T) {
+	events := []ChatMessage{
+		{Role: "assistant", Content: "OLD_MARKER " + strings.Repeat("old ", 200)},
+		{Role: "assistant", Content: "MID_MARKER " + strings.Repeat("mid ", 200)},
+		{Role: "assistant", Content: "NEW_MARKER " + strings.Repeat("new ", 200)},
+	}
+
+	got := renderSummaryPrompt("Track concise state.", "", events, 2048, 700)
+	if strings.Contains(got, "OLD_MARKER") || strings.Contains(got, "MID_MARKER") {
+		t.Fatalf("summary prompt should drop older middle events under budget:\n%s", got)
+	}
+	if !strings.Contains(got, "NEW_MARKER") {
+		t.Fatalf("summary prompt should retain newest middle event:\n%s", got)
+	}
+	if len(got) > 900 {
+		t.Fatalf("summary prompt len = %d, want bounded near budget", len(got))
+	}
+}
+
+func TestLLMSummaryCompactorRetriesWithSmallerInputAfterContextOverflow(t *testing.T) {
+	var requestBodies []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []struct {
+				Content string `json:"content"`
+			} `json:"messages"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if len(req.Messages) != 1 {
+			t.Fatalf("messages = %d, want 1", len(req.Messages))
+		}
+		requestBodies = append(requestBodies, req.Messages[0].Content)
+		if len(requestBodies) == 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"error":{"code":"context_length_exceeded","message":"prompt is too long"}}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"RETRY SUMMARY"},"finish_reason":"stop"}]}` + "\n\n"))
+		fl.Flush()
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	events := make([]ChatMessage, 0, 8)
+	for i := 0; i < 8; i++ {
+		events = append(events, ChatMessage{Role: "assistant", Content: fmt.Sprintf("event-%d %s", i, strings.Repeat("payload ", 200))})
+	}
+	c := &LLMSummaryCompactor{
+		LLM:            NewLLMClient(srv.URL, "", "fake"),
+		MaxPromptBytes: -1,
+	}
+	got, err := c.summarize(context.Background(), "", events)
+	if err != nil {
+		t.Fatalf("summarize: %v", err)
+	}
+	if got != "RETRY SUMMARY" {
+		t.Fatalf("summary = %q", got)
+	}
+	if len(requestBodies) != 2 {
+		t.Fatalf("requests = %d, want one retry after context overflow", len(requestBodies))
+	}
+	if len(requestBodies[1]) >= len(requestBodies[0]) {
+		t.Fatalf("retry prompt did not shrink: first=%d second=%d", len(requestBodies[0]), len(requestBodies[1]))
+	}
+	if strings.Contains(requestBodies[1], "event-0") || !strings.Contains(requestBodies[1], "event-7") {
+		t.Fatalf("retry prompt should drop oldest events and keep recent state:\n%s", requestBodies[1])
+	}
+}
+
 func TestBackUpToSafeBoundary(t *testing.T) {
 	// Sequence: assistant(tool_calls) → tool → tool → assistant → user
 	msgs := []ChatMessage{
