@@ -153,7 +153,7 @@ func TestApplyTraceEventCapturesContextInjectionMetadata(t *testing.T) {
 	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextInjected, json.RawMessage(`{"turn_id":"turn-2","source":"active_plan","title":"wrong turn","bytes":10,"estimated_tokens":3}`), "turn-1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextInjected, json.RawMessage(`{"turn_id":"turn-1","source":"account_access","title":"Account access context injected","summary":"Account hints were made available.","preview":"GITHUB_TOKEN","bytes":120,"estimated_tokens":30}`), "turn-1"); err != nil {
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextInjected, json.RawMessage(`{"turn_id":"turn-1","source":"skill","name":"reviewed_eval","title":"Active skill injected","summary":"Activated skill: reviewed_eval.","preview":"AFFENT ACTIVE SKILL: reviewed_eval","content_sha256":"abc123","bytes":120,"estimated_tokens":30}`), "turn-1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -162,11 +162,13 @@ func TestApplyTraceEventCapturesContextInjectionMetadata(t *testing.T) {
 	}
 	injection := trace.ContextInjections[0]
 	if injection.TurnID != "turn-1" ||
-		injection.Source != "account_access" ||
-		injection.Title != "Account access context injected" ||
+		injection.Source != "skill" ||
+		injection.Name != "reviewed_eval" ||
+		injection.Title != "Active skill injected" ||
+		injection.ContentSHA256 != "abc123" ||
 		injection.Bytes != 120 ||
 		injection.EstimatedTokens != 30 ||
-		injection.Preview != "GITHUB_TOKEN" {
+		injection.Preview != "AFFENT ACTIVE SKILL: reviewed_eval" {
 		t.Fatalf("ContextInjection = %+v", injection)
 	}
 }

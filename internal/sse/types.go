@@ -146,9 +146,11 @@ type RuntimeCapabilities struct {
 type ContextInjectedPayload struct {
 	TurnID          string `json:"turn_id"`
 	Source          string `json:"source"`
+	Name            string `json:"name,omitempty"`
 	Title           string `json:"title"`
 	Summary         string `json:"summary,omitempty"`
 	Preview         string `json:"preview,omitempty"`
+	ContentSHA256   string `json:"content_sha256,omitempty"`
 	Bytes           int    `json:"bytes,omitempty"`
 	EstimatedTokens int    `json:"estimated_tokens,omitempty"`
 }

@@ -65,9 +65,11 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		t.ContextInjections = append(t.ContextInjections, ContextInjection{
 			TurnID:          p.TurnID,
 			Source:          p.Source,
+			Name:            p.Name,
 			Title:           p.Title,
 			Summary:         p.Summary,
 			Preview:         p.Preview,
+			ContentSHA256:   p.ContentSHA256,
 			Bytes:           p.Bytes,
 			EstimatedTokens: p.EstimatedTokens,
 		})

@@ -1318,6 +1318,12 @@ func renderTimelineContextInjections(b *strings.Builder, trace *Trace) {
 			injection.Bytes,
 			injection.EstimatedTokens,
 		)
+		if injection.Name != "" {
+			fmt.Fprintf(b, "   name: `%s`\n", injection.Name)
+		}
+		if injection.ContentSHA256 != "" {
+			fmt.Fprintf(b, "   content_sha256: `%s`\n", injection.ContentSHA256)
+		}
 		if injection.Summary != "" {
 			fmt.Fprintf(b, "   summary: %s\n", timelineInline(injection.Summary, timelineMemoryPreviewBytes))
 		}

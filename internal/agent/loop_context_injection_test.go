@@ -57,7 +57,10 @@ func TestAppendUserMessagePublishesContextInjectedEvents(t *testing.T) {
 	if !strings.Contains(payloads[0].Preview, "GITHUB_TOKEN") || strings.Contains(payloads[0].Preview, "super-secret-token") {
 		t.Fatalf("account preview = %q", payloads[0].Preview)
 	}
-	if payloads[1].Source != "skill" || !strings.Contains(payloads[1].Summary, "demo") {
+	if payloads[1].Source != "skill" ||
+		payloads[1].Name != "demo" ||
+		!strings.Contains(payloads[1].Summary, "demo") ||
+		payloads[1].ContentSHA256 != contextInjectedContentSHA256("AFFENT ACTIVE SKILL: demo\nUse demo workflow.") {
 		t.Fatalf("skill payload = %+v", payloads[1])
 	}
 	if payloads[0].Bytes <= 0 || payloads[0].EstimatedTokens <= 0 {

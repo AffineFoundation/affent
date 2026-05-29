@@ -764,9 +764,11 @@ type ContextInjection struct {
 	Scenario        string `json:"scenario,omitempty"`
 	TurnID          string `json:"turn_id,omitempty"`
 	Source          string `json:"source"`
+	Name            string `json:"name,omitempty"`
 	Title           string `json:"title"`
 	Summary         string `json:"summary,omitempty"`
 	Preview         string `json:"preview,omitempty"`
+	ContentSHA256   string `json:"content_sha256,omitempty"`
 	Bytes           int    `json:"bytes,omitempty"`
 	EstimatedTokens int    `json:"estimated_tokens,omitempty"`
 }
@@ -1975,9 +1977,11 @@ func (t Trace) ContextInjectionStats(maxExamples int) ContextInjectionStats {
 		stats.Examples = append(stats.Examples, ContextInjection{
 			TurnID:          injection.TurnID,
 			Source:          injection.Source,
+			Name:            injection.Name,
 			Title:           compactOneLine(injection.Title, 160),
 			Summary:         compactOneLine(injection.Summary, 260),
 			Preview:         compactOneLine(injection.Preview, 360),
+			ContentSHA256:   injection.ContentSHA256,
 			Bytes:           injection.Bytes,
 			EstimatedTokens: injection.EstimatedTokens,
 		})
