@@ -1137,6 +1137,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	toolContextBudgetDecisionPublished := false
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
+	loopProtocolCalibrationPending := false
 	completionGuardInterventions := 0
 	runBudgetFinal := func(prompt string, skippedReason skippedToolResultReason) (bool, string, error) {
 		nextPrompt := prompt
@@ -1687,6 +1688,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			if l.loopProtocolStartSetupCreatedDraft(toolName, args, isErr) {
 				opts.ForceLoopCalibrationQuestion = true
 				opts.FinalNoToolsOnMaxTurns = true
+				loopProtocolCalibrationPending = true
 				if !forceNoToolsNext {
 					toolStats.ForcedNoTools++
 				}
@@ -1733,6 +1735,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 				break
 			}
+		}
+		if loopProtocolCalibrationPending && l.finishLoopProtocolCalibrationTurn(turnID, opts) {
+			finishedNaturally = true
+			break
 		}
 		if toolBudgetExhausted {
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {

@@ -484,30 +484,50 @@ func markdownSectionBody(section string) string {
 	return strings.Join(strings.Fields(strings.Join(out, " ")), " ")
 }
 
-func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string, opts TurnOptions) {
+func (l *Loop) finishLoopProtocolCalibrationTurn(turnID string, opts TurnOptions) bool {
+	question := defaultLoopProtocolCalibrationQuestion()
+	if !l.recordLoopProtocolCalibrationQuestionIfReady(turnID, question, opts) {
+		return false
+	}
+	l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
+		TurnID:       turnID,
+		Text:         question,
+		FinishReason: "stop",
+	})
+	if err := l.Conv.Append(ChatMessage{Role: "assistant", Content: question}); err != nil {
+		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append loop calibration question")
+	}
+	return true
+}
+
+func defaultLoopProtocolCalibrationQuestion() string {
+	return "Before I activate this loop, what should make it pause or stop, and what outcome should count as complete?"
+}
+
+func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string, opts TurnOptions) bool {
 	if l == nil {
-		return
+		return false
 	}
 	path := strings.TrimSpace(l.LoopProtocolPath)
 	question := strings.TrimSpace(text)
 	if path == "" || !opts.ForceLoopCalibrationQuestion {
-		return
+		return false
 	}
 	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
 	if err != nil || !found || state.Status != "draft" {
-		return
+		return false
 	}
 	if state.CalibrationQuestions > state.CalibrationAnswers {
-		return
+		return false
 	}
 	preview := loopstate.ProtocolCalibrationPreview(question)
 	if state.LastCalibrationQuestion == preview {
-		return
+		return false
 	}
 	state, event, err := loopstate.RecordProtocolCalibrationQuestion(path, question)
 	if err != nil {
 		l.Log.Warn().Err(err).Msg("record loop protocol calibration question")
-		return
+		return false
 	}
 	l.publish(sse.TypeLoopCalibrationRequest, sse.LoopProtocolCalibrationPayload{
 		LoopID:                  state.LoopID,
@@ -519,6 +539,7 @@ func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string,
 		ProtocolPath:            loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(path))),
 		EventSeq:                event.Seq,
 	})
+	return true
 }
 
 func (l *Loop) loopProtocolStartSetupCreatedDraft(toolName string, args json.RawMessage, isErr bool) bool {

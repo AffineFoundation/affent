@@ -2000,11 +2000,9 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 		case 1:
 			args := `{"action":"start_setup","goal":"Maintain multi-day subnet research with stable recovery context."}`
 			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"setup1\",\"type\":\"function\",\"function\":{\"name\":\"loop_protocol\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(args))
-		case 2:
-			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":%s},\"finish_reason\":\"stop\"}]}\n\n", jsonStringLiteral("What stop condition should pause this long-running loop?"))
 		default:
 			t.Errorf("unexpected LLM call %d", calls.Load())
-			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"unexpected\"},\"finish_reason\":\"stop\"}]}\n\n")
+			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Loop is activated and running.\"},\"finish_reason\":\"stop\"}]}\n\n")
 		}
 	}))
 	defer srv.Close()
@@ -2056,7 +2054,7 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 				}
 				if p.CalibrationQuestions == 1 &&
 					p.ProtocolPath == loopstate.ProtocolRelPath("chat-loop-setup") &&
-					strings.Contains(p.LastCalibrationQuestion, "stop condition") {
+					strings.Contains(p.LastCalibrationQuestion, "pause or stop") {
 					sawCalibrationQuestion = true
 				}
 			case sse.TypeTurnEnd:
@@ -2072,6 +2070,9 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 				}
 				if !sawCalibrationQuestion {
 					t.Fatal("turn ended without mirrored loop calibration question")
+				}
+				if got := calls.Load(); got != 1 {
+					t.Fatalf("LLM calls = %d, want 1 deterministic runtime calibration turn", got)
 				}
 				assertChatLoopSetupDraft(t, pool, s)
 				return
@@ -2098,11 +2099,11 @@ func assertChatLoopSetupDraft(t *testing.T, pool *SessionPool, s *Session) {
 	if state.Status != "draft" || state.CalibrationQuestions != 1 || state.CalibrationAnswers != 0 || state.ProtocolUpdates != 1 {
 		t.Fatalf("chat setup state = %+v", state)
 	}
-	if !strings.Contains(state.LastCalibrationQuestion, "stop condition") {
+	if !strings.Contains(state.LastCalibrationQuestion, "pause or stop") {
 		t.Fatalf("chat setup missing calibration question preview: %+v", state)
 	}
 	messages := s.conv.Snapshot()
-	if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].Content, "What stop condition should pause") {
+	if len(messages) == 0 || !strings.Contains(messages[len(messages)-1].Content, "pause or stop") {
 		t.Fatalf("assistant did not ask calibration question; messages=%+v", messages)
 	}
 }

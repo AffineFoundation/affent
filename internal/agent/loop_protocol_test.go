@@ -482,47 +482,38 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(200)
 		fl := w.(http.Flusher)
-		switch call {
-		case 1:
+		if call == 1 {
 			writeSSEData(t, w, map[string]any{
 				"choices": []any{map[string]any{
 					"delta": map[string]any{
 						"role": "assistant",
-						"tool_calls": []any{map[string]any{
-							"index": 0,
-							"id":    "lp_start",
-							"type":  "function",
-							"function": map[string]any{
-								"name":      LoopProtocolToolName,
-								"arguments": string(startSetupArgs),
+						"tool_calls": []any{
+							map[string]any{
+								"index": 0,
+								"id":    "lp_start",
+								"type":  "function",
+								"function": map[string]any{
+									"name":      LoopProtocolToolName,
+									"arguments": string(startSetupArgs),
+								},
 							},
-						}},
+							map[string]any{
+								"index": 1,
+								"id":    "lp_read_after_setup",
+								"type":  "function",
+								"function": map[string]any{
+									"name":      LoopProtocolToolName,
+									"arguments": string(readArgs),
+								},
+							},
+						},
 					},
 					"finish_reason": nil,
 				}},
 			})
 			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
-		case 2:
-			writeSSEData(t, w, map[string]any{
-				"choices": []any{map[string]any{
-					"delta": map[string]any{
-						"role": "assistant",
-						"tool_calls": []any{map[string]any{
-							"index": 0,
-							"id":    "lp_read_after_setup",
-							"type":  "function",
-							"function": map[string]any{
-								"name":      LoopProtocolToolName,
-								"arguments": string(readArgs),
-							},
-						}},
-					},
-					"finish_reason": nil,
-				}},
-			})
-			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
-		default:
-			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"What stop condition should pause this loop?\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		} else {
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Loop is activated and running.\"},\"finish_reason\":\"stop\"}]}\n\n"))
 		}
 		w.Write([]byte("data: [DONE]\n\n"))
 		fl.Flush()
@@ -554,6 +545,7 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 	sawRepairedStartSetupArgs := false
 	sawSkippedTool := false
 	sawCalibrationQuestion := false
+	sawFalseActivation := false
 	for {
 		select {
 		case ev := <-events:
@@ -590,8 +582,16 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatalf("decode loop calibration request: %v", err)
 				}
-				if p.CalibrationQuestions == 1 && strings.Contains(p.LastCalibrationQuestion, "stop condition") {
+				if p.CalibrationQuestions == 1 && strings.Contains(p.LastCalibrationQuestion, "pause or stop") {
 					sawCalibrationQuestion = true
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if strings.Contains(p.Text, "activated") || strings.Contains(p.Text, "running") {
+					sawFalseActivation = true
 				}
 			case sse.TypeTurnEnd:
 				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
@@ -607,8 +607,11 @@ func TestRunTurnStartSetupForcesCalibrationBeforeMoreTools(t *testing.T) {
 				if !sawCalibrationQuestion || state.CalibrationQuestions != 1 {
 					t.Fatalf("expected start_setup to force one calibration question, state=%+v", state)
 				}
-				if got := atomic.LoadInt32(&calls); got != 3 {
-					t.Fatalf("LLM calls = %d, want 3", got)
+				if sawFalseActivation {
+					t.Fatal("runtime accepted a false loop activation message while draft was only calibrated")
+				}
+				if got := atomic.LoadInt32(&calls); got != 1 {
+					t.Fatalf("LLM calls = %d, want 1 deterministic runtime calibration turn", got)
 				}
 				return
 			}
