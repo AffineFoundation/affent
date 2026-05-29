@@ -3517,15 +3517,17 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if modelWindowPolicy.RequiredContextCompactions != 0 ||
 		modelWindowPolicy.RequiredCompactScopeActive != 1 ||
+		modelWindowPolicy.RequiredRuntimeCompactPrefillSource != "server_observed" ||
 		modelWindowPolicy.MaxCompactScopedPressurePercent == nil ||
 		*modelWindowPolicy.MaxCompactScopedPressurePercent != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeRuntimeSurface] != 1 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompactSkipped] != 1 ||
 		!stringSliceContains(modelWindowPolicy.RequiredFinalText, "MODEL-WINDOW-POLICY-OK-3") {
-		t.Fatalf("model-window policy requirements = compactions:%d compact_scope:%d scoped_pressure:%#v trace:%#v final:%#v",
+		t.Fatalf("model-window policy requirements = compactions:%d compact_scope:%d prefill_source:%q scoped_pressure:%#v trace:%#v final:%#v",
 			modelWindowPolicy.RequiredContextCompactions,
 			modelWindowPolicy.RequiredCompactScopeActive,
+			modelWindowPolicy.RequiredRuntimeCompactPrefillSource,
 			modelWindowPolicy.MaxCompactScopedPressurePercent,
 			modelWindowPolicy.RequiredTraceEventCounts,
 			modelWindowPolicy.RequiredFinalText,
@@ -3538,6 +3540,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		"runtime_surface_compact_summary_prompt_matches_model_policy",
 		"runtime_surface_tool_schema_within_budget",
 		"context_maintenance_compact_scope_active_at_least:1",
+		"runtime_surface_compact_prefill_source:server_observed",
 		"context_compaction_scoped_pressure_at_most:0",
 	} {
 		if !stringSliceContains(modelWindowChecks, want) {
