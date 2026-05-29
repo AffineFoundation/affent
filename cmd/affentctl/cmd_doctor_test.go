@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -205,6 +207,36 @@ func TestDoctorCmdReportsOutputReservedCompactionPolicy(t *testing.T) {
 		!strings.Contains(got, "trigger_bytes=280000") ||
 		!strings.Contains(got, "trigger_input_tokens=70000") {
 		t.Fatalf("doctor output missing output-reserved compaction policy:\n%s", got)
+	}
+}
+
+func TestDoctorCmdUsesAutoModelContextWindowForCompactionPolicy(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			t.Fatalf("path = %q, want /v1/models", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"data":[{"id":"auto-model","context_window":100000}]}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	var stdout, stderr strings.Builder
+	code := doctorCmdWithRunner([]string{
+		"--workspace", t.TempDir(),
+		"--base-url", srv.URL + "/v1",
+		"--model", "auto-model",
+		"--executor", "local",
+		"--model-context-window-auto",
+		"--max-tokens", "30000",
+		"--compact-trigger-input-percent", "80",
+	}, &fakeCommandRunner{}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit = %d stderr=%s stdout=%s", code, stderr.String(), stdout.String())
+	}
+	got := stdout.String()
+	if !strings.Contains(got, "ok compaction:") ||
+		!strings.Contains(got, "trigger_bytes=280000") ||
+		!strings.Contains(got, "trigger_input_tokens=70000") {
+		t.Fatalf("doctor output did not use auto model context window for compaction policy:\n%s", got)
 	}
 }
 

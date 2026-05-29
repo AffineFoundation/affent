@@ -106,6 +106,10 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	} else {
 		add("ok", "sampling", "valid")
 	}
+	if c.modelContextWindowAuto && strings.TrimSpace(c.model) != "" {
+		llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
+		c = resolveAffentctlModelContextWindowFromProvider(c, llm, zerolog.Nop())
+	}
 	trigger, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	triggerBytes := agent.CompactTriggerBytesForModelPolicy(c.compactTriggerInputTokens, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(sampling), agent.DefaultSummaryTriggerBytes)
 	triggerInputTokens := agent.CompactTriggerInputTokensForModelPolicy(c.compactTriggerInputTokens, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(sampling), agent.DefaultSummaryTriggerInputTokens)
