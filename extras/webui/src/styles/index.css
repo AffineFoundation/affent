@@ -7450,6 +7450,11 @@ button.workbench-context-runtime-item:focus-visible {
   background: rgba(255, 251, 235, 0.7);
 }
 
+.session-memory-stat[data-tone="action"] {
+  border-color: rgba(20, 184, 166, 0.28);
+  background: rgba(240, 253, 250, 0.72);
+}
+
 .session-memory-stat span,
 .session-memory-stat small {
   min-width: 0;
@@ -14930,6 +14935,11 @@ html[data-theme="dark"] .session-memory-targets button[aria-pressed="true"] {
 html[data-theme="dark"] .session-memory-stat[data-tone="watch"] {
   border-color: rgba(251, 191, 36, 0.26);
   background: rgba(69, 48, 14, 0.34);
+}
+
+html[data-theme="dark"] .session-memory-stat[data-tone="action"] {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(20, 83, 80, 0.28);
 }
 
 html[data-theme="dark"] .session-memory-empty-state,

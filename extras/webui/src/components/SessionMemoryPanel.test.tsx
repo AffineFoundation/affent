@@ -63,6 +63,8 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Shared user + session");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("104/7975 chars");
     expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Draft only");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Review");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Clean");
     expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Searchable durable memory");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
@@ -318,6 +320,11 @@ describe("SessionMemoryPanel", () => {
       />,
     );
 
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Review");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("4");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Sensitive 1");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Duplicate 2");
+    expect(screen.getByTestId("session-memory-dashboard")).toHaveTextContent("Capacity 1");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("4 findings");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Sensitive");
     expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Duplicate");
