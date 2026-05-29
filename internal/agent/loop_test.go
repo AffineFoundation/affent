@@ -1180,6 +1180,236 @@ func TestRunTurnCompletionGuardDefersPrematureFinalAnswer(t *testing.T) {
 	}
 }
 
+func TestRunTurnCompletionGuardChainsPlanAndLoopClosure(t *testing.T) {
+	var calls int
+	planUpdated := false
+	loopClosed := false
+	planArgs, err := json.Marshal(map[string]any{
+		"action": "update",
+		"index":  1,
+		"status": "completed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closeArgs, err := json.Marshal(map[string]any{
+		"action": "close",
+		"status": "completed",
+		"reason": "tests passed and code was pushed",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = r
+		calls++
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl := w.(http.Flusher)
+		switch calls {
+		case 1:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Done and pushed.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		case 2:
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "plan_close",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      PlanToolName,
+								"arguments": string(planArgs),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+		case 3:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Plan closed; all done.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		case 4:
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "loop_close",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(closeArgs),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+		default:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Closed durable state and pushed commit b53cb8b.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv := newTestConv(t)
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        PlanToolName,
+		Description: "test plan tool",
+		Schema:      json.RawMessage(`{"type":"object"}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			_ = ctx
+			if !strings.Contains(string(args), `"status":"completed"`) {
+				t.Fatalf("plan args = %s, want completed update", args)
+			}
+			planUpdated = true
+			return `{"version":1,"steps":[{"text":"ship","status":"completed"}]}`, nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:        LoopProtocolToolName,
+		Description: "test loop protocol tool",
+		Schema:      json.RawMessage(`{"type":"object"}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			_ = ctx
+			if !strings.Contains(string(args), `"action":"close"`) || !strings.Contains(string(args), `"status":"completed"`) {
+				t.Fatalf("loop args = %s, want close completed", args)
+			}
+			loopClosed = true
+			return "closed LOOP.md status=completed event_seq=8 updates=4", nil
+		},
+	})
+	events := make(chan sse.Event, 128)
+	loop := &Loop{
+		LLM:          NewLLMClient(srv.URL, "", "fake-model"),
+		Tools:        reg,
+		Conv:         conv,
+		Events:       events,
+		Log:          zerolog.Nop(),
+		MaxTurnSteps: 6,
+		CompletionGuards: []CompletionGuard{
+			func() CompletionGuardResult {
+				if planUpdated {
+					return CompletionGuardResult{}
+				}
+				return CompletionGuardResult{
+					Blocked:        true,
+					ID:             "plan-unfinished",
+					Trigger:        "active_plan_unfinished",
+					Reason:         "plan:7/8:active",
+					RequiredAction: "update the plan before finalizing",
+					Prompt:         "The persisted plan is unfinished. Call the plan tool before finalizing.",
+				}
+			},
+			func() CompletionGuardResult {
+				if loopClosed {
+					return CompletionGuardResult{}
+				}
+				return CompletionGuardResult{
+					Blocked:        true,
+					ID:             "loop-running",
+					Trigger:        "loop_protocol_running",
+					Reason:         "active loop protocol is still running",
+					RequiredAction: "close the loop protocol before finalizing",
+					Prompt:         "The loop protocol is still running. Call loop_protocol action=close before finalizing.",
+				}
+			},
+		},
+		CompletionGuardLabels: []string{"active_plan_unfinished", "loop_protocol_running"},
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "finish and push the task"); err != nil {
+		t.Fatal(err)
+	}
+
+	decisions := map[string]int{}
+	toolCalls := map[string]int{}
+	var rejectedTexts []string
+	var messageDoneTexts []string
+	var surfaceGuards []string
+	var endReason string
+	deadline := time.After(10 * time.Second)
+	for endReason == "" {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeRuntimeSurface:
+				var p sse.RuntimeSurfacePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				surfaceGuards = append([]string(nil), p.CompletionGuards...)
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				if p.Kind == "completion_guard" {
+					decisions[p.Trigger]++
+				}
+			case sse.TypeToolRequest:
+				var p sse.ToolRequestPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				toolCalls[p.Tool]++
+			case sse.TypeMessageRejected:
+				var p sse.MessageRejectedPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				rejectedTexts = append(rejectedTexts, p.Text)
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				messageDoneTexts = append(messageDoneTexts, p.Text)
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				endReason = p.Reason
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for chained guarded turn.end")
+		}
+	}
+	if !planUpdated || !loopClosed {
+		t.Fatalf("guards did not force durable closure: plan=%v loop=%v", planUpdated, loopClosed)
+	}
+	if decisions["active_plan_unfinished"] != 1 || decisions["loop_protocol_running"] != 1 {
+		t.Fatalf("completion guard decisions = %#v, want one plan and one loop guard", decisions)
+	}
+	if toolCalls[PlanToolName] != 1 || toolCalls[LoopProtocolToolName] != 1 {
+		t.Fatalf("tool calls = %#v, want plan and loop_protocol closure calls", toolCalls)
+	}
+	if !reflect.DeepEqual(surfaceGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("runtime surface guards = %#v", surfaceGuards)
+	}
+	if !reflect.DeepEqual(rejectedTexts, []string{"Done and pushed.", "Plan closed; all done."}) {
+		t.Fatalf("rejected texts = %#v", rejectedTexts)
+	}
+	if len(messageDoneTexts) != 1 || messageDoneTexts[0] != "Closed durable state and pushed commit b53cb8b." {
+		t.Fatalf("message.done texts = %#v, want only final state-closed answer", messageDoneTexts)
+	}
+	if endReason != sse.TurnEndCompleted {
+		t.Fatalf("turn end reason = %q, want completed", endReason)
+	}
+	if calls != 5 {
+		t.Fatalf("LLM calls = %d, want 5", calls)
+	}
+}
+
 func TestEnsureSystemPrompt_EmptyConv_WithMemory(t *testing.T) {
 	conv := newTestConv(t)
 	mem := newTestStore(t)

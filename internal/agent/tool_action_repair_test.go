@@ -92,3 +92,56 @@ Long-term objective:
 		t.Fatalf("valid activation protocol should not be repaired: got=%s notes=%v", got, notes)
 	}
 }
+
+func TestRepairPlanArgsForActionInfersUpdate(t *testing.T) {
+	args := json.RawMessage(`{
+		"index": 1,
+		"status": "completed",
+		"evidence": ["commit b53cb8b pushed to origin/main"]
+	}`)
+	got, repaired, notes := repairToolArgsForAction(PlanToolName, args)
+	if !repaired {
+		t.Fatal("expected missing plan update action to be repaired")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v", err)
+	}
+	if obj["action"] != "update" || obj["status"] != "completed" {
+		t.Fatalf("required update args were not preserved: %s", got)
+	}
+	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "action=update") || !strings.Contains(joined, PlanToolName) {
+		t.Fatalf("repair notes should explain inferred update action: %v", notes)
+	}
+}
+
+func TestRepairPlanArgsForActionInfersSet(t *testing.T) {
+	args := json.RawMessage(`{
+		"steps": [
+			{"text": "inspect"},
+			{"text": "ship", "status": "pending"}
+		]
+	}`)
+	got, repaired, notes := repairToolArgsForAction(PlanToolName, args)
+	if !repaired {
+		t.Fatal("expected missing plan set action to be repaired")
+	}
+	var obj map[string]any
+	if err := json.Unmarshal(got, &obj); err != nil {
+		t.Fatalf("unmarshal repaired args: %v", err)
+	}
+	if obj["action"] != "set" {
+		t.Fatalf("action = %v, want set; args=%s", obj["action"], got)
+	}
+	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "action=set") {
+		t.Fatalf("repair notes should explain inferred set action: %v", notes)
+	}
+}
+
+func TestRepairPlanArgsForActionDoesNotInferAmbiguousAction(t *testing.T) {
+	args := json.RawMessage(`{"index": 1}`)
+	got, repaired, notes := repairToolArgsForAction(PlanToolName, args)
+	if repaired {
+		t.Fatalf("ambiguous plan args should not be repaired: got=%s notes=%v", got, notes)
+	}
+}

@@ -3593,6 +3593,94 @@ func longRunActivePlanFinalClosureGuardScenario() BatchScenario {
 	}
 }
 
+func longRunPlanLoopFinalClosureGuardScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-plan-loop-final-closure-guard",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{longRunRecoveryDomain},
+		SessionID:          "plan-loop-final-closure-guard",
+		EnableLoopProtocol: true,
+		Prompt:             "The active plan and loop objective are already complete. Reply with final marker PLAN-LOOP-CLOSE-GUARD-41 immediately and do not call tools.",
+		Files: map[string]string{
+			".affentctl/plan-loop-final-closure-guard.plan.json": `{
+  "version": 1,
+  "updated_at": "2026-05-28T00:00:00Z",
+  "steps": [
+    {
+      "text": "mark pushed implementation complete before final answer",
+      "status": "pending",
+      "evidence": ["commit b53cb8b pushed to origin/main"]
+    }
+  ]
+}
+`,
+			".affent/loops/plan-loop-final-closure-guard/LOOP.md": `# Loop Protocol: plan-loop-final-closure-guard
+
+## 0. Metadata
+
+- loop_id: plan-loop-final-closure-guard
+- owner_session: plan-loop-final-closure-guard
+- status: running
+
+## 1. North Star
+
+Demonstrate that final answers cannot bypass both unfinished plan state and a running loop protocol.
+
+## 2. Current Situation
+
+- The requested work is complete.
+- The remaining durable actions are to mark the plan completed and close this loop as completed before the final answer.
+
+## 3. Rules
+
+- Do not rewrite this protocol body.
+- Close the loop through the loop_protocol tool after the plan is marked completed.
+
+## 4. Plan/Step Pointer
+
+Current step: complete the active plan, close LOOP.md as completed, then report PLAN-LOOP-CLOSE-GUARD-41.
+
+## 5. Evidence And Recovery Index
+
+Evidence is the plan update, loop_protocol close event, and final LOOP.md status.
+`,
+			".affent/loops/plan-loop-final-closure-guard/state.json": `{"version":1,"loop_id":"plan-loop-final-closure-guard","owner_session":"plan-loop-final-closure-guard","status":"running","protocol_path":".affent/loops/plan-loop-final-closure-guard/LOOP.md"}`,
+			"README.md": "# Plan And Loop Final Closure Guard Eval\n\nThe agent must not finalize while either persisted plan or LOOP.md is unfinished.\n",
+		},
+		RequiredTools: []string{"plan", "loop_protocol"},
+		RequiredToolCounts: map[string]int{
+			"plan":          1,
+			"loop_protocol": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "plan", Arg: "action", Substring: "update"},
+			{Tool: "plan", Arg: "index", Substring: "1"},
+			{Tool: "plan", Arg: "status", Substring: "completed"},
+			{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+			{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
+		},
+		RequiredCompletionGuards: []string{
+			"active_plan_unfinished",
+			"loop_protocol_running",
+		},
+		RequiredLoopProtocolFinalStatus: "completed",
+		RequireNoPlanErrors:             true,
+		RequireFinalPlanCompleted:       true,
+		RequiredFinalText: []string{
+			"PLAN-LOOP-CLOSE-GUARD-41",
+		},
+		ProtectedFiles: []string{
+			".affent/loops/plan-loop-final-closure-guard/LOOP.md",
+			"README.md",
+		},
+		MaxParentToolCalls:           2,
+		ForbidWorkspaceAbsolutePaths: true,
+		MaxLoopTurnInputTokens:       300000,
+		MaxLoopTurnTotalTokens:       320000,
+		MaxTurns:                     8,
+	}
+}
+
 func longRunScratchProjectIterativeLoopPushScenario() BatchScenario {
 	return BatchScenario{
 		Name:               "longrun-scratch-project-iterative-loop-push",

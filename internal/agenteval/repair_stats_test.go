@@ -39,6 +39,11 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 			RepairNotes:  []string{"wrapped object arguments as query"},
 		},
 		{
+			Tool:         "plan",
+			ArgsRepaired: true,
+			RepairNotes:  []string{"inferred missing action=update for plan from structured fields"},
+		},
+		{
 			Tool:          "session_search",
 			Canonicalized: true, // defensive fallback when older traces omit notes
 		},
@@ -50,14 +55,14 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 	}}
 
 	got := tr.RepairStats()
-	if got.Calls != 5 {
-		t.Fatalf("Calls = %d, want 5", got.Calls)
+	if got.Calls != 6 {
+		t.Fatalf("Calls = %d, want 6", got.Calls)
 	}
-	if got.SucceededCalls != 4 || got.FailedCalls != 1 {
-		t.Fatalf("repair outcomes = ok:%d failed:%d, want 4/1", got.SucceededCalls, got.FailedCalls)
+	if got.SucceededCalls != 5 || got.FailedCalls != 1 {
+		t.Fatalf("repair outcomes = ok:%d failed:%d, want 5/1", got.SucceededCalls, got.FailedCalls)
 	}
-	if got.Notes != 11 {
-		t.Fatalf("Notes = %d, want 11; by_kind=%#v", got.Notes, got.ByKind)
+	if got.Notes != 12 {
+		t.Fatalf("Notes = %d, want 12; by_kind=%#v", got.Notes, got.ByKind)
 	}
 	want := map[string]int{
 		"tool_name":          2,
@@ -68,6 +73,7 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 		"unknown_field_drop": 1,
 		"malformed_json":     2,
 		"scalar_wrap":        1,
+		"action_inference":   1,
 	}
 	if !reflect.DeepEqual(got.ByKind, want) {
 		t.Fatalf("ByKind = %#v, want %#v", got.ByKind, want)

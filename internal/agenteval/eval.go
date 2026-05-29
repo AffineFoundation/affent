@@ -1123,6 +1123,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunScratchProjectLoopPushScenario(),
 		longRunLoopFinalClosureGuardScenario(),
 		longRunActivePlanFinalClosureGuardScenario(),
+		longRunPlanLoopFinalClosureGuardScenario(),
 		longRunScratchProjectIterativeLoopPushScenario(),
 		longRunIntegratedMemoryRecoveryScenario(),
 		longRunFocusedTaskRecoveryScenario(),

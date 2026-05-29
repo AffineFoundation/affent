@@ -2085,8 +2085,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 29 {
-		t.Fatalf("long-run suite size = %d, want 29", len(scenarios))
+	if len(scenarios) != 30 {
+		t.Fatalf("long-run suite size = %d, want 30", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -2563,6 +2563,47 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !activePlanGuard.ForbidWorkspaceAbsolutePaths || activePlanGuard.MaxLoopTurnInputTokens != 300000 || activePlanGuard.MaxLoopTurnTotalTokens != 320000 {
 		t.Fatalf("active plan guard path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", activePlanGuard.ForbidWorkspaceAbsolutePaths, activePlanGuard.MaxLoopTurnInputTokens, activePlanGuard.MaxLoopTurnTotalTokens)
+	}
+
+	planLoopGuard, ok := seen["longrun-plan-loop-final-closure-guard"]
+	if !ok {
+		t.Fatalf("long-run suite missing combined plan/loop final closure guard scenario")
+	}
+	if planLoopGuard.SessionID != "plan-loop-final-closure-guard" || !planLoopGuard.EnableLoopProtocol {
+		t.Fatalf("combined closure guard fields = session:%q loop:%v", planLoopGuard.SessionID, planLoopGuard.EnableLoopProtocol)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "plan", Arg: "action", Substring: "update"},
+		{Tool: "plan", Arg: "status", Substring: "completed"},
+		{Tool: "loop_protocol", Arg: "action", Substring: "close"},
+		{Tool: "loop_protocol", Arg: "status", Substring: "completed"},
+	} {
+		if !toolArgRequirementContains(planLoopGuard.RequiredToolArgContains, want) {
+			t.Fatalf("combined closure guard RequiredToolArgContains = %#v, want %#v", planLoopGuard.RequiredToolArgContains, want)
+		}
+	}
+	if planLoopGuard.RequiredLoopProtocolFinalStatus != "completed" ||
+		!planLoopGuard.RequireNoPlanErrors ||
+		!planLoopGuard.RequireFinalPlanCompleted {
+		t.Fatalf("combined closure guard closure flags = loop:%q no_plan_errors:%v final_plan:%v", planLoopGuard.RequiredLoopProtocolFinalStatus, planLoopGuard.RequireNoPlanErrors, planLoopGuard.RequireFinalPlanCompleted)
+	}
+	if !reflect.DeepEqual(planLoopGuard.RequiredCompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
+		t.Fatalf("combined closure guard RequiredCompletionGuards = %#v", planLoopGuard.RequiredCompletionGuards)
+	}
+	planLoopGuardChecks := checkNamesFor(BatchScenarioChecks(planLoopGuard))
+	for _, want := range []string{"runtime_surface_completion_guard:active_plan_unfinished", "runtime_surface_completion_guard:loop_protocol_running", "no_plan_errors", "final_plan_completed"} {
+		if !stringSliceContains(planLoopGuardChecks, want) {
+			t.Fatalf("combined closure guard checks = %#v, want %q", planLoopGuardChecks, want)
+		}
+	}
+	planLoopGuardCaps := ScenarioExpectationCapabilityNames(planLoopGuard)
+	for _, want := range []string{"plan", "loop_protocol", "trace"} {
+		if !stringSliceContains(planLoopGuardCaps, want) {
+			t.Fatalf("combined closure guard expectation capabilities = %#v, want %q", planLoopGuardCaps, want)
+		}
+	}
+	if !planLoopGuard.ForbidWorkspaceAbsolutePaths || planLoopGuard.MaxLoopTurnInputTokens != 300000 || planLoopGuard.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("combined closure guard path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", planLoopGuard.ForbidWorkspaceAbsolutePaths, planLoopGuard.MaxLoopTurnInputTokens, planLoopGuard.MaxLoopTurnTotalTokens)
 	}
 
 	iterativeProject, ok := seen["longrun-scratch-project-iterative-loop-push"]

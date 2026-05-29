@@ -28,6 +28,8 @@ func Kind(note string) string {
 		return "unknown_field_drop"
 	case strings.HasPrefix(note, "dropped action-inapplicable field "):
 		return "action_field_drop"
+	case strings.HasPrefix(note, "inferred missing action="):
+		return "action_inference"
 	default:
 		return "other"
 	}
