@@ -1777,18 +1777,23 @@ export function App() {
     latestMemoryUpdate,
   });
   useEffect(() => {
+    const normalized = normalizeWorkbenchTab(workbenchTab);
+    if (normalized !== workbenchTab) {
+      setWorkbenchTab(normalized);
+      return;
+    }
     if (!workbenchNavItems.some((item) => item.key === workbenchTab)) setWorkbenchTab("context");
   }, [workbenchNavItems, workbenchTab]);
 
   useEffect(() => {
-    if (!workbenchOpen || workbenchTab !== "loop") return;
+    if (!workbenchOpen || workbenchTab !== "automation") return;
     if (!showLoopContext || !selectedSession?.has_loop_protocol) return;
     if (selectedLoopProtocolState.state !== "idle") return;
     void handleLoadLoopProtocol();
   }, [selectedLoopProtocolState.state, selectedSession?.has_loop_protocol, showLoopContext, workbenchOpen, workbenchTab]);
 
   useEffect(() => {
-    if (!workbenchOpen || workbenchTab !== "loop") return;
+    if (!workbenchOpen || workbenchTab !== "automation") return;
     if (!showScheduleContext) return;
     if (selectedScheduleState.state !== "idle") return;
     const summary = selectedSession?.schedules;
@@ -1809,13 +1814,13 @@ export function App() {
   ]);
 
   function openWorkbench(tab: WorkbenchTab = "context") {
-    setWorkbenchTab(tab);
+    setWorkbenchTab(normalizeWorkbenchTab(tab));
     setSessionsExpandedInWorkbench(false);
     setWorkbenchOpen(true);
   }
 
   function handleSelectWorkbenchTab(tab: WorkbenchTab) {
-    setWorkbenchTab(tab);
+    setWorkbenchTab(normalizeWorkbenchTab(tab));
   }
 
   function handleShowSessions() {
@@ -1880,7 +1885,7 @@ export function App() {
             setWorkbenchTab("files");
             void handleOpenWorkspacePath(path);
           } : undefined}
-          onOpenWorkspacePanel={() => setWorkbenchTab("workspace")}
+          onOpenWorkspacePanel={() => setWorkbenchTab("files")}
           onOpenFilesPanel={() => setWorkbenchTab("files")}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
@@ -1889,14 +1894,23 @@ export function App() {
     }
     if (workbenchTab === "run") {
       return (
-        <SessionRunPanel
-          run={sessionRun}
-          defaultOpen
-          onOpenArtifact={(path) => void handleOpenArtifact(path)}
-          onRunCommand={handleRunCommandRequest}
-          runCommandBusy={runCommandBusy}
-          onUseAsDraft={handleUseAsDraft}
-        />
+        <>
+          <SessionRunPanel
+            run={sessionRun}
+            defaultOpen
+            onOpenArtifact={(path) => void handleOpenArtifact(path)}
+            onRunCommand={handleRunCommandRequest}
+            runCommandBusy={runCommandBusy}
+            onUseAsDraft={handleUseAsDraft}
+          />
+          {workbenchArtifacts.length > 0 ? (
+            <SessionArtifactsPanel
+              artifacts={workbenchArtifacts}
+              defaultOpen
+              onOpenArtifact={(path) => void handleOpenArtifact(path)}
+            />
+          ) : null}
+        </>
       );
     }
     if (workbenchTab === "artifacts") {
@@ -1910,15 +1924,29 @@ export function App() {
     }
     if (workbenchTab === "files") {
       return (
-        <SessionFilesPanel
-          files={sessionFiles}
-          workspaceBrowser={workspaceFileBrowser}
-          defaultOpen
-          onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
-          onOpenWorkspacePanel={() => setWorkbenchTab("workspace")}
-          onOpenArtifact={(path) => void handleOpenArtifact(path)}
-          onUseAsDraft={handleUseAsDraft}
-        />
+        <>
+          {selectedSessionId && (sessionWorkspace.hasData || sessionWorkspace.issue || sessionWorkspace.path) ? (
+            <SessionWorkspacePanel
+              workspace={sessionWorkspace}
+              defaultOpen={Boolean(sessionWorkspace.issue)}
+              onOpenWorkspacePath={sessionWorkspace.path ? (path) => {
+                setWorkbenchTab("files");
+                void handleOpenWorkspacePath(path);
+              } : undefined}
+              onVerifyWorkspace={handleRunCommandRequest}
+              onUseAsDraft={handleUseAsDraft}
+            />
+          ) : null}
+          <SessionFilesPanel
+            files={sessionFiles}
+            workspaceBrowser={workspaceFileBrowser}
+            defaultOpen
+            onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
+            onOpenWorkspacePanel={() => setWorkbenchTab("files")}
+            onOpenArtifact={(path) => void handleOpenArtifact(path)}
+            onUseAsDraft={handleUseAsDraft}
+          />
+        </>
       );
     }
     if (workbenchTab === "workspace") {
@@ -1977,7 +2005,7 @@ export function App() {
           <span className="connection-pill" data-state={status.state} data-testid="connection-pill" title={status.detail ?? status.label}>
             {connectionLabel}
           </span>
-          <WorkspaceStatusPill workspace={sessionWorkspace} onOpen={() => openWorkbench("workspace")} />
+          <WorkspaceStatusPill workspace={sessionWorkspace} onOpen={() => openWorkbench("files")} />
           <span className="spacer" />
           <button type="button" className="mobile-chrome-toggle" aria-label="Hide top controls" onClick={() => setMobileTopbarHidden(true)}>
             <span className="mobile-collapse-icon" aria-hidden="true">
@@ -2239,6 +2267,13 @@ function syncSessionIdToUrl(sessionId?: string) {
   } catch {
     // URL sync is convenience only; loading and sending should keep working.
   }
+}
+
+function normalizeWorkbenchTab(tab: WorkbenchTab): WorkbenchTab {
+  if (tab === "workspace") return "files";
+  if (tab === "artifacts") return "run";
+  if (tab === "loop") return "automation";
+  return tab;
 }
 
 function clamp(value: number, min: number, max: number): number {

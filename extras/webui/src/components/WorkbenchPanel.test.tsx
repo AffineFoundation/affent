@@ -5,7 +5,7 @@ import type { WorkbenchNavItem } from "../view/workbenchNav";
 import { WorkbenchEmpty, WorkbenchPanel } from "./WorkbenchPanel";
 
 const navItems: WorkbenchNavItem[] = [
-  { key: "context", label: "Context", detail: "Result ready", scope: "current" },
+  { key: "context", label: "Task", detail: "Result ready", scope: "current" },
   { key: "run", label: "Run", detail: "1 failed", scope: "current", badge: "1", tone: "error" },
   { key: "config", label: "Config", detail: "1 env configured", scope: "platform", badge: "1" },
 ];

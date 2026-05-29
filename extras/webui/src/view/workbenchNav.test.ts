@@ -12,7 +12,7 @@ const overview = {
 } as SessionOverview;
 
 describe("buildWorkbenchNavItems", () => {
-  it("keeps empty current-work sections out of the primary nav while preserving platform access", () => {
+  it("keeps every Workbench capability reachable without duplicate artifact or workspace tabs", () => {
     const items = buildWorkbenchNavItems({
       overview,
       changes: { summary: "No changed files", detail: "No changes", files: [] },
@@ -27,14 +27,20 @@ describe("buildWorkbenchNavItems", () => {
 
     expect(items.map((item) => item.key)).toEqual([
       "context",
-      "loop",
+      "changes",
+      "run",
+      "files",
+      "automation",
       "memory",
       "skills",
       "config",
       "trace",
     ]);
-    expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "Current chat" });
-    expect(items.find((item) => item.key === "loop")).toMatchObject({
+    expect(items.find((item) => item.key === "context")).toMatchObject({ label: "Task", detail: "Current task" });
+    expect(items.find((item) => item.key === "changes")).toMatchObject({ detail: "Diff review" });
+    expect(items.find((item) => item.key === "run")).toMatchObject({ detail: "Command console" });
+    expect(items.find((item) => item.key === "files")).toMatchObject({ detail: "Workspace files" });
+    expect(items.find((item) => item.key === "automation")).toMatchObject({
       label: "Automation",
       detail: "Loop and timers",
       scope: "current",
@@ -42,7 +48,10 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
     expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
       "context",
-      "loop",
+      "changes",
+      "run",
+      "files",
+      "automation",
     ]);
     expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
       "memory",
@@ -118,10 +127,10 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "0.0015M tokens" });
     expect(items.find((item) => item.key === "changes")).toMatchObject({ badge: "1" });
     expect(items.find((item) => item.key === "run")).toMatchObject({ badge: "1", tone: "error" });
-    expect(items.find((item) => item.key === "artifacts")).toMatchObject({ badge: "1", detail: "1 artifact file · 1 full output · 4 KiB" });
-    expect(items.find((item) => item.key === "workspace")).toMatchObject({ badge: "!" });
-    expect(items.find((item) => item.key === "workspace")?.tone).toBeUndefined();
-    expect(items.find((item) => item.key === "loop")).toMatchObject({
+    expect(items.find((item) => item.key === "artifacts")).toBeUndefined();
+    expect(items.find((item) => item.key === "workspace")).toBeUndefined();
+    expect(items.find((item) => item.key === "files")).toMatchObject({ badge: "!", detail: "1 read" });
+    expect(items.find((item) => item.key === "automation")).toMatchObject({
       label: "Automation",
       badge: "active",
       detail: "Loop waiting",
@@ -159,7 +168,7 @@ describe("buildWorkbenchNavItems", () => {
     });
 
     expect(items.find((item) => item.key === "trace")).toMatchObject({
-      scope: "current",
+      scope: "platform",
       badge: "12",
       detail: "5 records · schema v1",
     });
@@ -222,7 +231,7 @@ describe("buildWorkbenchNavItems", () => {
     });
   });
 
-  it("keeps Workspace reachable when current work exists but no binding was recorded", () => {
+  it("keeps Files responsible for missing workspace binding when current work exists", () => {
     const items = buildWorkbenchNavItems({
       overview,
       changes: { summary: "No changed files", detail: "No changes", files: [] },
@@ -245,16 +254,16 @@ describe("buildWorkbenchNavItems", () => {
       skillsState: { state: "idle" },
     });
 
-    expect(items.find((item) => item.key === "workspace")).toMatchObject({
-      label: "Workspace",
-      detail: "No binding evidence",
-      badge: "?",
+    expect(items.find((item) => item.key === "workspace")).toBeUndefined();
+    expect(items.find((item) => item.key === "files")).toMatchObject({
+      label: "Files",
+      detail: "Workspace files",
       scope: "current",
     });
   });
 
   it("maps attention targets to Workbench tabs", () => {
-    expect(workbenchTabFromAttention("workspace")).toBe("workspace");
-    expect(workbenchTabFromAttention("automation")).toBe("loop");
+    expect(workbenchTabFromAttention("workspace")).toBe("files");
+    expect(workbenchTabFromAttention("automation")).toBe("automation");
   });
 });

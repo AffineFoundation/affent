@@ -7,7 +7,6 @@ import type { SessionRunView } from "./sessionRun";
 import type { SessionTraceView } from "./sessionTrace";
 import type { SessionWorkspaceView } from "./sessionWorkspace";
 import type { TurnArtifact } from "./turnArtifacts";
-import { artifactKind } from "./sessionArtifacts";
 import type { WorkbenchAttention, WorkbenchAttentionTarget, WorkbenchAttentionTone } from "./workbenchAttention";
 import { workbenchContextUsageSummary, type WorkbenchContextUsageView } from "./workbenchContext";
 import {
@@ -72,78 +71,15 @@ export function buildWorkbenchNavItems({
   const currentItems: WorkbenchNavItem[] = [
     {
       key: "context",
-      label: "Context",
+      label: "Task",
       scope: "current",
-      detail: contextNavDetail(usage),
+      detail: taskNavDetail(usage),
     },
-    {
-      key: "loop",
-      label: "Automation",
-      scope: "current",
-      detail: automation?.title ?? "Loop and timers",
-      badge: automation ? "active" : undefined,
-      tone: toneForAttention(attention?.target === "automation" ? attention.tone : undefined),
-    },
+    changesNavItem(changes, attention),
+    runNavItem(run, artifacts, attention),
+    filesNavItem(files, workspaceBrowserActive, workspace, attention),
+    automationNavItem(automation, attention),
   ];
-  if (changes.files.length > 0 || attention?.target === "changes") {
-    currentItems.push({
-      key: "changes",
-      label: "Changes",
-      scope: "current",
-      detail: changes.files.length > 0 ? changes.detail : "Changed file review",
-      badge: changes.files.length > 0 ? String(changes.files.length) : undefined,
-      tone: toneForAttention(attention?.target === "changes" ? attention.tone : changes.tone),
-    });
-  }
-  if (run.commands.length > 0 || attention?.target === "run") {
-    currentItems.push({
-      key: "run",
-      label: "Run",
-      scope: "current",
-      detail: run.commands.length > 0 ? run.detail : "Command history",
-      badge: run.commands.length > 0 ? String(run.commands.length) : undefined,
-      tone: toneForAttention(attention?.target === "run" ? attention.tone : run.tone),
-    });
-  }
-  if (artifacts.length > 0) {
-    currentItems.push({
-      key: "artifacts",
-      label: "Artifacts",
-      scope: "current",
-      detail: artifactNavDetail(artifacts),
-      badge: artifactBadge(artifacts),
-    });
-  }
-  if (files.items.length > 0 || workspaceBrowserActive || workspace.hasData || attention?.target === "files") {
-    currentItems.push({
-      key: "files",
-      label: "Files",
-      scope: "current",
-      detail: files.items.length > 0 ? files.detail : workspace.hasData || workspaceBrowserActive ? "Workspace browser" : "Task file evidence",
-      badge: files.items.length > 0 ? String(files.items.length) : undefined,
-      tone: toneForAttention(attention?.target === "files" ? attention.tone : files.tone),
-    });
-  }
-  if (workspace.hasData || hasCurrentWorkEvidence({ changes, run, artifacts, files, workspaceBrowserActive }) || attention?.target === "workspace") {
-    currentItems.push({
-      key: "workspace",
-      label: "Workspace",
-      scope: "current",
-      detail: workspace.hasData ? workspace.summary : "No binding evidence",
-      badge: workspace.issue ? "!" : !workspace.hasData ? "?" : undefined,
-      tone: toneForAttention(attention?.target === "workspace" ? attention.tone : workspace.tone),
-    });
-  }
-  if (trace && trace.eventCount > 0) {
-    currentItems.push({
-      key: "trace",
-      label: "Trace",
-      scope: "current",
-      detail: traceNavDetail(trace),
-      badge: traceBadge(trace),
-      tone: undefined,
-    });
-  }
 
   return [
     ...currentItems,
@@ -171,56 +107,18 @@ export function buildWorkbenchNavItems({
       badge: configTabHasSignal ? configBadge(configState) : undefined,
       tone: configState.state === "error" ? "error" : undefined,
     },
-    ...(trace && trace.eventCount > 0
-      ? []
-      : [{
-        key: "trace" as const,
-        label: "Trace",
-        scope: "platform" as const,
-        detail: runtimeNavDetail(runtimeState),
-        badge: runtimeTabHasSignal ? runtimeBadge(runtimeState) : undefined,
-        tone: runtimeState.state === "error" ? "error" as const : undefined,
-      }]),
+    traceNavItem(trace, runtimeState, runtimeTabHasSignal),
   ];
 }
 
-function hasCurrentWorkEvidence({
-  changes,
-  run,
-  artifacts,
-  files,
-  workspaceBrowserActive,
-}: {
-  changes: SessionChangesView;
-  run: SessionRunView;
-  artifacts: readonly TurnArtifact[];
-  files: SessionFilesView;
-  workspaceBrowserActive: boolean;
-}): boolean {
-  return changes.files.length > 0
-    || run.commands.length > 0
-    || artifacts.length > 0
-    || files.items.length > 0
-    || workspaceBrowserActive;
-}
-
-function contextNavDetail(usage?: WorkbenchContextUsageView): string {
+function taskNavDetail(usage?: WorkbenchContextUsageView): string {
   const usageSummary = workbenchContextUsageSummary(usage);
   if (usageSummary) return usageSummary;
-  return "Current chat";
+  return "Current task";
 }
 
 function toneForAttention(tone: SessionOverview["tone"] | WorkbenchAttentionTone | undefined): WorkbenchNavTone | undefined {
   return tone === "error" ? "error" : undefined;
-}
-
-function artifactNavDetail(artifacts: readonly TurnArtifact[]): string {
-  const fullOutputs = artifacts.filter((artifact) => artifactKind(artifact) === "full_output").length;
-  const totalBytes = artifacts.reduce((sum, artifact) => sum + (artifact.bytes ?? 0), 0);
-  const parts = [`${artifacts.length} ${artifacts.length === 1 ? "artifact file" : "artifact files"}`];
-  if (fullOutputs > 0) parts.push(`${fullOutputs} full output`);
-  if (totalBytes > 0) parts.push(`${Math.ceil(totalBytes / 1024)} KiB`);
-  return parts.join(" · ");
 }
 
 function artifactBadge(artifacts: readonly TurnArtifact[]): string | undefined {
@@ -230,8 +128,89 @@ function artifactBadge(artifacts: readonly TurnArtifact[]): string | undefined {
 }
 
 export function workbenchTabFromAttention(target: WorkbenchAttentionTarget): WorkbenchTab {
-  if (target === "automation") return "loop";
+  if (target === "automation") return "automation";
+  if (target === "workspace") return "files";
   return target;
+}
+
+function changesNavItem(changes: SessionChangesView, attention?: WorkbenchAttention): WorkbenchNavItem {
+  return {
+    key: "changes",
+    label: "Changes",
+    scope: "current",
+    detail: changes.files.length > 0 ? changes.detail : "Diff review",
+    badge: changes.files.length > 0 ? String(changes.files.length) : undefined,
+    tone: toneForAttention(attention?.target === "changes" ? attention.tone : changes.tone),
+  };
+}
+
+function runNavItem(run: SessionRunView, artifacts: readonly TurnArtifact[], attention?: WorkbenchAttention): WorkbenchNavItem {
+  const artifactCount = artifacts.length;
+  const commandCount = run.commands.length;
+  const badge = commandCount > 0 ? String(commandCount) : artifactBadge(artifacts);
+  const detail = commandCount > 0 ? run.detail : artifactCount > 0 ? `${artifactCount} stored output${artifactCount === 1 ? "" : "s"}` : "Command console";
+  return {
+    key: "run",
+    label: "Run",
+    scope: "current",
+    detail,
+    badge,
+    tone: toneForAttention(attention?.target === "run" ? attention.tone : run.tone),
+  };
+}
+
+function filesNavItem(
+  files: SessionFilesView,
+  workspaceBrowserActive: boolean,
+  workspace: SessionWorkspaceView,
+  attention?: WorkbenchAttention,
+): WorkbenchNavItem {
+  const detail = files.items.length > 0 ? files.detail : workspace.hasData || workspaceBrowserActive ? "Workspace browser" : "Workspace files";
+  const badge = workspace.issue ? "!" : files.items.length > 0 ? String(files.items.length) : undefined;
+  return {
+    key: "files",
+    label: "Files",
+    scope: "current",
+    detail,
+    badge,
+    tone: toneForAttention(attention?.target === "workspace" ? attention.tone : attention?.target === "files" ? attention.tone : workspace.issue ? workspace.tone : files.tone),
+  };
+}
+
+function automationNavItem(automation?: { title: string }, attention?: WorkbenchAttention): WorkbenchNavItem {
+  return {
+    key: "automation",
+    label: "Automation",
+    scope: "current",
+    detail: automation?.title ?? "Loop and timers",
+    badge: automation ? "active" : undefined,
+    tone: toneForAttention(attention?.target === "automation" ? attention.tone : undefined),
+  };
+}
+
+function traceNavItem(
+  trace: SessionTraceView | undefined,
+  runtimeState: WorkbenchRuntimePanelState,
+  runtimeTabHasSignal: boolean,
+): WorkbenchNavItem {
+  if (trace && trace.eventCount > 0) {
+    return {
+      key: "trace",
+      label: "Trace",
+      scope: "platform",
+      detail: traceNavDetail(trace),
+      badge: traceBadge(trace),
+      tone: undefined,
+    };
+  }
+  return {
+    key: "trace",
+    label: "Trace",
+    scope: "platform",
+    detail: runtimeNavDetail(runtimeState),
+    badge: runtimeTabHasSignal ? runtimeBadge(runtimeState) : undefined,
+    tone: runtimeState.state === "error" ? "error" : undefined,
+  };
 }
 
 function runtimeNavDetail(state: WorkbenchRuntimePanelState): string {

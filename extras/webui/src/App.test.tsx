@@ -3508,11 +3508,12 @@ describe("App", () => {
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
     await user.click(screen.getByLabelText("Workbench"));
-    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("Artifacts");
-    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("1 artifact file · 1 full output");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).not.toHaveTextContent("Artifacts");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("Run");
+    expect(screen.getByRole("navigation", { name: "Workbench sections" })).toHaveTextContent("1 passed");
     expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
-    await selectWorkbenchTab(user, "Artifacts");
+    await selectWorkbenchTab(user, "Run");
     const artifactsPanel = await screen.findByTestId("session-artifacts-panel");
     await user.click(within(screen.getByTestId("session-artifacts-focus")).getByRole("button", { name: "Open artifact" }));
     expect(artifactsPanel).toHaveTextContent("Stored full output");
