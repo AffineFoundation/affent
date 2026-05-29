@@ -159,7 +159,7 @@ describe("sessionMemory view helpers", () => {
     expect(draft).toContain("Current memory: 1 entry");
   });
 
-  it("proposes durable candidates from session evidence without duplicating saved memory", () => {
+  it("keeps transient task file evidence out of durable memory candidates", () => {
     const candidates = buildSessionMemoryCandidates({
       memory: {
         session_id: "s1",
@@ -197,13 +197,52 @@ describe("sessionMemory view helpers", () => {
       },
     });
 
-    expect(candidates.map((candidate) => candidate.id)).toEqual(["changed-files"]);
-    expect(candidates[0]).toMatchObject({
-      target: "memory",
-      topic: "project",
-      content: "Changed files for this task: game2048.py",
-      source: "Changes",
+    expect(candidates).toEqual([]);
+  });
+
+  it("proposes durable loop goals without deriving candidates from ordinary chat text", () => {
+    const fromLoop = buildSessionMemoryCandidates({
+      memory: { session_id: "s1", has_memory: false, topics: [] },
+      session: {
+        id: "s1",
+        active: true,
+        durable: true,
+        has_conversation: true,
+        has_events: true,
+        has_artifacts: false,
+        has_memory: false,
+        has_runtime_skills: false,
+        latest_user_message: "just fixed current bug",
+        topic_user_message: "temporary chat task",
+        loop_state: { version: 1, initial_goal_preview: "Build a Python CLI 2048 game." },
+      },
     });
+    expect(fromLoop).toEqual([
+      expect.objectContaining({
+        id: "project-goal",
+        target: "memory",
+        topic: "project",
+        content: "Project goal: Build a Python CLI 2048 game.",
+        source: "Loop goal",
+      }),
+    ]);
+
+    const fromOrdinaryChat = buildSessionMemoryCandidates({
+      memory: { session_id: "s2", has_memory: false, topics: [] },
+      session: {
+        id: "s2",
+        active: true,
+        durable: true,
+        has_conversation: true,
+        has_events: true,
+        has_artifacts: false,
+        has_memory: false,
+        has_runtime_skills: false,
+        latest_user_message: "fix this failing test",
+        topic_user_message: "fix this failing test",
+      },
+    });
+    expect(fromOrdinaryChat).toEqual([]);
   });
 
   it("summarizes memory scope and capacity pressure", () => {

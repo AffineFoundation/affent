@@ -63,38 +63,8 @@ export function buildSessionMemoryCandidates(input: SessionMemoryCandidateInput)
       target: "memory",
       topic: "project",
       content: `Project goal: ${goal}`,
-      source: input.session?.has_loop_protocol || input.session?.has_loop_state ? "Loop goal" : "Chat task",
+      source: hasDurableLoopGoal(input.session) ? "Loop goal" : "Chat task",
       reason: "Useful for resuming this project without rereading the whole chat.",
-    });
-  }
-  const changedPaths = (input.changes?.files ?? [])
-    .filter((file) => file.status === "changed")
-    .map((file) => file.path)
-    .filter(Boolean)
-    .slice(0, 5);
-  if (changedPaths.length > 0) {
-    add({
-      id: "changed-files",
-      target: "memory",
-      topic: "project",
-      content: `Changed files for this task: ${changedPaths.join(", ")}`,
-      source: "Changes",
-      reason: "Helps the next turn inspect the files that carry the current implementation state.",
-    });
-  }
-  const readPaths = (input.files?.items ?? [])
-    .filter((item) => item.actions.includes("read") && item.contentPreview)
-    .map((item) => item.path)
-    .filter(Boolean)
-    .slice(0, 5);
-  if (readPaths.length > 0 && readPaths.some((path) => !changedPaths.includes(path))) {
-    add({
-      id: "read-files",
-      target: "memory",
-      topic: "project",
-      content: `Relevant files read for this task: ${readPaths.join(", ")}`,
-      source: "Files",
-      reason: "Keeps the evidence boundary visible when the session is resumed later.",
     });
   }
   return candidates.slice(0, 4);
@@ -383,14 +353,16 @@ function durableGoal(session: SessionSummary | undefined): string | undefined {
   const raw = [
     session?.loop_state?.initial_goal_preview,
     session?.loop_protocol?.state?.initial_goal_preview,
-    session?.topic_user_message,
-    session?.latest_user_message,
   ].find((value) => value?.trim())?.trim();
   if (!raw) return undefined;
   const compact = raw.replace(/\s+/g, " ");
   if (compact.length < 12) return undefined;
   if (/^(?:push|done|ok|yes|no|continue|继续|可以|好的|推了吗|push了吗)[？?。!.]*$/i.test(compact)) return undefined;
   return compactMemoryCandidate(compact, 220);
+}
+
+function hasDurableLoopGoal(session: SessionSummary | undefined): boolean {
+  return Boolean(session?.loop_state?.initial_goal_preview?.trim() || session?.loop_protocol?.state?.initial_goal_preview?.trim());
 }
 
 function compactMemoryCandidate(value: string, maxLength: number): string {
