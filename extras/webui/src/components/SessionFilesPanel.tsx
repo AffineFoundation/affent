@@ -915,7 +915,7 @@ function FileEvidenceInspector({
     item.detail ? { label: "Latest result", value: item.detail } : undefined,
     item.next ? { label: "Next check", value: item.next } : undefined,
     { label: "Turn", value: `turn ${item.turnNumber} · ${item.actionCount} ${item.actionCount === 1 ? "action" : "actions"}` },
-    item.artifactPath ? { label: "Evidence", value: item.artifactPath } : undefined,
+    item.artifactPath ? { label: "Evidence", value: "Output captured" } : undefined,
   ].filter(Boolean) as Array<{ label: string; value: string }>;
   return (
     <div className="session-file-inspector" data-testid="session-file-inspector" data-status={item.status}>
@@ -1089,7 +1089,7 @@ function fileMatchesQuery(item: SessionFileEvidence, query: string): boolean {
     item.status,
     item.detail,
     item.next,
-    item.artifactPath,
+    item.artifactPath ? "evidence output captured" : undefined,
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
 }

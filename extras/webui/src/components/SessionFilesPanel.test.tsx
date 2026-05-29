@@ -57,6 +57,8 @@ describe("SessionFilesPanel", () => {
 
     await user.click(within(tree).getByRole("button", { name: /src Listed/ }));
     expect(screen.getByTestId("session-file-inspector")).toHaveTextContent("src");
+    expect(screen.getByTestId("session-file-inspector")).toHaveTextContent("Output captured");
+    expect(screen.getByTestId("session-file-inspector")).not.toHaveTextContent("list.txt");
     await user.click(within(screen.getByTestId("session-file-inspector")).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith("src");
     await user.click(within(screen.getByTestId("session-file-inspector")).getByRole("button", { name: "Use listing" }));
@@ -327,6 +329,7 @@ const files: SessionFilesView = {
       status: "available",
       turnNumber: 1,
       actionCount: 1,
+      artifactPath: ".affent/artifacts/tool-results/list.txt",
     },
   ],
 };

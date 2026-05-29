@@ -30,7 +30,8 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Edit · changed · +2 -1 · turn 2");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Updated payment route");
-    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Evidence: edit.txt");
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Evidence output captured");
+    expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("edit.txt");
     expect(screen.getByTestId("session-change-diff")).toHaveAccessibleName("Diff preview for src/payments.ts");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent("@@ -1,3 +1,4 @@");
     expect(screen.getByTestId("session-change-diff")).toHaveTextContent(/\+\s+return enabled;/);
@@ -88,6 +89,10 @@ describe("SessionChangesPanel", () => {
     await user.type(screen.getByLabelText("Search changes"), "return enabled");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     expect(screen.getByTestId("session-changes-list")).not.toHaveTextContent("tests/payments.spec.ts");
+    await user.click(screen.getByRole("button", { name: "Clear" }));
+
+    await user.type(screen.getByLabelText("Search changes"), "evidence");
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
     await user.click(within(screen.getByLabelText("Change filters")).getByRole("button", { name: /Diff/ }));

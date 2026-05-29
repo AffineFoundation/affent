@@ -80,7 +80,7 @@ export function SessionChangesPanel({
               <small className="session-changes-evidence-state" data-state={changeEvidenceState(focusFile).state}>
                 {changeEvidenceState(focusFile).label}
               </small>
-              {focusFile.artifactPath ? <small title={focusFile.artifactPath}>Evidence: {artifactLabel(focusFile.artifactPath)}</small> : null}
+              {focusFile.artifactPath ? <small title="Open evidence to inspect the saved tool output.">Evidence output captured</small> : null}
             </div>
             <span className="session-evidence-actions">
               {onOpenWorkspacePath ? (
@@ -148,7 +148,7 @@ export function SessionChangesPanel({
                   <small className="session-changes-evidence-state" data-state={changeEvidenceState(file).state}>
                     {changeEvidenceState(file).label}
                   </small>
-                  {file.artifactPath ? <small title={file.artifactPath}>Evidence: {artifactLabel(file.artifactPath)}</small> : null}
+                  {file.artifactPath ? <small title="Open evidence to inspect the saved tool output.">Evidence output captured</small> : null}
                 </button>
                 <span className="session-evidence-actions">
                   {onOpenWorkspacePath ? (
@@ -312,7 +312,7 @@ function changeMatchesQuery(file: SessionChangedFile, query: string): boolean {
     file.operation,
     file.status,
     file.detail,
-    file.artifactPath,
+    file.artifactPath ? "evidence output captured" : undefined,
     ...(file.diffPreview?.map((line) => line.text) ?? []),
   ].filter(Boolean).join("\n").toLowerCase();
   return haystack.includes(query.toLowerCase());
@@ -349,9 +349,4 @@ function displayPath(path: string): string {
   if (path.length > 64 && parts.length >= 2) return `.../${parts.slice(-2).join("/")}`;
   if (parts.length <= 3) return path;
   return parts.slice(-3).join("/");
-}
-
-function artifactLabel(path: string): string {
-  const normalized = path.replace(/\\/g, "/");
-  return normalized.split("/").filter(Boolean).at(-1) ?? path;
 }
