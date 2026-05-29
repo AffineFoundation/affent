@@ -170,41 +170,31 @@ export function AccountSettingsPanel({
                 </div>
               </>
             ) : null}
-            <div className="account-settings-section">
-              <div className="account-settings-section-heading">
-                <strong>Private repo access</strong>
-                <span>{sshDescription}</span>
+            {ssh?.exists && !ssh.public_key ? (
+              <div className="account-settings-section">
+                <div className="account-settings-section-heading">
+                  <strong>Private repo access</strong>
+                  <span>{sshDescription}</span>
+                </div>
+                {sshStorage ? (
+                  <div className="account-ssh-storage" data-testid="account-ssh-storage">
+                    <span>Key path</span>
+                    <code title={sshStorage}>{sshPathDisplay(ssh?.public_key_path) || sshStorage}</code>
+                    {ssh?.public_key_path ? <CopyButton label="Copy path" value={ssh.public_key_path} className="ghost-action" /> : null}
+                  </div>
+                ) : null}
+                <div className="session-skills-empty error" role="alert">
+                  {ssh.public_key_error || "Public key is missing for the existing SSH private key."}
+                </div>
+                <div className="session-loop-actions">
+                  {onRefresh ? (
+                    <button type="button" className="ghost-action" disabled={!!busy} onClick={() => void onRefresh()}>
+                      Refresh
+                    </button>
+                  ) : null}
+                </div>
               </div>
-              {sshStorage ? (
-                <div className="account-ssh-storage" data-testid="account-ssh-storage">
-                  <span>Key path</span>
-                  <code title={sshStorage}>{sshPathDisplay(ssh?.public_key_path) || sshStorage}</code>
-                  {ssh?.public_key_path ? <CopyButton label="Copy path" value={ssh.public_key_path} className="ghost-action" /> : null}
-                </div>
-              ) : null}
-              {ssh?.public_key ? (
-                <div className="account-public-key-row">
-                  <span>Public key</span>
-                  <code className="account-public-key" data-testid="account-public-key" title={ssh.public_key}>{ssh.public_key}</code>
-                  <CopyButton label="Copy full key" value={ssh.public_key} className="ghost-action" />
-                </div>
-              ) : ssh?.exists ? (
-                <>
-                  <div className="session-skills-empty error" role="alert">
-                    {ssh.public_key_error || "Public key is missing for the existing SSH private key."}
-                  </div>
-                  <div className="session-loop-actions">
-                    {onRefresh ? (
-                      <button type="button" className="ghost-action" disabled={!!busy} onClick={() => void onRefresh()}>
-                        Refresh
-                      </button>
-                    ) : null}
-                  </div>
-                </>
-              ) : (
-                <div className="session-skills-empty">No SSH key is configured.</div>
-              )}
-            </div>
+            ) : null}
             <details className="account-env-write" open={!settings || settings.env.length === 0}>
               <summary>
                 <strong>Environment variables</strong>
@@ -450,6 +440,13 @@ function AccountConfigFocus({
         <div className="account-config-focus-actions">
           <CopyButton label="Copy public key" value={settings.ssh.public_key} className="secondary-action" />
           {settings.ssh.public_key_path ? <CopyButton label="Copy key path" value={settings.ssh.public_key_path} className="ghost-action" /> : null}
+        </div>
+      ) : null}
+      {settings.ssh.public_key ? (
+        <div className="account-public-key-row account-public-key-row-compact">
+          <span>Public key</span>
+          <code className="account-public-key" data-testid="account-public-key" title={settings.ssh.public_key}>{settings.ssh.public_key}</code>
+          <CopyButton label="Copy full key" value={settings.ssh.public_key} className="ghost-action" />
         </div>
       ) : null}
       {settings.ssh.public_key ? (

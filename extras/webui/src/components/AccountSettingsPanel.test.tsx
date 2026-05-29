@@ -41,8 +41,7 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-config-dashboard")).toHaveTextContent("Clean");
     expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy public key" })).toBeInTheDocument();
     expect(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" })).toBeInTheDocument();
-    expect(panel).toHaveTextContent("Existing keys are never overwritten");
-    expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
+    expect(screen.queryByText("Private repo access")).toBeNull();
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
     expect(screen.getByTestId("account-config-verify")).toHaveTextContent("SSH host reachability");
     expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Repository permission");
@@ -54,8 +53,6 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("GITHUB_TOKEN");
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("configured");
 
-    await user.click(screen.getByRole("button", { name: "Copy path" }));
-    expect(writeText).toHaveBeenCalledWith("/workspace/.home/.ssh/id_ed25519.pub");
     await user.click(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy public key" }));
     expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
     await user.click(within(screen.getByTestId("account-config-focus")).getByRole("button", { name: "Copy key path" }));
@@ -150,7 +147,7 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No env vars or SSH key configured");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("SSH key missing");
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent("Generate an SSH key only when this runtime needs private repo access");
-    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate a key when this runtime needs private Git access");
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate an SSH key only when this runtime needs private repo access.");
     await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
 
     expect(onEnsureSSHKey).toHaveBeenCalled();
