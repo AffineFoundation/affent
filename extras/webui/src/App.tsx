@@ -2448,10 +2448,10 @@ function automationWorkbenchQueue(
   const items: SessionAutomationQueueItem[] = [];
   const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
   const path = automationCompact(session?.loop_protocol?.path ?? loopState?.protocol_path);
-  const goal = automationCompact(loopState?.initial_goal_preview ?? session?.loop_protocol?.state?.initial_goal_preview);
   const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
   const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
   const lastQuestion = automationCompact(loopState?.last_calibration_question_preview ?? session?.loop_protocol?.state?.last_calibration_question_preview);
+  const hasLoopSignal = Boolean(status || path || session?.has_loop_protocol || session?.has_loop_state);
 
   if (loopPanelState.state === "loading") {
     items.push({
@@ -2490,14 +2490,8 @@ function automationWorkbenchQueue(
       meta: path,
     });
   } else if (status === "running") {
-    items.push({
-      id: "loop-running",
-      label: "Loop",
-      title: "LOOP.md is running",
-      detail: goal ?? automationCompact(loopState?.last_decision ?? loopState?.last_event_summary) ?? "Future loop turns receive this protocol.",
-      tone: "ok",
-      meta: path,
-    });
+    // A running loop is already represented by the focus, metrics, and Loop panel.
+    // Keep the queue for blocked, pending, failed, or scheduled work.
   } else if (status === "disabled") {
     items.push({
       id: "loop-disabled",
@@ -2548,7 +2542,7 @@ function automationWorkbenchQueue(
     if (summaryItem) items.push(summaryItem);
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !hasLoopSignal) {
     items.push({
       id: "automation-off",
       label: "Manual",

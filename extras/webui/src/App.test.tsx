@@ -1256,6 +1256,7 @@ describe("App", () => {
     expect(panel).toHaveTextContent("Keep LOOP.md compact");
     expect(panel).toHaveTextContent("watch market evidence for several days");
     expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");
+    expect(screen.queryByTestId("session-automation-queue")).toBeNull();
     const dashboard = screen.getByTestId("session-automation-dashboard");
     expect(dashboard).toHaveTextContent("Protocol");
     expect(dashboard).toHaveTextContent("LOOP.md");
