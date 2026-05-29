@@ -25,6 +25,7 @@ export interface SessionArtifactFact {
 export interface SessionArtifactSourceGroup {
   key: string;
   label: string;
+  fullLabel: string;
   count: number;
   kindLabel: string;
   turns: string;
@@ -212,9 +213,11 @@ export function artifactSourceGroups(artifacts: readonly TurnArtifact[]): Sessio
       const latestArtifact = [...group.artifacts].sort((a, b) => (b.turnNumber ?? 0) - (a.turnNumber ?? 0) || (b.callIndex ?? 0) - (a.callIndex ?? 0))[0];
       const kinds = new Set(group.artifacts.map(artifactKind));
       const turns = turnRangeLabel(group.artifacts);
+      const fullLabel = artifactSourceLabel(group.tool, group.source);
       return {
         key,
-        label: artifactSourceLabel(group.tool, group.source),
+        label: compactSourceLabel(fullLabel),
+        fullLabel,
         count: group.artifacts.length,
         kindLabel: kinds.size === 1
           ? artifactKindLabel(group.artifacts[0])
@@ -316,6 +319,12 @@ function artifactSourceLabel(tool: string | undefined, source: string): string {
   if (!tool) return source;
   if (source === tool) return tool;
   return `${tool}: ${source}`;
+}
+
+function compactSourceLabel(label: string): string {
+  const compact = compactWhitespace(label);
+  if (compact.length <= 72) return compact;
+  return `${compact.slice(0, 69).trimEnd()}...`;
 }
 
 function latestTurnNumber(artifact: TurnArtifact): number {

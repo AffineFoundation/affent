@@ -178,4 +178,23 @@ describe("sessionArtifacts", () => {
       ["write_file", 1, "Deliverable"],
     ]);
   });
+
+  it("keeps long source commands scannable while preserving the full label", () => {
+    const longCommand = "python3 -c \"import sys; sys.path.insert(0, '.'); from game2048 import Game; print('run the complete smoke test suite')\"";
+    const [group] = artifactSourceGroups([{
+      path: ".affent/artifacts/tool-results/000001-shell.txt",
+      name: "000001-shell.txt",
+      source: longCommand,
+      tool: "shell",
+      turnNumber: 2,
+      callIndex: 1,
+      truncated: true,
+    }]);
+
+    expect(group.label.length).toBeLessThanOrEqual(72);
+    expect(group.label).toMatch(/^shell: python3 -c/);
+    expect(group.label).toMatch(/\.\.\.$/);
+    expect(group.label).not.toContain("complete smoke test suite");
+    expect(group.fullLabel).toBe(`shell: ${longCommand}`);
+  });
 });

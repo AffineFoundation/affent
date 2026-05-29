@@ -146,7 +146,7 @@ export function SessionArtifactsPanel({
                       setSourceKey((current) => current === group.key ? undefined : group.key);
                     }}
                   >
-                    <strong title={group.label}>{group.label}</strong>
+                    <strong title={group.fullLabel}>{group.label}</strong>
                     <small>{group.count} {group.count === 1 ? "file" : "files"} · {group.kindLabel} · {group.turns}{group.sizeLabel ? ` · ${group.sizeLabel}` : ""}</small>
                   </button>
                 ))}
