@@ -119,6 +119,39 @@ func TestDeriveTaskStateDefaultsBlankRequestSourceToUser(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateClassifiesGitHandoffEvidence(t *testing.T) {
+	trace := Trace{
+		Prompt:        "Fix the project, commit, and push.",
+		TurnEndReason: "completed",
+		Tools: []ToolCall{
+			{
+				TurnID:   "turn-1",
+				CallID:   "commit-1",
+				Tool:     "shell",
+				Args:     map[string]any{"command": "git -C app commit -m fix"},
+				ExitCode: 0,
+			},
+			{
+				TurnID:   "turn-1",
+				CallID:   "push-1",
+				Tool:     "shell",
+				Args:     map[string]any{"command": "git push origin main"},
+				ExitCode: 0,
+			},
+		},
+	}
+
+	got := DeriveTaskState(trace)
+	for _, want := range []string{"shell", "git_commit", "git_push"} {
+		if !taskStateHasEvidence(got, want) {
+			t.Fatalf("evidence = %+v, want %q", got.Evidence, want)
+		}
+		if !taskStateHasSource(got, want) {
+			t.Fatalf("sources = %+v, want %q", got.Sources, want)
+		}
+	}
+}
+
 func TestCloneTaskStateSnapshotPtrDeepCopiesSlices(t *testing.T) {
 	original := TaskStateSnapshot{
 		Objective:    "ship task",

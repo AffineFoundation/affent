@@ -88,12 +88,23 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 			continue
 		}
 		if tool.Tool == "shell" && tool.ExitCode == 0 {
+			summary := compactTaskStateSummary(taskStateToolSummary(tool))
 			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
 				Source:  "shell",
-				Summary: compactTaskStateSummary(taskStateToolSummary(tool)),
+				Summary: summary,
 				TurnID:  tool.TurnID,
 				CallID:  tool.CallID,
 			})
+			task.Sources = appendUniqueTaskString(task.Sources, "shell", taskStateMaxItems)
+			if source := taskStateShellEvidenceSource(taskStateToolSummary(tool)); source != "" {
+				task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+					Source:  source,
+					Summary: summary,
+					TurnID:  tool.TurnID,
+					CallID:  tool.CallID,
+				})
+				task.Sources = appendUniqueTaskString(task.Sources, source, taskStateMaxItems)
+			}
 		}
 	}
 	task.NextStep = traceTaskNextStep(trace, task)
@@ -239,6 +250,43 @@ func taskStateToolSummary(tool ToolCall) string {
 			if value := stringArg(tool.Args, key); value != "" {
 				return key + ": " + value
 			}
+		}
+	}
+	return ""
+}
+
+func taskStateShellEvidenceSource(command string) string {
+	switch taskStateGitSubcommand(command) {
+	case "commit":
+		return "git_commit"
+	case "push":
+		return "git_push"
+	default:
+		return ""
+	}
+}
+
+func taskStateGitSubcommand(command string) string {
+	fields := strings.Fields(command)
+	if len(fields) == 0 || strings.Trim(fields[0], " \t\r\n()") != "git" {
+		return ""
+	}
+	for i := 1; i < len(fields); i++ {
+		token := strings.Trim(fields[i], " \t\r\n;()")
+		switch {
+		case token == "-C" || token == "-c" || token == "--git-dir" || token == "--work-tree" || token == "--namespace":
+			i++
+			continue
+		case strings.HasPrefix(token, "--git-dir=") || strings.HasPrefix(token, "--work-tree=") || strings.HasPrefix(token, "--namespace="):
+			continue
+		case strings.HasPrefix(token, "-C") && token != "-C":
+			continue
+		case strings.HasPrefix(token, "-c") && token != "-c":
+			continue
+		case strings.HasPrefix(token, "-"):
+			continue
+		default:
+			return token
 		}
 	}
 	return ""
