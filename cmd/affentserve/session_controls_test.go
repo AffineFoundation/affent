@@ -2,12 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
@@ -45,6 +47,98 @@ func TestHandleSessionMessage_ReopensDurableSession(t *testing.T) {
 	if activeSessionByID(pool, "message-durable") == nil {
 		t.Fatal("POST messages should reopen durable session")
 	}
+}
+
+func TestHandleSessionMessageInjectsUnresolvedTaskStateIntoLLMRequest(t *testing.T) {
+	requests := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read LLM request: %v", err)
+		}
+		requests <- string(raw)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"continuing from task state\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	createDurableSessionDir(t, pool, "task-state-resume")
+	dir := pool.sessionDirPath("task-state-resume")
+	body := sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID: "t1",
+		Text:   "Append the latest BTC price.",
+	}) +
+		sessionEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
+			CallID: "read-tracker",
+			Tool:   "read_file",
+			Args:   map[string]any{"path": "btc_price_tracker.md"},
+		}) +
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:        "t1",
+			CallID:        "read-tracker",
+			ExitCode:      1,
+			FailureKind:   "not_found",
+			ResultSummary: "Error: btc_price_tracker.md not found",
+			Result:        "Error: btc_price_tracker.md not found\nFailure: kind=not_found\nNext: call list_files on . or the workspace root to find the correct path, then retry read_file",
+		}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+		})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/task-state-resume/messages", strings.NewReader(`{"content":"continue the tracker"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+
+	var rawRequest string
+	select {
+	case rawRequest = <-requests:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for LLM request")
+	}
+	var req struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal([]byte(rawRequest), &req); err != nil {
+		t.Fatalf("decode LLM request: %v\n%s", err, rawRequest)
+	}
+	taskStateIndex, userIndex := -1, -1
+	for i, msg := range req.Messages {
+		if strings.Contains(msg.Content, "AFFENT TASK STATE:") {
+			taskStateIndex = i
+			for _, want := range []string{
+				"status=completed",
+				"verification=failed",
+				"next_step: call list_files on . or the workspace root to find the correct path, then retry read_file",
+				"failed_action: tool=read_file",
+			} {
+				if !strings.Contains(msg.Content, want) {
+					t.Fatalf("task state context missing %q:\n%s", want, msg.Content)
+				}
+			}
+		}
+		if msg.Role == "user" && msg.Content == "continue the tracker" {
+			userIndex = i
+		}
+	}
+	if taskStateIndex < 0 || userIndex < 0 || taskStateIndex > userIndex {
+		t.Fatalf("messages should include task state context before user message: task=%d user=%d messages=%+v", taskStateIndex, userIndex, req.Messages)
+	}
+	waitForFileSubstring(t, filepath.Join(dir, "events.jsonl"), `"source":"task_state"`)
 }
 
 func TestHandleSessionMessage_EditTurnTruncatesHistoryAndConversation(t *testing.T) {
