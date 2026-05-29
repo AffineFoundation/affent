@@ -434,6 +434,7 @@ export interface SessionCapabilities {
   builtins: boolean;
   skill_install: boolean;
   plan: boolean;
+  session_schedule?: boolean;
   memory: boolean;
   session_search: boolean;
   symbol_context: boolean;

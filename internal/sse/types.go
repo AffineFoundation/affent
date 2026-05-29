@@ -121,18 +121,19 @@ type RuntimeToolCallCap struct {
 }
 
 type RuntimeCapabilities struct {
-	Builtins       bool     `json:"builtins,omitempty"`
-	WorkspaceTools []string `json:"workspace_tools,omitempty"`
-	Memory         bool     `json:"memory,omitempty"`
-	Plan           bool     `json:"plan,omitempty"`
-	SessionSearch  bool     `json:"session_search,omitempty"`
-	WebFetch       bool     `json:"web_fetch,omitempty"`
-	WebSearch      bool     `json:"web_search,omitempty"`
-	Browser        bool     `json:"browser,omitempty"`
-	Subagent       bool     `json:"subagent,omitempty"`
-	FocusedTasks   bool     `json:"focused_tasks,omitempty"`
-	Skill          bool     `json:"skill,omitempty"`
-	MCP            bool     `json:"mcp,omitempty"`
+	Builtins        bool     `json:"builtins,omitempty"`
+	WorkspaceTools  []string `json:"workspace_tools,omitempty"`
+	Memory          bool     `json:"memory,omitempty"`
+	Plan            bool     `json:"plan,omitempty"`
+	SessionSchedule bool     `json:"session_schedule,omitempty"`
+	SessionSearch   bool     `json:"session_search,omitempty"`
+	WebFetch        bool     `json:"web_fetch,omitempty"`
+	WebSearch       bool     `json:"web_search,omitempty"`
+	Browser         bool     `json:"browser,omitempty"`
+	Subagent        bool     `json:"subagent,omitempty"`
+	FocusedTasks    bool     `json:"focused_tasks,omitempty"`
+	Skill           bool     `json:"skill,omitempty"`
+	MCP             bool     `json:"mcp,omitempty"`
 }
 
 // ContextInjectedPayload records a bounded, redacted summary of hidden system

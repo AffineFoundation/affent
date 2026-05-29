@@ -2810,18 +2810,19 @@ func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
 	}
 	workspaceTools := runtimeWorkspaceToolsForRegistry(reg)
 	return sse.RuntimeCapabilities{
-		Builtins:       runtimeHasCoreWorkspaceTools(workspaceTools),
-		WorkspaceTools: workspaceTools,
-		Memory:         hasRegisteredTool(reg, MemoryToolName),
-		Plan:           hasRegisteredTool(reg, PlanToolName),
-		SessionSearch:  hasRegisteredTool(reg, SessionSearchToolName),
-		WebFetch:       hasRegisteredTool(reg, "web_fetch"),
-		WebSearch:      hasRegisteredTool(reg, "web_search"),
-		Browser:        hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
-		Subagent:       hasRegisteredTool(reg, SubagentToolName),
-		FocusedTasks:   hasRegisteredTool(reg, FocusedTaskToolName),
-		Skill:          hasRegisteredTool(reg, SkillToolName),
-		MCP:            registryHasMCPTools(reg),
+		Builtins:        runtimeHasCoreWorkspaceTools(workspaceTools),
+		WorkspaceTools:  workspaceTools,
+		Memory:          hasRegisteredTool(reg, MemoryToolName),
+		Plan:            hasRegisteredTool(reg, PlanToolName),
+		SessionSchedule: hasRegisteredTool(reg, SessionScheduleToolName),
+		SessionSearch:   hasRegisteredTool(reg, SessionSearchToolName),
+		WebFetch:        hasRegisteredTool(reg, "web_fetch"),
+		WebSearch:       hasRegisteredTool(reg, "web_search"),
+		Browser:         hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
+		Subagent:        hasRegisteredTool(reg, SubagentToolName),
+		FocusedTasks:    hasRegisteredTool(reg, FocusedTaskToolName),
+		Skill:           hasRegisteredTool(reg, SkillToolName),
+		MCP:             registryHasMCPTools(reg),
 	}
 }
 

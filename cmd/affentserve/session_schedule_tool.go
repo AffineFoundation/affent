@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	sessionScheduleToolName      = "session_schedule"
+	sessionScheduleToolName      = agent.SessionScheduleToolName
 	maxSessionScheduleActionSize = 16
 )
 

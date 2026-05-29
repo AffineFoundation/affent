@@ -59,6 +59,7 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 		WorkspaceTools:   []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", agent.SymbolContextToolName, "repo_search"},
 		SkillInstall:     true,
 		Plan:             true,
+		SessionSchedule:  true,
 		Memory:           true,
 		SessionSearch:    true,
 		SymbolContext:    true,
@@ -3645,7 +3646,7 @@ func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 	if caps.Builtins || caps.SkillInstall || caps.Plan || caps.RepoSearch {
 		t.Fatalf("tool-light session should not report builtin-only tools: %+v", caps)
 	}
-	if !caps.Memory || !caps.SessionSearch || !caps.Subagent || !caps.FocusedTasks {
+	if !caps.Memory || !caps.SessionSearch || !caps.SessionSchedule || !caps.Subagent || !caps.FocusedTasks {
 		t.Fatalf("tool-light session should report actually registered non-builtin tools: %+v", caps)
 	}
 }

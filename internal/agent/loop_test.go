@@ -1724,6 +1724,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	reg.Add(&Tool{Name: "web_fetch", CatalogGroup: "Web"})
 	reg.Add(&Tool{Name: "web_search", CatalogGroup: "Web"})
 	reg.Add(&Tool{Name: MemoryToolName, CatalogGroup: "Memory"})
+	reg.Add(&Tool{Name: SessionScheduleToolName, CatalogGroup: "Core"})
 	loop := &Loop{
 		Tools:                        reg,
 		Events:                       events,
@@ -1748,10 +1749,10 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	if err := json.Unmarshal(ev.Data, &payload); err != nil {
 		t.Fatalf("decode runtime surface: %v", err)
 	}
-	if payload.TurnID != "turn_surface" || payload.ToolCount != 4 || len(payload.Tools) != 4 {
+	if payload.TurnID != "turn_surface" || payload.ToolCount != 5 || len(payload.Tools) != 5 {
 		t.Fatalf("payload identity = %+v", payload)
 	}
-	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory {
+	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory || !payload.Capabilities.SessionSchedule {
 		t.Fatalf("capabilities missing expected tools: %+v", payload.Capabilities)
 	}
 	if payload.Capabilities.Builtins {

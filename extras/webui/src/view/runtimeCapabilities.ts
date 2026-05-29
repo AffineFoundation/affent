@@ -36,6 +36,8 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
   ];
   const skills = skillsChip(caps);
   if (skills) chips.push(skills);
+  const schedule = scheduleChip(caps);
+  if (schedule) chips.push(schedule);
   chips.push(workChip(caps));
   const discovery = discoveryChip(caps);
   if (discovery) chips.push(discovery);
@@ -117,6 +119,12 @@ function workChip(caps: SessionCapabilities): RuntimeCapabilityChip {
 function skillsChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefined {
   return caps.skill_install
     ? { group: "Skills", label: "Skill install", detail: "Can install and activate runtime skills without restarting.", tone: "ready" }
+    : undefined;
+}
+
+function scheduleChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefined {
+  return caps.session_schedule
+    ? { group: "Automation", label: "Session schedules", detail: "Can create future and recurring turns without requiring LOOP.md.", tone: "ready" }
     : undefined;
 }
 

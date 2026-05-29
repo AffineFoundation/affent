@@ -484,6 +484,7 @@ function runtimeSurfaceBadges(event: NormalizedEvent): string[] {
   return compact([
     readBoolean(caps, "web_search") ? "web search" : readBoolean(caps, "web_fetch") ? "web fetch" : undefined,
     readBoolean(caps, "browser") ? "browser" : undefined,
+    readBoolean(caps, "session_schedule") ? "schedules" : undefined,
     readBoolean(caps, "memory") ? "memory" : undefined,
     readBoolean(caps, "subagent") ? "subagent" : undefined,
     readBoolean(caps, "focused_tasks") ? "focused tasks" : undefined,

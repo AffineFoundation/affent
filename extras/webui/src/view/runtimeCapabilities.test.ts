@@ -73,6 +73,31 @@ describe("buildRuntimeCapabilityView", () => {
     expect(view?.chips.some((chip) => chip.group === "Skills")).toBe(false);
   });
 
+  it("surfaces session scheduling as automation instead of a loop requirement", () => {
+    const view = buildRuntimeCapabilityView({
+      eval_mode: false,
+      builtins: true,
+      skill_install: false,
+      plan: false,
+      session_schedule: true,
+      memory: false,
+      session_search: false,
+      symbol_context: false,
+      repo_search: false,
+      browser: false,
+      browser_screenshot: false,
+      web: false,
+      web_search: false,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    });
+
+    expect(view?.chips).toEqual(expect.arrayContaining([
+      { group: "Automation", label: "Session schedules", detail: "Can create future and recurring turns without requiring LOOP.md.", tone: "ready" },
+    ]));
+  });
+
   it("warns before a live research task when external tools are off", () => {
     const view = buildRuntimeCapabilityView({
       eval_mode: false,

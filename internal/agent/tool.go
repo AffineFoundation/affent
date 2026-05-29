@@ -11,6 +11,11 @@ import (
 	"sync"
 )
 
+// SessionScheduleToolName is the optional serve-runtime tool for future or
+// recurring scheduled session turns. The implementation lives in affentserve,
+// but the name is shared so traces and capability summaries do not drift.
+const SessionScheduleToolName = "session_schedule"
+
 // Tool is the in-process handler the loop dispatches to when the model
 // emits a tool_call. The schema is JSON Schema served verbatim to the
 // model alongside the tool name and description.

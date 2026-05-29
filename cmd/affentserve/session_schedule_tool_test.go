@@ -142,6 +142,9 @@ func TestSessionChatRecurringTimerUsesScheduleToolWithoutLoopProtocol(t *testing
 						sawScheduleInSurface = true
 					}
 				}
+				if !p.Capabilities.SessionSchedule {
+					t.Fatalf("runtime surface capabilities = %+v, want session_schedule", p.Capabilities)
+				}
 			case sse.TypeToolRequest:
 				var p sse.ToolRequestPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
