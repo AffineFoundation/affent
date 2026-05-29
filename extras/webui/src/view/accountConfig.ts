@@ -1,5 +1,4 @@
-import type { AccountEnvSummary, AccountSettingsResponse } from "../api/settings";
-import type { RunCommandExecutionRequest } from "./sessionRun";
+import type { AccountEnvSummary, AccountGitCheckRequest, AccountSettingsResponse } from "../api/settings";
 
 export type AccountConfigReview = {
   tone: "ready" | "attention" | "missing";
@@ -79,28 +78,19 @@ export function accountConfigEvidenceText(settings: AccountSettingsResponse): st
   ].filter((line): line is string => !!line).join("\n");
 }
 
-export function accountGitAccessVerifyRequest(host: string): RunCommandExecutionRequest {
+export function accountGitAccessVerifyRequest(host: string): AccountGitCheckRequest {
   const normalizedHost = normalizeGitHost(host);
-  const quotedHost = shellSingleQuote(normalizedHost);
   return {
-    command: [
-      `host=${quotedHost}`,
-      `out="$(ssh -T -o BatchMode=yes -o ConnectTimeout=12 -o StrictHostKeyChecking=accept-new git@$host 2>&1)"`,
-      "code=$?",
-      `printf '%s\\n' "$out"`,
-      `case "$out" in *"successfully authenticated"*|*"Welcome to GitLab"*|*"authenticated via ssh key"*) exit 0 ;; *) exit "$code" ;; esac`,
-    ].join("; "),
+    kind: "host",
+    target: normalizedHost,
   };
 }
 
-export function accountGitRemoteVerifyRequest(remote: string): RunCommandExecutionRequest {
-  const normalizedRemote = remote.trim() || "git@github.com:owner/repo.git";
-  const quotedRemote = shellSingleQuote(normalizedRemote);
+export function accountGitRemoteVerifyRequest(remote: string): AccountGitCheckRequest {
+  const normalizedRemote = remote.trim();
   return {
-    command: [
-      `remote=${quotedRemote}`,
-      `git ls-remote --exit-code "$remote" HEAD`,
-    ].join("; "),
+    kind: "remote",
+    target: normalizedRemote,
   };
 }
 
@@ -238,8 +228,4 @@ function normalizeGitHost(value: string): string {
   const trimmed = value.trim().replace(/^ssh:\/\//i, "").replace(/^git@/i, "").replace(/[:/].*$/, "");
   const safe = trimmed.toLowerCase().replace(/[^a-z0-9.-]/g, "");
   return safe || "github.com";
-}
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
 }

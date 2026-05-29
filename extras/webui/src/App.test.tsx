@@ -2192,7 +2192,7 @@ describe("App", () => {
     expect(requestedUrls()).toContain("/v1/skills");
   });
 
-  it("routes Config SSH verification results to the Run evidence surface", async () => {
+  it("keeps Config SSH verification inline without creating a chat turn", async () => {
     const user = userEvent.setup();
     let commandRan = false;
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -2216,25 +2216,8 @@ describe("App", () => {
       if (url === "/v1/sessions/config-run/history?after=-1&limit=500") {
         return jsonResponse({
           session_id: "config-run",
-          events: commandRan ? [
-            { id: 1, type: "trace.meta", data: { schema_version: 1 } },
-            { id: 2, type: "turn.start", data: { turn_id: "cmd1" } },
-            {
-              id: 3,
-              type: "tool.request",
-              data: {
-                turn_id: "cmd1",
-                call_id: "ssh-test",
-                tool: "shell",
-                args: { command: "host='gitlab.com'; ssh -T git@$host" },
-              },
-            },
-            { id: 4, type: "tool.result", data: { call_id: "ssh-test", exit_code: 0, result_summary: "Welcome to GitLab" } },
-            { id: 5, type: "turn.end", data: { turn_id: "cmd1", reason: "completed" } },
-          ] : [
-            { id: 1, type: "trace.meta", data: { schema_version: 1 } },
-          ],
-          next_after: commandRan ? 5 : 1,
+          events: [{ id: 1, type: "trace.meta", data: { schema_version: 1 } }],
+          next_after: 1,
           has_more: false,
           trace_schema_detected: true,
         });
@@ -2250,15 +2233,17 @@ describe("App", () => {
           },
         });
       }
-      if (url === "/v1/sessions/config-run/commands" && init?.method === "POST") {
+      if (url === "/v1/settings/git-check" && init?.method === "POST") {
         commandRan = true;
         return jsonResponse({
-          session_id: "config-run",
-          turn_id: "cmd1",
-          call_id: "ssh-test",
-          exit_code: 0,
-          result: "Welcome to GitLab",
-          completed_at: "2026-05-28T00:00:00Z",
+          kind: "host",
+          target: "gitlab.com",
+          host: "gitlab.com",
+          status: "ok",
+          exit_code: 1,
+          output: "Welcome to GitLab",
+          duration_ms: 41,
+          checked_at: "2026-05-28T00:00:00Z",
         });
       }
       if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
@@ -2271,15 +2256,17 @@ describe("App", () => {
     await user.click(await screen.findByLabelText("Workbench"));
     await selectWorkbenchTab(user, "Config");
     await screen.findByTestId("account-settings-panel");
-    await user.clear(screen.getByPlaceholderText("github.com"));
-    await user.type(screen.getByPlaceholderText("github.com"), "git@gitlab.com:team/repo.git");
-    await user.click(screen.getByRole("button", { name: "Test SSH" }));
+    await user.type(screen.getByPlaceholderText("github.com or gitlab.com"), "git@gitlab.com:team/repo.git");
+    await user.click(screen.getByRole("button", { name: "Check host" }));
 
-    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/config-run/commands", expect.objectContaining({ method: "POST" })));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/settings/git-check", expect.objectContaining({ method: "POST" })));
+    expect(commandRan).toBe(true);
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/config-run/commands", expect.anything());
     const tab = await screen.findByTestId("workbench-tab-surface");
-    await waitFor(() => expect(tab).toHaveTextContent("Latest command"));
+    await waitFor(() => expect(tab).toHaveTextContent("Reachable"));
     expect(tab).toHaveTextContent("gitlab.com");
     expect(tab).toHaveTextContent("Welcome to GitLab");
+    expect(tab).not.toHaveTextContent("Latest command");
   });
 
   it("auto-hides chats for Workbench and lets them reopen without closing Workbench", async () => {
@@ -3069,13 +3056,13 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Action details/ }));
+    await user.click(await screen.findByRole("button", { name: /What Affent did/ }));
     const executionTree = await screen.findByTestId("execution-tree");
     await user.click(within(executionTree).getByRole("button", { name: /make/ }));
     await user.click(screen.getByRole("button", { name: "Use next step as draft" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Continue: check the Makefile path");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Guidance added");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
   });
 
@@ -3102,7 +3089,7 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "Guide run" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Guidance for current run:");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Guidance added");
     expect(within(screen.getByTestId("composer")).queryByRole("button", { name: "Send guidance" })).toBeNull();
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
   });
@@ -3222,7 +3209,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Run summary/ }));
+    await user.click(await screen.findByRole("button", { name: /What Affent did/ }));
     await user.click(screen.getByRole("button", { name: /List current directory/ }));
     await user.click(screen.getByRole("button", { name: "Use output as draft" }));
 
@@ -3258,7 +3245,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Action details/ }));
+    await user.click(await screen.findByRole("button", { name: /What Affent did/ }));
     const executionTree = await screen.findByTestId("execution-tree");
     await user.click(within(executionTree).getByRole("button", { name: /make/ }));
     await user.click(screen.getByRole("button", { name: "Retry action" }));

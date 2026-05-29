@@ -201,6 +201,51 @@ func TestAccountSettingsSSHKeyUsesStandardHomeSSHDir(t *testing.T) {
 	}
 }
 
+func TestAccountSettingsGitCheckRunsOutsideChatHistory(t *testing.T) {
+	t.Setenv("GIT_SSH_COMMAND", "")
+	pool, _ := newPoolWithAccountHome(t)
+	info, err := ensureAccountSSHKey(pool)
+	if err != nil {
+		t.Fatalf("ensure ssh key: %v", err)
+	}
+	privatePath, _ := accountSSHKeyPaths(pool)
+	binDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sshPath := filepath.Join(binDir, "ssh")
+	if err := os.WriteFile(sshPath, []byte("#!/bin/sh\nprintf '%s\\n' \"$GIT_SSH_COMMAND\"\nprintf '%s\\n' \"Hi user! You've successfully authenticated, but GitHub does not provide shell access.\"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/settings/git-check", bytes.NewBufferString(`{"kind":"host","target":"git@GitHub.com:owner/repo.git"}`))
+	w := httptest.NewRecorder()
+	handleAccountSettingsRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("git check status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp accountGitCheckResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode git check: %v", err)
+	}
+	if resp.Kind != "host" || resp.Target != "github.com" || resp.Host != "github.com" || resp.Status != "ok" || resp.ExitCode != 1 {
+		t.Fatalf("git check response = %+v, want normalized ok host check", resp)
+	}
+	if strings.Contains(resp.Output, privatePath) || strings.Contains(resp.Output, info.PublicKey) || strings.Contains(resp.Output, "GIT_SSH_COMMAND=") {
+		t.Fatalf("git check output leaked account details: %q", resp.Output)
+	}
+	if !strings.Contains(resp.Output, "[REDACTED:account-secret]") {
+		t.Fatalf("git check output missing redaction marker: %q", resp.Output)
+	}
+	pool.mu.Lock()
+	sessionCount := len(pool.sessions)
+	pool.mu.Unlock()
+	if sessionCount != 0 {
+		t.Fatalf("git check created %d sessions; config checks must not write chat history", sessionCount)
+	}
+}
+
 func TestAccountSettingsSSHKeyMigratesLegacyAccountRootKeyToHomeSSH(t *testing.T) {
 	t.Setenv("GIT_SSH_COMMAND", "")
 	pool, home := newPoolWithAccountHome(t)

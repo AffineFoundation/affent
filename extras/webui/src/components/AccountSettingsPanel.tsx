@@ -1,5 +1,5 @@
 import { useMemo, useState, type FormEvent } from "react";
-import type { AccountSettingsResponse } from "../api/settings";
+import type { AccountGitCheckRequest, AccountGitCheckResponse, AccountSettingsResponse } from "../api/settings";
 import {
   accountGitAccessVerifyRequest,
   accountGitRemoteVerifyRequest,
@@ -16,9 +16,13 @@ import {
   sshStorageDescription,
   type AccountEnvFilter,
 } from "../view/accountConfig";
-import type { RunCommandExecutionRequest } from "../view/sessionRun";
 import { CopyButton } from "./CopyButton";
 import { panelErrorSummary } from "./panelErrorSummary";
+
+type GitCheckState =
+  | { kind: AccountGitCheckRequest["kind"]; status: "running" }
+  | { kind: AccountGitCheckRequest["kind"]; status: AccountGitCheckResponse["status"]; target: string; exitCode: number; output: string; durationMs?: number }
+  | { kind: AccountGitCheckRequest["kind"]; status: "error"; message: string };
 
 export function AccountSettingsPanel({
   settings,
@@ -43,12 +47,12 @@ export function AccountSettingsPanel({
   onSetEnv?: (name: string, value: string) => Promise<void> | void;
   onDeleteEnv?: (name: string) => Promise<void> | void;
   onEnsureSSHKey?: () => Promise<void> | void;
-  onVerifyGitAccess?: (request: RunCommandExecutionRequest) => Promise<void> | void;
+  onVerifyGitAccess?: (request: AccountGitCheckRequest) => Promise<AccountGitCheckResponse> | AccountGitCheckResponse;
 }) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const [query, setQuery] = useState("");
-  const [gitHost, setGitHost] = useState("github.com");
+  const [gitHost, setGitHost] = useState("");
   const [gitRemote, setGitRemote] = useState("");
   const [confirmDeleteEnv, setConfirmDeleteEnv] = useState<string | undefined>();
   const [mutationStatus, setMutationStatus] = useState<{ tone: "success" | "error"; message: string } | undefined>();
@@ -397,11 +401,32 @@ function AccountConfigFocus({
   setGitHost: (value: string) => void;
   gitRemote: string;
   setGitRemote: (value: string) => void;
-  onVerifyGitAccess?: (request: RunCommandExecutionRequest) => Promise<void> | void;
+  onVerifyGitAccess?: (request: AccountGitCheckRequest) => Promise<AccountGitCheckResponse> | AccountGitCheckResponse;
 }) {
+  const [gitCheck, setGitCheck] = useState<GitCheckState | undefined>();
   const review = accountConfigReview(settings);
   const canVerifyGit = Boolean(settings.ssh.public_key && onVerifyGitAccess);
-  const canVerifyRemote = canVerifyGit && gitRemote.trim().length > 0;
+  const canVerifyHost = canVerifyGit && gitHost.trim().length > 0 && gitCheck?.status !== "running";
+  const canVerifyRemote = canVerifyGit && gitRemote.trim().length > 0 && gitCheck?.status !== "running";
+
+  async function verify(kind: AccountGitCheckRequest["kind"], request: AccountGitCheckRequest) {
+    if (!onVerifyGitAccess) return;
+    setGitCheck({ kind, status: "running" });
+    try {
+      const result = await onVerifyGitAccess(request);
+      setGitCheck({
+        kind,
+        status: result.status,
+        target: result.host || result.target,
+        exitCode: result.exit_code,
+        output: result.output,
+        durationMs: result.duration_ms,
+      });
+    } catch (err) {
+      setGitCheck({ kind, status: "error", message: formatPanelError(err) });
+    }
+  }
+
   return (
     <section className="account-config-focus" data-testid="account-config-focus" data-tone={review.tone} aria-label="Runtime config review">
       <div className="account-config-focus-head">
@@ -428,32 +453,42 @@ function AccountConfigFocus({
       {settings.ssh.public_key ? (
         <div className="account-config-verify-stack" data-testid="account-config-verify">
           <div className="account-config-verify">
+            <div className="account-config-verify-title">
+              <strong>SSH host reachability</strong>
+              <span>Checks this runtime key against a Git SSH host. This does not create a chat turn.</span>
+            </div>
             <label>
-              <span>Test private Git host</span>
-              <input value={gitHost} onChange={(event) => setGitHost(event.target.value)} placeholder="github.com" disabled={!!busy || !canVerifyGit} />
+              <span>Host</span>
+              <input value={gitHost} onChange={(event) => setGitHost(event.target.value)} placeholder="github.com or gitlab.com" disabled={!!busy || !canVerifyGit} />
             </label>
             <button
               type="button"
               className="secondary-action"
-              disabled={!!busy || !canVerifyGit}
-              onClick={() => onVerifyGitAccess?.(accountGitAccessVerifyRequest(gitHost))}
+              disabled={!!busy || !canVerifyHost}
+              onClick={() => void verify("host", accountGitAccessVerifyRequest(gitHost))}
             >
-              Test SSH
+              {gitCheck?.kind === "host" && gitCheck.status === "running" ? "Checking host" : "Check host"}
             </button>
+            <GitCheckResult state={gitCheck} kind="host" />
           </div>
           <div className="account-config-verify">
+            <div className="account-config-verify-title">
+              <strong>Repository permission</strong>
+              <span>Checks whether the key can read a specific SSH remote without involving the agent.</span>
+            </div>
             <label>
-              <span>Test repository remote</span>
+              <span>SSH remote</span>
               <input value={gitRemote} onChange={(event) => setGitRemote(event.target.value)} placeholder="git@github.com:owner/repo.git" disabled={!!busy || !canVerifyGit} />
             </label>
             <button
               type="button"
               className="secondary-action"
               disabled={!!busy || !canVerifyRemote}
-              onClick={() => onVerifyGitAccess?.(accountGitRemoteVerifyRequest(gitRemote))}
+              onClick={() => void verify("remote", accountGitRemoteVerifyRequest(gitRemote))}
             >
-              Test remote
+              {gitCheck?.kind === "remote" && gitCheck.status === "running" ? "Checking repository" : "Check repository"}
             </button>
+            <GitCheckResult state={gitCheck} kind="remote" />
           </div>
         </div>
       ) : null}
@@ -479,6 +514,36 @@ function ConfigFocusFact({ label, value, detail }: { label: string; value: strin
       <span>{label}</span>
       <strong title={detail || value}>{value}</strong>
       {detail ? <small title={detail}>{detail}</small> : null}
+    </div>
+  );
+}
+
+function GitCheckResult({ state, kind }: { state?: GitCheckState; kind: AccountGitCheckRequest["kind"] }) {
+  if (!state || state.kind !== kind) return null;
+  if (state.status === "running") {
+    return (
+      <div className="account-config-check-result" data-state="running" role="status">
+        Checking...
+      </div>
+    );
+  }
+  if (state.status === "error") {
+    return (
+      <div className="account-config-check-result" data-state="failed" role="alert">
+        {state.message}
+      </div>
+    );
+  }
+  const meta = [
+    state.target,
+    `exit ${state.exitCode}`,
+    state.durationMs != null ? `${state.durationMs}ms` : undefined,
+  ].filter(Boolean).join(" · ");
+  return (
+    <div className="account-config-check-result" data-state={state.status} role="status">
+      <strong>{state.status === "ok" ? "Reachable" : "Not reachable"}</strong>
+      <span>{meta}</span>
+      {state.output ? <pre>{state.output}</pre> : null}
     </div>
   );
 }

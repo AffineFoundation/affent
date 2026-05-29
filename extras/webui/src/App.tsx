@@ -47,10 +47,13 @@ import {
 } from "./api/sessions";
 import { getServerStats, type ServerStatsResponse } from "./api/stats";
 import {
+  checkAccountGitAccess,
   deleteAccountEnv,
   ensureAccountSSHKey,
   getAccountSettings,
   setAccountEnv,
+  type AccountGitCheckRequest,
+  type AccountGitCheckResponse,
   type AccountSettingsResponse,
 } from "./api/settings";
 import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactViewer";
@@ -1528,9 +1531,20 @@ export function App() {
     }
   }
 
-  async function handleConfigVerifyGitAccess(request: SessionCommandRequest) {
-    await handleRunCommandRequest(request);
-    if (selectedSessionId) setWorkbenchTab("run");
+  async function handleConfigVerifyGitAccess(request: AccountGitCheckRequest): Promise<AccountGitCheckResponse> {
+    setStatus({ state: "loading", label: "Checking Git access", detail: request.target });
+    try {
+      const resp = await checkAccountGitAccess(client, request);
+      setStatus({
+        state: resp.status === "ok" ? "connected" : "error",
+        label: resp.status === "ok" ? "Git access reachable" : "Git access failed",
+        detail: [resp.host || resp.target, `exit ${resp.exit_code}`].filter(Boolean).join(" · "),
+      });
+      return resp;
+    } catch (err) {
+      setStatus({ state: "error", label: "Git access check failed", detail: formatError(err) });
+      throw err;
+    }
   }
 
   async function handleExecutePlanStep(opts: { runRemaining?: boolean } = {}) {

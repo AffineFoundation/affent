@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
@@ -14,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -31,6 +33,9 @@ const (
 	accountSettingsMaxEnvVars     = 128
 	accountSettingsMaxEnvValueLen = 32 * 1024
 	accountAccessPromptMaxEnvVars = 12
+	accountGitCheckMaxTargetBytes = 2048
+	accountGitCheckOutputMaxBytes = 4096
+	accountGitCheckTimeout        = 15 * time.Second
 )
 
 var accountEnvNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
@@ -71,6 +76,22 @@ type accountEnvSetRequest struct {
 	Value string `json:"value"`
 }
 
+type accountGitCheckRequest struct {
+	Kind   string `json:"kind"`
+	Target string `json:"target"`
+}
+
+type accountGitCheckResponse struct {
+	Kind       string `json:"kind"`
+	Target     string `json:"target"`
+	Host       string `json:"host,omitempty"`
+	Status     string `json:"status"`
+	ExitCode   int    `json:"exit_code"`
+	Output     string `json:"output"`
+	DurationMS int64  `json:"duration_ms,omitempty"`
+	CheckedAt  string `json:"checked_at"`
+}
+
 func handleAccountSettings(pool *SessionPool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -98,6 +119,8 @@ func handleAccountSettingsRoutes(pool *SessionPool) http.HandlerFunc {
 			handleAccountEnvDelete(pool, strings.TrimPrefix(sub, "env/"), w)
 		case sub == "ssh-key" && r.Method == http.MethodPost:
 			handleAccountSSHKeyEnsure(pool, w)
+		case sub == "git-check" && r.Method == http.MethodPost:
+			handleAccountGitCheck(pool, w, r)
 		default:
 			writeJSONErrorTyped(w, http.StatusNotFound, "not found", nil, "not_found")
 		}
@@ -158,6 +181,30 @@ func handleAccountSSHKeyEnsure(pool *SessionPool, w http.ResponseWriter) {
 	_ = json.NewEncoder(w).Encode(settings)
 }
 
+func handleAccountGitCheck(pool *SessionPool, w http.ResponseWriter, r *http.Request) {
+	req, err := decodeAccountGitCheckRequest(w, r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid git check request", err, "bad_request")
+		return
+	}
+	settings, err := readAccountSettingsResponse(pool)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read account settings", err)
+		return
+	}
+	if strings.TrimSpace(settings.SSH.PublicKey) == "" {
+		writeJSONErrorTyped(w, http.StatusConflict, "git check unavailable", errors.New("SSH public key is not available"), "ssh_key_unavailable")
+		return
+	}
+	resp, err := runAccountGitCheck(r.Context(), pool, req)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "run git check", err, "bad_request")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
 func decodeAccountEnvSetRequest(w http.ResponseWriter, r *http.Request) (accountEnvSetRequest, error) {
 	var req accountEnvSetRequest
 	if r.Body == nil || r.Body == http.NoBody {
@@ -174,6 +221,158 @@ func decodeAccountEnvSetRequest(w http.ResponseWriter, r *http.Request) (account
 		return req, errors.New("request body must contain a single JSON object")
 	}
 	return req, nil
+}
+
+func decodeAccountGitCheckRequest(w http.ResponseWriter, r *http.Request) (accountGitCheckRequest, error) {
+	var req accountGitCheckRequest
+	if r.Body == nil || r.Body == http.NoBody {
+		return req, errors.New("request body is required")
+	}
+	defer r.Body.Close()
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, accountGitCheckMaxTargetBytes+1024))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		return req, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return req, errors.New("request body must contain a single JSON object")
+	}
+	req.Kind = strings.TrimSpace(strings.ToLower(req.Kind))
+	req.Target = strings.TrimSpace(req.Target)
+	if req.Kind != "host" && req.Kind != "remote" {
+		return req, errors.New(`kind must be "host" or "remote"`)
+	}
+	if req.Target == "" {
+		return req, errors.New("target is required")
+	}
+	if len(req.Target) > accountGitCheckMaxTargetBytes {
+		return req, fmt.Errorf("target exceeds %d bytes", accountGitCheckMaxTargetBytes)
+	}
+	if strings.ContainsAny(req.Target, "\x00\r\n") {
+		return req, errors.New("target must be a single line")
+	}
+	if req.Kind == "host" {
+		req.Target = normalizeGitHost(req.Target)
+	}
+	return req, nil
+}
+
+func runAccountGitCheck(ctx context.Context, pool *SessionPool, req accountGitCheckRequest) (accountGitCheckResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, accountGitCheckTimeout)
+	defer cancel()
+
+	var cmd *exec.Cmd
+	host := ""
+	switch req.Kind {
+	case "host":
+		host = normalizeGitHost(req.Target)
+		cmd = exec.CommandContext(ctx, "ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=12", "-o", "StrictHostKeyChecking=accept-new", "git@"+host)
+	case "remote":
+		host = gitRemoteHost(req.Target)
+		cmd = exec.CommandContext(ctx, "git", "ls-remote", "--exit-code", req.Target, "HEAD")
+	default:
+		return accountGitCheckResponse{}, errors.New(`kind must be "host" or "remote"`)
+	}
+	cmd.Env = append(os.Environ(), pool.accountEnvPairs()...)
+	var output bytes.Buffer
+	cmd.Stdout = &output
+	cmd.Stderr = &output
+	start := time.Now()
+	err := cmd.Run()
+	duration := time.Since(start)
+	exitCode := gitCheckExitCode(err)
+	out := strings.TrimSpace(output.String())
+	if ctx.Err() == context.DeadlineExceeded {
+		if out != "" {
+			out += "\n"
+		}
+		out += "Timed out while checking Git access."
+	}
+	out = redactAccountGitCheckOutput(out, pool)
+	capped, _, _ := capSessionCommandResult(out, accountGitCheckOutputMaxBytes)
+	status := "failed"
+	if accountGitCheckSucceeded(req.Kind, exitCode, out) {
+		status = "ok"
+	}
+	return accountGitCheckResponse{
+		Kind:       req.Kind,
+		Target:     req.Target,
+		Host:       host,
+		Status:     status,
+		ExitCode:   exitCode,
+		Output:     capped,
+		DurationMS: duration.Milliseconds(),
+		CheckedAt:  time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func gitCheckExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return -1
+}
+
+func accountGitCheckSucceeded(kind string, exitCode int, output string) bool {
+	if kind == "remote" {
+		return exitCode == 0
+	}
+	if exitCode == 0 {
+		return true
+	}
+	lower := strings.ToLower(output)
+	return strings.Contains(lower, "successfully authenticated") ||
+		strings.Contains(lower, "welcome to gitlab") ||
+		strings.Contains(lower, "authenticated via ssh key")
+}
+
+func gitRemoteHost(remote string) string {
+	value := strings.TrimSpace(remote)
+	if strings.HasPrefix(strings.ToLower(value), "ssh://") {
+		return normalizeGitHost(value)
+	}
+	if strings.HasPrefix(strings.ToLower(value), "git@") {
+		return normalizeGitHost(value)
+	}
+	return ""
+}
+
+func normalizeGitHost(value string) string {
+	host := strings.TrimSpace(value)
+	host = strings.TrimPrefix(strings.TrimPrefix(host, "ssh://"), "SSH://")
+	if strings.HasPrefix(strings.ToLower(host), "git@") {
+		host = host[4:]
+	}
+	if index := strings.IndexAny(host, ":/"); index >= 0 {
+		host = host[:index]
+	}
+	host = strings.ToLower(host)
+	var safe strings.Builder
+	for _, r := range host {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '-' {
+			safe.WriteRune(r)
+		}
+	}
+	if safe.Len() == 0 {
+		return "github.com"
+	}
+	return safe.String()
+}
+
+func redactAccountGitCheckOutput(output string, pool *SessionPool) string {
+	redacted := output
+	for _, secret := range pool.accountSecretValues() {
+		if len(secret) < 8 {
+			continue
+		}
+		redacted = strings.ReplaceAll(redacted, secret, "[REDACTED:account-secret]")
+	}
+	return redacted
 }
 
 func readAccountSettingsResponse(pool *SessionPool) (accountSettingsResponse, error) {

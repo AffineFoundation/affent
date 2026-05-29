@@ -61,22 +61,13 @@ describe("accountConfig view helpers", () => {
   it("builds a bounded SSH verification command for private Git hosts", () => {
     const request = accountGitAccessVerifyRequest("git@GitLab.com:team/private-repo.git");
 
-    expect(request.cwd).toBeUndefined();
-    expect(request.command).toContain("host='gitlab.com'");
-    expect(request.command).toContain("ssh -T");
-    expect(request.command).toContain("BatchMode=yes");
-    expect(request.command).toContain("ConnectTimeout=12");
-    expect(request.command).toContain("git@$host");
-    expect(request.command).toContain("successfully authenticated");
-    expect(request.command).not.toContain("team/private-repo");
+    expect(request).toEqual({ kind: "host", target: "gitlab.com" });
   });
 
-  it("builds a direct remote verification command for a private repository", () => {
+  it("builds a direct remote verification request for a private repository", () => {
     const request = accountGitRemoteVerifyRequest("git@github.com:team/private-repo.git");
 
-    expect(request.cwd).toBeUndefined();
-    expect(request.command).toContain("remote='git@github.com:team/private-repo.git'");
-    expect(request.command).toContain("git ls-remote --exit-code \"$remote\" HEAD");
+    expect(request).toEqual({ kind: "remote", target: "git@github.com:team/private-repo.git" });
   });
 
   it("surfaces SSH key issues as runtime config evidence", () => {

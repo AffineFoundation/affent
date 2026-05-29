@@ -7,7 +7,15 @@ describe("AccountSettingsPanel", () => {
   it("shows an existing SSH public key and safe config evidence actions", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
-    const onVerifyGitAccess = vi.fn();
+    const onVerifyGitAccess = vi.fn(async (request) => ({
+      ...request,
+      host: request.kind === "host" ? request.target : "github.com",
+      status: "ok" as const,
+      exit_code: request.kind === "host" ? 1 : 0,
+      output: request.kind === "host" ? "successfully authenticated" : "repo reachable",
+      duration_ms: 42,
+      checked_at: "2026-05-29T00:00:00Z",
+    }));
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(
       <AccountSettingsPanel
@@ -36,9 +44,11 @@ describe("AccountSettingsPanel", () => {
     expect(panel).toHaveTextContent("Existing keys are never overwritten");
     expect(screen.getByTestId("account-ssh-storage")).toHaveTextContent("~/.ssh/id_ed25519.pub");
     expect(screen.getByTestId("account-public-key")).toHaveTextContent("ssh-ed25519 AAAA affent");
-    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Test private Git host");
-    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Test repository remote");
-    expect(screen.getByRole("button", { name: "Test remote" })).toBeDisabled();
+    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("SSH host reachability");
+    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("Repository permission");
+    expect(screen.getByTestId("account-config-verify")).toHaveTextContent("does not create a chat turn");
+    expect(screen.getByRole("button", { name: "Check host" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Check repository" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Generate SSH key" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Use config as draft" })).toBeNull();
     expect(screen.getByTestId("account-env-list")).toHaveTextContent("GITHUB_TOKEN");
@@ -53,22 +63,16 @@ describe("AccountSettingsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Copy full key" }));
     expect(writeText).toHaveBeenCalledWith("ssh-ed25519 AAAA affent");
 
-    await user.clear(screen.getByPlaceholderText("github.com"));
-    await user.type(screen.getByPlaceholderText("github.com"), "git@gitlab.com:team/repo.git");
-    await user.click(screen.getByRole("button", { name: "Test SSH" }));
-    expect(onVerifyGitAccess).toHaveBeenCalledWith(expect.objectContaining({
-      command: expect.stringContaining("host='gitlab.com'"),
-    }));
-    expect(onVerifyGitAccess.mock.calls[0][0].command).toContain("BatchMode=yes");
-    expect(onVerifyGitAccess.mock.calls[0][0].command).toContain("git@$host");
-    expect(onVerifyGitAccess.mock.calls[0][0].command).not.toContain("team/repo");
+    await user.type(screen.getByPlaceholderText("github.com or gitlab.com"), "git@gitlab.com:team/repo.git");
+    await user.click(screen.getByRole("button", { name: "Check host" }));
+    expect(onVerifyGitAccess).toHaveBeenCalledWith({ kind: "host", target: "gitlab.com" });
+    expect(screen.getByText("Reachable")).toBeInTheDocument();
+    expect(screen.getByText("successfully authenticated")).toBeInTheDocument();
 
     await user.type(screen.getByPlaceholderText("git@github.com:owner/repo.git"), "git@github.com:team/private-repo.git");
-    await user.click(screen.getByRole("button", { name: "Test remote" }));
-    expect(onVerifyGitAccess).toHaveBeenCalledWith(expect.objectContaining({
-      command: expect.stringContaining("git ls-remote --exit-code"),
-    }));
-    expect(onVerifyGitAccess.mock.calls[1][0].command).toContain("remote='git@github.com:team/private-repo.git'");
+    await user.click(screen.getByRole("button", { name: "Check repository" }));
+    expect(onVerifyGitAccess).toHaveBeenCalledWith({ kind: "remote", target: "git@github.com:team/private-repo.git" });
+    expect(screen.getByText("repo reachable")).toBeInTheDocument();
   });
 
   it("saves and confirms deletion for environment variables without displaying the value", async () => {

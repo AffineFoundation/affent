@@ -24,6 +24,22 @@ export interface AccountEnvSetRequest {
   value: string;
 }
 
+export interface AccountGitCheckRequest {
+  kind: "host" | "remote";
+  target: string;
+}
+
+export interface AccountGitCheckResponse {
+  kind: "host" | "remote";
+  target: string;
+  host?: string;
+  status: "ok" | "failed";
+  exit_code: number;
+  output: string;
+  duration_ms?: number;
+  checked_at: string;
+}
+
 export function getAccountSettings(client: ApiClient, signal?: AbortSignal): Promise<AccountSettingsResponse> {
   return client.json<AccountSettingsResponse>("/v1/settings", { signal });
 }
@@ -45,4 +61,12 @@ export function deleteAccountEnv(client: ApiClient, name: string, signal?: Abort
 
 export function ensureAccountSSHKey(client: ApiClient, signal?: AbortSignal): Promise<AccountSettingsResponse> {
   return client.json<AccountSettingsResponse>("/v1/settings/ssh-key", { method: "POST", signal });
+}
+
+export function checkAccountGitAccess(
+  client: ApiClient,
+  body: AccountGitCheckRequest,
+  signal?: AbortSignal,
+): Promise<AccountGitCheckResponse> {
+  return client.json<AccountGitCheckResponse>("/v1/settings/git-check", { method: "POST", body, signal });
 }
