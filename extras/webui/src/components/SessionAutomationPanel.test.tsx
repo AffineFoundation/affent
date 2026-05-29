@@ -14,6 +14,8 @@ describe("SessionAutomationPanel", () => {
     const panel = screen.getByTestId("session-automation-panel");
     expect(panel).toHaveAttribute("open");
     expect(panel).toHaveTextContent("Loop waiting · 1 timer pending");
+    expect(screen.getByTestId("session-automation-details")).toContainElement(screen.getByTestId("loop-section"));
+    expect(screen.getByTestId("session-automation-details")).toContainElement(screen.getByTestId("timer-section"));
     expect(screen.getByTestId("loop-section")).toBeInTheDocument();
     expect(screen.getByTestId("timer-section")).toBeInTheDocument();
   });
@@ -77,6 +79,10 @@ describe("SessionAutomationPanel", () => {
     expect(dashboard).toHaveTextContent("Off");
     expect(dashboard).toHaveTextContent("Next");
     expect(dashboard).toHaveTextContent("Loop waiting");
+    expect(screen.getByTestId("session-automation-details")).toHaveTextContent("Loop section");
+    expect(
+      screen.getByTestId("session-automation-details").compareDocumentPosition(queue) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("does not repeat the focused loop action in the execution queue", () => {

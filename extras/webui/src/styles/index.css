@@ -4931,6 +4931,18 @@ button.workbench-context-runtime-item:focus-visible {
   min-width: 0;
 }
 
+.session-automation-details {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.session-automation-details > .session-loop-panel,
+.session-automation-details > .session-schedule-panel {
+  margin-bottom: 0;
+}
+
 .session-automation-focus {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

@@ -66,6 +66,20 @@ export function SessionAutomationPanel({
             {actions ? <div className="session-automation-focus-actions">{actions}</div> : null}
           </section>
         ) : null}
+        {metrics.length > 0 ? (
+          <div className="session-automation-dashboard" data-testid="session-automation-dashboard">
+            {metrics.map((metric) => (
+              <div key={metric.label} className="session-automation-metric" data-tone={metric.tone ?? "neutral"}>
+                <span>{metric.label}</span>
+                <strong>{metric.value}</strong>
+                {metric.detail ? <small>{metric.detail}</small> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="session-automation-details" data-testid="session-automation-details">
+          {children}
+        </div>
         {visibleQueue.length > 0 ? (
           <section className="session-automation-queue" data-testid="session-automation-queue" aria-label="Automation execution queue">
             <header>
@@ -86,18 +100,6 @@ export function SessionAutomationPanel({
             </ol>
           </section>
         ) : null}
-        {metrics.length > 0 ? (
-          <div className="session-automation-dashboard" data-testid="session-automation-dashboard">
-            {metrics.map((metric) => (
-              <div key={metric.label} className="session-automation-metric" data-tone={metric.tone ?? "neutral"}>
-                <span>{metric.label}</span>
-                <strong>{metric.value}</strong>
-                {metric.detail ? <small>{metric.detail}</small> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {children}
       </div>
     </details>
   );

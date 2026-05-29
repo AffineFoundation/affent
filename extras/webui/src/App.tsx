@@ -1708,10 +1708,6 @@ export function App() {
     const emptyScheduleSummary = { count: 0, enabled: 0 };
     const scheduleSummary = selectedSession?.schedules;
     const loadedSchedules = selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined;
-    const loopStatus = selectedLoopState?.status ?? selectedSession?.loop_protocol?.status;
-    const loopDisabled = automationCompact(loopStatus)?.toLowerCase() === "disabled";
-    const hasLoop = showLoopContext || Boolean(selectedSession?.has_loop_protocol || selectedSession?.loop_protocol || selectedLoopState);
-    const hasScheduleSummary = (scheduleSummary?.count ?? 0) > 0 || (scheduleSummary?.enabled ?? 0) > 0 || (scheduleSummary?.pending_loop_ticks ?? 0) > 0 || (scheduleSummary?.error_count ?? 0) > 0;
     return (
       <SessionAutomationPanel
         title={automationTitle}
@@ -1719,36 +1715,11 @@ export function App() {
         metrics={automationMetrics}
         focus={automationFocus}
         queue={automationQueue}
-        actions={(
-          <>
-            {automationFocus?.action === "answer" || automationFocus?.action === "review" ? (
-              <button type="button" className="ghost-action primary-run-action" onClick={handleUseLoopProtocolDraft}>
-                {automationFocus.action === "answer" ? "Answer setup" : "Review in chat"}
-              </button>
-            ) : null}
-            {hasLoop ? (
-              <button type="button" className="ghost-action" disabled={selectedLoopProtocolState.state === "loading"} onClick={() => void handleLoadLoopProtocol()}>
-                {selectedLoopProtocolState.state === "loading" ? "Loading LOOP.md" : selectedLoopProtocolState.state === "ready" ? "Reload LOOP.md" : "Load LOOP.md"}
-              </button>
-            ) : null}
-            {hasScheduleSummary && selectedScheduleState.state !== "ready" ? (
-              <button type="button" className="ghost-action" disabled={selectedScheduleState.state === "loading"} onClick={() => void handleLoadSchedules()}>
-                {selectedScheduleState.state === "loading" ? "Loading timers" : "Load timers"}
-              </button>
-            ) : null}
-            {hasLoop && !loopDisabled ? (
-              <button type="button" className="ghost-action danger-action" disabled={loopProtocolBusy} onClick={() => void handleDisableLoopProtocol()}>
-                {loopProtocolBusy ? "Disabling loop" : "Disable loop"}
-              </button>
-            ) : null}
-            <button type="button" className="ghost-action" disabled={actionBusy || session.status === "running" || !!scheduleBusy} onClick={() => void handleCreateSchedule("checkin")}>
-              1h check-in
-            </button>
-            <button type="button" className="ghost-action" disabled={actionBusy || session.status === "running" || !!scheduleBusy} onClick={() => void handleCreateSchedule("loop")}>
-              30m loop tick
-            </button>
-          </>
-        )}
+        actions={automationFocus?.action === "answer" || automationFocus?.action === "review" ? (
+          <button type="button" className="ghost-action primary-run-action" onClick={handleUseLoopProtocolDraft}>
+            {automationFocus.action === "answer" ? "Answer setup" : "Review in chat"}
+          </button>
+        ) : undefined}
         defaultOpen
       >
         {showLoopContext ? (
@@ -1769,15 +1740,13 @@ export function App() {
             onLoadProtocol={handleLoadLoopProtocol}
             onUseAsDraft={handleUseLoopProtocolDraft}
           />
-        ) : !showScheduleContext ? (
+        ) : (
           <SessionLoopPanel
             embedded
             defaultGoal={selectedSessionTitle ?? selectedSessionId}
             starting={loopProtocolBusy || actionBusy || session.status === "running"}
             onStart={handleStartLoop}
           />
-        ) : (
-          null
         )}
         <SessionSchedulePanel
           embedded
