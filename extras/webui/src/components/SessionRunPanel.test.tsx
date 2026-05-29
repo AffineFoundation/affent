@@ -135,7 +135,8 @@ describe("SessionRunPanel", () => {
   });
 
   it("surfaces the latest passed command as verification focus", () => {
-    render(<SessionRunPanel defaultOpen run={{ ...run, summary: "1 passed command", detail: "1 passed", tone: undefined, commands: [run.commands[1]] }} />);
+    const onUseAsDraft = vi.fn();
+    render(<SessionRunPanel defaultOpen run={{ ...run, summary: "1 passed command", detail: "1 passed", tone: undefined, commands: [run.commands[1]] }} onUseAsDraft={onUseAsDraft} />);
 
     const focus = screen.getByTestId("session-run-focus");
     expect(focus).toHaveTextContent("Latest verification");
@@ -144,6 +145,7 @@ describe("SessionRunPanel", () => {
     expect(focus).toHaveTextContent("passed");
     expect(focus).toHaveTextContent("Exit");
     expect(focus).toHaveTextContent("0");
+    expect(within(focus).queryByRole("button", { name: "Rerun as draft" })).toBeNull();
     expect(screen.queryByTestId("session-run-list")).toBeNull();
   });
 

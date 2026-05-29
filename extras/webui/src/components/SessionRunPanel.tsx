@@ -374,12 +374,12 @@ function RunFocus({
             Open command output
           </button>
         ) : null}
-        {onRunCommand ? (
+        {onRunCommand && command.status !== "passed" ? (
           <button type="button" className="ghost-action primary-run-action" disabled={runCommandBusy} onClick={() => onRunCommand(runCommandRequest(command))}>
             Rerun now
           </button>
         ) : null}
-        {!onRunCommand && onUseAsDraft ? (
+        {!onRunCommand && onUseAsDraft && command.status !== "passed" ? (
           <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runCommandDraft(command), "run_command")}>
             Rerun as draft
           </button>
