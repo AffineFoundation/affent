@@ -504,6 +504,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" {
 		fmt.Fprintf(b, "- required_task_state_request_source: `%s`\n", timelineInline(exp.RequiredTaskStateRequestSource, timelineArgsPreviewBytes))
 	}
+	if strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" {
+		fmt.Fprintf(b, "- required_task_state_schedule_kind: `%s`\n", timelineInline(exp.RequiredTaskStateScheduleKind, timelineArgsPreviewBytes))
+	}
 	writeTimelineCountsLine(b, "required_context_injection_sources", exp.RequiredContextInjectionSources)
 	writeTimelineCountsLine(b, "required_conversation_repair_stats_at_least", exp.RequiredConversationRepairStatsAtLeast)
 	writeTimelineCountsLine(b, "required_conversation_repair_kinds", exp.RequiredConversationRepairKinds)
@@ -804,6 +807,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredUserMessageModes) > 0 ||
 		strings.TrimSpace(exp.RequiredTaskStateRequestMode) != "" ||
 		strings.TrimSpace(exp.RequiredTaskStateRequestSource) != "" ||
+		strings.TrimSpace(exp.RequiredTaskStateScheduleKind) != "" ||
 		len(exp.RequiredContextInjectionSources) > 0 ||
 		len(exp.RequiredContextInjectionText) > 0 ||
 		len(exp.RequiredConversationRepairStatsAtLeast) > 0 ||

@@ -180,6 +180,23 @@ func TaskStateRequestSourceIs(source string) Check {
 	}
 }
 
+func TaskStateScheduleKindIs(kind string) Check {
+	kind = strings.TrimSpace(kind)
+	return Check{
+		Name: fmt.Sprintf("task_state_schedule_kind:%s", kind),
+		Eval: func(t Trace) CheckResult {
+			got := strings.TrimSpace(t.TaskState.ScheduleKind)
+			if got == kind {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("schedule_kind=%s", got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected task_state schedule_kind %q, got %q", kind, got),
+			}
+		},
+	}
+}
+
 func normalizeTaskRequestMode(mode string) string {
 	mode = strings.TrimSpace(mode)
 	if mode == "" {

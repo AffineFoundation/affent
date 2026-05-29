@@ -717,15 +717,21 @@ func TestUserMessageModeAtMost(t *testing.T) {
 }
 
 func TestTaskStateRequestProvenanceChecks(t *testing.T) {
-	trace := Trace{TaskState: TaskStateSnapshot{RequestMode: "execute_plan", RequestSource: "schedule"}}
+	trace := Trace{TaskState: TaskStateSnapshot{RequestMode: "execute_plan", RequestSource: "schedule", ScheduleKind: "checkin"}}
 	if res := TaskStateRequestModeIs("execute_plan").Eval(trace); !res.Pass {
 		t.Fatalf("expected task state request mode to pass: %+v", res)
 	}
 	if res := TaskStateRequestSourceIs("schedule").Eval(trace); !res.Pass {
 		t.Fatalf("expected task state request source to pass: %+v", res)
 	}
+	if res := TaskStateScheduleKindIs("checkin").Eval(trace); !res.Pass {
+		t.Fatalf("expected task state schedule kind to pass: %+v", res)
+	}
 	if res := TaskStateRequestModeIs("loop_setup").Eval(trace); res.Pass || !strings.Contains(res.Detail, "execute_plan") {
 		t.Fatalf("expected mismatched task state request mode to fail with observed mode: %+v", res)
+	}
+	if res := TaskStateScheduleKindIs("loop_tick").Eval(trace); res.Pass || !strings.Contains(res.Detail, "checkin") {
+		t.Fatalf("expected mismatched task state schedule kind to fail with observed kind: %+v", res)
 	}
 
 	legacy := Trace{}

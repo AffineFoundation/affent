@@ -105,6 +105,17 @@ func TestExpectationCapabilityNamesIgnoresMaxOnlyToolCaps(t *testing.T) {
 	}
 }
 
+func TestExpectationCapabilityNamesIncludesTaskStateProvenance(t *testing.T) {
+	caps := ExpectationCapabilityNames(DebugScenarioExpectations{
+		RequiredTaskStateRequestSource: "schedule",
+		RequiredTaskStateScheduleKind:  "checkin",
+	})
+	want := []string{"session", "trace"}
+	if !reflect.DeepEqual(caps, want) {
+		t.Fatalf("ExpectationCapabilityNames = %#v, want %#v", caps, want)
+	}
+}
+
 func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
