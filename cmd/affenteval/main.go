@@ -1114,6 +1114,8 @@ type batchSummary struct {
 	TaskStateScenarios                      int
 	TaskStateByStatus                       map[string]int
 	TaskStateByVerification                 map[string]int
+	TaskStateByRequestMode                  map[string]int
+	TaskStateByRequestSource                map[string]int
 	TaskStateChangedFiles                   int
 	TaskStateFailedActions                  int
 	TaskStateEvidence                       int
@@ -1347,6 +1349,18 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 				s.TaskStateByVerification = map[string]int{}
 			}
 			s.TaskStateByVerification[verification]++
+		}
+		if mode := strings.TrimSpace(task.RequestMode); mode != "" {
+			if s.TaskStateByRequestMode == nil {
+				s.TaskStateByRequestMode = map[string]int{}
+			}
+			s.TaskStateByRequestMode[mode]++
+		}
+		if source := strings.TrimSpace(task.RequestSource); source != "" {
+			if s.TaskStateByRequestSource == nil {
+				s.TaskStateByRequestSource = map[string]int{}
+			}
+			s.TaskStateByRequestSource[source]++
 		}
 		s.TaskStateChangedFiles += len(task.ChangedFiles)
 		s.TaskStateFailedActions += len(task.FailedActions)
@@ -2002,6 +2016,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 		if len(s.TaskStateByVerification) > 0 {
 			fmt.Fprintf(w, " task_state_verification=%s", formatStringIntCounts(s.TaskStateByVerification))
+		}
+		if len(s.TaskStateByRequestMode) > 0 {
+			fmt.Fprintf(w, " task_state_request_modes=%s", formatStringIntCounts(s.TaskStateByRequestMode))
+		}
+		if len(s.TaskStateByRequestSource) > 0 {
+			fmt.Fprintf(w, " task_state_request_sources=%s", formatStringIntCounts(s.TaskStateByRequestSource))
 		}
 	}
 	if s.LoopDecisions > 0 {
@@ -3824,6 +3844,8 @@ type batchResultRecord struct {
 	TaskState                              *agenteval.TaskStateSnapshot               `json:"task_state,omitempty"`
 	TaskStateStatus                        string                                     `json:"task_state_status,omitempty"`
 	TaskStateVerification                  string                                     `json:"task_state_verification,omitempty"`
+	TaskStateRequestMode                   string                                     `json:"task_state_request_mode,omitempty"`
+	TaskStateRequestSource                 string                                     `json:"task_state_request_source,omitempty"`
 	TaskStateChangedFiles                  int                                        `json:"task_state_changed_files,omitempty"`
 	TaskStateFailedActions                 int                                        `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                      int                                        `json:"task_state_evidence,omitempty"`
@@ -4009,6 +4031,8 @@ type batchSummaryRecord struct {
 	TaskStateScenarios                      int                                              `json:"task_state_scenarios,omitempty"`
 	TaskStateByStatus                       map[string]int                                   `json:"task_state_by_status,omitempty"`
 	TaskStateByVerification                 map[string]int                                   `json:"task_state_by_verification,omitempty"`
+	TaskStateByRequestMode                  map[string]int                                   `json:"task_state_by_request_mode,omitempty"`
+	TaskStateByRequestSource                map[string]int                                   `json:"task_state_by_request_source,omitempty"`
 	TaskStateChangedFiles                   int                                              `json:"task_state_changed_files,omitempty"`
 	TaskStateFailedActions                  int                                              `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                       int                                              `json:"task_state_evidence,omitempty"`
@@ -4218,6 +4242,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		TaskState:                              agenteval.CloneTaskStateSnapshotPtr(res.TaskState),
 		TaskStateStatus:                        res.TaskState.Status,
 		TaskStateVerification:                  res.TaskState.VerificationState,
+		TaskStateRequestMode:                   res.TaskState.RequestMode,
+		TaskStateRequestSource:                 res.TaskState.RequestSource,
 		TaskStateChangedFiles:                  len(res.TaskState.ChangedFiles),
 		TaskStateFailedActions:                 len(res.TaskState.FailedActions),
 		TaskStateEvidence:                      len(res.TaskState.Evidence),
@@ -4516,6 +4542,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		TaskStateScenarios:                      s.TaskStateScenarios,
 		TaskStateByStatus:                       cloneStringIntMap(s.TaskStateByStatus),
 		TaskStateByVerification:                 cloneStringIntMap(s.TaskStateByVerification),
+		TaskStateByRequestMode:                  cloneStringIntMap(s.TaskStateByRequestMode),
+		TaskStateByRequestSource:                cloneStringIntMap(s.TaskStateByRequestSource),
 		TaskStateChangedFiles:                   s.TaskStateChangedFiles,
 		TaskStateFailedActions:                  s.TaskStateFailedActions,
 		TaskStateEvidence:                       s.TaskStateEvidence,

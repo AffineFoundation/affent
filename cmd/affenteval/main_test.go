@@ -2333,6 +2333,8 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		TaskState: agenteval.TaskStateSnapshot{
 			Status:            "completed",
 			VerificationState: "last_shell_passed",
+			RequestMode:       "normal",
+			RequestSource:     "user",
 			ChangedFiles:      []agenteval.TaskStateFile{{Path: "app/main.go", Action: "edit"}},
 			Evidence:          []agenteval.TaskStateEvidence{{Source: "shell", Summary: "go test ./..."}},
 		},
@@ -2507,6 +2509,8 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		TaskState: agenteval.TaskStateSnapshot{
 			Status:            "blocked",
 			VerificationState: "failed",
+			RequestMode:       "execute_plan",
+			RequestSource:     "schedule",
 			ChangedFiles: []agenteval.TaskStateFile{
 				{Path: "report.md", Action: "write"},
 				{Path: "notes.md", Action: "edit"},
@@ -2594,7 +2598,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1") {
+	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1") {
 		t.Fatalf("summary output missing task state rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
@@ -2730,11 +2734,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		summary.TaskStateFailedActions != 1 ||
 		summary.TaskStateEvidence != 3 ||
 		!reflect.DeepEqual(summary.TaskStateByStatus, map[string]int{"completed": 1, "blocked": 1}) ||
-		!reflect.DeepEqual(summary.TaskStateByVerification, map[string]int{"last_shell_passed": 1, "failed": 1}) {
-		t.Fatalf("task state summary = scenarios:%d status:%#v verification:%#v changed:%d failed:%d evidence:%d",
+		!reflect.DeepEqual(summary.TaskStateByVerification, map[string]int{"last_shell_passed": 1, "failed": 1}) ||
+		!reflect.DeepEqual(summary.TaskStateByRequestMode, map[string]int{"normal": 1, "execute_plan": 1}) ||
+		!reflect.DeepEqual(summary.TaskStateByRequestSource, map[string]int{"user": 1, "schedule": 1}) {
+		t.Fatalf("task state summary = scenarios:%d status:%#v verification:%#v modes:%#v sources:%#v changed:%d failed:%d evidence:%d",
 			summary.TaskStateScenarios,
 			summary.TaskStateByStatus,
 			summary.TaskStateByVerification,
+			summary.TaskStateByRequestMode,
+			summary.TaskStateByRequestSource,
 			summary.TaskStateChangedFiles,
 			summary.TaskStateFailedActions,
 			summary.TaskStateEvidence,
@@ -3949,6 +3957,8 @@ func TestPrintBatchResultJSONLIncludesTaskState(t *testing.T) {
 	}
 	if got["task_state_status"] != "completed" ||
 		got["task_state_verification"] != "last_shell_passed" ||
+		got["task_state_request_mode"] != "execute_plan" ||
+		got["task_state_request_source"] != "schedule" ||
 		got["task_state_changed_files"] != float64(1) ||
 		got["task_state_failed_actions"] != float64(1) ||
 		got["task_state_evidence"] != float64(1) {
@@ -4391,6 +4401,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		TaskStateScenarios:         2,
 		TaskStateByStatus:          map[string]int{"completed": 1, "blocked": 1},
 		TaskStateByVerification:    map[string]int{"last_shell_passed": 1, "failed": 1},
+		TaskStateByRequestMode:     map[string]int{"normal": 1, "execute_plan": 1},
+		TaskStateByRequestSource:   map[string]int{"user": 1, "schedule": 1},
 		TaskStateChangedFiles:      3,
 		TaskStateFailedActions:     1,
 		TaskStateEvidence:          4,
@@ -4855,6 +4867,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	taskStateVerification, ok := got["task_state_by_verification"].(map[string]any)
 	if !ok || taskStateVerification["last_shell_passed"] != float64(1) || taskStateVerification["failed"] != float64(1) {
 		t.Fatalf("task_state_by_verification = %#v\njson=%s", got["task_state_by_verification"], out.String())
+	}
+	taskStateModes, ok := got["task_state_by_request_mode"].(map[string]any)
+	if !ok || taskStateModes["normal"] != float64(1) || taskStateModes["execute_plan"] != float64(1) {
+		t.Fatalf("task_state_by_request_mode = %#v\njson=%s", got["task_state_by_request_mode"], out.String())
+	}
+	taskStateSources, ok := got["task_state_by_request_source"].(map[string]any)
+	if !ok || taskStateSources["user"] != float64(1) || taskStateSources["schedule"] != float64(1) {
+		t.Fatalf("task_state_by_request_source = %#v\njson=%s", got["task_state_by_request_source"], out.String())
 	}
 	if got["avg_reactive_context_compactions"] != float64(0.5) {
 		t.Fatalf("avg_reactive_context_compactions = %v, want 0.5\njson=%s", got["avg_reactive_context_compactions"], out.String())
