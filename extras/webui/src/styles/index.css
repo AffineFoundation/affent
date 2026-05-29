@@ -3031,7 +3031,7 @@ button.workbench-context-runtime-item:focus-visible {
 
 .session-run-overview {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -3049,7 +3049,6 @@ button.workbench-context-runtime-item:focus-visible {
 }
 
 .session-run-review {
-  grid-column: 1 / -1;
   border: 1px solid rgba(217, 224, 232, 0.78);
   border-left: 2px solid rgba(20, 184, 166, 0.46);
   border-radius: var(--radius-sm);
@@ -3148,14 +3147,16 @@ button.workbench-context-runtime-item:focus-visible {
 .session-run-facts {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
   gap: 6px;
   min-width: 0;
 }
 
 .session-run-facts > span {
   display: grid;
-  gap: 1px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 7px;
+  align-items: baseline;
   min-width: 0;
   border: 1px solid rgba(217, 224, 232, 0.74);
   border-radius: var(--radius-sm);
@@ -3188,6 +3189,11 @@ button.workbench-context-runtime-item:focus-visible {
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.session-run-facts b {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
 }
 
 .session-run-facts strong {

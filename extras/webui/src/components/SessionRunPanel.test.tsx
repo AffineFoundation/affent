@@ -164,7 +164,7 @@ describe("SessionRunPanel", () => {
 
     expect(screen.getByTestId("session-run-review")).toHaveTextContent("Recovered");
     expect(screen.getByTestId("session-run-review")).toHaveTextContent("1 earlier failure followed by a pass");
-    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("covered by later pass");
+    expect(screen.getByLabelText("Run review facts")).toHaveTextContent("recovered");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("Latest verification");
     expect(screen.getByTestId("session-run-focus")).toHaveTextContent("npm test -- checkout.spec.ts");
 

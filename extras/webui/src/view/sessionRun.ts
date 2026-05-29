@@ -260,7 +260,7 @@ export function runReviewFacts(commands: readonly SessionRunCommand[]): SessionR
       label: "Verification",
       value: verification.length > 0 ? `${verificationPassed}/${verification.length}` : "0/0",
       detail: verification.length > 0 ? "test/build/lint/typecheck" : "none recorded",
-      tone: verification.length === 0 ? (total > 0 ? "attention" : "neutral") : verificationPassed === verification.length ? "ok" : "attention",
+      tone: verification.length === 0 ? "neutral" : verificationPassed === verification.length || !unresolved ? "ok" : "attention",
     },
     {
       label: "Output",

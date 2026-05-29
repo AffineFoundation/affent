@@ -58,11 +58,6 @@ export function SessionRunPanel({
       </summary>
       <div className="session-skills-body">
         <div className="session-run-overview" aria-label="Run summary">
-          <div className="session-run-overview-main">
-            <span>Commands</span>
-            <strong>{run.summary}</strong>
-            <small>{run.detail || "No shell commands recorded."}</small>
-          </div>
           <div className="session-run-review" data-tone={review.tone ?? "neutral"} data-testid="session-run-review">
             <span>{review.label}</span>
             <strong>{review.title}</strong>
@@ -99,10 +94,10 @@ export function SessionRunPanel({
           </div>
           <div className="session-run-facts" aria-label="Run review facts">
             {reviewFacts.map((fact) => (
-              <span key={fact.label} data-tone={fact.tone ?? "neutral"}>
+              <span key={fact.label} data-tone={fact.tone ?? "neutral"} title={fact.detail}>
                 <small>{fact.label}</small>
                 <strong>{fact.value}</strong>
-                <b>{fact.detail}</b>
+                {runFactVisibleDetail(fact) ? <b>{runFactVisibleDetail(fact)}</b> : null}
               </span>
             ))}
           </div>
@@ -264,6 +259,18 @@ function RunFilterButton({
       <strong>{value}</strong>
     </button>
   );
+}
+
+function runFactVisibleDetail(fact: { label: string; detail: string }): string | undefined {
+  const detail = fact.detail.trim();
+  if (!detail) return undefined;
+  if (detail === "recorded command" || detail === "recorded commands") return undefined;
+  if (detail === "successful commands" || detail === "no successful command") return undefined;
+  if (detail === "artifact captured" || detail === "artifacts captured") return undefined;
+  if (detail === "none recorded" || detail === "no command") return undefined;
+  if (detail === "covered by later pass") return "recovered";
+  if (detail === "test/build/lint/typecheck") return "checks";
+  return detail;
 }
 
 function runStats(commands: readonly SessionRunCommand[]) {
