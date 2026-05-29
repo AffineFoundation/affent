@@ -713,6 +713,12 @@ func sessionScheduleDisplayText(schedule sessionSchedule) string {
 
 func (p *SessionPool) scheduleLoop() {
 	defer close(p.scheduleDone)
+	select {
+	case <-p.scheduleStop:
+		return
+	default:
+		p.runDueSessionSchedulesOnce(time.Now().UTC())
+	}
 	t := time.NewTicker(sessionScheduleSweepInterval)
 	defer t.Stop()
 	for {

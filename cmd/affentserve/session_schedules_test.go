@@ -70,6 +70,54 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	}
 }
 
+func TestSessionPool_ScheduleLoopSweepsDueSchedulesOnStartup(t *testing.T) {
+	memRoot := t.TempDir()
+	sessionID := "startup-due"
+	now := time.Now().UTC()
+	if err := os.MkdirAll(filepath.Join(memRoot, sessionID), 0o755); err != nil {
+		t.Fatalf("mkdir session state: %v", err)
+	}
+	if err := writeSessionSchedulesFile(filepath.Join(memRoot, sessionID, sessionSchedulesFileName), sessionSchedulesFile{
+		Version: 1,
+		Schedules: []sessionSchedule{
+			{
+				ID:        "sched_startup",
+				Kind:      sessionScheduleKindCustom,
+				Prompt:    "Startup schedule should run immediately.",
+				Enabled:   true,
+				NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
+				CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+				UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+			},
+		},
+	}); err != nil {
+		t.Fatalf("write startup schedule: %v", err)
+	}
+	srv := newSuccessfulScheduledTurnServer(t)
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    8,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        srv.URL,
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	schedule := waitSchedule(t, pool, sessionID, "sched_startup", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
+	if schedule.Enabled || schedule.LastError != "" {
+		t.Fatalf("schedule = %+v, want one-shot startup schedule completed without waiting for first ticker interval", schedule)
+	}
+}
+
 func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
@@ -337,6 +385,27 @@ func writeScheduleFixture(t *testing.T, pool *SessionPool, sessionID string, sch
 
 func newPoolWithSuccessfulScheduledTurns(t *testing.T, memRoot string) *SessionPool {
 	t.Helper()
+	srv := newSuccessfulScheduledTurnServer(t)
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    8,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        srv.URL,
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	return pool
+}
+
+func newSuccessfulScheduledTurnServer(t *testing.T) *httptest.Server {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		raw, err := io.ReadAll(r.Body)
@@ -354,22 +423,7 @@ func newPoolWithSuccessfulScheduledTurns(t *testing.T, memRoot string) *SessionP
 		fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
 	t.Cleanup(srv.Close)
-	cfg := Config{
-		Listen:         "127.0.0.1:0",
-		MaxSessions:    8,
-		SessionIdleTTL: "5m",
-		WorkspaceRoot:  t.TempDir(),
-		MemoryRoot:     memRoot,
-		BaseURL:        srv.URL,
-		APIKey:         "test",
-		Model:          "fake",
-	}
-	pool, err := NewSessionPool(cfg, zerologDiscard())
-	if err != nil {
-		t.Fatalf("NewSessionPool: %v", err)
-	}
-	t.Cleanup(pool.Shutdown)
-	return pool
+	return srv
 }
 
 func waitSchedule(t *testing.T, pool *SessionPool, sessionID, scheduleID string, ready func(sessionSchedule) bool) sessionSchedule {
