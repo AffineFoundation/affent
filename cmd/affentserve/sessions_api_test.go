@@ -341,6 +341,9 @@ func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
 	if def.CompactTriggerInputTokens != agent.DefaultSummaryTriggerInputTokens {
 		t.Fatalf("default input-token trigger = %d, want %d", def.CompactTriggerInputTokens, agent.DefaultSummaryTriggerInputTokens)
 	}
+	if def.CompactSummaryPromptMaxBytes != agent.DefaultSummaryPromptMaxBytes {
+		t.Fatalf("default summary prompt max bytes = %d, want %d", def.CompactSummaryPromptMaxBytes, agent.DefaultSummaryPromptMaxBytes)
+	}
 }
 
 func TestSessionContextSnapshotUsesBytePressure(t *testing.T) {
@@ -414,6 +417,9 @@ func TestSessionContextSnapshotDerivesRequestInputTriggerFromModelContext(t *tes
 	if got.CompactTriggerBytes != 320_000 {
 		t.Fatalf("byte trigger = %d, want 320000 aligned with model-window policy", got.CompactTriggerBytes)
 	}
+	if got.CompactSummaryPromptMaxBytes != agent.DefaultSummaryPromptMaxBytes {
+		t.Fatalf("summary prompt max bytes = %d, want default %d for large model window", got.CompactSummaryPromptMaxBytes, agent.DefaultSummaryPromptMaxBytes)
+	}
 }
 
 func TestSessionContextSnapshotReservesOutputBudgetInModelContextPolicy(t *testing.T) {
@@ -432,6 +438,22 @@ func TestSessionContextSnapshotReservesOutputBudgetInModelContextPolicy(t *testi
 	}
 	if got.CompactTriggerBytes != 280_000 {
 		t.Fatalf("byte trigger = %d, want 280000 aligned with output-reserved model-window policy", got.CompactTriggerBytes)
+	}
+	if got.CompactSummaryPromptMaxBytes != agent.DefaultSummaryPromptMaxBytes {
+		t.Fatalf("summary prompt max bytes = %d, want default %d for large model window", got.CompactSummaryPromptMaxBytes, agent.DefaultSummaryPromptMaxBytes)
+	}
+}
+
+func TestSessionContextSnapshotShrinksSummaryPromptForSmallModelContext(t *testing.T) {
+	got := sessionContextSnapshot(12, testRequestInputEstimate(512, 120), Config{
+		CompactTrigger:             240,
+		ModelContextWindowTokens:   200,
+		CompactTriggerInputPercent: 80,
+	})
+	if got.CompactTriggerInputTokens != 160 ||
+		got.CompactTriggerBytes != 640 ||
+		got.CompactSummaryPromptMaxBytes != 640 {
+		t.Fatalf("context snapshot = %+v, want small-window compact trigger and summary prompt cap at 160 tokens/640 bytes", got)
 	}
 }
 

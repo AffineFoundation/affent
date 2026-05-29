@@ -8,6 +8,8 @@ import (
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
+const defaultSummaryPromptMaxBytesForTaskStateTest = 196608
+
 func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
 		TurnID:       "t1",
@@ -18,13 +20,14 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		ScheduleKind: "checkin",
 	}) +
 		taskStateEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
-			TurnID:                    "t1",
-			MaxTurnSteps:              12,
-			MaxTurnInputTokens:        300000,
-			ModelContextWindowTokens:  100000,
-			ModelContextWindowAuto:    true,
-			ReservedOutputTokens:      30000,
-			CompactTriggerInputTokens: 70000,
+			TurnID:                       "t1",
+			MaxTurnSteps:                 12,
+			MaxTurnInputTokens:           300000,
+			ModelContextWindowTokens:     100000,
+			ModelContextWindowAuto:       true,
+			ReservedOutputTokens:         30000,
+			CompactTriggerInputTokens:    70000,
+			CompactSummaryPromptMaxBytes: defaultSummaryPromptMaxBytesForTaskStateTest,
 		}) +
 		taskStateEventLine(t, sse.TypeContextInjected, sse.ContextInjectedPayload{
 			TurnID:  "t1",
@@ -102,12 +105,13 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_auto=true") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "reserved_output_tokens=30000") ||
-		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") {
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_summary_prompt_max_bytes=196608") {
 		t.Fatalf("evidence = %+v, want runtime surface limits", state.Evidence)
 	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "reserved_output_tokens=30000"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "reserved_output_tokens=30000", "compact_summary_prompt_max_bytes=196608"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}

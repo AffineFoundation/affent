@@ -706,9 +706,6 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 			fields = append(fields, fmt.Sprintf("%s=%d", name, value))
 		}
 	}
-	addIntField("max_turn_steps", p.MaxTurnSteps)
-	addIntField("max_tool_calls", p.MaxToolCalls)
-	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
 	addIntField("model_context_window_tokens", p.ModelContextWindowTokens)
 	if p.ModelContextWindowAuto {
 		fields = append(fields, "model_context_window_auto=true")
@@ -716,6 +713,10 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	addIntField("reserved_output_tokens", p.ReservedOutputTokens)
 	addIntField("compact_trigger_input_tokens", p.CompactTriggerInputTokens)
 	addIntField("compact_trigger_input_percent", p.CompactTriggerInputPercent)
+	addIntField("compact_summary_prompt_max_bytes", p.CompactSummaryPromptMaxBytes)
+	addIntField("max_turn_steps", p.MaxTurnSteps)
+	addIntField("max_tool_calls", p.MaxToolCalls)
+	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
 	addIntField("available_tool_count", p.AvailableToolCount)
 	addIntField("excluded_tool_count", p.ExcludedToolCount)
 	addIntField("tool_schema_budget_tokens", p.ToolSchemaBudgetTokens)

@@ -343,8 +343,10 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 		t.Fatal("expected runtime.surface events")
 	}
 	latestSurface := out.Trace.RuntimeSurfaces[len(out.Trace.RuntimeSurfaces)-1]
-	if latestSurface.ModelContextWindowTokens != 200 || latestSurface.CompactTriggerInputTokens != 160 {
-		t.Fatalf("runtime surface policy = window:%d trigger:%d", latestSurface.ModelContextWindowTokens, latestSurface.CompactTriggerInputTokens)
+	if latestSurface.ModelContextWindowTokens != 200 ||
+		latestSurface.CompactTriggerInputTokens != 160 ||
+		latestSurface.CompactSummaryPromptMaxBytes != 640 {
+		t.Fatalf("runtime surface policy = window:%d trigger:%d summary_prompt:%d", latestSurface.ModelContextWindowTokens, latestSurface.CompactTriggerInputTokens, latestSurface.CompactSummaryPromptMaxBytes)
 	}
 	if out.Trace.RawTypes["context.compacted"] != 1 {
 		t.Fatalf("context.compacted events = %d, want 1; trace=%+v", out.Trace.RawTypes["context.compacted"], out.Trace.ContextCompactions)

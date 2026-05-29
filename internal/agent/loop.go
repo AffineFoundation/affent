@@ -2982,6 +2982,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		ReservedOutputTokens:         l.reservedOutputTokens(),
 		CompactTriggerInputTokens:    l.compactTriggerInputTokens(),
 		CompactTriggerInputPercent:   l.compactTriggerInputPercent(),
+		CompactSummaryPromptMaxBytes: l.compactSummaryPromptMaxBytes(),
 		ConversationBytes:            inputEstimate.ConversationBytes,
 		ToolSchemaBytes:              inputEstimate.ToolSchemaBytes,
 		EstimatedConversationTokens:  inputEstimate.ConversationTokens,
@@ -3651,6 +3652,17 @@ func (l *Loop) compactTriggerInputTokens() int {
 		}
 	}
 	return CompactTriggerInputTokensForModelPolicy(l.CompactTriggerInputTokens, l.ModelContextWindowTokens, l.CompactTriggerInputPercent, l.reservedOutputTokens(), fallback)
+}
+
+func (l *Loop) compactSummaryPromptMaxBytes() int {
+	c, ok := l.Compactor.(*LLMSummaryCompactor)
+	if !ok || c == nil {
+		return 0
+	}
+	if c.MaxPromptBytes == 0 {
+		return DefaultSummaryPromptMaxBytes
+	}
+	return c.MaxPromptBytes
 }
 
 func (l *Loop) reservedOutputTokens() int {

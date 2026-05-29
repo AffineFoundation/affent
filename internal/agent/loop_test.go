@@ -2069,6 +2069,7 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 			},
 		},
 		Events:                     events,
+		Compactor:                  &LLMSummaryCompactor{MaxPromptBytes: 280_000},
 		ModelContextWindowTokens:   100_000,
 		CompactTriggerInputPercent: 80,
 	}
@@ -2087,6 +2088,9 @@ func TestPublishRuntimeSurfaceReservesConfiguredOutputTokens(t *testing.T) {
 	}
 	if payload.ReservedOutputTokens != 30_000 {
 		t.Fatalf("reserved output tokens = %d, want 30000", payload.ReservedOutputTokens)
+	}
+	if payload.CompactSummaryPromptMaxBytes != 280_000 {
+		t.Fatalf("compact summary prompt max bytes = %d, want 280000", payload.CompactSummaryPromptMaxBytes)
 	}
 }
 

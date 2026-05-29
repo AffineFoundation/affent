@@ -3701,6 +3701,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, RuntimeSurfaceCompactTriggerInputTokens(scenario.CompactTriggerInputTokens))
 	} else if scenario.ModelContextWindowTokens > 0 {
 		checks = append(checks, RuntimeSurfaceCompactTriggerMatchesModelPolicy())
+		checks = append(checks, RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy())
 	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())

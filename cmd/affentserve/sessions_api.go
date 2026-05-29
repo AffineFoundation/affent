@@ -123,6 +123,7 @@ type sessionContextSummary struct {
 	ReservedOutputTokens           int  `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent     int  `json:"compact_trigger_input_percent,omitempty"`
 	CompactTriggerInputTokens      int  `json:"compact_trigger_input_tokens,omitempty"`
+	CompactSummaryPromptMaxBytes   int  `json:"compact_summary_prompt_max_bytes,omitempty"`
 	RequestInputCompactPercent     int  `json:"request_input_compact_percent,omitempty"`
 	RequestInputTokensUntilCompact int  `json:"request_input_tokens_until_compact,omitempty"`
 }
@@ -1492,6 +1493,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		ReservedOutputTokens:           reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputPercent:     compactTriggerInputPercentForConfig(cfg),
 		CompactTriggerInputTokens:      inputTrigger,
+		CompactSummaryPromptMaxBytes:   compactSummaryPromptMaxBytesForConfig(cfg),
 		RequestInputCompactPercent:     inputPercent,
 		RequestInputTokensUntilCompact: inputTokensUntilCompact,
 	}
@@ -1506,6 +1508,10 @@ func compactTriggerBytesForConfig(cfg Config) int {
 		return agent.CompactTriggerBytesForModelPolicy(0, cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryTriggerBytes)
 	}
 	return agent.DefaultSummaryTriggerBytes
+}
+
+func compactSummaryPromptMaxBytesForConfig(cfg Config) int {
+	return agent.SummaryPromptMaxBytesForModelPolicy(cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryPromptMaxBytes)
 }
 
 func reservedOutputTokensForConfig(cfg Config) int {

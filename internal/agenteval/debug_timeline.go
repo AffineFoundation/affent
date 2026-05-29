@@ -1188,7 +1188,8 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		surface.ModelContextWindowAuto ||
 		surface.ReservedOutputTokens > 0 ||
 		surface.CompactTriggerInputTokens > 0 ||
-		surface.CompactTriggerInputPercent > 0 {
+		surface.CompactTriggerInputPercent > 0 ||
+		surface.CompactSummaryPromptMaxBytes > 0 {
 		var parts []string
 		if surface.ModelContextWindowTokens > 0 {
 			parts = append(parts, fmt.Sprintf("model_context_window_tokens=`%d`", surface.ModelContextWindowTokens))
@@ -1204,6 +1205,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		}
 		if surface.CompactTriggerInputPercent > 0 {
 			parts = append(parts, fmt.Sprintf("compact_trigger_input_percent=`%d`", surface.CompactTriggerInputPercent))
+		}
+		if surface.CompactSummaryPromptMaxBytes > 0 {
+			parts = append(parts, fmt.Sprintf("compact_summary_prompt_max_bytes=`%d`", surface.CompactSummaryPromptMaxBytes))
 		}
 		fmt.Fprintf(b, "- context_policy: %s\n", strings.Join(parts, ", "))
 	}

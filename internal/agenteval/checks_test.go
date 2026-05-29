@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -1025,7 +1026,7 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000},
+		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
@@ -1041,6 +1042,9 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	}
 	if res := RuntimeSurfaceCompactTriggerMatchesModelPolicy().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface model policy check to pass: %+v", res)
+	}
+	if res := RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy().Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface summary prompt policy check to pass: %+v", res)
 	}
 	if res := RuntimeSurfaceReservedOutputTokens(30000).Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface reserved output check to pass: %+v", res)
@@ -1075,6 +1079,19 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	for _, want := range []string{"expected=70000", "trigger=80000", "reserve=30000"} {
 		if !strings.Contains(badPolicy.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", badPolicy.Detail, want)
+		}
+	}
+	badSummaryPolicy := RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+		ModelContextWindowTokens:     200,
+		CompactTriggerInputPercent:   80,
+		CompactSummaryPromptMaxBytes: 196608,
+	}}})
+	if badSummaryPolicy.Pass {
+		t.Fatal("expected mismatched runtime surface summary prompt policy check to fail")
+	}
+	for _, want := range []string{"expected=640", "summary_prompt_max_bytes=196608"} {
+		if !strings.Contains(badSummaryPolicy.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", badSummaryPolicy.Detail, want)
 		}
 	}
 	res = RuntimeSurfaceCompletionGuard("missing_guard").Eval(trace)

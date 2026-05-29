@@ -1221,6 +1221,40 @@ func RuntimeSurfaceCompactTriggerMatchesModelPolicy() Check {
 	}
 }
 
+func RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy() Check {
+	return Check{
+		Name: "runtime_surface_compact_summary_prompt_matches_model_policy",
+		Eval: func(t Trace) CheckResult {
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.ModelContextWindowTokens <= 0 {
+					continue
+				}
+				expected := agent.SummaryPromptMaxBytesForModelPolicy(
+					surface.ModelContextWindowTokens,
+					surface.CompactTriggerInputPercent,
+					surface.ReservedOutputTokens,
+					agent.DefaultSummaryPromptMaxBytes,
+				)
+				observed = append(observed, fmt.Sprintf("window=%d reserve=%d percent=%d summary_prompt_max_bytes=%d expected=%d",
+					surface.ModelContextWindowTokens,
+					surface.ReservedOutputTokens,
+					surface.CompactTriggerInputPercent,
+					surface.CompactSummaryPromptMaxBytes,
+					expected,
+				))
+				if expected > 0 && surface.CompactSummaryPromptMaxBytes == expected {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_summary_prompt_max_bytes=%d", expected)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface compact summary prompt budget to match model policy; observed=%v", observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceReservedOutputTokens(expected int) Check {
 	return Check{
 		Name: fmt.Sprintf("runtime_surface_reserved_output_tokens:%d", expected),
