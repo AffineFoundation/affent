@@ -4051,6 +4051,18 @@ This repository starts almost empty. The agent must create the project over two 
 		RequiredCommandOrder: []CommandOrderRequirement{
 			{Earlier: `git commit`, Later: `git push`},
 		},
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "todo_core/store.py", Action: "write"},
+			{PathContains: "tests/test_store.py", Action: "write"},
+			{PathContains: "README.md", Action: "write"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_commit"},
+			{Source: "git_push"},
+		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
@@ -4323,6 +4335,18 @@ if __name__ == "__main__":
 		},
 		RequiredCommandOrder: []CommandOrderRequirement{
 			{Earlier: `git commit`, Later: `git push`},
+		},
+		RequiredTaskStateAttemptedActions: []TaskStateAttemptedActionRequirement{
+			{Tool: "shell", SummaryContains: "git push"},
+		},
+		RequiredTaskStateChangedFiles: []TaskStateChangedFileRequirement{
+			{PathContains: "reporter/cli.py", Action: "edit"},
+			{PathContains: "tests/test_cli.py", Action: "edit"},
+		},
+		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
+			{Source: "git_commit"},
+			{Source: "git_push"},
+			{Source: "memory"},
 		},
 		RequiredLoopProtocolFeeds: 2,
 		RequiredCompletionGuards: []string{

@@ -4300,6 +4300,25 @@ func TestBuiltinCleanGitStatusScenariosRequireStatusEvidence(t *testing.T) {
 	}
 }
 
+func TestBuiltinCommitPushScenariosRequireTaskStateHandoffEvidence(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if !scenarioRequiresGitCommitAndPush(scenario) {
+			continue
+		}
+		if !scenarioHasTaskStateAttemptedAction(scenario, "shell", "git push") {
+			t.Fatalf("%s requires commit/push but lacks task_state git push attempted action evidence: %#v", scenario.Name, scenario.RequiredTaskStateAttemptedActions)
+		}
+		for _, source := range []string{"git_commit", "git_push"} {
+			if !scenarioRequiresTaskStateEvidence(scenario, source, "") {
+				t.Fatalf("%s requires commit/push but lacks task_state %s evidence: %#v", scenario.Name, source, scenario.RequiredTaskStateEvidence)
+			}
+		}
+		if scenarioMutatesFilesThroughTools(scenario) && !scenarioHasTaskStateChangedFileRequirement(scenario) {
+			t.Fatalf("%s requires commit/push and file mutation but lacks task_state changed file evidence: %#v", scenario.Name, scenario.RequiredTaskStateChangedFiles)
+		}
+	}
+}
+
 func scenarioRequiresGitCommitAndPush(scenario BatchScenario) bool {
 	return scenarioHasCommandRequirement(scenario, `git commit`) && scenarioHasCommandRequirement(scenario, `git push`)
 }
@@ -4341,6 +4360,28 @@ func scenarioHasGitStatusAfterMutation(scenario BatchScenario) bool {
 		}
 	}
 	return false
+}
+
+func scenarioHasTaskStateAttemptedAction(scenario BatchScenario, tool, summaryContains string) bool {
+	for _, req := range scenario.RequiredTaskStateAttemptedActions {
+		if req.Tool == tool && strings.Contains(req.SummaryContains, summaryContains) {
+			return true
+		}
+	}
+	return false
+}
+
+func scenarioMutatesFilesThroughTools(scenario BatchScenario) bool {
+	for _, tool := range scenario.RequiredTools {
+		if tool == "edit_file" || tool == "write_file" {
+			return true
+		}
+	}
+	return false
+}
+
+func scenarioHasTaskStateChangedFileRequirement(scenario BatchScenario) bool {
+	return len(scenario.RequiredTaskStateChangedFiles) > 0
 }
 
 func scenarioRequiresSkillInstallConfirmation(scenario BatchScenario) bool {
