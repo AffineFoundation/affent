@@ -104,30 +104,31 @@ type sessionSummary struct {
 }
 
 type sessionContextSummary struct {
-	MessageCount                       int  `json:"message_count"`
-	CompactTrigger                     int  `json:"compact_trigger"`
-	CompactPercent                     int  `json:"compact_percent"`
-	MessagesUntilCompact               int  `json:"messages_until_compact"`
-	ContextBytes                       int  `json:"context_bytes,omitempty"`
-	ConversationBytes                  int  `json:"conversation_bytes,omitempty"`
-	ToolSchemaBytes                    int  `json:"tool_schema_bytes,omitempty"`
-	CompactTriggerBytes                int  `json:"compact_trigger_bytes,omitempty"`
-	ByteCompactPercent                 int  `json:"byte_compact_percent,omitempty"`
-	BytesUntilCompact                  int  `json:"bytes_until_compact,omitempty"`
-	MessageCompactPercent              int  `json:"message_compact_percent,omitempty"`
-	EstimatedRequestInputTokens        int  `json:"estimated_request_input_tokens,omitempty"`
-	EstimatedConversationTokens        int  `json:"estimated_conversation_tokens,omitempty"`
-	EstimatedToolSchemaTokens          int  `json:"estimated_tool_schema_tokens,omitempty"`
-	ToolSchemaBudgetTokens             int  `json:"tool_schema_budget_tokens,omitempty"`
-	ModelContextWindowTokens           int  `json:"model_context_window_tokens,omitempty"`
-	ModelContextWindowAuto             bool `json:"model_context_window_auto,omitempty"`
-	ModelContextWindowEffectivePercent int  `json:"model_context_window_effective_percent,omitempty"`
-	ReservedOutputTokens               int  `json:"reserved_output_tokens,omitempty"`
-	CompactTriggerInputPercent         int  `json:"compact_trigger_input_percent,omitempty"`
-	CompactTriggerInputTokens          int  `json:"compact_trigger_input_tokens,omitempty"`
-	CompactSummaryPromptMaxBytes       int  `json:"compact_summary_prompt_max_bytes,omitempty"`
-	RequestInputCompactPercent         int  `json:"request_input_compact_percent,omitempty"`
-	RequestInputTokensUntilCompact     int  `json:"request_input_tokens_until_compact,omitempty"`
+	MessageCount                       int    `json:"message_count"`
+	CompactTrigger                     int    `json:"compact_trigger"`
+	CompactPercent                     int    `json:"compact_percent"`
+	MessagesUntilCompact               int    `json:"messages_until_compact"`
+	ContextBytes                       int    `json:"context_bytes,omitempty"`
+	ConversationBytes                  int    `json:"conversation_bytes,omitempty"`
+	ToolSchemaBytes                    int    `json:"tool_schema_bytes,omitempty"`
+	CompactTriggerBytes                int    `json:"compact_trigger_bytes,omitempty"`
+	ByteCompactPercent                 int    `json:"byte_compact_percent,omitempty"`
+	BytesUntilCompact                  int    `json:"bytes_until_compact,omitempty"`
+	MessageCompactPercent              int    `json:"message_compact_percent,omitempty"`
+	EstimatedRequestInputTokens        int    `json:"estimated_request_input_tokens,omitempty"`
+	EstimatedConversationTokens        int    `json:"estimated_conversation_tokens,omitempty"`
+	EstimatedToolSchemaTokens          int    `json:"estimated_tool_schema_tokens,omitempty"`
+	ToolSchemaBudgetTokens             int    `json:"tool_schema_budget_tokens,omitempty"`
+	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowAuto             bool   `json:"model_context_window_auto,omitempty"`
+	ModelContextWindowSource           string `json:"model_context_window_source,omitempty"`
+	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
+	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
+	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
+	CompactTriggerInputTokens          int    `json:"compact_trigger_input_tokens,omitempty"`
+	CompactSummaryPromptMaxBytes       int    `json:"compact_summary_prompt_max_bytes,omitempty"`
+	RequestInputCompactPercent         int    `json:"request_input_compact_percent,omitempty"`
+	RequestInputTokensUntilCompact     int    `json:"request_input_tokens_until_compact,omitempty"`
 }
 
 type sessionContextCompactionSummary struct {
@@ -144,6 +145,7 @@ type sessionContextCompactionSummary struct {
 	LatestAfterEstimatedInputTokens  int    `json:"latest_after_estimated_input_tokens,omitempty"`
 	LatestTriggerInputTokens         int    `json:"latest_trigger_input_tokens,omitempty"`
 	LatestModelContextWindowTokens   int    `json:"latest_model_context_window_tokens,omitempty"`
+	LatestModelContextWindowSource   string `json:"latest_model_context_window_source,omitempty"`
 	LatestReservedOutputTokens       int    `json:"latest_reserved_output_tokens,omitempty"`
 	LatestTriggerInputPercent        int    `json:"latest_trigger_input_percent,omitempty"`
 	LatestCompactScopeActive         bool   `json:"latest_compact_scope_active,omitempty"`
@@ -661,6 +663,7 @@ func contextCompactionSummaryFromRuntimeStats(stats RuntimeStatsSnapshot) *sessi
 		LatestAfterEstimatedInputTokens:  int(stats.ContextCompactionLatestAfterEstimatedInputTokens),
 		LatestTriggerInputTokens:         int(stats.ContextCompactionLatestTriggerInputTokens),
 		LatestModelContextWindowTokens:   int(stats.ContextCompactionLatestModelContextWindowTokens),
+		LatestModelContextWindowSource:   stats.ContextCompactionLatestModelContextWindowSource,
 		LatestReservedOutputTokens:       int(stats.ContextCompactionLatestReservedOutputTokens),
 		LatestTriggerInputPercent:        int(stats.ContextCompactionLatestTriggerInputPercent),
 		LatestCompactScopeActive:         stats.ContextCompactionLatestCompactScopeActive,
@@ -1517,6 +1520,7 @@ func sessionContextSnapshot(messageCount int, inputEstimate agent.RequestInputEs
 		EstimatedToolSchemaTokens:          inputEstimate.ToolSchemaTokens,
 		ModelContextWindowTokens:           cfg.ModelContextWindowTokens,
 		ModelContextWindowAuto:             cfg.ModelContextWindowAuto,
+		ModelContextWindowSource:           modelContextWindowSourceForConfig(cfg),
 		ModelContextWindowEffectivePercent: cfg.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputPercent:         compactTriggerInputPercentForConfig(cfg),
@@ -1545,6 +1549,17 @@ func compactTriggerBytesForConfig(cfg Config) int {
 
 func compactSummaryPromptMaxBytesForConfig(cfg Config) int {
 	return agent.SummaryPromptMaxBytesForModelPolicy(cfg.ModelContextWindowTokens, cfg.CompactTriggerInputPercent, reservedOutputTokensForConfig(cfg), agent.DefaultSummaryPromptMaxBytes)
+}
+
+func modelContextWindowSourceForConfig(cfg Config) string {
+	if cfg.ModelContextWindowTokens <= 0 {
+		return ""
+	}
+	source := strings.TrimSpace(cfg.ModelContextWindowSource)
+	if source != "" {
+		return source
+	}
+	return "explicit"
 }
 
 func reservedOutputTokensForConfig(cfg Config) int {
@@ -1807,6 +1822,7 @@ func scanContextCompactionsFromEvents(r *bufio.Reader) (sessionContextCompaction
 		summary.LatestAfterEstimatedInputTokens = p.AfterEstimatedInputTokens
 		summary.LatestTriggerInputTokens = p.TriggerInputTokens
 		summary.LatestModelContextWindowTokens = p.ModelContextWindowTokens
+		summary.LatestModelContextWindowSource = p.ModelContextWindowSource
 		summary.LatestReservedOutputTokens = p.ReservedOutputTokens
 		summary.LatestTriggerInputPercent = p.CompactTriggerInputPercent
 		summary.LatestCompactScopeActive = p.CompactScopeActive
@@ -2057,6 +2073,7 @@ func addRuntimeContextCompaction(summary *RuntimeStatsSnapshot, p sse.ContextCom
 	summary.ContextCompactionLatestAfterEstimatedInputTokens = int64(p.AfterEstimatedInputTokens)
 	summary.ContextCompactionLatestTriggerInputTokens = int64(p.TriggerInputTokens)
 	summary.ContextCompactionLatestModelContextWindowTokens = int64(p.ModelContextWindowTokens)
+	summary.ContextCompactionLatestModelContextWindowSource = p.ModelContextWindowSource
 	summary.ContextCompactionLatestReservedOutputTokens = int64(p.ReservedOutputTokens)
 	summary.ContextCompactionLatestTriggerInputPercent = int64(p.CompactTriggerInputPercent)
 	summary.ContextCompactionLatestCompactScopeActive = p.CompactScopeActive

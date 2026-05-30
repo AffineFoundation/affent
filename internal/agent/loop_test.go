@@ -1952,6 +1952,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		MaxTurnInputTokens:                 12345,
 		ModelContextWindowTokens:           100000,
 		ModelContextWindowAuto:             true,
+		ModelContextWindowSource:           "registry",
 		ModelContextWindowEffectivePercent: 95,
 		CompactTriggerInputPercent:         80,
 		ToolResultMaxBytesInContext:        1234,
@@ -1995,6 +1996,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 		payload.MaxTurnInputTokens != 12345 ||
 		payload.ModelContextWindowTokens != 100000 ||
 		!payload.ModelContextWindowAuto ||
+		payload.ModelContextWindowSource != "registry" ||
 		payload.ModelContextWindowEffectivePercent != 95 ||
 		payload.CompactTriggerInputTokens != 80000 ||
 		payload.CompactTriggerInputPercent != 80 ||

@@ -1020,9 +1020,9 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		events = append(events, ev)
 	}
 	for _, p := range []sse.ContextCompactPayload{
-		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048, EstimatedInputTokens: 120000, AfterEstimatedInputTokens: 65000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 1, CompactWindowPrefillInputTokens: 65000, CompactWindowPrefillSource: "estimated", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
-		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024, EstimatedInputTokens: 64000, AfterEstimatedInputTokens: 50000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 50000, CompactWindowPrefillSource: "estimated", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
-		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false, EstimatedInputTokens: 130000, AfterEstimatedInputTokens: 72000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 3, CompactWindowPrefillInputTokens: 72000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048, EstimatedInputTokens: 120000, AfterEstimatedInputTokens: 65000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 1, CompactWindowPrefillInputTokens: 65000, CompactWindowPrefillSource: "estimated", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024, EstimatedInputTokens: 64000, AfterEstimatedInputTokens: 50000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 50000, CompactWindowPrefillSource: "estimated", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
+		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false, EstimatedInputTokens: 130000, AfterEstimatedInputTokens: 72000, TriggerInputTokens: 70000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "registry", ReservedOutputTokens: 30000, CompactTriggerInputPercent: 80, CompactScopeActive: true, CompactWindowOrdinal: 3, CompactWindowPrefillInputTokens: 72000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 0, CompactHardInputLimitTokens: 70000},
 	} {
 		ev, err := sse.NewEvent(sse.TypeContextCompact, p)
 		if err != nil {
@@ -1053,6 +1053,7 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 			got.ContextCompactionLatestAfterEstimatedInputTokens == 72000 &&
 			got.ContextCompactionLatestTriggerInputTokens == 70000 &&
 			got.ContextCompactionLatestModelContextWindowTokens == 100000 &&
+			got.ContextCompactionLatestModelContextWindowSource == "registry" &&
 			got.ContextCompactionLatestReservedOutputTokens == 30000 &&
 			got.ContextCompactionLatestTriggerInputPercent == 80 &&
 			got.ContextCompactionLatestCompactScopeActive &&
@@ -1093,6 +1094,7 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		resp.Sessions[0].Runtime.ContextCompactionLatestEstimatedInputTokens != 130000 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestTriggerInputTokens != 70000 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
+		resp.Sessions[0].Runtime.ContextCompactionLatestModelContextWindowSource != "registry" ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
 		resp.Sessions[0].Runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
 		!resp.Sessions[0].Runtime.ContextCompactionLatestCompactScopeActive ||
@@ -1122,6 +1124,7 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		summary.ContextCompactions.LatestEstimatedInputTokens != 130000 ||
 		summary.ContextCompactions.LatestTriggerInputTokens != 70000 ||
 		summary.ContextCompactions.LatestModelContextWindowTokens != 100000 ||
+		summary.ContextCompactions.LatestModelContextWindowSource != "registry" ||
 		summary.ContextCompactions.LatestReservedOutputTokens != 30000 ||
 		summary.ContextCompactions.LatestTriggerInputPercent != 80 ||
 		!summary.ContextCompactions.LatestCompactScopeActive ||

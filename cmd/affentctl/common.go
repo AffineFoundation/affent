@@ -108,6 +108,7 @@ type commonFlags struct {
 	compactTriggerInputTokensAuto      bool
 	modelContextWindowTokens           int // 0 means unknown; derives compaction trigger when set
 	modelContextWindowAuto             bool
+	modelContextWindowSource           string
 	modelContextWindowEffectivePercent int
 	compactTriggerPercent              int // 0 uses agent default
 	compactKeepLast                    int
@@ -275,6 +276,7 @@ func resolveAffentctlModelContextWindowFromProvider(c commonFlags, llm *agent.LL
 		return c
 	}
 	c.modelContextWindowTokens = meta.ContextWindowTokens
+	c.modelContextWindowSource = source
 	c.modelContextWindowEffectivePercent = meta.EffectiveContextWindowPercent
 	if c.compactTriggerInputTokens == 0 && meta.AutoCompactTokenLimit > 0 {
 		c.compactTriggerInputTokens = agent.ClampAutoCompactTokenLimit(meta.AutoCompactTokenLimit, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(llm.Sampling))
@@ -1688,6 +1690,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		MaxTurnInputTokens:                 c.maxTurnInputTokens,
 		ModelContextWindowTokens:           c.modelContextWindowTokens,
 		ModelContextWindowAuto:             c.modelContextWindowAuto,
+		ModelContextWindowSource:           c.modelContextWindowSource,
 		ModelContextWindowEffectivePercent: c.modelContextWindowEffectivePercent,
 		CompactTriggerInputPercent:         c.compactTriggerPercent,
 		CompactTriggerInputTokensAuto:      c.compactTriggerInputTokensAuto,

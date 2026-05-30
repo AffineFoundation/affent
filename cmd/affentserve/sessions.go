@@ -132,6 +132,7 @@ type Session struct {
 	contextCompactionLastAfterEstimated int64
 	contextCompactionLastTrigger        int64
 	contextCompactionLastModelWindow    int64
+	contextCompactionLastModelSource    string
 	contextCompactionLastReserve        int64
 	contextCompactionLastPercent        int64
 	contextCompactionLastScopeActive    bool
@@ -773,6 +774,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		MaxTurnInputTokens:                 p.cfg.MaxTurnInputTokens,
 		ModelContextWindowTokens:           p.cfg.ModelContextWindowTokens,
 		ModelContextWindowAuto:             p.cfg.ModelContextWindowAuto,
+		ModelContextWindowSource:           p.cfg.ModelContextWindowSource,
 		ModelContextWindowEffectivePercent: p.cfg.ModelContextWindowEffectivePercent,
 		CompactTriggerInputPercent:         p.cfg.CompactTriggerInputPercent,
 		CompactTriggerInputTokensAuto:      p.cfg.compactTriggerInputTokensAuto,
@@ -1993,6 +1995,7 @@ type RuntimeStatsSnapshot struct {
 	ContextCompactionLatestAfterEstimatedInputTokens  int64            `json:"context_compaction_latest_after_estimated_input_tokens,omitempty"`
 	ContextCompactionLatestTriggerInputTokens         int64            `json:"context_compaction_latest_trigger_input_tokens,omitempty"`
 	ContextCompactionLatestModelContextWindowTokens   int64            `json:"context_compaction_latest_model_context_window_tokens,omitempty"`
+	ContextCompactionLatestModelContextWindowSource   string           `json:"context_compaction_latest_model_context_window_source,omitempty"`
 	ContextCompactionLatestReservedOutputTokens       int64            `json:"context_compaction_latest_reserved_output_tokens,omitempty"`
 	ContextCompactionLatestTriggerInputPercent        int64            `json:"context_compaction_latest_trigger_input_percent,omitempty"`
 	ContextCompactionLatestCompactScopeActive         bool             `json:"context_compaction_latest_compact_scope_active,omitempty"`
@@ -2017,6 +2020,7 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 	latestAfterEstimated := s.contextCompactionLastAfterEstimated
 	latestTrigger := s.contextCompactionLastTrigger
 	latestModelWindow := s.contextCompactionLastModelWindow
+	latestModelSource := s.contextCompactionLastModelSource
 	latestReserve := s.contextCompactionLastReserve
 	latestPercent := s.contextCompactionLastPercent
 	latestScopeActive := s.contextCompactionLastScopeActive
@@ -2043,6 +2047,7 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 		ContextCompactionLatestAfterEstimatedInputTokens:  latestAfterEstimated,
 		ContextCompactionLatestTriggerInputTokens:         latestTrigger,
 		ContextCompactionLatestModelContextWindowTokens:   latestModelWindow,
+		ContextCompactionLatestModelContextWindowSource:   latestModelSource,
 		ContextCompactionLatestReservedOutputTokens:       latestReserve,
 		ContextCompactionLatestTriggerInputPercent:        latestPercent,
 		ContextCompactionLatestCompactScopeActive:         latestScopeActive,
@@ -2198,6 +2203,7 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	s.contextCompactionLastAfterEstimated = int64(p.AfterEstimatedInputTokens)
 	s.contextCompactionLastTrigger = int64(p.TriggerInputTokens)
 	s.contextCompactionLastModelWindow = int64(p.ModelContextWindowTokens)
+	s.contextCompactionLastModelSource = p.ModelContextWindowSource
 	s.contextCompactionLastReserve = int64(p.ReservedOutputTokens)
 	s.contextCompactionLastPercent = int64(p.CompactTriggerInputPercent)
 	s.contextCompactionLastScopeActive = p.CompactScopeActive
@@ -2240,6 +2246,7 @@ func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 		s.contextCompactionLastAfterEstimated = stats.ContextCompactionLatestAfterEstimatedInputTokens
 		s.contextCompactionLastTrigger = stats.ContextCompactionLatestTriggerInputTokens
 		s.contextCompactionLastModelWindow = stats.ContextCompactionLatestModelContextWindowTokens
+		s.contextCompactionLastModelSource = stats.ContextCompactionLatestModelContextWindowSource
 		s.contextCompactionLastReserve = stats.ContextCompactionLatestReservedOutputTokens
 		s.contextCompactionLastPercent = stats.ContextCompactionLatestTriggerInputPercent
 		s.contextCompactionLastScopeActive = stats.ContextCompactionLatestCompactScopeActive

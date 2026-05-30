@@ -141,6 +141,9 @@ type Loop struct {
 	// metadata. It is trace/UI metadata; ModelContextWindowTokens already holds
 	// the effective value used by runtime policy.
 	ModelContextWindowEffectivePercent int
+	// ModelContextWindowSource records where ModelContextWindowTokens came from:
+	// provider metadata, Affent's local registry, or explicit operator config.
+	ModelContextWindowSource string
 	// CompactTriggerInputPercent is the percentage of ModelContextWindowTokens
 	// used for the derived request-input compaction trigger. Zero uses the
 	// runtime default.
@@ -3051,6 +3054,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 		MaxTurnInputTokens:                 l.maxTurnInputTokensForTurn(opts),
 		ModelContextWindowTokens:           l.ModelContextWindowTokens,
 		ModelContextWindowAuto:             l.ModelContextWindowAuto,
+		ModelContextWindowSource:           l.modelContextWindowSource(),
 		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               l.reservedOutputTokens(),
 		CompactTriggerInputTokens:          l.compactTriggerInputTokens(),
@@ -3381,6 +3385,17 @@ func (l *Loop) compactTriggerInputPercent() int {
 		return l.CompactTriggerInputPercent
 	}
 	return DefaultCompactTriggerInputPercent
+}
+
+func (l *Loop) modelContextWindowSource() string {
+	if l == nil || l.ModelContextWindowTokens <= 0 {
+		return ""
+	}
+	source := strings.TrimSpace(l.ModelContextWindowSource)
+	if source != "" {
+		return source
+	}
+	return "explicit"
 }
 
 func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
@@ -4075,6 +4090,7 @@ func (l *Loop) publishContextCompacted(turnID string, before, after, beforeBytes
 		AfterEstimatedInputTokens:          policy.AfterEstimatedInputTokens,
 		TriggerInputTokens:                 policy.TriggerInputTokens,
 		ModelContextWindowTokens:           l.ModelContextWindowTokens,
+		ModelContextWindowSource:           l.modelContextWindowSource(),
 		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               l.reservedOutputTokens(),
 		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),
@@ -4114,6 +4130,7 @@ func (l *Loop) publishContextCompactSkipped(turnID, cause string, before, candid
 		AfterEstimatedInputTokens:          policy.AfterEstimatedInputTokens,
 		TriggerInputTokens:                 policy.TriggerInputTokens,
 		ModelContextWindowTokens:           l.ModelContextWindowTokens,
+		ModelContextWindowSource:           l.modelContextWindowSource(),
 		ModelContextWindowEffectivePercent: l.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               l.reservedOutputTokens(),
 		CompactTriggerInputPercent:         l.compactTriggerInputPercent(),

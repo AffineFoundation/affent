@@ -138,6 +138,10 @@ type Config struct {
 	// only; ModelContextWindowTokens already holds the effective runtime value.
 	ModelContextWindowEffectivePercent int `json:"model_context_window_effective_percent"`
 
+	// ModelContextWindowSource records whether the effective context window came
+	// from provider metadata, Affent's local registry, or explicit config.
+	ModelContextWindowSource string `json:"model_context_window_source"`
+
 	// CompactTriggerInputPercent derives request-input compaction from
 	// ModelContextWindowTokens. Zero uses the agent runtime default.
 	CompactTriggerInputPercent int `json:"compact_trigger_input_percent"`

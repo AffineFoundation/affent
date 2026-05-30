@@ -37,6 +37,9 @@ func TestNewSessionPoolResolvesModelContextWindowFromProvider(t *testing.T) {
 	if pool.cfg.ModelContextWindowTokens != 131072 {
 		t.Fatalf("ModelContextWindowTokens = %d, want 131072", pool.cfg.ModelContextWindowTokens)
 	}
+	if pool.cfg.ModelContextWindowSource != "provider" {
+		t.Fatalf("ModelContextWindowSource = %q, want provider", pool.cfg.ModelContextWindowSource)
+	}
 	if pool.cfg.CompactTriggerInputTokens != 104857 {
 		t.Fatalf("CompactTriggerInputTokens = %d, want clamped default policy limit 104857", pool.cfg.CompactTriggerInputTokens)
 	}
@@ -133,6 +136,9 @@ func TestNewSessionPoolUsesKnownModelContextWindowFallback(t *testing.T) {
 	t.Cleanup(pool.Shutdown)
 	if pool.cfg.ModelContextWindowTokens != 262144 {
 		t.Fatalf("ModelContextWindowTokens = %d, want registry fallback 262144", pool.cfg.ModelContextWindowTokens)
+	}
+	if pool.cfg.ModelContextWindowSource != "registry" {
+		t.Fatalf("ModelContextWindowSource = %q, want registry", pool.cfg.ModelContextWindowSource)
 	}
 	if pool.cfg.CompactTriggerInputTokens != 0 {
 		t.Fatalf("CompactTriggerInputTokens = %d, want 0 derived at runtime", pool.cfg.CompactTriggerInputTokens)

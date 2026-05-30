@@ -1256,6 +1256,7 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 		CompactTriggerInputTokens:          4096,
 		ModelContextWindowTokens:           100000,
 		ModelContextWindowAuto:             true,
+		ModelContextWindowSource:           "provider",
 		ModelContextWindowEffectivePercent: 95,
 		CompactTriggerInputPercent:         75,
 		CompactKeepLast:                    4,
@@ -1291,6 +1292,9 @@ func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
 	}
 	if !s.loop.ModelContextWindowAuto {
 		t.Error("ModelContextWindowAuto = false, want true from config")
+	}
+	if s.loop.ModelContextWindowSource != "provider" {
+		t.Errorf("ModelContextWindowSource = %q, want provider from config", s.loop.ModelContextWindowSource)
 	}
 	if s.loop.ModelContextWindowEffectivePercent != 95 {
 		t.Errorf("ModelContextWindowEffectivePercent = %d, want 95 from config", s.loop.ModelContextWindowEffectivePercent)

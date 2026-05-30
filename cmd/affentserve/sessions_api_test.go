@@ -2195,6 +2195,7 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 			AfterEstimatedInputTokens:       68000,
 			TriggerInputTokens:              70000,
 			ModelContextWindowTokens:        100000,
+			ModelContextWindowSource:        "provider",
 			ReservedOutputTokens:            30000,
 			CompactTriggerInputPercent:      80,
 			CompactScopeActive:              true,
@@ -2230,6 +2231,7 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		summary.Runtime.ContextCompactionLatestAfterEstimatedInputTokens != 68000 ||
 		summary.Runtime.ContextCompactionLatestTriggerInputTokens != 70000 ||
 		summary.Runtime.ContextCompactionLatestModelContextWindowTokens != 100000 ||
+		summary.Runtime.ContextCompactionLatestModelContextWindowSource != "provider" ||
 		summary.Runtime.ContextCompactionLatestReservedOutputTokens != 30000 ||
 		summary.Runtime.ContextCompactionLatestTriggerInputPercent != 80 ||
 		!summary.Runtime.ContextCompactionLatestCompactScopeActive ||
@@ -2247,6 +2249,7 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 		summary.ContextCompactions.LatestAfterEstimatedInputTokens != 68000 ||
 		summary.ContextCompactions.LatestTriggerInputTokens != 70000 ||
 		summary.ContextCompactions.LatestModelContextWindowTokens != 100000 ||
+		summary.ContextCompactions.LatestModelContextWindowSource != "provider" ||
 		summary.ContextCompactions.LatestReservedOutputTokens != 30000 ||
 		summary.ContextCompactions.LatestTriggerInputPercent != 80 ||
 		!summary.ContextCompactions.LatestCompactScopeActive ||

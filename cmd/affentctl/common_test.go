@@ -717,6 +717,9 @@ func TestResolveAffentctlModelContextWindowFromProvider(t *testing.T) {
 	if got.compactTriggerInputTokens != 104857 {
 		t.Fatalf("compactTriggerInputTokens = %d, want clamped default policy limit 104857", got.compactTriggerInputTokens)
 	}
+	if got.modelContextWindowSource != "provider" {
+		t.Fatalf("modelContextWindowSource = %q, want provider", got.modelContextWindowSource)
+	}
 	if !got.compactTriggerInputTokensAuto {
 		t.Fatal("compactTriggerInputTokensAuto = false, want provider-derived auto compact limit")
 	}
@@ -742,6 +745,9 @@ func TestResolveAffentctlModelContextWindowHonorsCompactPercent(t *testing.T) {
 	if got.modelContextWindowEffectivePercent != 95 {
 		t.Fatalf("modelContextWindowEffectivePercent = %d, want 95", got.modelContextWindowEffectivePercent)
 	}
+	if got.modelContextWindowSource != "provider" {
+		t.Fatalf("modelContextWindowSource = %q, want provider", got.modelContextWindowSource)
+	}
 	if got.compactTriggerInputTokens != 71250 {
 		t.Fatalf("compactTriggerInputTokens = %d, want explicit 75%% effective policy limit 71250", got.compactTriggerInputTokens)
 	}
@@ -765,6 +771,9 @@ func TestResolveAffentctlModelContextWindowUsesKnownModelFallback(t *testing.T) 
 	got := resolveAffentctlModelContextWindowFromProvider(cf, llm, zerolog.New(io.Discard))
 	if got.modelContextWindowTokens != 262144 {
 		t.Fatalf("modelContextWindowTokens = %d, want registry fallback 262144", got.modelContextWindowTokens)
+	}
+	if got.modelContextWindowSource != "registry" {
+		t.Fatalf("modelContextWindowSource = %q, want registry", got.modelContextWindowSource)
 	}
 	if got.compactTriggerInputTokens != 0 || got.compactTriggerInputTokensAuto {
 		t.Fatalf("compact trigger should be derived later from model policy, got trigger=%d auto=%t", got.compactTriggerInputTokens, got.compactTriggerInputTokensAuto)
@@ -828,11 +837,13 @@ func TestSetupLoopPropagatesAutoModelContextMetadata(t *testing.T) {
 	defer b.close()
 
 	if b.loop.ModelContextWindowTokens != 95000 ||
+		b.loop.ModelContextWindowSource != "provider" ||
 		b.loop.ModelContextWindowEffectivePercent != 95 ||
 		b.loop.CompactTriggerInputTokens != 71250 ||
 		!b.loop.CompactTriggerInputTokensAuto {
-		t.Fatalf("loop model context policy = window:%d effective:%d trigger:%d auto:%t",
+		t.Fatalf("loop model context policy = window:%d source:%q effective:%d trigger:%d auto:%t",
 			b.loop.ModelContextWindowTokens,
+			b.loop.ModelContextWindowSource,
 			b.loop.ModelContextWindowEffectivePercent,
 			b.loop.CompactTriggerInputTokens,
 			b.loop.CompactTriggerInputTokensAuto,

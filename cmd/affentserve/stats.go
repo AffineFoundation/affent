@@ -82,6 +82,7 @@ type statsBoundaries struct {
 	MaxTurnInputTokens                 int    `json:"max_turn_input_tokens"`
 	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
 	ModelContextWindowAuto             bool   `json:"model_context_window_auto,omitempty"`
+	ModelContextWindowSource           string `json:"model_context_window_source,omitempty"`
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens          int    `json:"compact_trigger_input_tokens,omitempty"`
@@ -517,6 +518,7 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		MaxTurnInputTokens:                 maxTurnInputTokens,
 		ModelContextWindowTokens:           cfg.ModelContextWindowTokens,
 		ModelContextWindowAuto:             cfg.ModelContextWindowAuto,
+		ModelContextWindowSource:           modelContextWindowSourceForConfig(cfg),
 		ModelContextWindowEffectivePercent: cfg.ModelContextWindowEffectivePercent,
 		ReservedOutputTokens:               reservedOutputTokensForConfig(cfg),
 		CompactTriggerInputTokens:          compactTriggerInputTokensForConfig(cfg),

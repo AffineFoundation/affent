@@ -1186,6 +1186,31 @@ func RuntimeSurfaceModelContextWindowEffectivePercent(expected int) Check {
 	}
 }
 
+func RuntimeSurfaceModelContextWindowSource(expected string) Check {
+	expected = strings.TrimSpace(expected)
+	return Check{
+		Name: "runtime_surface_model_context_window_source:" + previewSubstr(expected, 48),
+		Eval: func(t Trace) CheckResult {
+			if expected == "" {
+				return CheckResult{Pass: true}
+			}
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.ModelContextWindowSource != "" {
+					observed = append(observed, surface.ModelContextWindowSource)
+				}
+				if surface.ModelContextWindowSource == expected {
+					return CheckResult{Pass: true, Detail: "model_context_window_source=" + expected}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface model_context_window_source=%q; observed=%v", expected, observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceCompactTriggerInputTokens(expected int) Check {
 	return Check{
 		Name: fmt.Sprintf("runtime_surface_compact_trigger_input_tokens:%d", expected),

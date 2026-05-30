@@ -1219,6 +1219,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		if surface.ModelContextWindowAuto {
 			parts = append(parts, "model_context_window_auto=`true`")
 		}
+		if surface.ModelContextWindowSource != "" {
+			parts = append(parts, fmt.Sprintf("model_context_window_source=`%s`", surface.ModelContextWindowSource))
+		}
 		if surface.ModelContextWindowEffectivePercent > 0 {
 			parts = append(parts, fmt.Sprintf("model_context_window_effective_percent=`%d`", surface.ModelContextWindowEffectivePercent))
 		}
@@ -1569,6 +1572,9 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 		if c.ModelContextWindowTokens > 0 {
 			policy = append(policy, fmt.Sprintf("model_context_window_tokens=%d", c.ModelContextWindowTokens))
 		}
+		if c.ModelContextWindowSource != "" {
+			policy = append(policy, fmt.Sprintf("model_context_window_source=%s", c.ModelContextWindowSource))
+		}
 		if c.ModelContextWindowEffectivePercent > 0 {
 			policy = append(policy, fmt.Sprintf("model_context_window_effective_percent=%d", c.ModelContextWindowEffectivePercent))
 		}
@@ -1645,6 +1651,9 @@ func renderTimelineCompactionSkips(b *strings.Builder, trace *Trace) {
 		}
 		if skipped.ModelContextWindowTokens > 0 {
 			policy = append(policy, fmt.Sprintf("model_context_window_tokens=%d", skipped.ModelContextWindowTokens))
+		}
+		if skipped.ModelContextWindowSource != "" {
+			policy = append(policy, fmt.Sprintf("model_context_window_source=%s", skipped.ModelContextWindowSource))
 		}
 		if skipped.ModelContextWindowEffectivePercent > 0 {
 			policy = append(policy, fmt.Sprintf("model_context_window_effective_percent=%d", skipped.ModelContextWindowEffectivePercent))

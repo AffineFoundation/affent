@@ -88,6 +88,7 @@ type RuntimeSurfacePayload struct {
 	MaxTurnInputTokens                 int                  `json:"max_turn_input_tokens,omitempty"`
 	ModelContextWindowTokens           int                  `json:"model_context_window_tokens,omitempty"`
 	ModelContextWindowAuto             bool                 `json:"model_context_window_auto,omitempty"`
+	ModelContextWindowSource           string               `json:"model_context_window_source,omitempty"`
 	ModelContextWindowEffectivePercent int                  `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int                  `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputTokens          int                  `json:"compact_trigger_input_tokens,omitempty"`
@@ -499,6 +500,7 @@ type ContextCompactPayload struct {
 	AfterEstimatedInputTokens          int    `json:"after_estimated_input_tokens,omitempty"`
 	TriggerInputTokens                 int    `json:"trigger_input_tokens,omitempty"`
 	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowSource           string `json:"model_context_window_source,omitempty"`
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
@@ -530,6 +532,7 @@ type ContextCompactSkippedPayload struct {
 	AfterEstimatedInputTokens          int    `json:"after_estimated_input_tokens,omitempty"`
 	TriggerInputTokens                 int    `json:"trigger_input_tokens,omitempty"`
 	ModelContextWindowTokens           int    `json:"model_context_window_tokens,omitempty"`
+	ModelContextWindowSource           string `json:"model_context_window_source,omitempty"`
 	ModelContextWindowEffectivePercent int    `json:"model_context_window_effective_percent,omitempty"`
 	ReservedOutputTokens               int    `json:"reserved_output_tokens,omitempty"`
 	CompactTriggerInputPercent         int    `json:"compact_trigger_input_percent,omitempty"`
