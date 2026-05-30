@@ -65,16 +65,18 @@ type sessionSchedulesFile struct {
 }
 
 type sessionSchedulesSummary struct {
-	Count             int    `json:"count"`
-	Enabled           int    `json:"enabled"`
-	EnabledLoopTicks  int    `json:"enabled_loop_ticks,omitempty"`
-	PendingLoopTicks  int    `json:"pending_loop_ticks,omitempty"`
-	ErrorCount        int    `json:"error_count,omitempty"`
-	LastError         string `json:"last_error,omitempty"`
-	NextRunAt         string `json:"next_run_at,omitempty"`
-	NextScheduleID    string `json:"next_schedule_id,omitempty"`
-	NextScheduleKind  string `json:"next_schedule_kind,omitempty"`
-	NextPromptPreview string `json:"next_prompt_preview,omitempty"`
+	Count                 int    `json:"count"`
+	Enabled               int    `json:"enabled"`
+	EnabledLoopTicks      int    `json:"enabled_loop_ticks,omitempty"`
+	PendingLoopTicks      int    `json:"pending_loop_ticks,omitempty"`
+	ErrorCount            int    `json:"error_count,omitempty"`
+	LastErrorScheduleID   string `json:"last_error_schedule_id,omitempty"`
+	LastErrorScheduleKind string `json:"last_error_schedule_kind,omitempty"`
+	LastError             string `json:"last_error,omitempty"`
+	NextRunAt             string `json:"next_run_at,omitempty"`
+	NextScheduleID        string `json:"next_schedule_id,omitempty"`
+	NextScheduleKind      string `json:"next_schedule_kind,omitempty"`
+	NextPromptPreview     string `json:"next_prompt_preview,omitempty"`
 }
 
 type sessionSchedulesResponse struct {
@@ -599,6 +601,8 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 		summary.NextPromptPreview = previewSessionSchedulePrompt(sessionScheduleDisplayText(*next))
 	}
 	if latestError != nil {
+		summary.LastErrorScheduleID = latestError.ID
+		summary.LastErrorScheduleKind = latestError.Kind
 		summary.LastError = latestError.LastError
 	}
 	return summary

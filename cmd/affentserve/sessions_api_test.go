@@ -2868,7 +2868,10 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 1 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "Loop every 30m: scheduled-list" {
 		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
 	}
-	if summary.ErrorCount != 1 || summary.LastError != "LOOP.md not running; answer calibration first" {
+	if summary.ErrorCount != 1 ||
+		summary.LastErrorScheduleID != "sched_paused" ||
+		summary.LastErrorScheduleKind != sessionScheduleKindCustom ||
+		summary.LastError != "LOOP.md not running; answer calibration first" {
 		t.Fatalf("schedule summary = %+v, want latest timer error", summary)
 	}
 }
