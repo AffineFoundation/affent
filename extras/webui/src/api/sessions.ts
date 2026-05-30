@@ -297,6 +297,7 @@ export interface SessionSchedule {
   last_run_at?: string;
   last_turn_id?: string;
   run_count?: number;
+  last_error_kind?: string;
   last_error?: string;
 }
 
@@ -306,6 +307,9 @@ export interface SessionSchedulesSummary {
   enabled_loop_ticks?: number;
   pending_loop_ticks?: number;
   error_count?: number;
+  last_error_schedule_id?: string;
+  last_error_schedule_kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";
+  last_error_kind?: string;
   last_error?: string;
   next_run_at?: string;
   next_schedule_id?: string;

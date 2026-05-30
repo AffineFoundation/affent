@@ -300,6 +300,12 @@ function ScheduleInspector({
             <dd>{schedule.run_count}</dd>
           </div>
         ) : null}
+        {schedule.last_error_kind ? (
+          <div>
+            <dt>Error kind</dt>
+            <dd>{schedule.last_error_kind}</dd>
+          </div>
+        ) : null}
       </dl>
       {schedule.last_error ? (
         <div className="session-schedule-inspector-error" role="alert">

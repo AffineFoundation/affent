@@ -303,6 +303,7 @@ describe("SessionSchedulePanel", () => {
             repeat_interval_seconds: 86400,
             created_at: "2026-05-27T13:30:00Z",
             updated_at: "2026-05-27T13:30:00Z",
+            last_error_kind: "session_schedule_turn_cancelled",
             last_error: "network unavailable",
           },
         ]}
@@ -316,5 +317,6 @@ describe("SessionSchedulePanel", () => {
       expect.stringContaining("Later check-in"),
       expect.stringContaining("Paused early check-in"),
     ]);
+    expect(screen.getByTestId("session-schedule-inspector")).toHaveTextContent("Error kindsession_schedule_turn_cancelled");
   });
 });
