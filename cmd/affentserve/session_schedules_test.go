@@ -48,8 +48,10 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	}
 	if schedule.RunCount != 0 ||
 		schedule.LastTurnID == "" ||
-		schedule.LastErrorKind != sessionScheduleTurnFailedFailureKind ||
-		!strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) {
+		schedule.LastErrorKind != sessionScheduleTurnMaxTurnsFailureKind ||
+		!strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) ||
+		!strings.Contains(schedule.LastError, "Next:") ||
+		!strings.Contains(schedule.LastError, "Failure: kind="+sessionScheduleTurnMaxTurnsFailureKind) {
 		t.Fatalf("schedule = %+v, want failed turn id and turn-end failure metadata instead of false success", schedule)
 	}
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
@@ -524,6 +526,28 @@ func TestSessionPool_ClaimScheduleDoesNotAdvanceBeforeTurnEnd(t *testing.T) {
 	})
 	if completed.Enabled || completed.NextRunAt != nextRunAt || completed.RunCount != 1 || completed.LastRunAt == "" || completed.LastError != "" {
 		t.Fatalf("schedule after success = %+v, want one-shot disabled only after turn.end", completed)
+	}
+}
+
+func TestSessionScheduleTurnFailureKind(t *testing.T) {
+	cases := []struct {
+		reason string
+		want   string
+	}{
+		{reason: sse.TurnEndMaxTurns, want: sessionScheduleTurnMaxTurnsFailureKind},
+		{reason: sse.TurnEndCancelled, want: sessionScheduleTurnCancelledFailureKind},
+		{reason: sse.TurnEndError, want: sessionScheduleTurnErrorFailureKind},
+		{reason: "provider_shutdown", want: sessionScheduleTurnFailedFailureKind},
+		{reason: "", want: sessionScheduleTurnErrorFailureKind},
+	}
+	for _, c := range cases {
+		if got := sessionScheduleTurnFailureKind(c.reason); got != c.want {
+			t.Fatalf("sessionScheduleTurnFailureKind(%q) = %q, want %q", c.reason, got, c.want)
+		}
+		err := sessionScheduleTurnFailureError(c.reason)
+		if err == nil || !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "Failure: kind="+c.want) {
+			t.Fatalf("sessionScheduleTurnFailureError(%q) = %v, want structured failure", c.reason, err)
+		}
 	}
 }
 

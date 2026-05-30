@@ -43,6 +43,9 @@ const (
 
 	sessionScheduleLoopTickUnavailableFailureKind = "session_schedule_loop_tick_unavailable"
 	sessionScheduleTurnFailedFailureKind          = "session_schedule_turn_failed"
+	sessionScheduleTurnMaxTurnsFailureKind        = "session_schedule_turn_max_turns"
+	sessionScheduleTurnCancelledFailureKind       = "session_schedule_turn_cancelled"
+	sessionScheduleTurnErrorFailureKind           = "session_schedule_turn_error"
 )
 
 type sessionSchedule struct {
@@ -1033,7 +1036,7 @@ func (s *Session) completeScheduledTurn(ev sse.Event) {
 	if reason == "" {
 		reason = sse.TurnEndError
 	}
-	if err := s.pool.recordSessionScheduleFailure(run, time.Now().UTC(), payload.TurnID, fmt.Errorf("scheduled turn ended with %s", reason)); err != nil {
+	if err := s.pool.recordSessionScheduleFailure(run, time.Now().UTC(), payload.TurnID, sessionScheduleTurnFailureError(reason)); err != nil {
 		s.pool.logger.Warn().Err(err).Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Msg("record session schedule failure")
 	}
 }
@@ -1173,6 +1176,31 @@ func sessionScheduleFailureKind(cause error) string {
 		}
 	}
 	return sessionScheduleTurnFailedFailureKind
+}
+
+func sessionScheduleTurnFailureError(reason string) error {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = sse.TurnEndError
+	}
+	return fmt.Errorf("scheduled turn ended with %s\nNext: inspect the scheduled turn trace, then retry only if the schedule prompt is still valid.\nFailure: kind=%s", reason, sessionScheduleTurnFailureKind(reason))
+}
+
+func sessionScheduleTurnFailureKind(reason string) string {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = sse.TurnEndError
+	}
+	switch reason {
+	case sse.TurnEndMaxTurns:
+		return sessionScheduleTurnMaxTurnsFailureKind
+	case sse.TurnEndCancelled:
+		return sessionScheduleTurnCancelledFailureKind
+	case sse.TurnEndError:
+		return sessionScheduleTurnErrorFailureKind
+	default:
+		return sessionScheduleTurnFailedFailureKind
+	}
 }
 
 func sessionScheduleDue(schedule sessionSchedule, now time.Time) bool {
