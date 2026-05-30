@@ -935,6 +935,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if err := s.seedStatsFromEventsFile(filepath.Join(sessionDir, "events.jsonl")); err != nil {
 		p.logger.Warn().Err(err).Str("session_id", id).Msg("seed session stats from event log")
 	}
+	if state := s.autoCompactWindowStateFromStats(); state.Ordinal > 0 {
+		loop.RestoreAutoCompactWindowState(state)
+	}
 	go s.fanout()
 	if repairStats := conv.RepairStats(); repairStats.HasAny() {
 		s.publishSessionEvent(sse.TypeConversationRepaired, sse.ConversationRepairedPayload{
@@ -2255,6 +2258,24 @@ func (s *Session) addRuntimeStatsSnapshot(stats RuntimeStatsSnapshot) {
 		s.contextCompactionLastPrefillSource = stats.ContextCompactionLatestCompactWindowPrefillSource
 		s.contextCompactionLastScopedInput = stats.ContextCompactionLatestCompactScopedInputTokens
 		s.contextCompactionLastHardLimit = stats.ContextCompactionLatestCompactHardInputLimit
+	}
+}
+
+func (s *Session) autoCompactWindowStateFromStats() agent.AutoCompactWindowState {
+	if s == nil {
+		return agent.AutoCompactWindowState{}
+	}
+	s.runtimeStatsMu.Lock()
+	defer s.runtimeStatsMu.Unlock()
+	if !s.contextCompactionLastScopeActive ||
+		s.contextCompactionLastWindowOrdinal <= 0 ||
+		s.contextCompactionLastPrefill <= 0 {
+		return agent.AutoCompactWindowState{}
+	}
+	return agent.AutoCompactWindowState{
+		Ordinal:            s.contextCompactionLastWindowOrdinal,
+		PrefillInputTokens: int(s.contextCompactionLastPrefill),
+		Observed:           s.contextCompactionLastPrefillSource == sse.CompactWindowPrefillSourceServerObserved,
 	}
 }
 

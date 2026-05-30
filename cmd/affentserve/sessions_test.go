@@ -84,6 +84,47 @@ func TestSessionPoolBuildSessionWritesMetadata(t *testing.T) {
 	}
 }
 
+func TestSessionPool_RestoresAutoCompactWindowFromDurableCompaction(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.ModelContextWindowTokens = 100_000
+	pool.cfg.CompactTriggerInputPercent = 80
+	createDurableSessionDir(t, pool, "compact-window-resume")
+	dir := pool.sessionDirPath("compact-window-resume")
+	body := sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
+		TurnID:                             "t1",
+		BeforeMessages:                     60,
+		AfterMessages:                      18,
+		RemovedMessages:                    42,
+		Reason:                             "estimated_context_pressure",
+		EstimatedInputTokens:               120_000,
+		AfterEstimatedInputTokens:          68_000,
+		TriggerInputTokens:                 80_000,
+		ModelContextWindowTokens:           100_000,
+		CompactTriggerInputPercent:         80,
+		CompactScopeActive:                 true,
+		CompactWindowOrdinal:               3,
+		CompactWindowPrefillInputTokens:    72_000,
+		CompactWindowPrefillSource:         sse.CompactWindowPrefillSourceServerObserved,
+		CompactScopedInputTokens:           0,
+		CompactHardInputLimitTokens:        100_000,
+		SummaryPresent:                     true,
+		SummaryBytes:                       512,
+		ModelContextWindowEffectivePercent: 0,
+	})
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := pool.GetOrCreate("compact-window-resume")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	got := s.loop.AutoCompactWindowState()
+	if got.Ordinal != 3 || got.PrefillInputTokens != 72_000 || !got.Observed {
+		t.Fatalf("auto compact window = %+v, want durable observed compaction scope", got)
+	}
+}
+
 // TestSessionPool_SignalShutdown pins the early-flip contract:
 // SignalShutdown sets IsShuttingDown immediately (so /healthz can
 // return 503 the moment SIGTERM arrives), GetOrCreate fails with

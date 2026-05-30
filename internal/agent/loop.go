@@ -321,11 +321,6 @@ const (
 	UserModeLoopSetup   = "loop_setup"
 )
 
-const (
-	compactWindowPrefillSourceEstimated      = "estimated"
-	compactWindowPrefillSourceServerObserved = "server_observed"
-)
-
 // TurnOptions scopes runtime controls to one SendUser call. Empty options
 // preserve the Loop's configured behavior.
 type TurnOptions struct {
@@ -4084,9 +4079,9 @@ func (l *Loop) autoCompactWindowPrefillTokens() (int64, int, string, bool) {
 	if !l.autoCompactWindow.prefillSet || l.autoCompactWindow.prefillTokens <= 0 {
 		return 0, 0, "", false
 	}
-	source := compactWindowPrefillSourceEstimated
+	source := sse.CompactWindowPrefillSourceEstimated
 	if l.autoCompactWindow.observed {
-		source = compactWindowPrefillSourceServerObserved
+		source = sse.CompactWindowPrefillSourceServerObserved
 	}
 	return l.autoCompactWindow.ordinal, l.autoCompactWindow.prefillTokens, source, true
 }

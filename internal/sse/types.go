@@ -485,6 +485,11 @@ type LoopTurnCheckpointPayload struct {
 	SessionSearchCalls       int    `json:"session_search_calls,omitempty"`
 }
 
+const (
+	CompactWindowPrefillSourceEstimated      = "estimated"
+	CompactWindowPrefillSourceServerObserved = "server_observed"
+)
+
 // ContextCompactPayload records when the model conversation was rewritten into
 // a shorter rolling summary. SummaryPreview is bounded by the runtime before
 // publication so trace/UI can inspect what state survived without receiving an
