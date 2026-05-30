@@ -2840,7 +2840,7 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 				NextRunAt: now.Add(30 * time.Minute).Format(time.RFC3339),
 				CreatedAt: now.Format(time.RFC3339),
 				UpdatedAt: now.Add(10 * time.Minute).Format(time.RFC3339),
-				LastError: "LOOP.md not running; answer calibration first",
+				LastError: "LOOP.md not running; answer calibration first\nNext: activate the loop before retrying.\nFailure: kind=session_schedule_loop_tick_unavailable",
 			},
 		},
 	}
@@ -2871,7 +2871,8 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	if summary.ErrorCount != 1 ||
 		summary.LastErrorScheduleID != "sched_paused" ||
 		summary.LastErrorScheduleKind != sessionScheduleKindCustom ||
-		summary.LastError != "LOOP.md not running; answer calibration first" {
+		summary.LastErrorKind != sessionScheduleLoopTickUnavailableFailureKind ||
+		!strings.Contains(summary.LastError, "LOOP.md not running") {
 		t.Fatalf("schedule summary = %+v, want latest timer error", summary)
 	}
 }

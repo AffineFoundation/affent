@@ -216,7 +216,7 @@ func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 				NextRunAt: now.Add(time.Hour).Format(time.RFC3339),
 				CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
 				UpdatedAt: now.Format(time.RFC3339),
-				LastError: "previous scheduled turn failed",
+				LastError: "previous scheduled turn failed\nNext: inspect the schedule prompt before retrying.\nFailure: kind=session_schedule_turn_failed",
 			},
 		},
 	}); err != nil {
@@ -276,7 +276,10 @@ func TestHandleStats_ReportsScheduleRunnerQueueSummary(t *testing.T) {
 	if got.LastErrorSessionID != "timers-a" || got.LastErrorScheduleID != "sched_paused_error" {
 		t.Fatalf("ScheduleRunner = %+v, want latest error schedule identity", got)
 	}
-	if got.LastError != "previous scheduled turn failed" {
+	if got.LastErrorKind != "session_schedule_turn_failed" {
+		t.Fatalf("ScheduleRunner.LastErrorKind = %q, want session_schedule_turn_failed", got.LastErrorKind)
+	}
+	if !strings.Contains(got.LastError, "previous scheduled turn failed") {
 		t.Fatalf("ScheduleRunner.LastError = %q, want latest schedule error", got.LastError)
 	}
 }

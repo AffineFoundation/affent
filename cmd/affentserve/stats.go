@@ -73,6 +73,7 @@ type scheduleRunnerStats struct {
 	OldestInFlightScheduleID string `json:"oldest_in_flight_schedule_id,omitempty"`
 	LastErrorSessionID       string `json:"last_error_session_id,omitempty"`
 	LastErrorScheduleID      string `json:"last_error_schedule_id,omitempty"`
+	LastErrorKind            string `json:"last_error_kind,omitempty"`
 	LastError                string `json:"last_error,omitempty"`
 	DisabledReason           string `json:"disabled_reason,omitempty"`
 }
@@ -370,6 +371,7 @@ func (stats *scheduleRunnerStats) addDurableQueueSnapshot(pool *SessionPool, now
 	if latestError != nil {
 		stats.LastErrorSessionID = latestErrorSessionID
 		stats.LastErrorScheduleID = latestError.ID
+		stats.LastErrorKind = sessionScheduleLastErrorKind(latestError.LastError)
 		stats.LastError = latestError.LastError
 	}
 }

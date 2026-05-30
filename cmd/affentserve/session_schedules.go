@@ -19,6 +19,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/toolfailure"
 )
 
 const (
@@ -72,6 +73,7 @@ type sessionSchedulesSummary struct {
 	ErrorCount            int    `json:"error_count,omitempty"`
 	LastErrorScheduleID   string `json:"last_error_schedule_id,omitempty"`
 	LastErrorScheduleKind string `json:"last_error_schedule_kind,omitempty"`
+	LastErrorKind         string `json:"last_error_kind,omitempty"`
 	LastError             string `json:"last_error,omitempty"`
 	NextRunAt             string `json:"next_run_at,omitempty"`
 	NextScheduleID        string `json:"next_schedule_id,omitempty"`
@@ -603,9 +605,14 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 	if latestError != nil {
 		summary.LastErrorScheduleID = latestError.ID
 		summary.LastErrorScheduleKind = latestError.Kind
+		summary.LastErrorKind = sessionScheduleLastErrorKind(latestError.LastError)
 		summary.LastError = latestError.LastError
 	}
 	return summary
+}
+
+func sessionScheduleLastErrorKind(lastError string) string {
+	return toolfailure.Kind(lastError)
 }
 
 func sortedSessionSchedules(schedules []sessionSchedule) []sessionSchedule {
