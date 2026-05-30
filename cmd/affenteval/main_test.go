@@ -2632,6 +2632,8 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Evidence: []agenteval.TaskStateEvidence{
 				{Source: "runtime_workspace", Summary: "workspace context"},
 				{Source: "shell", Summary: "go test ./..."},
+				{Source: "git_commit", Summary: "git commit -m fix"},
+				{Source: "git_push", Summary: "git push origin main"},
 			},
 		},
 		Verifier: agenteval.VerifierResult{
@@ -2711,7 +2713,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1 runtime_refresh=post_compaction:1,turn_start:2 tool_schema=max_tokens:500,max_request_tokens:800,max_pressure:125%") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,attempted_actions:0,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1 task_state_schedule_kinds=checkin:1") {
+	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,attempted_actions:0,failed_actions:1,evidence:5 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1 task_state_schedule_kinds=checkin:1 task_state_evidence_sources=git_commit:1,git_push:1,runtime_workspace:1,shell:2") {
 		t.Fatalf("summary output missing task state rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
@@ -2854,19 +2856,21 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if summary.TaskStateScenarios != 2 ||
 		summary.TaskStateChangedFiles != 3 ||
 		summary.TaskStateFailedActions != 1 ||
-		summary.TaskStateEvidence != 3 ||
+		summary.TaskStateEvidence != 5 ||
 		!reflect.DeepEqual(summary.TaskStateByStatus, map[string]int{"completed": 1, "blocked": 1}) ||
 		!reflect.DeepEqual(summary.TaskStateByVerification, map[string]int{"last_shell_passed": 1, "failed": 1}) ||
 		!reflect.DeepEqual(summary.TaskStateByRequestMode, map[string]int{"normal": 1, "execute_plan": 1}) ||
 		!reflect.DeepEqual(summary.TaskStateByRequestSource, map[string]int{"user": 1, "schedule": 1}) ||
-		!reflect.DeepEqual(summary.TaskStateByScheduleKind, map[string]int{"checkin": 1}) {
-		t.Fatalf("task state summary = scenarios:%d status:%#v verification:%#v modes:%#v sources:%#v schedule_kinds:%#v changed:%d failed:%d evidence:%d",
+		!reflect.DeepEqual(summary.TaskStateByScheduleKind, map[string]int{"checkin": 1}) ||
+		!reflect.DeepEqual(summary.TaskStateEvidenceBySource, map[string]int{"shell": 2, "runtime_workspace": 1, "git_commit": 1, "git_push": 1}) {
+		t.Fatalf("task state summary = scenarios:%d status:%#v verification:%#v modes:%#v sources:%#v schedule_kinds:%#v evidence_sources:%#v changed:%d failed:%d evidence:%d",
 			summary.TaskStateScenarios,
 			summary.TaskStateByStatus,
 			summary.TaskStateByVerification,
 			summary.TaskStateByRequestMode,
 			summary.TaskStateByRequestSource,
 			summary.TaskStateByScheduleKind,
+			summary.TaskStateEvidenceBySource,
 			summary.TaskStateChangedFiles,
 			summary.TaskStateFailedActions,
 			summary.TaskStateEvidence,
@@ -4200,6 +4204,10 @@ func TestPrintBatchResultJSONLIncludesTaskState(t *testing.T) {
 		got["task_state_evidence"] != float64(1) {
 		t.Fatalf("task state metrics missing: %#v\njson=%s", got, out.String())
 	}
+	taskStateEvidenceSources, ok := got["task_state_evidence_by_source"].(map[string]any)
+	if !ok || taskStateEvidenceSources["shell"] != float64(1) {
+		t.Fatalf("task_state_evidence_by_source = %#v\njson=%s", got["task_state_evidence_by_source"], out.String())
+	}
 	taskState, ok := got["task_state"].(map[string]any)
 	if !ok {
 		t.Fatalf("task_state missing or wrong type: %#v\njson=%s", got["task_state"], out.String())
@@ -4647,6 +4655,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		TaskStateChangedFiles:               3,
 		TaskStateFailedActions:              1,
 		TaskStateEvidence:                   4,
+		TaskStateEvidenceBySource:           map[string]int{"shell": 2, "git_commit": 1, "git_push": 1},
 		LoopDecisions:                       1,
 		LoopDecisionByKind:                  map[string]int{"evidence_quality": 1},
 		LoopDecisionByDecision:              map[string]int{"defer": 1},
@@ -5523,6 +5532,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			got["runtime_surface_max_tool_schema_pressure_percent"],
 			out.String(),
 		)
+	}
+	taskStateEvidenceSources, ok := got["task_state_evidence_by_source"].(map[string]any)
+	if !ok || taskStateEvidenceSources["shell"] != float64(2) || taskStateEvidenceSources["git_commit"] != float64(1) || taskStateEvidenceSources["git_push"] != float64(1) {
+		t.Fatalf("task_state_evidence_by_source = %#v\njson=%s", got["task_state_evidence_by_source"], out.String())
 	}
 	if got["context_compaction_compact_scope_active"] != float64(1) ||
 		got["context_compaction_max_scoped_input_tokens"] != float64(0) ||

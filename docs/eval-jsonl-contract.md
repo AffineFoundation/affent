@@ -217,9 +217,11 @@ Scenario records describe one eval case:
   audit/debug output and is not fed back into the agent runtime.
 - `task_state_status`, `task_state_verification`,
   `task_state_changed_files`, `task_state_attempted_actions`,
-  `task_state_failed_actions`, and `task_state_evidence`: compact task-state
-  columns for dashboards that do not need to parse the full `task_state`
-  object.
+  `task_state_failed_actions`, `task_state_evidence`, and
+  `task_state_evidence_by_source`: compact task-state columns for dashboards
+  that do not need to parse the full `task_state` object. The source map lets
+  code/PR suites verify handoff evidence such as `git_commit` and `git_push`
+  at summary level.
 - `run_exit_code`: `affentctl run` exit code for the scenario.
 - `turn_end_reason`: runtime turn end reason, when available. Scenarios default
   to expecting `completed`; set `required_turn_end_reason` when a scenario is
@@ -825,8 +827,8 @@ Summary records aggregate all scenario records from the same process:
 - Task-state coverage totals: `task_state_rate`, `task_state_scenarios`,
   `task_state_by_status`, `task_state_by_verification`,
   `task_state_changed_files`, `task_state_attempted_actions`,
-  `task_state_failed_actions`, and `task_state_evidence`. These summarize
-  derived task-state snapshots so
+  `task_state_failed_actions`, `task_state_evidence`, and
+  `task_state_evidence_by_source`. These summarize derived task-state snapshots so
   long-run dashboards can verify scenario traces are reviewable at the task
   level, not only as low-level tool timelines.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.

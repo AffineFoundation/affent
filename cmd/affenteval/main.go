@@ -1149,6 +1149,7 @@ type batchSummary struct {
 	TaskStateAttemptedActions               int
 	TaskStateFailedActions                  int
 	TaskStateEvidence                       int
+	TaskStateEvidenceBySource               map[string]int
 	LoopDecisions                           int
 	LoopDecisionByKind                      map[string]int
 	LoopDecisionByDecision                  map[string]int
@@ -1444,6 +1445,16 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.TaskStateAttemptedActions += len(task.AttemptedActions)
 		s.TaskStateFailedActions += len(task.FailedActions)
 		s.TaskStateEvidence += len(task.Evidence)
+		for _, evidence := range task.Evidence {
+			source := strings.TrimSpace(evidence.Source)
+			if source == "" {
+				continue
+			}
+			if s.TaskStateEvidenceBySource == nil {
+				s.TaskStateEvidenceBySource = map[string]int{}
+			}
+			s.TaskStateEvidenceBySource[source]++
+		}
 	}
 	s.LoopDecisions += res.LoopDecisionStats.Count
 	for k, v := range res.LoopDecisionStats.ByKind {
@@ -2188,6 +2199,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 		if len(s.TaskStateByScheduleKind) > 0 {
 			fmt.Fprintf(w, " task_state_schedule_kinds=%s", formatStringIntCounts(s.TaskStateByScheduleKind))
+		}
+		if len(s.TaskStateEvidenceBySource) > 0 {
+			fmt.Fprintf(w, " task_state_evidence_sources=%s", formatStringIntCounts(s.TaskStateEvidenceBySource))
 		}
 	}
 	if s.LoopDecisions > 0 {
@@ -4174,6 +4188,7 @@ type batchResultRecord struct {
 	TaskStateAttemptedActions              int                                        `json:"task_state_attempted_actions,omitempty"`
 	TaskStateFailedActions                 int                                        `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                      int                                        `json:"task_state_evidence,omitempty"`
+	TaskStateEvidenceBySource              map[string]int                             `json:"task_state_evidence_by_source,omitempty"`
 	RuntimeSurfaceScenarios                int                                        `json:"runtime_surface_scenarios,omitempty"`
 	RuntimeSurfaceTools                    map[string]int                             `json:"runtime_surface_tools,omitempty"`
 	RuntimeSurfaceCapabilities             map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
@@ -4396,6 +4411,7 @@ type batchSummaryRecord struct {
 	TaskStateAttemptedActions               int                                              `json:"task_state_attempted_actions,omitempty"`
 	TaskStateFailedActions                  int                                              `json:"task_state_failed_actions,omitempty"`
 	TaskStateEvidence                       int                                              `json:"task_state_evidence,omitempty"`
+	TaskStateEvidenceBySource               map[string]int                                   `json:"task_state_evidence_by_source,omitempty"`
 	LoopDecisions                           int                                              `json:"loop_decisions,omitempty"`
 	LoopDecisionByKind                      map[string]int                                   `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision                  map[string]int                                   `json:"loop_decision_by_decision,omitempty"`
@@ -4649,6 +4665,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		TaskStateAttemptedActions:              len(res.TaskState.AttemptedActions),
 		TaskStateFailedActions:                 len(res.TaskState.FailedActions),
 		TaskStateEvidence:                      len(res.TaskState.Evidence),
+		TaskStateEvidenceBySource:              taskStateEvidenceSourceCounts(res.TaskState.Evidence),
 		LoopDecisions:                          res.LoopDecisionStats.Count,
 		LoopDecisionByKind:                     cloneStringIntMap(res.LoopDecisionStats.ByKind),
 		LoopDecisionByDecision:                 cloneStringIntMap(res.LoopDecisionStats.ByDecision),
@@ -5023,6 +5040,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		TaskStateAttemptedActions:               s.TaskStateAttemptedActions,
 		TaskStateFailedActions:                  s.TaskStateFailedActions,
 		TaskStateEvidence:                       s.TaskStateEvidence,
+		TaskStateEvidenceBySource:               cloneStringIntMap(s.TaskStateEvidenceBySource),
 		LoopDecisions:                           s.LoopDecisions,
 		LoopDecisionByKind:                      cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:                  cloneStringIntMap(s.LoopDecisionByDecision),
@@ -5589,6 +5607,21 @@ func cloneStringFloatMap(in map[string]float64) map[string]float64 {
 	out := make(map[string]float64, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func taskStateEvidenceSourceCounts(evidence []agenteval.TaskStateEvidence) map[string]int {
+	var out map[string]int
+	for _, item := range evidence {
+		source := strings.TrimSpace(item.Source)
+		if source == "" {
+			continue
+		}
+		if out == nil {
+			out = map[string]int{}
+		}
+		out[source]++
 	}
 	return out
 }
