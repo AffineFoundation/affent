@@ -2326,7 +2326,7 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
-	subID, ch := s.Subscribe(16)
+	subID, ch := s.Subscribe(32)
 	defer s.Unsubscribe(subID)
 	turnID, err := s.SendUserWithOptions(context.Background(), "请开启 loop，长期分析 Bittensor 子网并保持恢复上下文。", agent.TurnOptions{
 		UserMode:                     agent.UserModeLoopSetup,
@@ -2337,6 +2337,7 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 	}
 	deadline := time.After(10 * time.Second)
 	sawSetupToolResult := false
+	sawLoopSurfaceRefresh := false
 	sawCalibrationQuestion := false
 	for {
 		select {
@@ -2350,6 +2351,21 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 				if p.CallID == "setup1" && strings.Contains(p.Result, "initialized LOOP.md draft status=draft") {
 					sawSetupToolResult = true
 				}
+			case sse.TypeRuntimeSurface:
+				var p sse.RuntimeSurfacePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode runtime.surface: %v", err)
+				}
+				if p.RefreshReason != sse.RuntimeSurfaceRefreshLoopProtocolChanged {
+					continue
+				}
+				if !sawSetupToolResult {
+					t.Fatal("loop runtime surface refreshed before setup tool result was visible")
+				}
+				if p.LoopProtocolControl == nil || !p.LoopProtocolControl.Enabled || !p.LoopProtocolControl.ToolAvailable {
+					t.Fatalf("loop runtime surface control = %+v, want enabled loop_protocol tool", p.LoopProtocolControl)
+				}
+				sawLoopSurfaceRefresh = true
 			case sse.TypeLoopCalibrationRequest:
 				var p sse.LoopProtocolCalibrationPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -2370,6 +2386,9 @@ func TestSessionChatLoopStartSetupCreatesDraft(t *testing.T) {
 				}
 				if !sawSetupToolResult {
 					t.Fatal("turn ended without successful start_setup tool result")
+				}
+				if !sawLoopSurfaceRefresh {
+					t.Fatal("turn ended without loop protocol runtime surface refresh")
 				}
 				if !sawCalibrationQuestion {
 					t.Fatal("turn ended without mirrored loop calibration question")

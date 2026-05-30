@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -63,10 +64,11 @@ func loopProtocolTool(protocolPath string) *Tool {
         }
     }`, maxLoopProtocolActionBytes, maxLoopProtocolGoalBytes, loopstate.MaxProtocolBytes, maxLoopProtocolReasonBytes, maxLoopProtocolSectionBytes, maxLoopProtocolSectionBytes, maxLoopProtocolPatchBodyBytes))
 	return &Tool{
-		Name:         LoopProtocolToolName,
-		Description:  "Read, patch, update, activate, or close this session's LOOP.md. Use during explicit loop setup or long-run protocol maintenance. action=start_setup is reserved for explicit loop_setup/runtime initialization paths, not ordinary chat inference. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status. When the loop objective is complete or cannot continue, use action=close with status completed, blocked, or paused.",
-		Schema:       schema,
-		CatalogGroup: "Core",
+		Name:                  LoopProtocolToolName,
+		Description:           "Read, patch, update, activate, or close this session's LOOP.md. Use during explicit loop setup or long-run protocol maintenance. action=start_setup is reserved for explicit loop_setup/runtime initialization paths, not ordinary chat inference. Do not call complete_activation until the user has answered at least one calibration question and the intent is understood. When ready, prefer patch_draft for compact section updates, then call complete_activation without protocol to activate the saved draft; do not use update_draft to write running status. When the loop objective is complete or cannot continue, use action=close with status completed, blocked, or paused.",
+		Schema:                schema,
+		RuntimeSurfaceRefresh: loopProtocolRuntimeSurfaceRefresh,
+		CatalogGroup:          "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			_ = ctx
 			p, err := decodeBuiltinToolArgs[loopProtocolToolArgs](LoopProtocolToolName, args, "action, goal, protocol, reason, sections_changed, patches", "Use action=read when unsure; use action=start_setup only in explicit loop_setup/runtime initialization paths; use patch_draft for compact draft supplementation; use update_draft only for full draft rewrites; use complete_activation without protocol after calibration is recorded and the saved draft is complete.")
@@ -103,6 +105,24 @@ func loopProtocolTool(protocolPath string) *Tool {
 				return "", fmt.Errorf("unsupported action %q (valid: start_setup, read, patch_draft, update_draft, complete_activation, close)\nNext: retry loop_protocol with one of the supported actions", action)
 			}
 		},
+	}
+}
+
+func loopProtocolRuntimeSurfaceRefresh(args json.RawMessage, _ string, isErr bool) string {
+	if isErr {
+		return ""
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return ""
+	}
+	switch strings.ToLower(strings.TrimSpace(req.Action)) {
+	case "start_setup", "patch_draft", "update_draft", "complete_activation", "close":
+		return sse.RuntimeSurfaceRefreshLoopProtocolChanged
+	default:
+		return ""
 	}
 }
 

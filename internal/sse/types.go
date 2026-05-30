@@ -119,6 +119,7 @@ const (
 	RuntimeSurfaceRefreshCompactWindowObserved = "compact_window_observed"
 	RuntimeSurfaceRefreshWorkspaceChanged      = "workspace_changed"
 	RuntimeSurfaceRefreshSchedulesChanged      = "schedules_changed"
+	RuntimeSurfaceRefreshLoopProtocolChanged   = "loop_protocol_changed"
 )
 
 type RuntimeWorkspace struct {

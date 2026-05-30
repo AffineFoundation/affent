@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestLoopProtocolToolStartsExplicitSetup(t *testing.T) {
@@ -44,6 +45,31 @@ func TestLoopProtocolToolStartsExplicitSetup(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Dir(path)); err != nil {
 		t.Fatalf("loop dir not created: %v", err)
+	}
+}
+
+func TestLoopProtocolToolDeclaresRuntimeSurfaceRefresh(t *testing.T) {
+	cases := []struct {
+		name  string
+		args  json.RawMessage
+		isErr bool
+		want  string
+	}{
+		{name: "start setup", args: json.RawMessage(`{"action":"start_setup"}`), want: sse.RuntimeSurfaceRefreshLoopProtocolChanged},
+		{name: "patch draft", args: json.RawMessage(`{"action":"patch_draft"}`), want: sse.RuntimeSurfaceRefreshLoopProtocolChanged},
+		{name: "update draft", args: json.RawMessage(`{"action":"update_draft"}`), want: sse.RuntimeSurfaceRefreshLoopProtocolChanged},
+		{name: "complete activation", args: json.RawMessage(`{"action":"complete_activation"}`), want: sse.RuntimeSurfaceRefreshLoopProtocolChanged},
+		{name: "close", args: json.RawMessage(`{"action":"close"}`), want: sse.RuntimeSurfaceRefreshLoopProtocolChanged},
+		{name: "read", args: json.RawMessage(`{"action":"read"}`)},
+		{name: "failed mutation", args: json.RawMessage(`{"action":"close"}`), isErr: true},
+	}
+	tool := loopProtocolTool(loopstate.ProtocolPath(t.TempDir(), "chat-loop"))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tool.RuntimeSurfaceRefresh(tc.args, `{}`, tc.isErr); got != tc.want {
+				t.Fatalf("refresh = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
