@@ -3702,12 +3702,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 		len(requestPressure.Prompts) != 3 ||
 		requestPressure.CompactTrigger != 240 ||
 		requestPressure.CompactTriggerInputTokens != 1 ||
+		requestPressure.ModelContextWindowTokens != 6000 ||
+		requestPressure.CompactTriggerInputPercent != 80 ||
 		requestPressure.CompactKeepLast != 1 {
-		t.Fatalf("request pressure scenario fields = session:%q prompts:%d compact:%d input:%d keep:%d",
+		t.Fatalf("request pressure scenario fields = session:%q prompts:%d compact:%d input:%d window:%d percent:%d keep:%d",
 			requestPressure.SessionID,
 			len(requestPressure.Prompts),
 			requestPressure.CompactTrigger,
 			requestPressure.CompactTriggerInputTokens,
+			requestPressure.ModelContextWindowTokens,
+			requestPressure.CompactTriggerInputPercent,
 			requestPressure.CompactKeepLast,
 		)
 	}
@@ -3734,8 +3738,14 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_maintenance_at_least:1") ||
 		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_maintenance_policy_observed_at_least:1") ||
 		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "context_maintenance_reason_at_least:estimated_context_pressure:1") ||
+		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "runtime_surface_model_context_window_tokens:6000") ||
+		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "runtime_surface_compact_summary_prompt_matches_model_policy") ||
+		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "runtime_surface_hard_input_limit_matches_model_policy") ||
 		!stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "runtime_surface_tool_schema_within_budget") {
 		t.Fatalf("request pressure checks missing context maintenance assertion: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
+	}
+	if stringSliceContains(checkNamesFor(BatchScenarioChecks(requestPressure)), "runtime_surface_compact_trigger_matches_model_policy") {
+		t.Fatalf("request pressure explicit trigger should not require derived trigger policy: %#v", checkNamesFor(BatchScenarioChecks(requestPressure)))
 	}
 	if !taskStateEvidenceRequirementContains(requestPressure.RequiredTaskStateEvidence, TaskStateEvidenceRequirement{SummaryContains: "estimated_context_pressure"}) {
 		t.Fatalf("request pressure RequiredTaskStateEvidence = %#v, want context maintenance evidence", requestPressure.RequiredTaskStateEvidence)

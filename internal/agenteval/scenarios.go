@@ -2195,13 +2195,15 @@ func longRunRequestInputPressureCompactionScenario() BatchScenario {
 		RequiredTaskStateEvidence: []TaskStateEvidenceRequirement{
 			{SummaryContains: "estimated_context_pressure"},
 		},
-		RequiredFinalText:         []string{"REQUEST-PRESSURE-OK-3"},
-		ForbiddenTools:            []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
-		MaxParentToolCalls:        0,
-		MaxTurns:                  2,
-		CompactTrigger:            240,
-		CompactTriggerInputTokens: 1,
-		CompactKeepLast:           1,
+		RequiredFinalText:          []string{"REQUEST-PRESSURE-OK-3"},
+		ForbiddenTools:             []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
+		MaxParentToolCalls:         0,
+		MaxTurns:                   2,
+		CompactTrigger:             240,
+		CompactTriggerInputTokens:  1,
+		ModelContextWindowTokens:   6000,
+		CompactTriggerInputPercent: 80,
+		CompactKeepLast:            1,
 	}
 }
 
