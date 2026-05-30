@@ -1184,6 +1184,8 @@ type batchSummary struct {
 	RuntimeSurfaceMaxToolSchemaTokens       int
 	RuntimeSurfaceMaxRequestInputTokens     int
 	RuntimeSurfaceMaxToolSchemaPressure     int
+	RuntimeSurfaceMaxRequestInputPressure   int
+	RuntimeSurfaceMaxHardLimitPressure      int
 	RuntimeSurfaceMaxExcludedTools          int
 	TaskStateScenarios                      int
 	TaskStateByStatus                       map[string]int
@@ -1430,6 +1432,12 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		if pressure := runtimeSurfaceToolSchemaPressurePercent(res.RuntimeSurface); pressure > s.RuntimeSurfaceMaxToolSchemaPressure {
 			s.RuntimeSurfaceMaxToolSchemaPressure = pressure
+		}
+		if res.RuntimeSurface.RequestInputCompactPercent > s.RuntimeSurfaceMaxRequestInputPressure {
+			s.RuntimeSurfaceMaxRequestInputPressure = res.RuntimeSurface.RequestInputCompactPercent
+		}
+		if res.RuntimeSurface.RequestInputHardLimitPercent > s.RuntimeSurfaceMaxHardLimitPressure {
+			s.RuntimeSurfaceMaxHardLimitPressure = res.RuntimeSurface.RequestInputHardLimitPercent
 		}
 		if res.RuntimeSurface.ExcludedToolCount > s.RuntimeSurfaceMaxExcludedTools {
 			s.RuntimeSurfaceMaxExcludedTools = res.RuntimeSurface.ExcludedToolCount
@@ -2217,6 +2225,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " tool_schema=max_tokens:%d,max_request_tokens:%d", s.RuntimeSurfaceMaxToolSchemaTokens, s.RuntimeSurfaceMaxRequestInputTokens)
 			if s.RuntimeSurfaceMaxToolSchemaPressure > 0 {
 				fmt.Fprintf(w, ",max_pressure:%d%%", s.RuntimeSurfaceMaxToolSchemaPressure)
+			}
+			if s.RuntimeSurfaceMaxRequestInputPressure > 0 {
+				fmt.Fprintf(w, ",max_request_pressure:%d%%", s.RuntimeSurfaceMaxRequestInputPressure)
+			}
+			if s.RuntimeSurfaceMaxHardLimitPressure > 0 {
+				fmt.Fprintf(w, ",max_hard_pressure:%d%%", s.RuntimeSurfaceMaxHardLimitPressure)
 			}
 			if s.RuntimeSurfaceMaxExcludedTools > 0 {
 				fmt.Fprintf(w, ",max_excluded_tools:%d", s.RuntimeSurfaceMaxExcludedTools)
@@ -4469,6 +4483,8 @@ type batchSummaryRecord struct {
 	RuntimeSurfaceMaxToolSchemaTokens       int                                              `json:"runtime_surface_max_tool_schema_tokens,omitempty"`
 	RuntimeSurfaceMaxRequestInputTokens     int                                              `json:"runtime_surface_max_request_input_tokens,omitempty"`
 	RuntimeSurfaceMaxToolSchemaPressure     int                                              `json:"runtime_surface_max_tool_schema_pressure_percent,omitempty"`
+	RuntimeSurfaceMaxRequestInputPressure   int                                              `json:"runtime_surface_max_request_input_pressure_percent,omitempty"`
+	RuntimeSurfaceMaxHardLimitPressure      int                                              `json:"runtime_surface_max_hard_limit_pressure_percent,omitempty"`
 	RuntimeSurfaceMaxExcludedTools          int                                              `json:"runtime_surface_max_excluded_tools,omitempty"`
 	TaskStateRate                           float64                                          `json:"task_state_rate"`
 	TaskStateScenarios                      int                                              `json:"task_state_scenarios,omitempty"`
@@ -4671,6 +4687,10 @@ type runtimeSurfaceSummary struct {
 	EstimatedConversationTokens        int                      `json:"estimated_conversation_tokens,omitempty"`
 	EstimatedToolSchemaTokens          int                      `json:"estimated_tool_schema_tokens,omitempty"`
 	EstimatedRequestInputTokens        int                      `json:"estimated_request_input_tokens,omitempty"`
+	RequestInputCompactPercent         int                      `json:"request_input_compact_percent,omitempty"`
+	RequestInputTokensUntilCompact     int                      `json:"request_input_tokens_until_compact,omitempty"`
+	RequestInputHardLimitPercent       int                      `json:"request_input_hard_limit_percent,omitempty"`
+	RequestInputTokensUntilHardLimit   int                      `json:"request_input_tokens_until_hard_limit,omitempty"`
 	ToolSchemaPressurePercent          int                      `json:"tool_schema_pressure_percent,omitempty"`
 	ToolResultEventCapBytes            int                      `json:"tool_result_event_cap_bytes,omitempty"`
 	ToolResultContextMaxBytes          int                      `json:"tool_result_context_max_bytes,omitempty"`
@@ -4892,6 +4912,10 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 		EstimatedConversationTokens:        surface.EstimatedConversationTokens,
 		EstimatedToolSchemaTokens:          surface.EstimatedToolSchemaTokens,
 		EstimatedRequestInputTokens:        surface.EstimatedRequestInputTokens,
+		RequestInputCompactPercent:         surface.RequestInputCompactPercent,
+		RequestInputTokensUntilCompact:     surface.RequestInputTokensUntilCompact,
+		RequestInputHardLimitPercent:       surface.RequestInputHardLimitPercent,
+		RequestInputTokensUntilHardLimit:   surface.RequestInputTokensUntilHardLimit,
 		ToolSchemaPressurePercent:          runtimeSurfaceToolSchemaPressurePercent(surface),
 		ToolResultEventCapBytes:            surface.ToolResultEventCapBytes,
 		ToolResultContextMaxBytes:          surface.ToolResultContextMaxBytes,
@@ -5098,6 +5122,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		RuntimeSurfaceMaxToolSchemaTokens:       s.RuntimeSurfaceMaxToolSchemaTokens,
 		RuntimeSurfaceMaxRequestInputTokens:     s.RuntimeSurfaceMaxRequestInputTokens,
 		RuntimeSurfaceMaxToolSchemaPressure:     s.RuntimeSurfaceMaxToolSchemaPressure,
+		RuntimeSurfaceMaxRequestInputPressure:   s.RuntimeSurfaceMaxRequestInputPressure,
+		RuntimeSurfaceMaxHardLimitPressure:      s.RuntimeSurfaceMaxHardLimitPressure,
 		RuntimeSurfaceMaxExcludedTools:          s.RuntimeSurfaceMaxExcludedTools,
 		TaskStateRate:                           batchRatio(s.TaskStateScenarios, s.Total),
 		TaskStateScenarios:                      s.TaskStateScenarios,

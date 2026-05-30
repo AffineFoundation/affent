@@ -2631,11 +2631,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Errors:   1,
 		},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
-			RefreshReason:               "post_compaction",
-			ToolCount:                   3,
-			CompactTriggerInputTokens:   400,
-			EstimatedToolSchemaTokens:   500,
-			EstimatedRequestInputTokens: 800,
+			RefreshReason:                    "post_compaction",
+			ToolCount:                        3,
+			CompactTriggerInputTokens:        400,
+			CompactHardInputLimitTokens:      1000,
+			EstimatedToolSchemaTokens:        500,
+			EstimatedRequestInputTokens:      800,
+			RequestInputCompactPercent:       200,
+			RequestInputTokensUntilCompact:   0,
+			RequestInputHardLimitPercent:     80,
+			RequestInputTokensUntilHardLimit: 200,
 			Tools: []sse.RuntimeSurfaceTool{
 				{Name: "web_fetch"},
 				{Name: "web_search"},
@@ -2736,7 +2741,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `session_search_example: scenario=sample query="Alpha Coast" total=2 session=market-alpha turn=4 message=8 mod_time=2026-05-27T12:00:00Z terms=alpha,coast context=true`) {
 		t.Fatalf("summary output missing session search example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1 runtime_refresh=post_compaction:1,turn_start:2 tool_schema=max_tokens:500,max_request_tokens:800,max_pressure:125%") {
+	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1 runtime_refresh=post_compaction:1,turn_start:2 tool_schema=max_tokens:500,max_request_tokens:800,max_pressure:125%,max_request_pressure:200%,max_hard_pressure:80%") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,attempted_actions:0,failed_actions:1,evidence:5 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1 task_state_schedule_kinds=checkin:1 task_state_evidence_sources=git_commit:1,git_push:1,runtime_workspace:1,shell:2") {
@@ -4054,24 +4059,29 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 				{Name: "read_file", ArgPolicy: &sse.RuntimeToolArgPolicy{WorkspacePathArgs: []string{"path"}}},
 				{Name: "web_fetch"},
 			},
-			Capabilities:                 sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file", "repo_search"}, WebFetch: true, Browser: true},
-			ToolCallCaps:                 []sse.RuntimeToolCallCap{{Tool: "web_fetch", Max: 8}, {Tool: "browser_find", Max: 8}},
-			MaxTurnSteps:                 12,
-			MaxToolCalls:                 40,
-			MaxTurnInputTokens:           300000,
-			ModelContextWindowTokens:     100000,
-			ReservedOutputTokens:         30000,
-			CompactTriggerInputTokens:    70000,
-			CompactTriggerInputPercent:   80,
-			ConversationBytes:            12000,
-			ToolSchemaBytes:              8000,
-			EstimatedConversationTokens:  3000,
-			EstimatedToolSchemaTokens:    2000,
-			EstimatedRequestInputTokens:  5000,
-			ToolResultEventCapBytes:      8192,
-			ToolResultContextMaxBytes:    4096,
-			ToolResultContextBudgetBytes: 32768,
-			ToolResultArtifactPrefix:     ".affent/artifacts/tool-results",
+			Capabilities:                     sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file", "repo_search"}, WebFetch: true, Browser: true},
+			ToolCallCaps:                     []sse.RuntimeToolCallCap{{Tool: "web_fetch", Max: 8}, {Tool: "browser_find", Max: 8}},
+			MaxTurnSteps:                     12,
+			MaxToolCalls:                     40,
+			MaxTurnInputTokens:               300000,
+			ModelContextWindowTokens:         100000,
+			ReservedOutputTokens:             30000,
+			CompactTriggerInputTokens:        70000,
+			CompactTriggerInputPercent:       80,
+			CompactHardInputLimitTokens:      70000,
+			ConversationBytes:                12000,
+			ToolSchemaBytes:                  8000,
+			EstimatedConversationTokens:      3000,
+			EstimatedToolSchemaTokens:        2000,
+			EstimatedRequestInputTokens:      5000,
+			RequestInputCompactPercent:       7,
+			RequestInputTokensUntilCompact:   65000,
+			RequestInputHardLimitPercent:     7,
+			RequestInputTokensUntilHardLimit: 65000,
+			ToolResultEventCapBytes:          8192,
+			ToolResultContextMaxBytes:        4096,
+			ToolResultContextBudgetBytes:     32768,
+			ToolResultArtifactPrefix:         ".affent/artifacts/tool-results",
 		},
 		RuntimeSurfaceRefreshByReason: map[string]int{"post_compaction": 1, "turn_start": 1},
 	})
@@ -4115,6 +4125,10 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		surface["estimated_conversation_tokens"] != float64(3000) ||
 		surface["estimated_tool_schema_tokens"] != float64(2000) ||
 		surface["estimated_request_input_tokens"] != float64(5000) ||
+		surface["request_input_compact_percent"] != float64(7) ||
+		surface["request_input_tokens_until_compact"] != float64(65000) ||
+		surface["request_input_hard_limit_percent"] != float64(7) ||
+		surface["request_input_tokens_until_hard_limit"] != float64(65000) ||
 		surface["tool_schema_pressure_percent"] != float64(3) ||
 		surface["tool_result_event_cap_bytes"] != float64(8192) ||
 		surface["tool_result_artifact_prefix"] != ".affent/artifacts/tool-results" {
@@ -4665,26 +4679,28 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				{Scenario: "taostats-rendered", Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s"},
 			},
 		},
-		RuntimeSurfaceScenarios:             2,
-		RuntimeSurfaceTools:                 map[string]int{"web_fetch": 2, "browser_find": 1},
-		RuntimeSurfaceCapabilities:          map[string]int{"web_fetch": 2, "browser": 1},
-		RuntimeSurfaceRefreshByReason:       map[string]int{"turn_start": 2, "post_compaction": 1},
-		RuntimeSurfaceMaxToolSchemaTokens:   500,
-		RuntimeSurfaceMaxRequestInputTokens: 800,
-		RuntimeSurfaceMaxToolSchemaPressure: 125,
-		TaskStateScenarios:                  2,
-		TaskStateByStatus:                   map[string]int{"completed": 1, "blocked": 1},
-		TaskStateByVerification:             map[string]int{"last_shell_passed": 1, "failed": 1},
-		TaskStateByRequestMode:              map[string]int{"normal": 1, "execute_plan": 1},
-		TaskStateByRequestSource:            map[string]int{"user": 1, "schedule": 1},
-		TaskStateByScheduleKind:             map[string]int{"checkin": 1},
-		TaskStateChangedFiles:               3,
-		TaskStateFailedActions:              1,
-		TaskStateEvidence:                   4,
-		TaskStateEvidenceBySource:           map[string]int{"shell": 2, "git_commit": 1, "git_push": 1},
-		LoopDecisions:                       1,
-		LoopDecisionByKind:                  map[string]int{"evidence_quality": 1},
-		LoopDecisionByDecision:              map[string]int{"defer": 1},
+		RuntimeSurfaceScenarios:               2,
+		RuntimeSurfaceTools:                   map[string]int{"web_fetch": 2, "browser_find": 1},
+		RuntimeSurfaceCapabilities:            map[string]int{"web_fetch": 2, "browser": 1},
+		RuntimeSurfaceRefreshByReason:         map[string]int{"turn_start": 2, "post_compaction": 1},
+		RuntimeSurfaceMaxToolSchemaTokens:     500,
+		RuntimeSurfaceMaxRequestInputTokens:   800,
+		RuntimeSurfaceMaxToolSchemaPressure:   125,
+		RuntimeSurfaceMaxRequestInputPressure: 200,
+		RuntimeSurfaceMaxHardLimitPressure:    80,
+		TaskStateScenarios:                    2,
+		TaskStateByStatus:                     map[string]int{"completed": 1, "blocked": 1},
+		TaskStateByVerification:               map[string]int{"last_shell_passed": 1, "failed": 1},
+		TaskStateByRequestMode:                map[string]int{"normal": 1, "execute_plan": 1},
+		TaskStateByRequestSource:              map[string]int{"user": 1, "schedule": 1},
+		TaskStateByScheduleKind:               map[string]int{"checkin": 1},
+		TaskStateChangedFiles:                 3,
+		TaskStateFailedActions:                1,
+		TaskStateEvidence:                     4,
+		TaskStateEvidenceBySource:             map[string]int{"shell": 2, "git_commit": 1, "git_push": 1},
+		LoopDecisions:                         1,
+		LoopDecisionByKind:                    map[string]int{"evidence_quality": 1},
+		LoopDecisionByDecision:                map[string]int{"defer": 1},
 		LoopDecisionExamples: []agenteval.LoopDecision{
 			{Scenario: "taostats-rendered", Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
 		},
@@ -5145,11 +5161,13 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"loop_protocol_calibrations":                  float64(1),
 		"runtime_surface_rate":                        float64(1),
 		"runtime_surface_scenarios":                   float64(2),
-		"task_state_rate":                             float64(1),
-		"task_state_scenarios":                        float64(2),
-		"task_state_changed_files":                    float64(3),
-		"task_state_failed_actions":                   float64(1),
-		"task_state_evidence":                         float64(4),
+		"runtime_surface_max_request_input_pressure_percent": float64(200),
+		"runtime_surface_max_hard_limit_pressure_percent":    float64(80),
+		"task_state_rate":           float64(1),
+		"task_state_scenarios":      float64(2),
+		"task_state_changed_files":  float64(3),
+		"task_state_failed_actions": float64(1),
+		"task_state_evidence":       float64(4),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
