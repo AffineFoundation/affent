@@ -108,6 +108,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	}
 	if c.modelContextWindowAuto && strings.TrimSpace(c.model) != "" {
 		llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
+		llm.Sampling = sampling
 		c = resolveAffentctlModelContextWindowFromProvider(c, llm, zerolog.Nop())
 	}
 	compaction := agent.ResolveSummaryCompactorPolicy(agent.SummaryCompactorPolicy{
@@ -118,7 +119,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 		ReservedOutputTokens:       reservedOutputTokensFromSampling(sampling),
 		KeepLast:                   c.compactKeepLast,
 	})
-	add("ok", "compaction", fmt.Sprintf("trigger=%d trigger_bytes=%d trigger_input_tokens=%d keep_last=%d", compaction.TriggerMsgs, compaction.TriggerBytes, compaction.TriggerInputTokens, compaction.KeepLast))
+	add("ok", "compaction", doctorCompactionSummary(c, sampling, compaction))
 	add("ok", "boundaries", doctorBoundarySummary(c))
 	add("ok", "capabilities", doctorCapabilitySummary(c))
 	if status, msg := doctorSystemPrompt(c.systemPromptPath); status != "" {
@@ -191,6 +192,39 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	}
 
 	return out
+}
+
+func doctorCompactionSummary(c commonFlags, sampling agent.SamplingDefaults, compaction agent.ResolvedSummaryCompactorPolicy) string {
+	parts := []string{
+		fmt.Sprintf("trigger=%d", compaction.TriggerMsgs),
+		fmt.Sprintf("trigger_bytes=%d", compaction.TriggerBytes),
+		fmt.Sprintf("trigger_input_tokens=%d", compaction.TriggerInputTokens),
+		fmt.Sprintf("keep_last=%d", compaction.KeepLast),
+	}
+	if c.modelContextWindowTokens > 0 {
+		source := strings.TrimSpace(c.modelContextWindowSource)
+		if source == "" {
+			source = "explicit"
+		}
+		percent := c.compactTriggerPercent
+		if percent <= 0 {
+			percent = agent.DefaultCompactTriggerInputPercent
+		}
+		parts = append(parts,
+			fmt.Sprintf("model_context_window_tokens=%d", c.modelContextWindowTokens),
+			fmt.Sprintf("model_context_window_source=%s", source),
+			fmt.Sprintf("reserved_output_tokens=%d", reservedOutputTokensFromSampling(sampling)),
+			fmt.Sprintf("input_capacity_tokens=%d", compaction.HardInputLimitTokens),
+			fmt.Sprintf("trigger_input_percent=%d", percent),
+		)
+		if c.modelContextWindowEffectivePercent > 0 {
+			parts = append(parts, fmt.Sprintf("effective_context_window_percent=%d", c.modelContextWindowEffectivePercent))
+		}
+	}
+	if c.compactTriggerInputTokensAuto {
+		parts = append(parts, "trigger_input_tokens_source=provider_auto_compact")
+	}
+	return strings.Join(parts, " ")
 }
 
 func doctorCapabilitySummary(c commonFlags) string {
