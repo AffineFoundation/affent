@@ -2084,6 +2084,9 @@ func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
 	if err := os.WriteFile(planPath, []byte(`{"version":1,"steps":[{"text":"resume serve work","status":"in_progress","evidence":["cmd/affentserve/sessions.go"]}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if s.loop.SkillProvider == nil {
+		t.Fatal("active plan skill provider should be installed")
+	}
 	got := s.loop.SkillProvider("continue")
 	if !strings.Contains(got, "AFFENT ACTIVE PLAN:") || !strings.Contains(got, "resume serve work") {
 		t.Fatalf("active plan should be injected, got %q", got)
@@ -2120,7 +2123,7 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nKeep long-run state recoverable."), 0o644); err != nil {
+	if err := loopstate.WriteProtocol(path, "# Loop Protocol\n\n## 0. Metadata\n\n- loop_id: loop-protocol\n- status: running\n\n## 1. North Star\n\nKeep long-run state recoverable."); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2131,7 +2134,10 @@ func TestSessionPool_SkillProviderInjectsLoopProtocolWhenPresent(t *testing.T) {
 	if s.loop.LoopProtocolPath != path {
 		t.Fatalf("LoopProtocolPath = %q, want %q", s.loop.LoopProtocolPath, path)
 	}
-	got := s.loop.SkillProvider("continue")
+	if s.loop.LoopProtocolSkillProvider == nil {
+		t.Fatal("loop protocol skill provider should be installed")
+	}
+	got := s.loop.LoopProtocolSkillProvider("continue")
 	for _, want := range []string{
 		"AFFENT LOOP PROTOCOL:",
 		"Keep long-run state recoverable.",
@@ -2448,10 +2454,10 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if state.CalibrationQuestions != 1 || state.CalibrationAnswers != 1 || state.LastEventType != "loop.protocol_calibration" || !strings.Contains(state.LastCalibrationQuestion, "stop condition") || !strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
 		t.Fatalf("calibration state = %+v", state)
 	}
-	if s.loop.SkillProvider == nil {
+	if s.loop.LoopProtocolSkillProvider == nil {
 		t.Fatal("draft activation provider should be installed")
 	}
-	if got := s.loop.SkillProvider("continue"); !strings.Contains(got, "AFFENT LOOP DRAFT ACTIVATION:") ||
+	if got := s.loop.LoopProtocolSkillProvider("continue"); !strings.Contains(got, "AFFENT LOOP DRAFT ACTIVATION:") ||
 		!strings.Contains(got, "complete_activation without protocol") {
 		t.Fatalf("draft activation context = %q", got)
 	}

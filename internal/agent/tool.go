@@ -120,6 +120,32 @@ func (r *Registry) Get(name string) (*Tool, bool) {
 	return t, ok
 }
 
+// Without returns a read-only-equivalent registry copy with the named tools
+// omitted. Tool handlers are shared because tools are immutable after
+// registration; callers use this to narrow a single turn's runtime surface.
+func (r *Registry) Without(names ...string) *Registry {
+	if r == nil {
+		return nil
+	}
+	omit := map[string]bool{}
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			omit[name] = true
+		}
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := NewRegistry()
+	for _, name := range r.order {
+		if omit[name] {
+			continue
+		}
+		out.Add(r.tools[name])
+	}
+	return out
+}
+
 func (r *Registry) canonicalName(name string) (string, bool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

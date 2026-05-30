@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -69,6 +70,40 @@ func TestAppendUserMessagePublishesContextInjectedEvents(t *testing.T) {
 	msgs := conv.Snapshot()
 	if len(msgs) != 2 || !msgs[0].TransientContext || msgs[1].Role != "user" {
 		t.Fatalf("dynamic context should be persisted as transient before the user message: %+v", msgs)
+	}
+}
+
+func TestTurnOptionsDisableLoopProtocolNarrowsControlContext(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		Conv: conv,
+		SkillProvider: func(string) string {
+			return "AFFENT ACTIVE SKILL: base\nUse base workflow."
+		},
+		LoopProtocolSkillProvider: func(string) string {
+			return "AFFENT LOOP PROTOCOL:\n- status: running"
+		},
+		CompletionGuards:                  []CompletionGuard{func() CompletionGuardResult { return CompletionGuardResult{} }},
+		CompletionGuardLabels:             []string{"base_guard"},
+		LoopProtocolCompletionGuards:      []CompletionGuard{func() CompletionGuardResult { return CompletionGuardResult{} }},
+		LoopProtocolCompletionGuardLabels: []string{"loop_guard"},
+	}
+
+	if err := loop.appendActiveSkills("turn-disabled", "run timer", TurnOptions{DisableLoopProtocol: true}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := conv.Snapshot()
+	if len(snapshot) != 1 || strings.Contains(snapshot[0].Content, "AFFENT LOOP PROTOCOL") || !strings.Contains(snapshot[0].Content, "AFFENT ACTIVE SKILL") {
+		t.Fatalf("disabled loop protocol context = %+v, want base skill only", snapshot)
+	}
+	if labels := loop.completionGuardLabelsForTurn(TurnOptions{DisableLoopProtocol: true}); !reflect.DeepEqual(labels, []string{"base_guard"}) {
+		t.Fatalf("disabled guard labels = %#v, want base only", labels)
+	}
+	if labels := loop.completionGuardLabelsForTurn(TurnOptions{}); !reflect.DeepEqual(labels, []string{"base_guard", "loop_guard"}) {
+		t.Fatalf("default guard labels = %#v, want base and loop", labels)
 	}
 }
 

@@ -41,18 +41,14 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
 	}
 	schedule := waitSchedule(t, pool, "due-one", "sched_due", func(schedule sessionSchedule) bool {
-		return schedule.LastError != ""
+		return schedule.LastTurnID != ""
 	})
-	if !schedule.Enabled {
-		t.Fatalf("schedule = %+v, want failed one-shot re-enabled for retry", schedule)
-	}
-	if schedule.RunCount != 0 ||
+	if schedule.Enabled ||
+		schedule.RunCount != 1 ||
 		schedule.LastTurnID == "" ||
-		schedule.LastErrorKind != sessionScheduleTurnMaxTurnsFailureKind ||
-		!strings.Contains(schedule.LastError, sse.TurnEndMaxTurns) ||
-		!strings.Contains(schedule.LastError, "Next:") ||
-		!strings.Contains(schedule.LastError, "Failure: kind="+sessionScheduleTurnMaxTurnsFailureKind) {
-		t.Fatalf("schedule = %+v, want failed turn id and turn-end failure metadata instead of false success", schedule)
+		schedule.LastErrorKind != "" ||
+		schedule.LastError != "" {
+		t.Fatalf("schedule = %+v, want completed one-shot schedule metadata", schedule)
 	}
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
 	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.ScheduleKind != sessionScheduleKindLoopTick || userMessage.Text != "Scheduled check-in for session: due-one" || userMessage.DisplayText != "Loop tick: due-one" {
@@ -486,6 +482,69 @@ func TestSessionPool_RunDueSessionSchedulesOnceLoopTickFailureDoesNotBlockTimer(
 	}
 }
 
+func TestSessionPool_RunDueSessionSchedulesOnceSerializesLoopTickAndTimer(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
+	createDurableSessionDir(t, pool, "serialized-schedules")
+	writeLoopProtocolStatusFixture(t, pool, "serialized-schedules", "running")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "serialized-schedules",
+		sessionSchedule{
+			ID:          "sched_loop",
+			Kind:        sessionScheduleKindLoopTick,
+			Prompt:      "Scheduled loop tick for session: serialized-schedules",
+			DisplayText: "Loop tick",
+			Enabled:     true,
+			NextRunAt:   now.Add(-2 * time.Minute).Format(time.RFC3339),
+			CreatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+			UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+		},
+		sessionSchedule{
+			ID:          "sched_timer",
+			Kind:        sessionScheduleKindCustom,
+			Prompt:      "Run the ordinary timer after the loop tick yields.",
+			DisplayText: "Timer",
+			Enabled:     true,
+			NextRunAt:   now.Add(-time.Minute).Format(time.RFC3339),
+			CreatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+			UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+		},
+	)
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
+		t.Fatalf("first runDueSessionSchedulesOnce = %d, want only one schedule turn for the session", got)
+	}
+	loopSchedule := waitSchedule(t, pool, "serialized-schedules", "sched_loop", func(schedule sessionSchedule) bool {
+		return schedule.LastTurnID != ""
+	})
+	if loopSchedule.LastTurnID == "" || loopSchedule.RunCount != 1 || loopSchedule.LastError != "" {
+		t.Fatalf("loop schedule = %+v, want first serialized loop turn recorded", loopSchedule)
+	}
+	waitSessionIdle(t, pool, "serialized-schedules")
+	timerSchedule := readScheduleByID(t, pool, "serialized-schedules", "sched_timer")
+	if timerSchedule.RunCount != 0 || timerSchedule.LastTurnID != "" || !timerSchedule.Enabled {
+		t.Fatalf("timer schedule after first pass = %+v, want untouched until the next scheduler pass", timerSchedule)
+	}
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
+		t.Fatalf("second runDueSessionSchedulesOnce = %d, want timer to fire after loop turn releases the session", got)
+	}
+	timerSchedule = waitSchedule(t, pool, "serialized-schedules", "sched_timer", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
+	if timerSchedule.Enabled || timerSchedule.LastError != "" {
+		t.Fatalf("timer schedule after second pass = %+v, want one-shot timer completed", timerSchedule)
+	}
+	messages := scheduleUserMessages(t, pool, "serialized-schedules")
+	if len(messages) != 2 ||
+		messages[0].ScheduleID != "sched_loop" ||
+		messages[0].ScheduleKind != sessionScheduleKindLoopTick ||
+		messages[1].ScheduleID != "sched_timer" ||
+		messages[1].ScheduleKind != sessionScheduleKindCustom {
+		t.Fatalf("scheduled messages = %+v, want loop and timer as separate serialized turns", messages)
+	}
+}
+
 func TestSessionPool_ClaimScheduleDoesNotAdvanceBeforeTurnEnd(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
@@ -824,7 +883,7 @@ func newSuccessfulScheduledTurnServer(t *testing.T) *httptest.Server {
 			t.Errorf("read LLM request: %v", err)
 		}
 		body := string(raw)
-		if strings.Contains(body, "AFFENT LOOP PROTOCOL") || (strings.Contains(body, "loop_protocol") && strings.Contains(body, "close")) {
+		if chatRequestExposesTool(body, "loop_protocol") {
 			args := `{"action":"close","status":"paused","reason":"scheduled test turn reached a clean checkpoint"}`
 			fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"close_loop\",\"type\":\"function\",\"function\":{\"name\":\"loop_protocol\",\"arguments\":%s}}]},\"finish_reason\":\"tool_calls\"}]}\n\n", jsonStringLiteral(args))
 			fmt.Fprint(w, "data: [DONE]\n\n")
@@ -835,6 +894,25 @@ func newSuccessfulScheduledTurnServer(t *testing.T) *httptest.Server {
 	}))
 	t.Cleanup(srv.Close)
 	return srv
+}
+
+func chatRequestExposesTool(body, name string) bool {
+	var req struct {
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal([]byte(body), &req); err != nil {
+		return false
+	}
+	for _, tool := range req.Tools {
+		if tool.Function.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func waitSchedule(t *testing.T, pool *SessionPool, sessionID, scheduleID string, ready func(sessionSchedule) bool) sessionSchedule {
@@ -861,6 +939,33 @@ func waitSchedule(t *testing.T, pool *SessionPool, sessionID, scheduleID string,
 	}
 	t.Fatalf("timed out waiting for schedule %s in %s; last=%+v", scheduleID, sessionID, last)
 	return sessionSchedule{}
+}
+
+func readScheduleByID(t *testing.T, pool *SessionPool, sessionID, scheduleID string) sessionSchedule {
+	t.Helper()
+	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, sessionID))
+	if err != nil || !found {
+		t.Fatalf("read schedules found=%v err=%v", found, err)
+	}
+	for _, schedule := range file.Schedules {
+		if schedule.ID == scheduleID {
+			return schedule
+		}
+	}
+	t.Fatalf("schedule %s not found in %s", scheduleID, sessionID)
+	return sessionSchedule{}
+}
+
+func waitSessionIdle(t *testing.T, pool *SessionPool, sessionID string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if s := activeSessionByID(pool, sessionID); s == nil || !s.isActiveTurn() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for session %s to become idle", sessionID)
 }
 
 func writeLoopProtocolStatusFixture(t *testing.T, pool *SessionPool, sessionID string, status string) {
@@ -896,6 +1001,28 @@ func waitScheduleUserMessage(t *testing.T, pool *SessionPool, sessionID string) 
 	}
 	t.Fatalf("timed out waiting for schedule user.message in %s", sessionID)
 	return sse.UserMessagePayload{}
+}
+
+func scheduleUserMessages(t *testing.T, pool *SessionPool, sessionID string) []sse.UserMessagePayload {
+	t.Helper()
+	history, err := readSessionHistory(pool.sessionDirPath(sessionID), sessionID, -1, 100)
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	var messages []sse.UserMessagePayload
+	for _, ev := range history.Events {
+		if ev.Type != sse.TypeUserMessage {
+			continue
+		}
+		var payload sse.UserMessagePayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode user.message: %v", err)
+		}
+		if payload.Source == "schedule" {
+			messages = append(messages, payload)
+		}
+	}
+	return messages
 }
 
 func waitScheduleToolResult(t *testing.T, pool *SessionPool, sessionID, callID string) sse.ToolResultPayload {

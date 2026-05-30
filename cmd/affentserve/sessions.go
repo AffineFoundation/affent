@@ -818,14 +818,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if !p.cfg.EvalMode {
 		loop.LoopProtocolPath = loopProtocolPath
-		loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolActivationCompletionGuard(loopProtocolPath))
-		loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_activation_pending")
+		loop.LoopProtocolCompletionGuards = append(loop.LoopProtocolCompletionGuards, agent.LoopProtocolActivationCompletionGuard(loopProtocolPath))
+		loop.LoopProtocolCompletionGuardLabels = append(loop.LoopProtocolCompletionGuardLabels, "loop_protocol_activation_pending")
 		if agent.LoopProtocolRequiresCloseBeforeFinal(loopProtocolPath) {
-			loop.CompletionGuards = append(loop.CompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
-			loop.CompletionGuardLabels = append(loop.CompletionGuardLabels, "loop_protocol_running")
+			loop.LoopProtocolCompletionGuards = append(loop.LoopProtocolCompletionGuards, agent.LoopProtocolCompletionGuard(loopProtocolPath))
+			loop.LoopProtocolCompletionGuardLabels = append(loop.LoopProtocolCompletionGuardLabels, "loop_protocol_running")
 		}
-		loop.SkillProvider = agent.WithLoopProtocolDraftActivationProvider(loopProtocolPath, loop.SkillProvider)
-		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
+		loop.LoopProtocolSkillProvider = agent.WithLoopProtocolDraftActivationProvider(loopProtocolPath, loop.LoopProtocolSkillProvider)
+		loop.LoopProtocolSkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.LoopProtocolSkillProvider)
 	}
 	if p.cfg.EnableBuiltins && !p.cfg.EvalMode {
 		loop.SkillProvider = p.withAccountAccessSkillProvider(loop.SkillProvider)

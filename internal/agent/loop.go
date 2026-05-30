@@ -262,6 +262,9 @@ type Loop struct {
 	// selected per turn from the actual request so small models get a
 	// narrow procedure instead of a permanently longer prompt.
 	SkillProvider SkillProvider
+	// LoopProtocolSkillProvider injects active LOOP.md state only for turns
+	// that are allowed to advance the loop protocol control plane.
+	LoopProtocolSkillProvider SkillProvider
 
 	// TaskStateProvider optionally injects compact, structured session truth
 	// before a turn when the previous event stream has unresolved recovery
@@ -277,6 +280,12 @@ type Loop struct {
 	// guards. They make runtime.surface auditable without invoking guards at
 	// turn start.
 	CompletionGuardLabels []string
+	// LoopProtocolCompletionGuards apply only to turns that are allowed to
+	// advance the loop protocol control plane.
+	LoopProtocolCompletionGuards []CompletionGuard
+	// LoopProtocolCompletionGuardLabels are trace/UI metadata for loop-protocol
+	// scoped guards.
+	LoopProtocolCompletionGuardLabels []string
 
 	// FinalNoToolsOnMaxTurns gives the model one final no-tool response
 	// after the tool budget is exhausted. This is useful for bounded
@@ -361,6 +370,12 @@ type TurnOptions struct {
 	// ScheduleKind carries the scheduler's structured kind for trace/debug UI,
 	// for example "checkin", "daily_checkin", or "loop_tick".
 	ScheduleKind string
+	// DisableLoopProtocol narrows this turn away from the loop-protocol
+	// control plane. Hosts use this for ordinary timers in sessions that also
+	// have a running LOOP.md: the timer can still use normal tools, memory,
+	// plan, and workspace context, but it must not receive LOOP.md feeds,
+	// loop_protocol tools, or loop completion guards.
+	DisableLoopProtocol bool
 }
 
 type FirstToolPolicy struct {
@@ -918,11 +933,27 @@ func (l *Loop) SendUserWithOptions(ctx context.Context, text string, opts TurnOp
 	return turnID, nil
 }
 
-func (l *Loop) appendActiveSkills(turnID, userText string) error {
-	if l.SkillProvider == nil {
+func (l *Loop) appendActiveSkills(turnID, userText string, opts TurnOptions) error {
+	providers := make([]SkillProvider, 0, 2)
+	if !opts.DisableLoopProtocol && l.LoopProtocolSkillProvider != nil {
+		providers = append(providers, l.LoopProtocolSkillProvider)
+	}
+	if l.SkillProvider != nil {
+		providers = append(providers, l.SkillProvider)
+	}
+	if len(providers) == 0 {
 		return nil
 	}
-	block := strings.TrimSpace(l.SkillProvider(userText))
+	parts := make([]string, 0, len(providers))
+	for _, provider := range providers {
+		if provider == nil {
+			continue
+		}
+		if block := strings.TrimSpace(provider(userText)); block != "" {
+			parts = append(parts, block)
+		}
+	}
+	block := strings.Join(parts, "\n\n")
 	if block == "" {
 		return nil
 	}
@@ -1133,7 +1164,7 @@ func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
 	if err := l.appendTaskStateContext(turnID, text); err != nil {
 		return err
 	}
-	if err := l.appendActiveSkills(turnID, text); err != nil {
+	if err := l.appendActiveSkills(turnID, text, opts); err != nil {
 		return err
 	}
 	if block := l.researchCheckpointSkillBlock(text, opts); block != "" {
@@ -1302,7 +1333,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					nextPrompt = processNarrationRecoveryPrompt
 					continue
 				}
-				if guard, blocked := l.completionGuardBlocker(turnID); blocked {
+				if guard, blocked := l.completionGuardBlocker(turnID, opts); blocked {
 					l.publishCompletionGuardDecision(turnID, guard)
 					if completionGuardCanDeferAfterBudgetFinal(nextSkippedReason) {
 						l.publishCompletionGuardBudgetFinalDecision(turnID, guard, nextSkippedReason)
@@ -1511,7 +1542,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				endReason = sse.TurnEndMaxTurns
 				break
 			}
-			if guard, blocked := l.completionGuardBlocker(turnID); blocked {
+			if guard, blocked := l.completionGuardBlocker(turnID, opts); blocked {
 				l.publishCompletionGuardDecision(turnID, guard)
 				l.publishMessageRejectedForFinish(turnID, final, guard)
 				completionGuardInterventions++
@@ -2074,8 +2105,8 @@ func (l *Loop) publishLoopDecision(payload sse.LoopDecisionPayload) {
 	l.recordLoopDecision(payload)
 }
 
-func (l *Loop) completionGuardBlocker(turnID string) (CompletionGuardResult, bool) {
-	for _, guard := range l.CompletionGuards {
+func (l *Loop) completionGuardBlocker(turnID string, opts TurnOptions) (CompletionGuardResult, bool) {
+	for _, guard := range l.completionGuardsForTurn(opts) {
 		if guard == nil {
 			continue
 		}
@@ -2106,6 +2137,28 @@ func (l *Loop) completionGuardBlocker(turnID string) (CompletionGuardResult, boo
 		return result, true
 	}
 	return CompletionGuardResult{}, false
+}
+
+func (l *Loop) completionGuardsForTurn(opts TurnOptions) []CompletionGuard {
+	if l == nil {
+		return nil
+	}
+	guards := append([]CompletionGuard(nil), l.CompletionGuards...)
+	if !opts.DisableLoopProtocol {
+		guards = append(guards, l.LoopProtocolCompletionGuards...)
+	}
+	return guards
+}
+
+func (l *Loop) completionGuardLabelsForTurn(opts TurnOptions) []string {
+	if l == nil {
+		return nil
+	}
+	labels := append([]string(nil), l.CompletionGuardLabels...)
+	if !opts.DisableLoopProtocol {
+		labels = append(labels, l.LoopProtocolCompletionGuardLabels...)
+	}
+	return labels
 }
 
 func (l *Loop) publishCompletionGuardDecision(turnID string, guard CompletionGuardResult) {
@@ -2288,7 +2341,7 @@ func (l *Loop) researchCheckpointSkillBlock(userText string, opts TurnOptions) s
 }
 
 func (l *Loop) researchCheckpointDecision(userText string, opts TurnOptions) (sse.LoopDecisionPayload, bool) {
-	if !l.activeLoopProtocolAvailable() {
+	if opts.DisableLoopProtocol || !l.activeLoopProtocolAvailable() {
 		return sse.LoopDecisionPayload{}, false
 	}
 	trigger := researchCheckpointTrigger(userText)
@@ -3098,9 +3151,9 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 		ToolResultArtifactPrefix:           l.ToolResultArtifactPathPrefix,
 		TurnToolOverride:                   opts.Tools != nil,
 	}
-	if len(l.CompletionGuardLabels) > 0 {
-		payload.CompletionGuards = append([]string(nil), l.CompletionGuardLabels...)
-	} else if len(l.CompletionGuards) > 0 {
+	if labels := l.completionGuardLabelsForTurn(opts); len(labels) > 0 {
+		payload.CompletionGuards = labels
+	} else if len(l.completionGuardsForTurn(opts)) > 0 {
 		payload.CompletionGuards = []string{"custom"}
 	}
 	if payload.ToolResultArtifactPrefix == "" {

@@ -80,6 +80,27 @@ func TestRegistryModelDefsPrioritizeDurableControlTools(t *testing.T) {
 	}
 }
 
+func TestRegistryWithoutNarrowsCopyWithoutMutatingBase(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "shell", Description: "shell", Schema: json.RawMessage(`{"type":"object"}`)})
+	reg.Add(&Tool{Name: LoopProtocolToolName, Description: "loop", Schema: json.RawMessage(`{"type":"object"}`)})
+	reg.Add(&Tool{Name: PlanToolName, Description: "plan", Schema: json.RawMessage(`{"type":"object"}`)})
+
+	narrowed := reg.Without(LoopProtocolToolName)
+	if _, ok := narrowed.Get(LoopProtocolToolName); ok {
+		t.Fatalf("narrowed registry still contains %s", LoopProtocolToolName)
+	}
+	if _, ok := narrowed.Get("shell"); !ok {
+		t.Fatal("narrowed registry dropped unrelated shell tool")
+	}
+	if _, ok := reg.Get(LoopProtocolToolName); !ok {
+		t.Fatalf("base registry lost %s", LoopProtocolToolName)
+	}
+	if got, want := len(narrowed.Catalog()), 2; got != want {
+		t.Fatalf("narrowed catalog length = %d, want %d", got, want)
+	}
+}
+
 func TestRegistrySelectModelToolsAppliesSchemaBudgetByModelRank(t *testing.T) {
 	reg := NewRegistry()
 	reg.Add(&Tool{Name: "shell", Description: "run commands", Schema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}}}`)})

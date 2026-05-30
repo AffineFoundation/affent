@@ -964,12 +964,8 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		return err
 	}
 	p.rememberSessionScheduleClaim(run)
-	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{
-		UserSource:      "schedule",
-		UserDisplayText: run.DisplayText,
-		ScheduleID:      run.ScheduleID,
-		ScheduleKind:    run.ScheduleKind,
-	})
+	opts := sessionScheduleTurnOptions(sess, run)
+	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, opts)
 	if err != nil {
 		p.forgetSessionScheduleClaim(run.SessionID, run.ScheduleID)
 		_ = p.recordSessionScheduleFailure(run, now, "", err)
@@ -977,6 +973,22 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 	}
 	p.logger.Info().Str("session_id", run.SessionID).Str("schedule_id", run.ScheduleID).Str("turn_id", turnID).Msg("session schedule fired")
 	return nil
+}
+
+func sessionScheduleTurnOptions(sess *Session, run sessionScheduleRun) agent.TurnOptions {
+	opts := agent.TurnOptions{
+		UserSource:      "schedule",
+		UserDisplayText: run.DisplayText,
+		ScheduleID:      run.ScheduleID,
+		ScheduleKind:    run.ScheduleKind,
+	}
+	if run.ScheduleKind != sessionScheduleKindLoopTick {
+		opts.DisableLoopProtocol = true
+		if sess != nil && sess.registry != nil {
+			opts.Tools = sess.registry.Without(agent.LoopProtocolToolName)
+		}
+	}
+	return opts
 }
 
 func (s *Session) observeScheduledTurn(ev sse.Event) {
