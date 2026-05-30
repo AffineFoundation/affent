@@ -1653,7 +1653,7 @@ func Marker() string { return "seed" }
 }
 
 func TestBatchRunnerRejectsUnsafeSourceRepoDir(t *testing.T) {
-	for _, dir := range []string{".", "..", "../app", "/tmp/app"} {
+	for _, dir := range []string{".", "..", "../app", "/tmp/app", ".git", "app/.git", ".affent", "app/.affent/skills", ".affentctl"} {
 		if got, err := cleanScenarioSourceRepoDir(dir); err == nil {
 			t.Fatalf("cleanScenarioSourceRepoDir(%q) = %q, want error", dir, got)
 		}

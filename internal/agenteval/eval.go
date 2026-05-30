@@ -2885,7 +2885,20 @@ func cleanScenarioSourceRepoDir(dir string) (string, error) {
 	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
 		return "", fmt.Errorf("source repo dir %q must stay inside the scenario workspace", dir)
 	}
+	if sourceRepoDirUsesReservedRuntimePath(clean) {
+		return "", fmt.Errorf("source repo dir %q must not use reserved runtime state directories", dir)
+	}
 	return clean, nil
+}
+
+func sourceRepoDirUsesReservedRuntimePath(clean string) bool {
+	for _, part := range strings.Split(clean, "/") {
+		switch part {
+		case ".git", ".affent", ".affentctl":
+			return true
+		}
+	}
+	return false
 }
 
 func (r BatchRunner) runGit(ctx context.Context, dir, repoRoot string, args ...string) verifierRun {
