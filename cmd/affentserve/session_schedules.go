@@ -1165,13 +1165,16 @@ func (p *SessionPool) recordSessionScheduleFailure(run sessionScheduleRun, now t
 		if schedule.ID != run.ScheduleID {
 			continue
 		}
-		schedule.Enabled = true
-		schedule.NextRunAt = retryAt
+		failureKind := sessionScheduleFailureKind(cause)
+		schedule.Enabled = sessionScheduleFailureShouldRetry(failureKind)
+		if schedule.Enabled {
+			schedule.NextRunAt = retryAt
+		}
 		if strings.TrimSpace(turnID) != "" {
 			schedule.LastTurnID = strings.TrimSpace(turnID)
 		}
 		schedule.LastError = previewSessionScheduleError(cause)
-		schedule.LastErrorKind = sessionScheduleFailureKind(cause)
+		schedule.LastErrorKind = failureKind
 		schedule.UpdatedAt = nowStr
 		return writeSessionSchedulesFile(path, file)
 	}
@@ -1187,12 +1190,21 @@ func sessionScheduleFailureKind(cause error) string {
 	return sessionScheduleTurnFailedFailureKind
 }
 
+func sessionScheduleFailureShouldRetry(kind string) bool {
+	return kind != sessionScheduleTurnCancelledFailureKind
+}
+
 func sessionScheduleTurnFailureError(reason string) error {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		reason = sse.TurnEndError
 	}
-	return fmt.Errorf("scheduled turn ended with %s\nNext: inspect the scheduled turn trace, then retry only if the schedule prompt is still valid.\nFailure: kind=%s", reason, sessionScheduleTurnFailureKind(reason))
+	kind := sessionScheduleTurnFailureKind(reason)
+	next := "inspect the scheduled turn trace, then retry only if the schedule prompt is still valid"
+	if kind == sessionScheduleTurnCancelledFailureKind {
+		next = "inspect the cancellation reason, then resume or recreate the schedule only if it should continue"
+	}
+	return fmt.Errorf("scheduled turn ended with %s\nNext: %s.\nFailure: kind=%s", reason, next, kind)
 }
 
 func sessionScheduleTurnFailureKind(reason string) string {

@@ -646,6 +646,70 @@ func TestSessionScheduleTurnFailureKind(t *testing.T) {
 	}
 }
 
+func TestSessionPool_RecordScheduleFailureDisablesCancelledTurn(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "cancelled-schedule")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	nextRunAt := now.Add(-time.Minute).Format(time.RFC3339)
+	writeScheduleFixture(t, pool, "cancelled-schedule", sessionSchedule{
+		ID:        "sched_cancelled",
+		Kind:      sessionScheduleKindCustom,
+		Prompt:    "Run the scheduled cleanup.",
+		Enabled:   true,
+		NextRunAt: nextRunAt,
+		CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	err := pool.recordSessionScheduleFailure(sessionScheduleRun{
+		SessionID:  "cancelled-schedule",
+		ScheduleID: "sched_cancelled",
+	}, now, "turn_cancelled", sessionScheduleTurnFailureError(sse.TurnEndCancelled))
+	if err != nil {
+		t.Fatalf("record cancelled failure: %v", err)
+	}
+	schedule := readScheduleByID(t, pool, "cancelled-schedule", "sched_cancelled")
+	if schedule.Enabled ||
+		schedule.NextRunAt != nextRunAt ||
+		schedule.LastTurnID != "turn_cancelled" ||
+		schedule.LastErrorKind != sessionScheduleTurnCancelledFailureKind ||
+		!strings.Contains(schedule.LastError, "resume or recreate the schedule only if it should continue") {
+		t.Fatalf("schedule = %+v, want cancelled schedule paused with recovery guidance", schedule)
+	}
+}
+
+func TestSessionPool_RecordScheduleFailureRetriesNonCancelledTurn(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "failed-schedule")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "failed-schedule", sessionSchedule{
+		ID:        "sched_failed",
+		Kind:      sessionScheduleKindCustom,
+		Prompt:    "Run the scheduled cleanup.",
+		Enabled:   true,
+		NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
+		CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	err := pool.recordSessionScheduleFailure(sessionScheduleRun{
+		SessionID:  "failed-schedule",
+		ScheduleID: "sched_failed",
+	}, now, "turn_failed", sessionScheduleTurnFailureError(sse.TurnEndError))
+	if err != nil {
+		t.Fatalf("record error failure: %v", err)
+	}
+	schedule := readScheduleByID(t, pool, "failed-schedule", "sched_failed")
+	if !schedule.Enabled ||
+		schedule.NextRunAt != now.Add(sessionScheduleRetryDelay).Format(time.RFC3339) ||
+		schedule.LastTurnID != "turn_failed" ||
+		schedule.LastErrorKind != sessionScheduleTurnErrorFailureKind {
+		t.Fatalf("schedule = %+v, want retryable failure rescheduled", schedule)
+	}
+}
+
 func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
 	schedules := []sessionSchedule{
 		{ID: "loop", Kind: sessionScheduleKindLoopTick, Enabled: true, NextRunAt: "2026-05-27T10:00:00Z"},
