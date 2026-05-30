@@ -26,7 +26,7 @@ export function SessionTracePanel({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TraceFilter>("all");
-  const [selectedEventId, setSelectedEventId] = useState<number | undefined>();
+  const [selectedRowKey, setSelectedRowKey] = useState<string | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(
     () => traceFilters(events, trace.toolIssueCount),
@@ -60,34 +60,29 @@ export function SessionTracePanel({
   const callTools = useMemo(() => toolNamesByCallId(events), [events]);
   const requestLabels = useMemo(() => requestLabelsByTurnId(events), [events]);
   const eventRows = useMemo(
-    () =>
-      visibleEvents.map((event) =>
-        traceEventRow(event, callTools, requestLabels),
-      ),
+    () => traceEventRows(visibleEvents, callTools, requestLabels),
     [callTools, requestLabels, visibleEvents],
   );
-  const defaultSelectedEvent =
-    visibleEvents.find((event) => eventIsFailedToolResult(event)) ??
-    visibleEvents.find(
-      (event) =>
-        event.type === EventType.ToolResult &&
-        eventHasSourceEvidence(event, callTools),
+  const defaultSelectedRow =
+    eventRows.find((row) => row.events.some(eventIsFailedToolResult)) ??
+    eventRows.find((row) =>
+      row.events.some(
+        (event) =>
+          event.type === EventType.ToolResult &&
+          eventHasSourceEvidence(event, callTools),
+      ),
     ) ??
-    visibleEvents.find((event) => event.type === EventType.ToolResult) ??
-    visibleEvents.find(
-      (event) =>
-        event.type === EventType.ToolRequest,
+    eventRows.find((row) =>
+      row.events.some((event) => event.type === EventType.ToolResult),
     ) ??
-    visibleEvents[0];
-  const selectedEvent =
-    visibleEvents.find((event) => event.id === selectedEventId) ??
-    defaultSelectedEvent;
-  const selectedRow = selectedEvent
-    ? eventRows.find((row) => row.event.id === selectedEvent.id) ??
-      traceEventRow(selectedEvent, callTools, requestLabels)
-    : undefined;
-  const focusedIssue = selectedEvent
-    ? traceIssueForEvent(trace.toolIssues, selectedEvent)
+    eventRows.find((row) =>
+      row.events.some((event) => event.type === EventType.ToolRequest),
+    ) ??
+    eventRows[0];
+  const selectedRow =
+    eventRows.find((row) => row.key === selectedRowKey) ?? defaultSelectedRow;
+  const focusedIssue = selectedRow
+    ? traceIssueForEvents(trace.toolIssues, selectedRow.events)
     : undefined;
   const focusedIssueEvidence = useMemo(
     () =>
@@ -97,7 +92,7 @@ export function SessionTracePanel({
   const applySearch = (nextQuery: string, nextFilter: TraceFilter = "all") => {
     setFilter(nextFilter);
     setQuery(nextQuery);
-    setSelectedEventId(undefined);
+    setSelectedRowKey(undefined);
   };
 
   return (
@@ -146,7 +141,7 @@ export function SessionTracePanel({
                       value={query}
                       onChange={(event) => {
                         setQuery(event.target.value);
-                        setSelectedEventId(undefined);
+                        setSelectedRowKey(undefined);
                       }}
                       placeholder="Search event, tool, path, command, status:failed, exit:1"
                       aria-describedby={
@@ -174,7 +169,7 @@ export function SessionTracePanel({
                               ? "all"
                               : item.key,
                           );
-                          setSelectedEventId(undefined);
+                          setSelectedRowKey(undefined);
                         }}
                       >
                         {item.label}
@@ -209,7 +204,7 @@ export function SessionTracePanel({
                       onClick={() => {
                         setFilter("all");
                         setQuery("");
-                        setSelectedEventId(undefined);
+                        setSelectedRowKey(undefined);
                       }}
                     >
                       Reset
@@ -223,14 +218,14 @@ export function SessionTracePanel({
               data-testid="session-trace-resultbar"
             >
               <div>
-                <strong>{visibleEvents.length}</strong>
-                <span>
-                  {resultCountLabel(
-                    visibleEvents.length,
-                    hasActiveNarrowing,
-                    events.length,
-                  )}
-                </span>
+                    <strong>{eventRows.length}</strong>
+                    <span>
+                      {resultCountLabel(
+                        eventRows.length,
+                        hasActiveNarrowing,
+                        traceDisplayTotal(events),
+                      )}
+                    </span>
               </div>
               <div
                 className="session-trace-active-scopes"
@@ -256,7 +251,9 @@ export function SessionTracePanel({
                   <div className="session-trace-list-head">
                     <div>
                       <strong>Events</strong>
-                      <span>{visibleEvents.length} of {events.length}</span>
+                      <span>
+                        {eventRows.length} records · {visibleEvents.length} events
+                      </span>
                     </div>
                   </div>
                   <div
@@ -267,18 +264,18 @@ export function SessionTracePanel({
                   >
                     {eventRows.map((row) => (
                       <button
-                        key={`${row.event.id}:${row.event.type}`}
+                        key={row.key}
                         type="button"
                         role="option"
                         aria-selected={
-                          selectedEvent?.id === row.event.id ? "true" : "false"
+                          selectedRow?.key === row.key ? "true" : "false"
                         }
                         className="session-trace-event-row"
                         data-tone={row.tone}
-                        onClick={() => setSelectedEventId(row.event.id)}
+                        onClick={() => setSelectedRowKey(row.key)}
                       >
                         <span className="session-trace-event-id">
-                          #{row.event.id}
+                          {row.idLabel}
                         </span>
                         <span className="session-trace-event-kind">
                           <strong>{row.label}</strong>
@@ -304,12 +301,12 @@ export function SessionTracePanel({
                   onOnlyCall={(issue) => {
                     setFilter("issues");
                     setQuery(issue.query);
-                    setSelectedEventId(undefined);
+                    setSelectedRowKey(undefined);
                   }}
                   onWholeRequest={(issue) => {
                     setFilter("all");
                     setQuery(issue.requestQuery);
-                    setSelectedEventId(undefined);
+                    setSelectedRowKey(undefined);
                   }}
                 />
               </div>
@@ -387,7 +384,12 @@ interface TraceRelatedEvidence {
 }
 
 interface TraceEventRowView {
-  event: NormalizedEvent;
+  key: string;
+  events: NormalizedEvent[];
+  primaryEvent: NormalizedEvent;
+  requestEvent?: NormalizedEvent;
+  resultEvent?: NormalizedEvent;
+  idLabel: string;
   label: string;
   scope: string;
   summary: string;
@@ -418,8 +420,14 @@ function TraceEventDetail({
     );
   }
 
-  const artifactPath = readEventString(row.event, "result_artifact_path");
-  const signal = traceEventSignal(row.event);
+  const artifactPath = row.events
+    .map((event) => readEventString(event, "result_artifact_path"))
+    .find(Boolean);
+  const signal = traceEventSignal(row);
+  const rawValue =
+    row.events.length === 1
+      ? JSON.stringify(row.events[0].raw, null, 2)
+      : JSON.stringify(row.events.map((event) => event.raw), null, 2);
 
   return (
     <aside
@@ -433,8 +441,15 @@ function TraceEventDetail({
         <small>{row.summary}</small>
       </div>
       <div className="session-trace-detail-facts">
-        <TraceIssueFact label="Event" value={`#${row.event.id}`} />
-        <TraceIssueFact label="Type" value={row.event.type} />
+        <TraceIssueFact label={row.events.length > 1 ? "Events" : "Event"} value={row.idLabel} />
+        <TraceIssueFact
+          label="Type"
+          value={
+            row.events.length > 1
+              ? traceGroupedTypeLabel(row)
+              : row.primaryEvent.type
+          }
+        />
         {row.meta.slice(0, 6).map((part) => {
           const [label, ...rest] = part.split(" ");
           return (
@@ -517,11 +532,11 @@ function TraceEventDetail({
         <div className="event-actions">
           <CopyButton
             label="Copy event"
-            value={JSON.stringify(row.event.raw, null, 2)}
+            value={rawValue}
             className="event-action"
           />
         </div>
-        <pre className="code">{JSON.stringify(row.event.raw, null, 2)}</pre>
+        <pre className="code">{rawValue}</pre>
       </details>
     </aside>
   );
@@ -593,48 +608,135 @@ function TraceFailureEvidenceCard({
   );
 }
 
-function traceEventRow(
-  event: NormalizedEvent,
+function traceEventRows(
+  events: readonly NormalizedEvent[],
+  callTools: Map<string, string>,
+  requestLabels: Map<string, number>,
+): TraceEventRowView[] {
+  const rows: TraceEventRowView[] = [];
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index];
+    const next = events[index + 1];
+    if (
+      event.type === EventType.ToolRequest &&
+      next?.type === EventType.ToolResult &&
+      readEventString(event, "call_id") &&
+      readEventString(event, "call_id") === readEventString(next, "call_id")
+    ) {
+      rows.push(traceEventRowFromEvents([event, next], callTools, requestLabels));
+      index += 1;
+      continue;
+    }
+    rows.push(traceEventRowFromEvents([event], callTools, requestLabels));
+  }
+  return rows;
+}
+
+function traceEventRowFromEvents(
+  events: readonly NormalizedEvent[],
   callTools: Map<string, string>,
   requestLabels: Map<string, number>,
 ): TraceEventRowView {
-  const tool = toolName(event, callTools);
-  const requestNumber = event.turnId ? requestLabels.get(event.turnId) : undefined;
+  const requestEvent = events.find((event) => event.type === EventType.ToolRequest);
+  const resultEvent = events.find((event) => event.type === EventType.ToolResult);
+  const primaryEvent = resultEvent ?? requestEvent ?? events[0];
+  const tool = toolName(primaryEvent, callTools) ?? (requestEvent ? toolName(requestEvent, callTools) : undefined);
+  const requestNumber = primaryEvent.turnId ? requestLabels.get(primaryEvent.turnId) : undefined;
   const request = requestNumber ? `Request ${requestNumber}` : "Session";
-  const callId = readEventString(event, "call_id");
-  const exitCode = readEventNumber(event, "exit_code");
-  const durationMs = readEventNumber(event, "duration_ms");
-  const source = eventHasSourceEvidence(event, callTools);
-  const failed = eventIsFailedToolResult(event) || event.type === EventType.Error;
+  const callId = readEventString(primaryEvent, "call_id") ?? (requestEvent ? readEventString(requestEvent, "call_id") : undefined);
+  const exitCode = resultEvent ? readEventNumber(resultEvent, "exit_code") : readEventNumber(primaryEvent, "exit_code");
+  const durationMs = resultEvent ? readEventNumber(resultEvent, "duration_ms") : readEventNumber(primaryEvent, "duration_ms");
+  const source = events.some((event) => eventHasSourceEvidence(event, callTools));
+  const failed = events.some((event) => eventIsFailedToolResult(event) || event.type === EventType.Error);
+  const repaired = events.some(eventHasRepair);
+  const truncated = events.some(eventHasTruncation);
+  const artifact = events.some(eventHasArtifact);
   const meta = compactTraceParts([
     tool ? `tool ${tool}` : undefined,
     callId ? `call ${callId}` : undefined,
     exitCode != null ? `exit ${exitCode}` : undefined,
     durationMs != null ? formatTraceDuration(durationMs) : undefined,
-    eventHasArtifact(event) ? "artifact" : undefined,
-    eventHasRepair(event) ? "repaired" : undefined,
-    eventHasTruncation(event) ? "truncated" : undefined,
-    !event.known ? "unclassified" : undefined,
+    artifact ? "artifact" : undefined,
+    repaired ? "repaired" : undefined,
+    truncated ? "truncated" : undefined,
+    events.length > 1 ? `${events.length} events` : undefined,
+    events.some((event) => !event.known) ? "unclassified" : undefined,
   ]);
+  const label = requestEvent && resultEvent
+    ? traceToolCallLabel(resultEvent, failed, source)
+    : traceEventLabel(primaryEvent, failed, source);
 
   return {
-    event,
-    label: traceEventLabel(event, failed, source),
+    key: traceRowKey(events),
+    events: [...events],
+    primaryEvent,
+    requestEvent,
+    resultEvent,
+    idLabel: traceRowIdLabel(events),
+    label,
     scope: tool ? `${request} · ${tool}` : request,
-    summary: traceEventSummary(event, tool),
-    tone: !event.known
+    summary: traceRowSummary(events, tool),
+    tone: events.some((event) => !event.known)
       ? "unknown"
       : failed
         ? "error"
         : source
           ? "source"
-          : eventHasTruncation(event) || eventHasRepair(event)
+          : truncated || repaired
             ? "warning"
-            : event.type === EventType.ToolResult && exitCode === 0
+            : resultEvent && exitCode === 0
               ? "ok"
               : "info",
     meta,
   };
+}
+
+function traceRowKey(events: readonly NormalizedEvent[]): string {
+  const first = events[0];
+  const last = events[events.length - 1];
+  const callId = events
+    .map((event) => readEventString(event, "call_id"))
+    .find(Boolean);
+  return callId
+    ? `call:${callId}:${first.id}-${last.id}`
+    : `event:${first.id}:${first.type}`;
+}
+
+function traceRowIdLabel(events: readonly NormalizedEvent[]): string {
+  const first = events[0];
+  const last = events[events.length - 1];
+  return first.id === last.id ? `#${first.id}` : `#${first.id}-#${last.id}`;
+}
+
+function traceToolCallLabel(
+  result: NormalizedEvent,
+  failed: boolean,
+  source: boolean,
+): string {
+  if (failed) return "Action failed";
+  if (source) return "Source action";
+  if (readEventBoolean(result, "skipped")) return "Action skipped";
+  return "Action finished";
+}
+
+function traceRowSummary(events: readonly NormalizedEvent[], tool: string | undefined): string {
+  const request = events.find((event) => event.type === EventType.ToolRequest);
+  const result = events.find((event) => event.type === EventType.ToolResult);
+  if (result) {
+    const resultSummary = traceEventSummary(result, tool);
+    if (request && eventIsFailedToolResult(result)) {
+      const requestSummary = traceRequestSummary(
+        tool ?? readEventString(request, "tool") ?? "tool",
+        readEventObject(request, "args"),
+      ).value;
+      return compactTraceParts([
+        requestSummary ? compactTraceText(requestSummary, 96) : undefined,
+        resultSummary,
+      ]).join(" · ");
+    }
+    return resultSummary;
+  }
+  return traceEventSummary(events[0], tool);
 }
 
 function traceEventLabel(
@@ -754,15 +856,26 @@ function traceToolStatsSummary(event: NormalizedEvent): string | undefined {
   return `${total} tool requests`;
 }
 
+function traceGroupedTypeLabel(row: TraceEventRowView): string {
+  if (row.requestEvent && row.resultEvent) return "tool call";
+  return row.primaryEvent.type;
+}
+
+function traceDisplayTotal(events: readonly NormalizedEvent[]): number {
+  return traceEventRows(
+    events,
+    toolNamesByCallId(events),
+    requestLabelsByTurnId(events),
+  ).length;
+}
+
 function traceEventSignal(
-  event: NormalizedEvent,
+  row: TraceEventRowView,
 ): { label: string; value: string } | undefined {
-  if (event.type === EventType.ToolRequest) {
-    const args = readEventObject(event, "args");
-    const summary = traceRequestSummary(readEventString(event, "tool") ?? "tool", args);
-    if (summary.value) return { label: summary.label, value: summary.value };
-  }
-  if (event.type === EventType.ToolResult) {
+  const request = row.requestEvent ?? (row.primaryEvent.type === EventType.ToolRequest ? row.primaryEvent : undefined);
+  const result = row.resultEvent ?? (row.primaryEvent.type === EventType.ToolResult ? row.primaryEvent : undefined);
+  if (result) {
+    const event = result;
     const source = describeSourceAccess(eventResultText(event));
     if (source) {
       return {
@@ -781,14 +894,22 @@ function traceEventSignal(
     const output = traceFailureOutput(event.data as ToolResultPayload);
     if (output) return { label: eventIsFailedToolResult(event) ? "Failure output" : "Output", value: output };
   }
+  if (request) {
+    const event = request;
+    const args = readEventObject(event, "args");
+    const summary = traceRequestSummary(readEventString(event, "tool") ?? "tool", args);
+    if (summary.value) return { label: summary.label, value: summary.value };
+  }
   return undefined;
 }
 
-function traceIssueForEvent(
+function traceIssueForEvents(
   issues: SessionTraceView["toolIssues"],
-  event: NormalizedEvent,
+  events: readonly NormalizedEvent[],
 ): SessionTraceView["toolIssues"][number] | undefined {
-  const callId = readEventString(event, "call_id");
+  const callId = events
+    .map((event) => readEventString(event, "call_id"))
+    .find(Boolean);
   if (!callId) return undefined;
   return issues.find((issue) => issue.id === callId);
 }
@@ -1607,8 +1728,8 @@ function resultCountLabel(
   narrowed: boolean,
   total: number,
 ): string {
-  if (narrowed) return `${count === 1 ? "entry" : "entries"} of ${total}`;
-  return count === 1 ? "trace entry loaded" : "trace entries loaded";
+  if (narrowed) return `${count === 1 ? "record" : "records"} of ${total}`;
+  return count === 1 ? "trace record loaded" : "trace records loaded";
 }
 
 function eventMatchesFilter(

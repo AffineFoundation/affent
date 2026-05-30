@@ -65,9 +65,12 @@ describe("SessionTracePanel", () => {
 
     const list = screen.getByTestId("session-trace-event-list");
     expect(list).toHaveTextContent("User message");
-    expect(list).toHaveTextContent("Source evidence");
+    expect(list).toHaveTextContent("Source action");
     expect(list).toHaveTextContent("Action failed");
     expect(list).toHaveTextContent("npm test");
+    expect(within(list).getAllByRole("option")).toHaveLength(5);
+    expect(list).toHaveTextContent("#3-#4");
+    expect(list).toHaveTextContent("#5-#6");
 
     const detail = screen.getByTestId("session-trace-event-detail");
     expect(detail).toHaveTextContent("Action failed");
@@ -88,7 +91,7 @@ describe("SessionTracePanel", () => {
     await user.click(screen.getByRole("button", { name: "Reset" }));
     await user.click(screen.getByRole("button", { name: "Sources 2" }));
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Sources");
-    expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("Source evidence");
+    expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("Source action");
     expect(screen.getByTestId("session-trace-event-list")).not.toHaveTextContent("npm test");
 
     await user.click(screen.getByRole("button", { name: "Reset" }));
@@ -149,8 +152,10 @@ describe("SessionTracePanel", () => {
     render(<SessionTracePanel trace={buildSessionTrace(session)} events={session.events} defaultOpen />);
 
     expect(screen.getByTestId("session-trace-panel")).toHaveTextContent("No failed tool calls");
-    expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("Source evidence");
+    expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("Source action");
     expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("taostats.io/api/subnets/120");
+    expect(within(screen.getByTestId("session-trace-event-list")).getAllByRole("option")).toHaveLength(3);
+    expect(screen.getByTestId("session-trace-event-list")).toHaveTextContent("#3-#4");
 
     await user.click(screen.getByRole("button", { name: "Sources 2" }));
     expect(screen.getByTestId("session-trace-resultbar")).toHaveTextContent("Sources");
