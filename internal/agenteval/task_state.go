@@ -53,6 +53,14 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 				TurnID:  latest.TurnID,
 			})
 		}
+		if summary := taskstate.RuntimeSurfaceWorkspaceSummary(&latest); summary != "" {
+			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+				Source:  "runtime_workspace",
+				Summary: compactTaskStateSummary(summary),
+				TurnID:  latest.TurnID,
+			})
+			task.Sources = appendUniqueTaskString(task.Sources, "runtime_workspace", taskStateMaxItems)
+		}
 		if summary := taskstate.RuntimeSurfaceCompactionPolicySummary(&latest); summary != "" {
 			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
 				Source:  "runtime_surface",

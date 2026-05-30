@@ -152,6 +152,46 @@ func TestAppendUserMessageInjectsRuntimeWorkspaceContext(t *testing.T) {
 	}
 }
 
+func TestAppendUserMessageInjectsActiveWorkspacePathContext(t *testing.T) {
+	root := t.TempDir()
+	app := filepath.Join(root, "app")
+	if err := os.Mkdir(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(app, "go.mod"), []byte("module example.com/app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		Conv:                  conv,
+		WorkspaceRoot:         root,
+		WorkspaceRootProvider: func() string { return app },
+		Tools: func() *Registry {
+			reg := NewRegistry()
+			reg.Add(readFileTool(BuiltinDeps{
+				HostWorkspaceDir:         root,
+				HostWorkspaceDirProvider: func() string { return app },
+			}))
+			return reg
+		}(),
+	}
+
+	if err := loop.appendUserMessage("turn_workspace_app", "continue in active app workspace", TurnOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs := conv.Snapshot()
+	if len(msgs) != 2 || msgs[0].Role != "system" || !msgs[0].TransientContext ||
+		!strings.Contains(msgs[0].Content, `active_workspace: "app"`) ||
+		!strings.Contains(msgs[0].Content, `do not prefix paths with "app"`) ||
+		!strings.Contains(msgs[0].Content, `"go.mod" (file)`) {
+		t.Fatalf("active workspace context should name the active relative root: %+v", msgs)
+	}
+}
+
 func TestAppendUserMessageInjectsScheduledTurnContext(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
 	if err != nil {

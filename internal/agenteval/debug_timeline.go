@@ -1341,13 +1341,19 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		fmt.Fprintf(b, "- tools: `%s`\n", strings.Join(names, "`, `"))
 	}
 	if ws := surface.Workspace; ws != nil {
-		if ws.DefaultCWD != "" || ws.PathMode != "" || len(ws.RootEntries) > 0 {
+		if ws.DefaultCWD != "" || ws.PathMode != "" || ws.WorkspacePath != "" || ws.WorkspaceLabel != "" || len(ws.RootEntries) > 0 {
 			var parts []string
 			if ws.DefaultCWD != "" {
 				parts = append(parts, "default_cwd="+ws.DefaultCWD)
 			}
 			if ws.PathMode != "" {
 				parts = append(parts, "path_mode="+ws.PathMode)
+			}
+			if ws.WorkspacePath != "" {
+				parts = append(parts, "workspace_path="+ws.WorkspacePath)
+			}
+			if ws.WorkspaceLabel != "" {
+				parts = append(parts, "workspace_label="+ws.WorkspaceLabel)
 			}
 			if len(ws.RootEntries) > 0 {
 				var entries []string

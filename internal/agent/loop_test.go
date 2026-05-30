@@ -2049,8 +2049,48 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	if payload.Workspace == nil ||
 		payload.Workspace.DefaultCWD != "workspace_root" ||
 		payload.Workspace.PathMode != "workspace_relative" ||
+		payload.Workspace.WorkspacePath != "." ||
+		payload.Workspace.WorkspaceLabel != "." ||
 		len(payload.Workspace.RootEntries) == 0 ||
 		payload.Workspace.RootEntries[0].Name != "README.md" {
+		t.Fatalf("workspace surface = %+v", payload.Workspace)
+	}
+}
+
+func TestPublishRuntimeSurfaceReportsActiveWorkspacePath(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	root := t.TempDir()
+	app := filepath.Join(root, "app")
+	if err := os.Mkdir(app, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(app, "go.mod"), []byte("module example.com/app\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(readFileTool(BuiltinDeps{
+		HostWorkspaceDir:         root,
+		HostWorkspaceDirProvider: func() string { return app },
+	}))
+	loop := &Loop{
+		Tools:                 reg,
+		Events:                events,
+		WorkspaceRoot:         root,
+		WorkspaceRootProvider: func() string { return app },
+	}
+
+	loop.publishRuntimeSurface("turn_surface_workspace", TurnOptions{})
+	ev := <-events
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if payload.Workspace == nil ||
+		payload.Workspace.WorkspacePath != "app" ||
+		payload.Workspace.WorkspaceLabel != "app" ||
+		payload.Workspace.Root != "." ||
+		len(payload.Workspace.RootEntries) != 1 ||
+		payload.Workspace.RootEntries[0].Name != "go.mod" {
 		t.Fatalf("workspace surface = %+v", payload.Workspace)
 	}
 }

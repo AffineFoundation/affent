@@ -1402,8 +1402,10 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 				Reason:  "disabled_for_turn",
 			},
 			Workspace: &sse.RuntimeWorkspace{
-				DefaultCWD: "workspace_root",
-				PathMode:   "workspace_relative",
+				DefaultCWD:     "workspace_root",
+				PathMode:       "workspace_relative",
+				WorkspacePath:  "app",
+				WorkspaceLabel: "app",
 				RootEntries: []sse.RuntimeWorkspaceEntry{
 					{Name: "remote.git", Kind: "dir"},
 					{Name: "README.md", Kind: "file"},
@@ -1497,11 +1499,17 @@ func TestSummarizeDurableSessionRestoresTaskStateFromRuntimeEvents(t *testing.T)
 	if !stringSliceContains(task.Constraints, "workspace path mode: workspace_relative") {
 		t.Fatalf("constraints = %+v, want workspace path mode", task.Constraints)
 	}
+	if !stringSliceContains(task.Constraints, "active workspace path: app") {
+		t.Fatalf("constraints = %+v, want active workspace path", task.Constraints)
+	}
 	if !stringSliceContains(task.Constraints, "unavailable capabilities: live sources, nested work, skills, loop protocol, schedules, schedule runner") {
 		t.Fatalf("constraints = %+v, want runtime capability gaps", task.Constraints)
 	}
 	if !stringSliceContains(task.KnownFacts, "available capabilities: workspace, memory/history") {
 		t.Fatalf("known_facts = %+v, want available runtime capabilities", task.KnownFacts)
+	}
+	if !stringSliceContains(task.KnownFacts, "active workspace: app") {
+		t.Fatalf("known_facts = %+v, want active workspace label", task.KnownFacts)
 	}
 	if !stringSliceContains(task.KnownFacts, "latest turn loop protocol control: disabled") {
 		t.Fatalf("known_facts = %+v, want loop protocol control scope", task.KnownFacts)

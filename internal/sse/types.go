@@ -122,6 +122,8 @@ const (
 type RuntimeWorkspace struct {
 	DefaultCWD           string                  `json:"default_cwd,omitempty"`
 	PathMode             string                  `json:"path_mode,omitempty"`
+	WorkspacePath        string                  `json:"workspace_path,omitempty"`
+	WorkspaceLabel       string                  `json:"workspace_label,omitempty"`
 	Root                 string                  `json:"root,omitempty"`
 	RootEntries          []RuntimeWorkspaceEntry `json:"root_entries,omitempty"`
 	RootEntryCount       int                     `json:"root_entry_count,omitempty"`

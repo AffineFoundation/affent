@@ -26,6 +26,11 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 			ModelContextWindowTokens:  100000,
 			ReservedOutputTokens:      30000,
 			CompactTriggerInputTokens: 70000,
+			Workspace: &sse.RuntimeWorkspace{
+				PathMode:       "workspace_relative",
+				WorkspacePath:  "app",
+				WorkspaceLabel: "app",
+			},
 		}},
 		ContextInjections: []ContextInjection{{
 			TurnID:  "turn-1",
@@ -98,6 +103,9 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	if !taskStateHasEvidenceSummary(got, "runtime_surface", "reserved_output_tokens=30000") ||
 		!taskStateHasEvidenceSummary(got, "runtime_surface", "compact_trigger_input_tokens=70000") {
 		t.Fatalf("evidence = %+v, want runtime surface policy limits", got.Evidence)
+	}
+	if !taskStateHasEvidenceSummary(got, "runtime_workspace", "workspace_path=app") {
+		t.Fatalf("evidence = %+v, want runtime workspace path", got.Evidence)
 	}
 	if !taskStateHasSource(got, "runtime_workspace") || !taskStateHasSource(got, "runtime_surface") || !taskStateHasSource(got, "schedule") {
 		t.Fatalf("sources = %+v", got.Sources)

@@ -141,6 +141,9 @@ func sessionTaskConstraints(summary sessionSummary, eventState sessionTaskEventS
 	if eventState.RuntimeWorkspace != nil && eventState.RuntimeWorkspace.PathMode != "" {
 		out = appendUniqueLimited(out, "workspace path mode: "+eventState.RuntimeWorkspace.PathMode, sessionTaskStateMaxItems)
 	}
+	if eventState.RuntimeWorkspace != nil && eventState.RuntimeWorkspace.WorkspacePath != "" {
+		out = appendUniqueLimited(out, "active workspace path: "+eventState.RuntimeWorkspace.WorkspacePath, sessionTaskStateMaxItems)
+	}
 	if summary.Capabilities != nil && len(summary.Capabilities.WorkspaceTools) > 0 {
 		out = appendUniqueLimited(out, "workspace tools available", sessionTaskStateMaxItems)
 	}
@@ -166,6 +169,9 @@ func sessionTaskKnownFacts(summary sessionSummary, eventState sessionTaskEventSt
 	}
 	if summary.WorkspaceLabel != "" {
 		out = appendUniqueLimited(out, "workspace: "+summary.WorkspaceLabel, sessionTaskStateMaxItems)
+	}
+	if eventState.RuntimeWorkspace != nil && eventState.RuntimeWorkspace.WorkspaceLabel != "" {
+		out = appendUniqueLimited(out, "active workspace: "+eventState.RuntimeWorkspace.WorkspaceLabel, sessionTaskStateMaxItems)
 	}
 	if eventState.RuntimeWorkspace != nil && len(eventState.RuntimeWorkspace.RootEntries) > 0 {
 		var names []string

@@ -12,14 +12,25 @@ import (
 const runtimeWorkspaceRootEntryLimit = 24
 
 func runtimeWorkspaceSurface(root string) *sse.RuntimeWorkspace {
-	root = strings.TrimSpace(root)
-	if root == "" {
+	return runtimeWorkspaceSurfaceForRoots(root, root)
+}
+
+func runtimeWorkspaceSurfaceForRoots(configuredRoot, currentRoot string) *sse.RuntimeWorkspace {
+	configuredRoot = strings.TrimSpace(configuredRoot)
+	currentRoot = strings.TrimSpace(currentRoot)
+	if currentRoot == "" {
+		currentRoot = configuredRoot
+	}
+	if currentRoot == "" {
 		return nil
 	}
-	entries, count, truncated := runtimeWorkspaceRootEntries(root, runtimeWorkspaceRootEntryLimit)
+	workspacePath := activeWorkspaceRelativePath(configuredRoot, currentRoot)
+	entries, count, truncated := runtimeWorkspaceRootEntries(currentRoot, runtimeWorkspaceRootEntryLimit)
 	return &sse.RuntimeWorkspace{
 		DefaultCWD:           "workspace_root",
 		PathMode:             "workspace_relative",
+		WorkspacePath:        workspacePath,
+		WorkspaceLabel:       activeWorkspaceLabel(workspacePath),
 		Root:                 ".",
 		RootEntries:          entries,
 		RootEntryCount:       count,
@@ -68,6 +79,9 @@ func runtimeWorkspaceContextBlock(ws *sse.RuntimeWorkspace) string {
 	b.WriteString("AFFENT RUNTIME WORKSPACE:\n")
 	b.WriteString("- default_cwd: workspace root (`.`)\n")
 	b.WriteString("- path_mode: workspace-relative; address root entries directly from `.` and omit cwd unless a subdirectory is needed\n")
+	if ws.WorkspacePath != "" && ws.WorkspacePath != "." {
+		fmt.Fprintf(&b, "- active_workspace: %s; later workspace paths resolve from this directory, so do not prefix paths with %s\n", strconv.Quote(ws.WorkspacePath), strconv.Quote(ws.WorkspacePath))
+	}
 	if len(ws.RootEntries) > 0 {
 		b.WriteString("- root_entries:")
 		for i, entry := range ws.RootEntries {

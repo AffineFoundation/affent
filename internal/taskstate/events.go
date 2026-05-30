@@ -114,6 +114,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				addSource(state, "runtime_surface", opts.MaxItems)
 				seen = true
 			}
+			if summary := RuntimeSurfaceWorkspaceSummary(&p); summary != "" {
+				state.Evidence = appendEvidence(state.Evidence, Evidence{
+					Source:  "runtime_workspace",
+					Summary: compactSummary(summary, opts.SummaryMaxChar),
+					TurnID:  p.TurnID,
+				}, opts.MaxItems)
+				addSource(state, "runtime_workspace", opts.MaxItems)
+				seen = true
+			}
 			if summary := RuntimeSurfaceCompactionPolicySummary(&p); summary != "" {
 				state.Evidence = appendEvidence(state.Evidence, Evidence{
 					Source:  "runtime_surface",
@@ -853,6 +862,26 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 	addIntField("max_turn_input_tokens", p.MaxTurnInputTokens)
 	addIntField("available_tool_count", p.AvailableToolCount)
 	addIntField("excluded_tool_count", p.ExcludedToolCount)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Join(fields, " ")
+}
+
+func RuntimeSurfaceWorkspaceSummary(p *sse.RuntimeSurfacePayload) string {
+	if p == nil || p.Workspace == nil {
+		return ""
+	}
+	var fields []string
+	if path := strings.TrimSpace(p.Workspace.WorkspacePath); path != "" {
+		fields = append(fields, "workspace_path="+path)
+	}
+	if label := strings.TrimSpace(p.Workspace.WorkspaceLabel); label != "" {
+		fields = append(fields, "workspace_label="+label)
+	}
+	if mode := strings.TrimSpace(p.Workspace.PathMode); mode != "" {
+		fields = append(fields, "workspace_path_mode="+mode)
+	}
 	if len(fields) == 0 {
 		return ""
 	}

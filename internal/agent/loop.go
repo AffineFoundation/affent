@@ -3205,7 +3205,7 @@ func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, 
 		payload.Capabilities = runtimeCapabilitiesForCatalog(toolSurface.Catalog)
 		payload.Capabilities.SessionScheduleRunner = payload.Capabilities.SessionSchedule && l.SessionScheduleRunner
 		if len(payload.Capabilities.WorkspaceTools) > 0 {
-			payload.Workspace = runtimeWorkspaceSurface(l.workspaceRoot())
+			payload.Workspace = runtimeWorkspaceSurfaceForRoots(l.WorkspaceRoot, l.workspaceRoot())
 		}
 	}
 	l.publish(sse.TypeRuntimeSurface, payload)
@@ -3239,7 +3239,7 @@ func (l *Loop) runtimeWorkspaceSurfaceForTurn(opts TurnOptions) *sse.RuntimeWork
 	if len(runtimeWorkspaceToolsForCatalog(toolSurface.Catalog)) == 0 {
 		return nil
 	}
-	return runtimeWorkspaceSurface(l.workspaceRoot())
+	return runtimeWorkspaceSurfaceForRoots(l.WorkspaceRoot, l.workspaceRoot())
 }
 
 func (l *Loop) workspaceRoot() string {
