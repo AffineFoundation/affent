@@ -21,11 +21,13 @@ export interface WorkspaceFileView {
   size?: string;
 }
 
+export type WorkspaceFileScope = "global" | "session";
+
 export type WorkspaceFileBrowserState =
-  | { state: "idle"; workspacePath?: string }
-  | { state: "loading"; path: string; workspacePath?: string }
-  | { state: "ready"; file: WorkspaceFileView; workspacePath?: string }
-  | { state: "error"; path?: string; error: string; workspacePath?: string };
+  | { state: "idle"; workspacePath?: string; scope?: WorkspaceFileScope }
+  | { state: "loading"; path: string; workspacePath?: string; scope?: WorkspaceFileScope }
+  | { state: "ready"; file: WorkspaceFileView; revealDirectories?: WorkspaceFileView[]; workspacePath?: string; scope?: WorkspaceFileScope }
+  | { state: "error"; path?: string; error: string; workspacePath?: string; scope?: WorkspaceFileScope };
 
 export function buildWorkspaceFileView(resp: SessionFileResponse): WorkspaceFileView {
   const kind = resp.kind === "directory" ? "directory" : "file";

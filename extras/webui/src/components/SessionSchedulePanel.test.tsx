@@ -91,7 +91,11 @@ describe("SessionSchedulePanel", () => {
     expect(panel).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("30m timer");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
+    expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("sched_loop");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Every 30m");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("Scheduled loop tick for session");
+    expect(screen.queryByTestId("session-schedule-callout")).toBeNull();
+    expect(panel).not.toHaveTextContent("Scheduler ready");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Active");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("waiting for LOOP.md activation");
   });
@@ -236,16 +240,17 @@ describe("SessionSchedulePanel", () => {
       />,
     );
 
-    const list = screen.getByTestId("session-schedule-list");
-    await user.click(within(list).getByRole("button", { name: "Delete" }));
+    const inspector = screen.getByTestId("session-schedule-inspector");
+    expect(inspector).toHaveTextContent("Check runtime health");
+    await user.click(within(inspector).getByRole("button", { name: "Delete" }));
     expect(onDeleteSchedule).not.toHaveBeenCalled();
-    const firstConfirm = within(list).getByRole("group", { name: "Confirm delete Check-in timer" });
+    const firstConfirm = within(inspector).getByRole("group", { name: "Confirm delete Check-in timer" });
     expect(firstConfirm).toHaveTextContent("Delete this timer?");
     await user.click(within(firstConfirm).getByRole("button", { name: "Cancel" }));
-    expect(within(list).queryByRole("group", { name: "Confirm delete Check-in timer" })).toBeNull();
+    expect(within(inspector).queryByRole("group", { name: "Confirm delete Check-in timer" })).toBeNull();
 
-    await user.click(within(list).getByRole("button", { name: "Delete" }));
-    const confirm = within(list).getByRole("group", { name: "Confirm delete Check-in timer" });
+    await user.click(within(inspector).getByRole("button", { name: "Delete" }));
+    const confirm = within(inspector).getByRole("group", { name: "Confirm delete Check-in timer" });
     await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
     expect(onDeleteSchedule).toHaveBeenCalledWith("sched_checkin");
   });

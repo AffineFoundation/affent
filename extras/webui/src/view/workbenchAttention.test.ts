@@ -49,7 +49,7 @@ describe("buildWorkbenchAttention", () => {
       changes: changes({ changed: 2 }),
       run: run({ failed: 2, failedDetail: "checkout spec failed", failedNext: "update payment route then rerun" }),
     })).toEqual({
-      label: "2 failed commands · View run",
+      label: "2 failed commands · Open trace",
       detail: "npm test 0 · checkout spec failed · Next: update payment route then rerun · +1 more",
       tone: "error",
       target: "run",
@@ -95,7 +95,7 @@ describe("buildWorkbenchAttention", () => {
       changes: changes({ changed: 3, changedDetail: "Updated payment route" }),
       run: run(),
     })).toEqual({
-      label: "3 changed files · Review diff",
+      label: "3 changed files · Open files",
       detail: "src/changed-0.ts · Updated payment route · +2 more",
       tone: "attention",
       target: "changes",

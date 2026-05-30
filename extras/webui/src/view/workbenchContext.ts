@@ -29,6 +29,8 @@ export interface WorkbenchContextUsageItem {
 export interface WorkbenchContextUsageTrendPoint {
   label: string;
   value: number;
+  inputTokens: number;
+  outputTokens: number;
   valueLabel: string;
   detail?: string;
 }
@@ -37,6 +39,10 @@ export interface WorkbenchContextUsageView {
   items: WorkbenchContextUsageItem[];
   trend: WorkbenchContextUsageTrendPoint[];
   totalTokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  latestTurnInputTokens?: number;
+  latestTurnOutputTokens?: number;
 }
 
 export interface WorkbenchRequestModeView {
@@ -115,7 +121,7 @@ export function buildWorkbenchContextEvidence({
   }
   if (changes && changes.files.length > 0) {
     items.push({
-      target: "changes",
+      target: "files",
       label: "Changes",
       summary: changes.summary,
       detail: changes.detail,
@@ -133,7 +139,7 @@ export function buildWorkbenchContextEvidence({
   }
   if (run && run.commands.length > 0) {
     items.push({
-      target: "run",
+      target: "trace",
       label: "Run",
       summary: run.summary,
       detail: run.detail,
@@ -142,7 +148,7 @@ export function buildWorkbenchContextEvidence({
   }
   if (artifacts.length > 0) {
     items.push({
-      target: "run",
+      target: "trace",
       label: "Artifacts",
       summary: `${artifacts.length} ${artifacts.length === 1 ? "artifact" : "artifacts"}`,
       detail: workbenchArtifactContextDetail(artifacts),
@@ -176,6 +182,12 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
   const summaryOutput = summary?.usage?.output_tokens ?? 0;
   const summaryTotal = tokenTotal(summaryInput, summaryOutput);
   const totalTokens = traceTotal > 0 ? traceTotal : summaryTotal;
+  const inputTokens = traceTotal > 0 ? session.totalUsage.inputTokens : summaryInput;
+  const outputTokens = traceTotal > 0 ? session.totalUsage.outputTokens : summaryOutput;
+  const latestTurn = latestTurnWithUsage(session);
+  const checkpoint = latestTurn?.usage ? undefined : latestCheckpointUsage(summary);
+  const latestTurnInputTokens = latestTurn?.usage?.inputTokens ?? checkpoint?.inputTokens;
+  const latestTurnOutputTokens = latestTurn?.usage?.outputTokens ?? checkpoint?.outputTokens;
   if (traceTotal > 0) {
     items.push({
       label: "Session tokens",
@@ -191,7 +203,6 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
     });
   }
 
-  const latestTurn = latestTurnWithUsage(session);
   if (latestTurn?.usage) {
     items.push({
       label: "Latest turn tokens",
@@ -199,7 +210,6 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
       detail: latestTurn.id,
     });
   } else {
-    const checkpoint = latestCheckpointUsage(summary);
     if (checkpoint) {
       items.push({
         label: "Latest turn tokens",
@@ -218,7 +228,7 @@ export function buildWorkbenchContextUsage(session: SessionState, summary?: Sess
     });
   }
 
-  return { items, trend: usageTrend(session, summary), totalTokens };
+  return { items, trend: usageTrend(session, summary), totalTokens, inputTokens, outputTokens, latestTurnInputTokens, latestTurnOutputTokens };
 }
 
 export function buildConversationContextView(session: SessionState, summary?: SessionContextSummary): WorkbenchConversationContextView | undefined {
@@ -439,6 +449,8 @@ function usageTrend(session: SessionState, summary?: SessionSummary): WorkbenchC
       return {
         label: `Turn ${index + 1}`,
         value: total,
+        inputTokens: turn.usage?.inputTokens ?? 0,
+        outputTokens: turn.usage?.outputTokens ?? 0,
         valueLabel: formatTokenCountMillions(total),
         detail: turn.id,
       };
@@ -452,6 +464,8 @@ function usageTrend(session: SessionState, summary?: SessionSummary): WorkbenchC
     return [{
       label: turns > 0 ? `${turns} ${turns === 1 ? "turn" : "turns"}` : "Session",
       value: summaryTotal,
+      inputTokens: summary?.usage?.input_tokens ?? 0,
+      outputTokens: summary?.usage?.output_tokens ?? 0,
       valueLabel: formatTokenCountMillions(summaryTotal),
       detail: "from session index",
     }];
@@ -460,7 +474,14 @@ function usageTrend(session: SessionState, summary?: SessionSummary): WorkbenchC
   const checkpoint = latestCheckpointUsage(summary);
   if (checkpoint) {
     const total = tokenTotal(checkpoint.inputTokens, checkpoint.outputTokens);
-    return [{ label: "Latest turn", value: total, valueLabel: formatTokenCountMillions(total), detail: "from loop checkpoint" }];
+    return [{
+      label: "Latest turn",
+      value: total,
+      inputTokens: checkpoint.inputTokens,
+      outputTokens: checkpoint.outputTokens,
+      valueLabel: formatTokenCountMillions(total),
+      detail: "from loop checkpoint",
+    }];
   }
 
   return [];

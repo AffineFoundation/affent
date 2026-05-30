@@ -14,6 +14,7 @@ import {
   listSessions,
   listSkills,
   readSessionArtifact,
+  readWorkspaceFile,
   readSkill,
   removeSessionMemory,
   replaceSessionMemory,
@@ -24,6 +25,7 @@ import {
   updateSessionLoopProtocol,
   updateSessionSchedule,
   writeSessionFile,
+  writeWorkspaceFile,
 } from "./sessions";
 
 describe("session API helpers", () => {
@@ -74,6 +76,8 @@ describe("session API helpers", () => {
     await installSkill(client, { name: "skill_1", body: "AFFENT ACTIVE SKILL: skill_1" });
     await deleteSkill(client, "skill/1");
     await writeSessionFile(client, "s/1", { path: "src/upload.txt", text: "hello" });
+    await readWorkspaceFile(client, { path: "src", limit: 10 });
+    await writeWorkspaceFile(client, { path: "src/global.txt", text: "hello global" });
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
@@ -120,6 +124,10 @@ describe("session API helpers", () => {
     expect(fetchImpl.mock.calls[16][0]).toBe("/v1/sessions/s%2F1/files");
     expect((fetchImpl.mock.calls[16][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[16][1] as RequestInit).body).toBe(JSON.stringify({ path: "src/upload.txt", text: "hello" }));
+    expect(fetchImpl.mock.calls[17][0]).toBe("/v1/workspace/files?path=src&limit=10");
+    expect(fetchImpl.mock.calls[18][0]).toBe("/v1/workspace/files");
+    expect((fetchImpl.mock.calls[18][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[18][1] as RequestInit).body).toBe(JSON.stringify({ path: "src/global.txt", text: "hello global" }));
   });
 
   it("streams native affent session events", async () => {

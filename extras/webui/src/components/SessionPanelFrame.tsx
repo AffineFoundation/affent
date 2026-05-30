@@ -8,11 +8,13 @@ export function SessionPanelFrame({
   kicker,
   title,
   detail,
+  embeddedHeader = "default",
   children,
 }: {
   className: string;
   testId: string;
   embedded?: boolean;
+  embeddedHeader?: "default" | "hidden";
   defaultOpen?: boolean;
   kicker: string;
   title: string;
@@ -29,8 +31,13 @@ export function SessionPanelFrame({
 
   if (embedded) {
     return (
-      <section className={`${className} session-automation-section`} data-testid={testId} aria-label={kicker}>
-        <div className="session-plan-summary session-automation-section-header">{header}</div>
+      <section
+        className={`${className} session-automation-section`}
+        data-testid={testId}
+        data-embedded-header={embeddedHeader}
+        aria-label={kicker}
+      >
+        {embeddedHeader === "default" ? <div className="session-plan-summary session-automation-section-header">{header}</div> : null}
         {children}
       </section>
     );

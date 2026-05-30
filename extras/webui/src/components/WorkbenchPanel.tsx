@@ -26,7 +26,7 @@ export function WorkbenchPanel({
   const groups = groupNavItems(navItems);
 
   return (
-    <aside className="workbench-panel" data-testid="workbench-panel" aria-label={title}>
+    <aside className="workbench-panel" data-active-tab={activeTab} data-testid="workbench-panel" aria-label={title}>
       {onResizeStart ? (
         <span
           className="workbench-resize-handle"
@@ -50,7 +50,6 @@ export function WorkbenchPanel({
           <div className="workbench-attachment-main">
             <span>{attachment.label}</span>
             <strong title={attachment.title}>{attachment.title}</strong>
-            {attachment.detail ? <small title={attachment.detail}>{attachment.detail}</small> : null}
           </div>
           {attachment.metrics?.length ? (
             <div className="workbench-attachment-metrics" aria-label={`${attachment.label} status`}>
@@ -99,8 +98,8 @@ function groupNavItems(items: readonly WorkbenchNavItem[]): { scope: WorkbenchNa
   const current = items.filter((item) => item.scope === "current");
   const platform = items.filter((item) => item.scope === "platform");
   const groups: { scope: WorkbenchNavScope; label: string; items: WorkbenchNavItem[] }[] = [
-    { scope: "current", label: "Current chat", items: current },
-    { scope: "platform", label: "Platform", items: platform },
+    { scope: "current", label: "Session", items: current },
+    { scope: "platform", label: "Global", items: platform },
   ];
   return groups.filter((group) => group.items.length > 0);
 }

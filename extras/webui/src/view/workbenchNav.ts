@@ -30,9 +30,6 @@ export interface WorkbenchNavItem {
 }
 
 export function buildWorkbenchNavItems({
-  changes,
-  run,
-  artifacts = [],
   files,
   workspaceBrowserActive = false,
   workspace,
@@ -71,18 +68,16 @@ export function buildWorkbenchNavItems({
   const currentItems: WorkbenchNavItem[] = [
     {
       key: "context",
-      label: "Task",
+      label: "Usage",
       scope: "current",
-      detail: taskNavDetail(usage),
+      detail: usageNavDetail(usage),
     },
-    changesNavItem(changes, attention),
-    runNavItem(run, artifacts, attention),
-    filesNavItem(files, workspaceBrowserActive, workspace, attention),
     automationNavItem(automation, attention),
   ];
 
   return [
     ...currentItems,
+    filesNavItem(files, workspaceBrowserActive, workspace, attention),
     {
       key: "memory",
       label: "Memory",
@@ -111,52 +106,21 @@ export function buildWorkbenchNavItems({
   ];
 }
 
-function taskNavDetail(usage?: WorkbenchContextUsageView): string {
+function usageNavDetail(usage?: WorkbenchContextUsageView): string {
   const usageSummary = workbenchContextUsageSummary(usage);
   if (usageSummary) return usageSummary;
-  return "Current task";
+  return "Token usage";
 }
 
 function toneForAttention(tone: SessionOverview["tone"] | WorkbenchAttentionTone | undefined): WorkbenchNavTone | undefined {
   return tone === "error" ? "error" : undefined;
 }
 
-function artifactBadge(artifacts: readonly TurnArtifact[]): string | undefined {
-  if (artifacts.length === 0) return undefined;
-  if (artifacts.length > 99) return "99+";
-  return String(artifacts.length);
-}
-
 export function workbenchTabFromAttention(target: WorkbenchAttentionTarget): WorkbenchTab {
   if (target === "automation") return "automation";
-  if (target === "workspace") return "files";
+  if (target === "workspace" || target === "changes") return "files";
+  if (target === "run") return "trace";
   return target;
-}
-
-function changesNavItem(changes: SessionChangesView, attention?: WorkbenchAttention): WorkbenchNavItem {
-  return {
-    key: "changes",
-    label: "Changes",
-    scope: "current",
-    detail: changes.files.length > 0 ? changes.detail : "Diff review",
-    badge: changes.files.length > 0 ? String(changes.files.length) : undefined,
-    tone: toneForAttention(attention?.target === "changes" ? attention.tone : changes.tone),
-  };
-}
-
-function runNavItem(run: SessionRunView, artifacts: readonly TurnArtifact[], attention?: WorkbenchAttention): WorkbenchNavItem {
-  const artifactCount = artifacts.length;
-  const commandCount = run.commands.length;
-  const badge = commandCount > 0 ? String(commandCount) : artifactBadge(artifacts);
-  const detail = commandCount > 0 ? run.detail : artifactCount > 0 ? `${artifactCount} stored output${artifactCount === 1 ? "" : "s"}` : "Command console";
-  return {
-    key: "run",
-    label: "Run",
-    scope: "current",
-    detail,
-    badge,
-    tone: toneForAttention(attention?.target === "run" ? attention.tone : run.tone),
-  };
 }
 
 function filesNavItem(
@@ -170,7 +134,7 @@ function filesNavItem(
   return {
     key: "files",
     label: "Files",
-    scope: "current",
+    scope: "platform",
     detail,
     badge,
     tone: toneForAttention(attention?.target === "workspace" ? attention.tone : attention?.target === "files" ? attention.tone : workspace.issue ? workspace.tone : files.tone),
@@ -197,7 +161,7 @@ function traceNavItem(
     return {
       key: "trace",
       label: "Trace",
-      scope: "platform",
+      scope: "current",
       detail: traceNavDetail(trace),
       badge: traceBadge(trace),
       tone: undefined,
@@ -206,7 +170,7 @@ function traceNavItem(
   return {
     key: "trace",
     label: "Trace",
-    scope: "platform",
+    scope: "current",
     detail: runtimeNavDetail(runtimeState),
     badge: runtimeTabHasSignal ? runtimeBadge(runtimeState) : undefined,
     tone: runtimeState.state === "error" ? "error" : undefined,

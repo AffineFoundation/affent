@@ -47,7 +47,10 @@ describe("SessionLoopPanel", () => {
     expect(panel).toHaveTextContent("Loop");
     expect(panel).toHaveTextContent("Loop running");
     expect(panel).not.toHaveTextContent("Running protocol");
-    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Keep LOOP.md compact");
+    expect(panel).not.toHaveTextContent(".affent/loops/loop-1/LOOP.md");
+    expect(screen.queryByTestId("session-loop-progress")).toBeNull();
+    expect(screen.queryByTestId("session-loop-next")).toBeNull();
+    expect(screen.getByTestId("session-loop-runtimebar")).toHaveTextContent("Goal: watch market evidence for several days");
     expect(screen.getByRole("button", { name: "Update LOOP.md" })).toBeInTheDocument();
   });
 
@@ -95,17 +98,17 @@ describe("SessionLoopPanel", () => {
     );
 
     const panel = screen.getByTestId("session-loop-panel");
-    expect(panel).toHaveTextContent("Activation review");
-    expect(panel).toHaveTextContent("Calibration recorded; ready for activation review");
+    expect(panel).toHaveTextContent("Calibration answer recorded");
+    expect(screen.queryByTestId("session-loop-callout")).toBeNull();
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("A calibration answer is recorded");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("Current Situation <= 1200 chars");
-    expect(panel).toHaveTextContent("Calibration");
+    expect(panel).toHaveTextContent("Setup answer");
     expect(panel).toHaveTextContent("1 calibration answer");
     expect(panel).toHaveTextContent("Stop when source evidence is weak.");
     expect(panel).not.toHaveTextContent("Setup questionWhat should pause this loop?");
-    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Review and activate in chat");
-    expect(screen.getByRole("button", { name: "Review in chat" })).toBeInTheDocument();
+    expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Activate LOOP.md in chat");
+    expect(screen.getByRole("button", { name: "Open activation draft" })).toBeInTheDocument();
   });
 
   it("surfaces the latest loop memory update as recovery context", () => {
@@ -175,6 +178,65 @@ describe("SessionLoopPanel", () => {
     expect(panel).toHaveTextContent("3 compactions");
     expect(panel).toHaveTextContent("reactive");
     expect(panel).toHaveTextContent("context_overflow");
+  });
+
+  it("keeps running loop counters out of the Workbench first screen", () => {
+    render(
+      <SessionLoopPanel
+        embedded
+        summary={{ path: ".affent/loops/loop-counters/LOOP.md", status: "running", bytes: 512 }}
+        state={{
+          version: 1,
+          loop_id: "loop-counters",
+          status: "running",
+          initial_goal_preview: "watch market evidence",
+          protocol_updates: 7,
+          protocol_feeds: 9,
+          loop_decisions: 4,
+          event_count: 12,
+          last_event_summary: "Updated LOOP.md",
+          last_decision_kind: "evidence_quality",
+          last_decision: "defer",
+        }}
+      />,
+    );
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("watch market evidence");
+    expect(panel).not.toHaveTextContent("Feeds");
+    expect(panel).not.toHaveTextContent("Updates");
+    expect(panel).not.toHaveTextContent("Decision");
+    expect(panel).not.toHaveTextContent("Latest");
+    expect(panel).not.toHaveTextContent(".affent/loops/loop-counters/LOOP.md");
+  });
+
+  it("keeps recovery notes out of the embedded running first screen", () => {
+    render(
+      <SessionLoopPanel
+        embedded
+        summary={{ path: ".affent/loops/loop-compact/LOOP.md", status: "running", bytes: 512 }}
+        state={{
+          version: 1,
+          loop_id: "loop-compact",
+          status: "running",
+          initial_goal_preview: "maintain automation reliability",
+          memory_update_events: 2,
+          last_memory_update_action: "replace",
+          last_memory_update_topic: "automation",
+          last_memory_update_preview: "Keep timer inspector visible on mobile.",
+          context_compactions: 1,
+          last_context_compaction_reason: "context_overflow",
+        }}
+        events={[{ seq: 1, time: "2026-05-30T00:00:00Z", type: "protocol_update", summary: "Updated LOOP.md" }]}
+      />,
+    );
+
+    const panel = screen.getByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Goal: maintain automation reliability");
+    expect(panel).not.toHaveTextContent("Memory");
+    expect(panel).not.toHaveTextContent("Compaction");
+    expect(screen.queryByTestId("session-loop-protocol-details")).toBeNull();
+    expect(screen.queryByTestId("session-loop-events-details")).toBeNull();
   });
 
   it("renders recent loop protocol events returned with LOOP.md", () => {

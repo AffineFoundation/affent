@@ -5,8 +5,8 @@ import type { WorkbenchNavItem } from "../view/workbenchNav";
 import { WorkbenchEmpty, WorkbenchPanel } from "./WorkbenchPanel";
 
 const navItems: WorkbenchNavItem[] = [
-  { key: "context", label: "Task", detail: "Result ready", scope: "current" },
-  { key: "run", label: "Run", detail: "1 failed", scope: "current", badge: "1", tone: "error" },
+  { key: "context", label: "Usage", detail: "0.0015M tokens", scope: "current" },
+  { key: "trace", label: "Trace", detail: "1 failed", scope: "current", badge: "1", tone: "error" },
   { key: "config", label: "Config", detail: "1 env configured", scope: "platform", badge: "1" },
 ];
 
@@ -19,7 +19,7 @@ describe("WorkbenchPanel", () => {
     render(
       <WorkbenchPanel
         title="Workbench"
-        subtitle="Global runtime console"
+        subtitle="Current session task"
         attachment={{
           label: "Attached chat",
           title: "Fix checkout tests",
@@ -37,17 +37,17 @@ describe("WorkbenchPanel", () => {
     );
 
     expect(screen.getByTestId("workbench-panel")).toHaveAccessibleName("Workbench");
-    expect(screen.getByText("Global runtime console")).toBeInTheDocument();
+    expect(screen.getByText("Current session task")).toBeInTheDocument();
     expect(screen.getByTestId("workbench-attachment")).toHaveTextContent("Attached chat");
     expect(screen.getByTestId("workbench-attachment")).toHaveTextContent("Fix checkout tests");
     expect(screen.getByTestId("workbench-attachment")).toHaveTextContent("0.0015M tokens");
-    expect(screen.getByText("Current chat")).toBeInTheDocument();
-    expect(screen.getByText("Platform")).toBeInTheDocument();
+    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.getByText("Global")).toBeInTheDocument();
     expect(screen.getByTestId("active-tab")).toHaveTextContent("Context content");
-    expect(within(screen.getByRole("navigation", { name: "Workbench sections" })).getByRole("button", { name: /^Run\b/ })).toHaveAttribute("data-tone", "error");
+    expect(within(screen.getByRole("navigation", { name: "Workbench sections" })).getByRole("button", { name: /^Trace\b/ })).toHaveAttribute("data-tone", "error");
 
-    await user.click(screen.getByRole("button", { name: /^Run\b/ }));
-    expect(onSelectTab).toHaveBeenCalledWith("run");
+    await user.click(screen.getByRole("button", { name: /^Trace\b/ }));
+    expect(onSelectTab).toHaveBeenCalledWith("trace");
 
     await user.click(screen.getByRole("button", { name: "Close Workbench" }));
     expect(onClose).toHaveBeenCalledTimes(1);

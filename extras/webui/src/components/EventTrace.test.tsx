@@ -115,9 +115,14 @@ describe("EventTrace", () => {
     render(<EventTrace events={events} />);
 
     expect(screen.getByText("Action failed")).toBeInTheDocument();
+    expect(screen.getByText("Failure output")).toBeInTheDocument();
+    expect(screen.getByText("Only a dynamic shell was captured.")).toBeInTheDocument();
+    expect(screen.getByText("retry with browser network evidence")).toBeInTheDocument();
     expect(screen.getByText(/next retry with browser network evidence/)).toBeInTheDocument();
-    expect(screen.getByText("dynamic_shell")).toBeInTheDocument();
-    expect(screen.getByText("no_verified_source")).toBeInTheDocument();
+    expect(screen.getByText("Dynamic shell")).toBeInTheDocument();
+    expect(screen.getByText("No verified source")).toBeInTheDocument();
+    expect(screen.queryByText("dynamic_shell")).not.toBeInTheDocument();
+    expect(screen.queryByText("no_verified_source")).not.toBeInTheDocument();
   });
 
   it("surfaces failed tool Next guidance in result rows", () => {
@@ -142,10 +147,15 @@ describe("EventTrace", () => {
     render(<EventTrace events={events} />);
 
     expect(screen.getByText("Action failed")).toBeInTheDocument();
+    expect(screen.getByText("Failure output")).toBeInTheDocument();
+    expect(screen.getByText("read failed")).toBeInTheDocument();
+    expect(screen.getByText("check the path from rg --files before retrying")).toBeInTheDocument();
+    expect(screen.getByText("exit 1")).toBeInTheDocument();
     expect(screen.getByText(/next check the path from rg --files before retrying/)).toBeInTheDocument();
   });
 
-  it("surfaces source evidence status in tool result rows", () => {
+  it("surfaces source evidence status in tool result rows", async () => {
+    const user = userEvent.setup();
     const events = normalizeEvents([
       {
         id: 1,
@@ -169,8 +179,17 @@ describe("EventTrace", () => {
     render(<EventTrace events={events} />);
 
     expect(screen.getByText("Action finished")).toBeInTheDocument();
-    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120 · from https://taostats.io/subnets/120 · ref n1 · http 200 · application/json · preview {\"price\":\"0.06342 T\"}")).toBeInTheDocument();
+    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120")).toBeInTheDocument();
+    expect(screen.getByText("Network Source")).toBeInTheDocument();
+    expect(screen.getByText("from https://taostats.io/subnets/120")).toBeInTheDocument();
+    expect(screen.getByText("ref n1")).toBeInTheDocument();
+    expect(screen.getByText("http 200")).toBeInTheDocument();
+    expect(screen.getByText("application/json")).toBeInTheDocument();
+    expect(screen.getByText("preview {\"price\":\"0.06342 T\"}")).toBeInTheDocument();
     expect(screen.getByText("network")).toBeInTheDocument();
+    await user.click(screen.getByText("Action finished"));
+    expect(screen.getByLabelText("Event summary details")).toHaveTextContent("from https://taostats.io/subnets/120");
+    expect(screen.getByLabelText("Event summary details")).toHaveTextContent("preview {\"price\":\"0.06342 T\"}");
   });
 
   it("groups request lifecycle events into one readable record", async () => {
@@ -252,7 +271,8 @@ describe("EventTrace", () => {
     expect(screen.getByText("sched_1")).toBeInTheDocument();
   });
 
-  it("surfaces guard and memory update counters in collapsed request records", () => {
+  it("surfaces guard and memory update counters in collapsed request records", async () => {
+    const user = userEvent.setup();
     const raws = [
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated browser failures" } },
@@ -280,8 +300,11 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("Request trace")).toBeInTheDocument();
-    expect(screen.getByText("Request 1 · recover repeated browser failures · max_turns · 4 actions · 3 admitted / 1 skipped · 1 failed · Guard 2 · 1 no-tools · 2 memory updates (1 add, 1 replace)")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · recover repeated browser failures · max_turns · 4 actions · 3 admitted / 1 skipped · 1 failed")).toBeInTheDocument();
     expect(screen.queryByText(/"loop_guard_interventions"/)).not.toBeInTheDocument();
+    await user.click(screen.getByText("Request trace"));
+    expect(screen.getByLabelText("Event summary details")).toHaveTextContent("Guard 2");
+    expect(screen.getByLabelText("Event summary details")).toHaveTextContent("2 memory updates (1 add, 1 replace)");
   });
 
   it("marks unknown events without dropping their payload", async () => {

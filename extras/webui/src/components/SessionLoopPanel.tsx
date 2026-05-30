@@ -99,10 +99,27 @@ export function SessionLoopPanel({
   const calibrationAnswers = state?.calibration_answers ?? 0;
   const disabled = status === "disabled";
   const draft = status === "draft";
+  const running = status === "running";
   const title = disabled ? "Disabled" : statusLabel(status);
   const detail = draft
-    ? calibrationAnswers > 0 ? "Calibration recorded; ready for activation review" : calibrationQuestions > 0 ? "Waiting for your calibration answer" : "Waiting for Affent to ask calibration"
+    ? calibrationAnswers > 0 ? "Calibration answer recorded" : calibrationQuestions > 0 ? "Waiting for your calibration answer" : "Waiting for Affent to ask calibration"
     : loopDetail({ goal, feeds, updates, event });
+  const headerDetail = embedded && (running || (draft && calibrationAnswers > 0)) ? "" : detail;
+  const loopFacts = loopVisibleFacts({
+    status: disabled ? "disabled" : draft ? "draft" : running ? "running" : "unknown",
+    embedded,
+    goal,
+    path,
+    feeds,
+    updates,
+    calibration,
+    memory,
+    compaction,
+    decisionKind: state?.last_decision_kind,
+    decision: state?.last_decision,
+    event,
+  });
+  const compactRunning = embedded && running;
 
   return (
     <SessionPanelFrame
@@ -112,37 +129,44 @@ export function SessionLoopPanel({
       defaultOpen={defaultOpen}
       kicker="Loop"
       title={embedded ? loopEmbeddedTitle(title) : title}
-      detail={detail}
+      detail={headerDetail}
+      embeddedHeader={compactRunning ? "hidden" : "default"}
     >
       <div className="session-plan-body session-loop-body">
-        {!(status === "running" && (embedded || suppressRunningCallout)) ? (
+        {compactRunning ? (
+          <LoopRuntimeBar
+            goal={goal}
+            protocol={protocol}
+            disabling={disabling}
+            onUseAsDraft={onUseAsDraft}
+            onDisable={onDisable}
+          />
+        ) : !(draft && calibrationAnswers > 0) && !(status === "running" && (embedded || suppressRunningCallout)) ? (
           <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
         ) : null}
-        <LoopNextStep
-          status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"}
-          goal={goal}
-          calibrationQuestion={calibrationQuestion}
-          calibrationAnswers={calibrationAnswers}
-          onUseAsDraft={onUseAsDraft}
-        />
-        <div className="session-loop-grid">
-          {goal ? <LoopField label="Goal" value={goal} /> : null}
-          {path ? <LoopField label="File" value={path} mono /> : null}
-          {feeds > 0 ? <LoopField label="Feeds" value={String(feeds)} /> : null}
-          {updates > 0 ? <LoopField label="Updates" value={String(updates)} /> : null}
-          {calibration ? <LoopField label="Calibration" value={calibration} /> : null}
-          {memory ? <LoopField label="Memory" value={memory} /> : null}
-          {compaction ? <LoopField label="Compaction" value={compaction} /> : null}
-          {compact(state?.last_decision_kind) ? (
-            <LoopField label="Decision" value={[state?.last_decision_kind, state?.last_decision].filter(Boolean).join(":")} />
-          ) : null}
-          {event ? <LoopField label="Latest" value={event} /> : null}
-        </div>
-        <details className="session-loop-details" data-testid="session-loop-progress">
-          <summary>Activation flow</summary>
-          <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
-        </details>
-        {preview || protocol ? (
+        {!compactRunning && !(embedded && draft && calibrationAnswers > 0) ? (
+          <LoopNextStep
+            status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"}
+            goal={goal}
+            calibrationQuestion={calibrationQuestion}
+            calibrationAnswers={calibrationAnswers}
+            onUseAsDraft={onUseAsDraft}
+          />
+        ) : null}
+        {!compactRunning && loopFacts.length > 0 ? (
+          <div className="session-loop-grid">
+            {loopFacts.map((fact) => (
+              <LoopField key={fact.label} label={fact.label} value={fact.value} mono={fact.mono} />
+            ))}
+          </div>
+        ) : null}
+        {draft ? (
+          <details className="session-loop-details" data-testid="session-loop-progress">
+            <summary>Activation flow</summary>
+            <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
+          </details>
+        ) : null}
+        {!compactRunning && (preview || protocol) ? (
           <details className="session-loop-details" data-testid="session-loop-protocol-details">
             <summary>{protocol ? "LOOP.md" : "LOOP.md preview"}</summary>
             {preview ? <p className="session-loop-preview">{preview}</p> : null}
@@ -151,7 +175,7 @@ export function SessionLoopPanel({
             ) : null}
           </details>
         ) : null}
-        {events && events.length > 0 ? (
+        {!compactRunning && events && events.length > 0 ? (
           <details className="session-loop-details" data-testid="session-loop-events-details">
             <summary>Recent loop events</summary>
             <LoopEvents events={events} />
@@ -162,21 +186,60 @@ export function SessionLoopPanel({
             {protocolError}
           </div>
         ) : null}
-        <div className="session-loop-actions">
-          {onLoadProtocol ? (
-            <button type="button" className="ghost-action" disabled={loadingProtocol} onClick={() => void onLoadProtocol()}>
-              {loadingProtocol ? "Loading LOOP.md" : protocol ? "Reload LOOP.md" : "Load LOOP.md"}
-            </button>
-          ) : null}
-          {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
-          {!disabled && onDisable ? (
-            <button type="button" className="ghost-action danger-action" disabled={disabling} onClick={() => void onDisable()}>
-              {disabling ? "Disabling loop" : "Disable loop"}
-            </button>
-          ) : null}
-        </div>
+        {!compactRunning ? (
+          <div className="session-loop-actions">
+            {onLoadProtocol ? (
+              <button type="button" className="ghost-action" disabled={loadingProtocol} onClick={() => void onLoadProtocol()}>
+                {loadingProtocol ? "Loading LOOP.md" : protocol ? "Reload LOOP.md" : "Inspect LOOP.md"}
+              </button>
+            ) : null}
+            {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
+            {!disabled && onDisable ? (
+              <button type="button" className="ghost-action danger-action" disabled={disabling} onClick={() => void onDisable()}>
+                {disabling ? "Disabling loop" : "Disable loop"}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </SessionPanelFrame>
+  );
+}
+
+function LoopRuntimeBar({
+  goal,
+  protocol,
+  disabling,
+  onUseAsDraft,
+  onDisable,
+}: {
+  goal?: string;
+  protocol?: string;
+  disabling: boolean;
+  onUseAsDraft?: () => void;
+  onDisable?: () => Promise<void> | void;
+}) {
+  return (
+    <div className="session-loop-runtimebar" data-testid="session-loop-runtimebar">
+      <div className="session-loop-runtimebar-status">
+        <span>Loop</span>
+        <strong>Loop running</strong>
+        <small>{goal ? `Goal: ${goal}` : "Update durable rules only"}</small>
+      </div>
+      <div className="session-loop-runtimebar-actions">
+        {onUseAsDraft ? (
+          <button type="button" className="ghost-action" onClick={onUseAsDraft}>
+            Update LOOP.md
+          </button>
+        ) : null}
+        {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
+        {onDisable ? (
+          <button type="button" className="ghost-action danger-action" disabled={disabling} onClick={() => void onDisable()}>
+            {disabling ? "Disabling loop" : "Disable loop"}
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -235,15 +298,15 @@ function loopNextStepCopy(
   if (status === "draft") {
     return {
       kicker: "Ready",
-      title: "Review and activate in chat",
-      detail: "Use the recorded answer to fill durable intent, stop conditions, recovery anchors, and only then mark LOOP.md running.",
+      title: "Activate LOOP.md in chat",
+      detail: "Use the recorded answer to complete durable intent, stop conditions, and recovery anchors.",
     };
   }
   if (status === "running") {
     return {
       kicker: "Next action",
-      title: "Keep LOOP.md compact",
-      detail: "Use chat for durable protocol changes; each future loop turn should advance one compact step.",
+      title: "Update durable rules only",
+      detail: "Use this for stop conditions, recovery anchors, or long-run policy changes.",
     };
   }
   if (status === "disabled") {
@@ -260,9 +323,61 @@ function loopNextStepCopy(
   };
 }
 
+interface LoopFact {
+  label: string;
+  value: string;
+  mono?: boolean;
+}
+
+function loopVisibleFacts({
+  status,
+  embedded,
+  goal,
+  path,
+  feeds,
+  updates,
+  calibration,
+  memory,
+  compaction,
+  decisionKind,
+  decision,
+  event,
+}: {
+  status: "draft" | "running" | "disabled" | "unknown";
+  embedded: boolean;
+  goal?: string;
+  path?: string;
+  feeds: number;
+  updates: number;
+  calibration?: string;
+  memory?: string;
+  compaction?: string;
+  decisionKind?: string;
+  decision?: string;
+  event?: string;
+}): LoopFact[] {
+  const facts: LoopFact[] = [];
+  if (goal) facts.push({ label: "Goal", value: goal });
+  if (status === "draft") {
+    if (calibration) facts.push({ label: "Setup answer", value: calibration });
+    return facts;
+  }
+  if (status === "running") {
+    if (memory) facts.push({ label: "Memory", value: memory });
+    if (compaction) facts.push({ label: "Compaction", value: compaction });
+    return facts;
+  }
+  if (!embedded && path) facts.push({ label: "File", value: path, mono: true });
+  if (feeds > 0) facts.push({ label: "Feeds", value: String(feeds) });
+  if (updates > 0) facts.push({ label: "Updates", value: String(updates) });
+  if (compact(decisionKind)) facts.push({ label: "Decision", value: [decisionKind, decision].filter(Boolean).join(":") });
+  if (event) facts.push({ label: "Latest", value: event });
+  return facts;
+}
+
 function loopNextStepActionLabel(status: "off" | "draft" | "running" | "disabled" | "unknown", calibrationAnswers = 0): string | undefined {
   if (status === "draft" && calibrationAnswers <= 0) return "Open answer draft";
-  if (status === "draft") return "Review in chat";
+  if (status === "draft") return "Open activation draft";
   if (status === "running") return "Update LOOP.md";
   return undefined;
 }
@@ -364,8 +479,8 @@ function loopStatusCopy(status: "off" | "draft" | "running" | "disabled" | "unkn
   if (status === "draft") {
     if (calibrationAnswers > 0) {
       return {
-        title: "Activation review",
-        detail: "Affent has your calibration answer and should update LOOP.md before activating.",
+        title: "Activation draft ready",
+        detail: "Affent has your calibration answer and can complete or revise LOOP.md in chat.",
       };
     }
     return {

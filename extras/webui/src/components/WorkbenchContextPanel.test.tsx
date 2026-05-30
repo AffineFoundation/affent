@@ -65,7 +65,7 @@ describe("WorkbenchContextPanel", () => {
     );
 
     const panel = screen.getByTestId("workbench-context-panel");
-    expect(panel).toHaveAttribute("open");
+    expect(panel).toHaveAttribute("data-surface", "true");
     expect(panel).toHaveTextContent("Task");
     expect(panel).toHaveTextContent("Current task");
     expect(panel).not.toHaveTextContent("Review needed");
@@ -74,7 +74,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Verification");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Unresolved failure");
     expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Open first");
-    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Run");
+    expect(screen.getByTestId("workbench-context-brief")).toHaveTextContent("Trace");
     expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
     expect(screen.queryByTestId("workbench-usage-card")).toBeNull();
     expect(screen.getByTestId("workbench-context-evidence")).toHaveTextContent("Workspace");
@@ -91,7 +91,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.queryByRole("button", { name: "Use context as draft" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Open Verification" }));
-    expect(onSelectSection).toHaveBeenCalledWith("run");
+    expect(onSelectSection).toHaveBeenCalledWith("trace");
   });
 
   it("shows session, turn, and delegated token evidence in Workbench context", async () => {
@@ -120,8 +120,12 @@ describe("WorkbenchContextPanel", () => {
         }}
         usage={{
           totalTokens: 1540,
+          inputTokens: 1200,
+          outputTokens: 340,
+          latestTurnInputTokens: 1200,
+          latestTurnOutputTokens: 340,
           trend: [
-            { label: "Turn 1", value: 1540, valueLabel: "0.0015M tokens", detail: "t1" },
+            { label: "Turn 1", value: 1540, inputTokens: 1200, outputTokens: 340, valueLabel: "0.0015M tokens", detail: "t1" },
           ],
           items: [
             { label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" },
@@ -185,42 +189,30 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    const brief = screen.getByTestId("workbench-context-brief");
-    expect(brief).toHaveTextContent("Task state");
-    expect(brief).toHaveTextContent("Completed");
-    expect(brief).not.toHaveTextContent("Failed");
+    expect(screen.queryByTestId("workbench-context-brief")).toBeNull();
+    expect(screen.queryByTestId("workbench-context-evidence")).toBeNull();
 
     const taskState = screen.getByTestId("workbench-task-state");
     expect(taskState).toHaveAttribute("data-tone", "ready");
     expect(taskState).toHaveTextContent("Fix clamp behavior, verify it, and push the code");
+    expect(screen.getByTestId("workbench-task-next")).toHaveTextContent("Verified");
+    expect(screen.getByTestId("workbench-task-next")).toHaveTextContent("1 changed file available in Files.");
     expect(taskState).toHaveTextContent("Last shell check passed");
-    expect(taskState).toHaveTextContent("Recent failed actions");
-    expect(taskState).toHaveTextContent("shell");
-    expect(taskState).toHaveTextContent("test failed");
-    expect(taskState).toHaveTextContent("Next: Inspect clamp bounds then rerun go test");
-    expect(taskState).toHaveTextContent("Recent actions");
-    expect(taskState).toHaveTextContent("git push origin main");
-    expect(taskState).toHaveTextContent("Evidence");
-    expect(taskState).toHaveTextContent("runtime workspace");
-    expect(taskState).toHaveTextContent("git push");
-    expect(taskState).toHaveTextContent("go test ./...");
+    expect(taskState).toHaveTextContent("Trace");
+    expect(taskState).toHaveTextContent("2 actions · 3 evidence");
+    expect(taskState).toHaveTextContent("Test failed: FAIL ./...");
+    expect(taskState).toHaveTextContent("Files");
+    expect(taskState).toHaveTextContent("1 changed file");
+    expect(taskState).not.toHaveTextContent("Changed files");
+    expect(taskState).not.toHaveTextContent("Recent failed actions");
+    expect(taskState).not.toHaveTextContent("Recent actions");
+    expect(taskState).not.toHaveTextContent("Evidence");
+    expect(taskState).not.toHaveTextContent("runtime workspace");
 
-    const sourceLinks = screen.getByTestId("workbench-context-evidence");
-    expect(sourceLinks).toHaveTextContent("Changed files");
-    expect(sourceLinks).toHaveTextContent("app/mathutil/clamp.go");
-    expect(sourceLinks).toHaveTextContent("Execution record");
-    expect(sourceLinks).toHaveTextContent("2 actions");
-    expect(sourceLinks).toHaveTextContent("1 failure");
-    expect(sourceLinks).toHaveTextContent("test failed");
-
-    await user.click(within(taskState).getByRole("button", { name: "Open trace" }));
+    await user.click(within(taskState).getByRole("button", { name: /Trace/ }));
     expect(onSelectSection).toHaveBeenCalledWith("trace");
-    await user.click(within(taskState).getByRole("button", { name: "Open changes" }));
-    expect(onSelectSection).toHaveBeenCalledWith("changes");
-    await user.click(within(sourceLinks).getByRole("button", { name: "Open Changed files" }));
-    expect(onSelectSection).toHaveBeenCalledWith("changes");
-    await user.click(within(sourceLinks).getByRole("button", { name: "Open Execution record" }));
-    expect(onSelectSection).toHaveBeenCalledWith("trace");
+    await user.click(within(taskState).getByRole("button", { name: "Open files" }));
+    expect(onSelectSection).toHaveBeenCalledWith("files");
   });
 
   it("links tool issue cards to concrete run evidence and suppresses generic next-step templates", async () => {
@@ -257,19 +249,21 @@ describe("WorkbenchContextPanel", () => {
     expect(brief).not.toHaveTextContent("continue from the current plan state");
     expect(screen.queryByTestId("workbench-context-snapshot")).toBeNull();
 
-    await user.click(within(brief).getByRole("button", { name: "Open Run" }));
-    expect(onSelectSection).toHaveBeenCalledWith("run");
+    await user.click(within(brief).getByRole("button", { name: "Open Trace" }));
+    expect(onSelectSection).toHaveBeenCalledWith("trace");
   });
 
   it("uses task state as concrete Context evidence instead of generic next-step text", async () => {
     const user = userEvent.setup();
     const onSelectSection = vi.fn();
+    const onUseAsDraft = vi.fn();
 
     render(
       <WorkbenchContextPanel
         defaultOpen
         hasSelectedSession
         onSelectSection={onSelectSection}
+        onUseAsDraft={onUseAsDraft}
         overview={overview({
           headline: "Harden inline message editing",
           detail: "Workbench should expose the real task state.",
@@ -300,33 +294,114 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    const brief = screen.getByTestId("workbench-context-brief");
-    expect(brief).toHaveTextContent("Task state");
-    expect(brief).toHaveTextContent("Running");
-    expect(brief).toHaveTextContent("Wire task_state into Workbench Context");
+    expect(screen.queryByTestId("workbench-context-brief")).toBeNull();
 
     const taskState = screen.getByTestId("workbench-task-state");
     expect(taskState).toHaveTextContent("Harden inline message editing");
-    expect(taskState).toHaveTextContent("Request mode");
-    expect(taskState).toHaveTextContent("Execute plan");
-    expect(taskState).toHaveTextContent("Request source");
+    expect(taskState).toHaveTextContent("Needs review");
+    expect(screen.getByTestId("workbench-task-next")).toHaveTextContent("Fix first");
+    expect(screen.getByTestId("workbench-task-next")).toHaveTextContent("Run the focused test after checking the Context panel state");
+    expect(taskState).not.toHaveTextContent("Mode");
+    expect(taskState).not.toHaveTextContent("Execute plan");
+    expect(taskState).toHaveTextContent("Origin");
     expect(taskState).toHaveTextContent("Scheduled check-in");
     expect(taskState).not.toHaveTextContent("sched_context");
-    expect(taskState).toHaveTextContent("Current step");
-    expect(taskState).toHaveTextContent("Wire task_state into Workbench Context");
-    expect(taskState).toHaveTextContent("Next step");
-    expect(taskState).toHaveTextContent("Run WorkbenchContextPanel tests and screenshot the Context tab");
-    expect(taskState).toHaveTextContent("Recent failed actions");
-    expect(taskState).toHaveTextContent("shell · command failed");
-    expect(taskState).toHaveTextContent("Recent actions");
-    expect(taskState).toHaveTextContent("npm --prefix extras/webui test -- WorkbenchContextPanel.test.tsx");
-    expect(taskState).toHaveTextContent("Evidence");
-    expect(taskState).toHaveTextContent("runtime workspace");
-    expect(taskState).toHaveTextContent("Changed files");
+    expect(taskState).not.toHaveTextContent("Current step");
+    expect(taskState).not.toHaveTextContent("Wire task_state into Workbench Context");
+    expect(taskState).not.toHaveTextContent("Next step");
+    expect(taskState).not.toHaveTextContent("Recent failed actions");
+    expect(taskState).not.toHaveTextContent("Recent actions");
+    expect(taskState).toHaveTextContent("Trace");
+    expect(taskState).toHaveTextContent("Files");
+    expect(taskState).toHaveTextContent("Automation");
+    expect(taskState).not.toHaveTextContent("Evidence");
+    expect(taskState).not.toHaveTextContent("runtime workspace");
+    expect(taskState).not.toHaveTextContent("Changed files");
     expect(taskState).not.toHaveTextContent("continue from the current plan state");
 
     await user.click(within(taskState).getByRole("button", { name: "Open trace" }));
     expect(onSelectSection).toHaveBeenCalledWith("trace");
+    await user.click(within(taskState).getByRole("button", { name: "Draft retry" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Retry this task after addressing the current failure."),
+      "retry_reply",
+    );
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Next: Run the focused test after checking the Context panel state"),
+      "retry_reply",
+    );
+  });
+
+  it("turns task next steps and blocking questions into composer drafts", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    const { rerender } = render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        onUseAsDraft={onUseAsDraft}
+        overview={overview({ headline: "Continue Files polish", detail: "Next step is known." })}
+        taskState={{
+          objective: "Continue Files polish",
+          status: "running",
+          current_step: "Review the directory preview",
+          next_step: "Tighten row actions and rerun the Files screenshot",
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Draft next" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Next: Tighten row actions and rerun the Files screenshot"),
+      "continuation",
+    );
+
+    rerender(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        onUseAsDraft={onUseAsDraft}
+        overview={overview({ headline: "Answer deployment question", detail: "Input is required." })}
+        taskState={{
+          objective: "Deploy preview build",
+          status: "blocked",
+          open_questions: ["Which environment should receive the preview build?"],
+        }}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Draft answer" }));
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("Which environment should receive the preview build?"),
+      "answer",
+    );
+  });
+
+  it("keeps raw failed tool text out of the Task focus", () => {
+    render(
+      <WorkbenchContextPanel
+        defaultOpen
+        hasSelectedSession
+        overview={overview({ headline: "Investigate subnet data", detail: "The last browser step failed." })}
+        taskState={{
+          objective: "Investigate subnet data",
+          status: "completed",
+          verification_state: "failed",
+          failed_actions: [{
+            tool: "browser_click",
+            summary: "tool failed · tool result context budget exhausted; final no-tool answer requested",
+            kinds: ["loop_guard_no_budget"],
+          }],
+        }}
+      />,
+    );
+
+    const next = screen.getByTestId("workbench-task-next");
+    expect(next).toHaveTextContent("Fix first");
+    expect(next).toHaveTextContent("Browser click exceeded context budget");
+    expect(next).not.toHaveTextContent("browser_click");
+    expect(next).not.toHaveTextContent("tool failed");
+    expect(next).not.toHaveTextContent("no-tool answer requested");
   });
 
   it("keeps low-value work and tool-context metrics out of Context actions", () => {
@@ -453,7 +528,7 @@ describe("WorkbenchContextPanel", () => {
     expect(screen.getByTestId("workbench-context-status")).not.toHaveTextContent("npm test -- checkout.spec.ts: Next");
   });
 
-  it("keeps completed chat state labels out of the collapsed summary", () => {
+  it("keeps completed chat state labels out of the task surface header", () => {
     render(
       <WorkbenchContextPanel
         defaultOpen
@@ -467,11 +542,11 @@ describe("WorkbenchContextPanel", () => {
       />,
     );
 
-    const summary = within(screen.getByTestId("workbench-context-panel")).getByText("Current task").closest("summary");
-    expect(summary).toHaveTextContent("Current task");
-    expect(summary).not.toHaveTextContent("Result ready");
-    expect(summary).not.toHaveTextContent("Checkout route inspected");
-    expect(summary).not.toHaveTextContent("Chat ready");
+    const header = within(screen.getByTestId("workbench-context-panel")).getByText("Current task").closest("header");
+    expect(header).toHaveTextContent("Current task");
+    expect(header).not.toHaveTextContent("Result ready");
+    expect(header).not.toHaveTextContent("Checkout route inspected");
+    expect(header).not.toHaveTextContent("Chat ready");
   });
 
   it("keeps fresh-task Workbench context short and actionable", () => {

@@ -27,18 +27,16 @@ describe("buildWorkbenchNavItems", () => {
 
     expect(items.map((item) => item.key)).toEqual([
       "context",
-      "changes",
-      "run",
-      "files",
       "automation",
+      "files",
       "memory",
       "skills",
       "config",
       "trace",
     ]);
-    expect(items.find((item) => item.key === "context")).toMatchObject({ label: "Task", detail: "Current task" });
-    expect(items.find((item) => item.key === "changes")).toMatchObject({ detail: "Diff review" });
-    expect(items.find((item) => item.key === "run")).toMatchObject({ detail: "Command console" });
+    expect(items.find((item) => item.key === "context")).toMatchObject({ label: "Usage", detail: "Token usage" });
+    expect(items.find((item) => item.key === "changes")).toBeUndefined();
+    expect(items.find((item) => item.key === "run")).toBeUndefined();
     expect(items.find((item) => item.key === "files")).toMatchObject({ detail: "Workspace files" });
     expect(items.find((item) => item.key === "automation")).toMatchObject({
       label: "Automation",
@@ -48,16 +46,14 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "trace")).toMatchObject({ detail: "Runtime diagnostics" });
     expect(items.filter((item) => item.scope === "current").map((item) => item.key)).toEqual([
       "context",
-      "changes",
-      "run",
-      "files",
       "automation",
+      "trace",
     ]);
     expect(items.filter((item) => item.scope === "platform").map((item) => item.key)).toEqual([
+      "files",
       "memory",
       "skills",
       "config",
-      "trace",
     ]);
   });
 
@@ -66,7 +62,11 @@ describe("buildWorkbenchNavItems", () => {
       overview,
       usage: {
         totalTokens: 1540,
-        trend: [{ label: "Turn 1", value: 1540, valueLabel: "0.0015M tokens", detail: "t1" }],
+        inputTokens: 1200,
+        outputTokens: 340,
+        latestTurnInputTokens: 1200,
+        latestTurnOutputTokens: 340,
+        trend: [{ label: "Turn 1", value: 1540, inputTokens: 1200, outputTokens: 340, valueLabel: "0.0015M tokens", detail: "t1" }],
         items: [{ label: "Session tokens", value: "0.0015M tokens (0.0012M in / 0.0003M out)", detail: "1 turn from loaded trace" }],
       },
       changes: {
@@ -125,8 +125,8 @@ describe("buildWorkbenchNavItems", () => {
     });
 
     expect(items.find((item) => item.key === "context")).toMatchObject({ detail: "0.0015M tokens" });
-    expect(items.find((item) => item.key === "changes")).toMatchObject({ badge: "1" });
-    expect(items.find((item) => item.key === "run")).toMatchObject({ badge: "1", tone: "error" });
+    expect(items.find((item) => item.key === "changes")).toBeUndefined();
+    expect(items.find((item) => item.key === "run")).toBeUndefined();
     expect(items.find((item) => item.key === "artifacts")).toBeUndefined();
     expect(items.find((item) => item.key === "workspace")).toBeUndefined();
     expect(items.find((item) => item.key === "files")).toMatchObject({ badge: "!", detail: "1 read" });
@@ -168,7 +168,7 @@ describe("buildWorkbenchNavItems", () => {
     });
 
     expect(items.find((item) => item.key === "trace")).toMatchObject({
-      scope: "platform",
+      scope: "current",
       badge: "12",
       detail: "5 records · schema v1",
     });
@@ -199,7 +199,7 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "files")).toMatchObject({
       label: "Files",
       detail: "Workspace browser",
-      scope: "current",
+      scope: "platform",
     });
   });
 
@@ -227,7 +227,7 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "files")).toMatchObject({
       label: "Files",
       detail: "Workspace browser",
-      scope: "current",
+      scope: "platform",
     });
   });
 
@@ -258,12 +258,14 @@ describe("buildWorkbenchNavItems", () => {
     expect(items.find((item) => item.key === "files")).toMatchObject({
       label: "Files",
       detail: "Workspace files",
-      scope: "current",
+      scope: "platform",
     });
   });
 
   it("maps attention targets to Workbench tabs", () => {
     expect(workbenchTabFromAttention("workspace")).toBe("files");
+    expect(workbenchTabFromAttention("changes")).toBe("files");
+    expect(workbenchTabFromAttention("run")).toBe("trace");
     expect(workbenchTabFromAttention("automation")).toBe("automation");
   });
 });

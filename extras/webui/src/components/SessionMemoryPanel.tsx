@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionMemoryAddRequest, SessionMemoryBucket, SessionMemoryRemoveRequest, SessionMemoryReplaceRequest, SessionMemoryResponse } from "../api/sessions";
 import type { UseAsDraft } from "../view/draftSource";
@@ -15,7 +15,6 @@ import {
   memoryEntryIsSensitive,
   memoryEntrySafePreview,
   memoryReviewFindings,
-  memoryScopeLabel,
   memoryStats,
   memorySnapshotEvidenceText,
   memoryUsageLabel,
@@ -78,19 +77,23 @@ export function SessionMemoryPanel({
       .filter((bucket) => memoryBucketMatchesScope(bucket, scopeFilter, reviewBucketKeys))
       .filter((bucket) => !trimmedQuery || memoryBucketMatchesQuery(bucket, trimmedQuery));
   }, [buckets, reviewBucketKeys, scopeFilter, trimmedQuery]);
+  const latestUpdateBucketKey = latestUpdate ? memoryUpdateBucketKey(latestUpdate) : undefined;
   const focusedBucket = useMemo(() => {
     if (filtered.length === 0) return undefined;
     const selected = selectedBucketKey ? filtered.find((bucket) => memoryBucketKey(bucket) === selectedBucketKey) : undefined;
     if (selected) return selected;
+    const review = filtered.find((bucket) => reviewBucketKeys.has(memoryBucketKey(bucket)));
+    if (review) return review;
+    const latest = latestUpdateBucketKey ? filtered.find((bucket) => memoryBucketKey(bucket) === latestUpdateBucketKey) : undefined;
+    if (latest) return latest;
     return filtered.find((bucket) => bucket.target === "memory" && bucket.topic && bucket.topic !== "core")
       ?? filtered.find((bucket) => bucket.target === "memory")
       ?? filtered[0];
-  }, [filtered, selectedBucketKey]);
+  }, [filtered, latestUpdateBucketKey, reviewBucketKeys, selectedBucketKey]);
   const matchingEntryCount = useMemo(() => {
     if (!trimmedQuery) return 0;
     return filtered.reduce((sum, bucket) => sum + memoryBucketMatchingEntries(bucket, trimmedQuery).length, 0);
   }, [filtered, trimmedQuery]);
-  const hasSearch = buckets.length > 0;
   const hasMemorySnapshot = !!memory;
   const stats = useMemo(() => memoryStats(memory), [memory]);
   const summary = noSession
@@ -112,7 +115,7 @@ export function SessionMemoryPanel({
           : panelErrorSummary("Memory API", error)
         : memory?.has_memory
           ? `${stats.topicCount} ${stats.topicCount === 1 ? "topic" : "topics"} · ${memoryUsageLabel(stats)}${memory.shared_user_memory ? " · shared user" : ""}`
-          : "No user, core, or topic entries saved.";
+          : "";
 
   async function handleManualMemorySubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -182,6 +185,13 @@ export function SessionMemoryPanel({
     }
   }
 
+  function prepareMemoryDraftForBucket(bucket?: SessionMemoryBucket) {
+    if (!bucket) return;
+    setMemoryTarget(bucket.target);
+    setMemoryTopic(bucket.topic ?? (bucket.target === "user" ? "user" : ""));
+    setMemorySaveState({ state: "idle" });
+  }
+
   function toggleRevealedEntry(key: string) {
     setRevealedEntryKeys((current) => {
       const next = new Set(current);
@@ -192,6 +202,14 @@ export function SessionMemoryPanel({
       }
       return next;
     });
+  }
+
+  function openReviewFinding(finding: ReturnType<typeof memoryReviewFindings>[number]) {
+    setScopeFilter("review");
+    setSelectedBucketKey(finding.bucketKey);
+    setConfirmRemoveKey(undefined);
+    setEditingEntry(undefined);
+    setWriteOpen(false);
   }
 
   return (
@@ -211,7 +229,7 @@ export function SessionMemoryPanel({
       <summary className="session-skills-summary" onClick={surface ? (event) => event.preventDefault() : undefined}>
         <span className="session-skills-kicker">Memory</span>
         <strong>{summary}</strong>
-        <span>{summaryDetail}</span>
+        {summaryDetail ? <span>{summaryDetail}</span> : null}
       </summary>
       <div className="session-skills-body">
         {loading ? <div className="session-skills-empty">Loading session memory...</div> : null}
@@ -248,24 +266,26 @@ export function SessionMemoryPanel({
         {!loading && !error && noSession ? <div className="session-skills-empty">Open a saved chat to inspect stored memory buckets.</div> : null}
         {!loading && !noSession && (!error || hasMemorySnapshot) ? (
           <>
-            <MemoryMaintenanceBoard
-              reviewFindings={reviewFindings}
-              candidateCount={candidates.length}
-              latestUpdate={latestUpdate}
-              canWrite={Boolean(onAddMemory)}
-              onShowReview={() => setScopeFilter("review")}
-            />
-            {memory?.has_memory && reviewFindings.length > 0 ? (
-              <MemoryReviewQueue
-                findings={reviewFindings}
-                onShowBuckets={() => setScopeFilter("review")}
-              />
-            ) : null}
-            <MemoryPanelActions
+            <MemoryWorkbenchToolbar
               memory={memory}
               stats={stats}
-              hasSearch={hasSearch}
+              buckets={buckets}
+              reviewBucketKeys={reviewBucketKeys}
+              filter={scopeFilter}
+              query={query}
+              filteredCount={filtered.length}
+              matchingEntryCount={matchingEntryCount}
+              reviewFindings={reviewFindings}
+              candidateCount={candidates.length}
+              canWrite={Boolean(onAddMemory)}
+              onFilterChange={setScopeFilter}
+              onQueryChange={setQuery}
+              onClear={() => {
+                setQuery("");
+                setScopeFilter("all");
+              }}
               onRefresh={onRefresh}
+              onOpenFinding={openReviewFinding}
             />
             {candidates.length > 0 && memorySaveState.message && !writeOpen ? (
               <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"} role="status" aria-live="polite">
@@ -281,211 +301,108 @@ export function SessionMemoryPanel({
                 onSaveCandidate={(candidate) => void handleSaveCandidate(candidate)}
               />
             ) : null}
-            {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
-            {focusedBucket ? (
-              <MemoryBucketFocus
-                bucket={focusedBucket}
-                revealedEntryKeys={revealedEntryKeys}
-                onToggleReveal={toggleRevealedEntry}
-              />
-            ) : null}
-            {hasSearch ? (
-              <div className="session-skills-controls">
-                <MemoryScopeFilters buckets={buckets} reviewBucketKeys={reviewBucketKeys} value={scopeFilter} onChange={setScopeFilter} />
-                <label className="session-skills-search">
-                  <span>Search memory</span>
-                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search entries or topics" />
-                </label>
-                {trimmedQuery || scopeFilter !== "all" ? (
-                  <button type="button" className="ghost-action" onClick={() => {
-                    setQuery("");
-                    setScopeFilter("all");
-                  }}>
-                    Clear
-                  </button>
-                ) : null}
-                {trimmedQuery || scopeFilter !== "all" ? (
-                  <span className="session-search-count" data-testid="session-memory-search-count">
-                    {filtered.length} {filtered.length === 1 ? "bucket" : "buckets"}
-                    {matchingEntryCount > 0 ? ` · ${matchingEntryCount} ${matchingEntryCount === 1 ? "entry" : "entries"}` : ""}
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-            <div className="session-skills-list" data-testid="session-memory-list">
-              {filtered.length > 0 ? (
-                filtered.map((bucket) => {
-                  const matchingEntries = trimmedQuery ? memoryBucketMatchingEntries(bucket, trimmedQuery) : [];
-                  const entriesToShow = matchingEntries.length > 0 ? matchingEntries : bucket.entries;
-                  const bucketKey = memoryBucketKey(bucket);
-                  return (
-                    <details
-                      key={bucketKey}
-                      className="session-skill-item"
-                      data-selected={focusedBucket && memoryBucketKey(focusedBucket) === bucketKey ? "true" : "false"}
-                      open={trimmedQuery ? true : undefined}
-                      onToggle={(event) => {
-                        if (event.currentTarget.open) setSelectedBucketKey(bucketKey);
+            {buckets.length > 0 ? (
+              <div className="session-memory-manager">
+                <aside className="session-memory-sidebar" aria-label="Memory buckets">
+                  <MemoryBucketList
+                    buckets={filtered}
+                    allBucketCount={buckets.length}
+                    reviewFindings={reviewFindings}
+                    selectedBucketKey={focusedBucket ? memoryBucketKey(focusedBucket) : undefined}
+                    query={trimmedQuery}
+                    onSelect={setSelectedBucketKey}
+                  />
+                </aside>
+                <section className="session-memory-main">
+                  {focusedBucket ? (
+                    <MemoryBucketFocus
+                      bucket={focusedBucket}
+                      query={trimmedQuery}
+                      reviewFindings={reviewFindings.filter((finding) => finding.bucketKey === memoryBucketKey(focusedBucket))}
+                      autoScrollReview={scopeFilter === "review" || Boolean(selectedBucketKey)}
+                      latestUpdate={latestUpdateBucketKey === memoryBucketKey(focusedBucket) ? latestUpdate : undefined}
+                      editingEntry={editingEntry}
+                      saving={memorySaveState.state === "saving"}
+                      confirmRemoveKey={confirmRemoveKey}
+                      canRemove={Boolean(onRemoveMemory)}
+                      canReplace={Boolean(onReplaceMemory)}
+                      revealedEntryKeys={revealedEntryKeys}
+                      onToggleReveal={toggleRevealedEntry}
+                      onStartEdit={(key, value) => {
+                        setConfirmRemoveKey(undefined);
+                        setEditingEntry({ key, value });
                       }}
-                    >
-                      <summary onClick={() => setSelectedBucketKey(bucketKey)}>
-                        <span className="session-skill-title">
-                          <strong>{memoryBucketLabel(bucket)}</strong>
-                          <span>{bucket.entry_count} entries</span>
-                        </span>
-                        <span className="session-skill-desc">
-                          <span data-testid={`memory-bucket-preview-${bucket.target}-${bucket.topic ?? "general"}`}>{memoryBucketPreview(bucket)}</span>
-                          <small>{memoryBucketUsage(bucket)}</small>
-                        </span>
-                        {trimmedQuery && matchingEntries.length > 0 ? (
-                          <span className="session-skill-status">
-                            <span>{matchingEntries.length} matched</span>
-                          </span>
-                        ) : null}
-                      </summary>
-                      <div className="session-skill-detail">
-                        <div className="session-skill-meta">
-                          <span>{bucket.target}</span>
-                          {bucket.newest_at ? <span>Updated {formatTimestamp(bucket.newest_at)}</span> : null}
-                        </div>
-                        {bucket.entries && bucket.entries.length > 0 ? (
-                          <>
-                            <div className="session-memory-actions">
-                              <CopyButton label="Copy entries" value={bucket.entries.join("\n\n")} className="node-action" />
-                            </div>
-                            <ul className="session-memory-entries" data-filtered={matchingEntries.length > 0 ? "true" : "false"}>
-                              {(entriesToShow ?? []).map((entry, index) => {
-                                const entryKey = memoryEntryKey(bucket.target, bucket.topic, entry);
-                                const isEditing = editingEntry?.key === entryKey;
-                                return (
-                                  <li key={`${index}:${entry}`} className="session-memory-entry-row">
-                                    {isEditing ? (
-                                      <form className="session-memory-entry-edit" onSubmit={(event) => {
-                                        event.preventDefault();
-                                        void handleReplaceMemory(bucket, entry);
-                                      }}>
-                                        <label>
-                                          <span>Edit memory {index + 1}</span>
-                                          <textarea
-                                            value={editingEntry.value}
-                                            disabled={memorySaveState.state === "saving"}
-                                            onChange={(event) => setEditingEntry({ key: entryKey, value: event.target.value })}
-                                          />
-                                        </label>
-                                        <div className="session-memory-entry-actions">
-                                          <button
-                                            type="button"
-                                            className="ghost-action"
-                                            disabled={memorySaveState.state === "saving"}
-                                            onClick={() => setEditingEntry(undefined)}
-                                          >
-                                            Cancel
-                                          </button>
-                                          <button
-                                            type="submit"
-                                            className="ghost-action"
-                                            disabled={memorySaveState.state === "saving" || !editingEntry.value.trim() || editingEntry.value.trim() === entry.trim()}
-                                          >
-                                            Save edit
-                                          </button>
-                                        </div>
-                                      </form>
-                                    ) : (
-                                      <MemoryEntryText
-                                        entry={entry}
-                                        entryKey={entryKey}
-                                        revealed={revealedEntryKeys.has(entryKey)}
-                                        onToggleReveal={toggleRevealedEntry}
-                                      />
-                                    )}
-                                    {!isEditing && (onRemoveMemory || onReplaceMemory) ? (
-                                      confirmRemoveKey === entryKey ? (
-                                        <span className="session-memory-entry-actions" role="group" aria-label={`Confirm remove memory ${index + 1}`}>
-                                          <button type="button" className="ghost-action" disabled={memorySaveState.state === "saving"} onClick={() => setConfirmRemoveKey(undefined)}>
-                                            Cancel
-                                          </button>
-                                          <button
-                                            type="button"
-                                            className="ghost-action danger-action"
-                                            disabled={memorySaveState.state === "saving"}
-                                            onClick={() => void handleRemoveMemory(bucket, entry)}
-                                          >
-                                            Confirm remove
-                                          </button>
-                                        </span>
-                                      ) : (
-                                        <span className="session-memory-entry-actions">
-                                          {onReplaceMemory ? (
-                                            <button
-                                              type="button"
-                                              className="ghost-action"
-                                              disabled={memorySaveState.state === "saving"}
-                                              onClick={() => {
-                                                setConfirmRemoveKey(undefined);
-                                                setEditingEntry({ key: entryKey, value: entry });
-                                              }}
-                                            >
-                                              Edit
-                                            </button>
-                                          ) : null}
-                                          {onRemoveMemory ? (
-                                            <button
-                                              type="button"
-                                              className="ghost-action danger-action"
-                                              disabled={memorySaveState.state === "saving"}
-                                              onClick={() => {
-                                                setEditingEntry(undefined);
-                                                setConfirmRemoveKey(entryKey);
-                                              }}
-                                            >
-                                              Remove
-                                            </button>
-                                          ) : null}
-                                        </span>
-                                      )
-                                    ) : null}
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          </>
-                        ) : (
-                          <p className="session-skill-preview">No entries in this bucket.</p>
-                        )}
-                      </div>
-                    </details>
-                  );
-                })
-              ) : candidates.length > 0 ? null : (
-                <div className="session-memory-empty-state">
-                  <strong>{buckets.length > 0 ? "No matching memory" : "No durable memory saved"}</strong>
-                  <span>{buckets.length > 0 ? "Clear the filters or search to inspect another bucket." : "Save only stable, non-secret facts that will help future turns."}</span>
-                </div>
-              )}
-            </div>
-            {memorySaveState.message && !(onAddMemory || onUseAsDraft) ? (
-              <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
-            ) : null}
-            {onAddMemory || onUseAsDraft ? (
-              <details className="session-memory-write" open={writeOpen || (!memory?.has_memory && candidates.length === 0)} onToggle={(event) => setWriteOpen(event.currentTarget.open)}>
-                <summary>
-                  <strong>{onAddMemory ? "Add memory" : "Prepare memory draft"}</strong>
-                  <span>{onAddMemory ? "Write a durable fact into this chat's memory." : "Prepare an agent instruction to write memory."}</span>
-                </summary>
-                <MemoryDraftForm
-                  memoryTarget={memoryTarget}
-                  memoryTopic={memoryTopic}
-                  memoryContent={memoryContent}
-                  busy={memorySaveState.state === "saving"}
-                  status={memorySaveState}
-                  submitLabel={onAddMemory ? "Save memory" : "Prepare memory draft"}
-                  setMemoryTarget={setMemoryTarget}
-                  setMemoryTopic={setMemoryTopic}
-                  setMemoryContent={setMemoryContent}
-                  onSubmit={handleManualMemorySubmit}
-                />
-              </details>
-            ) : null}
+                      onCancelEdit={() => setEditingEntry(undefined)}
+                      onEditChange={(key, value) => setEditingEntry({ key, value })}
+                      onSaveEdit={(entry) => void handleReplaceMemory(focusedBucket, entry)}
+                      onAskRemove={(key) => {
+                        setEditingEntry(undefined);
+                        setConfirmRemoveKey(key);
+                      }}
+                      onCancelRemove={() => setConfirmRemoveKey(undefined)}
+                      onConfirmRemove={(entry) => void handleRemoveMemory(focusedBucket, entry)}
+                    />
+                  ) : candidates.length > 0 ? null : (
+                    <div className="session-memory-empty-state">
+                      <strong>No matching memory</strong>
+                      <span>Clear the filters or search to inspect another bucket.</span>
+                    </div>
+                  )}
+                  {memorySaveState.message && !(onAddMemory || onUseAsDraft) ? (
+                    <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
+                  ) : null}
+                  {onAddMemory || onUseAsDraft ? (
+                    <MemoryWritePanel
+                      open={writeOpen}
+                      forceOpen={!memory?.has_memory && candidates.length === 0}
+                      canSave={Boolean(onAddMemory)}
+                      memoryTarget={memoryTarget}
+                      memoryTopic={memoryTopic}
+                      memoryContent={memoryContent}
+                      bucketContext={focusedBucket}
+                      busy={memorySaveState.state === "saving"}
+                      status={memorySaveState}
+                      setOpen={setWriteOpen}
+                      onOpen={() => prepareMemoryDraftForBucket(focusedBucket)}
+                      setMemoryTarget={setMemoryTarget}
+                      setMemoryTopic={setMemoryTopic}
+                      setMemoryContent={setMemoryContent}
+                      onSubmit={handleManualMemorySubmit}
+                    />
+                  ) : null}
+                </section>
+              </div>
+            ) : (
+              <section className="session-memory-empty-workflow">
+                {memorySaveState.message && !(onAddMemory || onUseAsDraft) ? (
+                  <span className="session-memory-form-status" data-tone={memorySaveState.state === "error" ? "error" : "success"}>{memorySaveState.message}</span>
+                ) : null}
+                {onAddMemory || onUseAsDraft ? (
+                  <MemoryWritePanel
+                    open={writeOpen}
+                    forceOpen={candidates.length === 0}
+                    canSave={Boolean(onAddMemory)}
+                    memoryTarget={memoryTarget}
+                    memoryTopic={memoryTopic}
+                    memoryContent={memoryContent}
+                    bucketContext={undefined}
+                    busy={memorySaveState.state === "saving"}
+                    status={memorySaveState}
+                    setOpen={setWriteOpen}
+                    onOpen={() => undefined}
+                    setMemoryTarget={setMemoryTarget}
+                    setMemoryTopic={setMemoryTopic}
+                    setMemoryContent={setMemoryContent}
+                    onSubmit={handleManualMemorySubmit}
+                  />
+                ) : (
+                  <div className="session-memory-empty-state" data-testid="session-memory-list">
+                    <strong>No durable memory saved</strong>
+                    <span>Save only stable, non-secret facts that will help future turns.</span>
+                  </div>
+                )}
+              </section>
+            )}
           </>
         ) : null}
       </div>
@@ -494,6 +411,85 @@ export function SessionMemoryPanel({
 }
 
 type MemoryScopeFilter = "all" | "session" | "user" | "review";
+
+function MemoryWorkbenchToolbar({
+  memory,
+  stats,
+  buckets,
+  reviewBucketKeys,
+  filter,
+  query,
+  filteredCount,
+  matchingEntryCount,
+  reviewFindings,
+  candidateCount,
+  canWrite,
+  onFilterChange,
+  onQueryChange,
+  onClear,
+  onRefresh,
+  onOpenFinding,
+}: {
+  memory?: SessionMemoryResponse;
+  stats: ReturnType<typeof memoryStats>;
+  buckets: readonly SessionMemoryBucket[];
+  reviewBucketKeys: ReadonlySet<string>;
+  filter: MemoryScopeFilter;
+  query: string;
+  filteredCount: number;
+  matchingEntryCount: number;
+  reviewFindings: ReturnType<typeof memoryReviewFindings>;
+  candidateCount: number;
+  canWrite: boolean;
+  onFilterChange: (filter: MemoryScopeFilter) => void;
+  onQueryChange: (query: string) => void;
+  onClear: () => void;
+  onRefresh?: () => Promise<void> | void;
+  onOpenFinding: (finding: ReturnType<typeof memoryReviewFindings>[number]) => void;
+}) {
+  const trimmedQuery = query.trim();
+  const hasSavedMemory = Boolean(memory?.has_memory && buckets.length > 0);
+  const hasActions = hasSavedMemory || reviewFindings.length > 0 || candidateCount > 0 || Boolean(onRefresh);
+  if (!hasActions) return null;
+  const status = hasSavedMemory ? memoryToolbarStatus(stats, memory, reviewFindings) : undefined;
+  return (
+    <section className="session-memory-workbench-toolbar" data-testid="session-memory-toolbar" aria-label="Memory commands">
+      {buckets.length > 0 ? <MemoryScopeFilters buckets={buckets} reviewBucketKeys={reviewBucketKeys} value={filter} onChange={onFilterChange} /> : null}
+      {buckets.length > 0 ? (
+        <label className="session-skills-search session-memory-toolbar-search">
+          <span className="visually-hidden">Search memory</span>
+          <input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search entries or topics" />
+        </label>
+      ) : null}
+      <div className="session-memory-toolbar-actions">
+        {trimmedQuery || filter !== "all" ? (
+          <button type="button" className="ghost-action" onClick={onClear}>
+            Clear
+          </button>
+        ) : null}
+        {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="session-workspace-icon-action" icon="copy" title="Copy snapshot" /> : null}
+        {onRefresh ? (
+          <button type="button" className="session-workspace-icon-action" data-icon="refresh" aria-label="Refresh memory" title="Refresh memory" onClick={() => void onRefresh()}>
+            <span className="visually-hidden">Refresh memory</span>
+          </button>
+        ) : null}
+      </div>
+      {status ? <span className="session-memory-toolbar-status">{status}</span> : null}
+      <MemoryReviewActions
+        reviewFindings={reviewFindings}
+        candidateCount={candidateCount}
+        canWrite={canWrite}
+        onOpenFinding={onOpenFinding}
+      />
+      {trimmedQuery || filter !== "all" ? (
+        <span className="session-search-count" data-testid="session-memory-search-count">
+          {filteredCount} {filteredCount === 1 ? "bucket" : "buckets"}
+          {matchingEntryCount > 0 ? ` · ${matchingEntryCount} ${matchingEntryCount === 1 ? "entry" : "entries"}` : ""}
+        </span>
+      ) : null}
+    </section>
+  );
+}
 
 function MemoryScopeFilters({
   buckets,
@@ -520,7 +516,7 @@ function MemoryScopeFilters({
   ];
   return (
     <div className="session-filter-pills" role="group" aria-label="Filter memory buckets">
-      {options.map((option) => (
+      {options.filter((option) => option.value === "all" || option.count > 0 || value === option.value).map((option) => (
         <button
           key={option.value}
           type="button"
@@ -543,67 +539,64 @@ function memoryBucketMatchesScope(bucket: SessionMemoryBucket, scope: MemoryScop
   return true;
 }
 
-function MemoryReviewQueue({
-  findings,
-  onShowBuckets,
-}: {
-  findings: ReturnType<typeof memoryReviewFindings>;
-  onShowBuckets: () => void;
-}) {
-  const counts = findings.reduce<Record<string, number>>((acc, finding) => {
-    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
-    return acc;
-  }, {});
-  const buckets = new Set(findings.map((finding) => finding.bucketKey)).size;
-  return (
-    <section className="session-memory-review" data-testid="session-memory-review" aria-label="Memory review queue">
-      <div className="session-memory-review-head">
-        <span>Review queue</span>
-        <strong>{findings.length} {findings.length === 1 ? "finding" : "findings"} · {buckets} {buckets === 1 ? "bucket" : "buckets"}</strong>
-        <button type="button" className="ghost-action" onClick={onShowBuckets}>Show buckets</button>
-      </div>
-      <div className="session-memory-review-kinds">
-        {Object.entries(counts).map(([kind, count]) => (
-          <span key={kind} data-kind={kind}>
-            {memoryFindingKindLabel(kind)}
-            <strong>{count}</strong>
-          </span>
-        ))}
-      </div>
-      <ul className="session-memory-review-list">
-        {findings.slice(0, 5).map((finding, index) => (
-          <li key={`${finding.kind}:${finding.bucketKey}:${index}`}>
-            <strong>{finding.bucketLabel}</strong>
-            <span>{finding.detail}</span>
-            {finding.entryPreview ? <small title={finding.entryPreview}>{finding.entryPreview}</small> : null}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function memoryFindingKindLabel(kind: string): string {
-  if (kind === "sensitive") return "Sensitive";
-  if (kind === "duplicate") return "Duplicate";
-  if (kind === "capacity") return "Capacity";
-  if (kind === "large") return "Large";
-  return kind;
-}
-
-function MemoryMaintenanceBoard({
+function MemoryReviewActions({
   reviewFindings,
   candidateCount,
-  latestUpdate,
   canWrite,
-  onShowReview,
+  onOpenFinding,
 }: {
   reviewFindings: ReturnType<typeof memoryReviewFindings>;
   candidateCount: number;
-  latestUpdate?: MemoryUpdateMeta;
   canWrite: boolean;
-  onShowReview: () => void;
+  onOpenFinding: (finding: ReturnType<typeof memoryReviewFindings>[number]) => void;
 }) {
+  const actions = memoryReviewActions(reviewFindings, candidateCount, canWrite, onOpenFinding);
+  if (actions.length === 0) return null;
+  return (
+    <div className="session-memory-review-actions" data-testid="session-memory-maintenance" aria-label="Memory items needing review">
+      {actions.map((action) => (
+        <button key={action.id} type="button" data-tone={action.tone} onClick={action.onClick} disabled={!action.onClick}>
+          <strong>{action.label}</strong>
+          <small>{action.meta}</small>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function memoryToolbarStatus(
+  stats: ReturnType<typeof memoryStats>,
+  memory: SessionMemoryResponse | undefined,
+  reviewFindings: ReturnType<typeof memoryReviewFindings>,
+): string {
+  if (reviewFindings.length === 0) {
+    return `Ready · ${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} in ${stats.bucketCount} ${stats.bucketCount === 1 ? "bucket" : "buckets"} · ${memoryUsageLabel(stats)}`;
+  }
+  const counts = reviewFindings.reduce<Record<string, number>>((acc, finding) => {
+    acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
+    return acc;
+  }, {});
+  const parts = [
+    counts.sensitive ? `${counts.sensitive} secret ${counts.sensitive === 1 ? "entry" : "entries"}` : undefined,
+    counts.duplicate ? `${counts.duplicate} duplicate ${counts.duplicate === 1 ? "entry" : "entries"}` : undefined,
+    (counts.capacity ?? 0) + (counts.large ?? 0) > 0 ? `${(counts.capacity ?? 0) + (counts.large ?? 0)} pressure ${(counts.capacity ?? 0) + (counts.large ?? 0) === 1 ? "issue" : "issues"}` : undefined,
+  ].filter((part): part is string => Boolean(part));
+  const scope = memory?.shared_user_memory ? "shared + session" : "session";
+  return `Review · ${parts.join(" · ")} · ${scope}`;
+}
+
+function memoryReviewActions(
+  reviewFindings: ReturnType<typeof memoryReviewFindings>,
+  candidateCount: number,
+  canWrite: boolean,
+  onOpenFinding: (finding: ReturnType<typeof memoryReviewFindings>[number]) => void,
+): Array<{
+  id: string;
+  label: string;
+  meta: string;
+  tone?: "danger" | "action" | "muted";
+  onClick?: () => void;
+}> {
   const counts = reviewFindings.reduce<Record<string, number>>((acc, finding) => {
     acc[finding.kind] = (acc[finding.kind] ?? 0) + 1;
     return acc;
@@ -611,110 +604,219 @@ function MemoryMaintenanceBoard({
   const actions: Array<{
     id: string;
     label: string;
-    detail: string;
     meta: string;
     tone?: "danger" | "action" | "muted";
     onClick?: () => void;
-    button?: string;
   }> = [];
+  const firstSensitive = reviewFindings.find((finding) => finding.kind === "sensitive");
   if ((counts.sensitive ?? 0) > 0) {
     actions.push({
       id: "sensitive",
       label: "Remove secrets",
-      detail: "Sensitive-looking memory is redacted in previews. Inspect and remove or replace it before it is reused.",
-      meta: `${counts.sensitive} ${counts.sensitive === 1 ? "entry" : "entries"}`,
+      meta: `${counts.sensitive} ${counts.sensitive === 1 ? "entry" : "entries"} · ${firstSensitive?.bucketLabel ?? "review"}`,
       tone: "danger",
-      onClick: onShowReview,
-      button: "Review",
+      onClick: firstSensitive ? () => onOpenFinding(firstSensitive) : undefined,
     });
   }
+  const firstDuplicate = reviewFindings.find((finding) => finding.kind === "duplicate");
   if ((counts.duplicate ?? 0) > 0) {
     actions.push({
       id: "duplicate",
       label: "Deduplicate",
-      detail: "Duplicate facts increase prompt noise and can hide the authoritative wording.",
-      meta: `${counts.duplicate} duplicate ${counts.duplicate === 1 ? "entry" : "entries"}`,
+      meta: `${counts.duplicate} duplicate ${counts.duplicate === 1 ? "entry" : "entries"} · ${firstDuplicate?.bucketLabel ?? "review"}`,
       tone: "action",
-      onClick: onShowReview,
-      button: "Review",
+      onClick: firstDuplicate ? () => onOpenFinding(firstDuplicate) : undefined,
     });
   }
   const pressureCount = (counts.capacity ?? 0) + (counts.large ?? 0);
+  const firstPressure = reviewFindings.find((finding) => finding.kind === "capacity" || finding.kind === "large");
   if (pressureCount > 0) {
     actions.push({
       id: "pressure",
       label: "Reduce pressure",
-      detail: "Large or nearly full buckets should be split, shortened, or moved out of durable memory.",
-      meta: `${pressureCount} ${pressureCount === 1 ? "bucket" : "items"}`,
+      meta: `${pressureCount} ${pressureCount === 1 ? "issue" : "issues"} · ${firstPressure?.bucketLabel ?? "review"}`,
       tone: "action",
-      onClick: onShowReview,
-      button: "Review",
+      onClick: firstPressure ? () => onOpenFinding(firstPressure) : undefined,
     });
   }
   if (candidateCount > 0) {
     actions.push({
       id: "candidates",
       label: canWrite ? "Save candidates" : "Prepare candidates",
-      detail: "Stable facts were derived from this session. Review the candidate card before saving durable memory.",
       meta: `${candidateCount} candidate ${candidateCount === 1 ? "fact" : "facts"}`,
       tone: "action",
     });
   }
-  if (latestUpdate) {
-    actions.push({
-      id: "latest",
-      label: "Verify latest write",
-      detail: "A memory write happened in this chat. Use the latest-update card below for the exact preview and evidence.",
-      meta: [memoryActionLabel(latestUpdate.action), memoryUpdateLocation(latestUpdate)].filter(Boolean).join(" · "),
-      tone: "muted",
-    });
-  }
-  if (actions.length === 0) {
-    actions.push({
-      id: "clean",
-      label: "No maintenance queued",
-      detail: "No duplicate, sensitive, oversized, or candidate memory items are visible for this session.",
-      meta: "Clean",
-      tone: "muted",
-    });
-  }
+  return actions;
+}
+
+function MemoryBucketList({
+  buckets,
+  allBucketCount,
+  reviewFindings,
+  selectedBucketKey,
+  query,
+  onSelect,
+}: {
+  buckets: readonly SessionMemoryBucket[];
+  allBucketCount: number;
+  reviewFindings: ReturnType<typeof memoryReviewFindings>;
+  selectedBucketKey?: string;
+  query: string;
+  onSelect: (bucketKey: string) => void;
+}) {
+  const bucketRisk = useMemo(() => memoryBucketRiskMap(reviewFindings), [reviewFindings]);
+  const displayBuckets = useMemo(() => prioritizeMemoryBuckets(buckets, bucketRisk), [bucketRisk, buckets]);
   return (
-    <section className="session-memory-maintenance" data-testid="session-memory-maintenance" aria-label="Memory maintenance queue">
-      <div className="session-memory-maintenance-head">
-        <span>Maintenance</span>
-        <strong>{actions.length === 1 && actions[0].id === "clean" ? "Nothing to fix" : `${actions.length} active ${actions.length === 1 ? "item" : "items"}`}</strong>
-      </div>
-      <div className="session-memory-maintenance-list">
-        {actions.map((action) => (
-          <article key={action.id} data-tone={action.tone}>
-            <div>
-              <span>{action.meta}</span>
-              <strong>{action.label}</strong>
-              <p>{action.detail}</p>
-            </div>
-            {action.onClick && action.button ? (
-              <button type="button" className="ghost-action" onClick={action.onClick}>
-                {action.button}
-              </button>
-            ) : null}
-          </article>
-        ))}
-      </div>
-    </section>
+    <div className="session-memory-bucket-list" data-testid="session-memory-list">
+      {displayBuckets.length > 0 ? (
+        displayBuckets.map((bucket) => {
+          const bucketKey = memoryBucketKey(bucket);
+          const matchingEntries = query ? memoryBucketMatchingEntries(bucket, query) : [];
+          const bucketType = bucket.target === "user" ? "user" : bucket.topic === "core" ? "core" : "topic";
+          const bucketGlyph = bucket.target === "user" ? "U" : bucket.topic === "core" ? "C" : "T";
+          const usage = bucket.percent !== undefined ? `${bucket.percent}%` : `${bucket.chars_used}c`;
+          const risk = bucketRisk.get(bucketKey);
+          return (
+            <button
+              key={bucketKey}
+              type="button"
+              className="session-memory-bucket-button"
+              data-kind={bucketType}
+              data-risk={risk?.tone}
+              data-selected={selectedBucketKey === bucketKey ? "true" : "false"}
+              onClick={() => onSelect(bucketKey)}
+            >
+              <span className="session-memory-bucket-kind" aria-hidden="true">{bucketGlyph}</span>
+              <span className="session-memory-bucket-content">
+                <span className="session-memory-bucket-main">
+                  <strong>{memoryBucketLabel(bucket)}</strong>
+                  <small>{bucketType}</small>
+                </span>
+                <span className="session-memory-bucket-preview" data-testid={`memory-bucket-preview-${bucket.target}-${bucket.topic ?? "general"}`}>
+                  {memoryBucketPreview(bucket)}
+                </span>
+              </span>
+              <span className="session-memory-bucket-stats">
+                {risk ? <strong className="session-memory-bucket-risk">{risk.label}</strong> : null}
+                <strong>{bucket.entry_count} {bucket.entry_count === 1 ? "entry" : "entries"}</strong>
+                <small>{usage}</small>
+                {query && matchingEntries.length > 0 ? <strong className="session-memory-bucket-match">{matchingEntries.length} matched</strong> : null}
+              </span>
+            </button>
+          );
+        })
+      ) : (
+        <div className="session-memory-empty-state">
+          <strong>{allBucketCount > 0 ? "No matching memory" : "No durable memory saved"}</strong>
+          <span>{allBucketCount > 0 ? "Clear the filters or search to inspect another bucket." : "Save only stable, non-secret facts that will help future turns."}</span>
+        </div>
+      )}
+    </div>
   );
+}
+
+function memoryBucketRiskMap(reviewFindings: ReturnType<typeof memoryReviewFindings>): Map<string, { label: string; tone: "danger" | "warning" | "attention"; rank: number }> {
+  const findingsByBucket = new Map<string, Set<ReturnType<typeof memoryReviewFindings>[number]["kind"]>>();
+  for (const finding of reviewFindings) {
+    const current = findingsByBucket.get(finding.bucketKey) ?? new Set();
+    current.add(finding.kind);
+    findingsByBucket.set(finding.bucketKey, current);
+  }
+  const out = new Map<string, { label: string; tone: "danger" | "warning" | "attention"; rank: number }>();
+  for (const [bucketKey, kinds] of findingsByBucket) {
+    const sensitive = kinds.has("sensitive");
+    const duplicate = kinds.has("duplicate");
+    const pressure = kinds.has("capacity") || kinds.has("large");
+    const labels = [
+      sensitive ? "Secret" : undefined,
+      duplicate ? "Duplicate" : undefined,
+      pressure ? "Pressure" : undefined,
+    ].filter((label): label is string => Boolean(label));
+    out.set(bucketKey, {
+      label: labels.join(" + "),
+      tone: sensitive ? "danger" : pressure ? "warning" : "attention",
+      rank: sensitive ? 3 : duplicate ? 2 : 1,
+    });
+  }
+  return out;
+}
+
+function prioritizeMemoryBuckets(
+  buckets: readonly SessionMemoryBucket[],
+  bucketRisk: Map<string, { rank: number }>,
+): SessionMemoryBucket[] {
+  return [...buckets].sort((a, b) => {
+    const riskDelta = (bucketRisk.get(memoryBucketKey(b))?.rank ?? 0) - (bucketRisk.get(memoryBucketKey(a))?.rank ?? 0);
+    if (riskDelta !== 0) return riskDelta;
+    return 0;
+  });
 }
 
 function MemoryBucketFocus({
   bucket,
+  query,
+  reviewFindings,
+  autoScrollReview,
+  latestUpdate,
+  editingEntry,
+  saving,
+  confirmRemoveKey,
+  canRemove,
+  canReplace,
   revealedEntryKeys,
   onToggleReveal,
+  onStartEdit,
+  onCancelEdit,
+  onEditChange,
+  onSaveEdit,
+  onAskRemove,
+  onCancelRemove,
+  onConfirmRemove,
 }: {
   bucket: SessionMemoryBucket;
+  query: string;
+  reviewFindings: ReturnType<typeof memoryReviewFindings>;
+  autoScrollReview: boolean;
+  latestUpdate?: MemoryUpdateMeta;
+  editingEntry?: { key: string; value: string };
+  saving: boolean;
+  confirmRemoveKey?: string;
+  canRemove: boolean;
+  canReplace: boolean;
   revealedEntryKeys: ReadonlySet<string>;
   onToggleReveal: (key: string) => void;
+  onStartEdit: (key: string, value: string) => void;
+  onCancelEdit: () => void;
+  onEditChange: (key: string, value: string) => void;
+  onSaveEdit: (entry: string) => void;
+  onAskRemove: (key: string) => void;
+  onCancelRemove: () => void;
+  onConfirmRemove: (entry: string) => void;
 }) {
   const entries = bucket.entries ?? [];
-  const previewEntries = entries.slice(0, 4);
+  const matchingEntries = query ? memoryBucketMatchingEntries(bucket, query) : [];
+  const entriesToShow = matchingEntries.length > 0 ? matchingEntries : entries;
+  const latestPreview = latestUpdate ? memoryUpdatePreview(latestUpdate) : "";
+  const firstReviewedEntryRef = useRef<HTMLLIElement | null>(null);
+  const reviewedEntryKinds = useMemo(() => {
+    const byPreview = new Map<string, string[]>();
+    reviewFindings.forEach((finding) => {
+      if (!finding.entryPreview) return;
+      const current = byPreview.get(finding.entryPreview) ?? [];
+      current.push(finding.kind);
+      byPreview.set(finding.entryPreview, current);
+    });
+    return byPreview;
+  }, [reviewFindings]);
+  const firstReviewedEntryIndex = entriesToShow.findIndex((entry) => reviewedEntryKinds.has(memoryEntrySafePreview(entry)));
+
+  useEffect(() => {
+    if (!autoScrollReview) return;
+    if (firstReviewedEntryIndex < 0) return;
+    firstReviewedEntryRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [autoScrollReview, bucket.target, bucket.topic, firstReviewedEntryIndex, reviewedEntryKinds]);
+
   return (
     <section className="session-memory-focus" data-testid="session-memory-focus" aria-label={`Memory bucket ${memoryBucketLabel(bucket)}`}>
       <div className="session-memory-focus-head">
@@ -722,26 +824,119 @@ function MemoryBucketFocus({
         <strong>{memoryBucketLabel(bucket)}</strong>
         <small>{memoryBucketPreview(bucket)}</small>
       </div>
+      {latestUpdate ? (
+        <div className="session-memory-focus-update" data-testid="session-memory-latest">
+          <span>Latest write</span>
+          <strong>{memoryActionLabel(latestUpdate.action)}</strong>
+          {latestPreview ? <small>{latestPreview}</small> : null}
+        </div>
+      ) : null}
       <div className="session-memory-focus-grid">
-        <MemoryFocusFact label="Target" value={bucket.target} />
+        <MemoryFocusFact label="Scope" value={memoryBucketScopeValue(bucket)} />
         <MemoryFocusFact label="Entries" value={String(bucket.entry_count)} />
-        <MemoryFocusFact label="Usage" value={memoryBucketUsage(bucket)} />
+        <MemoryFocusFact label="Capacity" value={memoryBucketUsage(bucket)} />
         <MemoryFocusFact label="Updated" value={bucket.newest_at ? formatTimestamp(bucket.newest_at) : "Unknown"} />
       </div>
+      {reviewFindings.length > 0 ? <MemoryFocusReview findings={reviewFindings} /> : null}
       <div className="session-memory-focus-entries">
-        <span>Entries</span>
-        {previewEntries.length > 0 ? (
-          <ul>
-            {previewEntries.map((entry, index) => {
+        <div className="session-memory-focus-entries-head">
+          <span>Entries</span>
+          <CopyButton label="Copy entries" value={entries.join("\n\n")} className="node-action" />
+        </div>
+        {entriesToShow.length > 0 ? (
+          <ul className="session-memory-entries" data-filtered={matchingEntries.length > 0 ? "true" : "false"}>
+            {entriesToShow.map((entry, index) => {
               const entryKey = memoryEntryKey(bucket.target, bucket.topic, entry);
+              const isEditing = editingEntry?.key === entryKey;
+              const reviewKinds = reviewedEntryKinds.get(memoryEntrySafePreview(entry)) ?? [];
+              const isReviewedEntry = reviewKinds.length > 0;
               return (
-                <li key={`${index}:${entry}`}>
-                  <MemoryEntryText
-                    entry={entry}
-                    entryKey={entryKey}
-                    revealed={revealedEntryKeys.has(entryKey)}
-                    onToggleReveal={onToggleReveal}
-                  />
+                <li
+                  key={`${index}:${entry}`}
+                  ref={isReviewedEntry && index === firstReviewedEntryIndex ? firstReviewedEntryRef : undefined}
+                  className="session-memory-entry-row"
+                  data-review={isReviewedEntry ? "true" : undefined}
+                  data-review-kind={reviewKinds[0]}
+                >
+                  {isEditing ? (
+                    <form className="session-memory-entry-edit" onSubmit={(event) => {
+                      event.preventDefault();
+                      onSaveEdit(entry);
+                    }}>
+                      <label>
+                        <span>Edit memory {index + 1}</span>
+                        <textarea
+                          value={editingEntry.value}
+                          disabled={saving}
+                          onChange={(event) => onEditChange(entryKey, event.target.value)}
+                        />
+                      </label>
+                      <div className="session-memory-entry-actions">
+                        <button
+                          type="button"
+                          className="ghost-action"
+                          disabled={saving}
+                          onClick={onCancelEdit}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="ghost-action"
+                          disabled={saving || !editingEntry.value.trim() || editingEntry.value.trim() === entry.trim()}
+                        >
+                          Save edit
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <MemoryEntryText
+                      entry={entry}
+                      entryKey={entryKey}
+                      revealed={revealedEntryKeys.has(entryKey)}
+                      onToggleReveal={onToggleReveal}
+                    />
+                  )}
+                  {!isEditing && (canRemove || canReplace) ? (
+                    confirmRemoveKey === entryKey ? (
+                      <span className="session-memory-entry-actions" role="group" aria-label={`Confirm remove memory ${index + 1}`}>
+                        <button type="button" className="ghost-action" disabled={saving} onClick={onCancelRemove}>
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-action danger-action"
+                          disabled={saving}
+                          onClick={() => onConfirmRemove(entry)}
+                        >
+                          Confirm remove
+                        </button>
+                      </span>
+                    ) : (
+                      <span className="session-memory-entry-actions">
+                        {canReplace ? (
+                          <button
+                            type="button"
+                            className="ghost-action"
+                            disabled={saving}
+                            onClick={() => onStartEdit(entryKey, entry)}
+                          >
+                            Edit
+                          </button>
+                        ) : null}
+                        {canRemove ? (
+                          <button
+                            type="button"
+                            className="ghost-action danger-action"
+                            disabled={saving}
+                            onClick={() => onAskRemove(entryKey)}
+                          >
+                            Remove
+                          </button>
+                        ) : null}
+                      </span>
+                    )
+                  ) : null}
                 </li>
               );
             })}
@@ -749,12 +944,26 @@ function MemoryBucketFocus({
         ) : (
           <p>No entries in this bucket.</p>
         )}
-        {entries.length > previewEntries.length ? <small>{entries.length - previewEntries.length} more entries in the bucket list.</small> : null}
-      </div>
-      <div className="session-memory-actions">
-        <CopyButton label="Copy entries" value={entries.join("\n\n")} className="node-action" />
+        {query && matchingEntries.length > 0 ? <small>{matchingEntries.length} matched {matchingEntries.length === 1 ? "entry" : "entries"} in this bucket.</small> : null}
       </div>
     </section>
+  );
+}
+
+function MemoryFocusReview({ findings }: { findings: ReturnType<typeof memoryReviewFindings> }) {
+  return (
+    <div className="session-memory-focus-review" data-testid="session-memory-focus-review">
+      <span>Review</span>
+      <ul>
+        {findings.map((finding, index) => (
+          <li key={`${finding.kind}:${index}:${finding.entryPreview ?? finding.detail}`}>
+            <strong data-kind={finding.kind}>{memoryFindingLabel(finding.kind)}</strong>
+            <span>{finding.detail}</span>
+            {finding.entryPreview ? <small>{finding.entryPreview}</small> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -788,36 +997,6 @@ function MemoryFocusFact({ label, value }: { label: string; value: string }) {
     <div className="session-memory-focus-fact">
       <span>{label}</span>
       <strong title={value}>{value}</strong>
-    </div>
-  );
-}
-
-function MemoryPanelActions({
-  memory,
-  stats,
-  hasSearch,
-  onRefresh,
-}: {
-  memory?: SessionMemoryResponse;
-  stats: ReturnType<typeof memoryStats>;
-  hasSearch: boolean;
-  onRefresh?: () => Promise<void> | void;
-}) {
-  if (!memory && !onRefresh) return null;
-  const hasSavedMemory = Boolean(memory?.has_memory);
-  const minimal = !hasSavedMemory && !hasSearch;
-  const status = memory && hasSavedMemory
-    ? `${stats.entryCount} ${stats.entryCount === 1 ? "entry" : "entries"} · ${memoryUsageLabel(stats)} · ${memoryScopeLabel(memory)}`
-    : undefined;
-  return (
-    <div className="session-memory-toolbar" data-mode={minimal ? "minimal" : undefined} data-testid="session-memory-toolbar">
-      {memory && hasSavedMemory ? <CopyButton label="Copy snapshot" value={memorySnapshotEvidenceText(memory)} className="ghost-action" /> : null}
-      {status ? <span>{status}</span> : hasSearch ? <span>Searchable durable memory</span> : null}
-      {onRefresh ? (
-        <button type="button" className="ghost-action" onClick={() => void onRefresh()}>
-          Refresh
-        </button>
-      ) : null}
     </div>
   );
 }
@@ -872,6 +1051,86 @@ function MemoryCandidateReview({
   );
 }
 
+function MemoryWritePanel({
+  open,
+  forceOpen,
+  canSave,
+  memoryTarget,
+  memoryTopic,
+  memoryContent,
+  bucketContext,
+  busy,
+  status,
+  setOpen,
+  onOpen,
+  setMemoryTarget,
+  setMemoryTopic,
+  setMemoryContent,
+  onSubmit,
+}: {
+  open: boolean;
+  forceOpen: boolean;
+  canSave: boolean;
+  memoryTarget: string;
+  memoryTopic: string;
+  memoryContent: string;
+  bucketContext?: SessionMemoryBucket;
+  busy: boolean;
+  status: { state: "idle" | "saving" | "saved" | "error"; message?: string };
+  setOpen: (open: boolean) => void;
+  onOpen: () => void;
+  setMemoryTarget: (value: string) => void;
+  setMemoryTopic: (value: string) => void;
+  setMemoryContent: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  if (forceOpen) {
+    return (
+      <section className="session-memory-write" data-forced="true">
+        <MemoryDraftForm
+          memoryTarget={memoryTarget}
+          memoryTopic={memoryTopic}
+          memoryContent={memoryContent}
+          busy={busy}
+          status={status}
+          submitLabel={canSave ? "Save memory" : "Prepare memory draft"}
+          setMemoryTarget={setMemoryTarget}
+          setMemoryTopic={setMemoryTopic}
+          setMemoryContent={setMemoryContent}
+          onSubmit={onSubmit}
+        />
+      </section>
+    );
+  }
+  const bucketLabel = bucketContext ? memoryBucketLabel(bucketContext) : "";
+  const summaryLabel = bucketContext
+    ? canSave ? `Add to ${bucketLabel}` : `Draft for ${bucketLabel}`
+    : canSave ? "Add memory" : "Prepare memory draft";
+  return (
+    <details className="session-memory-write" open={open} onToggle={(event) => {
+      setOpen(event.currentTarget.open);
+      if (event.currentTarget.open) onOpen();
+    }}>
+      <summary>
+        <strong>{summaryLabel}</strong>
+        {bucketContext ? <span>{bucketContext.target}:{bucketContext.topic ?? ""}</span> : null}
+      </summary>
+      <MemoryDraftForm
+        memoryTarget={memoryTarget}
+        memoryTopic={memoryTopic}
+        memoryContent={memoryContent}
+        busy={busy}
+        status={status}
+        submitLabel={canSave ? "Save memory" : "Prepare memory draft"}
+        setMemoryTarget={setMemoryTarget}
+        setMemoryTopic={setMemoryTopic}
+        setMemoryContent={setMemoryContent}
+        onSubmit={onSubmit}
+      />
+    </details>
+  );
+}
+
 function MemoryDraftForm({
   memoryTarget,
   memoryTopic,
@@ -899,6 +1158,8 @@ function MemoryDraftForm({
     { value: "memory", label: "Session", description: "Project or task fact" },
     { value: "user", label: "User", description: "Stable preference" },
   ];
+  const editorLocation = memoryFormLocation(memoryTarget, memoryTopic);
+  const editorStats = memoryBodyStats(memoryContent);
   return (
     <form className="session-skill-form session-memory-form" data-testid="session-memory-form" onSubmit={onSubmit}>
       <fieldset className="session-memory-targets">
@@ -922,10 +1183,20 @@ function MemoryDraftForm({
         <span>Topic</span>
         <input value={memoryTopic} onChange={(event) => setMemoryTopic(event.target.value)} placeholder="project, user, workflow" disabled={busy} />
       </label>
-      <label className="session-skill-form-body">
-        <span>Content</span>
-        <textarea value={memoryContent} onChange={(event) => setMemoryContent(event.target.value)} placeholder="Fact to remember" disabled={busy} />
-      </label>
+      <div className="session-skill-form-body session-memory-form-body">
+        <div className="session-skill-editor-head session-memory-editor-head" data-testid="session-memory-editor-meta">
+          <span>Content</span>
+          <code title={editorLocation}>{editorLocation}</code>
+          <small>{editorStats}</small>
+        </div>
+        <textarea
+          aria-label="Content"
+          value={memoryContent}
+          onChange={(event) => setMemoryContent(event.target.value)}
+          placeholder="Fact to remember"
+          disabled={busy}
+        />
+      </div>
       <button type="submit" className="session-skills-add-submit" disabled={!memoryContent.trim() || busy}>
         {busy ? "Saving" : submitLabel}
       </button>
@@ -936,29 +1207,46 @@ function MemoryDraftForm({
   );
 }
 
-function LatestMemoryUpdate({ update }: { update: MemoryUpdateMeta }) {
-  const location = memoryUpdateLocation(update);
-  const preview = memoryUpdatePreview(update);
-  return (
-    <div className="session-memory-latest" data-testid="session-memory-latest">
-      <div>
-        <strong>Latest update</strong>
-        <span>{memoryActionLabel(update.action)}</span>
-        {location ? <code>{location}</code> : null}
-      </div>
-      {preview ? <p>{preview}</p> : null}
-    </div>
-  );
+function memoryFormLocation(target: string, topic: string): string {
+  const cleanTarget = target.trim() || "memory";
+  const cleanTopic = topic.trim() || (cleanTarget === "user" ? "user" : "general");
+  return `${cleanTarget}:${cleanTopic}`;
+}
+
+function memoryBodyStats(body: string): string {
+  const lineCount = body.length > 0 ? body.split("\n").length : 0;
+  return `${lineCount} ${lineCount === 1 ? "line" : "lines"} · ${body.length} chars`;
 }
 
 function formatTimestamp(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function memoryBucketScopeValue(bucket: SessionMemoryBucket): string {
+  if (bucket.target === "user") return "Shared user";
+  if (bucket.topic === "core") return "Session core";
+  return "Session topic";
+}
+
+function memoryFindingLabel(kind: ReturnType<typeof memoryReviewFindings>[number]["kind"]): string {
+  if (kind === "sensitive") return "Secret";
+  if (kind === "duplicate") return "Duplicate";
+  if (kind === "capacity") return "Capacity";
+  if (kind === "large") return "Large entry";
+  return kind;
 }
 
 function memoryEntryKey(target: string, topic: string | undefined, entry: string): string {
   return `${target}:${topic ?? ""}:${entry}`;
+}
+
+function memoryUpdateBucketKey(update: MemoryUpdateMeta): string {
+  if (update.target || update.topic) return `${update.target || "memory"}:${update.topic ?? ""}`;
+  const location = memoryUpdateLocation(update);
+  const [target, ...topicParts] = location.split(":");
+  return `${target || "memory"}:${topicParts.join(":")}`;
 }
 
 function formatPanelError(err: unknown): string {

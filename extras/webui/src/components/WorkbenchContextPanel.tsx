@@ -3,6 +3,7 @@ import type { SessionChangesView } from "../view/sessionChanges";
 import { changesReviewFocus } from "../view/sessionChanges";
 import type { SessionContextSummary, SessionTaskStateAction, SessionTaskStateEvidence, SessionTaskStateFailure, SessionTaskStateSummary } from "../api/sessions";
 import { formatByteCount } from "../view/byteFormat";
+import type { DraftSource, UseAsDraft } from "../view/draftSource";
 import type { SessionFilesView } from "../view/sessionFiles";
 import { filesReviewFocus } from "../view/sessionFiles";
 import type { SessionRunView } from "../view/sessionRun";
@@ -39,7 +40,7 @@ export function WorkbenchContextPanel({
   automationTitle,
   automationDetail,
   onSelectSection,
-  defaultOpen = false,
+  onUseAsDraft,
 }: {
   overview: SessionOverview;
   hasSelectedSession: boolean;
@@ -56,6 +57,7 @@ export function WorkbenchContextPanel({
   automationTitle?: string;
   automationDetail?: string;
   onSelectSection?: (tab: WorkbenchTab) => void;
+  onUseAsDraft?: UseAsDraft;
   defaultOpen?: boolean;
 }) {
   const requestMode = latestWorkbenchRequestMode(session);
@@ -64,6 +66,7 @@ export function WorkbenchContextPanel({
   const evidence = buildWorkbenchContextEvidence(contextInput);
   const sourceLinks = taskSourceLinks(evidence, taskState);
   const hasSourceLinks = sourceLinks.length > 0;
+  const hasConcreteTaskState = hasTaskState(taskState);
   const brief = hasSelectedSession ? buildContextBrief({
     overview,
     statusDetail,
@@ -85,11 +88,11 @@ export function WorkbenchContextPanel({
   const actionSnapshots = brief?.drilldown ? [] : snapshot;
 
   return (
-    <details className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" open={defaultOpen}>
-      <summary className="session-skills-summary">
+    <section className="session-skills-panel workbench-context-panel" data-testid="workbench-context-panel" data-surface="true">
+      <header className="workbench-task-surface-head">
         <span className="session-skills-kicker">Task</span>
         <strong>{hasSelectedSession ? "Current task" : "No task selected"}</strong>
-      </summary>
+      </header>
       <div className="session-skills-body">
         {overview.tone === "error" ? (
           <div className="workbench-context-status" data-tone="error" data-testid="workbench-context-status">
@@ -102,8 +105,8 @@ export function WorkbenchContextPanel({
             </span>
           </div>
         ) : null}
-        {brief ? <ContextBriefCard brief={brief} onSelectSection={onSelectSection} /> : null}
-        {hasTaskState(taskState) ? <TaskStateCard taskState={taskState} onSelectSection={onSelectSection} /> : null}
+        {!hasConcreteTaskState && brief ? <ContextBriefCard brief={brief} onSelectSection={onSelectSection} /> : null}
+        {hasConcreteTaskState ? <TaskStateCard taskState={taskState} onSelectSection={onSelectSection} onUseAsDraft={onUseAsDraft} /> : null}
         {actionSnapshots.length > 0 ? (
           <section className="workbench-context-snapshot" data-testid="workbench-context-snapshot" aria-label="Action needed">
             <div className="workbench-context-snapshot-head">
@@ -142,7 +145,7 @@ export function WorkbenchContextPanel({
           </section>
         ) : null}
         {hasSelectedSession && shouldShowTaskUsageCard(usage, contextSummary) ? <WorkbenchUsageCard usage={usage} contextSummary={contextSummary} /> : null}
-        {hasSourceLinks ? (
+        {hasSourceLinks && !hasConcreteTaskState ? (
           <div className="workbench-context-evidence" data-testid="workbench-context-evidence">
             {sourceLinks.map((item) => (
               <button
@@ -162,7 +165,7 @@ export function WorkbenchContextPanel({
         ) : null}
         {!hasSelectedSession ? <div className="session-skills-empty">Start or open a chat to see the objective, next step, and source tabs.</div> : null}
       </div>
-    </details>
+    </section>
   );
 }
 
@@ -336,7 +339,7 @@ function runBriefFact(run?: SessionRunView): ContextBriefFact | undefined {
     value: review.label,
     detail: review.title,
     tone: review.tone === "danger" ? "error" : review.tone === "attention" ? "attention" : "ready",
-    target: "run",
+    target: "trace",
   };
 }
 
@@ -348,7 +351,7 @@ function changesBriefFact(changes?: SessionChangesView): ContextBriefFact | unde
     value: review.title,
     detail: review.detail,
     tone: review.tone === "danger" ? "error" : review.tone === "attention" ? "attention" : "ready",
-    target: "changes",
+    target: "files",
   };
 }
 
@@ -371,7 +374,7 @@ function artifactsBriefFact(artifacts?: readonly TurnArtifact[]): ContextBriefFa
     value: `${artifacts.length} captured`,
     detail: workbenchArtifactContextDetail(artifacts),
     tone: "ready",
-    target: "run",
+    target: "trace",
   };
 }
 
@@ -416,13 +419,13 @@ function bestContextDrilldown({
   if (run?.commands.length) {
     const review = runReviewFocus(run.commands);
     if (review.tone === "danger" || review.tone === "attention") {
-      return { label: "Best drilldown", value: "Run", detail: review.detail, tone: review.tone === "danger" ? "error" : "attention", target: "run" };
+      return { label: "Best drilldown", value: "Trace", detail: review.detail, tone: review.tone === "danger" ? "error" : "attention", target: "trace" };
     }
   }
   if (changes?.files.length) {
     const review = changesReviewFocus(changes.files);
     if (review.tone === "danger" || review.tone === "attention") {
-      return { label: "Best drilldown", value: "Changes", detail: review.detail, tone: review.tone === "danger" ? "error" : "attention", target: "changes" };
+      return { label: "Best drilldown", value: "Files", detail: review.detail, tone: review.tone === "danger" ? "error" : "attention", target: "files" };
     }
   }
   if (contextSummary && contextSummary.compact_trigger > 0 && contextSummary.compact_percent >= 72) {
@@ -433,42 +436,66 @@ function bestContextDrilldown({
     return { label: "Best drilldown", value: "Trace", detail: taskStateFailureSummary(latest), tone: "error", target: "trace" };
   }
   if (files?.items.length) return { label: "Best drilldown", value: "Files", detail: files.summary, tone: "ready", target: "files" };
-  if (artifacts?.length) return { label: "Best drilldown", value: "Run", detail: `${artifacts.length} captured`, tone: "ready", target: "run" };
-  if (run?.commands.length) return { label: "Best drilldown", value: "Run", detail: run.summary, tone: "ready", target: "run" };
+  if (artifacts?.length) return { label: "Best drilldown", value: "Trace", detail: `${artifacts.length} captured`, tone: "ready", target: "trace" };
+  if (run?.commands.length) return { label: "Best drilldown", value: "Trace", detail: run.summary, tone: "ready", target: "trace" };
   return undefined;
 }
 
 function TaskStateCard({
   taskState,
   onSelectSection,
+  onUseAsDraft,
 }: {
   taskState?: SessionTaskStateSummary;
   onSelectSection?: (tab: WorkbenchTab) => void;
+  onUseAsDraft?: UseAsDraft;
 }) {
   if (!hasTaskState(taskState)) return null;
   const tone = taskStateTone(taskState);
+  const nextAction = taskNextAction(taskState);
   const rows = compact([
-    hasNonNormalRequestMode(taskState) ? { label: "Request mode", value: requestModeSummary(taskState) } : undefined,
-    taskState.request_source ? { label: "Request source", value: requestSourceSummary(taskState) } : undefined,
-    taskState.current_step ? { label: "Current step", value: taskState.current_step } : undefined,
-    taskState.next_step ? { label: "Next step", value: taskState.next_step } : undefined,
     taskState.verification_state && taskState.verification_state !== "unknown" ? { label: "Verification", value: verificationStateLabel(taskState.verification_state) } : undefined,
-    taskState.changed_files?.length ? { label: "Changed files", value: `${taskState.changed_files.length} ${taskState.changed_files.length === 1 ? "file" : "files"}` } : undefined,
+    shouldShowTaskModeFact(taskState) ? { label: "Mode", value: requestModeSummary(taskState) } : undefined,
+    taskState.request_source === "schedule" ? { label: "Origin", value: requestSourceSummary(taskState) } : undefined,
   ]);
   const latestFailures = [...(taskState.failed_actions ?? [])].slice(-3).reverse();
   const latestEvidence = [...(taskState.evidence ?? [])].slice(-3).reverse();
   const latestActions = [...(taskState.attempted_actions ?? [])].slice(-3).reverse();
   const changedFiles = [...(taskState.changed_files ?? [])].slice(-3).reverse();
+  const currentFailure = taskStateHasCurrentFailure(taskState);
+  const evidenceActions = taskEvidenceActions(taskState);
+  const traceEvidenceAction = evidenceActions.some((action) => action.target === "trace");
+  const filesEvidenceAction = evidenceActions.some((action) => action.target === "files");
 
   return (
     <section className="workbench-task-state" data-tone={tone} data-testid="workbench-task-state" aria-label="Task state">
       <header className="workbench-task-state-head">
         <div>
-          <span>Execution record</span>
           <strong>{taskState.objective || taskStatusLabel(taskState.status)}</strong>
         </div>
-        <b data-tone={tone}>{taskStatusLabel(taskState.status)}</b>
+        <b data-tone={tone}>{taskStateBadgeLabel(taskState)}</b>
       </header>
+      <section className="workbench-task-next" data-tone={nextAction.tone} data-testid="workbench-task-next">
+        <div>
+          <small>{nextAction.label}</small>
+          <strong>{nextAction.title}</strong>
+          {nextAction.detail ? <span>{nextAction.detail}</span> : null}
+        </div>
+        {(nextAction.target && onSelectSection) || (nextAction.draft && onUseAsDraft) ? (
+          <div className="workbench-task-next-actions">
+            {nextAction.target && onSelectSection ? (
+              <button type="button" onClick={() => nextAction.target && onSelectSection(nextAction.target)}>
+                {nextAction.actionLabel}
+              </button>
+            ) : null}
+            {nextAction.draft && onUseAsDraft ? (
+              <button type="button" onClick={() => nextAction.draft && onUseAsDraft(nextAction.draft.content, nextAction.draft.source)}>
+                {nextAction.draft.label}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
       {rows.length > 0 ? (
         <div className="workbench-task-state-grid">
           {rows.map((row) => (
@@ -479,37 +506,249 @@ function TaskStateCard({
           ))}
         </div>
       ) : null}
-      {latestFailures.length > 0 ? (
+      {evidenceActions.length > 0 ? <TaskEvidenceStrip actions={evidenceActions} onSelectSection={onSelectSection} /> : null}
+      {latestFailures.length > 0 && !currentFailure && !traceEvidenceAction ? (
         <TaskStateList
           title="Recent failed actions"
           items={latestFailures.map((item) => taskStateFailureSummary(item))}
-          actionLabel="Open trace"
-          onAction={() => onSelectSection?.("trace")}
-          tone={taskStateHasCurrentFailure(taskState) ? "error" : undefined}
+          actionLabel={nextAction.target === "trace" ? undefined : "Open trace"}
+          onAction={nextAction.target === "trace" ? undefined : () => onSelectSection?.("trace")}
         />
       ) : null}
-      {latestActions.length > 0 ? (
+      {latestActions.length > 0 && !currentFailure && !traceEvidenceAction ? (
         <TaskStateList
           title="Recent actions"
           items={latestActions.map((item) => taskStateActionSummary(item))}
         />
       ) : null}
-      {latestEvidence.length > 0 ? (
+      {latestEvidence.length > 0 && !traceEvidenceAction ? (
         <TaskStateList
           title="Evidence"
           items={latestEvidence.map((item) => taskStateEvidenceSummary(item))}
         />
       ) : null}
-      {changedFiles.length > 0 ? (
+      {changedFiles.length > 0 && !filesEvidenceAction ? (
         <TaskStateList
           title="Changed files"
           items={changedFiles.map((item) => [item.action, item.path].filter(Boolean).join(" "))}
-          actionLabel="Open changes"
-          onAction={() => onSelectSection?.("changes")}
+          actionLabel={nextAction.target === "files" ? undefined : "Open files"}
+          onAction={nextAction.target === "files" ? undefined : () => onSelectSection?.("files")}
         />
       ) : null}
     </section>
   );
+}
+
+interface TaskEvidenceAction {
+  target: WorkbenchTab;
+  label: string;
+  title: string;
+  detail?: string;
+  tone?: "ready" | "attention" | "error";
+}
+
+function TaskEvidenceStrip({
+  actions,
+  onSelectSection,
+}: {
+  actions: readonly TaskEvidenceAction[];
+  onSelectSection?: (tab: WorkbenchTab) => void;
+}) {
+  return (
+    <section className="workbench-task-evidence-strip" aria-label="Task evidence">
+      {actions.map((action) => (
+        <button
+          key={`${action.target}:${action.label}`}
+          type="button"
+          data-tone={action.tone}
+          onClick={() => onSelectSection?.(action.target)}
+        >
+          <small>{action.label}</small>
+          <strong>{action.title}</strong>
+          {action.detail ? <span>{action.detail}</span> : null}
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function taskEvidenceActions(taskState: SessionTaskStateSummary): TaskEvidenceAction[] {
+  const actions: TaskEvidenceAction[] = [];
+  const failureCount = taskState.failed_actions?.length ?? 0;
+  const attemptedCount = taskState.attempted_actions?.length ?? 0;
+  const evidenceCount = taskState.evidence?.length ?? 0;
+  const changedCount = taskState.changed_files?.length ?? 0;
+  const latestFailure = taskState.failed_actions?.at(-1);
+  const latestAction = taskState.attempted_actions?.at(-1);
+  const latestFile = taskState.changed_files?.at(-1);
+
+  if (failureCount > 0 || attemptedCount > 0 || evidenceCount > 0) {
+    actions.push({
+      target: "trace",
+      label: "Trace",
+      title: taskStateHasCurrentFailure(taskState)
+        ? `${failureCount || 1} ${failureCount === 1 ? "failure" : "failures"}`
+        : compact([
+          attemptedCount > 0 ? `${attemptedCount} ${attemptedCount === 1 ? "action" : "actions"}` : undefined,
+          evidenceCount > 0 ? `${evidenceCount} evidence` : undefined,
+        ]).join(" · "),
+      detail: latestFailure
+        ? taskStateFailureSummary(latestFailure)
+        : latestAction
+          ? taskStateActionSummary(latestAction)
+          : taskState.evidence?.at(-1)
+            ? taskStateEvidenceSummary(taskState.evidence.at(-1) as SessionTaskStateEvidence)
+            : undefined,
+      tone: taskStateHasCurrentFailure(taskState) ? "error" : failureCount > 0 ? "attention" : "ready",
+    });
+  }
+
+  if (changedCount > 0) {
+    actions.push({
+      target: "files",
+      label: "Files",
+      title: `${changedCount} changed ${changedCount === 1 ? "file" : "files"}`,
+      detail: latestFile ? [latestFile.action, latestFile.path].filter(Boolean).join(" ") : undefined,
+      tone: "ready",
+    });
+  }
+
+  if (taskState.request_source === "schedule") {
+    actions.push({
+      target: "automation",
+      label: "Automation",
+      title: requestSourceSummary(taskState) || requestModeSummary(taskState),
+      detail: requestSourceSummary(taskState) || undefined,
+      tone: "attention",
+    });
+  }
+
+  return actions.slice(0, 3);
+}
+
+interface TaskNextAction {
+  label: string;
+  title: string;
+  detail?: string;
+  tone?: "ready" | "attention" | "error";
+  target?: WorkbenchTab;
+  actionLabel?: string;
+  draft?: {
+    label: string;
+    content: string;
+    source: DraftSource;
+  };
+}
+
+function taskNextAction(taskState: SessionTaskStateSummary): TaskNextAction {
+  const question = taskState.open_questions?.at(-1)?.trim();
+  if (question) {
+    return {
+      label: "Answer needed",
+      title: summarizeTaskStateText(question) ?? "Question waiting",
+      detail: "Reply in chat before the task can continue.",
+      tone: "attention",
+      draft: {
+        label: "Draft answer",
+        content: taskAnswerDraft(taskState, question),
+        source: "answer",
+      },
+    };
+  }
+  if (taskStateHasCurrentFailure(taskState)) {
+    const failure = taskState.failed_actions?.at(-1);
+    const failureView = taskStateFailureView(failure);
+    return {
+      label: "Fix first",
+      title: failureView.title,
+      detail: failureView.detail ?? "Open Trace to inspect the failed runtime event.",
+      tone: "error",
+      target: "trace",
+      actionLabel: "Open trace",
+      draft: {
+        label: "Draft retry",
+        content: taskRetryDraft(taskState, failureView),
+        source: "retry_reply",
+      },
+    };
+  }
+  const status = taskState.status?.trim().toLowerCase();
+  if (status === "completed") {
+    const changed = taskState.changed_files?.length ?? 0;
+    return {
+      label: taskState.verification_state && taskState.verification_state !== "unknown" ? "Verified" : "Completed",
+      title: taskState.verification_state && taskState.verification_state !== "unknown" ? verificationStateLabel(taskState.verification_state) : "Task completed",
+      detail: changed > 0 ? `${changed} changed ${changed === 1 ? "file" : "files"} available in Files.` : undefined,
+      tone: "ready",
+      target: changed > 0 ? "files" : undefined,
+      actionLabel: "Open files",
+    };
+  }
+  if (taskState.next_step?.trim()) {
+    return {
+      label: "Next step",
+      title: summarizeTaskStateText(taskState.next_step) ?? "Continue task",
+      detail: taskState.current_step ? `Current: ${summarizeTaskStateText(taskState.current_step)}` : undefined,
+      tone: "attention",
+      draft: {
+        label: "Draft next",
+        content: taskNextStepDraft(taskState),
+        source: "continuation",
+      },
+    };
+  }
+  if ((taskState.changed_files?.length ?? 0) > 0) {
+    return {
+      label: "Review",
+      title: `${taskState.changed_files?.length} changed ${taskState.changed_files?.length === 1 ? "file" : "files"}`,
+      detail: taskState.changed_files?.slice(-2).map((item) => [item.action, item.path].filter(Boolean).join(" ")).join(" · "),
+      tone: "ready",
+      target: "files",
+      actionLabel: "Open files",
+    };
+  }
+  if (taskState.current_step?.trim()) {
+    return {
+      label: "In progress",
+      title: summarizeTaskStateText(taskState.current_step) ?? "Task running",
+      tone: "ready",
+    };
+  }
+  return {
+    label: "Ready",
+    title: taskStatusLabel(taskState.status),
+    detail: taskState.objective ? summarizeTaskStateText(taskState.objective) : undefined,
+    tone: taskStateTone(taskState),
+  };
+}
+
+function taskAnswerDraft(taskState: SessionTaskStateSummary, question: string): string {
+  return compact([
+    taskState.objective ? `Objective: ${taskState.objective}` : undefined,
+    "Answer the blocking question so this task can continue:",
+    question,
+    "",
+    "My answer:",
+  ]).join("\n");
+}
+
+function taskRetryDraft(taskState: SessionTaskStateSummary, failure: TaskFailureView): string {
+  return compact([
+    taskState.objective ? `Objective: ${taskState.objective}` : undefined,
+    "Retry this task after addressing the current failure.",
+    `Failure: ${failure.title}`,
+    failure.detail ? `Next: ${failure.detail}` : undefined,
+    taskState.changed_files?.length ? `Changed files: ${taskState.changed_files.slice(-3).map((item) => item.path).join(", ")}` : undefined,
+  ]).join("\n");
+}
+
+function taskNextStepDraft(taskState: SessionTaskStateSummary): string {
+  return compact([
+    taskState.objective ? `Objective: ${taskState.objective}` : undefined,
+    taskState.current_step ? `Current: ${summarizeTaskStateText(taskState.current_step)}` : undefined,
+    taskState.next_step ? `Next: ${summarizeTaskStateText(taskState.next_step)}` : undefined,
+    "Continue from this state and report the result.",
+  ]).join("\n");
 }
 
 function TaskStateList({
@@ -567,9 +806,9 @@ function hasTaskState(taskState?: SessionTaskStateSummary): taskState is Session
   );
 }
 
-function hasNonNormalRequestMode(taskState: SessionTaskStateSummary): boolean {
+function shouldShowTaskModeFact(taskState: SessionTaskStateSummary): boolean {
   const mode = taskState.request_mode?.trim().toLowerCase();
-  return Boolean(mode && mode !== "normal");
+  return Boolean(mode && mode !== "normal" && mode !== "execute_plan");
 }
 
 function requestModeSummary(taskState: SessionTaskStateSummary): string {
@@ -625,6 +864,12 @@ function taskStatusLabel(status?: string): string {
   return normalized.replace(/_/g, " ");
 }
 
+function taskStateBadgeLabel(taskState: SessionTaskStateSummary): string {
+  if (taskStateHasCurrentFailure(taskState)) return "Needs review";
+  if ((taskState.open_questions ?? []).length > 0) return "Waiting";
+  return taskStatusLabel(taskState.status);
+}
+
 function verificationStateLabel(status: string): string {
   const normalized = status.trim().toLowerCase();
   if (normalized === "last_shell_passed") return "Last shell check passed";
@@ -633,10 +878,74 @@ function verificationStateLabel(status: string): string {
 }
 
 function taskStateFailureSummary(item?: SessionTaskStateFailure): string {
-  if (!item) return "Failed action";
-  const kind = item.kinds?.[0] ? failureKindLabel(item.kinds[0]) : undefined;
-  const next = item.next ? `Next: ${summarizeTaskStateText(item.next)}` : undefined;
-  return compact([toolNameLabel(item.tool), kind, summarizeTaskStateText(item.summary), next]).join(" · ") || "Failed action";
+  const failure = taskStateFailureView(item);
+  return compact([failure.title, failure.detail]).join(" · ") || "Failed action";
+}
+
+interface TaskFailureView {
+  title: string;
+  detail?: string;
+}
+
+function taskStateFailureView(item?: SessionTaskStateFailure): TaskFailureView {
+  if (!item) return { title: "Failed action" };
+  const title = taskStateFailureTitle(item);
+  const detail = item.next ? summarizeTaskStateText(item.next) : undefined;
+  return { title, detail };
+}
+
+function taskStateFailureTitle(item: SessionTaskStateFailure): string {
+  const summary = summarizeTaskStateText(item.summary);
+  const normalizedSummary = summary?.toLowerCase() ?? "";
+  const kind = item.kinds?.[0]?.trim().toLowerCase();
+  const action = failureActionLabel(item.tool);
+
+  if (normalizedSummary.includes("context budget") || normalizedSummary.includes("context limit")) {
+    return `${action} exceeded context budget`;
+  }
+  if (kind === "test_failed") {
+    return summary ? `Test failed: ${summary}` : "Test failed";
+  }
+  if (kind === "command_failed") {
+    return summary ? `Command failed: ${summary}` : "Command failed";
+  }
+  if (kind === "timeout" || normalizedSummary.includes("timed out") || normalizedSummary.includes("timeout")) {
+    return `${action} timed out`;
+  }
+  if (kind === "network" || kind === "network_error") {
+    return `${action} hit a network error`;
+  }
+  if (kind) {
+    return `${action} failed: ${sentenceCase(failureKindLabel(kind))}`;
+  }
+  if (summary && !looksLikeRuntimeFailureSummary(summary)) {
+    return `${action} failed: ${summary}`;
+  }
+  return `${action} failed`;
+}
+
+function failureActionLabel(tool?: string): string {
+  const normalized = tool?.trim().toLowerCase();
+  if (!normalized) return "Action";
+  if (normalized === "shell") return "Command";
+  if (normalized === "browser_click") return "Browser click";
+  if (normalized === "browser_open" || normalized === "browser_navigate") return "Browser navigation";
+  if (normalized?.startsWith("browser_")) return "Browser action";
+  if (normalized === "web_search" || normalized === "search_query") return "Search";
+  return sentenceCase(normalized.replace(/_/g, " "));
+}
+
+function looksLikeRuntimeFailureSummary(summary: string): boolean {
+  const normalized = summary.toLowerCase();
+  return normalized.includes("tool failed")
+    || normalized.includes("no-tool answer requested")
+    || normalized.includes("call_")
+    || normalized.includes("tool result context");
+}
+
+function sentenceCase(value: string): string {
+  const cleaned = value.trim();
+  return cleaned ? `${cleaned.charAt(0).toUpperCase()}${cleaned.slice(1)}` : cleaned;
 }
 
 function taskStateActionSummary(item: SessionTaskStateAction): string {
@@ -767,9 +1076,9 @@ function taskSourceLinks(items: readonly WorkbenchContextEvidenceItem[], taskSta
   if (!hasTaskState(taskState)) return links;
 
   const changedFileCount = taskState.changed_files?.length ?? 0;
-  if (changedFileCount > 0 && !hasSourceTarget(links, "changes")) {
+  if (changedFileCount > 0 && !hasSourceTarget(links, "files")) {
     links.push({
-      target: "changes",
+      target: "files",
       label: "Changed files",
       summary: `${changedFileCount} ${changedFileCount === 1 ? "file" : "files"}`,
       detail: taskState.changed_files?.slice(-3).map((item) => [item.action, item.path].filter(Boolean).join(" ")).join(" · ") || "Task state recorded changed files.",

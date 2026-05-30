@@ -9,7 +9,10 @@ describe("SessionSkillsPanel", () => {
   it("lists skill titles and summaries, then loads full content on expand", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     const onReadSkill = vi.fn(async () => ({
       name: "coding_repair_workflow",
       description: "Repair code by reproducing failures first.",
@@ -39,46 +42,166 @@ describe("SessionSkillsPanel", () => {
     );
 
     await user.click(screen.getByText("1 skill"));
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Repair code by reproducing failures first.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "coding_repair_workflow",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "Repair code by reproducing failures first.",
+    );
     expect(screen.queryByTestId("session-skills-coverage")).toBeNull();
     expect(screen.queryByTestId("session-skills-dashboard")).toBeNull();
-    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("Activation test");
-    expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
-    await user.click(within(screen.getByTestId("session-skills-activation")).getByText("Activation test"));
-    await user.type(screen.getByPlaceholderText("Paste a task to see which skills would activate"), "repair the failing workspace tests");
-    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("1 match");
-    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent("trigger: repair");
-    await user.click(within(screen.getByTestId("session-skills-activation")).getByRole("button", { name: /coding_repair_workflow/ }));
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("coding_repair_workflow");
-    expect(screen.getByTestId("skill-activation-coding_repair_workflow")).toHaveTextContent("Triggers: fix, repair");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
-    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("embed:skillembed:skill");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("coding_repair_workflow");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("2 triggers · 1 tool");
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent(
+      "Activation probe",
+    );
+    expect(screen.getByTestId("session-skills-panel")).not.toHaveTextContent(
+      "1 built in",
+    );
+    await user.type(
+      screen.getByPlaceholderText("e.g. repair failing workspace tests"),
+      "repair the failing workspace tests",
+    );
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent(
+      "1 match",
+    );
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent(
+      "trigger: repair",
+    );
+    await user.click(
+      within(screen.getByTestId("session-skills-activation")).getByRole(
+        "button",
+        { name: /coding_repair_workflow/ },
+      ),
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "coding_repair_workflow",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "2 triggers",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "1 tool",
+    );
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent(
+      "embed:skillembed:skill",
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "coding_repair_workflow",
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "2 triggers · 1 tool",
+    );
+    expect(screen.getByTestId("session-skills-focus")).not.toHaveTextContent(
+      "content on demand",
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "SKILL.md",
+    );
     expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("fix");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("workspace");
-    expect(within(screen.getByTestId("session-skills-focus")).queryByRole("button", { name: "Start from skill" })).toBeNull();
-    expect(within(screen.getByTestId("session-skills-focus")).queryByRole("button", { name: "Revise skill" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Tool-bound\s+1/ }));
-    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
-    await user.click(screen.getAllByRole("button", { name: "Clear" }).at(-1)!);
-    await user.click(within(screen.getByRole("group", { name: "Filter skills" })).getByRole("button", { name: /Custom\s+0/ }));
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "workspace",
+    );
+    expect(screen.getByLabelText("Skill activation rules")).toHaveTextContent(
+      "Activation",
+    );
+    expect(screen.getByLabelText("Skill activation rules")).toHaveTextContent(
+      "fix",
+    );
+    expect(screen.getByLabelText("Skill activation rules")).toHaveTextContent(
+      "repair",
+    );
+    expect(screen.getByLabelText("Skill activation rules")).toHaveTextContent(
+      "workspace",
+    );
+    await user.click(
+      within(screen.getByTestId("session-skills-activation")).getByRole(
+        "button",
+        { name: "Clear" },
+      ),
+    );
+    await user.type(
+      screen.getByPlaceholderText("e.g. repair failing workspace tests"),
+      "release audit",
+    );
+    expect(screen.getByTestId("session-skills-activation")).toHaveTextContent(
+      "0 matches",
+    );
+    expect(
+      screen.getByTestId("session-skills-activation-diagnostics"),
+    ).toHaveTextContent("No automatic match");
+    expect(
+      screen.getByTestId("session-skills-activation-diagnostics"),
+    ).toHaveTextContent("coding_repair_workflow");
+    expect(
+      screen.getByTestId("session-skills-activation-diagnostics"),
+    ).toHaveTextContent("No trigger matched: fix, repair.");
+    expect(
+      within(screen.getByTestId("session-skills-focus")).queryByRole("button", {
+        name: "Start from skill",
+      }),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId("session-skills-focus")).queryByRole("button", {
+        name: "Revise skill",
+      }),
+    ).toBeNull();
+    await user.click(
+      within(screen.getByRole("group", { name: "Filter skills" })).getByRole(
+        "button",
+        { name: "Built in: 1" },
+      ),
+    );
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent(
+      "1 skill",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "coding_repair_workflow",
+    );
+    await user.click(
+      within(screen.getByTestId("session-skills-toolbar")).getByRole("button", {
+        name: "Clear",
+      }),
+    );
     expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
 
-    await user.click(within(screen.getByTestId("session-skills-list")).getByText("coding_repair_workflow"));
+    await user.click(
+      within(screen.getByTestId("session-skills-list")).getByText(
+        "coding_repair_workflow",
+      ),
+    );
 
     expect(onReadSkill).toHaveBeenCalledWith("coding_repair_workflow");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Origin: Built-in library");
-    expect(await within(screen.getByTestId("session-skills-list")).findByText(/Reproduce first/)).toBeInTheDocument();
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "Built-in library",
+    );
+    expect(
+      await within(screen.getByTestId("session-skills-focus")).findByText(
+        /Reproduce first/,
+      ),
+    ).toBeInTheDocument();
 
-    expect(within(screen.getByTestId("session-skills-list")).queryByRole("button", { name: "Copy details" })).toBeNull();
-    expect(within(screen.getByTestId("session-skills-list")).queryByRole("button", { name: "Start from skill" })).toBeNull();
-    expect(within(screen.getByTestId("session-skills-list")).queryByRole("button", { name: "Revise skill" })).toBeNull();
-    await user.click(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Copy" }));
-    expect(writeText).toHaveBeenCalledWith("AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.");
+    expect(
+      within(screen.getByTestId("session-skills-list")).queryByRole("button", {
+        name: "Copy details",
+      }),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId("session-skills-list")).queryByRole("button", {
+        name: "Start from skill",
+      }),
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId("session-skills-list")).queryByRole("button", {
+        name: "Revise skill",
+      }),
+    ).toBeNull();
+    await user.click(
+      within(screen.getByTestId("session-skills-focus")).getByRole("button", {
+        name: "Copy",
+      }),
+    );
+    expect(writeText).toHaveBeenCalledWith(
+      "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.",
+    );
   });
 
   it("submits a manually entered skill", async () => {
@@ -91,15 +214,28 @@ describe("SessionSkillsPanel", () => {
       body_bytes: request.body.length,
       body: request.body,
     }));
-    render(<SessionSkillsPanel skills={[]} installEnabled onReadSkill={vi.fn()} onInstallSkill={onInstallSkill} />);
+    render(
+      <SessionSkillsPanel
+        skills={[]}
+        installEnabled
+        onReadSkill={vi.fn()}
+        onInstallSkill={onInstallSkill}
+      />,
+    );
 
     await user.click(screen.getByText("No reusable workflows"));
     await user.click(screen.getByRole("button", { name: "Add skill" }));
     await user.type(screen.getByLabelText("Name"), "manual_demo");
     await user.type(screen.getByLabelText("Summary"), "Manual workflow.");
     await user.type(screen.getByLabelText("Triggers"), "manual demo");
-    await user.type(screen.getByLabelText("Required tools"), "workspace, browser");
-    await user.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.");
+    await user.type(
+      screen.getByLabelText("Required tools"),
+      "workspace, browser",
+    );
+    await user.type(
+      screen.getByLabelText("Full content"),
+      "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.",
+    );
     await user.click(screen.getByRole("button", { name: "Save skill" }));
 
     expect(onInstallSkill).toHaveBeenCalledWith({
@@ -110,11 +246,111 @@ describe("SessionSkillsPanel", () => {
       required_tools: ["workspace", "browser"],
     });
     expect(screen.getByRole("status")).toHaveTextContent("manual_demo saved.");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("manual_demo");
-    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent("Manual workflow.");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_demo");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Manual workflow.");
-    expect(within(screen.getByTestId("session-skills-list")).getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "manual_demo",
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "Manual workflow.",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "manual_demo",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "Manual workflow.",
+    );
+    expect(
+      within(screen.getByTestId("session-skills-focus")).getByRole("button", {
+        name: "Edit skill",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("clones the selected skill into an editable save form", async () => {
+    const user = userEvent.setup();
+    const onReadSkill = vi.fn(async () => ({
+      name: "coding_repair_workflow",
+      description: "Repair code by reproducing failures first.",
+      source: "embed:skill",
+      runtime: false,
+      triggers: ["fix", "repair"],
+      required_tools: ["workspace"],
+      body_bytes: 96,
+      body: "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.",
+    }));
+    const onInstallSkill = vi.fn(async (request) => ({
+      name: request.name,
+      description: request.description,
+      source: "user",
+      runtime: true,
+      triggers: request.triggers,
+      required_tools: request.required_tools,
+      body_bytes: request.body.length,
+      body: request.body,
+    }));
+    render(
+      <SessionSkillsPanel
+        defaultOpen
+        skills={[
+          {
+            name: "coding_repair_workflow",
+            description: "Repair code by reproducing failures first.",
+            source: "embed:skill",
+            runtime: false,
+            triggers: ["fix", "repair"],
+            required_tools: ["workspace"],
+            body_preview: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+            body_bytes: 96,
+          },
+        ]}
+        installEnabled
+        onReadSkill={onReadSkill}
+        onInstallSkill={onInstallSkill}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Clone skill" }));
+    expect(onReadSkill).toHaveBeenCalledWith("coding_repair_workflow");
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Cloned coding_repair_workflow",
+    );
+    expect(screen.getByLabelText("Name")).toHaveValue(
+      "coding_repair_workflow_copy",
+    );
+    expect(screen.getByLabelText("Summary")).toHaveValue(
+      "Repair code by reproducing failures first.",
+    );
+    expect(screen.getByLabelText("Triggers")).toHaveValue("fix, repair");
+    expect(screen.getByLabelText("Required tools")).toHaveValue("workspace");
+    expect(screen.getByLabelText("Full content")).toHaveValue(
+      "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.",
+    );
+    expect(screen.getByLabelText("Unsaved skill editor")).toHaveTextContent(
+      "coding_repair_workflow_copy/SKILL.md",
+    );
+    expect(screen.getByLabelText("Unsaved skill editor")).toHaveTextContent(
+      "Unsaved",
+    );
+    expect(
+      screen.getAllByText("coding_repair_workflow_copy/SKILL.md"),
+    ).toHaveLength(2);
+    expect(screen.getByText("2 lines · 60 chars")).toBeInTheDocument();
+
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "coding_repair_project");
+    expect(screen.getByLabelText("Unsaved skill editor")).toHaveTextContent(
+      "coding_repair_project/SKILL.md",
+    );
+    expect(screen.getAllByText("coding_repair_project/SKILL.md")).toHaveLength(
+      2,
+    );
+    await user.click(screen.getByRole("button", { name: "Save skill" }));
+    expect(onInstallSkill).toHaveBeenCalledWith({
+      name: "coding_repair_project",
+      description: "Repair code by reproducing failures first.",
+      body: "AFFENT ACTIVE SKILL: coding_repair_workflow\nReproduce first.",
+      triggers: ["fix", "repair"],
+      required_tools: ["workspace"],
+    });
   });
 
   it("edits and deletes runtime skills directly from the panel", async () => {
@@ -131,39 +367,54 @@ describe("SessionSkillsPanel", () => {
     }));
     const onDeleteSkill = vi.fn(async (_name: string) => undefined);
     function Harness() {
-      const [skills, setSkills] = useState<SessionSkillInfo[]>([{
-        name: "runtime_demo",
-        description: "Original workflow.",
-        source: "file:///account-skills/runtime_demo/SKILL.md",
-        runtime: true,
-        triggers: ["runtime demo"],
-        required_tools: ["workspace"],
-        body_bytes: 58,
-        body: "AFFENT ACTIVE SKILL: runtime_demo\nUse the original workflow.",
-      }]);
+      const [skills, setSkills] = useState<SessionSkillInfo[]>([
+        {
+          name: "runtime_demo",
+          description: "Original workflow.",
+          source: "file:///account-skills/runtime_demo/SKILL.md",
+          runtime: true,
+          triggers: ["runtime demo"],
+          required_tools: ["workspace"],
+          body_bytes: 58,
+          body: "AFFENT ACTIVE SKILL: runtime_demo\nUse the original workflow.",
+        },
+      ]);
       return (
         <SessionSkillsPanel
           defaultOpen
           skills={skills}
           installEnabled
-          onReadSkill={async (name) => skills.find((skill) => skill.name === name)!}
+          onReadSkill={async (name) =>
+            skills.find((skill) => skill.name === name)!
+          }
           onInstallSkill={async (request) => {
             const installed = await onInstallSkill(request);
-            setSkills((current) => [installed, ...current.filter((skill) => skill.name !== installed.name)]);
+            setSkills((current) => [
+              installed,
+              ...current.filter((skill) => skill.name !== installed.name),
+            ]);
             return installed;
           }}
           onDeleteSkill={async (name) => {
             await onDeleteSkill(name);
-            setSkills((current) => current.filter((skill) => skill.name !== name));
+            setSkills((current) =>
+              current.filter((skill) => skill.name !== name),
+            );
           }}
         />
       );
     }
     render(<Harness />);
 
-    await user.click(within(screen.getByTestId("session-skills-list")).getByText("runtime_demo"));
-    await user.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.getByRole("status")).toHaveTextContent("Editing runtime_demo");
+    await user.click(
+      within(screen.getByTestId("session-skills-list")).getByText(
+        "runtime_demo",
+      ),
+    );
+    await user.click(screen.getByRole("button", { name: "Edit skill" }));
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Editing runtime_demo",
+    );
     expect(screen.getByLabelText("Name")).toHaveValue("runtime_demo");
     expect(screen.getByLabelText("Summary")).toHaveValue("Original workflow.");
     expect(screen.getByLabelText("Triggers")).toHaveValue("runtime demo");
@@ -171,7 +422,10 @@ describe("SessionSkillsPanel", () => {
     await user.clear(screen.getByLabelText("Summary"));
     await user.type(screen.getByLabelText("Summary"), "Updated workflow.");
     await user.clear(screen.getByLabelText("Full content"));
-    await user.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: runtime_demo\nUse the updated workflow.");
+    await user.type(
+      screen.getByLabelText("Full content"),
+      "AFFENT ACTIVE SKILL: runtime_demo\nUse the updated workflow.",
+    );
     await user.click(screen.getByRole("button", { name: "Update skill" }));
 
     expect(onInstallSkill).toHaveBeenCalledWith({
@@ -182,29 +436,52 @@ describe("SessionSkillsPanel", () => {
       required_tools: ["workspace"],
     });
     expect(screen.getByRole("status")).toHaveTextContent("runtime_demo saved.");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Updated workflow.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "Updated workflow.",
+    );
 
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(screen.getByRole("button", { name: "Confirm delete" }));
 
     expect(onDeleteSkill).toHaveBeenCalledWith("runtime_demo");
-    expect(screen.getByRole("status")).toHaveTextContent("runtime_demo deleted.");
-    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("runtime_demo");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "runtime_demo deleted.",
+    );
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent(
+      "runtime_demo",
+    );
   });
 
   it("keeps the manual skill form populated and reports install failures", async () => {
     const user = userEvent.setup();
-    const onInstallSkill = vi.fn().mockRejectedValue(new Error("skill directory is read-only"));
-    render(<SessionSkillsPanel skills={[]} installEnabled onReadSkill={vi.fn()} onInstallSkill={onInstallSkill} defaultOpen />);
+    const onInstallSkill = vi
+      .fn()
+      .mockRejectedValue(new Error("skill directory is read-only"));
+    render(
+      <SessionSkillsPanel
+        skills={[]}
+        installEnabled
+        onReadSkill={vi.fn()}
+        onInstallSkill={onInstallSkill}
+        defaultOpen
+      />,
+    );
 
     await user.click(screen.getByRole("button", { name: "Add skill" }));
     await user.type(screen.getByLabelText("Name"), "manual_demo");
-    await user.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.");
+    await user.type(
+      screen.getByLabelText("Full content"),
+      "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.",
+    );
     await user.click(screen.getByRole("button", { name: "Save skill" }));
 
-    expect(screen.getByRole("status")).toHaveTextContent("skill directory is read-only");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "skill directory is read-only",
+    );
     expect(screen.getByLabelText("Name")).toHaveValue("manual_demo");
-    expect(screen.getByLabelText("Full content")).toHaveValue("AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.");
+    expect(screen.getByLabelText("Full content")).toHaveValue(
+      "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.",
+    );
   });
 
   it("keeps empty skills state factual and avoids unusable search", () => {
@@ -212,8 +489,10 @@ describe("SessionSkillsPanel", () => {
 
     const panel = screen.getByTestId("session-skills-panel");
     expect(panel).toHaveTextContent("No reusable workflows");
-    expect(panel).toHaveTextContent("No reusable workflows listed.");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills returned by this runtime.");
+    expect(panel).not.toHaveTextContent("No reusable workflows listed.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "No skills returned by this runtime.",
+    );
     expect(screen.queryByPlaceholderText("Search title or summary")).toBeNull();
     expect(panel).not.toHaveTextContent("Built-in workflows ready");
     expect(panel).not.toHaveTextContent("No matching skills.");
@@ -222,9 +501,19 @@ describe("SessionSkillsPanel", () => {
 
   it("keeps an empty installable skills state tied to the save action", async () => {
     const user = userEvent.setup();
-    render(<SessionSkillsPanel skills={[]} defaultOpen installEnabled onReadSkill={vi.fn()} onInstallSkill={vi.fn()} />);
+    render(
+      <SessionSkillsPanel
+        skills={[]}
+        defaultOpen
+        installEnabled
+        onReadSkill={vi.fn()}
+        onInstallSkill={vi.fn()}
+      />,
+    );
 
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No reusable workflows saved yet.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "No reusable workflows saved yet.",
+    );
     await user.click(screen.getByRole("button", { name: "Add skill" }));
     expect(screen.getByLabelText("Name")).toBeVisible();
   });
@@ -246,11 +535,20 @@ describe("SessionSkillsPanel", () => {
       />,
     );
 
-    expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 built in");
-    await user.type(screen.getByPlaceholderText("Search title or summary"), "browser");
+    expect(screen.getByTestId("session-skills-panel")).not.toHaveTextContent(
+      "1 built in",
+    );
+    await user.type(
+      screen.getByPlaceholderText("Search title or summary"),
+      "browser",
+    );
 
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No matching skills.");
-    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("No skills returned by this runtime.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "No matching skills.",
+    );
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent(
+      "No skills returned by this runtime.",
+    );
   });
 
   it("shows why a skill matched search and clears the filter", async () => {
@@ -289,12 +587,23 @@ describe("SessionSkillsPanel", () => {
       />,
     );
 
-    await user.type(screen.getByPlaceholderText("Search title or summary"), "workspace");
+    await user.type(
+      screen.getByPlaceholderText("Search title or summary"),
+      "workspace",
+    );
 
-    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent('1 skill matching "workspace"');
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
-    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("browser_source_workflow");
-    expect(screen.getByTestId("skill-search-matches-coding_repair_workflow")).toHaveTextContent("Tool: workspace");
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent(
+      '1 skill matching "workspace"',
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "coding_repair_workflow",
+    );
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent(
+      "browser_source_workflow",
+    );
+    expect(
+      screen.getByTestId("skill-search-matches-coding_repair_workflow"),
+    ).toHaveTextContent("Tool: workspace");
     expect(onReadSkill).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Load full content" }));
@@ -303,7 +612,9 @@ describe("SessionSkillsPanel", () => {
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
     expect(screen.queryByTestId("session-skills-search-count")).toBeNull();
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("browser_source_workflow");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "browser_source_workflow",
+    );
   });
 
   it("filters maintenance gaps and drafts a skill from an empty search", async () => {
@@ -335,45 +646,141 @@ describe("SessionSkillsPanel", () => {
 
     const filterGroup = screen.getByRole("group", { name: "Filter skills" });
     expect(screen.queryByTestId("session-skills-dashboard")).toBeNull();
-    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Skill maintenance");
-    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Manual-only 1");
-    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent("Needs summary 1");
-    await user.click(within(filterGroup).getByRole("button", { name: /Manual-only\s+1/ }));
-    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent("1 skill");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_workflow");
-    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("browser_source_workflow");
+    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent(
+      "Fix manual-only 1",
+    );
+    expect(screen.getByTestId("session-skills-coverage")).toHaveTextContent(
+      "Add summaries 1",
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "manual_workflow",
+    );
+    expect(
+      within(screen.getByTestId("session-skills-list")).getAllByRole(
+        "button",
+      )[0],
+    ).toHaveTextContent("manual_workflow");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "No trigger",
+    );
+    await user.click(
+      within(screen.getByTestId("session-skills-coverage")).getByRole(
+        "button",
+        { name: "Fix manual-only 1" },
+      ),
+    );
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent(
+      "1 skill",
+    );
+    expect(screen.getByTestId("session-skills-focus")).toHaveTextContent(
+      "manual_workflow",
+    );
+    expect(screen.getByTestId("session-skills-focus-review")).toHaveTextContent(
+      "Manual only",
+    );
+    expect(screen.getByTestId("session-skills-focus-review")).toHaveTextContent(
+      "Add triggers so Affent can select this workflow automatically.",
+    );
+    expect(screen.getByTestId("session-skills-focus-review")).toHaveTextContent(
+      "Missing summary",
+    );
+    expect(screen.getByTestId("session-skills-focus-review")).toHaveTextContent(
+      "Add a short summary so humans can scan the workflow list.",
+    );
+    await user.type(
+      screen.getByPlaceholderText("e.g. repair failing workspace tests"),
+      "release audit",
+    );
+    expect(
+      screen.getByTestId("session-skills-activation-diagnostics"),
+    ).toHaveTextContent("manual_workflow");
+    expect(
+      screen.getByTestId("session-skills-activation-diagnostics"),
+    ).toHaveTextContent(
+      "Manual only; required tools do not auto-activate (workspace).",
+    );
+    await user.click(
+      within(filterGroup).getByRole("button", { name: "Review: 1" }),
+    );
+    expect(screen.getByTestId("session-skills-search-count")).toHaveTextContent(
+      "1 skill",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "manual_workflow",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "Summary missing",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "No trigger",
+    );
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent(
+      "browser_source_workflow",
+    );
 
-    await user.click(within(filterGroup).getByRole("button", { name: /Needs summary\s+1/ }));
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("manual_workflow");
+    await user.click(
+      within(filterGroup).getByRole("button", { name: "Review: 1" }),
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "manual_workflow",
+    );
 
-    await user.type(screen.getByPlaceholderText("Search title or summary"), "release audit");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No matching skills.");
-    await user.click(screen.getByRole("button", { name: "Draft matching skill" }));
+    await user.type(
+      screen.getByPlaceholderText("Search title or summary"),
+      "release audit",
+    );
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent(
+      "No matching skills.",
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Draft matching skill" }),
+    );
 
     expect(screen.getByRole("status")).toHaveTextContent("Draft release_audit");
     expect(screen.getByLabelText("Name")).toHaveValue("release_audit");
-    expect(screen.getByLabelText("Summary")).toHaveValue("Reusable workflow for release audit");
+    expect(screen.getByLabelText("Summary")).toHaveValue(
+      "Reusable workflow for release audit",
+    );
     expect(screen.getByLabelText("Triggers")).toHaveValue("release audit");
     expect(screen.getByRole("button", { name: "Save skill" })).toBeDisabled();
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
     const onUseAsDraft = vi.fn();
-    const diagnostic = "API route /v1/skills returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
-    render(<SessionSkillsPanel error={diagnostic} onUseAsDraft={onUseAsDraft} />);
+    const diagnostic =
+      "API route /v1/skills returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
+    render(
+      <SessionSkillsPanel error={diagnostic} onUseAsDraft={onUseAsDraft} />,
+    );
 
-    const summary = within(screen.getByTestId("session-skills-panel")).getByText("Skills unavailable").closest("summary");
-    expect(summary).toHaveTextContent("Skills API failed: API route /v1/skills returned the WebUI app shell.");
+    const summary = within(screen.getByTestId("session-skills-panel"))
+      .getByText("Skills unavailable")
+      .closest("summary");
+    expect(summary).toHaveTextContent(
+      "Skills API failed: API route /v1/skills returned the WebUI app shell.",
+    );
     expect(summary).not.toHaveTextContent("Use the current affentserve build");
 
     await userEvent.click(screen.getByText("Skills unavailable"));
     expect(screen.getByRole("alert")).toHaveTextContent(diagnostic);
-    expect(screen.getByTestId("session-skills-fallback")).toHaveTextContent("Create a reusable workflow in chat");
+    expect(screen.getByTestId("session-skills-fallback")).toHaveTextContent(
+      "Create a reusable workflow in chat",
+    );
     await userEvent.click(screen.getByRole("button", { name: "Create skill" }));
     await userEvent.type(screen.getByLabelText("Name"), "trace_debugging");
-    await userEvent.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: trace_debugging\nFilter failures first.");
-    await userEvent.click(screen.getByRole("button", { name: "Prepare skill draft" }));
-    expect(onUseAsDraft).toHaveBeenCalledWith(expect.stringContaining("trace_debugging"), "skill");
-    expect(screen.getByRole("status")).toHaveTextContent("trace_debugging draft prepared.");
+    await userEvent.type(
+      screen.getByLabelText("Full content"),
+      "AFFENT ACTIVE SKILL: trace_debugging\nFilter failures first.",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Prepare skill draft" }),
+    );
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      expect.stringContaining("trace_debugging"),
+      "skill",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "trace_debugging draft prepared.",
+    );
   });
 });

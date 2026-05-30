@@ -71,7 +71,7 @@ describe("automationContext view model", () => {
       { state: "idle" },
     )).toEqual({
       title: "Loop running · Timer failed",
-      detail: "LOOP.md is active; use chat for durable protocol changes. · 1 timer error: provider unavailable",
+      detail: "1 timer error: provider unavailable",
     });
   });
 

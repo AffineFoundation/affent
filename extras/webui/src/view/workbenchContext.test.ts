@@ -44,7 +44,7 @@ describe("workbenchContext", () => {
     };
 
     expect(workbenchContextSummary(overview, true)).toBe("Review needed");
-    expect(buildWorkbenchContextEvidence(input).map((item) => [item.label, item.target])).toEqual([["Changes", "changes"], ["Run", "run"], ["Artifacts", "run"]]);
+    expect(buildWorkbenchContextEvidence(input).map((item) => [item.label, item.target])).toEqual([["Changes", "files"], ["Run", "trace"], ["Artifacts", "trace"]]);
     expect(workbenchContextEvidenceText(input)).toContain("Next step: update payment route");
     expect(workbenchContextEvidenceText(input)).toContain("Task request mode: execute_plan");
     expect(workbenchContextEvidenceText(input)).toContain("Task request source: schedule · checkin · sched_checkout");
@@ -101,9 +101,11 @@ describe("workbenchContext", () => {
       expect.objectContaining({ label: "Subagent tokens", value: "0.0004M tokens (0.0003M in / 0.0001M out)" }),
     ]));
     expect(usage.trend).toEqual([
-      { label: "Turn 1", value: 1540, valueLabel: "0.0015M tokens", detail: "t1" },
+      { label: "Turn 1", value: 1540, inputTokens: 1200, outputTokens: 340, valueLabel: "0.0015M tokens", detail: "t1" },
     ]);
     expect(usage.totalTokens).toBe(1540);
+    expect(usage.inputTokens).toBe(1200);
+    expect(usage.outputTokens).toBe(340);
     expect(workbenchContextUsageSummary(usage)).toBe("0.0015M tokens");
     expect(workbenchContextEvidenceText(input)).toContain("Workspace path: /home/claudeuser/work/affent");
     expect(workbenchContextEvidenceText(input)).toContain("Session tokens: 0.0015M tokens (0.0012M in / 0.0003M out)");
@@ -127,7 +129,7 @@ describe("workbenchContext", () => {
       { label: "Session tokens", value: "0.0025M tokens (0.0020M in / 0.0005M out)", detail: "4 turns from session index" },
     ]);
     expect(usage.trend).toEqual([
-      { label: "4 turns", value: 2500, valueLabel: "0.0025M tokens", detail: "from session index" },
+      { label: "4 turns", value: 2500, inputTokens: 2000, outputTokens: 500, valueLabel: "0.0025M tokens", detail: "from session index" },
     ]);
     expect(usage.totalTokens).toBe(2500);
   });
@@ -190,8 +192,12 @@ describe("workbenchContext", () => {
   it("builds the attached chat summary from session truth", () => {
     const usage = {
       totalTokens: 2500,
+      inputTokens: 2000,
+      outputTokens: 500,
+      latestTurnInputTokens: 2000,
+      latestTurnOutputTokens: 500,
       trend: [
-        { label: "4 turns", value: 2500, valueLabel: "0.0025M tokens", detail: "from session index" },
+        { label: "4 turns", value: 2500, inputTokens: 2000, outputTokens: 500, valueLabel: "0.0025M tokens", detail: "from session index" },
       ],
       items: [
         { label: "Session tokens", value: "0.0025M tokens (0.0020M in / 0.0005M out)", detail: "4 turns from session index" },

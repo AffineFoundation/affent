@@ -4,10 +4,16 @@ export function CopyButton({
   label,
   value,
   className = "node-action",
+  displayLabel,
+  title,
+  icon,
 }: {
   label: string;
   value: string;
   className?: string;
+  displayLabel?: string;
+  title?: string;
+  icon?: string;
 }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const resetTimer = useRef<number | undefined>(undefined);
@@ -32,13 +38,22 @@ export function CopyButton({
     <button
       type="button"
       className={className}
+      aria-label={displayLabel || icon ? label : undefined}
       data-copy-state={state}
+      data-icon={icon}
       disabled={value.length === 0}
+      title={title ?? label}
       onClick={() => void copy()}
     >
-      {state === "copied" ? "Copied" : state === "failed" ? "Copy failed" : label}
+      {icon ? <span className="visually-hidden">{copyButtonText(state, label, displayLabel)}</span> : copyButtonText(state, label, displayLabel)}
     </button>
   );
+}
+
+function copyButtonText(state: "idle" | "copied" | "failed", label: string, displayLabel: string | undefined): string {
+  if (state === "copied") return displayLabel ? "OK" : "Copied";
+  if (state === "failed") return displayLabel ? "!" : "Copy failed";
+  return displayLabel ?? label;
 }
 
 async function writeClipboard(value: string): Promise<void> {

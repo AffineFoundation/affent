@@ -61,20 +61,21 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("4 entries");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("shared user");
     expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
-    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Maintenance");
-    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Verify latest write");
-    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Replaced · memory:research");
-    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("4 entries · 104/7975 chars · Shared user + session");
+    expect(screen.queryByTestId("session-memory-maintenance")).toBeNull();
+    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Ready · 4 entries in 3 buckets · 104/7975 chars");
     await user.click(within(screen.getByTestId("session-memory-toolbar")).getByRole("button", { name: "Copy snapshot" }));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Memory snapshot evidence"));
     expect(within(screen.getByTestId("session-memory-toolbar")).queryByRole("button", { name: "Find candidates" })).toBeNull();
     expect(within(screen.getByTestId("session-memory-toolbar")).queryByRole("button", { name: "Review snapshot" })).toBeNull();
-    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest write");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
-    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:research");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("taostats pages require browser network evidence");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("research");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("Topic memory");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("Scope");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("Session topic");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("Capacity");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("55/4400 chars · 1%");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("taostats pages are dynamic");
     expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("CoinGecko has API fallback");
     expect(within(screen.getByTestId("session-memory-latest")).queryByRole("button", { name: "Copy update evidence" })).toBeNull();
@@ -83,6 +84,12 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("research");
     expect(screen.getByTestId("memory-bucket-preview-memory-research")).toHaveTextContent("taostats pages are dynamic");
+    const researchBucket = screen.getByTestId("memory-bucket-preview-memory-research").closest("button");
+    expect(researchBucket).not.toBeNull();
+    expect(researchBucket!).toHaveTextContent("topic");
+    expect(researchBucket!).toHaveTextContent("2 entries");
+    expect(researchBucket!).toHaveTextContent("1%");
+    expect(researchBucket!).not.toHaveTextContent("55/4400 chars");
 
     await user.type(screen.getByPlaceholderText("Search entries or topics"), "taostats");
 
@@ -97,25 +104,29 @@ describe("SessionMemoryPanel", () => {
 
     expect(within(list).queryByRole("button", { name: "Copy details" })).toBeNull();
     expect(within(list).queryByRole("button", { name: "Start from memory" })).toBeNull();
-    await user.click(within(list).getByRole("button", { name: "Copy entries" }));
+    await user.click(within(screen.getByTestId("session-memory-focus")).getByRole("button", { name: "Copy entries" }));
     expect(writeText).toHaveBeenCalledWith("taostats pages are dynamic\n\nCoinGecko has API fallback");
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.queryByTestId("session-memory-search-count")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /User\s+1/ }));
+    const filters = screen.getByRole("group", { name: "Filter memory buckets" });
+    await user.click(within(filters).getByRole("button", { name: /User\s+1/ }));
     expect(screen.getByTestId("session-memory-search-count")).toHaveTextContent("1 bucket");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("prefers concise reports");
     expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("project runs in containers");
     await user.click(screen.getByRole("button", { name: "Clear" }));
-    await user.click(screen.getByRole("button", { name: /Session\s+2/ }));
+    await user.click(within(filters).getByRole("button", { name: /Session\s+2/ }));
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("research");
     expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("prefers concise reports");
     await user.click(screen.getByRole("button", { name: "Clear" }));
 
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic"), "research");
+    expect(screen.getByTestId("session-memory-editor-meta")).toHaveTextContent("memory:research");
     await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "CoinGecko pages require a browser fallback.");
+    expect(screen.getByTestId("session-memory-editor-meta")).toHaveTextContent("1 line");
+    expect(screen.getByTestId("session-memory-editor-meta")).toHaveTextContent("43 chars");
     await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Prepare memory draft" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [
@@ -127,7 +138,7 @@ describe("SessionMemoryPanel", () => {
       ].join("\n"),
       "memory",
     );
-  });
+  }, 10_000);
 
   it("saves memory directly when the runtime supports memory writes", async () => {
     const user = userEvent.setup();
@@ -161,6 +172,58 @@ describe("SessionMemoryPanel", () => {
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Content")).toHaveValue("");
   });
 
+  it("opens add memory with the selected bucket as the write target", async () => {
+    const user = userEvent.setup();
+    const onAddMemory = vi.fn(async () => ({ session_id: "s1", has_memory: true, topics: [] }));
+    render(
+      <SessionMemoryPanel
+        defaultOpen
+        onAddMemory={onAddMemory}
+        memory={{
+          session_id: "s1",
+          has_memory: true,
+          topics: [
+            {
+              target: "memory",
+              topic: "project",
+              entries: ["Use Vite for WebUI development."],
+              entry_count: 1,
+              chars_used: 30,
+              chars_limit: 4400,
+              percent: 1,
+            },
+            {
+              target: "memory",
+              topic: "research",
+              entries: ["CoinGecko pages require browser fallback."],
+              entry_count: 1,
+              chars_used: 40,
+              chars_limit: 4400,
+              percent: 1,
+            },
+          ],
+        }}
+      />,
+    );
+
+    await user.click(within(screen.getByTestId("session-memory-list")).getByText("project"));
+    await user.click(screen.getByText("Add to project"));
+    expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic")).toHaveValue("project");
+    expect(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: /Session/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByTestId("session-memory-editor-meta")).toHaveTextContent("memory:project");
+    expect(screen.getByTestId("session-memory-editor-meta")).toHaveTextContent("0 lines · 0 chars");
+
+    await user.type(within(screen.getByTestId("session-memory-form")).getByLabelText("Content"), "Use containerized Vite for WebUI screenshots.");
+    expect(screen.getByTestId("session-memory-editor-meta")).toHaveTextContent("1 line");
+    await user.click(within(screen.getByTestId("session-memory-form")).getByRole("button", { name: "Save memory" }));
+
+    expect(onAddMemory).toHaveBeenCalledWith({
+      target: "memory",
+      topic: "project",
+      content: "Use containerized Vite for WebUI screenshots.",
+    });
+  });
+
   it("shows session-derived memory candidates and loads them into the write form", async () => {
     const user = userEvent.setup();
     const onAddMemory = vi.fn(async () => ({ session_id: "s1", has_memory: true, topics: [] }));
@@ -185,8 +248,10 @@ describe("SessionMemoryPanel", () => {
     const candidates = screen.getByTestId("session-memory-candidates");
     expect(candidates).toHaveTextContent("Candidate facts");
     expect(candidates).toHaveTextContent("Project goal: Build a Python CLI 2048 game.");
-    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Save candidates");
-    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("1 candidate fact");
+    const maintenance = screen.getByTestId("session-memory-maintenance");
+    expect(maintenance).toHaveTextContent("Save candidates");
+    expect(maintenance).toHaveTextContent("1 candidate fact");
+    expect(within(maintenance).queryByRole("article")).toBeNull();
     expect(screen.getByTestId("session-memory-form")).not.toBeVisible();
     await user.click(within(candidates).getByRole("button", { name: "Edit before save" }));
     expect(within(screen.getByTestId("session-memory-form")).getByLabelText("Topic")).toHaveValue("project");
@@ -241,8 +306,12 @@ describe("SessionMemoryPanel", () => {
       />,
     );
 
+    const filterGroup = screen.getByRole("group", { name: "Filter memory buckets" });
+    expect(within(filterGroup).queryByRole("button", { name: /User\s+0/ })).toBeNull();
+    expect(within(filterGroup).queryByRole("button", { name: /Needs review\s+0/ })).toBeNull();
+
     await user.click(within(screen.getByTestId("session-memory-list")).getByText("research"));
-    const obsoleteEntry = within(screen.getByTestId("session-memory-list")).getAllByText("obsolete browser fallback rule").find((node) => node.closest("li"));
+    const obsoleteEntry = within(screen.getByTestId("session-memory-focus")).getAllByText("obsolete browser fallback rule").find((node) => node.closest("li"));
     expect(obsoleteEntry).toBeDefined();
     await user.click(within(obsoleteEntry!.closest("li")!).getByRole("button", { name: "Remove" }));
     expect(onRemoveMemory).not.toHaveBeenCalled();
@@ -297,7 +366,7 @@ describe("SessionMemoryPanel", () => {
     );
 
     await user.click(within(screen.getByTestId("session-memory-list")).getByText("research"));
-    const staleEntry = within(screen.getByTestId("session-memory-list")).getAllByText("stale browser fallback rule").find((node) => node.closest("li"));
+    const staleEntry = within(screen.getByTestId("session-memory-focus")).getAllByText("stale browser fallback rule").find((node) => node.closest("li"));
     expect(staleEntry).toBeDefined();
     await user.click(within(staleEntry!.closest("li")!).getByRole("button", { name: "Edit" }));
     const editBox = screen.getByLabelText("Edit memory 1");
@@ -318,6 +387,8 @@ describe("SessionMemoryPanel", () => {
 
   it("surfaces memory maintenance findings and filters affected buckets", async () => {
     const user = userEvent.setup();
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
     render(
       <SessionMemoryPanel
         defaultOpen
@@ -357,25 +428,45 @@ describe("SessionMemoryPanel", () => {
 
     expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Remove secrets");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("1 entry · User");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Deduplicate");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("2 duplicate entries · project");
     expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("Reduce pressure");
-    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("4 findings");
-    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Sensitive");
-    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Duplicate");
-    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("Capacity");
-    expect(screen.getByTestId("session-memory-review")).toHaveTextContent("access_token=[redacted]");
+    expect(screen.getByTestId("session-memory-maintenance")).toHaveTextContent("1 issue · project");
+    expect(screen.getByTestId("session-memory-toolbar")).toHaveTextContent("Review · 1 secret entry · 2 duplicate entries · 1 pressure issue · session");
+    expect(screen.getByTestId("session-memory-maintenance")).not.toHaveTextContent("Scan for memory entries");
+    expect(within(screen.getByTestId("session-memory-maintenance")).queryByRole("article")).toBeNull();
+    expect(screen.queryByTestId("session-memory-review")).toBeNull();
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Secret");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Duplicate");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Pressure");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("access_token=[redacted] should not be stored");
     expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("ghp_example");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("User");
+    expect(screen.getByTestId("session-memory-focus-review")).toHaveTextContent("Secret");
 
-    await user.click(within(screen.getByTestId("session-memory-review")).getByRole("button", { name: "Show buckets" }));
+    await user.click(within(screen.getByTestId("session-memory-maintenance")).getByRole("button", { name: /Remove secrets/ }));
     expect(screen.getByTestId("session-memory-search-count")).toHaveTextContent("2 buckets");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("project");
     expect(screen.getByTestId("session-memory-list")).not.toHaveTextContent("research");
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("User");
+    expect(screen.getByTestId("session-memory-focus-review")).toHaveTextContent("Secret");
+    expect(screen.getByTestId("session-memory-focus-review")).toHaveTextContent("possible secret or credential");
+    expect(screen.getByTestId("session-memory-focus-review")).toHaveTextContent("access_token=[redacted] should not be stored");
+    const secretRows = screen.getByTestId("session-memory-focus").querySelectorAll('[data-review-kind="sensitive"]');
+    expect(secretRows).toHaveLength(1);
+    expect(secretRows[0]).toHaveTextContent("access_token=[redacted] should not be stored");
 
-    await user.click(within(screen.getByTestId("session-memory-list")).getByText("User"));
-    await user.click(within(screen.getByTestId("session-memory-list")).getByRole("button", { name: "Reveal" }));
-    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("access_token=ghp_example should not be stored");
+    await user.click(within(screen.getByTestId("session-memory-focus")).getByRole("button", { name: "Reveal" }));
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("access_token=ghp_example should not be stored");
+
+    await user.click(within(screen.getByTestId("session-memory-maintenance")).getByRole("button", { name: /Deduplicate/ }));
+    expect(screen.getByTestId("session-memory-focus")).toHaveTextContent("project");
+    expect(screen.getByTestId("session-memory-focus-review")).toHaveTextContent("Duplicate");
+    expect(screen.getByTestId("session-memory-focus-review")).toHaveTextContent("Capacity");
+    expect(screen.getByTestId("session-memory-focus").querySelectorAll('[data-review-kind="duplicate"]')).toHaveLength(2);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   });
 
   it("shows an empty selected-chat state", () => {
@@ -392,14 +483,14 @@ describe("SessionMemoryPanel", () => {
 
     const panel = screen.getByTestId("session-memory-panel");
     expect(panel).toHaveTextContent("No durable memory");
-    expect(panel).toHaveTextContent("No user, core, or topic entries saved.");
+    expect(panel).not.toHaveTextContent("No user, core, or topic entries saved.");
     expect(screen.queryByTestId("session-memory-dashboard")).toBeNull();
-    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No durable memory saved");
-    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Save only stable, non-secret facts");
-    expect(within(screen.getByTestId("session-memory-list")).queryByRole("button", { name: "Find candidates" })).toBeNull();
+    expect(screen.queryByTestId("session-memory-list")).toBeNull();
+    expect(panel).not.toHaveTextContent("No durable memory saved");
+    expect(screen.queryByTestId("session-memory-maintenance")).toBeNull();
     expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
     expect(screen.getByTestId("session-memory-form")).toBeInTheDocument();
-    expect(screen.getByTestId("session-memory-toolbar")).not.toHaveTextContent("Find candidates");
+    expect(screen.queryByTestId("session-memory-toolbar")).toBeNull();
     expect(onUseAsDraft).not.toHaveBeenCalled();
     expect(panel).not.toHaveTextContent("No matching memory.");
   });

@@ -56,14 +56,16 @@ export function buildAutomationContext(
   loopPanelState: AutomationLoopPanelState,
   schedulePanelState: AutomationSchedulePanelState,
 ): AutomationContextView {
+  const loopStatus = compactStatus(loopState?.status ?? session?.loop_protocol?.status);
+  const loopDetail = loopAutomationDetail(session, loopState, loopPanelState);
+  const scheduleDetail = scheduleAutomationDetail(session, schedulePanelState);
   const titleParts = [
     loopAutomationLabel(session, loopState, loopPanelState),
     scheduleAutomationLabel(session, schedulePanelState),
   ].filter((part): part is string => !!part);
-  const detailParts = [
-    loopAutomationDetail(session, loopState, loopPanelState),
-    scheduleAutomationDetail(session, schedulePanelState),
-  ].filter((part): part is string => !!part);
+  const detailParts = loopStatus === "running" && scheduleDetail
+    ? [scheduleDetail]
+    : [loopDetail, scheduleDetail].filter((part): part is string => !!part);
   return {
     title: titleParts.length > 0 ? titleParts.join(" · ") : "Attention",
     detail: detailParts.length > 0 ? detailParts.join(" · ") : "Open Automation for loop and timer state.",
@@ -81,7 +83,7 @@ function loopAutomationLabel(
   if (!status || status === "off") return undefined;
   if (status === "draft") {
     const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
-    return answers > 0 ? "Loop review" : "Loop waiting";
+    return answers > 0 ? "Loop draft" : "Loop waiting";
   }
   return `Loop ${status}`;
 }
@@ -98,7 +100,7 @@ function loopAutomationDetail(
   if (status === "draft") {
     const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
     const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
-    if (answers > 0) return "Review recorded calibration before activating LOOP.md.";
+    if (answers > 0) return "Calibration answer recorded; open activation draft when ready.";
     if (questions > 0) return "Answer the setup question before LOOP.md can run.";
     return "Wait for Affent to ask the required setup question.";
   }
@@ -130,12 +132,15 @@ function scheduleAutomationDetail(
   panelState: AutomationSchedulePanelState,
 ): string | undefined {
   if (panelState.state === "loading") return "Loading saved timer details.";
-  if (panelState.state === "error") return `Timers failed: ${compact(panelState.error) ?? "unknown error"}`;
+  if (panelState.state === "error") return `Timers failed: ${scheduleErrorSummary(panelState.error)}`;
   const summary = session?.schedules;
   const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
   const error = scheduleErrorDetail(summary);
   if (error) return error;
-  if (summary?.next_run_at) return `Next ${formatScheduleTime(summary.next_run_at)}${compact(summary.next_prompt_preview) ? ` · ${compact(summary.next_prompt_preview)}` : ""}`;
+  if (summary?.next_run_at) {
+    const prompt = truncate(compact(summary.next_prompt_preview), 48);
+    return `Next ${formatScheduleTime(summary.next_run_at)}${prompt ? ` · ${prompt}` : ""}`;
+  }
   const enabled = Math.max(summary?.enabled ?? 0, visibleSchedules.filter((schedule) => schedule.enabled).length);
   if (enabled > 0) return `${enabled} timer${enabled === 1 ? "" : "s"} enabled; open Automation to inspect the next run.`;
   const count = Math.max(summary?.count ?? 0, visibleSchedules.length);
@@ -151,6 +156,15 @@ function scheduleErrorDetail(summary?: SessionSchedulesSummary): string | undefi
   return `${count} timer error${count === 1 ? "" : "s"}${error ? `: ${error}` : ""}`;
 }
 
+function scheduleErrorSummary(value?: string): string {
+  const error = compact(value);
+  if (!error) return "unknown error";
+  const normalized = error.toLowerCase();
+  if (normalized.includes("permission denied") && normalized.includes("schedule")) return "permission denied while saving timer state";
+  if (normalized.includes("permission denied")) return "permission denied";
+  return error.length > 110 ? `${error.slice(0, 109).trimEnd()}...` : error;
+}
+
 function compactStatus(value: string | undefined): string | undefined {
   const compacted = value?.replace(/\s+/g, " ").trim().toLowerCase();
   return compacted || undefined;
@@ -159,6 +173,11 @@ function compactStatus(value: string | undefined): string | undefined {
 function compact(value?: string): string | undefined {
   const next = value?.replace(/\s+/g, " ").trim();
   return next || undefined;
+}
+
+function truncate(value: string | undefined, limit: number): string | undefined {
+  if (!value || value.length <= limit) return value;
+  return `${value.slice(0, limit - 1).trimEnd()}...`;
 }
 
 function formatScheduleTime(value: string): string {

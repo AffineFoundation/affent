@@ -56,6 +56,16 @@ SERVE_ACCOUNT_ROOT ?= /account
 WEBUI_DEV_PORT ?= 18789
 WEBUI_API_PORT ?= 18791
 WEBUI_API_TARGET ?= http://127.0.0.1:$(WEBUI_API_PORT)
+WEBUI_DEV_CONTAINER_NAME ?= affent-webui-dev
+WEBUI_DEV_IMAGE ?= affinefoundation/affent:latest
+WEBUI_DEV_API_TARGET ?= http://host.docker.internal:$(WEBUI_API_PORT)
+WEBUI_DEV_ALLOWED_HOSTS ?= true
+WEBUI_DEV_NODE_MODULES_VOLUME ?= affent-webui-dev-node-modules
+WEBUI_DEV_CACHE_VOLUME ?= affent-webui-dev-vite-cache
+WEBUI_SCREENSHOT_PATH ?= /tmp/affent-webui-screenshot.png
+WEBUI_SCREENSHOT_URL ?= http://127.0.0.1:$(WEBUI_DEV_PORT)/
+WEBUI_SCREENSHOT_TAB ?= Files
+WEBUI_SCREENSHOT_WORKSPACE_PATH ?=
 DOCTOR_ARGS ?=
 SMOKE_CONTAINER_NAME ?= affent-serve-smoke
 SMOKE_WORKSPACE ?= $(CURDIR)/.tmp/image-serve-smoke
@@ -93,7 +103,7 @@ fi
 endef
 
 .PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container eval-agent-container eval-serve-container eval-serve-browser-container test-container
-.PHONY: webui-dev image-serve-existing
+.PHONY: webui-dev webui-dev-container webui-dev-container-up webui-dev-container-status webui-dev-container-logs webui-dev-container-stop webui-dev-container-screenshot image-serve-existing
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -140,7 +150,50 @@ image-serve-existing:
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --account-dir "$(SERVE_ACCOUNT_DIR)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" $(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)") $(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)") $(if $(SERVE_MODEL),--model "$(SERVE_MODEL)") --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --account-root "$(SERVE_ACCOUNT_ROOT)" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)
 
 webui-dev:
-	cd extras/webui && VITE_AFFENT_API_TARGET="$(WEBUI_API_TARGET)" VITE_AFFENT_WEBUI_PORT="$(WEBUI_DEV_PORT)" npm run dev -- --host 0.0.0.0 --port "$(WEBUI_DEV_PORT)"
+	cd extras/webui && VITE_AFFENT_API_TARGET="$(WEBUI_API_TARGET)" VITE_AFFENT_WEBUI_PORT="$(WEBUI_DEV_PORT)" VITE_AFFENT_ALLOWED_HOSTS="$(WEBUI_DEV_ALLOWED_HOSTS)" npm run dev -- --host 0.0.0.0 --port "$(WEBUI_DEV_PORT)"
+
+webui-dev-container: webui-dev-container-up
+
+webui-dev-container-up:
+	@docker rm -f "$(WEBUI_DEV_CONTAINER_NAME)" >/dev/null 2>&1 || true
+	@docker volume create "$(WEBUI_DEV_NODE_MODULES_VOLUME)" >/dev/null
+	@docker volume create "$(WEBUI_DEV_CACHE_VOLUME)" >/dev/null
+	docker run -d \
+		--name "$(WEBUI_DEV_CONTAINER_NAME)" \
+		--rm=false \
+		--memory "$(CONTAINER_MEMORY)" \
+		--memory-swap "$(CONTAINER_MEMORY)" \
+		--cpus "$(CONTAINER_CPUS)" \
+		--pids-limit "$(CONTAINER_PIDS)" \
+		--add-host=host.docker.internal:host-gateway \
+		-p "0.0.0.0:$(WEBUI_DEV_PORT):$(WEBUI_DEV_PORT)" \
+		-e VITE_AFFENT_API_TARGET="$(WEBUI_DEV_API_TARGET)" \
+		-e VITE_AFFENT_WEBUI_PORT="$(WEBUI_DEV_PORT)" \
+		-e VITE_AFFENT_ALLOWED_HOSTS="$(WEBUI_DEV_ALLOWED_HOSTS)" \
+		-v "$(CURDIR):/work" \
+		-v "$(WEBUI_DEV_NODE_MODULES_VOLUME):/work/extras/webui/node_modules" \
+		-v "$(WEBUI_DEV_CACHE_VOLUME):/work/extras/webui/.vite-cache" \
+		-w /work/extras/webui \
+		"$(WEBUI_DEV_IMAGE)" \
+		sh -lc 'set -eu; deps_hash=$$(sha256sum package.json package-lock.json | sha256sum | awk '\''{print $$1}'\''); marker=node_modules/.affent-deps-hash; if test ! -f "$$marker" || test "$$(cat "$$marker")" != "$$deps_hash"; then npm ci; printf "%s\n" "$$deps_hash" > "$$marker"; fi; npm run dev -- --host 0.0.0.0 --port "$$VITE_AFFENT_WEBUI_PORT"'
+
+webui-dev-container-status:
+	@docker ps --filter "name=^/$(WEBUI_DEV_CONTAINER_NAME)$$" --format 'table {{.Names}}\t{{.Image}}\t{{.Ports}}\t{{.Status}}'
+
+webui-dev-container-logs:
+	docker logs --tail=200 -f "$(WEBUI_DEV_CONTAINER_NAME)"
+
+webui-dev-container-stop:
+	@docker rm -f "$(WEBUI_DEV_CONTAINER_NAME)" >/dev/null 2>&1 || true
+
+webui-dev-container-screenshot:
+	docker exec \
+		-e WEBUI_SCREENSHOT_URL="$(WEBUI_SCREENSHOT_URL)" \
+		-e WEBUI_SCREENSHOT_TAB="$(WEBUI_SCREENSHOT_TAB)" \
+		-e WEBUI_SCREENSHOT_PATH="$(WEBUI_SCREENSHOT_PATH)" \
+		-e WEBUI_SCREENSHOT_WORKSPACE_PATH="$(WEBUI_SCREENSHOT_WORKSPACE_PATH)" \
+		"$(WEBUI_DEV_CONTAINER_NAME)" \
+		node scripts/capture-workbench.mjs
 
 image-serve-up:
 	@if test -z "$(SERVE_CONTAINER_NAME)"; then \

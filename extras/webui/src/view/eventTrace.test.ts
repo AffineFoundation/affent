@@ -264,7 +264,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Started action",
-        meta: ["Request 1", "plan", "not dispatched", "loop_guard_no_budget"],
+        meta: ["Request 1", "plan", "not dispatched", "Context budget"],
         badges: ["skipped"],
       },
     });
@@ -494,7 +494,7 @@ describe("eventTrace view model", () => {
           "guard blocked repeated failed call to \"web_fetch\" with the same effective URL after previous Failure ...",
           "next do not retry the same failing URL; choose a different source, use another available inspection ...",
         ],
-        badges: ["blocked", "loop_guard_repeated_failed_input"],
+        badges: ["Blocked", "Loop guard repeated failed input"],
       },
     });
   });
@@ -528,7 +528,7 @@ describe("eventTrace view model", () => {
           "next check the path from rg --files before retrying",
           "read failed Next: check the path from rg --files before retrying Failure: kind=not_found",
         ],
-        badges: ["not_found"],
+        badges: ["Not found"],
       },
     });
   });

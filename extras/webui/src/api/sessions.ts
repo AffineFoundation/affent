@@ -488,10 +488,20 @@ export interface SessionContextSummary {
   estimated_request_input_tokens?: number;
   estimated_conversation_tokens?: number;
   estimated_tool_schema_tokens?: number;
+  tool_schema_budget_tokens?: number;
+  model_context_window_tokens?: number;
+  model_context_window_auto?: boolean;
   compact_trigger_input_tokens?: number;
+  compact_trigger_input_percent?: number;
+  compact_hard_input_limit_tokens?: number;
+  compact_summary_prompt_max_bytes?: number;
+  reserved_output_tokens?: number;
   model_context_window_source?: string;
+  model_context_window_effective_percent?: number;
   request_input_compact_percent?: number;
   request_input_tokens_until_compact?: number;
+  request_input_hard_limit_percent?: number;
+  request_input_tokens_until_hard_limit?: number;
 }
 
 export interface SessionContextCompactionSummary {
@@ -504,7 +514,19 @@ export interface SessionContextCompactionSummary {
   latest_reason?: string;
   latest_reactive?: boolean;
   latest_summary_state?: "present" | "missing" | "empty";
+  latest_estimated_input_tokens?: number;
+  latest_after_estimated_input_tokens?: number;
+  latest_trigger_input_tokens?: number;
+  latest_model_context_window_tokens?: number;
   latest_model_context_window_source?: string;
+  latest_reserved_output_tokens?: number;
+  latest_trigger_input_percent?: number;
+  latest_compact_scope_active?: boolean;
+  latest_compact_window_ordinal?: number;
+  latest_compact_window_prefill_input_tokens?: number;
+  latest_compact_window_prefill_source?: string;
+  latest_compact_scoped_input_tokens?: number;
+  latest_compact_hard_input_limit_tokens?: number;
   tail_only?: boolean;
 }
 
@@ -919,6 +941,20 @@ export function readSessionFile(
   );
 }
 
+export function readWorkspaceFile(
+  client: ApiClient,
+  opts: SessionFileReadOptions = {},
+): Promise<SessionFileResponse> {
+  const q = new URLSearchParams();
+  if (opts.path) q.set("path", opts.path);
+  if (opts.offset != null) q.set("offset", String(opts.offset));
+  if (opts.limit != null) q.set("limit", String(opts.limit));
+  return client.json<SessionFileResponse>(
+    withQuery("/v1/workspace/files", q),
+    { signal: opts.signal },
+  );
+}
+
 export function writeSessionFile(
   client: ApiClient,
   sessionId: string,
@@ -926,6 +962,18 @@ export function writeSessionFile(
   signal?: AbortSignal,
 ): Promise<SessionFileResponse> {
   return client.json<SessionFileResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/files`, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export function writeWorkspaceFile(
+  client: ApiClient,
+  body: SessionFileWriteRequest,
+  signal?: AbortSignal,
+): Promise<SessionFileResponse> {
+  return client.json<SessionFileResponse>("/v1/workspace/files", {
     method: "POST",
     body,
     signal,

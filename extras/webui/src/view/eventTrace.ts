@@ -688,7 +688,7 @@ function toolRequestMeta(event: NormalizedEvent, turn: string | undefined): stri
     turn,
     readString(event.data, "tool"),
     skipped ? "not dispatched" : undefined,
-    skipFailureKind,
+    skipFailureKind ? failureKindDisplayLabel(skipFailureKind) : undefined,
     argsSummary ? streamSummary(argsSummary) : undefined,
   ]);
 }
@@ -824,7 +824,7 @@ function toolResultBadges(event: NormalizedEvent): string[] {
   const memoryAction = memoryUpdateAction(event);
   const resultText = readString(event.data, "result") ?? readString(event.data, "result_summary") ?? "";
   return compact([
-    ...eventFailureKinds(event),
+    ...eventFailureKinds(event).map(failureKindDisplayLabel),
     memoryAction ? `memory ${memoryAction}` : undefined,
     sourceAccess ? sourceAccess.status : undefined,
     ...browserScrollTelemetryBadges(resultText),
@@ -952,6 +952,28 @@ function eventFailureKinds(event: NormalizedEvent): string[] {
     seen.add(kind);
     return true;
   });
+}
+
+function failureKindDisplayLabel(kind: string): string {
+  const normalized = kind.trim().toLowerCase();
+  if (!normalized) return kind;
+  if (normalized === "invalid_args") return "Invalid request";
+  if (normalized === "command_failed") return "Command failed";
+  if (normalized === "test_failed") return "Test failed";
+  if (normalized === "context_budget" || normalized === "loop_guard_no_budget") return "Context budget";
+  if (normalized === "dynamic_shell") return "Dynamic shell";
+  if (normalized === "no_verified_source") return "No verified source";
+  if (normalized === "not_found") return "Not found";
+  if (normalized === "network" || normalized === "network_error") return "Network";
+  if (normalized === "blocked") return "Blocked";
+  if (normalized === "permission_denied") return "Permission denied";
+  if (normalized === "timeout") return "Timeout";
+  return normalized.includes("_") ? sentenceCase(normalized.replace(/_/g, " ")) : kind;
+}
+
+function sentenceCase(value: string): string {
+  const cleaned = value.trim();
+  return cleaned ? `${cleaned.charAt(0).toUpperCase()}${cleaned.slice(1)}` : cleaned;
 }
 
 function usageMeta(event: NormalizedEvent, turn: string | undefined): string[] {

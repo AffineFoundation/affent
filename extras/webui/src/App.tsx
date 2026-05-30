@@ -20,6 +20,7 @@ import {
   listSkills,
   readSessionArtifact,
   readSessionFile,
+  readWorkspaceFile,
   sessionArtifactPath,
   readSkill,
   removeSessionMemory,
@@ -29,6 +30,7 @@ import {
   streamSessionEvents,
   updateSessionSchedule,
   writeSessionFile,
+  writeWorkspaceFile,
   type SessionScheduleDeleteResponse,
   type SessionSchedule,
   type SessionSchedulesResponse,
@@ -40,6 +42,7 @@ import {
   type SessionPlanSummary,
   type SessionContextSummary,
   type SessionCommandRequest,
+  type SessionFileResponse,
   type SessionSkillInfo,
   type SessionSkillInstallRequest,
   type SessionSummary,
@@ -61,16 +64,14 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
-import { SessionAutomationPanel, type SessionAutomationFocus, type SessionAutomationMetric, type SessionAutomationQueueItem } from "./components/SessionAutomationPanel";
+import { SessionAutomationPanel, type SessionAutomationFocus, type SessionAutomationMetric, type SessionAutomationOverviewItem, type SessionAutomationQueueItem } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
-import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
+import { SessionUsagePanel } from "./components/SessionUsagePanel";
 import { SessionArtifactsPanel } from "./components/SessionArtifactsPanel";
 import { SessionFilesPanel } from "./components/SessionFilesPanel";
-import { SessionChangesPanel } from "./components/SessionChangesPanel";
-import { SessionRunPanel } from "./components/SessionRunPanel";
 import { SessionWorkspacePanel } from "./components/SessionWorkspacePanel";
 import { SessionTracePanel } from "./components/SessionTracePanel";
 import { WorkbenchEmpty, WorkbenchPanel } from "./components/WorkbenchPanel";
@@ -89,7 +90,7 @@ import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun, manualRunDraft } from "./view/sessionRun";
 import { buildWorkbenchArtifacts } from "./view/sessionArtifacts";
 import { buildSessionWorkspace, latestRuntimeWorkspace } from "./view/sessionWorkspace";
-import { buildWorkspaceFileView, type WorkspaceFileBrowserState } from "./view/workspaceFile";
+import { buildWorkspaceFileView, parentWorkspacePath, type WorkspaceFileBrowserState, type WorkspaceFileScope, type WorkspaceFileView } from "./view/workspaceFile";
 import { buildSessionTrace } from "./view/sessionTrace";
 import {
   buildConversationContextView,
@@ -179,6 +180,7 @@ const minSessionPanelWidth = 220;
 const maxSessionPanelWidth = 420;
 const minWorkbenchPanelWidth = 420;
 const maxWorkbenchPanelWidth = 940;
+const defaultWorkspaceRoot = "/workspace";
 
 // The shell stays deliberately thin: transport helpers own HTTP details,
 // the reducer owns event interpretation, and UI components receive stable
@@ -197,7 +199,6 @@ export function App() {
   const [liveConnectTick, setLiveConnectTick] = useState(0);
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
-  const [runCommandBusy, setRunCommandBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [loopProtocolBusy, setLoopProtocolBusy] = useState(false);
   const [scheduleBusy, setScheduleBusy] = useState<"loop" | "checkin" | "daily" | undefined>();
@@ -367,9 +368,14 @@ export function App() {
   const sessionWorkspace = useMemo(() => buildSessionWorkspace(selectedSession, sessionRun, runtimeWorkspace), [runtimeWorkspace, selectedSession, sessionRun]);
   const workbenchContextUsage = useMemo(() => buildWorkbenchContextUsage(session, selectedSession), [session, selectedSession]);
   const conversationContext = useMemo(() => buildConversationContextView(session, selectedSession?.context), [selectedSession?.context, session]);
+  const globalWorkspaceRoot = runtimeStatsState.state === "ready" ? runtimeStatsState.stats.workspace_root || defaultWorkspaceRoot : defaultWorkspaceRoot;
+  const statsWorkspaceSessionId = runtimeStatsState.state === "ready" ? runtimeStatsState.stats.sessions?.[0]?.id : undefined;
+  const workspaceFileSessionId = selectedSessionId && sessionWorkspace.path ? selectedSessionId : statsWorkspaceSessionId;
+  const defaultFileWorkspaceScope: WorkspaceFileScope = workspaceFileSessionId ? "session" : "global";
+  const defaultFileWorkspacePath = workspaceFileSessionId ? sessionWorkspace.path || globalWorkspaceRoot : runtimeStatsState.state === "ready" ? globalWorkspaceRoot : undefined;
   useEffect(() => {
-    setWorkspaceFileBrowser({ state: "idle", workspacePath: sessionWorkspace.path });
-  }, [selectedSessionId, sessionWorkspace.path]);
+    setWorkspaceFileBrowser({ state: "idle", workspacePath: defaultFileWorkspacePath, scope: defaultFileWorkspaceScope });
+  }, [defaultFileWorkspacePath, defaultFileWorkspaceScope, selectedSessionId]);
   const workbenchAttachment = useMemo(
     () => buildWorkbenchAttachment({
       selectedSessionId,
@@ -1267,7 +1273,10 @@ export function App() {
       setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
       setStatus({ state: "connected", label: "Ready", detail: "timer saved" });
     } catch (err) {
-      setStatus({ state: "error", label: "Schedule failed", detail: formatError(err) });
+      const error = formatError(err);
+      const schedules = selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined;
+      setScheduleState({ state: "error", sessionId, error, schedules });
+      setStatus({ state: "error", label: "Schedule failed", detail: error });
     } finally {
       setScheduleBusy(undefined);
     }
@@ -1477,7 +1486,6 @@ export function App() {
       handleUseAsDraft(manualRunDraft(request.command, request.cwd), "run_command");
       return;
     }
-    setRunCommandBusy(true);
     setStatus({ state: "loading", label: "Running command", detail: request.command });
     try {
       const resp = await runSessionCommand(client, selectedSessionId, request);
@@ -1489,8 +1497,6 @@ export function App() {
       });
     } catch (err) {
       setStatus({ state: "error", label: "Command failed", detail: formatError(err) });
-    } finally {
-      setRunCommandBusy(false);
     }
   }
 
@@ -1577,29 +1583,79 @@ export function App() {
     }
   }
 
-  async function handleOpenWorkspacePath(path: string) {
-    const cleanPath = path.trim() || ".";
-    if (!selectedSessionId || !sessionWorkspace.path) return;
-    const workspacePath = sessionWorkspace.path;
-    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath });
+  async function readWorkspacePathForScope(path: string, scope: WorkspaceFileScope): Promise<{ resp: SessionFileResponse; workspacePath: string; scope: WorkspaceFileScope }> {
+    const workspacePath = scope === "session" ? sessionWorkspace.path || globalWorkspaceRoot : globalWorkspaceRoot;
+    if (scope === "session") {
+      if (!workspaceFileSessionId) throw new Error("session workspace unavailable");
+      const resp = await readSessionFile(client, workspaceFileSessionId, { path, limit: 64 * 1024 });
+      return { resp, workspacePath, scope };
+    }
     try {
-      const resp = await readSessionFile(client, selectedSessionId, { path: cleanPath, limit: 64 * 1024 });
-      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath });
+      return { resp: await readWorkspaceFile(client, { path, limit: 64 * 1024 }), workspacePath, scope: "global" };
     } catch (err) {
-      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath });
+      if (scope === "global" && workspaceFileSessionId && isWorkspaceFilesRouteUnavailable(err)) {
+        const fallbackPath = sessionWorkspace.path || globalWorkspaceRoot;
+        return { resp: await readSessionFile(client, workspaceFileSessionId, { path, limit: 64 * 1024 }), workspacePath: fallbackPath, scope: "session" };
+      }
+      throw err;
     }
   }
 
-  async function handleUploadWorkspaceFile(path: string, text: string) {
-    const cleanPath = path.trim();
-    if (!cleanPath || !selectedSessionId || !sessionWorkspace.path) return;
-    const workspacePath = sessionWorkspace.path;
-    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath });
+  async function readWorkspaceRevealDirectories(path: string, scope: WorkspaceFileScope): Promise<WorkspaceFileView[]> {
+    const reveal: WorkspaceFileView[] = [];
+    const directories = workspaceParentChain(path);
+    for (const directoryPath of directories) {
+      try {
+        const { resp } = await readWorkspacePathForScope(directoryPath, scope);
+        const view = buildWorkspaceFileView(resp);
+        if (view.kind === "directory") reveal.push(view);
+      } catch {
+        break;
+      }
+    }
+    return reveal;
+  }
+
+  async function handleOpenWorkspacePath(path: string, scope: WorkspaceFileScope = workspaceFileBrowser.scope ?? "global") {
+    const cleanPath = path.trim() || ".";
+    if (scope === "session" && !workspaceFileSessionId) return;
+    const loadingWorkspacePath = scope === "session" ? sessionWorkspace.path : globalWorkspaceRoot;
+    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath: loadingWorkspacePath, scope });
     try {
-      const resp = await writeSessionFile(client, selectedSessionId, { path: cleanPath, text });
-      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath });
+      const { resp, workspacePath, scope: actualScope } = await readWorkspacePathForScope(cleanPath, scope);
+      const file = buildWorkspaceFileView(resp);
+      const revealDirectories = file.kind === "file" ? await readWorkspaceRevealDirectories(file.path, actualScope) : undefined;
+      setWorkspaceFileBrowser({ state: "ready", file, revealDirectories, workspacePath, scope: actualScope });
     } catch (err) {
-      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath });
+      const workspacePath = scope === "session" ? sessionWorkspace.path : globalWorkspaceRoot;
+      setWorkspaceFileBrowser({ state: "error", path: cleanPath, error: formatError(err), workspacePath, scope });
+    }
+  }
+
+  async function handleUploadWorkspaceFile(path: string, text: string, scope: WorkspaceFileScope = workspaceFileBrowser.scope ?? "global") {
+    const cleanPath = path.trim();
+    if (!cleanPath || (scope === "session" && !workspaceFileSessionId)) return;
+    const workspacePath = scope === "session" ? sessionWorkspace.path : globalWorkspaceRoot;
+    const previousWorkspaceFileBrowser = workspaceFileBrowser;
+    setWorkspaceFileBrowser({ state: "loading", path: cleanPath, workspacePath, scope });
+    try {
+      const resp = scope === "session" && workspaceFileSessionId
+        ? await writeSessionFile(client, workspaceFileSessionId, { path: cleanPath, text })
+        : await writeWorkspaceFile(client, { path: cleanPath, text });
+      setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath, scope });
+    } catch (err) {
+      if (scope === "global" && workspaceFileSessionId && isWorkspaceFilesRouteUnavailable(err)) {
+        const fallbackPath = sessionWorkspace.path || globalWorkspaceRoot;
+        try {
+          const resp = await writeSessionFile(client, workspaceFileSessionId, { path: cleanPath, text });
+          setWorkspaceFileBrowser({ state: "ready", file: buildWorkspaceFileView(resp), workspacePath: fallbackPath, scope: "session" });
+          return;
+        } catch (fallbackErr) {
+          setWorkspaceFileBrowser(previousWorkspaceFileBrowser);
+          throw fallbackErr;
+        }
+      }
+      setWorkspaceFileBrowser(previousWorkspaceFileBrowser);
       throw err;
     }
   }
@@ -1648,22 +1704,49 @@ export function App() {
     }
     const automationTitle = automationContext?.title ?? "No automation";
     const automationDetail = automationContext?.detail ?? "Start a loop or schedule a check-in when this chat needs follow-up.";
-    const automationMetrics = automationWorkbenchMetrics(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
+    const automationMetrics = automationWorkbenchMetrics(selectedSession, selectedLoopState, selectedScheduleState, automationContext);
     const automationFocus = automationWorkbenchFocus(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState, automationContext);
     const automationQueue = automationWorkbenchQueue(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState);
+    const automationOverview = automationWorkbenchOverview(selectedSession, selectedLoopState, selectedLoopProtocolState, selectedScheduleState)
+      .map((item) => item.id === "loop" && item.actionLabel
+        ? { ...item, actionBusy: loopProtocolBusy, actionDisabled: actionBusy || session.status === "running", onAction: handleUseLoopProtocolDraft }
+        : item);
     const emptyScheduleSummary = { count: 0, enabled: 0 };
     const scheduleSummary = selectedSession?.schedules;
     const loadedSchedules = selectedScheduleState.state === "ready" || selectedScheduleState.state === "error" ? selectedScheduleState.schedules : undefined;
+    const hasScheduleSurface = showScheduleContext
+      || automationHasScheduleEvidence(selectedSession, selectedScheduleState)
+      || scheduleBusy !== undefined
+      || Boolean(deletingScheduleId || updatingScheduleId);
+    const automationEmpty = !showLoopContext
+      && !hasScheduleSurface
+      && !loopProtocolBusy
+      && !scheduleBusy
+      && selectedLoopProtocolState.state !== "loading"
+      && selectedLoopProtocolState.state !== "error"
+      && selectedScheduleState.state !== "loading"
+      && selectedScheduleState.state !== "error"
+      && (scheduleSummary?.count ?? 0) === 0
+      && (loadedSchedules?.length ?? 0) === 0;
     return (
       <SessionAutomationPanel
         title={automationTitle}
         detail={automationDetail}
+        overview={automationOverview}
         metrics={automationMetrics}
         focus={automationFocus}
         queue={automationQueue}
-        actions={automationFocus?.action === "answer" || automationFocus?.action === "review" ? (
+        empty={automationEmpty}
+        defaultGoal={selectedSessionTitle ?? selectedSessionId}
+        starting={loopProtocolBusy || actionBusy || session.status === "running"}
+        scheduling={scheduleBusy === "checkin" || scheduleBusy === "daily" ? scheduleBusy : undefined}
+        disabled={actionBusy || session.status === "running"}
+        onStartLoop={handleStartLoop}
+        onScheduleCheckIn={() => handleCreateSchedule("checkin")}
+        onScheduleDaily={() => handleCreateSchedule("daily")}
+        actions={automationFocus?.action === "answer" ? (
           <button type="button" className="ghost-action primary-run-action" onClick={handleUseLoopProtocolDraft}>
-            {automationFocus.action === "answer" ? "Answer setup" : "Review in chat"}
+            Answer setup
           </button>
         ) : undefined}
         defaultOpen
@@ -1686,7 +1769,7 @@ export function App() {
             onLoadProtocol={handleLoadLoopProtocol}
             onUseAsDraft={handleUseLoopProtocolDraft}
           />
-        ) : (
+        ) : hasScheduleSurface ? null : (
           <SessionLoopPanel
             embedded
             defaultGoal={selectedSessionTitle ?? selectedSessionId}
@@ -1701,7 +1784,7 @@ export function App() {
           busy={scheduleBusy}
           disabled={actionBusy || session.status === "running"}
           loading={selectedScheduleState.state === "loading"}
-          error={selectedScheduleState.state === "error" ? selectedScheduleState.error : undefined}
+          error={selectedScheduleState.state === "error" && automationFocus?.tone !== "danger" ? selectedScheduleState.error : undefined}
           deletingId={deletingScheduleId}
           updatingId={updatingScheduleId}
           loopStatus={selectedLoopState?.status ?? selectedSession?.loop_protocol?.status}
@@ -1835,7 +1918,9 @@ export function App() {
   }
 
   function handleSelectWorkbenchTab(tab: WorkbenchTab) {
-    setWorkbenchTab(normalizeWorkbenchTab(tab));
+    const normalized = normalizeWorkbenchTab(tab);
+    setWorkbenchTab(normalized);
+    if (normalized === "files" && defaultFileWorkspacePath) void handleOpenWorkspacePath(".", defaultFileWorkspaceScope);
   }
 
   function handleShowSessions() {
@@ -1869,63 +1954,13 @@ export function App() {
   function renderWorkbenchTab() {
     if (workbenchTab === "context") {
       return (
-        <>
-          <WorkbenchContextPanel
-            overview={overview}
-            hasSelectedSession={!!selectedSessionId}
-            attention={workbenchAttention?.target === "context" ? workbenchAttention : undefined}
-            workspace={sessionWorkspace}
-            files={sessionFiles}
-            changes={sessionChanges}
-            artifacts={workbenchArtifacts}
-            run={sessionRun}
-            session={session}
-            usage={workbenchContextUsage}
-            contextSummary={conversationContext}
-            taskState={selectedSession?.task_state}
-            automationTitle={automationContext?.title}
-            automationDetail={automationContext?.detail}
-            onSelectSection={handleSelectWorkbenchTab}
-            defaultOpen
-          />
-        </>
-      );
-    }
-    if (workbenchTab === "changes") {
-      return (
-        <SessionChangesPanel
-          changes={sessionChanges}
-          defaultOpen
-          onOpenWorkspacePath={sessionWorkspace.path ? (path) => {
-            setWorkbenchTab("files");
-            void handleOpenWorkspacePath(path);
-          } : undefined}
-          onOpenWorkspacePanel={() => setWorkbenchTab("files")}
-          onOpenFilesPanel={() => setWorkbenchTab("files")}
-          onOpenArtifact={(path) => void handleOpenArtifact(path)}
-          onUseAsDraft={handleUseAsDraft}
+        <SessionUsagePanel
+          hasSelectedSession={!!selectedSessionId}
+          usage={workbenchContextUsage}
+          contextSummary={conversationContext}
+          compactions={selectedSession?.context_compactions}
+          session={session}
         />
-      );
-    }
-    if (workbenchTab === "run") {
-      return (
-        <>
-          <SessionRunPanel
-            run={sessionRun}
-            defaultOpen
-            onOpenArtifact={(path) => void handleOpenArtifact(path)}
-            onRunCommand={handleRunCommandRequest}
-            runCommandBusy={runCommandBusy}
-            onUseAsDraft={handleUseAsDraft}
-          />
-          {workbenchArtifacts.length > 0 ? (
-            <SessionArtifactsPanel
-              artifacts={workbenchArtifacts}
-              defaultOpen
-              onOpenArtifact={(path) => void handleOpenArtifact(path)}
-            />
-          ) : null}
-        </>
       );
     }
     if (workbenchTab === "artifacts") {
@@ -1943,8 +1978,8 @@ export function App() {
           files={sessionFiles}
           workspaceBrowser={workspaceFileBrowser}
           defaultOpen
-          onOpenWorkspacePath={sessionWorkspace.path ? (path) => void handleOpenWorkspacePath(path) : undefined}
-          onUploadWorkspaceFile={sessionWorkspace.path ? (path, text) => handleUploadWorkspaceFile(path, text) : undefined}
+          onOpenWorkspacePath={(path) => void handleOpenWorkspacePath(path)}
+          onUploadWorkspaceFile={(path, text) => handleUploadWorkspaceFile(path, text)}
           onOpenWorkspacePanel={() => setWorkbenchTab("files")}
           onOpenArtifact={(path) => void handleOpenArtifact(path)}
           onUseAsDraft={handleUseAsDraft}
@@ -1958,7 +1993,7 @@ export function App() {
           defaultOpen
           onOpenWorkspacePath={sessionWorkspace.path ? (path) => {
             setWorkbenchTab("files");
-            void handleOpenWorkspacePath(path);
+            void handleOpenWorkspacePath(path, "session");
           } : undefined}
           onVerifyWorkspace={handleRunCommandRequest}
           onUseAsDraft={handleUseAsDraft}
@@ -2061,6 +2096,7 @@ export function App() {
           data-compact-nav={compactNav}
           data-session-nav={sessionNavState}
           data-workbench={workbenchOpen ? "open" : "closed"}
+          data-workbench-tab={workbenchOpen ? workbenchTab : undefined}
           data-testid="workspace-shell"
           style={{
             "--session-panel-width": `${sessionPanelWidth}px`,
@@ -2074,7 +2110,7 @@ export function App() {
               aria-label="Show chats"
               onClick={handleShowSessions}
             >
-              <span aria-hidden="true">›</span>
+              <span aria-hidden="true">Chats</span>
             </button>
           ) : null}
           {showSessionNav && !sessionsCollapsed ? (
@@ -2169,7 +2205,7 @@ export function App() {
           {workbenchOpen ? (
             <WorkbenchPanel
               title="Workbench"
-              subtitle="Global runtime console"
+              subtitle={workbenchPanelSubtitle(workbenchTab)}
               attachment={workbenchAttachment}
               navItems={workbenchNavItems}
               activeTab={workbenchTab}
@@ -2273,9 +2309,19 @@ function syncSessionIdToUrl(sessionId?: string) {
 
 function normalizeWorkbenchTab(tab: WorkbenchTab): WorkbenchTab {
   if (tab === "workspace") return "files";
-  if (tab === "artifacts") return "run";
+  if (tab === "changes") return "files";
+  if (tab === "run" || tab === "artifacts") return "trace";
   if (tab === "loop") return "automation";
   return tab;
+}
+
+function workbenchPanelSubtitle(tab: WorkbenchTab): string {
+  const normalized = normalizeWorkbenchTab(tab);
+  if (normalized === "files") return "Global workspace files";
+  if (normalized === "memory" || normalized === "skills" || normalized === "config") return "Global tools and settings";
+  if (normalized === "trace") return "Current session trace";
+  if (normalized === "automation") return "Current session automation";
+  return "Current session usage";
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -2298,19 +2344,113 @@ function trackResize(event: ReactPointerEvent<HTMLElement>, onMove: (event: Poin
   document.addEventListener("pointercancel", handleEnd, { once: true });
 }
 
-function automationWorkbenchMetrics(
+function automationWorkbenchOverview(
   session: SessionSummary | undefined,
   loopState: SessionSummary["loop_state"] | undefined,
   loopPanelState: LoopProtocolState,
   schedulePanelState: ScheduleState,
+): SessionAutomationOverviewItem[] {
+  return [
+    automationLoopOverview(session, loopState, loopPanelState),
+    automationTimerOverview(session, schedulePanelState),
+  ];
+}
+
+function automationLoopOverview(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  loopPanelState: LoopProtocolState,
+): SessionAutomationOverviewItem {
+  const path = automationCompact(session?.loop_protocol?.path ?? loopState?.protocol_path);
+  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
+  if (loopPanelState.state === "loading") {
+    return { id: "loop", label: "Loop", value: "Loading", detail: "Reading LOOP.md", meta: path, tone: "neutral" };
+  }
+  if (loopPanelState.state === "error" && !status) {
+    return { id: "loop", label: "Loop", value: "Error", detail: automationErrorSummary(loopPanelState.error), meta: path, tone: "danger" };
+  }
+  const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
+  const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
+  const goal = automationCompact(loopState?.initial_goal_preview);
+  if (status === "running") {
+    return { id: "loop", label: "Loop", value: "On", detail: goal ? `Goal: ${goal}` : "LOOP.md active", meta: path, tone: "ok" };
+  }
+  if (status === "draft") {
+    return {
+      id: "loop",
+      label: "Loop",
+      value: answers > 0 ? "Draft ready" : "Draft",
+      detail: answers > 0 ? "Answered; not active yet" : questions > 0 ? "Waiting for setup answer" : "Waiting for setup question",
+      meta: path,
+      tone: "attention",
+      actionLabel: answers > 0 ? "Activate" : undefined,
+    };
+  }
+  if (status === "disabled") {
+    return { id: "loop", label: "Loop", value: "Disabled", detail: "Protocol will not be injected", meta: path, tone: "danger" };
+  }
+  if (path || session?.has_loop_protocol || session?.has_loop_state) {
+    return { id: "loop", label: "Loop", value: "Unknown", detail: "Status metadata incomplete", meta: path, tone: "neutral" };
+  }
+  return { id: "loop", label: "Loop", value: "Off", detail: "No LOOP.md for this chat", tone: "neutral" };
+}
+
+function automationTimerOverview(
+  session: SessionSummary | undefined,
+  panelState: ScheduleState,
+): SessionAutomationOverviewItem {
+  if (panelState.state === "loading") return { id: "timer", label: "Timer", value: "Loading", detail: "Reading saved schedules", tone: "neutral" };
+  if (panelState.state === "error") return { id: "timer", label: "Timer", value: "Error", detail: automationErrorSummary(panelState.error), tone: "danger" };
+  const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
+  const visibleEnabled = visibleSchedules.filter((schedule) => schedule.enabled).length;
+  const summary = session?.schedules;
+  const errors = summary?.error_count ?? 0;
+  if (errors > 0 || summary?.last_error) {
+    return { id: "timer", label: "Timer", value: `${Math.max(errors, 1)} error`, detail: automationCompact(summary?.last_error) ?? "Inspect timer list", tone: "danger" };
+  }
+  const enabled = Math.max(summary?.enabled ?? 0, visibleEnabled);
+  const count = Math.max(summary?.count ?? 0, visibleSchedules.length);
+  const next = summary?.next_run_at ?? visibleSchedules.find((schedule) => schedule.enabled)?.next_run_at;
+  if (enabled > 0) {
+    return {
+      id: "timer",
+      label: "Timer",
+      value: `${enabled} active`,
+      detail: next ? `Next ${automationFormatTime(next)}` : "Active; next run not loaded",
+      meta: automationCompact(summary?.next_prompt_preview),
+      tone: "ok",
+    };
+  }
+  if (count > 0) {
+    return { id: "timer", label: "Timer", value: `${count} paused`, detail: "Saved but not running", tone: "neutral" };
+  }
+  if (session?.has_schedules) {
+    return { id: "timer", label: "Timer", value: "Details needed", detail: "Load schedules to inspect state", tone: "neutral" };
+  }
+  return { id: "timer", label: "Timer", value: "Off", detail: "No scheduled follow-up", tone: "neutral" };
+}
+
+function automationWorkbenchMetrics(
+  session: SessionSummary | undefined,
+  loopState: SessionSummary["loop_state"] | undefined,
+  schedulePanelState: ScheduleState,
   _context: { title: string; detail: string } | undefined,
 ): SessionAutomationMetric[] {
+  if (schedulePanelState.state === "ready" && schedulePanelState.schedules.length > 0) return [];
+  const timers = automationTimerMetric(session, schedulePanelState);
+  const nextRun = automationNextRunMetric(session, loopState, schedulePanelState);
   return compactArray([
-    automationLoopMetric(session, loopState, loopPanelState),
-    automationProtocolMetric(session, loopState, loopPanelState),
-    automationTimerMetric(session, schedulePanelState),
-    automationNextRunMetric(session, loopState, schedulePanelState),
+    shouldShowAutomationMetric(timers) ? timers : undefined,
+    shouldShowAutomationMetric(nextRun) ? nextRun : undefined,
   ]);
+}
+
+function shouldShowAutomationMetric(metric: SessionAutomationMetric): boolean {
+  if (metric.tone === "danger" || metric.tone === "attention") return true;
+  const value = metric.value.trim().toLowerCase();
+  if (metric.label === "Timers") return value !== "off";
+  if (metric.label === "Next run") return value !== "none" && value !== "manual";
+  return true;
 }
 
 function automationWorkbenchFocus(
@@ -2319,7 +2459,9 @@ function automationWorkbenchFocus(
   loopPanelState: LoopProtocolState,
   schedulePanelState: ScheduleState,
   context: { title: string; detail: string } | undefined,
-): SessionAutomationFocus {
+): SessionAutomationFocus | undefined {
+  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
+  const hasKnownLoopStatus = Boolean(status || session?.loop_protocol?.path || loopState?.protocol_path);
   if (loopPanelState.state === "loading") {
     return {
       label: "Checking",
@@ -2328,7 +2470,7 @@ function automationWorkbenchFocus(
       tone: "neutral",
     };
   }
-  if (loopPanelState.state === "error") {
+  if (loopPanelState.state === "error" && !hasKnownLoopStatus) {
     return {
       label: "Loop error",
       title: "LOOP.md could not be loaded",
@@ -2339,12 +2481,11 @@ function automationWorkbenchFocus(
   if (schedulePanelState.state === "error") {
     return {
       label: "Timer error",
-      title: "Timer details could not be loaded",
-      detail: automationCompact(schedulePanelState.error) ?? "Refresh timers before changing scheduled work.",
+      title: "Timer action failed",
+      detail: automationErrorSummary(schedulePanelState.error),
       tone: "danger",
     };
   }
-  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
   const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
   const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
   const lastQuestion = automationCompact(loopState?.last_calibration_question_preview ?? session?.loop_protocol?.state?.last_calibration_question_preview);
@@ -2358,13 +2499,7 @@ function automationWorkbenchFocus(
     };
   }
   if (status === "draft") {
-    return {
-      label: "Required action",
-      title: "Review activation",
-      detail: "Calibration is recorded. Review durable intent and activate through chat before timer ticks run.",
-      tone: "attention",
-      action: "review",
-    };
+    return undefined;
   }
   const schedules = session?.schedules;
   if ((schedules?.error_count ?? 0) > 0 || schedules?.last_error) {
@@ -2380,13 +2515,9 @@ function automationWorkbenchFocus(
     const visibleSchedules = schedulePanelState.state === "ready" ? schedulePanelState.schedules : [];
     const enabled = Math.max(summary?.enabled ?? 0, visibleSchedules.filter((schedule) => schedule.enabled).length);
     if (enabled <= 0) {
-      return {
-        label: "Automation active",
-        title: "Loop running manually",
-        detail: "No timer is scheduled; this loop continues only from chat or a new scheduled trigger.",
-        tone: "ok",
-      };
+      return undefined;
     }
+    if (schedulePanelState.state === "ready" && visibleSchedules.length > 0) return undefined;
     return {
       label: "Automation active",
       title: "Loop can receive timer ticks",
@@ -2397,6 +2528,7 @@ function automationWorkbenchFocus(
     };
   }
   if ((schedules?.enabled ?? 0) > 0) {
+    if (schedulePanelState.state === "ready" && schedulePanelState.schedules.length > 0) return undefined;
     return {
       label: "Timer active",
       title: `${schedules?.enabled} scheduled follow-up${schedules?.enabled === 1 ? "" : "s"}`,
@@ -2404,12 +2536,15 @@ function automationWorkbenchFocus(
       tone: "ok",
     };
   }
-  return {
-    label: "Manual control",
-    title: context?.title ?? "No automation running",
-    detail: context?.detail ?? "Start loop setup or create a timer only when this chat needs durable follow-up.",
-    tone: "neutral",
-  };
+  if (context) {
+    return {
+      label: "Manual control",
+      title: context.title,
+      detail: context.detail,
+      tone: "neutral",
+    };
+  }
+  return undefined;
 }
 
 function automationWorkbenchQueue(
@@ -2425,6 +2560,7 @@ function automationWorkbenchQueue(
   const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
   const lastQuestion = automationCompact(loopState?.last_calibration_question_preview ?? session?.loop_protocol?.state?.last_calibration_question_preview);
   const hasLoopSignal = Boolean(status || path || session?.has_loop_protocol || session?.has_loop_state);
+  const hasScheduleSignal = automationHasScheduleEvidence(session, schedulePanelState);
 
   if (loopPanelState.state === "loading") {
     items.push({
@@ -2454,14 +2590,8 @@ function automationWorkbenchQueue(
       meta: path,
     });
   } else if (status === "draft") {
-    items.push({
-      id: "loop-review",
-      label: "Required",
-      title: "Review and activate LOOP.md",
-      detail: "A calibration answer is recorded; verify durable intent, stop conditions, and recovery anchors before activation.",
-      tone: "attention",
-      meta: path,
-    });
+    // The Loop panel already owns this activation action; repeating it in the
+    // queue makes Automation read like a checklist instead of a workbench.
   } else if (status === "running") {
     // A running loop is already represented by the focus, metrics, and Loop panel.
     // Keep the queue for blocked, pending, failed, or scheduled work.
@@ -2498,24 +2628,15 @@ function automationWorkbenchQueue(
     });
   } else if (schedulePanelState.state === "ready" && schedulePanelState.schedules.length > 0) {
     const schedules = [...schedulePanelState.schedules].sort((a, b) => Date.parse(a.next_run_at) - Date.parse(b.next_run_at));
-    schedules.slice(0, 4).forEach((schedule) => {
+    schedules.filter((schedule) => automationCompact(schedule.last_error)).slice(0, 3).forEach((schedule) => {
       items.push(automationScheduleQueueItem(schedule));
     });
-    if (schedules.length > 4) {
-      items.push({
-        id: "timers-more",
-        label: "Timers",
-        title: `${schedules.length - 4} more saved timers`,
-        detail: "Use the timer list below for full pause, resume, and delete controls.",
-        tone: "neutral",
-      });
-    }
   } else {
     const summaryItem = automationScheduleSummaryQueueItem(session);
     if (summaryItem) items.push(summaryItem);
   }
 
-  if (items.length === 0 && !hasLoopSignal) {
+  if (items.length === 0 && !hasLoopSignal && !hasScheduleSignal) {
     items.push({
       id: "automation-off",
       label: "Manual",
@@ -2528,6 +2649,19 @@ function automationWorkbenchQueue(
   return items;
 }
 
+function automationHasScheduleEvidence(session: SessionSummary | undefined, panelState: ScheduleState): boolean {
+  const summary = session?.schedules;
+  const visibleSchedules = panelState.state === "ready" || panelState.state === "error" ? panelState.schedules ?? [] : [];
+  return Boolean(
+    session?.has_schedules ||
+    (summary?.count ?? 0) > 0 ||
+    (summary?.enabled ?? 0) > 0 ||
+    (summary?.error_count ?? 0) > 0 ||
+    summary?.last_error ||
+    visibleSchedules.length > 0,
+  );
+}
+
 function automationScheduleErrorItem(
   session: SessionSummary | undefined,
   panelState: ScheduleState,
@@ -2538,7 +2672,7 @@ function automationScheduleErrorItem(
       id: "timers-error",
       label: "Timers",
       title: "Timer details unavailable",
-      detail: automationCompact(panelState.error) ?? "Refresh timers before changing scheduled work.",
+      detail: automationErrorSummary(panelState.error),
       tone: "danger",
     };
   }
@@ -2566,24 +2700,7 @@ function automationScheduleSummaryQueueItem(session: SessionSummary | undefined)
       }
       : undefined;
   }
-  if (summary.next_run_at) {
-    return {
-      id: `timer-next-${summary.next_schedule_id ?? summary.next_run_at}`,
-      label: scheduleKindLabel(summary.next_schedule_kind),
-      title: `Next run ${automationFormatTime(summary.next_run_at)}`,
-      detail: automationCompact(summary.next_prompt_preview) ?? scheduleKindDetail(summary.next_schedule_kind),
-      tone: "ok",
-    };
-  }
-  if (summary.enabled > 0) {
-    return {
-      id: "timers-enabled",
-      label: "Timers",
-      title: `${summary.enabled} enabled ${summary.enabled === 1 ? "timer" : "timers"}`,
-      detail: "Load timer details to inspect the next run and recent outcome.",
-      tone: "neutral",
-    };
-  }
+  if (summary.next_run_at || summary.enabled > 0) return undefined;
   if (summary.count > 0) {
     return {
       id: "timers-paused",
@@ -2619,60 +2736,9 @@ function automationScheduleQueueDetail(schedule: SessionSchedule): string {
   return parts.join(" · ");
 }
 
-function automationLoopMetric(
-  session: SessionSummary | undefined,
-  loopState: SessionSummary["loop_state"] | undefined,
-  panelState: LoopProtocolState,
-): SessionAutomationMetric {
-  if (panelState.state === "loading") return { label: "Loop", value: "Loading", detail: "Reading LOOP.md", tone: "neutral" };
-  if (panelState.state === "error") return { label: "Loop", value: "Error", detail: automationCompact(panelState.error) ?? "LOOP.md unavailable", tone: "danger" };
-  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
-  const questions = loopState?.calibration_questions ?? session?.loop_protocol?.state?.calibration_questions ?? 0;
-  const answers = loopState?.calibration_answers ?? session?.loop_protocol?.state?.calibration_answers ?? 0;
-  const goal = automationCompact(loopState?.initial_goal_preview ?? session?.loop_protocol?.state?.initial_goal_preview);
-  if (!status || status === "off") return { label: "Loop", value: "Off", detail: "No LOOP.md for this chat", tone: "neutral" };
-  if (status === "draft") {
-    if (answers > 0) return { label: "Loop", value: "Review", detail: "Calibration recorded; activate from chat", tone: "attention" };
-    if (questions > 0) return { label: "Loop", value: "Draft", detail: "Answer setup question", tone: "attention" };
-    return { label: "Loop", value: "Draft", detail: "Waiting for calibration question", tone: "attention" };
-  }
-  if (status === "running") return { label: "Loop", value: "Running", detail: goal ?? "LOOP.md active", tone: "ok" };
-  if (status === "disabled") return { label: "Loop", value: "Disabled", detail: "LOOP.md will not feed future turns", tone: "danger" };
-  return { label: "Loop", value: automationStatusLabel(status), detail: "Review LOOP.md status", tone: "neutral" };
-}
-
-function automationProtocolMetric(
-  session: SessionSummary | undefined,
-  loopState: SessionSummary["loop_state"] | undefined,
-  panelState: LoopProtocolState,
-): SessionAutomationMetric | undefined {
-  if (panelState.state === "loading") return { label: "Protocol", value: "Loading", detail: "Reading LOOP.md and events", tone: "neutral" };
-  if (panelState.state === "error") return { label: "Protocol", value: "Error", detail: automationCompact(panelState.error) ?? "LOOP.md unavailable", tone: "danger" };
-  const path = automationCompact(session?.loop_protocol?.path ?? loopState?.protocol_path);
-  const status = automationCompact(loopState?.status ?? session?.loop_protocol?.status)?.toLowerCase();
-  if (!path && !loopState && !session?.has_loop_protocol) return undefined;
-  const feeds = loopState?.protocol_feeds ?? session?.loop_protocol?.state?.protocol_feeds ?? 0;
-  const updates = loopState?.protocol_updates ?? session?.loop_protocol?.state?.protocol_updates ?? 0;
-  const decisions = loopState?.loop_decisions ?? session?.loop_protocol?.state?.loop_decisions ?? 0;
-  const events = loopState?.event_count ?? session?.loop_protocol?.state?.event_count ?? 0;
-  const detail = [
-    feeds > 0 ? `${feeds} ${feeds === 1 ? "feed" : "feeds"}` : undefined,
-    updates > 0 ? `${updates} ${updates === 1 ? "update" : "updates"}` : undefined,
-    decisions > 0 ? `${decisions} ${decisions === 1 ? "decision" : "decisions"}` : undefined,
-    events > 0 ? `${events} ${events === 1 ? "event" : "events"}` : undefined,
-    automationCompact(loopState?.last_event_summary ?? session?.loop_protocol?.state?.last_event_summary),
-  ].filter(Boolean).join(" · ");
-  return {
-    label: "Protocol",
-    value: path ? automationFileLabel(path) : "LOOP.md",
-    detail: detail || "Protocol file detected",
-    tone: status === "running" ? "ok" : status === "draft" ? "attention" : status === "disabled" ? "danger" : "neutral",
-  };
-}
-
 function automationTimerMetric(session: SessionSummary | undefined, panelState: ScheduleState): SessionAutomationMetric {
   if (panelState.state === "loading") return { label: "Timers", value: "Loading", detail: "Reading saved timers", tone: "neutral" };
-  if (panelState.state === "error") return { label: "Timers", value: "Error", detail: automationCompact(panelState.error) ?? "Timer details unavailable", tone: "danger" };
+  if (panelState.state === "error") return { label: "Timers", value: "Error", detail: automationErrorSummary(panelState.error), tone: "danger" };
   const visibleSchedules = panelState.state === "ready" ? panelState.schedules : [];
   const visibleEnabled = visibleSchedules.filter((schedule) => schedule.enabled).length;
   const summary = session?.schedules;
@@ -2691,7 +2757,7 @@ function automationNextRunMetric(
   panelState: ScheduleState,
 ): SessionAutomationMetric {
   if (panelState.state === "loading") return { label: "Next run", value: "Loading", detail: "Reading timer details", tone: "neutral" };
-  if (panelState.state === "error") return { label: "Next run", value: "Error", detail: automationCompact(panelState.error) ?? "Timer details unavailable", tone: "danger" };
+  if (panelState.state === "error") return { label: "Next run", value: "Error", detail: automationErrorSummary(panelState.error), tone: "danger" };
   const summary = session?.schedules;
   if (summary?.next_run_at) {
     return {
@@ -2746,17 +2812,13 @@ function automationCompact(value?: string): string | undefined {
   return next || undefined;
 }
 
-function automationStatusLabel(status: string): string {
-  return status
-    .split(/[_-]+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() + part.slice(1))
-    .join(" ") || "Unknown";
-}
-
-function automationFileLabel(path: string): string {
-  const parts = path.replace(/\\/g, "/").split("/").filter(Boolean);
-  return parts.at(-1) ?? path;
+function automationErrorSummary(value?: string): string {
+  const compacted = automationCompact(value);
+  if (!compacted) return "Refresh or retry the timer action.";
+  const lower = compacted.toLowerCase();
+  if (lower.includes("permission denied") && lower.includes("schedule")) return "Permission denied while saving timer state.";
+  if (lower.includes("permission denied")) return "Permission denied.";
+  return compacted.length > 110 ? `${compacted.slice(0, 109).trimEnd()}...` : compacted;
 }
 
 function compactArray<T>(items: readonly (T | undefined)[]): T[] {
@@ -2990,6 +3052,21 @@ function compactContextText(text: string, limit: number): string {
 
 function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
+}
+
+function isWorkspaceFilesRouteUnavailable(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  return err.status === 404 || (err.type === "invalid_api_response" && err.message.includes("returned the WebUI app shell"));
+}
+
+function workspaceParentChain(path: string): string[] {
+  const parents: string[] = [];
+  let current = parentWorkspacePath(path);
+  while (current && current !== ".") {
+    parents.unshift(current);
+    current = parentWorkspacePath(current);
+  }
+  return [".", ...parents];
 }
 
 function formatError(err: unknown): string {
