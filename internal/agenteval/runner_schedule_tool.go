@@ -15,6 +15,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 const evalSessionSchedulesRelPath = ".affent/schedules.json"
@@ -81,14 +82,31 @@ func registerEvalSessionScheduleTool(reg *agent.Registry, workspaceDir string) {
 		}
 	}`)
 	reg.Add(&agent.Tool{
-		Name:         agent.SessionScheduleToolName,
-		Description:  "Create or list eval session scheduled turns. This mirrors the serve runtime's timer semantics for eval scenarios: ordinary timers and recurring checks use session_schedule and do not require LOOP.md.",
-		Schema:       schema,
-		CatalogGroup: "Core",
+		Name:                  agent.SessionScheduleToolName,
+		Description:           "Create or list eval session scheduled turns. This mirrors the serve runtime's timer semantics for eval scenarios: ordinary timers and recurring checks use session_schedule and do not require LOOP.md.",
+		Schema:                schema,
+		RuntimeSurfaceRefresh: evalSessionScheduleRuntimeSurfaceRefresh,
+		CatalogGroup:          "Core",
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			return executeEvalSessionScheduleTool(ctx, workspaceDir, args)
 		},
 	})
+}
+
+func evalSessionScheduleRuntimeSurfaceRefresh(args json.RawMessage, _ string, isErr bool) string {
+	if isErr {
+		return ""
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return ""
+	}
+	if strings.ToLower(strings.TrimSpace(req.Action)) == "create" {
+		return sse.RuntimeSurfaceRefreshSchedulesChanged
+	}
+	return ""
 }
 
 func executeEvalSessionScheduleTool(ctx context.Context, workspaceDir string, args json.RawMessage) (string, error) {

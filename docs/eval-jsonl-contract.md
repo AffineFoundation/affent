@@ -121,9 +121,10 @@ Shared metadata fields:
 - `required_runtime_surface_refresh_reasons`: optional list of
   `runtime.surface.refresh_reason` values that must appear at least once in the
   batch summary. This lets long-run suites require structural runtime refresh
-  facts such as `post_compaction` or `compact_window_observed`; the built-in
-  `longrun` profile requires both to keep model-window compaction recovery
-  observable.
+  facts such as `post_compaction`, `compact_window_observed`,
+  `loop_protocol_changed`, `schedules_changed`, or `workspace_changed`; the
+  built-in `longrun` profile requires these to keep compaction recovery and
+  runtime control-plane changes observable.
 
 ## Scenario Record
 

@@ -154,6 +154,22 @@ func TestExpectationCapabilityNamesIncludesTaskStateProvenance(t *testing.T) {
 
 func TestEvalSessionScheduleToolCreatePersistsSchedule(t *testing.T) {
 	workspace := t.TempDir()
+	reg := agent.NewRegistry()
+	registerEvalSessionScheduleTool(reg, workspace)
+	tool, ok := reg.Get(agent.SessionScheduleToolName)
+	if !ok {
+		t.Fatal("eval session_schedule tool missing")
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"create"}`), `{}`, false); got != sse.RuntimeSurfaceRefreshSchedulesChanged {
+		t.Fatalf("create refresh = %q, want %q", got, sse.RuntimeSurfaceRefreshSchedulesChanged)
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"list"}`), `{}`, false); got != "" {
+		t.Fatalf("list refresh = %q, want empty", got)
+	}
+	if got := tool.RuntimeSurfaceRefresh(json.RawMessage(`{"action":"create"}`), `Error: no`, true); got != "" {
+		t.Fatalf("failed create refresh = %q, want empty", got)
+	}
+
 	result, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
 		"action":"create",
 		"kind":"custom",
@@ -2725,6 +2741,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(clonePush)), "max_total_tokens:220000") {
 		t.Fatalf("clone/push checks missing max_total_tokens:220000")
 	}
+	if clonePush.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshWorkspaceChanged] != 1 {
+		t.Fatalf("clone/push RequiredRuntimeSurfaceRefreshReasons = %#v, want workspace refresh", clonePush.RequiredRuntimeSurfaceRefreshReasons)
+	}
 	clonePushCaps := ScenarioExpectationCapabilityNames(clonePush)
 	for _, want := range []string{"source_repo", "workspace", "verifier", "skill"} {
 		if !stringSliceContains(clonePushCaps, want) {
@@ -3037,6 +3056,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		if !stringSliceContains(planLoopGuardChecks, want) {
 			t.Fatalf("combined closure guard checks = %#v, want %q", planLoopGuardChecks, want)
 		}
+	}
+	if planLoopGuard.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshLoopProtocolChanged] != 1 {
+		t.Fatalf("combined closure guard RequiredRuntimeSurfaceRefreshReasons = %#v, want loop protocol refresh", planLoopGuard.RequiredRuntimeSurfaceRefreshReasons)
 	}
 	planLoopGuardCaps := ScenarioExpectationCapabilityNames(planLoopGuard)
 	for _, want := range []string{"plan", "loop_protocol", "trace"} {
@@ -3850,6 +3872,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if loopActivation.RequiredLoopProtocolFinalStatus != "running" {
 		t.Fatalf("loop activation RequiredLoopProtocolFinalStatus = %q, want running", loopActivation.RequiredLoopProtocolFinalStatus)
 	}
+	if loopActivation.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshLoopProtocolChanged] != 1 {
+		t.Fatalf("loop activation RequiredRuntimeSurfaceRefreshReasons = %#v, want loop protocol refresh", loopActivation.RequiredRuntimeSurfaceRefreshReasons)
+	}
 	for _, want := range []string{"LOOP-ACTIVATED-23"} {
 		if !stringSliceContains(loopActivation.RequiredFinalText, want) {
 			t.Fatalf("loop activation RequiredFinalText = %#v, want %q", loopActivation.RequiredFinalText, want)
@@ -3922,6 +3947,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(scheduleFollowup.Domains, scheduleAutomationDomain) || !stringSliceContains(scheduleFollowup.Domains, longRunRecoveryDomain) {
 		t.Fatalf("session schedule Domains = %#v, want schedule automation and longrun recovery", scheduleFollowup.Domains)
+	}
+	if scheduleFollowup.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshSchedulesChanged] != 1 {
+		t.Fatalf("session schedule RequiredRuntimeSurfaceRefreshReasons = %#v, want schedules refresh", scheduleFollowup.RequiredRuntimeSurfaceRefreshReasons)
 	}
 
 	scheduledTurn, ok := seen["longrun-scheduled-turn-provenance"]

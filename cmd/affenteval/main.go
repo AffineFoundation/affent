@@ -735,7 +735,13 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				RequiredExpectationCapabilities:       []string{"context_compaction", "delegation", "input_budget", "longrun_recovery", "loop_protocol", "memory", "plan", "research_checkpoint", "session", "session_schedule", "session_search", "skill", "skill_install", "source_repo", "trace", "verifier", "workspace"},
 				RequiredExpectationDomains:            []string{"bittensor", "code_pr", "context_compaction", "longrun_recovery", "market", "memory", "schedule_automation", "session_recovery"},
 				RequiredTaskStateEvidenceSources:      []string{"git_commit", "git_push"},
-				RequiredRuntimeSurfaceRefreshReasons:  []string{"compact_window_observed", "post_compaction"},
+				RequiredRuntimeSurfaceRefreshReasons: []string{
+					"compact_window_observed",
+					sse.RuntimeSurfaceRefreshLoopProtocolChanged,
+					"post_compaction",
+					sse.RuntimeSurfaceRefreshSchedulesChanged,
+					sse.RuntimeSurfaceRefreshWorkspaceChanged,
+				},
 				MaxDebugBriefTagRates: map[string]float64{
 					"context_compaction:policy_missing":  0,
 					"context_compaction:summary_empty":   0,

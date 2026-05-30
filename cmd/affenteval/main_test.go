@@ -87,7 +87,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"require-expectation-domain=bittensor,code_pr,context_compaction,longrun_recovery,market,memory,schedule_automation,session_recovery",
 		"require-expectation-domain=web_evidence",
 		"require-task-state-evidence-source=git_commit,git_push",
-		"require-runtime-surface-refresh-reason=compact_window_observed,post_compaction",
+		"require-runtime-surface-refresh-reason=compact_window_observed,loop_protocol_changed,post_compaction,schedules_changed,workspace_changed",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--list-quality-profiles output missing %q:\n%s", want, out)
@@ -1471,7 +1471,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if !reflect.DeepEqual(gates.RequiredTaskStateEvidenceSources, []string{"git_commit", "git_push"}) {
 		t.Fatalf("longrun required task-state evidence sources = %#v", gates.RequiredTaskStateEvidenceSources)
 	}
-	if !reflect.DeepEqual(gates.RequiredRuntimeSurfaceRefreshReasons, []string{"compact_window_observed", "post_compaction"}) {
+	if !reflect.DeepEqual(gates.RequiredRuntimeSurfaceRefreshReasons, []string{"compact_window_observed", "loop_protocol_changed", "post_compaction", "schedules_changed", "workspace_changed"}) {
 		t.Fatalf("longrun required runtime surface refresh reasons = %#v", gates.RequiredRuntimeSurfaceRefreshReasons)
 	}
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {

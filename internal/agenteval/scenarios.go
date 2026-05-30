@@ -2340,6 +2340,9 @@ func longRunSessionScheduleRecurringFollowupScenario() BatchScenario {
 				"2030-01-02T15:04:05Z",
 			},
 		},
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			sse.RuntimeSurfaceRefreshSchedulesChanged: 1,
+		},
 		RequiredFinalText: []string{"SCHEDULE-READY-91", "sched_"},
 		ProtectedFiles:    []string{"docs/launch-metrics.md"},
 		MaxSuccessfulToolCallsByTool: map[string]int{
@@ -2539,6 +2542,9 @@ func longRunLoopActivationCompletedDraftScenario() BatchScenario {
 			"loop_protocol_activation": {
 				"complete_activation without protocol",
 			},
+		},
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			sse.RuntimeSurfaceRefreshLoopProtocolChanged: 1,
 		},
 		RequiredLoopProtocolFinalStatus: "running",
 		RequiredFinalText: []string{
@@ -3440,6 +3446,9 @@ func TestClampAboveRange(t *testing.T) {
 			{Source: "git_commit"},
 			{Source: "git_push"},
 		},
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			sse.RuntimeSurfaceRefreshWorkspaceChanged: 1,
+		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "session_workspace", Later: "read_file"},
 			{Earlier: "read_file", Later: "edit_file"},
@@ -3956,6 +3965,9 @@ Evidence is the plan update, loop_protocol close event, and final LOOP.md status
 		RequiredCompletionGuards: []string{
 			"active_plan_unfinished",
 			"loop_protocol_running",
+		},
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			sse.RuntimeSurfaceRefreshLoopProtocolChanged: 1,
 		},
 		RequiredLoopProtocolFinalStatus: "completed",
 		RequireNoPlanErrors:             true,
