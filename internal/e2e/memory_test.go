@@ -102,7 +102,7 @@ func TestE2E_MemoryAddPersistsAcrossSessions(t *testing.T) {
 	// emits a plain "ok" final answer after the tool result is in.
 	turn1 := []string{
 		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"memory","arguments":""}}]},"finish_reason":null}]}`,
-		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"action\":\"add\",\"target\":\"memory\",\"content\":\"User prefers Go 1.22 + sqlc\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"action\":\"add\",\"target\":\"memory\",\"kind\":\"preference\",\"content\":\"User prefers Go 1.22 + sqlc\"}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}

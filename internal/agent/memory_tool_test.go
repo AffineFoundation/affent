@@ -33,7 +33,7 @@ func newMemoryToolFixture(t *testing.T) (*Tool, *memory.FileMemoryStore) {
 func TestMemoryTool_DispatchAdd(t *testing.T) {
 	tool, _ := newMemoryToolFixture(t)
 	out, err := tool.Execute(context.Background(), json.RawMessage(
-		`{"action":"add","content":"hello memory"}`))
+		`{"action":"add","kind":"project_fact","content":"hello memory"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,22 +52,34 @@ func TestMemoryTool_DispatchAdd(t *testing.T) {
 	}
 }
 
-func TestMemoryToolRejectsMixedDurableAndExclusionContent(t *testing.T) {
-	tool, store := newMemoryToolFixture(t)
+func TestMemoryToolRequiresStructuredWriteKind(t *testing.T) {
+	tool, _ := newMemoryToolFixture(t)
 	out, err := tool.Execute(context.Background(), json.RawMessage(
 		`{"action":"add","target":"memory","topic":"conventions","content":"Durable CLI contract: every machine-readable JSON output must include marker AUTO-MEM-64. Transient facts, one-off test output, and other non-memory details are not durable conventions."}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "positive reusable fact") || !strings.Contains(out, "compact atomic entry") {
-		t.Fatalf("quality rejection should guide atomic rewrite:\n%s", out)
+	if !strings.Contains(out, "kind is required") || !strings.Contains(out, "project_fact") || !strings.Contains(out, "convention") {
+		t.Fatalf("missing write kind should guide structured retry:\n%s", out)
 	}
-	search, err := store.Search(memory.TargetMemory, "conventions", "AUTO-MEM-64", 5)
+}
+
+func TestMemoryToolRejectsUnstableWriteKind(t *testing.T) {
+	tool, store := newMemoryToolFixture(t)
+	out, err := tool.Execute(context.Background(), json.RawMessage(
+		`{"action":"add","target":"memory","kind":"task_state","topic":"conventions","content":"Current turn is blocked after a failed push."}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(search.Entries) != 0 {
-		t.Fatalf("rejected memory content should not be stored: %+v", search.Entries)
+	if !strings.Contains(out, "invalid memory kind") || !strings.Contains(out, "plan/loop/task state") {
+		t.Fatalf("unstable write kind should be rejected structurally:\n%s", out)
+	}
+	search, err := store.Search(memory.TargetMemory, "conventions", "failed push", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 0 || len(search.Entries) != 0 {
+		t.Fatalf("rejected memory content should not be stored: results=%+v entries=%+v", search.Results, search.Entries)
 	}
 }
 
@@ -85,10 +97,13 @@ func TestMemoryTool_DispatchValidation(t *testing.T) {
 		{"no action", `{}`, "action is required"},
 		{"blank action", `{"action":"   "}`, "action is required"},
 		{"add without content", `{"action":"add"}`, "content is required"},
-		{"add with blank content", `{"action":"add","content":"   "}`, "content is required"},
+		{"add with blank content", `{"action":"add","kind":"project_fact","content":"   "}`, "content is required"},
+		{"add without kind", `{"action":"add","content":"fact"}`, "kind is required"},
+		{"add with blank kind", `{"action":"add","kind":"   ","content":"fact"}`, "kind is required"},
 		{"replace without old_text", `{"action":"replace","content":"x"}`, "old_text and content are required"},
-		{"replace with blank content", `{"action":"replace","old_text":"x","content":"   "}`, "old_text and content are required"},
-		{"replace with blank old_text", `{"action":"replace","old_text":"   ","content":"x"}`, "old_text and content are required"},
+		{"replace with blank content", `{"action":"replace","kind":"project_fact","old_text":"x","content":"   "}`, "old_text and content are required"},
+		{"replace with blank old_text", `{"action":"replace","kind":"project_fact","old_text":"   ","content":"x"}`, "old_text and content are required"},
+		{"replace without kind", `{"action":"replace","old_text":"old","content":"new"}`, "kind is required"},
 		{"remove without old_text", `{"action":"remove"}`, "old_text is required"},
 		{"remove with blank old_text", `{"action":"remove","old_text":"   "}`, "old_text is required"},
 		{"search without query", `{"action":"search"}`, "query is required"},
@@ -219,6 +234,15 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	if schema.Properties["target"].MaxLength != maxMemoryTargetBytes {
 		t.Fatalf("target maxLength = %d, want %d", schema.Properties["target"].MaxLength, maxMemoryTargetBytes)
 	}
+	if schema.Properties["kind"].MinLength != 1 {
+		t.Fatalf("kind minLength = %d, want 1", schema.Properties["kind"].MinLength)
+	}
+	if schema.Properties["kind"].MaxLength != maxMemoryKindBytes {
+		t.Fatalf("kind maxLength = %d, want %d", schema.Properties["kind"].MaxLength, maxMemoryKindBytes)
+	}
+	if got, want := strings.Join(schema.Properties["kind"].Enum, ","), strings.Join(memoryWriteKinds, ","); got != want {
+		t.Fatalf("kind enum = %s, want %s", got, want)
+	}
 	if schema.Properties["topic"].MinLength != 1 {
 		t.Fatalf("topic minLength = %d, want 1", schema.Properties["topic"].MinLength)
 	}
@@ -266,17 +290,22 @@ func TestMemoryToolRejectsOversizedArgsBeforeStore(t *testing.T) {
 		},
 		{
 			name: "target",
-			args: `{"action":"add","target":` + mustJSON(t, strings.Repeat("t", maxMemoryTargetBytes+1)) + `,"content":"fact"}`,
+			args: `{"action":"add","target":` + mustJSON(t, strings.Repeat("t", maxMemoryTargetBytes+1)) + `,"kind":"project_fact","content":"fact"}`,
 			want: "target must be at most",
 		},
 		{
+			name: "kind",
+			args: `{"action":"add","kind":` + mustJSON(t, strings.Repeat("k", maxMemoryKindBytes+1)) + `,"content":"fact"}`,
+			want: "kind must be at most",
+		},
+		{
 			name: "topic",
-			args: `{"action":"add","topic":` + mustJSON(t, strings.Repeat("t", maxMemoryTopicBytes+1)) + `,"content":"fact"}`,
+			args: `{"action":"add","kind":"project_fact","topic":` + mustJSON(t, strings.Repeat("t", maxMemoryTopicBytes+1)) + `,"content":"fact"}`,
 			want: "topic must be at most",
 		},
 		{
 			name: "content",
-			args: `{"action":"add","content":` + mustJSON(t, strings.Repeat("x", maxMemoryContentBytes+1)) + `}`,
+			args: `{"action":"add","kind":"project_fact","content":` + mustJSON(t, strings.Repeat("x", maxMemoryContentBytes+1)) + `}`,
 			want: "content must be at most",
 		},
 		{
@@ -322,7 +351,7 @@ func TestMemoryToolNormalizesSearchArgsBeforeStore(t *testing.T) {
 func TestMemoryToolTrimsRoutingArgs(t *testing.T) {
 	tool, _ := newMemoryToolFixture(t)
 	out, err := tool.Execute(context.Background(), json.RawMessage(
-		`{"action":" add ","target":"   ","topic":"  deploy  ","content":"ship via fly.io"}`))
+		`{"action":" add ","target":"   ","kind":" project_fact ","topic":"  deploy  ","content":"ship via fly.io"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,8 +409,8 @@ func TestMemoryTool_DispatchSearchAndList(t *testing.T) {
 	tool, _ := newMemoryToolFixture(t)
 	// Seed two topics with one entry each.
 	for _, args := range []string{
-		`{"action":"add","topic":"deploy","content":"deploys via fly.io"}`,
-		`{"action":"add","topic":"auth","content":"uses OAuth"}`,
+		`{"action":"add","kind":"project_fact","topic":"deploy","content":"deploys via fly.io"}`,
+		`{"action":"add","kind":"project_fact","topic":"auth","content":"uses OAuth"}`,
 	} {
 		if _, err := tool.Execute(context.Background(), json.RawMessage(args)); err != nil {
 			t.Fatal(err)

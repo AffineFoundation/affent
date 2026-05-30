@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/memory"
-	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -27,6 +26,7 @@ const (
 const (
 	maxMemoryActionBytes  = 16
 	maxMemoryTargetBytes  = 16
+	maxMemoryKindBytes    = 32
 	maxMemoryTopicBytes   = 128
 	maxMemoryContentBytes = 16 * 1024
 	maxMemoryOldTextBytes = 4 * 1024
@@ -37,9 +37,18 @@ var memoryActions = []string{
 	memoryActionSearch, memoryActionList,
 }
 
+var memoryWriteKinds = []string{
+	"preference",
+	"project_fact",
+	"convention",
+	"decision",
+	"lesson",
+}
+
 type memoryToolArgs struct {
 	Action  string `json:"action"`
 	Target  string `json:"target"`
+	Kind    string `json:"kind"`
 	Topic   string `json:"topic"`
 	Content string `json:"content"`
 	OldText string `json:"old_text"`
@@ -82,6 +91,13 @@ func memoryTool(store memory.MemoryStore) *Tool {
 				"enum":        []string{string(memory.TargetMemory), string(memory.TargetUser)},
 				"description": "memory (default) for project/env notes; user for stable user preferences/details.",
 			},
+			"kind": map[string]any{
+				"type":        "string",
+				"minLength":   1,
+				"maxLength":   maxMemoryKindBytes,
+				"enum":        memoryWriteKinds,
+				"description": "Required for add/replace. Classifies the durable write: preference, project_fact, convention, decision, or lesson. Do not write current task progress as memory.",
+			},
 			"topic": map[string]any{
 				"type":        "string",
 				"minLength":   1,
@@ -121,7 +137,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 	}
 	return &Tool{
 		Name:        MemoryToolName,
-		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. Save verified conventions when the task asks to preserve them for future sessions; store the positive reusable rule, not excluded transient examples. Do not save transient task progress, raw dumps, or routine facts easily re-read from files.",
+		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. For add/replace, set kind to preference, project_fact, convention, decision, or lesson; do not save transient task progress, raw dumps, or routine facts easily re-read from files.",
 		Schema:      json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, present, err := decodeMemoryToolArgs(args)
@@ -130,6 +146,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			}
 			p.Action = strings.TrimSpace(p.Action)
 			p.Target = strings.TrimSpace(p.Target)
+			p.Kind = strings.TrimSpace(p.Kind)
 			p.Topic = strings.TrimSpace(p.Topic)
 			// Default target to "memory" — the agent-notes case is far
 			// more common than user-profile updates, and forcing the
@@ -167,7 +184,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add. Next: retry with compact durable content, target=memory for project facts or target=user for stable user preferences."}
 					break
 				}
-				if issue := memoryContentQualityIssue(p.Content); issue != "" {
+				if issue := validateMemoryWriteKind(p.Kind); issue != "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: issue}
 					break
 				}
@@ -177,7 +194,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace. Next: search/list first, then retry with a unique old_text substring and the full replacement content."}
 					break
 				}
-				if issue := memoryContentQualityIssue(p.Content); issue != "" {
+				if issue := validateMemoryWriteKind(p.Kind); issue != "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: issue}
 					break
 				}
@@ -222,54 +239,11 @@ func memoryTool(store memory.MemoryStore) *Tool {
 	}
 }
 
-func memoryContentQualityIssue(content string) string {
-	if memoryContentHasExclusionClause(content) {
-		return "memory content mixes a durable fact with non-memory/exclusion guidance. Next: retry with only the positive reusable fact as a compact atomic entry; do not include examples of transient facts, rejected facts, or things not to remember."
-	}
-	return ""
-}
-
-func memoryContentHasExclusionClause(content string) bool {
-	for _, clause := range memoryContentClauses(content) {
-		normalized := strings.ToLower(textutil.CompactWhitespace(clause))
-		switch {
-		case strings.Contains(normalized, "transient") && (strings.Contains(normalized, "not durable") || strings.Contains(normalized, "not a durable") || strings.Contains(normalized, "not memory") || strings.Contains(normalized, "not be remembered") || strings.Contains(normalized, "do not remember")):
-			return true
-		case strings.Contains(normalized, "one-off") && (strings.Contains(normalized, "not durable") || strings.Contains(normalized, "transient")):
-			return true
-		case strings.Contains(normalized, "do not save") || strings.Contains(normalized, "do not store") || strings.Contains(normalized, "do not remember"):
-			return true
-		case strings.Contains(normalized, "not durable convention") || strings.Contains(normalized, "not durable conventions"):
-			return true
-		}
-	}
-	return false
-}
-
-func memoryContentClauses(content string) []string {
-	fields := strings.FieldsFunc(content, func(r rune) bool {
-		switch r {
-		case '.', '!', '?', '\n', ';':
-			return true
-		default:
-			return false
-		}
-	})
-	out := make([]string, 0, len(fields))
-	for _, field := range fields {
-		field = strings.TrimSpace(field)
-		if field != "" {
-			out = append(out, field)
-		}
-	}
-	return out
-}
-
 func formatMemoryDecodeArgsError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("decode args for memory: %w\nFailure: kind=invalid_args\nNext: retry memory with a single JSON object using only documented fields: action, target, topic, content, old_text, query, top_k. Use action=search with query to recall, action=list to discover topics, or action=add/replace/remove with compact durable text.", err)
+	return fmt.Errorf("decode args for memory: %w\nFailure: kind=invalid_args\nNext: retry memory with a single JSON object using only documented fields: action, target, kind, topic, content, old_text, query, top_k. Use action=search with query to recall, action=list to discover topics, or action=add/replace/remove with compact durable text and a durable kind.", err)
 }
 
 func decodeMemoryToolArgs(args json.RawMessage) (memoryToolArgs, map[string]bool, error) {
@@ -301,10 +275,12 @@ func rejectUnusedMemoryArgs(p memoryToolArgs, present map[string]bool) (memory.M
 		return memory.MemoryResponse{}, false
 	case memoryActionAdd:
 		allowed["target"] = true
+		allowed["kind"] = true
 		allowed["topic"] = true
 		allowed["content"] = true
 	case memoryActionReplace:
 		allowed["target"] = true
+		allowed["kind"] = true
 		allowed["topic"] = true
 		allowed["old_text"] = true
 		allowed["content"] = true
@@ -369,6 +345,9 @@ func validateMemoryToolInputLengths(p memoryToolArgs) (memory.MemoryResponse, bo
 	if resp, ok := check("target", p.Target, maxMemoryTargetBytes); ok {
 		return resp, true
 	}
+	if resp, ok := check("kind", p.Kind, maxMemoryKindBytes); ok {
+		return resp, true
+	}
 	if resp, ok := check("topic", p.Topic, maxMemoryTopicBytes); ok {
 		return resp, true
 	}
@@ -379,4 +358,16 @@ func validateMemoryToolInputLengths(p memoryToolArgs) (memory.MemoryResponse, bo
 		return resp, true
 	}
 	return memory.MemoryResponse{}, false
+}
+
+func validateMemoryWriteKind(kind string) string {
+	if kind == "" {
+		return "kind is required for memory writes. Next: retry with kind=preference, project_fact, convention, decision, or lesson; do not write current task progress as memory."
+	}
+	for _, allowed := range memoryWriteKinds {
+		if kind == allowed {
+			return ""
+		}
+	}
+	return fmt.Sprintf("invalid memory kind %q. Next: retry with one stable kind: preference, project_fact, convention, decision, or lesson; keep current task progress in plan/loop/task state, not memory.", kind)
 }

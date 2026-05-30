@@ -121,14 +121,14 @@ func TestRecordMemorySearchStatsCountsSearchCallsAndNoHitSearches(t *testing.T) 
 
 func TestMemoryUpdateMetaForResult(t *testing.T) {
 	add := memoryUpdateMetaForResult("memory",
-		[]byte(`{"action":"add","target":"memory","topic":"markets","content":"Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence."}`),
+		[]byte(`{"action":"add","target":"memory","kind":"convention","topic":"markets","content":"Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence."}`),
 		`{"ok":true,"mutated":true,"target":"memory","topic":"markets","message":"added"}`,
 		false,
 	)
 	if add == nil {
 		t.Fatal("add memory update meta missing")
 	}
-	if add.Action != "add" || add.Target != "memory" || add.Topic != "markets" || add.Location != "memory:markets" ||
+	if add.Action != "add" || add.Target != "memory" || add.Kind != "convention" || add.Topic != "markets" || add.Location != "memory:markets" ||
 		add.Preview != "Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence." ||
 		add.NextPreview != add.Preview {
 		t.Fatalf("add memory update meta = %+v", add)

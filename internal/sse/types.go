@@ -337,6 +337,7 @@ type ToolResultPayload struct {
 type MemoryUpdateMeta struct {
 	Action          string `json:"action"`
 	Target          string `json:"target"`
+	Kind            string `json:"kind,omitempty"`
 	Topic           string `json:"topic,omitempty"`
 	Location        string `json:"location"`
 	Preview         string `json:"preview"`

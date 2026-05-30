@@ -2790,6 +2790,7 @@ func memoryAutonomousDurableRuleScenario() BatchScenario {
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "memory", Arg: "action", Substring: "add"},
 			{Tool: "memory", Arg: "target", Substring: "memory"},
+			{Tool: "memory", Arg: "kind", Substring: "convention"},
 			{Tool: "memory", Arg: "topic", Substring: "conventions"},
 			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-73"},
 			{Tool: "memory", Arg: "content", Substring: "source-led"},
@@ -4293,6 +4294,7 @@ if __name__ == "__main__":
 			{Tool: "edit_file", Arg: "path", Substring: "reporter/cli.py"},
 			{Tool: "memory", Arg: "action", Substring: "add"},
 			{Tool: "memory", Arg: "action", Substring: "search"},
+			{Tool: "memory", Arg: "kind", Substring: "convention"},
 			{Tool: "memory", Arg: "content", Substring: "AUTO-MEM-64"},
 			{Tool: "memory", Arg: "content", Substring: "JSON"},
 			{Tool: "loop_protocol", Arg: "action", Substring: "close"},

@@ -303,6 +303,7 @@ func memoryUpdateMetaForResult(tool string, args json.RawMessage, result string,
 	var req struct {
 		Action  string `json:"action"`
 		Target  string `json:"target"`
+		Kind    string `json:"kind"`
 		Topic   string `json:"topic"`
 		Content string `json:"content"`
 		OldText string `json:"old_text"`
@@ -345,6 +346,7 @@ func memoryUpdateMetaForResult(tool string, args json.RawMessage, result string,
 	out := &sse.MemoryUpdateMeta{
 		Action:   action,
 		Target:   target,
+		Kind:     strings.TrimSpace(req.Kind),
 		Topic:    topic,
 		Location: target + ":" + topic,
 		Preview:  preview,
