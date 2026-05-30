@@ -393,6 +393,54 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesOneShotLoopTickWithoutProto
 	}
 }
 
+func TestSessionPool_RunDueSessionSchedulesOnceLoopTickFailureDoesNotBlockTimer(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
+	createDurableSessionDir(t, pool, "mixed-schedules")
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "mixed-schedules",
+		sessionSchedule{
+			ID:                    "sched_loop",
+			Kind:                  sessionScheduleKindLoopTick,
+			Prompt:                "Scheduled loop tick for session: mixed-schedules",
+			Enabled:               true,
+			NextRunAt:             now.Add(-2 * time.Minute).Format(time.RFC3339),
+			RepeatIntervalSeconds: 1800,
+			CreatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+			UpdatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+		},
+		sessionSchedule{
+			ID:        "sched_timer",
+			Kind:      sessionScheduleKindCustom,
+			Prompt:    "Run the ordinary timer even when loop activation is incomplete.",
+			Enabled:   true,
+			NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
+			CreatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+			UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
+		},
+	)
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want ordinary timer to fire after pausing invalid loop_tick", got)
+	}
+	loopSchedule := waitSchedule(t, pool, "mixed-schedules", "sched_loop", func(schedule sessionSchedule) bool {
+		return schedule.LastError != ""
+	})
+	if loopSchedule.Enabled || loopSchedule.RunCount != 0 || loopSchedule.LastTurnID != "" || !strings.Contains(loopSchedule.LastError, "running LOOP.md") {
+		t.Fatalf("loop schedule = %+v, want paused invalid loop_tick without a turn", loopSchedule)
+	}
+	timerSchedule := waitSchedule(t, pool, "mixed-schedules", "sched_timer", func(schedule sessionSchedule) bool {
+		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+	})
+	if timerSchedule.Enabled || timerSchedule.LastError != "" {
+		t.Fatalf("timer schedule = %+v, want ordinary one-shot timer completed", timerSchedule)
+	}
+	userMessage := waitScheduleUserMessage(t, pool, "mixed-schedules")
+	if userMessage.ScheduleID != "sched_timer" || userMessage.ScheduleKind != sessionScheduleKindCustom {
+		t.Fatalf("user.message = %+v, want ordinary timer provenance", userMessage)
+	}
+}
+
 func TestSessionPool_ClaimScheduleDoesNotAdvanceBeforeTurnEnd(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
