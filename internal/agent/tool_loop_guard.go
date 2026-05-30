@@ -91,11 +91,13 @@ type toolLoopGuard struct {
 	browserScrollNoMovePage    string
 	browserScrollNoMoveDir     string
 	browserScrollNoMoveCount   int
+	workspaceMutationEpoch     int
 }
 
 type toolCallKey struct {
-	name string
-	hash uint64
+	name  string
+	hash  uint64
+	epoch int
 }
 
 type toolCallFailure struct {
@@ -156,7 +158,7 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		}
 		g.perToolCounts[tool]++
 	}
-	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
+	key := g.toolCallKey(tool, args)
 	if failure := g.failedCalls[key]; shouldBlockRepeatedFailedCall(tool, failure) {
 		return repeatedFailedCallMessage(tool, failure)
 	}
@@ -284,7 +286,17 @@ func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, resu
 		}
 		outcomeOK = false
 	}
+	if outcomeOK && workspaceGuardMutationRequiresVerification(tool, args) {
+		g.recordWorkspaceMutation()
+	}
 	return guardResult, outcomeOK
+}
+
+func (g *toolLoopGuard) recordWorkspaceMutation() {
+	if g == nil {
+		return
+	}
+	g.workspaceMutationEpoch++
 }
 
 func (g *toolLoopGuard) recordBrowserFindNoMatch(tool, result string, isErr bool) string {
@@ -600,7 +612,7 @@ func (g *toolLoopGuard) recordArgumentOutcome(tool string, args json.RawMessage,
 	if g == nil || !tracksFailedArguments(tool) {
 		return
 	}
-	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
+	key := g.toolCallKey(tool, args)
 	if ok {
 		delete(g.failedCalls, key)
 		if host := canonicalFetchHost(tool, args); host != "" && g.failedHosts != nil {
@@ -631,6 +643,23 @@ func (g *toolLoopGuard) recordArgumentOutcome(tool string, args json.RawMessage,
 func tracksFailedArguments(tool string) bool {
 	switch tool {
 	case "web_fetch", "web_search":
+		return true
+	default:
+		return false
+	}
+}
+
+func (g *toolLoopGuard) toolCallKey(tool string, args json.RawMessage) toolCallKey {
+	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
+	if g != nil && loopGuardWorkspaceSnapshotTool(tool) {
+		key.epoch = g.workspaceMutationEpoch
+	}
+	return key
+}
+
+func loopGuardWorkspaceSnapshotTool(tool string) bool {
+	switch tool {
+	case "shell", "read_file", "list_files", "file_context", "symbol_context", "repo_search":
 		return true
 	default:
 		return false

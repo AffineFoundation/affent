@@ -30,6 +30,48 @@ func TestToolLoopGuard_BlocksExactRepeatedCalls(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_AllowsRepeatedWorkspaceEvidenceAfterMutation(t *testing.T) {
+	g := newToolLoopGuard()
+	shellArgs := json.RawMessage(`{"command":"python3 -m unittest discover -s tests"}`)
+	if got := g.recordAttempt("shell", shellArgs); got != "" {
+		t.Fatalf("first verification attempt blocked: %s", got)
+	}
+	if got := g.recordAttempt("shell", shellArgs); got != "" {
+		t.Fatalf("second verification attempt blocked: %s", got)
+	}
+	if guard, ok := g.recordToolResult("edit_file", json.RawMessage(`{"path":"pkg/store.py","old":"return None","new":"return {}"}`), "replaced 1 occurrence(s) in pkg/store.py", false); guard != "" || !ok {
+		t.Fatalf("successful edit should only advance workspace state, guard=%q ok=%v", guard, ok)
+	}
+	if got := g.recordAttempt("shell", shellArgs); got != "" {
+		t.Fatalf("verification after workspace mutation should be a fresh evidence context, got %q", got)
+	}
+	if got := g.recordAttempt("shell", shellArgs); got != "" {
+		t.Fatalf("second verification in new workspace context should pass, got %q", got)
+	}
+	got := g.recordAttempt("shell", shellArgs)
+	if !strings.Contains(got, "blocked repeated call") {
+		t.Fatalf("third verification in the same workspace context should be blocked, got %q", got)
+	}
+}
+
+func TestToolLoopGuard_DoesNotResetWebArgumentFailuresOnWorkspaceMutation(t *testing.T) {
+	g := newToolLoopGuard()
+	fetchArgs := json.RawMessage(`{"url":"https://blocked.example/metrics"}`)
+	if got := g.recordAttempt("web_fetch", fetchArgs); got != "" {
+		t.Fatalf("first fetch should pass: %q", got)
+	}
+	if guard, ok := g.recordToolResult("web_fetch", fetchArgs, "http 403\nFailure: kind=blocked, status=403\nNext: use another source", true); guard != "" || ok {
+		t.Fatalf("first blocked fetch should record failure only, guard=%q ok=%v", guard, ok)
+	}
+	if guard, ok := g.recordToolResult("write_file", json.RawMessage(`{"path":"pkg/store.py","content":"print(1)"}`), "wrote 8 bytes to pkg/store.py", false); guard != "" || !ok {
+		t.Fatalf("successful write should only advance workspace state, guard=%q ok=%v", guard, ok)
+	}
+	got := g.recordAttempt("web_fetch", fetchArgs)
+	if !strings.Contains(got, "blocked repeated failed call") {
+		t.Fatalf("workspace mutation must not clear external-source failure evidence, got %q", got)
+	}
+}
+
 func TestToolLoopGuard_NormalizesFileToolPathVariants(t *testing.T) {
 	g := newToolLoopGuard()
 	for i, args := range []json.RawMessage{

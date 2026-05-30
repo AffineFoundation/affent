@@ -2003,6 +2003,74 @@ func TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats(t *testing.T) {
 	}
 }
 
+func TestRunner_EndToEnd_LoopGuardAllowsVerificationAfterWorkspaceMutation(t *testing.T) {
+	toolCall := func(callID, tool, args string) []string {
+		quotedArgs, err := json.Marshal(args)
+		if err != nil {
+			t.Fatalf("marshal args: %v", err)
+		}
+		return []string{
+			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":%q,"type":"function","function":{"name":%q,"arguments":""}}]},"finish_reason":null}]}`, callID, tool),
+			fmt.Sprintf(`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":%s}}]},"finish_reason":null}]}`, string(quotedArgs)),
+			`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`[DONE]`,
+		}
+	}
+	verifyArgs := `{"command":"printf verify"}`
+	writeArgs := `{"path":"pkg/store.py","content":"print('ok')\n"}`
+	finalText := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Verification reran after the workspace change."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{
+		toolCall("verify1", "shell", verifyArgs),
+		toolCall("verify2", "shell", verifyArgs),
+		toolCall("write1", "write_file", writeArgs),
+		toolCall("verify3", "shell", verifyArgs),
+		finalText,
+	})
+
+	scenario := Scenario{
+		Name:         "loop_guard_allows_verification_after_workspace_mutation",
+		Description:  "loop_guard treats a successful workspace mutation as a new evidence context for repeated verification commands",
+		Prompt:       "verify, edit, and verify again",
+		MaxTurnSteps: 8,
+		Checks:       []Check{TurnEndedCleanly(), ToolCalled("shell", nil), ToolCalled("write_file", nil)},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		for i, c := range out.Trace.Tools {
+			t.Logf("  trace[%d]: tool=%s args=%+v isErr=%v failure=%s result=%s", i, c.Tool, c.Args, c.IsErr, c.FailureKind, c.Result)
+		}
+	}
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected 4 tool calls; got %d", len(out.Trace.Tools))
+	}
+	thirdVerify := out.Trace.Tools[3]
+	if thirdVerify.Tool != "shell" {
+		t.Fatalf("fourth tool = %q, want shell", thirdVerify.Tool)
+	}
+	if thirdVerify.IsErr || strings.Contains(thirdVerify.Result, "loop_guard") {
+		t.Fatalf("verification after workspace mutation should not be loop-guarded: isErr=%v result=%q", thirdVerify.IsErr, thirdVerify.Result)
+	}
+}
+
 // TestRunner_EndToEnd_BroadShellScanGuardBlocks pins the shell guard
 // for unbounded filesystem scans (find / -name ..., grep -r / ...,
 // rg / --files). The runtime refuses the call before it reaches the
