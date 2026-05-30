@@ -35,7 +35,7 @@ func Kinds(output string) []string {
 				continue
 			}
 			kind := strings.TrimSpace(strings.TrimPrefix(part, "kind="))
-			if validKind(kind) && !seen[kind] {
+			if ValidKind(kind) && !seen[kind] {
 				seen[kind] = true
 				kinds = append(kinds, kind)
 			}
@@ -107,7 +107,9 @@ func IsNoEvidenceBrowserNetworkResult(result string) bool {
 		strings.Contains(result, "\nMATCHES: none\n")
 }
 
-func validKind(kind string) bool {
+// ValidKind reports whether kind is safe to expose as a structured failure
+// kind in JSON, logs, and eval summaries.
+func ValidKind(kind string) bool {
 	if kind == "" {
 		return false
 	}

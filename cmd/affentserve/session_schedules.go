@@ -619,7 +619,7 @@ func sessionScheduleLastErrorKind(lastError string) string {
 }
 
 func sessionScheduleErrorKind(schedule sessionSchedule) string {
-	if kind := strings.TrimSpace(schedule.LastErrorKind); kind != "" {
+	if kind := strings.TrimSpace(schedule.LastErrorKind); toolfailure.ValidKind(kind) {
 		return kind
 	}
 	return sessionScheduleLastErrorKind(schedule.LastError)
@@ -688,8 +688,12 @@ func normalizeSessionSchedule(schedule *sessionSchedule) error {
 	if strings.TrimSpace(schedule.LastError) == "" {
 		schedule.LastError = ""
 		schedule.LastErrorKind = ""
-	} else if strings.TrimSpace(schedule.LastErrorKind) == "" {
-		schedule.LastErrorKind = sessionScheduleLastErrorKind(schedule.LastError)
+	} else {
+		kind := strings.TrimSpace(schedule.LastErrorKind)
+		if !toolfailure.ValidKind(kind) {
+			kind = sessionScheduleLastErrorKind(schedule.LastError)
+		}
+		schedule.LastErrorKind = kind
 	}
 	return nil
 }

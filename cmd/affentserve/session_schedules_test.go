@@ -545,6 +545,64 @@ func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
 	}
 }
 
+func TestReadSessionSchedulesFileNormalizesLastErrorKind(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, sessionSchedulesFileName)
+	raw := `{
+		"version":1,
+		"schedules":[
+			{
+				"id":"sched_legacy",
+				"kind":"custom",
+				"prompt":"legacy error",
+				"enabled":false,
+				"next_run_at":"2026-05-27T10:00:00Z",
+				"created_at":"2026-05-27T09:00:00Z",
+				"updated_at":"2026-05-27T09:30:00Z",
+				"last_error":"failed\nNext: retry safely\nFailure: kind=session_schedule_turn_failed"
+			},
+			{
+				"id":"sched_invalid",
+				"kind":"custom",
+				"prompt":"invalid kind",
+				"enabled":false,
+				"next_run_at":"2026-05-27T10:00:00Z",
+				"created_at":"2026-05-27T09:00:00Z",
+				"updated_at":"2026-05-27T09:30:00Z",
+				"last_error_kind":"Blocked; rm -rf",
+				"last_error":"failed\nNext: retry safely\nFailure: kind=session_schedule_loop_tick_unavailable"
+			},
+			{
+				"id":"sched_clean",
+				"kind":"custom",
+				"prompt":"clean",
+				"enabled":false,
+				"next_run_at":"2026-05-27T10:00:00Z",
+				"created_at":"2026-05-27T09:00:00Z",
+				"updated_at":"2026-05-27T09:30:00Z",
+				"last_error_kind":"stale_error"
+			}
+		]
+	}`
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatalf("write schedules: %v", err)
+	}
+
+	file, found, err := readSessionSchedulesFile(path)
+	if err != nil || !found {
+		t.Fatalf("read schedules found=%v err=%v", found, err)
+	}
+	if file.Schedules[0].LastErrorKind != sessionScheduleTurnFailedFailureKind {
+		t.Fatalf("legacy LastErrorKind = %q, want derived kind", file.Schedules[0].LastErrorKind)
+	}
+	if file.Schedules[1].LastErrorKind != sessionScheduleLoopTickUnavailableFailureKind {
+		t.Fatalf("invalid LastErrorKind = %q, want sanitized fallback", file.Schedules[1].LastErrorKind)
+	}
+	if file.Schedules[2].LastError != "" || file.Schedules[2].LastErrorKind != "" {
+		t.Fatalf("clean schedule error state = %q/%q, want cleared stale kind", file.Schedules[2].LastError, file.Schedules[2].LastErrorKind)
+	}
+}
+
 func TestCreateSessionScheduleLoopTickDoesNotInitializeProtocol(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	createDurableSessionDir(t, pool, "direct-loop")

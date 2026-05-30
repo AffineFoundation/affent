@@ -37,6 +37,26 @@ func TestKinds(t *testing.T) {
 	}
 }
 
+func TestValidKind(t *testing.T) {
+	cases := []struct {
+		kind string
+		want bool
+	}{
+		{kind: "blocked", want: true},
+		{kind: "loop_guard_no_budget", want: true},
+		{kind: "http-403", want: true},
+		{kind: "", want: false},
+		{kind: "Blocked", want: false},
+		{kind: "blocked;rm", want: false},
+		{kind: "blocked source", want: false},
+	}
+	for _, c := range cases {
+		if got := ValidKind(c.kind); got != c.want {
+			t.Fatalf("ValidKind(%q) = %t, want %t", c.kind, got, c.want)
+		}
+	}
+}
+
 func TestKindForResult(t *testing.T) {
 	if got := KindForResult("web_fetch", "Failure: kind=blocked", true); got != "blocked" {
 		t.Fatalf("hard failure kind = %q, want blocked", got)
