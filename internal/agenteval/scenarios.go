@@ -2232,6 +2232,7 @@ func longRunModelWindowCompactionPolicyScenario() BatchScenario {
 		},
 		RequiredCompactScopeActive:          1,
 		RequiredRuntimeCompactPrefillSource: "server_observed",
+		RequiredRuntimeSurfaceRefreshReason: "post_compaction",
 		MaxCompactScopedPressurePercent:     intPtr(0),
 		ForbiddenTools:                      []string{"shell", "read_file", "write_file", "edit_file", "repo_search", "web_fetch", "web_search"},
 		MaxParentToolCalls:                  0,

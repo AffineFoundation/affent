@@ -65,6 +65,7 @@ export interface UserMessagePayload {
 
 export interface RuntimeSurfacePayload {
   turn_id: string;
+  refresh_reason?: string;
   tool_count: number;
   tools?: RuntimeSurfaceTool[];
   completion_guards?: string[];

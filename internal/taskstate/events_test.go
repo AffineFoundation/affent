@@ -21,6 +21,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}) +
 		taskStateEventLine(t, sse.TypeRuntimeSurface, sse.RuntimeSurfacePayload{
 			TurnID:                             "t1",
+			RefreshReason:                      "post_compaction",
 			MaxTurnSteps:                       12,
 			MaxTurnInputTokens:                 300000,
 			ModelContextWindowTokens:           100000,
@@ -114,6 +115,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		t.Fatalf("evidence = %+v, want git push handoff", state.Evidence)
 	}
 	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_auto=true") ||
+		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "refresh_reason=post_compaction") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_effective_percent=95") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "reserved_output_tokens=30000") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "compact_trigger_input_tokens=70000") ||
@@ -128,7 +130,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "refresh_reason=post_compaction", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}

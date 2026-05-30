@@ -3040,6 +3040,10 @@ func (l *Loop) publish(t string, payload any) {
 }
 
 func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
+	l.publishRuntimeSurfaceWithReason(turnID, opts, "turn_start")
+}
+
+func (l *Loop) publishRuntimeSurfaceWithReason(turnID string, opts TurnOptions, reason string) {
 	toolSurface := l.selectToolSurface(opts)
 	var messages []ChatMessage
 	if l.Conv != nil {
@@ -3049,6 +3053,7 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 	requestPressure := l.requestPressureStatusForMessages(messages, toolSurface.Defs)
 	payload := sse.RuntimeSurfacePayload{
 		TurnID:                             turnID,
+		RefreshReason:                      strings.TrimSpace(reason),
 		MaxTurnSteps:                       l.maxTurnStepsForSurface(),
 		MaxToolCalls:                       l.maxToolCallsForTurn(opts),
 		MaxTurnInputTokens:                 l.maxTurnInputTokensForTurn(opts),
@@ -3087,6 +3092,9 @@ func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
 	}
 	if payload.ToolResultArtifactPrefix == "" {
 		payload.ToolResultArtifactPrefix = defaultArtifactPathPrefix
+	}
+	if payload.RefreshReason == "" {
+		payload.RefreshReason = "turn_start"
 	}
 	if toolSurface.AvailableCount > 0 {
 		payload.ToolCount = len(toolSurface.Catalog)
@@ -3654,7 +3662,11 @@ func (l *Loop) prepareToolDefsForRequest(ctx context.Context, turnID string, too
 		refreshed = l.toolDefs(opts)
 	}
 	if compacted || !toolDefNamesEqual(toolDefs, refreshed) {
-		l.publishRuntimeSurface(turnID, opts)
+		reason := "tool_surface_changed"
+		if compacted {
+			reason = "post_compaction"
+		}
+		l.publishRuntimeSurfaceWithReason(turnID, opts, reason)
 	}
 	return refreshed
 }

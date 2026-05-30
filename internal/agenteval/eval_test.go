@@ -3550,6 +3550,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		modelWindowPolicy.RequiredContextCompactionReasons["estimated_context_pressure"] != 1 ||
 		modelWindowPolicy.RequiredCompactScopeActive != 1 ||
 		modelWindowPolicy.RequiredRuntimeCompactPrefillSource != "server_observed" ||
+		modelWindowPolicy.RequiredRuntimeSurfaceRefreshReason != "post_compaction" ||
 		modelWindowPolicy.MaxCompactScopedPressurePercent == nil ||
 		*modelWindowPolicy.MaxCompactScopedPressurePercent != 0 ||
 		modelWindowPolicy.RequiredTraceEventCounts[sse.TypeContextCompact] != 1 ||
@@ -3577,6 +3578,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 		"runtime_surface_tool_schema_within_budget",
 		"context_maintenance_compact_scope_active_at_least:1",
 		"runtime_surface_compact_prefill_source:server_observed",
+		"runtime_surface_refresh_reason:post_compaction",
 		"context_compaction_scoped_pressure_at_most:0",
 	} {
 		if !stringSliceContains(modelWindowChecks, want) {

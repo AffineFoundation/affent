@@ -1973,7 +1973,7 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	if err := json.Unmarshal(ev.Data, &payload); err != nil {
 		t.Fatalf("decode runtime surface: %v", err)
 	}
-	if payload.TurnID != "turn_surface" || payload.ToolCount != 5 || len(payload.Tools) != 5 {
+	if payload.TurnID != "turn_surface" || payload.RefreshReason != "turn_start" || payload.ToolCount != 5 || len(payload.Tools) != 5 {
 		t.Fatalf("payload identity = %+v", payload)
 	}
 	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory ||

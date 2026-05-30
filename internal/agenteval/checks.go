@@ -1294,6 +1294,35 @@ func RuntimeSurfaceCompactPrefillSource(required string) Check {
 	}
 }
 
+func RuntimeSurfaceRefreshReason(required string) Check {
+	required = strings.TrimSpace(required)
+	return Check{
+		Name: "runtime_surface_refresh_reason:" + required,
+		Eval: func(t Trace) CheckResult {
+			if required == "" {
+				return CheckResult{Pass: true}
+			}
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				reason := strings.TrimSpace(surface.RefreshReason)
+				observed = append(observed, fmt.Sprintf("turn=%s reason=%s tool_count=%d request_tokens=%d",
+					surface.TurnID,
+					reason,
+					surface.ToolCount,
+					surface.EstimatedRequestInputTokens,
+				))
+				if reason == required {
+					return CheckResult{Pass: true, Detail: "refresh_reason=" + required}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface refresh_reason=%s; observed=%v", required, observed),
+			}
+		},
+	}
+}
+
 func ContextMaintenanceCompactScopeActiveAtLeast(min int) Check {
 	if min <= 0 {
 		min = 1

@@ -1026,7 +1026,7 @@ func TestMessageRejectedAtLeast(t *testing.T) {
 func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	trace := Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{
 		{CompletionGuards: []string{"active_plan_unfinished"}},
-		{CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
+		{RefreshReason: "post_compaction", CompletionGuards: []string{"loop_protocol_running"}, MaxTurnInputTokens: 300000, ModelContextWindowTokens: 100000, ModelContextWindowSource: "provider", ModelContextWindowEffectivePercent: 95, ReservedOutputTokens: 30000, CompactTriggerInputTokens: 70000, CompactScopeActive: true, CompactWindowOrdinal: 2, CompactWindowPrefillInputTokens: 45000, CompactWindowPrefillSource: "server_observed", CompactScopedInputTokens: 12000, CompactHardInputLimitTokens: 70000, CompactSummaryPromptMaxBytes: agent.DefaultSummaryPromptMaxBytes, EstimatedToolSchemaTokens: 400, ToolSchemaBudgetTokens: 500, ExcludedToolCount: 2, AvailableToolCount: 5},
 	}}
 	if res := RuntimeSurfaceCompletionGuard("loop_protocol_running").Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface completion guard check to pass: %+v", res)
@@ -1054,6 +1054,12 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	}
 	if res := RuntimeSurfaceCompactPrefillSource("estimated").Eval(trace); res.Pass || !strings.Contains(res.Detail, "server_observed") {
 		t.Fatalf("expected runtime surface compact prefill source check to fail with observed source: %+v", res)
+	}
+	if res := RuntimeSurfaceRefreshReason("post_compaction").Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface refresh reason check to pass: %+v", res)
+	}
+	if res := RuntimeSurfaceRefreshReason("turn_start").Eval(trace); res.Pass || !strings.Contains(res.Detail, "post_compaction") {
+		t.Fatalf("expected runtime surface refresh reason check to fail with observed reason: %+v", res)
 	}
 	scopeTrace := Trace{ContextCompactionSkips: []ContextCompactionSkip{{
 		Cause:                           "request_pressure_not_reduced",

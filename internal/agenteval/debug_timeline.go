@@ -779,7 +779,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- max_tool_arg: `%s.%s` contains `%s` max=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), max)
 		}
 	}
-	if exp.RequiredContextMaintenance > 0 || len(exp.RequiredContextMaintenanceReasons) > 0 || exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || len(exp.RequiredContextCompactionReasons) > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || exp.RequiredCompactScopeActive > 0 || strings.TrimSpace(exp.RequiredRuntimeCompactPrefillSource) != "" || exp.MaxCompactScopedPressurePercent != nil || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
+	if exp.RequiredContextMaintenance > 0 || len(exp.RequiredContextMaintenanceReasons) > 0 || exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || len(exp.RequiredContextCompactionReasons) > 0 || exp.RequiredCompactionRemovedMsgs > 0 || exp.RequiredCompactionReducedBytes > 0 || exp.RequiredCompactScopeActive > 0 || strings.TrimSpace(exp.RequiredRuntimeCompactPrefillSource) != "" || strings.TrimSpace(exp.RequiredRuntimeSurfaceRefreshReason) != "" || exp.MaxCompactScopedPressurePercent != nil || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		var parts []string
 		if exp.RequiredContextMaintenance > 0 {
 			parts = append(parts, fmt.Sprintf("maintenance>=%d", exp.RequiredContextMaintenance))
@@ -801,6 +801,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if source := strings.TrimSpace(exp.RequiredRuntimeCompactPrefillSource); source != "" {
 			parts = append(parts, fmt.Sprintf("runtime_compact_prefill_source=%s", source))
+		}
+		if reason := strings.TrimSpace(exp.RequiredRuntimeSurfaceRefreshReason); reason != "" {
+			parts = append(parts, fmt.Sprintf("runtime_surface_refresh_reason=%s", reason))
 		}
 		if exp.MaxCompactScopedPressurePercent != nil {
 			parts = append(parts, fmt.Sprintf("compact_scoped_pressure<=%d%%", *exp.MaxCompactScopedPressurePercent))
@@ -899,6 +902,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.RequiredCompactionReducedBytes > 0 ||
 		exp.RequiredCompactScopeActive > 0 ||
 		strings.TrimSpace(exp.RequiredRuntimeCompactPrefillSource) != "" ||
+		strings.TrimSpace(exp.RequiredRuntimeSurfaceRefreshReason) != "" ||
 		exp.MaxCompactScopedPressurePercent != nil ||
 		len(exp.RequiredContextSummaryText) > 0 ||
 		len(exp.RequiredContextLoopProtocolAnchorText) > 0 ||

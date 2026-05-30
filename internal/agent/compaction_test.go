@@ -1568,7 +1568,7 @@ func TestPrepareToolDefsRefreshesSurfaceAfterCompaction(t *testing.T) {
 		t.Fatalf("compaction calls = %d, want one pre-request compaction", got)
 	}
 	surface := latestRuntimeSurfaceFromEvents(t, events)
-	if surface.ToolCount != 3 || surface.EstimatedRequestInputTokens > trigger {
+	if surface.RefreshReason != "post_compaction" || surface.ToolCount != 3 || surface.EstimatedRequestInputTokens > trigger {
 		t.Fatalf("refreshed runtime surface = %+v, want full surface within trigger", surface)
 	}
 	if got := runtimeSurfaceToolNames(surface.Tools); !reflect.DeepEqual(got, []string{"shell", "read_file", PlanToolName}) {

@@ -74,6 +74,7 @@ type UserMessagePayload struct {
 // the registered tools from later model behavior.
 type RuntimeSurfacePayload struct {
 	TurnID                             string               `json:"turn_id"`
+	RefreshReason                      string               `json:"refresh_reason,omitempty"`
 	ToolCount                          int                  `json:"tool_count"`
 	Tools                              []RuntimeSurfaceTool `json:"tools,omitempty"`
 	AvailableToolCount                 int                  `json:"available_tool_count,omitempty"`

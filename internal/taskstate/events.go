@@ -826,6 +826,9 @@ func RuntimeSurfaceSummary(p *sse.RuntimeSurfacePayload) string {
 		}
 	}
 	addIntField("model_context_window_tokens", p.ModelContextWindowTokens)
+	if reason := strings.TrimSpace(p.RefreshReason); reason != "" {
+		fields = append(fields, "refresh_reason="+reason)
+	}
 	if p.ModelContextWindowAuto {
 		fields = append(fields, "model_context_window_auto=true")
 	}
