@@ -3780,6 +3780,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	} else if scenario.ModelContextWindowTokens > 0 {
 		checks = append(checks, RuntimeSurfaceCompactTriggerMatchesModelPolicy())
 		checks = append(checks, RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy())
+		checks = append(checks, RuntimeSurfaceHardInputLimitMatchesModelPolicy())
 		checks = append(checks, RuntimeSurfaceToolSchemaWithinBudget())
 	}
 	if scenario.RequireNoDelegationErrors {

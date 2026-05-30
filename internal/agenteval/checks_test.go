@@ -1085,6 +1085,9 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	if res := RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface summary prompt policy check to pass: %+v", res)
 	}
+	if res := RuntimeSurfaceHardInputLimitMatchesModelPolicy().Eval(trace); !res.Pass {
+		t.Fatalf("expected runtime surface hard input limit policy check to pass: %+v", res)
+	}
 	if res := RuntimeSurfaceToolSchemaWithinBudget().Eval(trace); !res.Pass {
 		t.Fatalf("expected runtime surface tool schema budget check to pass: %+v", res)
 	}
@@ -1134,6 +1137,19 @@ func TestRuntimeSurfaceCompletionGuard(t *testing.T) {
 	for _, want := range []string{"expected=640", "summary_prompt_max_bytes=196608"} {
 		if !strings.Contains(badSummaryPolicy.Detail, want) {
 			t.Fatalf("failure detail = %q, want %q", badSummaryPolicy.Detail, want)
+		}
+	}
+	badHardLimitPolicy := RuntimeSurfaceHardInputLimitMatchesModelPolicy().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{
+		ModelContextWindowTokens:    100000,
+		ReservedOutputTokens:        30000,
+		CompactHardInputLimitTokens: 80000,
+	}}})
+	if badHardLimitPolicy.Pass {
+		t.Fatal("expected mismatched runtime surface hard input limit policy check to fail")
+	}
+	for _, want := range []string{"expected=70000", "hard_limit=80000", "reserve=30000"} {
+		if !strings.Contains(badHardLimitPolicy.Detail, want) {
+			t.Fatalf("failure detail = %q, want %q", badHardLimitPolicy.Detail, want)
 		}
 	}
 	badToolBudget := RuntimeSurfaceToolSchemaWithinBudget().Eval(Trace{RuntimeSurfaces: []sse.RuntimeSurfacePayload{{

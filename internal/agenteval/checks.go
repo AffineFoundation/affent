@@ -1494,6 +1494,34 @@ func RuntimeSurfaceCompactSummaryPromptMatchesModelPolicy() Check {
 	}
 }
 
+func RuntimeSurfaceHardInputLimitMatchesModelPolicy() Check {
+	return Check{
+		Name: "runtime_surface_hard_input_limit_matches_model_policy",
+		Eval: func(t Trace) CheckResult {
+			var observed []string
+			for _, surface := range t.RuntimeSurfaces {
+				if surface.ModelContextWindowTokens <= 0 {
+					continue
+				}
+				expected := agent.ModelInputCapacityTokens(surface.ModelContextWindowTokens, surface.ReservedOutputTokens)
+				observed = append(observed, fmt.Sprintf("window=%d reserve=%d hard_limit=%d expected=%d",
+					surface.ModelContextWindowTokens,
+					surface.ReservedOutputTokens,
+					surface.CompactHardInputLimitTokens,
+					expected,
+				))
+				if expected > 0 && surface.CompactHardInputLimitTokens == expected {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("compact_hard_input_limit_tokens=%d", expected)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected runtime.surface hard input limit to match model policy; observed=%v", observed),
+			}
+		},
+	}
+}
+
 func RuntimeSurfaceToolSchemaWithinBudget() Check {
 	return Check{
 		Name: "runtime_surface_tool_schema_within_budget",
