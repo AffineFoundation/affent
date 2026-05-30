@@ -2356,6 +2356,53 @@ func longRunSessionScheduleRecurringFollowupScenario() BatchScenario {
 	}
 }
 
+func longRunSessionScheduleControlLifecycleScenario() BatchScenario {
+	return BatchScenario{
+		Name:          "longrun-session-schedule-control-lifecycle",
+		Suites:        []string{longRunSuite},
+		Domains:       []string{longRunRecoveryDomain, scheduleAutomationDomain},
+		SessionID:     "longrun-session-schedule-control",
+		Prompt:        "Create a one-shot ordinary session timer for release readiness. Use kind custom, next_run_at exactly 2030-01-02T15:04:05Z, and a compact display label. After the create result returns the schedule id, pause that same timer with action update enabled false, then delete that same timer. Do not use loop_protocol. Reply with SCHEDULE-CONTROL-OK-17 and say no saved schedules remain.",
+		RequiredTools: []string{agent.SessionScheduleToolName},
+		RequiredToolCounts: map[string]int{
+			agent.SessionScheduleToolName: 3,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+			{Tool: agent.SessionScheduleToolName, Arg: "kind", Substring: "custom"},
+			{Tool: agent.SessionScheduleToolName, Arg: "next_run_at", Substring: "2030-01-02T15:04:05Z"},
+			{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "update"},
+			{Tool: agent.SessionScheduleToolName, Arg: "enabled", Substring: "false"},
+			{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "delete"},
+		},
+		ForbiddenTools: []string{
+			agent.LoopProtocolToolName,
+			"shell",
+			"write_file",
+			"edit_file",
+		},
+		RequiredToolResultText: map[string][]string{
+			agent.SessionScheduleToolName: {
+				"sched_eval_001",
+				`"enabled": false`,
+				`"count": 0`,
+			},
+		},
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			sse.RuntimeSurfaceRefreshSchedulesChanged: 3,
+		},
+		RequiredFinalText: []string{"SCHEDULE-CONTROL-OK-17", "no saved schedules remain"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.LoopProtocolToolName: 0,
+			"shell":                    0,
+			"write_file":               0,
+			"edit_file":                0,
+		},
+		MaxParentToolCalls: 5,
+		MaxTurns:           6,
+	}
+}
+
 func longRunScheduledTurnProvenanceScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-scheduled-turn-provenance",

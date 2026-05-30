@@ -2541,8 +2541,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 36 {
-		t.Fatalf("long-run suite size = %d, want 36", len(scenarios))
+	if len(scenarios) != 37 {
+		t.Fatalf("long-run suite size = %d, want 37", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -4013,6 +4013,39 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if scheduleFollowup.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshSchedulesChanged] != 1 {
 		t.Fatalf("session schedule RequiredRuntimeSurfaceRefreshReasons = %#v, want schedules refresh", scheduleFollowup.RequiredRuntimeSurfaceRefreshReasons)
+	}
+
+	scheduleControl, ok := seen["longrun-session-schedule-control-lifecycle"]
+	if !ok {
+		t.Fatalf("long-run suite missing session schedule control lifecycle scenario")
+	}
+	if scheduleControl.SessionID != "longrun-session-schedule-control" {
+		t.Fatalf("session schedule control SessionID = %q, want longrun-session-schedule-control", scheduleControl.SessionID)
+	}
+	if scheduleControl.RequiredToolCounts[agent.SessionScheduleToolName] != 3 {
+		t.Fatalf("session schedule control RequiredToolCounts = %#v, want three schedule calls", scheduleControl.RequiredToolCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+		{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "update"},
+		{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "delete"},
+		{Tool: agent.SessionScheduleToolName, Arg: "enabled", Substring: "false"},
+	} {
+		if !toolArgRequirementContains(scheduleControl.RequiredToolArgContains, want) {
+			t.Fatalf("session schedule control RequiredToolArgContains = %#v, want %#v", scheduleControl.RequiredToolArgContains, want)
+		}
+	}
+	if !stringSliceContains(scheduleControl.ForbiddenTools, agent.LoopProtocolToolName) ||
+		scheduleControl.MaxSuccessfulToolCallsByTool[agent.LoopProtocolToolName] != 0 {
+		t.Fatalf("session schedule control loop constraints = forbidden:%#v max:%#v", scheduleControl.ForbiddenTools, scheduleControl.MaxSuccessfulToolCallsByTool)
+	}
+	if scheduleControl.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshSchedulesChanged] != 3 {
+		t.Fatalf("session schedule control refresh requirements = %#v, want create/update/delete refreshes", scheduleControl.RequiredRuntimeSurfaceRefreshReasons)
+	}
+	scheduleControlChecks := checkNamesFor(BatchScenarioChecks(scheduleControl))
+	if !stringSliceContains(scheduleControlChecks, "tool_called_at_least:session_schedule:3") ||
+		!stringSliceContains(scheduleControlChecks, "runtime_surface_refresh_reason:schedules_changed:3") {
+		t.Fatalf("session schedule control checks = %#v, want schedule lifecycle checks", scheduleControlChecks)
 	}
 
 	scheduledTurn, ok := seen["longrun-scheduled-turn-provenance"]
