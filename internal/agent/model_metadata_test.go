@@ -42,6 +42,40 @@ func TestParseModelMetadataNestedAndStringFields(t *testing.T) {
 	}
 }
 
+func TestParseModelMetadataOpenRouterTopProviderContextLength(t *testing.T) {
+	raw := []byte(`{
+		"data": [
+			{
+				"id": "qwen/qwen3.6-35b-a3b",
+				"context_length": 200000,
+				"top_provider": {"context_length": "131072"}
+			}
+		]
+	}`)
+	got, err := ParseModelMetadata(raw, "Qwen3.6-35B-A3B")
+	if err != nil {
+		t.Fatalf("ParseModelMetadata: %v", err)
+	}
+	if got.ID != "qwen/qwen3.6-35b-a3b" || got.ContextWindowTokens != 131072 {
+		t.Fatalf("metadata = %+v, want normalized provider id and top_provider context limit", got)
+	}
+}
+
+func TestParseModelMetadataMatchesNormalizedProviderID(t *testing.T) {
+	raw := []byte(`{
+		"data": [
+			{"id": "Qwen/Qwen3.6-35B-A3B", "context_window": 262144}
+		]
+	}`)
+	got, err := ParseModelMetadata(raw, "qwen3.6-35b-a3b")
+	if err != nil {
+		t.Fatalf("ParseModelMetadata: %v", err)
+	}
+	if got.ID != "Qwen/Qwen3.6-35B-A3B" || got.ContextWindowTokens != 262144 {
+		t.Fatalf("metadata = %+v, want normalized provider id match", got)
+	}
+}
+
 func TestParseModelMetadataAppliesEffectiveContextWindowPercent(t *testing.T) {
 	raw := []byte(`{
 		"data": [

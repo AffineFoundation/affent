@@ -106,7 +106,7 @@ func ParseModelMetadata(raw []byte, model string) (ModelMetadata, error) {
 	}
 	for _, item := range envelope.Data {
 		id := modelMetadataString(item, "id")
-		if model != "" && id != model {
+		if model != "" && !modelMetadataIDsMatch(id, model) {
 			continue
 		}
 		window := modelContextWindowTokensFromMetadata(item)
@@ -133,6 +133,14 @@ func modelContextWindowTokensFromMetadata(item map[string]any) int {
 		"max_model_len",
 		"max_model_length",
 	)
+	if providerWindow := nestedPositiveModelMetadataInt(item, "top_provider",
+		"context_length",
+		"context_window",
+		"max_context_window",
+		"max_model_len",
+	); providerWindow > 0 && (maxWindow <= 0 || providerWindow < maxWindow) {
+		maxWindow = providerWindow
+	}
 	if window <= 0 {
 		return maxWindow
 	}
@@ -180,7 +188,7 @@ func firstPositiveModelMetadataInt(item map[string]any, keys ...string) int {
 			return n
 		}
 	}
-	for _, nestedKey := range []string{"metadata", "limits", "capabilities"} {
+	for _, nestedKey := range []string{"metadata", "limits", "capabilities", "top_provider"} {
 		nested, ok := item[nestedKey].(map[string]any)
 		if !ok {
 			continue
@@ -192,6 +200,18 @@ func firstPositiveModelMetadataInt(item map[string]any, keys ...string) int {
 		}
 	}
 	return 0
+}
+
+func modelMetadataIDsMatch(metadataID, requested string) bool {
+	metadataID = strings.TrimSpace(metadataID)
+	requested = strings.TrimSpace(requested)
+	if requested == "" {
+		return true
+	}
+	if metadataID == requested {
+		return true
+	}
+	return normalizeModelMetadataID(metadataID) == normalizeModelMetadataID(requested)
 }
 
 func modelMetadataInt(item map[string]any, key string) int {
@@ -207,6 +227,19 @@ func modelMetadataInt(item map[string]any, key string) int {
 	case string:
 		n, ok := parsePositiveIntString(v)
 		if ok {
+			return n
+		}
+	}
+	return 0
+}
+
+func nestedPositiveModelMetadataInt(item map[string]any, nestedKey string, keys ...string) int {
+	nested, ok := item[nestedKey].(map[string]any)
+	if !ok {
+		return 0
+	}
+	for _, key := range keys {
+		if n := modelMetadataInt(nested, key); n > 0 {
 			return n
 		}
 	}
