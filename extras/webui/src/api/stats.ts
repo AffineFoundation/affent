@@ -96,6 +96,7 @@ export interface ScheduleRunnerStats {
   oldest_in_flight_schedule_id?: string;
   last_error_session_id?: string;
   last_error_schedule_id?: string;
+  last_error_kind?: string;
   last_error?: string;
   disabled_reason?: string;
 }

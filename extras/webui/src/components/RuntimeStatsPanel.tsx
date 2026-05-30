@@ -223,6 +223,7 @@ function scheduleRunnerMetric(runner?: ScheduleRunnerStats): RuntimeMetric | und
   const inFlight = runner.in_flight_schedules ?? 0;
   const errors = runner.error_schedules ?? 0;
   const disabledReason = runner.disabled_reason?.trim();
+  const lastErrorKind = runner.last_error_kind?.trim();
   const lastError = runner.last_error?.trim();
   if (total <= 0 && due <= 0 && inFlight <= 0 && errors <= 0 && !lastError && !disabledReason) return undefined;
   const parts: string[] = [];
@@ -243,6 +244,7 @@ function scheduleRunnerMetric(runner?: ScheduleRunnerStats): RuntimeMetric | und
   if (runner.next_prompt_preview) parts.push(runner.next_prompt_preview);
   if (errors > 0) parts.push(`${errors} errors`);
   if (runner.last_error_session_id && runner.last_error_schedule_id) parts.push(`error ${runner.last_error_session_id}/${runner.last_error_schedule_id}`);
+  if (lastErrorKind) parts.push(lastErrorKind);
   if (lastError) parts.push(lastError);
   if (disabledReason && total > 0) parts.push(disabledReason);
   if (parts.length === 0) return undefined;

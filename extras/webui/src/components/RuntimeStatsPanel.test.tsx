@@ -195,6 +195,7 @@ describe("RuntimeStatsPanel", () => {
             next_prompt_preview: "Due timer",
             last_error_session_id: "timers-a",
             last_error_schedule_id: "sched_paused_error",
+            last_error_kind: "session_schedule_turn_cancelled",
             last_error: "previous scheduled turn failed",
           },
         }}
@@ -202,7 +203,7 @@ describe("RuntimeStatsPanel", () => {
     );
 
     const grid = screen.getByTestId("runtime-stats-grid");
-    expect(grid).toHaveTextContent("Schedules2/3 enabled · 2 sessions · 2 running · running timers-b/sched_running · 1 due · next timers-a/sched_due · checkin · Due timer · 1 errors · error timers-a/sched_paused_error · previous scheduled turn failed");
+    expect(grid).toHaveTextContent("Schedules2/3 enabled · 2 sessions · 2 running · running timers-b/sched_running · 1 due · next timers-a/sched_due · checkin · Due timer · 1 errors · error timers-a/sched_paused_error · session_schedule_turn_cancelled · previous scheduled turn failed");
     expect(within(grid).getByText("Schedules").closest(".session-tools-runtime-chip")).toHaveAttribute("data-tone", "warning");
   });
 
