@@ -4087,6 +4087,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if loopTickUnavailable.SessionID != "longrun-session-schedule-loop-tick-unavailable" {
 		t.Fatalf("loop_tick unavailable SessionID = %q, want longrun-session-schedule-loop-tick-unavailable", loopTickUnavailable.SessionID)
 	}
+	if loopTickUnavailable.VerifyCommand != `test ! -e .affent/schedules.json` {
+		t.Fatalf("loop_tick unavailable VerifyCommand = %q, want absent schedules file check", loopTickUnavailable.VerifyCommand)
+	}
 	if loopTickUnavailable.RequiredToolCounts[agent.SessionScheduleToolName] != 1 ||
 		loopTickUnavailable.RequiredToolFailureKindCounts[evalSessionScheduleLoopTickUnavailableFailureKind] != 1 {
 		t.Fatalf("loop_tick unavailable tool requirements = counts:%#v failures:%#v",
