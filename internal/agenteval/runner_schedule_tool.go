@@ -18,6 +18,7 @@ import (
 )
 
 const evalSessionSchedulesRelPath = ".affent/schedules.json"
+const evalSessionScheduleLoopTickUnavailableFailureKind = "session_schedule_loop_tick_unavailable"
 
 type evalSessionScheduleToolArgs struct {
 	Action                string `json:"action"`
@@ -154,7 +155,9 @@ func evalSessionScheduleToolCreate(workspaceDir string, parsed evalSessionSchedu
 		return "", fmt.Errorf("unsupported kind %q", kind)
 	}
 	if kind == "loop_tick" && !evalWorkspaceHasRunningLoopProtocol(workspaceDir) {
-		return "", errors.New("loop_tick requires a running LOOP.md; use custom/checkin/daily_checkin for ordinary eval timers or activate the loop protocol first")
+		return "", errors.New("loop_tick requires a running LOOP.md.\n" +
+			"Next: activate the loop protocol before retrying loop_tick, or use custom/checkin/daily_checkin for ordinary eval timers.\n" +
+			"Failure: kind=" + evalSessionScheduleLoopTickUnavailableFailureKind)
 	}
 	enabled := true
 	if parsed.Enabled != nil {

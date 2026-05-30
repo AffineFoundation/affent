@@ -76,8 +76,11 @@ func TestSessionScheduleToolLoopTickRequiresRunningProtocol(t *testing.T) {
 		"next_run_at":`+strconv.Quote(next)+`,
 		"repeat_interval_seconds":1800
 	}`))
-	if err == nil || !strings.Contains(err.Error(), "running LOOP.md") {
-		t.Fatalf("session_schedule loop_tick error = %v, want running LOOP.md guidance", err)
+	if err == nil ||
+		!strings.Contains(err.Error(), "running LOOP.md") ||
+		!strings.Contains(err.Error(), "Next:") ||
+		!strings.Contains(err.Error(), "Failure: kind="+sessionScheduleLoopTickUnavailableFailureKind) {
+		t.Fatalf("session_schedule loop_tick error = %v, want structured running LOOP.md guidance", err)
 	}
 	if _, found, readErr := readSessionSchedulesFile(sessionSchedulesPath(pool, "loop-tick-tool")); readErr != nil || found {
 		t.Fatalf("schedules found=%v err=%v, want no schedule persisted", found, readErr)
@@ -104,8 +107,11 @@ func TestSessionScheduleToolResumeLoopTickRequiresRunningProtocol(t *testing.T) 
 		UpdatedAt: now.Format(time.RFC3339),
 	})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"update","schedule_id":"sched_loop","enabled":true}`))
-	if err == nil || !strings.Contains(err.Error(), "running LOOP.md") {
-		t.Fatalf("session_schedule loop_tick resume err = %v, want running LOOP.md guidance", err)
+	if err == nil ||
+		!strings.Contains(err.Error(), "running LOOP.md") ||
+		!strings.Contains(err.Error(), "Next:") ||
+		!strings.Contains(err.Error(), "Failure: kind="+sessionScheduleLoopTickUnavailableFailureKind) {
+		t.Fatalf("session_schedule loop_tick resume err = %v, want structured running LOOP.md guidance", err)
 	}
 	file, found, readErr := readSessionSchedulesFile(sessionSchedulesPath(pool, "loop-tick-resume"))
 	if readErr != nil || !found || len(file.Schedules) != 1 || file.Schedules[0].Enabled {

@@ -392,7 +392,12 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickWhenRuntimeDisabled
 	schedule := waitSchedule(t, pool, "disabled-loop-runtime", "sched_loop", func(schedule sessionSchedule) bool {
 		return schedule.LastError != ""
 	})
-	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, "loop protocol runtime support") {
+	if schedule.Enabled ||
+		schedule.RunCount != 0 ||
+		schedule.LastTurnID != "" ||
+		!strings.Contains(schedule.LastError, "loop protocol runtime support") ||
+		!strings.Contains(schedule.LastError, "Next:") ||
+		!strings.Contains(schedule.LastError, "Failure: kind="+sessionScheduleLoopTickUnavailableFailureKind) {
 		t.Fatalf("schedule = %+v, want paused loop_tick while loop runtime is disabled", schedule)
 	}
 	summary := summarizeSessionSchedulesForSession(pool, "disabled-loop-runtime", []sessionSchedule{schedule})
@@ -617,8 +622,10 @@ func TestCreateSessionScheduleLoopTickRequiresLoopProtocolRuntime(t *testing.T) 
 	if got := w.Result().StatusCode; got != http.StatusConflict {
 		t.Fatalf("create schedule status = %d, want 409; body=%s", got, w.Body.String())
 	}
-	if !strings.Contains(w.Body.String(), "loop protocol runtime support") {
-		t.Fatalf("create loop_tick error missing runtime support guidance: %s", w.Body.String())
+	if !strings.Contains(w.Body.String(), "loop protocol runtime support") ||
+		!strings.Contains(w.Body.String(), "Next:") ||
+		!strings.Contains(w.Body.String(), "Failure: kind="+sessionScheduleLoopTickUnavailableFailureKind) {
+		t.Fatalf("create loop_tick error missing structured runtime support guidance: %s", w.Body.String())
 	}
 	if _, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "direct-loop-disabled")); err != nil || found {
 		t.Fatalf("schedules found=%v err=%v, want no schedule persisted", found, err)

@@ -39,6 +39,8 @@ const (
 	sessionScheduleKindCheckIn      = "checkin"
 	sessionScheduleKindDailyCheckIn = "daily_checkin"
 	sessionScheduleKindLoopTick     = "loop_tick"
+
+	sessionScheduleLoopTickUnavailableFailureKind = "session_schedule_loop_tick_unavailable"
 )
 
 type sessionSchedule struct {
@@ -872,7 +874,9 @@ func markSessionScheduleLoopTickUnavailable(schedule *sessionSchedule, now time.
 }
 
 func sessionScheduleLoopTickUnavailableMessage() string {
-	return "loop_tick requires loop protocol runtime support and a running LOOP.md; enable loop_protocol and activate the loop first, or use custom/checkin/daily_checkin for ordinary timers and recurring checks"
+	return "loop_tick requires loop protocol runtime support and a running LOOP.md.\n" +
+		"Next: enable loop_protocol and activate the loop before retrying loop_tick, or use custom/checkin/daily_checkin for ordinary timers and recurring checks.\n" +
+		"Failure: kind=" + sessionScheduleLoopTickUnavailableFailureKind
 }
 
 func sessionLoopTickRunnable(pool *SessionPool, sessionID string) bool {

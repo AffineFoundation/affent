@@ -193,8 +193,11 @@ func TestEvalSessionScheduleToolLoopTickRequiresRunningProtocol(t *testing.T) {
 		"repeat_interval_seconds":1800,
 		"enabled":true
 	}`))
-	if err == nil || !strings.Contains(err.Error(), "running LOOP.md") {
-		t.Fatalf("loop_tick create err = %v, want running LOOP.md guidance", err)
+	if err == nil ||
+		!strings.Contains(err.Error(), "running LOOP.md") ||
+		!strings.Contains(err.Error(), "Next:") ||
+		!strings.Contains(err.Error(), "Failure: kind="+evalSessionScheduleLoopTickUnavailableFailureKind) {
+		t.Fatalf("loop_tick create err = %v, want structured running LOOP.md guidance", err)
 	}
 	if _, readErr := os.Stat(filepath.Join(workspace, evalSessionSchedulesRelPath)); !os.IsNotExist(readErr) {
 		t.Fatalf("schedule file err = %v, want no persisted schedule", readErr)
