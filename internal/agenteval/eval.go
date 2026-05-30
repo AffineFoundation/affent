@@ -379,6 +379,9 @@ type BatchResult struct {
 	// RuntimeSurface is the latest effective tool/runtime surface observed
 	// in the trace. Nil for old traces or runs that failed before turn start.
 	RuntimeSurface *sse.RuntimeSurfacePayload
+	// RuntimeSurfaceRefreshByReason counts all runtime.surface refresh reasons
+	// observed in the trace, not only the latest surface.
+	RuntimeSurfaceRefreshByReason map[string]int
 	// TaskState is the derived task-state snapshot used by debug output and
 	// eval JSONL to keep long-run progress auditable.
 	TaskState TaskStateSnapshot
@@ -1805,6 +1808,7 @@ func populateBatchResultFromTrace(res *BatchResult, trace Trace) {
 	res.Plan = trace.PlanStats()
 	res.Repair = trace.RepairStats()
 	res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
+	res.RuntimeSurfaceRefreshByReason = runtimeSurfaceRefreshReasonCounts(trace.RuntimeSurfaces)
 	res.TaskState = trace.TaskState
 	res.ChildTranscripts = append([]DebugTranscriptRef(nil), trace.ChildTranscripts...)
 	res.TraceWorkspace = strings.TrimSpace(trace.WorkspaceDir)
@@ -2493,6 +2497,21 @@ func latestRuntimeSurface(surfaces []sse.RuntimeSurfacePayload) *sse.RuntimeSurf
 		return nil
 	}
 	return cloneRuntimeSurface(&surfaces[len(surfaces)-1])
+}
+
+func runtimeSurfaceRefreshReasonCounts(surfaces []sse.RuntimeSurfacePayload) map[string]int {
+	var out map[string]int
+	for _, surface := range surfaces {
+		reason := strings.TrimSpace(surface.RefreshReason)
+		if reason == "" {
+			continue
+		}
+		if out == nil {
+			out = map[string]int{}
+		}
+		out[reason]++
+	}
+	return out
 }
 
 func cloneRuntimeSurface(surface *sse.RuntimeSurfacePayload) *sse.RuntimeSurfacePayload {

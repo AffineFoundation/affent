@@ -2369,6 +2369,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			CurrentStepStatus: "pending",
 		}},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			RefreshReason:               "turn_start",
 			ToolCount:                   2,
 			CompactTriggerInputTokens:   200,
 			EstimatedToolSchemaTokens:   100,
@@ -2379,6 +2380,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			},
 			Capabilities: sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file"}, WebFetch: true, Browser: true},
 		},
+		RuntimeSurfaceRefreshByReason: map[string]int{"turn_start": 1},
 		TaskState: agenteval.TaskStateSnapshot{
 			Status:            "completed",
 			VerificationState: "last_shell_passed",
@@ -2603,6 +2605,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Errors:   1,
 		},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			RefreshReason:               "post_compaction",
 			ToolCount:                   3,
 			CompactTriggerInputTokens:   400,
 			EstimatedToolSchemaTokens:   500,
@@ -2614,6 +2617,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			},
 			Capabilities: sse.RuntimeCapabilities{WebFetch: true, WebSearch: true, Browser: true},
 		},
+		RuntimeSurfaceRefreshByReason: map[string]int{"turn_start": 1, "post_compaction": 1},
 		TaskState: agenteval.TaskStateSnapshot{
 			Status:            "blocked",
 			VerificationState: "failed",
@@ -2704,7 +2708,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `session_search_example: scenario=sample query="Alpha Coast" total=2 session=market-alpha turn=4 message=8 mod_time=2026-05-27T12:00:00Z terms=alpha,coast context=true`) {
 		t.Fatalf("summary output missing session search example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1 tool_schema=max_tokens:500,max_request_tokens:800,max_pressure:125%") {
+	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1 runtime_refresh=post_compaction:1,turn_start:2 tool_schema=max_tokens:500,max_request_tokens:800,max_pressure:125%") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "task_state=scenarios:2,changed_files:3,attempted_actions:0,failed_actions:1,evidence:3 task_state_status=blocked:1,completed:1 task_state_verification=failed:1,last_shell_passed:1 task_state_request_modes=execute_plan:1,normal:1 task_state_request_sources=schedule:1,user:1 task_state_schedule_kinds=checkin:1") {
@@ -2843,6 +2847,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.RuntimeSurfaceTools, map[string]int{"web_fetch": 2, "web_search": 1, "browser_find": 2}) {
 		t.Fatalf("RuntimeSurfaceTools = %#v", summary.RuntimeSurfaceTools)
+	}
+	if !reflect.DeepEqual(summary.RuntimeSurfaceRefreshByReason, map[string]int{"turn_start": 2, "post_compaction": 1}) {
+		t.Fatalf("RuntimeSurfaceRefreshByReason = %#v", summary.RuntimeSurfaceRefreshByReason)
 	}
 	if summary.TaskStateScenarios != 2 ||
 		summary.TaskStateChangedFiles != 3 ||
@@ -4009,7 +4016,8 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
 		RunExitCode:       2,
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
-			ToolCount: 4,
+			RefreshReason: "post_compaction",
+			ToolCount:     4,
 			Tools: []sse.RuntimeSurfaceTool{
 				{Name: "web_fetch"},
 				{Name: "browser_find"},
@@ -4035,6 +4043,7 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 			ToolResultContextBudgetBytes: 32768,
 			ToolResultArtifactPrefix:     ".affent/artifacts/tool-results",
 		},
+		RuntimeSurfaceRefreshByReason: map[string]int{"post_compaction": 1, "turn_start": 1},
 	})
 
 	var got map[string]any
@@ -4080,6 +4089,10 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		surface["tool_result_event_cap_bytes"] != float64(8192) ||
 		surface["tool_result_artifact_prefix"] != ".affent/artifacts/tool-results" {
 		t.Fatalf("runtime_surface limits = %#v\njson=%s", surface, out.String())
+	}
+	refreshReasons, ok := got["runtime_surface_refresh_by_reason"].(map[string]any)
+	if !ok || refreshReasons["post_compaction"] != float64(1) || refreshReasons["turn_start"] != float64(1) {
+		t.Fatalf("runtime_surface_refresh_by_reason = %#v\njson=%s", got["runtime_surface_refresh_by_reason"], out.String())
 	}
 	tools, ok := surface["tools"].([]any)
 	if !ok || len(tools) != 3 || tools[0] != "browser_find" || tools[1] != "read_file" || tools[2] != "web_fetch" {
@@ -4621,6 +4634,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		RuntimeSurfaceScenarios:             2,
 		RuntimeSurfaceTools:                 map[string]int{"web_fetch": 2, "browser_find": 1},
 		RuntimeSurfaceCapabilities:          map[string]int{"web_fetch": 2, "browser": 1},
+		RuntimeSurfaceRefreshByReason:       map[string]int{"turn_start": 2, "post_compaction": 1},
 		RuntimeSurfaceMaxToolSchemaTokens:   500,
 		RuntimeSurfaceMaxRequestInputTokens: 800,
 		RuntimeSurfaceMaxToolSchemaPressure: 125,
@@ -5495,6 +5509,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeSurfaceCapabilities, ok := got["runtime_surface_capabilities"].(map[string]any)
 	if !ok || runtimeSurfaceCapabilities["web_fetch"] != float64(2) || runtimeSurfaceCapabilities["browser"] != float64(1) {
 		t.Fatalf("runtime_surface_capabilities = %#v\njson=%s", got["runtime_surface_capabilities"], out.String())
+	}
+	runtimeSurfaceRefresh, ok := got["runtime_surface_refresh_by_reason"].(map[string]any)
+	if !ok || runtimeSurfaceRefresh["turn_start"] != float64(2) || runtimeSurfaceRefresh["post_compaction"] != float64(1) {
+		t.Fatalf("runtime_surface_refresh_by_reason = %#v\njson=%s", got["runtime_surface_refresh_by_reason"], out.String())
 	}
 	if got["runtime_surface_max_tool_schema_tokens"] != float64(500) ||
 		got["runtime_surface_max_request_input_tokens"] != float64(800) ||

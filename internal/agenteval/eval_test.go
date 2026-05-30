@@ -786,6 +786,11 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(trace.RuntimeSurfaces[0].CompletionGuards, []string{"active_plan_unfinished", "loop_protocol_running"}) {
 		t.Fatalf("RuntimeSurfaces = %+v", trace.RuntimeSurfaces)
 	}
+	var result BatchResult
+	populateBatchResultFromTrace(&result, trace)
+	if result.RuntimeSurfaceRefreshByReason["post_compaction"] != 1 {
+		t.Fatalf("RuntimeSurfaceRefreshByReason = %#v, want post_compaction=1", result.RuntimeSurfaceRefreshByReason)
+	}
 	if len(trace.ContextCompactions) != 1 ||
 		trace.ContextCompactions[0].EstimatedInputTokens != 120000 ||
 		trace.ContextCompactions[0].AfterEstimatedInputTokens != 30000 ||

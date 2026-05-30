@@ -202,6 +202,11 @@ Scenario records describe one eval case:
   caps for capped registered tools, plus key tool-result limits. Retained debug
   manifests include the fuller `runtime_surface` block with per-tool
   group/source metadata.
+- `runtime_surface_refresh_by_reason`: scenario-level counts of every
+  `runtime.surface.refresh_reason` observed in the trace. Summary records
+  aggregate those counts across scenarios, so long-run suites can distinguish
+  ordinary turn-start surfaces from post-compaction refreshes and observed
+  compact-window calibration.
 - `task_state`: optional derived snapshot of the scenario's objective, status,
   current step, constraints, known facts, next step, open questions,
   verification state, changed files, attempted actions, failed actions with
@@ -811,7 +816,8 @@ Summary records aggregate all scenario records from the same process:
   representative retained artifacts for the failing tag.
 - Runtime surface and trace coverage totals: `runtime_surface_rate`,
   `runtime_surface_scenarios`, `runtime_surface_tools`,
-  `runtime_surface_capabilities`, `trace_event_rate`, and
+  `runtime_surface_capabilities`, `runtime_surface_refresh_by_reason`,
+  `trace_event_rate`, and
   `trace_event_scenarios`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass
   rates and failures by the actual tool/capability surface exposed during the

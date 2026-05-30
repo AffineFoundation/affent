@@ -1134,6 +1134,7 @@ type batchSummary struct {
 	RuntimeSurfaceScenarios                 int
 	RuntimeSurfaceTools                     map[string]int
 	RuntimeSurfaceCapabilities              map[string]int
+	RuntimeSurfaceRefreshByReason           map[string]int
 	RuntimeSurfaceMaxToolSchemaTokens       int
 	RuntimeSurfaceMaxRequestInputTokens     int
 	RuntimeSurfaceMaxToolSchemaPressure     int
@@ -1397,6 +1398,14 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		for _, cap := range runtimeSurfaceCapabilityNames(res.RuntimeSurface.Capabilities) {
 			s.RuntimeSurfaceCapabilities[cap]++
+		}
+	}
+	if len(res.RuntimeSurfaceRefreshByReason) > 0 {
+		if s.RuntimeSurfaceRefreshByReason == nil {
+			s.RuntimeSurfaceRefreshByReason = map[string]int{}
+		}
+		for reason, count := range res.RuntimeSurfaceRefreshByReason {
+			s.RuntimeSurfaceRefreshByReason[reason] += count
 		}
 	}
 	if task := agenteval.CloneTaskStateSnapshotPtr(res.TaskState); task != nil {
@@ -2143,6 +2152,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 		if len(s.RuntimeSurfaceTools) > 0 {
 			fmt.Fprintf(w, " runtime_tools=%s", formatStringIntCounts(s.RuntimeSurfaceTools))
+		}
+		if len(s.RuntimeSurfaceRefreshByReason) > 0 {
+			fmt.Fprintf(w, " runtime_refresh=%s", formatStringIntCounts(s.RuntimeSurfaceRefreshByReason))
 		}
 		if s.RuntimeSurfaceMaxToolSchemaTokens > 0 || s.RuntimeSurfaceMaxRequestInputTokens > 0 {
 			fmt.Fprintf(w, " tool_schema=max_tokens:%d,max_request_tokens:%d", s.RuntimeSurfaceMaxToolSchemaTokens, s.RuntimeSurfaceMaxRequestInputTokens)
@@ -4150,6 +4162,7 @@ type batchResultRecord struct {
 	RuntimeErrorByKind                     map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples                   map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
 	RuntimeSurface                         *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
+	RuntimeSurfaceRefreshByReason          map[string]int                             `json:"runtime_surface_refresh_by_reason,omitempty"`
 	TaskState                              *agenteval.TaskStateSnapshot               `json:"task_state,omitempty"`
 	TaskStateStatus                        string                                     `json:"task_state_status,omitempty"`
 	TaskStateVerification                  string                                     `json:"task_state_verification,omitempty"`
@@ -4367,6 +4380,7 @@ type batchSummaryRecord struct {
 	RuntimeSurfaceScenarios                 int                                              `json:"runtime_surface_scenarios,omitempty"`
 	RuntimeSurfaceTools                     map[string]int                                   `json:"runtime_surface_tools,omitempty"`
 	RuntimeSurfaceCapabilities              map[string]int                                   `json:"runtime_surface_capabilities,omitempty"`
+	RuntimeSurfaceRefreshByReason           map[string]int                                   `json:"runtime_surface_refresh_by_reason,omitempty"`
 	RuntimeSurfaceMaxToolSchemaTokens       int                                              `json:"runtime_surface_max_tool_schema_tokens,omitempty"`
 	RuntimeSurfaceMaxRequestInputTokens     int                                              `json:"runtime_surface_max_request_input_tokens,omitempty"`
 	RuntimeSurfaceMaxToolSchemaPressure     int                                              `json:"runtime_surface_max_tool_schema_pressure_percent,omitempty"`
@@ -4623,6 +4637,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		RuntimeErrorByKind:                     cloneStringIntMap(res.RuntimeErrorByKind),
 		RuntimeErrorExamples:                   cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
 		RuntimeSurface:                         runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
+		RuntimeSurfaceRefreshByReason:          cloneStringIntMap(res.RuntimeSurfaceRefreshByReason),
 		TaskState:                              agenteval.CloneTaskStateSnapshotPtr(res.TaskState),
 		TaskStateStatus:                        res.TaskState.Status,
 		TaskStateVerification:                  res.TaskState.VerificationState,
@@ -4992,6 +5007,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		RuntimeSurfaceScenarios:                 s.RuntimeSurfaceScenarios,
 		RuntimeSurfaceTools:                     cloneStringIntMap(s.RuntimeSurfaceTools),
 		RuntimeSurfaceCapabilities:              cloneStringIntMap(s.RuntimeSurfaceCapabilities),
+		RuntimeSurfaceRefreshByReason:           cloneStringIntMap(s.RuntimeSurfaceRefreshByReason),
 		RuntimeSurfaceMaxToolSchemaTokens:       s.RuntimeSurfaceMaxToolSchemaTokens,
 		RuntimeSurfaceMaxRequestInputTokens:     s.RuntimeSurfaceMaxRequestInputTokens,
 		RuntimeSurfaceMaxToolSchemaPressure:     s.RuntimeSurfaceMaxToolSchemaPressure,

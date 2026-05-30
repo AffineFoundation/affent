@@ -1263,7 +1263,8 @@ context compactions, reactive context compactions, aggregate and per-family
 expected-capability pass rates, aggregate and per-domain workload pass rates,
 messages removed by compaction, compaction
 summary size, missing/empty compaction summaries, session-search matched terms
-per call, average tool calls, and tool-context truncation.
+per call, runtime-surface refresh reasons, average tool calls, and tool-context
+truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-loop-protocol-feed-rate`,
 `--min-runtime-surface-rate`, `--min-trace-event-rate`,
