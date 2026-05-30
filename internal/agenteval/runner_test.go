@@ -290,7 +290,7 @@ func TestRunner_PreRequestCompactionPrioritizesRequestPressure(t *testing.T) {
 func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 	final := func(text string) []string {
 		return []string{
-			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, text),
+			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}],"usage":{"prompt_tokens":120,"completion_tokens":3}}`, text),
 			`[DONE]`,
 		}
 	}
@@ -322,6 +322,8 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 			RuntimeSurfaceModelContextWindowEffectivePercent(95),
 			RuntimeSurfaceCompactTriggerInputTokens(160),
 			ContextMaintenanceCompactScopeActiveAtLeast(1),
+			RuntimeSurfaceRefreshReason("post_compaction"),
+			RuntimeSurfaceRefreshReason("compact_window_observed"),
 		},
 	}
 
@@ -361,6 +363,13 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 		out.Trace.ContextCompactions[0].CompactWindowPrefillInputTokens <= 0 ||
 		out.Trace.ContextCompactions[0].CompactHardInputLimitTokens != 200 {
 		t.Fatalf("context compaction compact scope = %+v", out.Trace.ContextCompactions)
+	}
+	refreshReasons := map[string]int{}
+	for _, surface := range out.Trace.RuntimeSurfaces {
+		refreshReasons[surface.RefreshReason]++
+	}
+	if refreshReasons["post_compaction"] != 1 || refreshReasons["compact_window_observed"] != 1 {
+		t.Fatalf("runtime surface refresh reasons = %+v; surfaces=%+v", refreshReasons, out.Trace.RuntimeSurfaces)
 	}
 }
 
