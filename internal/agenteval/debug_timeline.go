@@ -1194,6 +1194,9 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	surface := trace.RuntimeSurfaces[len(trace.RuntimeSurfaces)-1]
 	b.WriteString("\n## Runtime Surface\n\n")
 	fmt.Fprintf(b, "- turn_id: `%s`\n", surface.TurnID)
+	if reason := strings.TrimSpace(surface.RefreshReason); reason != "" {
+		fmt.Fprintf(b, "- refresh_reason: `%s`\n", timelineInline(reason, 80))
+	}
 	fmt.Fprintf(b, "- tool_count: `%d`\n", surface.ToolCount)
 	if surface.MaxTurnSteps > 0 {
 		fmt.Fprintf(b, "- max_turn_steps: `%d`\n", surface.MaxTurnSteps)
