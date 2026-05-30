@@ -1941,6 +1941,24 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				break
 			}
 		}
+		if ctx.Err() != nil {
+			endReason = sse.TurnEndCancelled
+			break
+		}
+		nextToolDefs := l.toolDefs(opts)
+		if forceNoToolsNext {
+			nextToolDefs = nil
+		}
+		postToolPressure := l.requestPressureStatus(nextToolDefs)
+		l.Log.Debug().
+			Int("estimated_input_tokens", postToolPressure.EstimatedInputTokens).
+			Int("trigger_input_tokens", postToolPressure.TriggerInputTokens).
+			Bool("limit_reached", postToolPressure.LimitReached).
+			Msg("checked post-tool request input pressure")
+		if postToolPressure.LimitReached &&
+			l.compactRequestPressureUntilDiminishing(ctx, turnID, nextToolDefs, 1) {
+			l.publishRuntimeSurfaceWithReason(turnID, opts, "post_compaction")
+		}
 		if loopProtocolCalibrationPending && l.finishLoopProtocolCalibrationTurn(turnID, opts) {
 			finishedNaturally = true
 			break
@@ -3761,7 +3779,7 @@ func (l *Loop) compactBeforeRequest(ctx context.Context, turnID string, toolDefs
 	// when the whole request is already over policy so traces name the real
 	// trigger and the loop avoids threshold-plus-pressure double work.
 	if l.requestPressureOverLimit(toolDefs) {
-		return l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 0)
+		return l.compactRequestPressureUntilDiminishing(ctx, turnID, toolDefs, 1)
 	}
 	if !l.maybeCompactWithToolDefs(ctx, turnID, false, toolDefs) {
 		return false

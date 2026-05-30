@@ -19,6 +19,7 @@ import (
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 
@@ -360,6 +361,125 @@ func TestRunner_ModelWindowDerivedCompactionPolicy(t *testing.T) {
 		out.Trace.ContextCompactions[0].CompactWindowPrefillInputTokens <= 0 ||
 		out.Trace.ContextCompactions[0].CompactHardInputLimitTokens != 200 {
 		t.Fatalf("context compaction compact scope = %+v", out.Trace.ContextCompactions)
+	}
+}
+
+func TestRunner_MidTurnToolResultCompactionRefreshesRuntimeSurface(t *testing.T) {
+	final := func(text string) []string {
+		return []string{
+			fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, text),
+			`[DONE]`,
+		}
+	}
+	toolCall := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"large1","type":"function","function":{"name":"large_evidence","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	var normalCalls atomic.Int32
+	var compactionCalls atomic.Int32
+	var normalRequestsWithMarker atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		isCompaction := strings.Contains(string(raw), "CONTEXT CHECKPOINT COMPACTION")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		payloads := []string{
+			`{"choices":[{"delta":{"role":"assistant","content":"USER_CONTEXT: compacted old warmup history. TASK_TRACKING: continue the active user request after mid-turn compaction. NEXT_ACTION: answer from the current tool evidence."},"finish_reason":"stop"}]}`,
+			`[DONE]`,
+		}
+		if isCompaction {
+			compactionCalls.Add(1)
+		} else {
+			if strings.Contains(string(raw), "MIDTURN-TOOL-77") {
+				normalRequestsWithMarker.Add(1)
+			}
+			switch int(normalCalls.Add(1)) {
+			case 1:
+				payloads = final("WARMUP-ONE-OK " + strings.Repeat("OLD-HISTORY ", 200))
+			case 2:
+				payloads = final("WARMUP-TWO-OK")
+			case 3:
+				payloads = toolCall
+			default:
+				payloads = final("MIDTURN-COMPACTION-OK uses preserved MIDTURN-TOOL-77 evidence.")
+			}
+		}
+		for _, p := range payloads {
+			_, _ = w.Write([]byte("data: " + p + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name: "mid_turn_tool_result_compaction",
+		Prompts: []string{
+			"Warm up a small amount of history. Reply exactly: WARMUP-ONE-OK",
+			"Add one more historical exchange before the tool turn. Reply exactly: WARMUP-TWO-OK",
+			"Call large_evidence once, then answer from its marker after any runtime context maintenance.",
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("large_evidence", nil),
+			ToolResultContains("large_evidence", "MIDTURN-TOOL-77"),
+			ContextCompactionsAtLeast(1),
+			ContextCompactionReasonAtLeast("estimated_context_pressure", 1),
+			RuntimeSurfaceRefreshReason("post_compaction"),
+			FinalTextContains("MIDTURN-COMPACTION-OK"),
+			FinalTextContains("MIDTURN-TOOL-77"),
+		},
+	}
+
+	runner := &Runner{
+		LLM: agent.NewLLMClient(srv.URL, "", "fake-model"),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg := agent.NewRegistry()
+			reg.Add(&agent.Tool{
+				Name:        "large_evidence",
+				Description: "Return a large deterministic evidence block.",
+				Schema:      json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{}}`),
+				Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+					return "MIDTURN-TOOL-77\n" + strings.Repeat("large evidence filler ", 1200), nil
+				},
+			})
+			return reg, nil
+		},
+		MaxTurnSteps:              4,
+		CompactTriggerInputTokens: 1800,
+		CompactKeepLast:           1,
+		PerCallTimeout:            5 * time.Second,
+		RunTimeout:                20 * time.Second,
+		Log:                       zerolog.Nop(),
+	}
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v final=%q compactions=%+v surfaces=%+v normal_marker_requests=%d", out.FailedChecks(), out.Trace.FinalText, out.Trace.ContextCompactions, out.Trace.RuntimeSurfaces, normalRequestsWithMarker.Load())
+	}
+	if out.Trace.RawTypes[sse.TypeContextCompact] != 1 {
+		t.Fatalf("context.compacted events = %d, want one mid-turn compaction; compactions=%+v", out.Trace.RawTypes[sse.TypeContextCompact], out.Trace.ContextCompactions)
+	}
+	if got := compactionCalls.Load(); got != 1 {
+		t.Fatalf("compaction LLM calls = %d, want one request-pressure compaction", got)
+	}
+	if got := normalRequestsWithMarker.Load(); got != 1 {
+		t.Fatalf("normal LLM requests containing tool marker = %d, want final request to preserve current tool evidence", got)
+	}
+	if len(out.Trace.RuntimeSurfaces) < 2 {
+		t.Fatalf("runtime surfaces = %+v, want initial plus post-compaction refresh", out.Trace.RuntimeSurfaces)
+	}
+	latestSurface := out.Trace.RuntimeSurfaces[len(out.Trace.RuntimeSurfaces)-1]
+	if latestSurface.RefreshReason != "post_compaction" {
+		t.Fatalf("latest runtime surface = %+v, want post-compaction refresh", latestSurface)
 	}
 }
 
