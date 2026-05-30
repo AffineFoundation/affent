@@ -444,7 +444,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	if len(exp.Domains) > 0 {
 		fmt.Fprintf(b, "- domains: `%s`\n", strings.Join(exp.Domains, "`, `"))
 	}
-	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.RuntimeMaxTurnInputTokens > 0 || exp.MaxLoopTurnInputTokens > 0 || exp.MaxLoopTurnTotalTokens > 0 || exp.CompactTrigger > 0 || exp.CompactTriggerInputTokens != 0 || exp.ModelContextWindowTokens > 0 || exp.CompactTriggerInputPercent > 0 || exp.CompactKeepLast > 0 {
+	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.RequiredTurnEndReason != "" || exp.MaxTurns > 0 || exp.RuntimeMaxTurnInputTokens > 0 || exp.MaxTotalTokens > 0 || exp.MaxLoopTurnInputTokens > 0 || exp.MaxLoopTurnTotalTokens > 0 || exp.CompactTrigger > 0 || exp.CompactTriggerInputTokens != 0 || exp.ModelContextWindowTokens > 0 || exp.CompactTriggerInputPercent > 0 || exp.CompactKeepLast > 0 {
 		var parts []string
 		if exp.SessionID != "" {
 			parts = append(parts, fmt.Sprintf("session_id=%s", exp.SessionID))
@@ -463,6 +463,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		if exp.RuntimeMaxTurnInputTokens > 0 {
 			parts = append(parts, fmt.Sprintf("runtime_max_turn_input_tokens=%d", exp.RuntimeMaxTurnInputTokens))
+		}
+		if exp.MaxTotalTokens > 0 {
+			parts = append(parts, fmt.Sprintf("max_total_tokens=%d", exp.MaxTotalTokens))
 		}
 		if exp.MaxLoopTurnInputTokens > 0 {
 			parts = append(parts, fmt.Sprintf("max_loop_turn_input_tokens=%d", exp.MaxLoopTurnInputTokens))
@@ -916,6 +919,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.MaxParentToolCalls > 0 ||
 		len(exp.MaxSuccessfulToolCallsByTool) > 0 ||
 		exp.RuntimeMaxTurnInputTokens > 0 ||
+		exp.MaxTotalTokens > 0 ||
 		exp.MaxLoopTurnInputTokens > 0 ||
 		exp.MaxLoopTurnTotalTokens > 0 ||
 		exp.MaxTurns > 0 ||

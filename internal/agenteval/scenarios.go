@@ -3448,6 +3448,7 @@ func TestClampAboveRange(t *testing.T) {
 			},
 		},
 		ForbidWorkspaceAbsolutePaths: true,
+		MaxTotalTokens:               220000,
 		MaxLoopTurnInputTokens:       300000,
 		MaxLoopTurnTotalTokens:       320000,
 		RequiredFinalText: []string{

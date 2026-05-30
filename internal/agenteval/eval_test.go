@@ -2608,8 +2608,11 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(clonePush.Domains, codePRDomain) {
 		t.Fatalf("clone/push Domains = %#v, want code_pr", clonePush.Domains)
 	}
-	if !clonePush.ForbidWorkspaceAbsolutePaths || clonePush.MaxLoopTurnInputTokens != 300000 || clonePush.MaxLoopTurnTotalTokens != 320000 {
-		t.Fatalf("clone/push path/token guards = forbid:%v input:%d total:%d, want workspace guard and 300000/320000 ceilings", clonePush.ForbidWorkspaceAbsolutePaths, clonePush.MaxLoopTurnInputTokens, clonePush.MaxLoopTurnTotalTokens)
+	if !clonePush.ForbidWorkspaceAbsolutePaths || clonePush.MaxTotalTokens != 220000 || clonePush.MaxLoopTurnInputTokens != 300000 || clonePush.MaxLoopTurnTotalTokens != 320000 {
+		t.Fatalf("clone/push path/token guards = forbid:%v total:%d input:%d loop_total:%d, want workspace guard and 220000/300000/320000 ceilings", clonePush.ForbidWorkspaceAbsolutePaths, clonePush.MaxTotalTokens, clonePush.MaxLoopTurnInputTokens, clonePush.MaxLoopTurnTotalTokens)
+	}
+	if !stringSliceContains(checkNamesFor(BatchScenarioChecks(clonePush)), "max_total_tokens:220000") {
+		t.Fatalf("clone/push checks missing max_total_tokens:220000")
 	}
 	clonePushCaps := ScenarioExpectationCapabilityNames(clonePush)
 	for _, want := range []string{"source_repo", "workspace", "verifier", "skill"} {

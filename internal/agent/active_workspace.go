@@ -215,7 +215,64 @@ func ResolveActiveWorkspacePath(root, raw string) (string, error) {
 			"retry session_workspace with a real directory under the workspace root, not a symlink",
 		)
 	}
+	if appearsBareGitRepository(candidateAbs) {
+		return "", structuredToolError(
+			fmt.Sprintf("workspace path %q is a bare git repository, not a working tree", raw),
+			"workspace_path_not_worktree",
+			"clone the repository into a working-tree directory, then retry session_workspace with that checkout directory",
+		)
+	}
 	return candidateAbs, nil
+}
+
+func appearsBareGitRepository(dir string) bool {
+	if !regularFileExists(filepath.Join(dir, "HEAD")) ||
+		!dirExists(filepath.Join(dir, "objects")) ||
+		!dirExists(filepath.Join(dir, "refs")) {
+		return false
+	}
+	configPath := filepath.Join(dir, "config")
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		return false
+	}
+	return gitConfigHasCoreBareTrue(string(raw))
+}
+
+func gitConfigHasCoreBareTrue(raw string) bool {
+	inCore := false
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section := strings.ToLower(strings.TrimSpace(strings.Trim(line, "[]")))
+			inCore = section == "core"
+			continue
+		}
+		if !inCore {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "bare") && strings.EqualFold(strings.TrimSpace(value), "true") {
+			return true
+		}
+	}
+	return false
+}
+
+func regularFileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.Mode().IsRegular()
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func RestoreActiveWorkspace(root, stored string) string {

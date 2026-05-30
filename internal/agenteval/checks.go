@@ -3197,6 +3197,28 @@ func MaxLoopTurnInputTokens(n int) Check {
 	}
 }
 
+func MaxTraceTotalTokens(n int) Check {
+	return Check{
+		Name: fmt.Sprintf("max_total_tokens:%d", n),
+		Eval: func(t Trace) CheckResult {
+			total := t.Usage.InputTokens + t.Usage.OutputTokens
+			if total <= 0 {
+				return CheckResult{
+					Pass:   false,
+					Detail: "expected usage events to measure total tokens, got none",
+				}
+			}
+			if total <= n {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("total_tokens=%d", total)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("total_tokens=%d, want <= %d", total, n),
+			}
+		},
+	}
+}
+
 func MaxLoopTurnTotalTokens(n int) Check {
 	return Check{
 		Name: fmt.Sprintf("max_loop_turn_total_tokens:%d", n),

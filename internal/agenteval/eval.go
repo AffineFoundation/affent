@@ -274,6 +274,7 @@ type BatchScenario struct {
 	MaxParentToolCalls                             int
 	MaxSuccessfulToolCallsByTool                   map[string]int
 	RuntimeMaxTurnInputTokens                      int
+	MaxTotalTokens                                 int
 	MaxLoopTurnInputTokens                         int
 	MaxLoopTurnTotalTokens                         int
 	MaxTurns                                       int
@@ -550,6 +551,7 @@ type DebugScenarioExpectations struct {
 	MaxParentToolCalls                             int                                    `json:"max_parent_tool_calls,omitempty"`
 	MaxSuccessfulToolCallsByTool                   map[string]int                         `json:"max_successful_tool_calls_by_tool,omitempty"`
 	RuntimeMaxTurnInputTokens                      int                                    `json:"runtime_max_turn_input_tokens,omitempty"`
+	MaxTotalTokens                                 int                                    `json:"max_total_tokens,omitempty"`
 	MaxLoopTurnInputTokens                         int                                    `json:"max_loop_turn_input_tokens,omitempty"`
 	MaxLoopTurnTotalTokens                         int                                    `json:"max_loop_turn_total_tokens,omitempty"`
 	MaxTurns                                       int                                    `json:"max_turns,omitempty"`
@@ -611,6 +613,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if exp.RuntimeMaxTurnInputTokens > 0 {
 		caps["input_budget"] = true
+		caps["trace"] = true
+	}
+	if exp.MaxTotalTokens > 0 {
 		caps["trace"] = true
 	}
 	if strings.TrimSpace(exp.ExpectedSkill) != "" {
@@ -2421,6 +2426,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		MaxParentToolCalls:                             s.MaxParentToolCalls,
 		MaxSuccessfulToolCallsByTool:                   cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
 		RuntimeMaxTurnInputTokens:                      s.RuntimeMaxTurnInputTokens,
+		MaxTotalTokens:                                 s.MaxTotalTokens,
 		MaxLoopTurnInputTokens:                         s.MaxLoopTurnInputTokens,
 		MaxLoopTurnTotalTokens:                         s.MaxLoopTurnTotalTokens,
 		MaxTurns:                                       s.MaxTurns,
@@ -3770,6 +3776,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RuntimeMaxTurnInputTokens > 0 {
 		checks = append(checks, RuntimeSurfaceMaxTurnInputTokens(scenario.RuntimeMaxTurnInputTokens))
+	}
+	if scenario.MaxTotalTokens > 0 {
+		checks = append(checks, MaxTraceTotalTokens(scenario.MaxTotalTokens))
 	}
 	if scenario.ModelContextWindowTokens > 0 {
 		checks = append(checks, RuntimeSurfaceModelContextWindowTokens(scenario.ModelContextWindowTokens))

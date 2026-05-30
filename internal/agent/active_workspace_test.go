@@ -68,6 +68,68 @@ func TestResolveActiveWorkspacePathRejectsEscapesFilesAndSymlinks(t *testing.T) 
 	}
 }
 
+func TestResolveActiveWorkspacePathRejectsBareGitRepository(t *testing.T) {
+	root := t.TempDir()
+	bare := filepath.Join(root, "remote.git")
+	writeBareGitRepository(t, bare)
+
+	resolved, err := ResolveActiveWorkspacePath(root, "remote.git")
+	if err == nil {
+		t.Fatalf("ResolveActiveWorkspacePath accepted bare repository: %q", resolved)
+	}
+	for _, want := range []string{"bare git repository", "Failure: kind=workspace_path_not_worktree", "working-tree directory"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
+		}
+	}
+}
+
+func TestSessionWorkspaceToolRejectsBareGitRepositoryWithoutChangingWorkspace(t *testing.T) {
+	root := t.TempDir()
+	bare := filepath.Join(root, "remote.git")
+	writeBareGitRepository(t, bare)
+	state := NewActiveWorkspaceState("sess-workspace", root, root, false, nil)
+	tool := SessionWorkspaceTool(state)
+
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","path":"remote.git"}`))
+	if err == nil {
+		t.Fatalf("Execute accepted bare repository unexpectedly: %s", out)
+	}
+	if state.Current() != root {
+		t.Fatalf("failed set changed workspace: current=%q root=%q", state.Current(), root)
+	}
+	for _, want := range []string{"Failure: kind=workspace_path_not_worktree", "clone the repository", "checkout directory"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
+		}
+	}
+}
+
+func TestResolveActiveWorkspacePathAllowsPlainDirectoryWithGitLikeNames(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "project")
+	if err := os.MkdirAll(filepath.Join(dir, "objects"), 0o755); err != nil {
+		t.Fatalf("mkdir objects: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "refs"), 0o755); err != nil {
+		t.Fatalf("mkdir refs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "HEAD"), []byte("not git\n"), 0o644); err != nil {
+		t.Fatalf("write HEAD: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config"), []byte("[core]\n\tbare = false\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	resolved, err := ResolveActiveWorkspacePath(root, "project")
+	if err != nil {
+		t.Fatalf("ResolveActiveWorkspacePath rejected plain directory: %v", err)
+	}
+	if resolved != dir {
+		t.Fatalf("resolved = %q, want %q", resolved, dir)
+	}
+}
+
 func TestSessionWorkspaceToolErrorsAreStructured(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "file.txt"), []byte("x"), 0o644); err != nil {
@@ -129,6 +191,21 @@ func TestSessionWorkspaceToolErrorsAreStructured(t *testing.T) {
 				t.Fatalf("error = %q, want %q and next %q", err.Error(), tc.want, tc.next)
 			}
 		})
+	}
+}
+
+func writeBareGitRepository(t *testing.T, dir string) {
+	t.Helper()
+	for _, rel := range []string{"objects", "refs"} {
+		if err := os.MkdirAll(filepath.Join(dir, rel), 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", rel, err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+		t.Fatalf("write HEAD: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config"), []byte("[core]\n\trepositoryformatversion = 0\n\tbare = true\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
 	}
 }
 

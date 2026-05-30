@@ -1432,7 +1432,10 @@ func TestLoopTurnTokenCeilingChecks(t *testing.T) {
 	trace := Trace{LoopTurnCheckpoints: []LoopTurnCheckpoint{
 		{TurnID: "t1", InputTokens: 120000, OutputTokens: 1500},
 		{TurnID: "t2", InputTokens: 260000, OutputTokens: 2000},
-	}}
+	}, Usage: Usage{InputTokens: 177835, OutputTokens: 1258}}
+	if res := MaxTraceTotalTokens(220000).Eval(trace); !res.Pass {
+		t.Fatalf("expected total token check to pass: %+v", res)
+	}
 	if res := MaxLoopTurnInputTokens(300000).Eval(trace); !res.Pass {
 		t.Fatalf("expected max input token check to pass: %+v", res)
 	}
@@ -1446,12 +1449,26 @@ func TestLoopTurnTokenCeilingChecks(t *testing.T) {
 	if !strings.Contains(res.Detail, "max_input_tokens=260000") || !strings.Contains(res.Detail, "want <= 200000") {
 		t.Fatalf("failure detail should include observed max and threshold: %s", res.Detail)
 	}
+	res = MaxTraceTotalTokens(100000).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected total token check to fail")
+	}
+	if !strings.Contains(res.Detail, "total_tokens=179093") || !strings.Contains(res.Detail, "want <= 100000") {
+		t.Fatalf("total token failure detail = %q", res.Detail)
+	}
 	res = MaxLoopTurnTotalTokens(200000).Eval(Trace{})
 	if res.Pass {
 		t.Fatal("expected missing checkpoint token check to fail")
 	}
 	if !strings.Contains(res.Detail, "got none") {
 		t.Fatalf("missing checkpoint failure detail = %q", res.Detail)
+	}
+	res = MaxTraceTotalTokens(200000).Eval(Trace{})
+	if res.Pass {
+		t.Fatal("expected missing usage token check to fail")
+	}
+	if !strings.Contains(res.Detail, "usage events") {
+		t.Fatalf("missing usage failure detail = %q", res.Detail)
 	}
 }
 

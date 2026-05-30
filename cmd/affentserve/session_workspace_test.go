@@ -117,6 +117,116 @@ func TestSessionWorkspaceToolRejectsEscapesAndFiles(t *testing.T) {
 	}
 }
 
+func TestSessionWorkspaceRejectsCopiedBareRepoAndAllowsRecovery(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		switch calls.Add(1) {
+		case 1:
+			streamToolCall(t, w, "copy_bare", "shell", `{"command":"cp -r remote.git app","timeout_sec":20}`)
+		case 2:
+			streamToolCall(t, w, "workspace_bad", agent.SessionWorkspaceToolName, `{"action":"set","path":"app"}`)
+		case 3:
+			streamToolCall(t, w, "clone_worktree", "shell", `{"command":"rm -rf app && git clone remote.git app","timeout_sec":20}`)
+		case 4:
+			streamToolCall(t, w, "workspace_good", agent.SessionWorkspaceToolName, `{"action":"set","path":"app"}`)
+		case 5:
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"role":"assistant","content":"Recovered by cloning a working tree into app."},"finish_reason":"stop"}]}`+"\n\n")
+		default:
+			t.Errorf("unexpected LLM call %d", calls.Load())
+			fmt.Fprint(w, `data: {"choices":[{"delta":{"role":"assistant","content":"unexpected"},"finish_reason":"stop"}]}`+"\n\n")
+		}
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     t.TempDir(),
+		BaseURL:        srv.URL,
+		APIKey:         "test",
+		Model:          "fake",
+		EnableBuiltins: true,
+		MaxTurnSteps:   8,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	sess, err := pool.GetOrCreate("workspace-bare-recovery")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	seedClampRemote(t, sess.workspaceRoot())
+
+	subID, ch := sess.Subscribe(64)
+	defer sess.Unsubscribe(subID)
+	turnID, err := sess.SendUser(context.Background(), "Prepare app as the active working tree.")
+	if err != nil {
+		t.Fatalf("SendUser: %v", err)
+	}
+
+	deadline := time.After(15 * time.Second)
+	sawBareRejection := false
+	sawGoodWorkspace := false
+	for {
+		select {
+		case ev := <-ch:
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				switch p.CallID {
+				case "workspace_bad":
+					if !strings.Contains(p.Result, "Failure: kind=workspace_path_not_worktree") ||
+						!strings.Contains(p.Result, "working tree") {
+						t.Fatalf("workspace_bad result should reject bare repo with recovery guidance: %s", p.Result)
+					}
+					if sess.Workspace() != sess.workspaceRoot() {
+						t.Fatalf("bare repo rejection changed workspace: current=%q root=%q", sess.Workspace(), sess.workspaceRoot())
+					}
+					sawBareRejection = true
+				case "workspace_good":
+					if !strings.Contains(p.Result, `"workspace_path": "app"`) ||
+						!strings.Contains(p.Result, `"changed": true`) {
+						t.Fatalf("workspace_good result missing active app workspace: %s", p.Result)
+					}
+					sawGoodWorkspace = true
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.TurnID != turnID {
+					continue
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("turn end reason = %q, want completed", p.Reason)
+				}
+				if !sawBareRejection || !sawGoodWorkspace {
+					t.Fatalf("recovery evidence missing: bare_rejection=%v good_workspace=%v", sawBareRejection, sawGoodWorkspace)
+				}
+				if sess.Workspace() != filepath.Join(sess.workspaceRoot(), "app") {
+					t.Fatalf("active workspace = %q, want app under root %q", sess.Workspace(), sess.workspaceRoot())
+				}
+				if _, err := os.Stat(filepath.Join(sess.Workspace(), ".git")); err != nil {
+					t.Fatalf("recovered workspace is not a git worktree: %v", err)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for bare repo recovery turn.end")
+		}
+	}
+}
+
 func TestSessionWorkspaceSupportsCloneModifyTestCommitPushWorkflow(t *testing.T) {
 	var calls atomic.Int32
 	fixedSource := `package mathutil
