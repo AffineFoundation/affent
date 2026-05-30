@@ -1776,23 +1776,15 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		}
 	}
 	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
-	triggerBytes := agent.DefaultSummaryTriggerBytes
-	if c.modelContextWindowTokens > 0 && c.compactTriggerInputTokens == 0 {
-		triggerBytes = agent.CompactTriggerBytesForModelPolicy(0, c.modelContextWindowTokens, c.compactTriggerPercent, reservedOutputTokensFromSampling(llm.Sampling), agent.DefaultSummaryTriggerBytes)
-	}
-	maxSummaryPromptBytes := agent.SummaryPromptMaxBytesForModelPolicy(
-		c.modelContextWindowTokens,
-		c.compactTriggerPercent,
-		reservedOutputTokensFromSampling(llm.Sampling),
-		agent.DefaultSummaryPromptMaxBytes,
-	)
-	loop.Compactor = &agent.LLMSummaryCompactor{
-		LLM:            llm,
-		TriggerMsgs:    triggerMsgs,
-		TriggerBytes:   triggerBytes,
-		KeepLast:       keepLast,
-		MaxPromptBytes: maxSummaryPromptBytes,
-	}
+	loop.Compactor = agent.NewLLMSummaryCompactorForPolicy(agent.SummaryCompactorPolicy{
+		LLM:                        llm,
+		TriggerMsgs:                triggerMsgs,
+		TriggerInputTokens:         c.compactTriggerInputTokens,
+		ModelContextWindowTokens:   c.modelContextWindowTokens,
+		CompactTriggerInputPercent: c.compactTriggerPercent,
+		ReservedOutputTokens:       reservedOutputTokensFromSampling(llm.Sampling),
+		KeepLast:                   keepLast,
+	})
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		log.Error().Err(err).Msg("seed system prompt")
 		return nil, exitRuntime

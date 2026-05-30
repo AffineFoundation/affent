@@ -108,6 +108,53 @@ func SummaryPromptMaxBytesForModelPolicy(modelContextWindowTokens, percent, rese
 	return limit
 }
 
+// SummaryCompactorPolicy is the host-facing configuration for Affent's rolling
+// context compactor. Keeping this policy in agent prevents serve, ctl, and eval
+// from drifting on model-window or reserved-output behavior.
+type SummaryCompactorPolicy struct {
+	LLM                        *LLMClient
+	TriggerMsgs                int
+	TriggerInputTokens         int
+	ModelContextWindowTokens   int
+	CompactTriggerInputPercent int
+	ReservedOutputTokens       int
+	KeepLast                   int
+}
+
+func NewLLMSummaryCompactorForPolicy(policy SummaryCompactorPolicy) *LLMSummaryCompactor {
+	triggerMsgs := policy.TriggerMsgs
+	if triggerMsgs <= 0 {
+		triggerMsgs = DefaultSummaryTriggerMsgs
+	}
+	keepLast := policy.KeepLast
+	if keepLast <= 0 {
+		keepLast = DefaultSummaryKeepLast
+	}
+	triggerBytes := DefaultSummaryTriggerBytes
+	if policy.ModelContextWindowTokens > 0 && policy.TriggerInputTokens == 0 {
+		triggerBytes = CompactTriggerBytesForModelPolicy(
+			0,
+			policy.ModelContextWindowTokens,
+			policy.CompactTriggerInputPercent,
+			policy.ReservedOutputTokens,
+			DefaultSummaryTriggerBytes,
+		)
+	}
+	maxSummaryPromptBytes := SummaryPromptMaxBytesForModelPolicy(
+		policy.ModelContextWindowTokens,
+		policy.CompactTriggerInputPercent,
+		policy.ReservedOutputTokens,
+		DefaultSummaryPromptMaxBytes,
+	)
+	return &LLMSummaryCompactor{
+		LLM:            policy.LLM,
+		TriggerMsgs:    triggerMsgs,
+		TriggerBytes:   triggerBytes,
+		KeepLast:       keepLast,
+		MaxPromptBytes: maxSummaryPromptBytes,
+	}
+}
+
 // ToolSchemaBudgetTokensForRequestPolicy returns the model-visible tool-schema
 // budget remaining after the current conversation has consumed part of the
 // request-input compaction trigger. It keeps tool selection aligned with the
