@@ -2541,8 +2541,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 37 {
-		t.Fatalf("long-run suite size = %d, want 37", len(scenarios))
+	if len(scenarios) != 38 {
+		t.Fatalf("long-run suite size = %d, want 38", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -4046,6 +4046,38 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(scheduleControlChecks, "tool_called_at_least:session_schedule:3") ||
 		!stringSliceContains(scheduleControlChecks, "runtime_surface_refresh_reason:schedules_changed:3") {
 		t.Fatalf("session schedule control checks = %#v, want schedule lifecycle checks", scheduleControlChecks)
+	}
+
+	scheduleCoexistence, ok := seen["longrun-session-schedule-loop-coexistence"]
+	if !ok {
+		t.Fatalf("long-run suite missing session schedule loop coexistence scenario")
+	}
+	if scheduleCoexistence.SessionID != "longrun-session-schedule-loop-coexistence" || !scheduleCoexistence.EnableLoopProtocol {
+		t.Fatalf("session schedule coexistence fields = session:%q loop:%v", scheduleCoexistence.SessionID, scheduleCoexistence.EnableLoopProtocol)
+	}
+	if !stringSliceContains(scheduleCoexistence.ProtectedFiles, ".affent/loops/schedule-loop-coexistence/LOOP.md") {
+		t.Fatalf("session schedule coexistence ProtectedFiles = %#v, want LOOP.md protected", scheduleCoexistence.ProtectedFiles)
+	}
+	if scheduleCoexistence.RequiredRuntimeLoopProtocolControl != "enabled" ||
+		scheduleCoexistence.RequiredLoopProtocolFeeds != 1 ||
+		scheduleCoexistence.RequiredLoopProtocolFinalStatus != "running" {
+		t.Fatalf("session schedule coexistence loop requirements = control:%q feeds:%d status:%q",
+			scheduleCoexistence.RequiredRuntimeLoopProtocolControl,
+			scheduleCoexistence.RequiredLoopProtocolFeeds,
+			scheduleCoexistence.RequiredLoopProtocolFinalStatus)
+	}
+	if !stringSliceContains(scheduleCoexistence.ForbiddenTools, agent.LoopProtocolToolName) ||
+		scheduleCoexistence.MaxSuccessfulToolCallsByTool[agent.LoopProtocolToolName] != 0 {
+		t.Fatalf("session schedule coexistence loop tool constraints = forbidden:%#v max:%#v", scheduleCoexistence.ForbiddenTools, scheduleCoexistence.MaxSuccessfulToolCallsByTool)
+	}
+	if scheduleCoexistence.RequiredRuntimeSurfaceRefreshReasons[sse.RuntimeSurfaceRefreshSchedulesChanged] != 1 {
+		t.Fatalf("session schedule coexistence refresh requirements = %#v, want schedule refresh", scheduleCoexistence.RequiredRuntimeSurfaceRefreshReasons)
+	}
+	scheduleCoexistenceChecks := checkNamesFor(BatchScenarioChecks(scheduleCoexistence))
+	if !stringSliceContains(scheduleCoexistenceChecks, "runtime_surface_loop_protocol_control:enabled") ||
+		!stringSliceContains(scheduleCoexistenceChecks, "loop_protocol_feeds_at_least:1") ||
+		!stringSliceContains(scheduleCoexistenceChecks, "tool_not_called:loop_protocol") {
+		t.Fatalf("session schedule coexistence checks = %#v, want active-loop coexistence checks", scheduleCoexistenceChecks)
 	}
 
 	scheduledTurn, ok := seen["longrun-scheduled-turn-provenance"]

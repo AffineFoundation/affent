@@ -2403,6 +2403,95 @@ func longRunSessionScheduleControlLifecycleScenario() BatchScenario {
 	}
 }
 
+func longRunSessionScheduleLoopCoexistenceScenario() BatchScenario {
+	return BatchScenario{
+		Name:               "longrun-session-schedule-loop-coexistence",
+		Suites:             []string{longRunSuite},
+		Domains:            []string{longRunRecoveryDomain, scheduleAutomationDomain},
+		SessionID:          "longrun-session-schedule-loop-coexistence",
+		EnableLoopProtocol: true,
+		Prompt:             "This session already has a running loop protocol, but the current request is only to create an ordinary one-shot session timer. Create a custom timer for release readiness with next_run_at exactly 2030-01-02T15:04:05Z and a compact display label. Do not use loop_protocol and do not close or edit the running loop. Reply with SCHEDULE-LOOP-COEXIST-44 and the schedule id.",
+		Files: map[string]string{
+			".affent/loops/schedule-loop-coexistence/LOOP.md": `# Loop Protocol: schedule-loop-coexistence
+
+## 0. Metadata
+
+- loop_id: schedule-loop-coexistence
+- owner_session: longrun-session-schedule-loop-coexistence
+- status: running
+
+## 1. North Star
+
+Keep durable loop state separate from ordinary timers.
+
+## 2. Current Situation
+
+- The running loop is intentionally present before the timer request.
+- Ordinary session timers must coexist with this loop without changing it.
+
+## 3. Rules
+
+- Do not close this loop for ordinary timer setup.
+- Do not use loop_protocol when session_schedule can express the timer directly.
+
+## 4. Plan/Step Pointer
+
+Current step: keep the loop running while creating only the ordinary timer.
+
+## 5. Evidence And Recovery Index
+
+Evidence is the session_schedule result and unchanged running loop status.
+`,
+			".affent/loops/schedule-loop-coexistence/state.json": `{"version":1,"loop_id":"schedule-loop-coexistence","owner_session":"longrun-session-schedule-loop-coexistence","status":"running","protocol_path":".affent/loops/schedule-loop-coexistence/LOOP.md"}`,
+		},
+		RequiredTools: []string{agent.SessionScheduleToolName},
+		RequiredToolCounts: map[string]int{
+			agent.SessionScheduleToolName: 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+			{Tool: agent.SessionScheduleToolName, Arg: "kind", Substring: "custom"},
+			{Tool: agent.SessionScheduleToolName, Arg: "next_run_at", Substring: "2030-01-02T15:04:05Z"},
+		},
+		ForbiddenTools: []string{
+			agent.LoopProtocolToolName,
+			"shell",
+			"write_file",
+			"edit_file",
+		},
+		RequiredToolResultText: map[string][]string{
+			agent.SessionScheduleToolName: {
+				"sched_eval_001",
+				`"next_schedule_id": "sched_eval_001"`,
+			},
+		},
+		RequiredRuntimeSurfaceRefreshReasons: map[string]int{
+			sse.RuntimeSurfaceRefreshSchedulesChanged: 1,
+		},
+		RequiredRuntimeLoopProtocolControl: "enabled",
+		RequiredLoopProtocolFeeds:          1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredLoopProtocolFinalStatus: "running",
+		RequiredFinalText:               []string{"SCHEDULE-LOOP-COEXIST-44", "sched_"},
+		RequiredTraceEventCounts: map[string]int{
+			"loop.turn_checkpoint": 1,
+		},
+		ProtectedFiles: []string{".affent/loops/schedule-loop-coexistence/LOOP.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.LoopProtocolToolName: 0,
+			"shell":                    0,
+			"write_file":               0,
+			"edit_file":                0,
+		},
+		MaxParentToolCalls:     3,
+		MaxLoopTurnInputTokens: 300000,
+		MaxLoopTurnTotalTokens: 320000,
+		MaxTurns:               5,
+	}
+}
+
 func longRunScheduledTurnProvenanceScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-scheduled-turn-provenance",
