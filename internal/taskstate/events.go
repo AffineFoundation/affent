@@ -262,6 +262,15 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 				if ToolRequestLooksLikeVerification(req) {
 					state.VerificationState = "last_shell_passed"
 				}
+				if summary := MemoryUpdateSummary(p.MemoryUpdate); summary != "" {
+					state.Evidence = appendEvidence(state.Evidence, Evidence{
+						Source:  "memory_update",
+						Summary: compactSummary(summary, opts.SummaryMaxChar),
+						TurnID:  firstNonEmpty(p.TurnID, req.TurnID),
+						CallID:  p.CallID,
+					}, opts.MaxItems)
+					addSource(state, "memory_update", opts.MaxItems)
+				}
 				action := ToolActionSummary(req)
 				summary := compactSummary(action, opts.SummaryMaxChar)
 				state.Evidence = appendEvidence(state.Evidence, Evidence{
@@ -417,6 +426,37 @@ func ToolEvidenceSource(tool string) string {
 	default:
 		return ""
 	}
+}
+
+func MemoryUpdateSummary(meta *sse.MemoryUpdateMeta) string {
+	if meta == nil {
+		return ""
+	}
+	action := strings.ToLower(strings.TrimSpace(meta.Action))
+	switch action {
+	case "add", "replace", "remove":
+	default:
+		return ""
+	}
+	var fields []string
+	fields = append(fields, "action="+action)
+	if kind := strings.TrimSpace(meta.Kind); kind != "" {
+		fields = append(fields, "kind="+kind)
+	}
+	location := strings.TrimSpace(meta.Location)
+	if location == "" {
+		target := firstNonEmpty(strings.TrimSpace(meta.Target), "memory")
+		topic := firstNonEmpty(strings.TrimSpace(meta.Topic), "general")
+		if target == "user" {
+			topic = "user"
+		}
+		location = target + ":" + topic
+	}
+	fields = append(fields, "location="+location)
+	if preview := firstNonEmpty(strings.TrimSpace(meta.Preview), strings.TrimSpace(meta.NextPreview), strings.TrimSpace(meta.PreviousPreview)); preview != "" {
+		fields = append(fields, "preview="+preview)
+	}
+	return strings.Join(fields, " ")
 }
 
 func contextCompactionSummary(p sse.ContextCompactPayload) string {

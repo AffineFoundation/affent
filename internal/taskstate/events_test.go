@@ -61,6 +61,33 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 		}) +
 		taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID: "t1",
+			CallID: "mem-1",
+			Tool:   "memory",
+			Args: map[string]any{
+				"action":  "add",
+				"target":  "memory",
+				"kind":    "lesson",
+				"topic":   "testing",
+				"content": "Clamp regressions require boundary tests before push.",
+			},
+		}) +
+		taskStateEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{
+			TurnID:   "t1",
+			CallID:   "mem-1",
+			ExitCode: 0,
+			Result:   `{"ok":true,"mutated":true,"target":"memory","topic":"testing","message":"added"}`,
+			MemoryUpdate: &sse.MemoryUpdateMeta{
+				Action:      "add",
+				Target:      "memory",
+				Kind:        "lesson",
+				Topic:       "testing",
+				Location:    "memory:testing",
+				Preview:     "Clamp regressions require boundary tests before push.",
+				NextPreview: "Clamp regressions require boundary tests before push.",
+			},
+		}) +
+		taskStateEventLine(t, sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: "t1",
 			CallID: "edit-1",
 			Tool:   "edit_file",
 			Args:   map[string]any{"path": "app/mathutil/clamp.go"},
@@ -128,6 +155,12 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	if !taskStateEvidenceContains(state.Evidence, GitPushEvidenceSource, "git push origin main") {
 		t.Fatalf("evidence = %+v, want git push handoff", state.Evidence)
 	}
+	if !taskStateEvidenceContains(state.Evidence, "memory_update", "action=add") ||
+		!taskStateEvidenceContains(state.Evidence, "memory_update", "kind=lesson") ||
+		!taskStateEvidenceContains(state.Evidence, "memory_update", "location=memory:testing") ||
+		!taskStateEvidenceContains(state.Evidence, "memory_update", "Clamp regressions require boundary tests") {
+		t.Fatalf("evidence = %+v, want structured memory update", state.Evidence)
+	}
 	if !taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_auto=true") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "refresh_reason=post_compaction") ||
 		!taskStateEvidenceContains(state.Evidence, "runtime_surface", "model_context_window_effective_percent=95") ||
@@ -154,7 +187,7 @@ func TestScanEventsDerivesAuditableTaskState(t *testing.T) {
 	}
 
 	text := SearchText(state.Snapshot)
-	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "refresh_reason=post_compaction", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "loop_protocol_control=disabled", "workspace_path=app", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000", "request_input_compact_percent=7", "request_input_tokens_until_compact=65000"} {
+	for _, want := range []string{"task_state:", "objective: Fix clamp behavior", "failed_action:", "test_failed", "next=inspect clamp bounds", "evidence: source=git_push", "evidence: source=memory_update", "location=memory:testing", "refresh_reason=post_compaction", "model_context_window_effective_percent=95", "reserved_output_tokens=30000", "compact_scope_active=true", "compact_window_prefill_source=server_observed", "compact_scoped_input_tokens=12000", "compact_summary_prompt_max_bytes=196608", "loop_protocol_control=disabled", "workspace_path=app", "tool_schema_budget_tokens=3000", "estimated_tool_schema_tokens=2000", "request_input_compact_percent=7", "request_input_tokens_until_compact=65000"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("SearchText missing %q:\n%s", want, text)
 		}

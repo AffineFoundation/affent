@@ -51,6 +51,22 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 				Args: map[string]any{"path": "app/mathutil/clamp.go"},
 			},
 			{
+				TurnID:   "turn-1",
+				CallID:   "mem-1",
+				Tool:     "memory",
+				Args:     map[string]any{"action": "add", "target": "memory", "kind": "lesson", "topic": "testing"},
+				ExitCode: 0,
+				MemoryUpdate: &sse.MemoryUpdateMeta{
+					Action:      "add",
+					Target:      "memory",
+					Kind:        "lesson",
+					Topic:       "testing",
+					Location:    "memory:testing",
+					Preview:     "Clamp regressions require boundary tests before push.",
+					NextPreview: "Clamp regressions require boundary tests before push.",
+				},
+			},
+			{
 				TurnID:        "turn-1",
 				CallID:        "test-1",
 				Tool:          "shell",
@@ -102,8 +118,14 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 		!reflect.DeepEqual(got.FailedActions[0].Kinds, []string{"test_failed"}) {
 		t.Fatalf("failed actions = %+v", got.FailedActions)
 	}
-	if !taskStateHasEvidence(got, "runtime_workspace") || !taskStateHasEvidence(got, "shell") {
+	if !taskStateHasEvidence(got, "runtime_workspace") || !taskStateHasEvidence(got, "shell") || !taskStateHasEvidence(got, "memory_update") {
 		t.Fatalf("evidence = %+v", got.Evidence)
+	}
+	if !taskStateHasEvidenceSummary(got, "memory_update", "action=add") ||
+		!taskStateHasEvidenceSummary(got, "memory_update", "kind=lesson") ||
+		!taskStateHasEvidenceSummary(got, "memory_update", "location=memory:testing") ||
+		!taskStateHasEvidenceSummary(got, "memory_update", "Clamp regressions require boundary tests") {
+		t.Fatalf("evidence = %+v, want structured memory update summary", got.Evidence)
 	}
 	if !taskStateHasEvidenceSummary(got, "runtime_surface", "reserved_output_tokens=30000") ||
 		!taskStateHasEvidenceSummary(got, "runtime_surface", "compact_trigger_input_tokens=70000") ||
@@ -115,7 +137,7 @@ func TestDeriveTaskStateKeepsProgressAuditableAfterRecoveredFailure(t *testing.T
 	if !taskStateHasEvidenceSummary(got, "runtime_workspace", "workspace_path=app") {
 		t.Fatalf("evidence = %+v, want runtime workspace path", got.Evidence)
 	}
-	if !taskStateHasSource(got, "runtime_workspace") || !taskStateHasSource(got, "runtime_surface") || !taskStateHasSource(got, "schedule") {
+	if !taskStateHasSource(got, "runtime_workspace") || !taskStateHasSource(got, "runtime_surface") || !taskStateHasSource(got, "schedule") || !taskStateHasSource(got, "memory_update") {
 		t.Fatalf("sources = %+v", got.Sources)
 	}
 }

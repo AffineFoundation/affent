@@ -122,6 +122,15 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 			})
 			continue
 		}
+		if summary := taskstate.MemoryUpdateSummary(tool.MemoryUpdate); summary != "" {
+			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
+				Source:  "memory_update",
+				Summary: compactTaskStateSummary(summary),
+				TurnID:  tool.TurnID,
+				CallID:  tool.CallID,
+			})
+			task.Sources = appendUniqueTaskString(task.Sources, "memory_update", taskStateMaxItems)
+		}
 		if source := taskStateToolEvidenceSource(tool); source != "" {
 			summary := compactTaskStateSummary(taskStateToolSummary(tool))
 			task.Evidence = appendTaskEvidence(task.Evidence, TaskStateEvidence{
