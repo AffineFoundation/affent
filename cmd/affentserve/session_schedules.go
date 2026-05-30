@@ -305,6 +305,10 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid schedule kind", err, "bad_request")
 		return
 	}
+	if err := validateSessionScheduleKindForSession(pool, sessionID, kind); err != nil {
+		writeJSONErrorTyped(w, http.StatusConflict, "schedule kind unavailable", err, "invalid_schedule_kind")
+		return
+	}
 	if req.RepeatIntervalSeconds < 0 {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "repeat_interval_seconds must be non-negative", nil, "bad_request")
 		return
@@ -549,11 +553,11 @@ func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSum
 }
 
 func summarizeSessionSchedulesForSession(pool *SessionPool, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
-	return summarizeSessionSchedulesWithLoopState(schedules, true)
+	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunning(pool, sessionID))
 }
 
 func summarizeSessionSchedulesForDir(sessionDir, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
-	return summarizeSessionSchedulesWithLoopState(schedules, true)
+	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunningForDir(sessionDir, sessionID))
 }
 
 func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopProtocolRunning bool) *sessionSchedulesSummary {
@@ -571,6 +575,9 @@ func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopPro
 			summary.Enabled++
 			if schedules[i].Kind == sessionScheduleKindLoopTick {
 				summary.EnabledLoopTicks++
+				if !loopProtocolRunning {
+					summary.PendingLoopTicks++
+				}
 			}
 			if next == nil || scheduleTimeBefore(schedules[i].NextRunAt, next.NextRunAt) {
 				next = &schedules[i]
@@ -663,6 +670,16 @@ func normalizeSessionScheduleKind(kind string) (string, error) {
 	default:
 		return "", fmt.Errorf("schedule kind must be one of %s, %s, %s, or %s", sessionScheduleKindCustom, sessionScheduleKindCheckIn, sessionScheduleKindDailyCheckIn, sessionScheduleKindLoopTick)
 	}
+}
+
+func validateSessionScheduleKindForSession(pool *SessionPool, sessionID, kind string) error {
+	if kind != sessionScheduleKindLoopTick {
+		return nil
+	}
+	if sessionLoopProtocolRunning(pool, sessionID) {
+		return nil
+	}
+	return errors.New(sessionScheduleLoopTickUnavailableMessage())
 }
 
 func validateSessionScheduleID(id string) error {
@@ -806,10 +823,21 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 	if err != nil || !found {
 		return sessionScheduleRun{}, false, err
 	}
+	updated := false
 	for i := range file.Schedules {
 		schedule := &file.Schedules[i]
 		if !schedule.Enabled || !sessionScheduleDue(*schedule, now) {
 			continue
+		}
+		if schedule.Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(p, sessionID) {
+			markSessionScheduleLoopTickUnavailable(schedule, now)
+			updated = true
+			continue
+		}
+		if updated {
+			if err := writeSessionSchedulesFile(path, file); err != nil {
+				return sessionScheduleRun{}, false, err
+			}
 		}
 		return sessionScheduleRun{
 			SessionID:    sessionID,
@@ -820,7 +848,25 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 			ClaimedAt:    now.UTC(),
 		}, true, nil
 	}
+	if updated {
+		if err := writeSessionSchedulesFile(path, file); err != nil {
+			return sessionScheduleRun{}, false, err
+		}
+	}
 	return sessionScheduleRun{}, false, nil
+}
+
+func markSessionScheduleLoopTickUnavailable(schedule *sessionSchedule, now time.Time) {
+	if schedule == nil {
+		return
+	}
+	schedule.Enabled = false
+	schedule.LastError = sessionScheduleLoopTickUnavailableMessage()
+	schedule.UpdatedAt = now.UTC().Format(time.RFC3339)
+}
+
+func sessionScheduleLoopTickUnavailableMessage() string {
+	return "loop_tick requires a running LOOP.md; activate the loop first, or use custom/checkin/daily_checkin for ordinary timers and recurring checks"
 }
 
 func sessionLoopProtocolRunning(pool *SessionPool, sessionID string) bool {

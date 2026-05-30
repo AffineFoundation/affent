@@ -138,6 +138,9 @@ func sessionScheduleToolCreate(pool *SessionPool, sessionID string, p sessionSch
 	if err != nil {
 		return "", err
 	}
+	if err := validateSessionScheduleKindForSession(pool, sessionID, kind); err != nil {
+		return "", err
+	}
 	if p.RepeatIntervalSeconds < 0 {
 		return "", errors.New("repeat_interval_seconds must be non-negative")
 	}

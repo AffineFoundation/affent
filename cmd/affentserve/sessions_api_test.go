@@ -2865,7 +2865,7 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	if !resp.Sessions[0].HasSchedules || summary == nil {
 		t.Fatalf("session = %+v, want schedule summary", resp.Sessions[0])
 	}
-	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 0 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "Loop every 30m: scheduled-list" {
+	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 1 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "Loop every 30m: scheduled-list" {
 		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
 	}
 	if summary.ErrorCount != 1 || summary.LastError != "LOOP.md not running; answer calibration first" {
@@ -2899,7 +2899,7 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	createDurableSessionDir(t, pool, "scheduled")
 	nextRunAt := time.Date(2026, 5, 27, 13, 30, 0, 0, time.UTC).Format(time.RFC3339)
 
-	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/scheduled/schedules", bytes.NewBufferString(`{"kind":"loop_tick","prompt":"Ask the user two focused questions before enabling loop.","display_text":"Loop every hour: scheduled","next_run_at":"`+nextRunAt+`","repeat_interval_seconds":3600}`))
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/scheduled/schedules", bytes.NewBufferString(`{"kind":"custom","prompt":"Ask the user two focused questions before enabling loop.","display_text":"Loop every hour: scheduled","next_run_at":"`+nextRunAt+`","repeat_interval_seconds":3600}`))
 	w := httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusCreated {
@@ -2916,10 +2916,10 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 		t.Fatalf("created = %+v, want one schedule", created)
 	}
 	schedule := created.Schedules[0]
-	if schedule.ID == "" || schedule.Kind != sessionScheduleKindLoopTick || schedule.Prompt != "Ask the user two focused questions before enabling loop." || schedule.DisplayText != "Loop every hour: scheduled" || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
+	if schedule.ID == "" || schedule.Kind != sessionScheduleKindCustom || schedule.Prompt != "Ask the user two focused questions before enabling loop." || schedule.DisplayText != "Loop every hour: scheduled" || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
 		t.Fatalf("schedule = %+v, want persisted request fields", schedule)
 	}
-	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.EnabledLoopTicks != 1 || created.Summary.PendingLoopTicks != 0 || created.Summary.NextScheduleID != schedule.ID {
+	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.EnabledLoopTicks != 0 || created.Summary.PendingLoopTicks != 0 || created.Summary.NextScheduleID != schedule.ID {
 		t.Fatalf("summary = %+v, want one enabled schedule", created.Summary)
 	}
 

@@ -168,6 +168,48 @@ func TestEvalSessionScheduleToolCreatePersistsSchedule(t *testing.T) {
 	}
 }
 
+func TestEvalSessionScheduleToolLoopTickRequiresRunningProtocol(t *testing.T) {
+	workspace := t.TempDir()
+	_, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
+		"action":"create",
+		"kind":"loop_tick",
+		"prompt":"Nudge the active loop.",
+		"display_text":"Loop tick",
+		"next_run_at":"2030-01-02T15:04:05Z",
+		"repeat_interval_seconds":1800,
+		"enabled":true
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "running LOOP.md") {
+		t.Fatalf("loop_tick create err = %v, want running LOOP.md guidance", err)
+	}
+	if _, readErr := os.Stat(filepath.Join(workspace, evalSessionSchedulesRelPath)); !os.IsNotExist(readErr) {
+		t.Fatalf("schedule file err = %v, want no persisted schedule", readErr)
+	}
+
+	protocolDir := filepath.Join(workspace, ".affent", "loops", "eval-loop")
+	if err := os.MkdirAll(protocolDir, 0o755); err != nil {
+		t.Fatalf("mkdir protocol dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(protocolDir, "LOOP.md"), []byte("# Loop Protocol\n\n## 0. Metadata\n\n- status: running\n"), 0o644); err != nil {
+		t.Fatalf("write protocol: %v", err)
+	}
+	result, err := executeEvalSessionScheduleTool(context.Background(), workspace, json.RawMessage(`{
+		"action":"create",
+		"kind":"loop_tick",
+		"prompt":"Nudge the active loop.",
+		"display_text":"Loop tick",
+		"next_run_at":"2030-01-02T15:04:05Z",
+		"repeat_interval_seconds":1800,
+		"enabled":true
+	}`))
+	if err != nil {
+		t.Fatalf("loop_tick create with running protocol: %v", err)
+	}
+	if !strings.Contains(result, `"kind": "loop_tick"`) || !strings.Contains(result, `"next_schedule_kind": "loop_tick"`) {
+		t.Fatalf("loop_tick create result missing running-loop schedule evidence:\n%s", result)
+	}
+}
+
 func TestDebugSourceExamplesUseFullTraceForQualitySignals(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "browser_network_read", Result: `SourceAccess: browser_network_url=https://example.test/api/1; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch

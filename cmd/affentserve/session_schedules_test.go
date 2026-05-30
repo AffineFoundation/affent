@@ -305,7 +305,7 @@ func TestSessionPool_StartupSchedulePreservesRootWorkspaceFiles(t *testing.T) {
 	}
 }
 
-func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProtocol(t *testing.T) {
+func TestSessionPool_RunDueSessionSchedulesOncePausesRecurringLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "draft-loop")
@@ -321,25 +321,18 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresRecurringLoopTickWithoutProt
 		UpdatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
 	})
 
-	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
-		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
 	}
 	schedule := waitSchedule(t, pool, "draft-loop", "sched_loop", func(schedule sessionSchedule) bool {
-		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+		return schedule.LastError != ""
 	})
-	if !schedule.Enabled || schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastError != "" {
-		t.Fatalf("schedule = %+v, want recurring timer fired without LOOP.md", schedule)
-	}
-	if got, want := schedule.NextRunAt, now.Add(29*time.Minute).Format(time.RFC3339); got != want {
-		t.Fatalf("next_run_at = %q, want advanced to %q", got, want)
-	}
-	userMessage := waitScheduleUserMessage(t, pool, "draft-loop")
-	if userMessage.Source != "schedule" || userMessage.ScheduleKind != sessionScheduleKindLoopTick {
-		t.Fatalf("user.message = %+v, want scheduled loop tick turn", userMessage)
+	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, "running LOOP.md") {
+		t.Fatalf("schedule = %+v, want paused loop_tick without a turn", schedule)
 	}
 }
 
-func TestSessionPool_RunDueSessionSchedulesOnceFiresLoopTickWhenStateStillDraft(t *testing.T) {
+func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickWhenStateStillDraft(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "stale-draft-loop")
@@ -363,18 +356,18 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresLoopTickWhenStateStillDraft(
 		UpdatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
 	})
 
-	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
-		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
 	}
 	schedule := waitSchedule(t, pool, "stale-draft-loop", "sched_loop", func(schedule sessionSchedule) bool {
-		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+		return schedule.LastError != ""
 	})
-	if schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastError != "" {
-		t.Fatalf("schedule = %+v, want fired loop tick independent from sidecar state", schedule)
+	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, "running LOOP.md") {
+		t.Fatalf("schedule = %+v, want paused loop_tick while loop state is draft", schedule)
 	}
 }
 
-func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShotLoopTickWithoutProtocol(t *testing.T) {
+func TestSessionPool_RunDueSessionSchedulesOncePausesOneShotLoopTickWithoutProtocol(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithSuccessfulScheduledTurns(t, memRoot)
 	createDurableSessionDir(t, pool, "draft-one-shot-loop")
@@ -389,14 +382,14 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShotLoopTickWithoutProtoc
 		UpdatedAt: now.Add(-time.Hour).Format(time.RFC3339),
 	})
 
-	if got := pool.runDueSessionSchedulesOnce(now); got != 1 {
-		t.Fatalf("runDueSessionSchedulesOnce = %d, want 1", got)
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
 	}
 	schedule := waitSchedule(t, pool, "draft-one-shot-loop", "sched_loop_once", func(schedule sessionSchedule) bool {
-		return schedule.RunCount == 1 && schedule.LastTurnID != ""
+		return schedule.LastError != ""
 	})
-	if schedule.Enabled || schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastError != "" {
-		t.Fatalf("schedule = %+v, want one-shot timer fired and disabled", schedule)
+	if schedule.Enabled || schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, "running LOOP.md") {
+		t.Fatalf("schedule = %+v, want one-shot loop_tick paused without a turn", schedule)
 	}
 }
 
@@ -451,8 +444,8 @@ func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
 	}
 
 	draft := summarizeSessionSchedulesWithLoopState(schedules, false)
-	if draft.EnabledLoopTicks != 1 || draft.PendingLoopTicks != 0 {
-		t.Fatalf("draft summary = %+v, want loop tick counted without pending calibration", draft)
+	if draft.EnabledLoopTicks != 1 || draft.PendingLoopTicks != 1 {
+		t.Fatalf("draft summary = %+v, want loop tick counted as pending without running loop", draft)
 	}
 
 	running := summarizeSessionSchedulesWithLoopState(schedules, true)
@@ -463,6 +456,8 @@ func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
 
 func TestCreateSessionScheduleLoopTickDoesNotInitializeProtocol(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "direct-loop")
+	writeLoopProtocolStatusFixture(t, pool, "direct-loop", "running")
 	next := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC).Format(time.RFC3339)
 	body := `{
 		"kind":"loop_tick",
@@ -486,11 +481,35 @@ func TestCreateSessionScheduleLoopTickDoesNotInitializeProtocol(t *testing.T) {
 	if resp.Summary == nil || resp.Summary.EnabledLoopTicks != 1 || resp.Summary.PendingLoopTicks != 0 {
 		t.Fatalf("summary = %+v, want one schedule without pending protocol calibration", resp.Summary)
 	}
-	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "direct-loop")); err != nil || found {
-		t.Fatalf("read loop protocol found=%v err=%v, want no protocol created", found, err)
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "direct-loop"))
+	if err != nil || !found || loopstate.ProtocolStatus(protocol) != "running" {
+		t.Fatalf("read loop protocol found=%v err=%v status=%q, want existing running protocol", found, err, loopstate.ProtocolStatus(protocol))
 	}
-	if _, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "direct-loop")); err != nil || found {
-		t.Fatalf("read loop state found=%v err=%v, want no loop state created", found, err)
+}
+
+func TestCreateSessionScheduleLoopTickRequiresRunningProtocol(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	next := time.Date(2026, 5, 27, 14, 30, 0, 0, time.UTC).Format(time.RFC3339)
+	body := `{
+		"kind":"loop_tick",
+		"prompt":"Scheduled loop tick for session: direct API",
+		"display_text":"Loop every 30m: direct API",
+		"next_run_at":` + strconv.Quote(next) + `,
+		"repeat_interval_seconds":1800,
+		"enabled":true
+	}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/direct-loop-missing/schedules", bytes.NewBufferString(body))
+	w := httptest.NewRecorder()
+
+	handleSessionSchedules(pool, "direct-loop-missing", w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("create schedule status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "running LOOP.md") {
+		t.Fatalf("create loop_tick error missing running loop guidance: %s", w.Body.String())
+	}
+	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "direct-loop-missing")); err != nil || found {
+		t.Fatalf("read loop protocol found=%v err=%v, want no protocol created", found, err)
 	}
 }
 

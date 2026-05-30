@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
 const evalSessionSchedulesRelPath = ".affent/schedules.json"
@@ -152,6 +153,9 @@ func evalSessionScheduleToolCreate(workspaceDir string, parsed evalSessionSchedu
 	default:
 		return "", fmt.Errorf("unsupported kind %q", kind)
 	}
+	if kind == "loop_tick" && !evalWorkspaceHasRunningLoopProtocol(workspaceDir) {
+		return "", errors.New("loop_tick requires a running LOOP.md; use custom/checkin/daily_checkin for ordinary eval timers or activate the loop protocol first")
+	}
 	enabled := true
 	if parsed.Enabled != nil {
 		enabled = *parsed.Enabled
@@ -176,6 +180,35 @@ func evalSessionScheduleToolCreate(workspaceDir string, parsed evalSessionSchedu
 		return "", err
 	}
 	return marshalEvalSessionScheduleResponse(file)
+}
+
+func evalWorkspaceHasRunningLoopProtocol(workspaceDir string) bool {
+	if strings.TrimSpace(workspaceDir) == "" {
+		return false
+	}
+	paths, err := filepath.Glob(filepath.Join(workspaceDir, ".affent", "loops", "*", "LOOP.md"))
+	if err != nil {
+		return false
+	}
+	for _, path := range paths {
+		if !evalLoopProtocolRunningAtPath(path) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func evalLoopProtocolRunningAtPath(protocolPath string) bool {
+	if loopstate.ProtocolStatusFromFile(protocolPath) != "running" {
+		return false
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		return true
+	}
+	status := strings.TrimSpace(strings.ToLower(state.Status))
+	return status == "" || status == "running"
 }
 
 func readEvalSessionSchedulesFile(workspaceDir string) (evalSessionSchedulesFile, error) {

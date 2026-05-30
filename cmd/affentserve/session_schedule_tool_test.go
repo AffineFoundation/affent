@@ -59,6 +59,31 @@ func TestSessionScheduleToolCreatesRecurringTimerWithoutLoopProtocol(t *testing.
 	}
 }
 
+func TestSessionScheduleToolLoopTickRequiresRunningProtocol(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	reg := agent.NewRegistry()
+	registerSessionScheduleTool(reg, pool, "loop-tick-tool")
+	tool, ok := reg.Get(sessionScheduleToolName)
+	if !ok {
+		t.Fatal("session_schedule tool not registered")
+	}
+	next := time.Date(2026, 5, 29, 6, 30, 0, 0, time.UTC).Format(time.RFC3339)
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{
+		"action":"create",
+		"kind":"loop_tick",
+		"prompt":"Nudge the active loop.",
+		"display_text":"Loop tick",
+		"next_run_at":`+strconv.Quote(next)+`,
+		"repeat_interval_seconds":1800
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "running LOOP.md") {
+		t.Fatalf("session_schedule loop_tick error = %v, want running LOOP.md guidance", err)
+	}
+	if _, found, readErr := readSessionSchedulesFile(sessionSchedulesPath(pool, "loop-tick-tool")); readErr != nil || found {
+		t.Fatalf("schedules found=%v err=%v, want no schedule persisted", found, readErr)
+	}
+}
+
 func TestSessionScheduleToolCreatedTimerIsVisibleThroughSessionAPI(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	reg := agent.NewRegistry()
