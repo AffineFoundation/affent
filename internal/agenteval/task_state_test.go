@@ -154,6 +154,21 @@ func TestDeriveTaskStateDefaultsBlankRequestModeToNormal(t *testing.T) {
 	}
 }
 
+func TestDeriveTaskStateDefaultsScheduledKindToCustom(t *testing.T) {
+	got := DeriveTaskState(Trace{
+		Prompt:        "Run the scheduled check-in.",
+		TurnEndReason: "completed",
+		UserMessages: []UserMessage{{
+			Text:       "Scheduled check-in for session: due-one",
+			Source:     "schedule",
+			ScheduleID: "sched_due",
+		}},
+	})
+	if got.RequestSource != "schedule" || got.ScheduleID != "sched_due" || got.ScheduleKind != "custom" {
+		t.Fatalf("request provenance = source:%q schedule:%q kind:%q, want scheduled custom", got.RequestSource, got.ScheduleID, got.ScheduleKind)
+	}
+}
+
 func TestDeriveTaskStatePreservesDistinctActionAndEvidenceSourcesAtLimit(t *testing.T) {
 	trace := Trace{
 		Prompt:        "Switch workspace, fix, commit, push, and leave clean status.",

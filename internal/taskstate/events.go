@@ -96,7 +96,7 @@ func ScanEvents(r io.Reader, opts EventScanOptions) (*EventState, error) {
 			state.RequestMode = NormalizeRequestMode(p.Mode)
 			state.RequestSource = NormalizeRequestSource(p.Source)
 			state.ScheduleID = strings.TrimSpace(p.ScheduleID)
-			state.ScheduleKind = strings.TrimSpace(p.ScheduleKind)
+			state.ScheduleKind = NormalizeScheduleKind(state.RequestSource, p.ScheduleKind)
 			addSource(state, state.RequestSource, opts.MaxItems)
 			seen = true
 		case sse.TypeRuntimeSurface:
@@ -783,6 +783,17 @@ func NormalizeRequestSource(source string) string {
 		return "user"
 	}
 	return source
+}
+
+func NormalizeScheduleKind(requestSource, kind string) string {
+	kind = strings.TrimSpace(kind)
+	if NormalizeRequestSource(requestSource) != "schedule" {
+		return kind
+	}
+	if kind == "" {
+		return "custom"
+	}
+	return kind
 }
 
 func statusFromTurnEnd(reason string) string {

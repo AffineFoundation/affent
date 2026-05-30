@@ -448,6 +448,26 @@ func TestScanEventsKeepsDurableObjectiveAcrossScheduledTurns(t *testing.T) {
 	}
 }
 
+func TestScanEventsDefaultsScheduledKindToCustom(t *testing.T) {
+	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
+		TurnID:     "t1",
+		Text:       "Run scheduled check-in.",
+		Source:     "schedule",
+		ScheduleID: "sched_custom",
+	})
+
+	state, err := ScanEvents(strings.NewReader(input), EventScanOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state == nil {
+		t.Fatal("ScanEvents returned nil")
+	}
+	if state.RequestSource != "schedule" || state.ScheduleID != "sched_custom" || state.ScheduleKind != "custom" {
+		t.Fatalf("request provenance = source:%q schedule:%q kind:%q, want scheduled custom", state.RequestSource, state.ScheduleID, state.ScheduleKind)
+	}
+}
+
 func TestScanEventsKeepsRecoveryNextStepAfterCompletedFailedTurn(t *testing.T) {
 	input := taskStateEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{
 		TurnID: "t1",

@@ -29,7 +29,7 @@ func DeriveTaskState(trace Trace) TaskStateSnapshot {
 		task.RequestMode = taskstate.NormalizeRequestMode(latest.Mode)
 		task.RequestSource = taskstate.NormalizeRequestSource(latest.Source)
 		task.ScheduleID = strings.TrimSpace(latest.ScheduleID)
-		task.ScheduleKind = strings.TrimSpace(latest.ScheduleKind)
+		task.ScheduleKind = taskstate.NormalizeScheduleKind(task.RequestSource, latest.ScheduleKind)
 		task.Sources = appendUniqueTaskString(task.Sources, task.RequestSource, taskStateMaxItems)
 	}
 	for _, injection := range trace.ContextInjections {

@@ -740,6 +740,9 @@ func TestTaskStateRequestProvenanceChecks(t *testing.T) {
 	if res := TaskStateScheduleIDIs("sched_other").Eval(trace); res.Pass || !strings.Contains(res.Detail, "sched_clamp") {
 		t.Fatalf("expected mismatched task state schedule id to fail with observed id: %+v", res)
 	}
+	if res := TaskStateScheduleKindIs("").Eval(Trace{TaskState: TaskStateSnapshot{RequestSource: "schedule"}}); !res.Pass {
+		t.Fatalf("expected missing scheduled kind to normalize to custom: %+v", res)
+	}
 
 	legacy := Trace{}
 	if res := TaskStateRequestModeIs("normal").Eval(legacy); !res.Pass {
