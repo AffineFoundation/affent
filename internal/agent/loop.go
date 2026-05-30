@@ -3544,7 +3544,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 			return nil, sse.TurnEndCancelled, ctx.Err()
 		}
 
-		l.compactBeforeRequest(ctx, turnID, toolDefs)
+		toolDefs = l.prepareToolDefsForRequest(ctx, turnID, toolDefs, opts)
 
 		callCtx, callCancel := context.WithTimeout(ctx, timeout)
 		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), toolDefs)
@@ -3641,6 +3641,34 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef, o
 			return nil, sse.TurnEndCancelled, ctx.Err()
 		}
 	}
+}
+
+func (l *Loop) prepareToolDefsForRequest(ctx context.Context, turnID string, toolDefs []ToolDef, opts TurnOptions) []ToolDef {
+	l.compactBeforeRequest(ctx, turnID, toolDefs)
+	if toolDefs == nil {
+		return nil
+	}
+	refreshed := l.toolDefs(opts)
+	if toolDefNamesEqual(toolDefs, refreshed) {
+		return refreshed
+	}
+	if l.requestPressureOverLimit(refreshed) {
+		l.compactRequestPressureUntilDiminishing(ctx, turnID, refreshed, 0)
+		refreshed = l.toolDefs(opts)
+	}
+	return refreshed
+}
+
+func toolDefNamesEqual(a, b []ToolDef) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].Function.Name != b[i].Function.Name {
+			return false
+		}
+	}
+	return true
 }
 
 // maybeCompact runs the configured Compactor against the current

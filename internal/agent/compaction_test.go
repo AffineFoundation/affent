@@ -1515,6 +1515,66 @@ func TestCompactTriggerInputTokensForPolicy(t *testing.T) {
 	}
 }
 
+type toolSurfaceRefreshCompactor struct {
+	calls int32
+}
+
+func (c *toolSurfaceRefreshCompactor) Compact(context.Context, []ChatMessage) ([]ChatMessage, error) {
+	atomic.AddInt32(&c.calls, 1)
+	return []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "continue after compaction"},
+	}, nil
+}
+
+func TestPrepareToolDefsRefreshesSurfaceAfterCompaction(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "shell", Description: "run commands", Schema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: "read_file", Description: "read files", Schema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`)})
+	reg.Add(&Tool{Name: PlanToolName, Description: "manage plan", Schema: json.RawMessage(`{"type":"object","properties":{"action":{"type":"string"}}}`)})
+
+	all := reg.SelectModelTools(ToolSurfacePolicy{})
+	trigger := EstimateRequestInput(nil, all.Defs).ToolSchemaTokens + 2048
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conv.Replace([]ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: strings.Repeat("old context ", trigger)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	compactor := &toolSurfaceRefreshCompactor{}
+	loop := &Loop{
+		Tools:                     reg,
+		Conv:                      conv,
+		Compactor:                 compactor,
+		CompactTriggerInputTokens: trigger,
+	}
+
+	initial := loop.toolDefs(TurnOptions{})
+	if got := toolDefNames(initial); !reflect.DeepEqual(got, []string{PlanToolName}) {
+		t.Fatalf("initial tool surface = %#v, want only plan under pre-compaction pressure", got)
+	}
+
+	prepared := loop.prepareToolDefsForRequest(context.Background(), "turn-refresh-tools", initial, TurnOptions{})
+	if got := toolDefNames(prepared); !reflect.DeepEqual(got, []string{PlanToolName, "read_file", "shell"}) {
+		t.Fatalf("prepared tool surface = %#v, want refreshed full ranked surface after compaction", got)
+	}
+	if got := atomic.LoadInt32(&compactor.calls); got != 1 {
+		t.Fatalf("compaction calls = %d, want one pre-request compaction", got)
+	}
+}
+
+func toolDefNames(defs []ToolDef) []string {
+	names := make([]string, 0, len(defs))
+	for _, def := range defs {
+		names = append(names, def.Function.Name)
+	}
+	return names
+}
+
 // Rolling: a second compaction pass should detect the existing summary
 // (left by the first pass), not start over from msg #1.
 func TestCompact_RollingDoesNotMultiplySummary(t *testing.T) {
