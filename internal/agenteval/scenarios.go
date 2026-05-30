@@ -2492,6 +2492,56 @@ Evidence is the session_schedule result and unchanged running loop status.
 	}
 }
 
+func longRunSessionScheduleLoopTickUnavailableScenario() BatchScenario {
+	return BatchScenario{
+		Name:          "longrun-session-schedule-loop-tick-unavailable",
+		Suites:        []string{longRunSuite},
+		Domains:       []string{longRunRecoveryDomain, scheduleAutomationDomain},
+		SessionID:     "longrun-session-schedule-loop-tick-unavailable",
+		Prompt:        "Try to create a loop_tick schedule to wake an active durable loop. Use next_run_at exactly 2030-01-02T15:04:05Z, repeat every 1800 seconds, and a compact display label. This workspace has no running LOOP.md. If session_schedule reports that loop_tick is unavailable, do not create a fallback custom timer and do not activate a loop. Reply with LOOP-TICK-UNAVAILABLE-64, the failure kind, and the next action from the tool result.",
+		RequiredTools: []string{agent.SessionScheduleToolName},
+		RequiredToolCounts: map[string]int{
+			agent.SessionScheduleToolName: 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+			{Tool: agent.SessionScheduleToolName, Arg: "kind", Substring: agent.SessionScheduleKindLoopTick},
+			{Tool: agent.SessionScheduleToolName, Arg: "next_run_at", Substring: "2030-01-02T15:04:05Z"},
+			{Tool: agent.SessionScheduleToolName, Arg: "repeat_interval_seconds", Substring: "1800"},
+		},
+		RequiredToolResultText: map[string][]string{
+			agent.SessionScheduleToolName: {
+				"loop_tick requires a running LOOP.md",
+				"Next: activate the loop protocol before retrying loop_tick",
+				"Failure: kind=session_schedule_loop_tick_unavailable",
+			},
+		},
+		RequiredToolFailureKindCounts: map[string]int{
+			"session_schedule_loop_tick_unavailable": 1,
+		},
+		ForbiddenTools: []string{
+			agent.LoopProtocolToolName,
+			"shell",
+			"write_file",
+			"edit_file",
+		},
+		RequiredFinalText: []string{
+			"LOOP-TICK-UNAVAILABLE-64",
+			"session_schedule_loop_tick_unavailable",
+			"activate the loop protocol before retrying loop_tick",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			agent.SessionScheduleToolName: 0,
+			agent.LoopProtocolToolName:    0,
+			"shell":                       0,
+			"write_file":                  0,
+			"edit_file":                   0,
+		},
+		MaxParentToolCalls: 0,
+		MaxTurns:           4,
+	}
+}
+
 func longRunScheduledTurnProvenanceScenario() BatchScenario {
 	return BatchScenario{
 		Name:      "longrun-scheduled-turn-provenance",

@@ -2541,8 +2541,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 39 {
-		t.Fatalf("long-run suite size = %d, want 39", len(scenarios))
+	if len(scenarios) != 40 {
+		t.Fatalf("long-run suite size = %d, want 40", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	suiteCapabilities := map[string]bool{}
@@ -4078,6 +4078,40 @@ func TestSelectLongRunSuite(t *testing.T) {
 		!stringSliceContains(scheduleCoexistenceChecks, "loop_protocol_feeds_at_least:1") ||
 		!stringSliceContains(scheduleCoexistenceChecks, "tool_not_called:loop_protocol") {
 		t.Fatalf("session schedule coexistence checks = %#v, want active-loop coexistence checks", scheduleCoexistenceChecks)
+	}
+
+	loopTickUnavailable, ok := seen["longrun-session-schedule-loop-tick-unavailable"]
+	if !ok {
+		t.Fatalf("long-run suite missing session schedule loop_tick unavailable scenario")
+	}
+	if loopTickUnavailable.SessionID != "longrun-session-schedule-loop-tick-unavailable" {
+		t.Fatalf("loop_tick unavailable SessionID = %q, want longrun-session-schedule-loop-tick-unavailable", loopTickUnavailable.SessionID)
+	}
+	if loopTickUnavailable.RequiredToolCounts[agent.SessionScheduleToolName] != 1 ||
+		loopTickUnavailable.RequiredToolFailureKindCounts[evalSessionScheduleLoopTickUnavailableFailureKind] != 1 {
+		t.Fatalf("loop_tick unavailable tool requirements = counts:%#v failures:%#v",
+			loopTickUnavailable.RequiredToolCounts,
+			loopTickUnavailable.RequiredToolFailureKindCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: agent.SessionScheduleToolName, Arg: "action", Substring: "create"},
+		{Tool: agent.SessionScheduleToolName, Arg: "kind", Substring: agent.SessionScheduleKindLoopTick},
+		{Tool: agent.SessionScheduleToolName, Arg: "repeat_interval_seconds", Substring: "1800"},
+	} {
+		if !toolArgRequirementContains(loopTickUnavailable.RequiredToolArgContains, want) {
+			t.Fatalf("loop_tick unavailable RequiredToolArgContains = %#v, want %#v", loopTickUnavailable.RequiredToolArgContains, want)
+		}
+	}
+	if !stringSliceContains(loopTickUnavailable.ForbiddenTools, agent.LoopProtocolToolName) ||
+		loopTickUnavailable.MaxSuccessfulToolCallsByTool[agent.SessionScheduleToolName] != 0 ||
+		loopTickUnavailable.MaxSuccessfulToolCallsByTool[agent.LoopProtocolToolName] != 0 {
+		t.Fatalf("loop_tick unavailable tool constraints = forbidden:%#v max:%#v", loopTickUnavailable.ForbiddenTools, loopTickUnavailable.MaxSuccessfulToolCallsByTool)
+	}
+	loopTickUnavailableChecks := checkNamesFor(BatchScenarioChecks(loopTickUnavailable))
+	if !stringSliceContains(loopTickUnavailableChecks, "tool_failure_kind_at_least:session_schedule_loop_tick_unavailable:1") ||
+		!stringSliceContains(loopTickUnavailableChecks, "max_successful_tool_calls:session_schedule:0") ||
+		!stringSliceContains(loopTickUnavailableChecks, "tool_not_called:loop_protocol") {
+		t.Fatalf("loop_tick unavailable checks = %#v, want structured failure and no fallback checks", loopTickUnavailableChecks)
 	}
 
 	scheduledTurn, ok := seen["longrun-scheduled-turn-provenance"]
