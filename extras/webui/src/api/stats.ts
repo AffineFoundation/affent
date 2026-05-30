@@ -63,6 +63,7 @@ export interface StatsRuntimeSnapshot {
   context_compaction_summary_bytes?: number;
   context_compaction_summary_missing?: number;
   context_compaction_summary_empty?: number;
+  context_compaction_latest_model_context_window_source?: string;
 }
 
 export interface RuntimeCapabilityContract {

@@ -539,6 +539,7 @@ describe("WorkbenchContextPanel", () => {
           estimated_conversation_tokens: 8192,
           estimated_tool_schema_tokens: 35808,
           compact_trigger_input_tokens: 48000,
+          model_context_window_source: "registry",
           request_input_compact_percent: 92,
           request_input_tokens_until_compact: 4000,
         }}
@@ -549,6 +550,7 @@ describe("WorkbenchContextPanel", () => {
     expect(health).toHaveTextContent("Context is getting tight");
     expect(health).toHaveTextContent("44,000 estimated input tokens of 48,000 before the next request.");
     expect(health).toHaveTextContent("4,000 estimated input tokens before compaction");
+    expect(health).toHaveTextContent("window source: registry");
     const usageCard = screen.getByTestId("workbench-usage-card");
     expect(usageCard).toHaveTextContent("Conversation");
     expect(usageCard).toHaveTextContent("8,192 estimated tokens");

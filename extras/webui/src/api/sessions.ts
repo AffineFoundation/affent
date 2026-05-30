@@ -489,6 +489,7 @@ export interface SessionContextSummary {
   estimated_conversation_tokens?: number;
   estimated_tool_schema_tokens?: number;
   compact_trigger_input_tokens?: number;
+  model_context_window_source?: string;
   request_input_compact_percent?: number;
   request_input_tokens_until_compact?: number;
 }
@@ -503,6 +504,7 @@ export interface SessionContextCompactionSummary {
   latest_reason?: string;
   latest_reactive?: boolean;
   latest_summary_state?: "present" | "missing" | "empty";
+  latest_model_context_window_source?: string;
   tail_only?: boolean;
 }
 

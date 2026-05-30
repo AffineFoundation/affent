@@ -880,6 +880,7 @@ interface ContextHealthView {
   tokenSummary?: string;
   tone: "ready" | "attention" | "error";
   estimated?: boolean;
+  modelContextWindowSource?: string;
 }
 
 function contextHealthView(context?: SessionContextSummary, tokenSummary?: string): ContextHealthView {
@@ -907,6 +908,7 @@ function contextHealthView(context?: SessionContextSummary, tokenSummary?: strin
     tokenSummary,
     tone,
     estimated: Boolean((context as SessionContextSummary & { estimated?: boolean }).estimated),
+    modelContextWindowSource: context.model_context_window_source?.trim() || undefined,
   };
 }
 
@@ -949,11 +951,16 @@ function ContextHealthCard({ health }: { health: ContextHealthView }) {
         <div className="workbench-context-health-meta">
           {health.remaining ? <small>{health.remaining}</small> : null}
           {health.tokenSummary ? <small>{health.tokenSummary}</small> : null}
+          {health.modelContextWindowSource ? <small>window source: {formatContextSource(health.modelContextWindowSource)}</small> : null}
           {health.estimated ? <small>estimated from loaded trace</small> : null}
         </div>
       </div>
     </div>
   );
+}
+
+function formatContextSource(source: string): string {
+  return source.trim().replace(/[_-]+/g, " ");
 }
 
 function ContextHealthRing({ percent }: { percent?: number }) {
