@@ -221,6 +221,7 @@ export function App() {
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>("context");
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [sessionsExpandedInWorkbench, setSessionsExpandedInWorkbench] = useState(false);
+  const [sessionSearchOpenSignal, setSessionSearchOpenSignal] = useState(0);
   const [sessionPanelWidth, setSessionPanelWidth] = useState(280);
   const [workbenchPanelWidth, setWorkbenchPanelWidth] = useState<number | undefined>();
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -1928,6 +1929,11 @@ export function App() {
     setSessionsCollapsed(false);
   }
 
+  function handleSearchSessions() {
+    handleShowSessions();
+    setSessionSearchOpenSignal((signal) => signal + 1);
+  }
+
   function handleHideSessions() {
     setSessionsCollapsed(true);
     if (workbenchOpen) setSessionsExpandedInWorkbench(false);
@@ -2038,7 +2044,10 @@ export function App() {
       ) : null}
       <div className="app-topbar" ref={topbarRef}>
         <header className="app-header">
-          <h1>Affent</h1>
+          <h1>
+            <span className="brand-mark" aria-hidden="true" />
+            <span>Affent</span>
+          </h1>
           <span className="connection-pill" data-state={status.state} data-testid="connection-pill" title={status.detail ?? status.label}>
             {connectionLabel}
           </span>
@@ -2104,14 +2113,37 @@ export function App() {
           } as CSSProperties}
         >
           {showSessionRailToggle ? (
-            <button
-              type="button"
-              className="session-rail-toggle"
-              aria-label="Show chats"
-              onClick={handleShowSessions}
-            >
-              <span aria-hidden="true">Chats</span>
-            </button>
+            <nav className="session-rail" aria-label="Collapsed chat sidebar">
+              <button
+                type="button"
+                className="session-rail-action"
+                aria-label="Open sidebar"
+                title="Open sidebar"
+                onClick={handleShowSessions}
+              >
+                <span className="session-sidebar-icon" aria-hidden="true">
+                  <span />
+                </span>
+              </button>
+              <button
+                type="button"
+                className="session-rail-action"
+                aria-label="New chat"
+                title="New chat"
+                onClick={() => void handleNewSession()}
+              >
+                <span className="session-rail-plus" aria-hidden="true">+</span>
+              </button>
+              <button
+                type="button"
+                className="session-rail-action"
+                aria-label="Search chats"
+                title="Search chats"
+                onClick={handleSearchSessions}
+              >
+                <span className="session-rail-search-icon" aria-hidden="true" />
+              </button>
+            </nav>
           ) : null}
           {showSessionNav && !sessionsCollapsed ? (
             <SessionList
@@ -2126,6 +2158,7 @@ export function App() {
               deletingId={deletingSessionId}
               onCollapse={handleHideSessions}
               onResizeStart={handleSessionResizeStart}
+              searchOpenSignal={sessionSearchOpenSignal}
             />
           ) : null}
           <section

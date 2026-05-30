@@ -16,6 +16,7 @@ import {
   accountEnvReviewNames,
   sshAccessDescription,
   sshPathDisplay,
+  sshPublicKeyIssueDescription,
   sshStorageDescription,
   type AccountEnvFilter,
 } from "../view/accountConfig";
@@ -111,6 +112,7 @@ export function AccountSettingsPanel({
   const surfaceDetail = error ? "Account settings cannot be read" : detail;
   const sshDescription = sshAccessDescription(ssh);
   const sshStorage = sshStorageDescription(ssh);
+  const sshPublicKeyIssue = sshPublicKeyIssueDescription(ssh);
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
   const showEnvWrite = Boolean(
     onSetEnv && (!settings || settings.env.length === 0 || envEditorOpen),
@@ -365,8 +367,7 @@ export function AccountSettingsPanel({
                 </div>
               ) : null}
               <div className="session-skills-empty error" role="alert">
-                {ssh.public_key_error ||
-                  "Public key is missing for the existing SSH private key."}
+                {sshPublicKeyIssue}
               </div>
               <div className="session-loop-actions">
                 {onRefresh ? (

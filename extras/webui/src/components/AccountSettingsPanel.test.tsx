@@ -490,10 +490,38 @@ describe("AccountSettingsPanel", () => {
     expect(screen.getByTestId("account-config-focus")).toHaveTextContent(
       "Fix or derive the public key in ~/.ssh",
     );
-    expect(screen.getByRole("alert")).toHaveTextContent("could not be derived");
+    expect(screen.getByRole("alert")).toHaveTextContent("missing or cannot be derived");
     expect(
       screen.queryByRole("button", { name: "Generate SSH key" }),
     ).toBeNull();
+  });
+
+  it("explains SSH public key permission failures without leaking storage paths", () => {
+    render(
+      <AccountSettingsPanel
+        settings={{
+          env: [],
+          ssh: {
+            exists: true,
+            public_key_path: "/workspace/.home/.ssh/id_ed25519.pub",
+            public_key_error:
+              "open /workspace/.home/.ssh/id_ed25519.pub: permission denied",
+          },
+        }}
+        defaultOpen
+      />,
+    );
+
+    const panel = screen.getByTestId("account-settings-panel");
+    expect(panel).toHaveTextContent(
+      "Cannot read the SSH public key: permission denied.",
+    );
+    expect(panel).toHaveTextContent("Fix ~/.ssh file permissions");
+    expect(panel).toHaveTextContent("~/.ssh/id_ed25519.pub");
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Cannot read the SSH public key: permission denied.",
+    );
+    expect(panel).not.toHaveTextContent("open /workspace/.home");
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {

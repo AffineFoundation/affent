@@ -11,7 +11,7 @@ import {
   describeSourceAccess,
   sourceEvidenceLabel,
 } from "../view/sourceAccess";
-import { EventTrace } from "./EventTrace";
+import { CopyButton } from "./CopyButton";
 
 export function SessionTracePanel({
   trace,
@@ -26,16 +26,11 @@ export function SessionTracePanel({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<TraceFilter>("all");
-  const [controlsOpen, setControlsOpen] = useState(false);
-  const [activeIssueId, setActiveIssueId] = useState<string | undefined>();
+  const [selectedEventId, setSelectedEventId] = useState<number | undefined>();
   const trimmedQuery = query.trim();
   const filters = useMemo(
     () => traceFilters(events, trace.toolIssueCount),
     [events, trace.toolIssueCount],
-  );
-  const evidenceNavItems = useMemo(
-    () => traceEvidenceNavigatorItems(filters, events),
-    [events, filters],
   );
   const searchShortcuts = useMemo(
     () => traceSearchShortcuts(events, trace),
@@ -45,15 +40,7 @@ export function SessionTracePanel({
     () => filterTraceIssues(trace.toolIssues, filter, trimmedQuery),
     [filter, trace.toolIssues, trimmedQuery],
   );
-  const issueGroups = useMemo(
-    () => traceToolIssueGroups(visibleIssues),
-    [visibleIssues],
-  );
   const headerDigest = useMemo(() => traceHeaderDigest(trace), [trace]);
-  const activeIssue =
-    visibleIssues.find((issue) => issue.id === activeIssueId) ??
-    issueGroups[0]?.issues[0];
-  const focusedIssue = trace.toolIssues.length > 0 ? activeIssue : undefined;
   const eventEvidenceQuery = trimmedQuery;
   const hasActiveNarrowing = filter !== "all" || Boolean(trimmedQuery);
   const visibleEvents = useMemo(() => {
@@ -62,7 +49,6 @@ export function SessionTracePanel({
       ? filterEventTraceEvents(source, eventEvidenceQuery)
       : source;
   }, [events, eventEvidenceQuery, filter]);
-  const evidenceEvents = useMemo(() => visibleEvents, [visibleEvents]);
   const visibleIssueCount = visibleIssues.reduce(
     (sum, issue) => sum + issue.occurrences,
     0,
@@ -71,18 +57,47 @@ export function SessionTracePanel({
     () => traceSelectionSummary(events, visibleEvents),
     [events, visibleEvents],
   );
+  const callTools = useMemo(() => toolNamesByCallId(events), [events]);
+  const requestLabels = useMemo(() => requestLabelsByTurnId(events), [events]);
+  const eventRows = useMemo(
+    () =>
+      visibleEvents.map((event) =>
+        traceEventRow(event, callTools, requestLabels),
+      ),
+    [callTools, requestLabels, visibleEvents],
+  );
+  const defaultSelectedEvent =
+    visibleEvents.find((event) => eventIsFailedToolResult(event)) ??
+    visibleEvents.find(
+      (event) =>
+        event.type === EventType.ToolResult &&
+        eventHasSourceEvidence(event, callTools),
+    ) ??
+    visibleEvents.find((event) => event.type === EventType.ToolResult) ??
+    visibleEvents.find(
+      (event) =>
+        event.type === EventType.ToolRequest,
+    ) ??
+    visibleEvents[0];
+  const selectedEvent =
+    visibleEvents.find((event) => event.id === selectedEventId) ??
+    defaultSelectedEvent;
+  const selectedRow = selectedEvent
+    ? eventRows.find((row) => row.event.id === selectedEvent.id) ??
+      traceEventRow(selectedEvent, callTools, requestLabels)
+    : undefined;
+  const focusedIssue = selectedEvent
+    ? traceIssueForEvent(trace.toolIssues, selectedEvent)
+    : undefined;
   const focusedIssueEvidence = useMemo(
     () =>
       focusedIssue ? traceFailureEvidence(focusedIssue, events) : undefined,
     [events, focusedIssue],
   );
-  const defaultFilter: TraceFilter = "all";
-  const showTraceControls =
-    controlsOpen || Boolean(trimmedQuery) || filter !== defaultFilter;
   const applySearch = (nextQuery: string, nextFilter: TraceFilter = "all") => {
-    setControlsOpen(true);
     setFilter(nextFilter);
     setQuery(nextQuery);
+    setSelectedEventId(undefined);
   };
 
   return (
@@ -98,471 +113,211 @@ export function SessionTracePanel({
           <strong>{headerDigest.primary}</strong>
           <small>{headerDigest.secondary}</small>
         </div>
+        <div className="session-trace-statusbar" aria-label="Trace status">
+          <span data-tone={trace.toolIssueCount > 0 ? "error" : "ok"}>
+            <small>Failures</small>
+            <strong>{trace.toolIssueCount}</strong>
+          </span>
+          <span>
+            <small>Actions</small>
+            <strong>{trace.toolRequests.total}</strong>
+          </span>
+          <span>
+            <small>Events</small>
+            <strong>{trace.eventCount}</strong>
+          </span>
+          {trace.schemaVersion ? (
+            <span>
+              <small>Schema</small>
+              <strong>v{trace.schemaVersion}</strong>
+            </span>
+          ) : null}
+        </div>
       </header>
       <div className="session-trace-body">
         {trace.eventCount > 0 ? (
           <>
             {events.length > 1 ? (
               <>
-                <div className="session-trace-controlbar">
-                  <button
-                    type="button"
-                    className="ghost-action"
-                    onClick={() => setControlsOpen((open) => !open)}
+                <div className="session-trace-toolbar">
+                  <label className="session-skills-search">
+                    <span className="visually-hidden">Search events</span>
+                    <input
+                      value={query}
+                      onChange={(event) => {
+                        setQuery(event.target.value);
+                        setSelectedEventId(undefined);
+                      }}
+                      placeholder="Search event, tool, path, command, status:failed, exit:1"
+                      aria-describedby={
+                        searchShortcuts.length > 0
+                          ? "session-trace-search-help"
+                          : undefined
+                      }
+                    />
+                  </label>
+                  <div
+                    className="session-trace-filter-group"
+                    role="group"
+                    aria-label="Trace filters"
                   >
-                    {controlsOpen ? "Hide filters" : "Filter trace"}
-                  </button>
-                  <span>
-                    {traceControlSummary(
-                      filter,
-                      trimmedQuery,
-                      visibleEvents.length,
-                      events.length,
-                      focusedIssue,
-                    )}
-                  </span>
-                </div>
-                {showTraceControls ? (
-                  <div className="session-trace-toolbar">
-                    <label className="session-skills-search">
-                      <span className="visually-hidden">Search events</span>
-                      <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="Search trace: tool:shell, status:failed, exit:1"
-                        aria-describedby={
-                          searchShortcuts.length > 0
-                            ? "session-trace-search-help"
-                            : undefined
-                        }
-                      />
-                    </label>
+                    {filters.map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        className="session-trace-filter"
+                        aria-pressed={filter === item.key}
+                        disabled={item.count === 0 && item.key !== "all"}
+                        onClick={() => {
+                          setFilter((current) =>
+                            current === item.key && item.key !== "all"
+                              ? "all"
+                              : item.key,
+                          );
+                          setSelectedEventId(undefined);
+                        }}
+                      >
+                        {item.label}
+                        {item.count > 0 ? ` ${item.count}` : ""}
+                      </button>
+                    ))}
+                  </div>
+                  {searchShortcuts.length > 0 ? (
                     <div
-                      className="session-trace-filter-group"
-                      role="group"
-                      aria-label="Trace filters"
+                      className="session-trace-query-tools"
+                      id="session-trace-search-help"
+                      aria-label="Trace search shortcuts"
                     >
-                      {filters.map((item) => (
+                      <span>Quick scopes</span>
+                      {searchShortcuts.map((shortcut) => (
                         <button
-                          key={item.key}
+                          key={shortcut.label}
                           type="button"
-                          className="session-trace-filter"
-                          aria-pressed={filter === item.key}
-                          disabled={item.count === 0 && item.key !== "all"}
                           onClick={() =>
-                            setFilter((current) =>
-                              current === item.key && item.key !== "all"
-                                ? "all"
-                                : item.key,
-                            )
+                            applySearch(shortcut.query, shortcut.filter)
                           }
                         >
-                          {item.label}
-                          {item.count > 0 ? ` ${item.count}` : ""}
+                          {shortcut.label}
                         </button>
                       ))}
                     </div>
-                    {searchShortcuts.length > 0 ? (
-                      <div
-                        className="session-trace-query-tools"
-                        id="session-trace-search-help"
-                        aria-label="Trace search shortcuts"
-                      >
-                        <span className="visually-hidden">
-                          Suggested trace queries
-                        </span>
-                        {searchShortcuts.map((shortcut) => (
-                          <button
-                            key={shortcut.label}
-                            type="button"
-                            onClick={() =>
-                              applySearch(shortcut.query, shortcut.filter)
-                            }
-                          >
-                            {shortcut.label}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    {trimmedQuery ? (
-                      <button
-                        type="button"
-                        className="ghost-action"
-                        onClick={() => setQuery("")}
-                      >
-                        Clear search
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-            <div
-              className="session-trace-debugger"
-              data-has-issues={trace.toolIssues.length > 0 ? "true" : "false"}
-            >
-              <aside
-                className="session-trace-rail"
-                aria-label="Trace navigation"
-              >
-                {trace.toolIssues.length > 0 ? (
-                  <div
-                    className="session-trace-issues"
-                    data-testid="session-trace-issues"
-                  >
-                    <div className="session-trace-issues-head">
-                      <div>
-                        <strong>Failures</strong>
-                        <span>
-                          {visibleIssueCount}{" "}
-                          {visibleIssueCount === 1 ? "failure" : "failures"} ·{" "}
-                          {issueGroups.length}{" "}
-                          {issueGroups.length === 1 ? "tool" : "tools"}
-                        </span>
-                      </div>
-                    </div>
-                    {visibleIssues.length > 0 ? (
-                      <div
-                        className="session-trace-issue-list"
-                        aria-label="Trace failures"
-                      >
-                        {issueGroups.map((group) => (
-                          <section
-                            key={group.tool}
-                            className="session-trace-issue-group"
-                          >
-                            <button
-                              type="button"
-                              className="session-trace-issue-group-head"
-                              onClick={() => {
-                                setFilter("all");
-                                setQuery("");
-                                setActiveIssueId(group.issues[0]?.id);
-                              }}
-                            >
-                              <strong>{group.tool}</strong>
-                              <span>{group.count}</span>
-                            </button>
-                            <div className="session-trace-issue-group-list">
-                              {traceToolRequestIssueGroups(group.issues).map(
-                                (requestGroup) => (
-                                  <section
-                                    key={`${group.tool}:${requestGroup.turnNumber}`}
-                                    className="session-trace-request-group"
-                                  >
-                                    <button
-                                      type="button"
-                                      className="session-trace-request-head"
-                                      onClick={() => {
-                                        setFilter("all");
-                                        setQuery("");
-                                        setActiveIssueId(
-                                          requestGroup.issues[0]?.id,
-                                        );
-                                      }}
-                                    >
-                                      <strong>
-                                        Request {requestGroup.turnNumber}
-                                      </strong>
-                                      <span>
-                                        {requestGroup.count}{" "}
-                                        {requestGroup.count === 1
-                                          ? "failure"
-                                          : "failures"}
-                                      </span>
-                                    </button>
-                                    <div className="session-trace-request-issues">
-                                      {requestGroup.issues.map((issue) => (
-                                        <button
-                                          key={`${issue.id}:${issue.title}`}
-                                          type="button"
-                                          className="session-trace-issue"
-                                          data-selected={
-                                            focusedIssue?.id === issue.id
-                                              ? "true"
-                                              : "false"
-                                          }
-                                          onClick={() => {
-                                            setActiveIssueId(issue.id);
-                                            setFilter("all");
-                                            setQuery("");
-                                          }}
-                                        >
-                                          <span title={issue.title}>
-                                            {traceIssueCauseLabel(issue)}
-                                          </span>
-                                          <small title={issue.detail}>
-                                            {traceIssueDetailLabel(issue)}
-                                          </small>
-                                          {issue.badges.length > 0 ? (
-                                            <span
-                                              className="session-trace-issue-badges"
-                                              aria-hidden="true"
-                                            >
-                                              {issue.badges
-                                                .slice(0, 3)
-                                                .map((badge) => (
-                                                  <b key={badge}>
-                                                    {traceIssueBadgeLabel(
-                                                      badge,
-                                                    )}
-                                                  </b>
-                                                ))}
-                                            </span>
-                                          ) : null}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </section>
-                                ),
-                              )}
-                            </div>
-                          </section>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="session-skills-empty">
-                        No failures matching the current trace filter.
-                      </div>
-                    )}
-                  </div>
-                ) : evidenceNavItems.length > 0 ? (
-                  <div
-                    className="session-trace-evidence-nav"
-                    data-testid="session-trace-evidence-nav"
-                  >
-                    <div className="session-trace-evidence-nav-head">
-                      <strong>Evidence</strong>
-                      <span>
-                        {evidenceNavItems.length}{" "}
-                        {evidenceNavItems.length === 1 ? "scope" : "scopes"}
-                      </span>
-                    </div>
-                    <div
-                      className="session-trace-evidence-list"
-                      aria-label="Trace evidence"
-                    >
-                      {evidenceNavItems.map((item) => (
-                        <section
-                          key={item.key}
-                          className="session-trace-evidence-entry"
-                        >
-                          <button
-                            type="button"
-                            className="session-trace-evidence-item"
-                            data-selected={
-                              filter === item.key ? "true" : "false"
-                            }
-                            onClick={() => {
-                              setFilter((current) =>
-                                current === item.key ? "all" : item.key,
-                              );
-                              setQuery("");
-                              setActiveIssueId(undefined);
-                            }}
-                          >
-                            <span>{item.label}</span>
-                            <strong>{item.count}</strong>
-                            <small>{item.detail}</small>
-                          </button>
-                          {item.children.length > 0 &&
-                          (filter === item.key ||
-                            evidenceNavItems.length === 1) ? (
-                            <div className="session-trace-evidence-children">
-                              {item.children.map((child) => (
-                                <button
-                                  key={`${item.key}:${child.query}`}
-                                  type="button"
-                                  className="session-trace-evidence-child"
-                                  data-selected={
-                                    filter === item.key && query === child.query
-                                      ? "true"
-                                      : "false"
-                                  }
-                                  onClick={() => {
-                                    setFilter(item.key);
-                                    setQuery(child.query);
-                                    setActiveIssueId(undefined);
-                                  }}
-                                >
-                                  <span>{child.label}</span>
-                                  <small>{child.detail}</small>
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                        </section>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="session-trace-clear">
-                    <strong>No failed tool calls</strong>
-                    {trace.latest ? (
-                      <span>
-                        {trace.latest.label}: {trace.latest.detail}
-                      </span>
-                    ) : (
-                      <span>Trace events are available.</span>
-                    )}
-                  </div>
-                )}
-              </aside>
-              <section className="session-trace-main" aria-label="Trace detail">
-                {focusedIssue ? (
-                  <div
-                    className="session-trace-issue-focus"
-                    data-testid="session-trace-issue-focus"
-                  >
-                    <div className="session-trace-issue-focus-head">
-                      <span>Failure cause</span>
-                      <strong>{traceIssueCauseLabel(focusedIssue)}</strong>
-                      {focusedIssue.detail ? (
-                        <small>{traceIssueDetailLabel(focusedIssue)}</small>
-                      ) : null}
-                    </div>
-                    {focusedIssue.next ? (
-                      <div
-                        className="session-trace-issue-next"
-                        data-testid="session-trace-issue-next"
-                      >
-                        <span>Next</span>
-                        <p>{focusedIssue.next}</p>
-                      </div>
-                    ) : null}
-                    {focusedIssueEvidence ? (
-                      <TraceFailureEvidenceCard
-                        evidence={focusedIssueEvidence}
-                        onOpenArtifact={onOpenArtifact}
-                      />
-                    ) : null}
-                    <div className="session-trace-issue-facts">
-                      <TraceIssueFact label="Tool" value={focusedIssue.tool} />
-                      <TraceIssueFact
-                        label="Request"
-                        value={String(focusedIssue.turnNumber)}
-                      />
-                      {focusedIssue.exitCode != null ? (
-                        <TraceIssueFact
-                          label="Exit"
-                          value={String(focusedIssue.exitCode)}
-                        />
-                      ) : null}
-                      {focusedIssue.durationMs != null ? (
-                        <TraceIssueFact
-                          label="Duration"
-                          value={formatTraceDuration(focusedIssue.durationMs)}
-                        />
-                      ) : null}
-                      {focusedIssue.occurrences > 1 ? (
-                        <TraceIssueFact
-                          label="Repeats"
-                          value={`${focusedIssue.occurrences}x`}
-                        />
-                      ) : null}
-                    </div>
-                    <div className="session-trace-issue-actions">
-                      <button
-                        type="button"
-                        className="ghost-action"
-                        onClick={() => {
-                          setFilter("issues");
-                          setQuery(focusedIssue.query);
-                          setControlsOpen(true);
-                        }}
-                      >
-                        Only this call
-                      </button>
-                      <button
-                        type="button"
-                        className="ghost-action"
-                        onClick={() => {
-                          setFilter("all");
-                          setQuery(focusedIssue.requestQuery);
-                          setControlsOpen(true);
-                        }}
-                      >
-                        Whole request
-                      </button>
-                      {focusedIssue.artifactPath && onOpenArtifact ? (
-                        <button
-                          type="button"
-                          className="ghost-action"
-                          onClick={() =>
-                            onOpenArtifact(focusedIssue.artifactPath ?? "")
-                          }
-                        >
-                          Open artifact
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                <div
-                  className="session-trace-resultbar"
-                  data-testid="session-trace-resultbar"
-                >
-                  <div>
-                    <strong>{visibleEvents.length}</strong>
-                    <span>
-                      {resultCountLabel(
-                        visibleEvents.length,
-                        hasActiveNarrowing,
-                        events.length,
-                      )}
-                    </span>
-                  </div>
-                  <div
-                    className="session-trace-active-scopes"
-                    aria-label="Active trace scopes"
-                  >
-                    {filter !== "all" ? (
-                      <span>{filterLabel(filter)}</span>
-                    ) : null}
-                    {trimmedQuery ? <span>Search: {trimmedQuery}</span> : null}
-                  </div>
+                  ) : null}
                   {hasActiveNarrowing ? (
                     <button
                       type="button"
+                      className="ghost-action"
                       onClick={() => {
                         setFilter("all");
                         setQuery("");
-                        setActiveIssueId(undefined);
+                        setSelectedEventId(undefined);
                       }}
                     >
                       Reset
                     </button>
                   ) : null}
                 </div>
-                <TraceScopeSummaryView
-                  summary={selectionSummary}
-                  trace={trace}
-                />
-                {!focusedIssue && !hasActiveNarrowing && trace.latest ? (
-                  <div
-                    className="session-trace-latest"
-                    data-testid="session-trace-latest"
-                  >
-                    <strong>{trace.latest.label}</strong>
-                    <span>{trace.latest.detail}</span>
-                  </div>
+              </>
+            ) : null}
+            <div
+              className="session-trace-resultbar"
+              data-testid="session-trace-resultbar"
+            >
+              <div>
+                <strong>{visibleEvents.length}</strong>
+                <span>
+                  {resultCountLabel(
+                    visibleEvents.length,
+                    hasActiveNarrowing,
+                    events.length,
+                  )}
+                </span>
+              </div>
+              <div
+                className="session-trace-active-scopes"
+                aria-label="Active trace scopes"
+              >
+                {filter !== "all" ? <span>{filterLabel(filter)}</span> : null}
+                {trimmedQuery ? <span>Search: {trimmedQuery}</span> : null}
+                {visibleIssueCount > 0 ? (
+                  <span>
+                    {visibleIssueCount}{" "}
+                    {visibleIssueCount === 1 ? "failure" : "failures"}
+                  </span>
                 ) : null}
-                {visibleEvents.length > 0 ? (
-                  <div className="session-trace-results">
-                    <EventTrace
-                      events={evidenceEvents}
-                      onOpenArtifact={onOpenArtifact}
-                      showCount={false}
-                    />
-                  </div>
-                ) : (
-                  <div className="session-skills-empty">
-                    No trace entries matching{" "}
-                    {emptyStateLabel(filter, trimmedQuery)}.
-                  </div>
-                )}
-              </section>
+              </div>
             </div>
+            <TraceScopeSummaryView summary={selectionSummary} trace={trace} />
+            {visibleEvents.length > 0 ? (
+              <div className="session-trace-workspace">
+                <section
+                  className="session-trace-list-pane"
+                  aria-label="Trace event list"
+                >
+                  <div className="session-trace-list-head">
+                    <div>
+                      <strong>Events</strong>
+                      <span>{visibleEvents.length} of {events.length}</span>
+                    </div>
+                  </div>
+                  <div
+                    className="session-trace-event-list"
+                    data-testid="session-trace-event-list"
+                    role="listbox"
+                    aria-label="Trace events"
+                  >
+                    {eventRows.map((row) => (
+                      <button
+                        key={`${row.event.id}:${row.event.type}`}
+                        type="button"
+                        role="option"
+                        aria-selected={
+                          selectedEvent?.id === row.event.id ? "true" : "false"
+                        }
+                        className="session-trace-event-row"
+                        data-tone={row.tone}
+                        onClick={() => setSelectedEventId(row.event.id)}
+                      >
+                        <span className="session-trace-event-id">
+                          #{row.event.id}
+                        </span>
+                        <span className="session-trace-event-kind">
+                          <strong>{row.label}</strong>
+                          <small>{row.scope}</small>
+                        </span>
+                        <span className="session-trace-event-summary">
+                          {row.summary}
+                        </span>
+                        <span className="session-trace-event-meta">
+                          {row.meta.map((part) => (
+                            <b key={part}>{part}</b>
+                          ))}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <TraceEventDetail
+                  row={selectedRow}
+                  issue={focusedIssue}
+                  issueEvidence={focusedIssueEvidence}
+                  onOpenArtifact={onOpenArtifact}
+                  onOnlyCall={(issue) => {
+                    setFilter("issues");
+                    setQuery(issue.query);
+                    setSelectedEventId(undefined);
+                  }}
+                  onWholeRequest={(issue) => {
+                    setFilter("all");
+                    setQuery(issue.requestQuery);
+                    setSelectedEventId(undefined);
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="session-skills-empty">
+                No trace entries matching {emptyStateLabel(filter, trimmedQuery)}.
+              </div>
+            )}
           </>
         ) : (
           <div
@@ -598,32 +353,6 @@ interface TraceFilterItem {
   count: number;
 }
 
-interface TraceEvidenceNavigatorItem {
-  key: TraceFilter;
-  label: string;
-  count: number;
-  detail: string;
-  children: TraceEvidenceNavigatorChild[];
-}
-
-interface TraceEvidenceNavigatorChild {
-  label: string;
-  detail: string;
-  query: string;
-}
-
-interface TraceToolIssueGroup {
-  tool: string;
-  count: number;
-  issues: SessionTraceView["toolIssues"];
-}
-
-interface TraceToolRequestIssueGroup {
-  turnNumber: number;
-  count: number;
-  issues: SessionTraceView["toolIssues"];
-}
-
 interface TraceSearchShortcut {
   label: string;
   query: string;
@@ -655,6 +384,147 @@ interface TraceRelatedEvidence {
   kind: string;
   label: string;
   detail: string;
+}
+
+interface TraceEventRowView {
+  event: NormalizedEvent;
+  label: string;
+  scope: string;
+  summary: string;
+  tone: "info" | "ok" | "error" | "source" | "warning" | "unknown";
+  meta: string[];
+}
+
+function TraceEventDetail({
+  row,
+  issue,
+  issueEvidence,
+  onOpenArtifact,
+  onOnlyCall,
+  onWholeRequest,
+}: {
+  row?: TraceEventRowView;
+  issue?: SessionTraceView["toolIssues"][number];
+  issueEvidence?: TraceFailureEvidence;
+  onOpenArtifact?: (path: string) => void;
+  onOnlyCall: (issue: SessionTraceView["toolIssues"][number]) => void;
+  onWholeRequest: (issue: SessionTraceView["toolIssues"][number]) => void;
+}) {
+  if (!row) {
+    return (
+      <aside className="session-trace-detail-pane" data-testid="session-trace-event-detail">
+        <div className="session-skills-empty">Select a trace event to inspect it.</div>
+      </aside>
+    );
+  }
+
+  const artifactPath = readEventString(row.event, "result_artifact_path");
+  const signal = traceEventSignal(row.event);
+
+  return (
+    <aside
+      className="session-trace-detail-pane"
+      data-testid="session-trace-event-detail"
+      aria-label="Selected trace event detail"
+    >
+      <div className="session-trace-detail-head" data-tone={row.tone}>
+        <span>{row.scope}</span>
+        <strong>{row.label}</strong>
+        <small>{row.summary}</small>
+      </div>
+      <div className="session-trace-detail-facts">
+        <TraceIssueFact label="Event" value={`#${row.event.id}`} />
+        <TraceIssueFact label="Type" value={row.event.type} />
+        {row.meta.slice(0, 6).map((part) => {
+          const [label, ...rest] = part.split(" ");
+          return (
+            <TraceIssueFact
+              key={part}
+              label={label}
+              value={rest.join(" ") || part}
+            />
+          );
+        })}
+      </div>
+      {issue ? (
+        <div
+          className="session-trace-issue-focus"
+          data-testid="session-trace-issue-focus"
+        >
+          <div className="session-trace-issue-focus-head">
+            <span>Failure cause</span>
+            <strong>{traceIssueCauseLabel(issue)}</strong>
+            {issue.detail ? <small>{traceIssueDetailLabel(issue)}</small> : null}
+          </div>
+          {issue.next ? (
+            <div
+              className="session-trace-issue-next"
+              data-testid="session-trace-issue-next"
+            >
+              <span>Next</span>
+              <p>{issue.next}</p>
+            </div>
+          ) : null}
+          {issueEvidence ? (
+            <TraceFailureEvidenceCard
+              evidence={issueEvidence}
+              onOpenArtifact={onOpenArtifact}
+            />
+          ) : null}
+          <div className="session-trace-issue-actions">
+            <button
+              type="button"
+              className="ghost-action"
+              onClick={() => onOnlyCall(issue)}
+            >
+              Only this call
+            </button>
+            <button
+              type="button"
+              className="ghost-action"
+              onClick={() => onWholeRequest(issue)}
+            >
+              Whole request
+            </button>
+            {issue.artifactPath && onOpenArtifact ? (
+              <button
+                type="button"
+                className="ghost-action"
+                onClick={() => onOpenArtifact(issue.artifactPath ?? "")}
+              >
+                Open artifact
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : signal ? (
+        <div className="session-trace-event-signal">
+          <span>{signal.label}</span>
+          <p>{signal.value}</p>
+        </div>
+      ) : null}
+      {artifactPath && onOpenArtifact ? (
+        <button
+          type="button"
+          className="ghost-action session-trace-open-artifact"
+          onClick={() => onOpenArtifact(artifactPath)}
+        >
+          Open artifact
+        </button>
+      ) : null}
+      <details className="session-trace-raw-event">
+        <summary>Raw event JSON</summary>
+        <div className="event-actions">
+          <CopyButton
+            label="Copy event"
+            value={JSON.stringify(row.event.raw, null, 2)}
+            className="event-action"
+          />
+        </div>
+        <pre className="code">{JSON.stringify(row.event.raw, null, 2)}</pre>
+      </details>
+    </aside>
+  );
 }
 
 function TraceFailureEvidenceCard({
@@ -720,6 +590,216 @@ function TraceFailureEvidenceCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function traceEventRow(
+  event: NormalizedEvent,
+  callTools: Map<string, string>,
+  requestLabels: Map<string, number>,
+): TraceEventRowView {
+  const tool = toolName(event, callTools);
+  const requestNumber = event.turnId ? requestLabels.get(event.turnId) : undefined;
+  const request = requestNumber ? `Request ${requestNumber}` : "Session";
+  const callId = readEventString(event, "call_id");
+  const exitCode = readEventNumber(event, "exit_code");
+  const durationMs = readEventNumber(event, "duration_ms");
+  const source = eventHasSourceEvidence(event, callTools);
+  const failed = eventIsFailedToolResult(event) || event.type === EventType.Error;
+  const meta = compactTraceParts([
+    tool ? `tool ${tool}` : undefined,
+    callId ? `call ${callId}` : undefined,
+    exitCode != null ? `exit ${exitCode}` : undefined,
+    durationMs != null ? formatTraceDuration(durationMs) : undefined,
+    eventHasArtifact(event) ? "artifact" : undefined,
+    eventHasRepair(event) ? "repaired" : undefined,
+    eventHasTruncation(event) ? "truncated" : undefined,
+    !event.known ? "unclassified" : undefined,
+  ]);
+
+  return {
+    event,
+    label: traceEventLabel(event, failed, source),
+    scope: tool ? `${request} · ${tool}` : request,
+    summary: traceEventSummary(event, tool),
+    tone: !event.known
+      ? "unknown"
+      : failed
+        ? "error"
+        : source
+          ? "source"
+          : eventHasTruncation(event) || eventHasRepair(event)
+            ? "warning"
+            : event.type === EventType.ToolResult && exitCode === 0
+              ? "ok"
+              : "info",
+    meta,
+  };
+}
+
+function traceEventLabel(
+  event: NormalizedEvent,
+  failed: boolean,
+  source: boolean,
+): string {
+  if (!event.known) return event.type;
+  if (event.type === EventType.TraceMeta) return "Trace metadata";
+  if (event.type === EventType.TurnStart) return "Request started";
+  if (event.type === EventType.UserMessage)
+    return readEventString(event, "source") === "schedule"
+      ? "Scheduled message"
+      : "User message";
+  if (event.type === EventType.RuntimeSurface) return "Runtime available";
+  if (event.type === EventType.ContextInjected) return "Context added";
+  if (event.type === EventType.ContextCompacted) return "Context compacted";
+  if (event.type === EventType.ToolRequest)
+    return readEventBoolean(event, "skipped") ? "Action skipped" : "Action started";
+  if (event.type === EventType.ToolResult) {
+    if (failed) return "Action failed";
+    if (source) return "Source evidence";
+    return "Action finished";
+  }
+  if (event.type === EventType.MessageDone) return "Assistant answer";
+  if (event.type === EventType.MessageRejected) return "Answer deferred";
+  if (event.type === EventType.ThinkingDone) return "Thinking saved";
+  if (event.type === EventType.Usage) return "Token usage";
+  if (event.type === EventType.TurnEnd) return "Request ended";
+  if (event.type.startsWith("loop.")) return traceLoopEventLabel(event.type);
+  if (event.type === EventType.Error) return "Error";
+  return event.type;
+}
+
+function traceLoopEventLabel(type: string): string {
+  if (type === EventType.LoopProtocolFeed) return "Loop protocol fed";
+  if (type === EventType.LoopProtocolCalibrationRequest) return "Loop question asked";
+  if (type === EventType.LoopProtocolCalibration) return "Loop answer recorded";
+  if (type === EventType.LoopProtocolActivation) return "Loop activated";
+  if (type === EventType.LoopDecision) return "Loop decision";
+  return "Loop event";
+}
+
+function traceEventSummary(event: NormalizedEvent, tool: string | undefined): string {
+  if (event.type === EventType.ToolRequest) {
+    const args = readEventObject(event, "args");
+    const request = traceRequestSummary(tool ?? "tool", args);
+    const skipped = readEventBoolean(event, "skipped");
+    const skipKind = readEventString(event, "skip_failure_kind");
+    return compactTraceParts([
+      skipped ? "not dispatched" : undefined,
+      request.value ?? request.label,
+      skipKind ? traceIssueBadgeLabel(skipKind) : undefined,
+    ]).join(" · ") || "Tool call was requested.";
+  }
+
+  if (event.type === EventType.ToolResult) {
+    const source = describeSourceAccess(eventResultText(event));
+    if (source) {
+      return compactTraceParts([
+        sourceEvidenceLabel(source),
+        source.accessedUrl,
+        source.httpStatus ? `http ${source.httpStatus}` : undefined,
+      ]).join(" · ");
+    }
+    const output = traceFailureOutput(event.data as ToolResultPayload);
+    if (output) return output;
+    const result = compactTraceText(readEventString(event, "result_summary"), 180);
+    if (result) return result;
+    return "Tool call completed without a captured summary.";
+  }
+
+  if (event.type === EventType.UserMessage)
+    return compactTraceText(
+      readEventString(event, "display_text") ?? readEventString(event, "text"),
+      180,
+    ) ?? "User request recorded.";
+  if (event.type === EventType.MessageDone || event.type === EventType.ThinkingDone)
+    return compactTraceText(readEventString(event, "text"), 180) ?? "Saved output.";
+  if (event.type === EventType.Usage) {
+    const input = readEventNumber(event, "input_tokens") ?? 0;
+    const output = readEventNumber(event, "output_tokens") ?? 0;
+    return `${(input + output).toLocaleString()} tokens · ${input.toLocaleString()} in / ${output.toLocaleString()} out`;
+  }
+  if (event.type === EventType.TurnEnd)
+    return compactTraceParts([
+      readEventString(event, "reason"),
+      traceToolStatsSummary(event),
+    ]).join(" · ") || "Request finished.";
+  if (event.type === EventType.ContextCompacted)
+    return compactTraceText(readEventString(event, "summary_preview"), 180) ??
+      readEventString(event, "reason") ??
+      "Conversation context was compacted.";
+  if (event.type.startsWith("loop."))
+    return compactTraceText(
+      readEventString(event, "summary") ??
+        readEventString(event, "decision") ??
+        readEventString(event, "required_action") ??
+        readEventString(event, "protocol_path"),
+      180,
+    ) ?? "Loop runtime event.";
+  if (event.type === EventType.Error)
+    return compactTraceText(readEventString(event, "message"), 180) ?? "Runtime error.";
+  if (!event.known) return compactTraceText(JSON.stringify(event.data), 180) ?? "Unclassified runtime event.";
+  return compactTraceText(JSON.stringify(event.data), 180) ?? "Trace event.";
+}
+
+function traceToolStatsSummary(event: NormalizedEvent): string | undefined {
+  const stats = readEventObject(event, "tool_stats");
+  if (!stats) return undefined;
+  const total = typeof stats.tool_requests === "number" ? stats.tool_requests : undefined;
+  const admitted = typeof stats.tool_requests_admitted === "number" ? stats.tool_requests_admitted : undefined;
+  const skipped = typeof stats.tool_requests_skipped === "number" ? stats.tool_requests_skipped : undefined;
+  if (total == null && admitted == null && skipped == null) return undefined;
+  if (admitted != null || skipped != null)
+    return `${admitted ?? 0} admitted / ${skipped ?? 0} skipped`;
+  return `${total} tool requests`;
+}
+
+function traceEventSignal(
+  event: NormalizedEvent,
+): { label: string; value: string } | undefined {
+  if (event.type === EventType.ToolRequest) {
+    const args = readEventObject(event, "args");
+    const summary = traceRequestSummary(readEventString(event, "tool") ?? "tool", args);
+    if (summary.value) return { label: summary.label, value: summary.value };
+  }
+  if (event.type === EventType.ToolResult) {
+    const source = describeSourceAccess(eventResultText(event));
+    if (source) {
+      return {
+        label: "Source",
+        value: compactTraceParts([
+          source.accessedUrl,
+          source.requestedUrl && source.requestedUrl !== source.accessedUrl
+            ? `requested ${source.requestedUrl}`
+            : undefined,
+          source.ref ? `ref ${source.ref}` : undefined,
+          source.httpStatus ? `http ${source.httpStatus}` : undefined,
+          source.contentType,
+        ]).join(" · "),
+      };
+    }
+    const output = traceFailureOutput(event.data as ToolResultPayload);
+    if (output) return { label: eventIsFailedToolResult(event) ? "Failure output" : "Output", value: output };
+  }
+  return undefined;
+}
+
+function traceIssueForEvent(
+  issues: SessionTraceView["toolIssues"],
+  event: NormalizedEvent,
+): SessionTraceView["toolIssues"][number] | undefined {
+  const callId = readEventString(event, "call_id");
+  if (!callId) return undefined;
+  return issues.find((issue) => issue.id === callId);
+}
+
+function eventIsFailedToolResult(event: NormalizedEvent): boolean {
+  if (event.type !== EventType.ToolResult || !event.data || typeof event.data !== "object") return false;
+  const data = event.data as ToolResultPayload;
+  return (
+    (data.exit_code ?? 0) !== 0 ||
+    Boolean(data.failure_kind) ||
+    Boolean(data.failure_kinds?.length)
   );
 }
 
@@ -938,55 +1018,6 @@ function compactTraceParts(values: Array<string | undefined>): string[] {
     out.push(trimmed);
   }
   return out;
-}
-
-function traceControlSummary(
-  filter: TraceFilter,
-  query: string,
-  visibleCount: number,
-  totalCount: number,
-  _issue?: SessionTraceView["toolIssues"][number],
-): string {
-  if (query) return `${visibleCount} of ${totalCount} entries · ${query}`;
-  if (filter !== "all")
-    return `${visibleCount} of ${totalCount} entries · ${filterLabel(filter)}`;
-  return `${totalCount} trace entries`;
-}
-
-function traceToolIssueGroups(
-  issues: SessionTraceView["toolIssues"],
-): TraceToolIssueGroup[] {
-  const groups = new Map<string, TraceToolIssueGroup>();
-  for (const issue of issues) {
-    const current = groups.get(issue.tool) ?? {
-      tool: issue.tool,
-      count: 0,
-      issues: [],
-    };
-    current.count += issue.occurrences;
-    current.issues.push(issue);
-    groups.set(issue.tool, current);
-  }
-  return [...groups.values()].sort(
-    (a, b) => b.count - a.count || a.tool.localeCompare(b.tool),
-  );
-}
-
-function traceToolRequestIssueGroups(
-  issues: SessionTraceView["toolIssues"],
-): TraceToolRequestIssueGroup[] {
-  const groups = new Map<number, TraceToolRequestIssueGroup>();
-  for (const issue of issues) {
-    const current = groups.get(issue.turnNumber) ?? {
-      turnNumber: issue.turnNumber,
-      count: 0,
-      issues: [],
-    };
-    current.count += issue.occurrences;
-    current.issues.push(issue);
-    groups.set(issue.turnNumber, current);
-  }
-  return [...groups.values()].sort((a, b) => a.turnNumber - b.turnNumber);
 }
 
 function traceIssueCauseLabel(
@@ -1288,272 +1319,6 @@ function traceSearchShortcuts(
     seen.add(shortcut.label);
   }
   return shortcuts;
-}
-
-function traceEvidenceNavigatorItems(
-  filters: readonly TraceFilterItem[],
-  events: readonly NormalizedEvent[],
-): TraceEvidenceNavigatorItem[] {
-  const priority: TraceFilter[] = [
-    "sources",
-    "files",
-    "commands",
-    "artifacts",
-    "repairs",
-    "truncated",
-    "unclassified",
-  ];
-  const byKey = new Map(filters.map((item) => [item.key, item]));
-  return priority
-    .map((key) => byKey.get(key))
-    .filter((item): item is TraceFilterItem => Boolean(item && item.count > 0))
-    .map((item) => ({
-      key: item.key,
-      label: item.label,
-      count: item.count,
-      detail: traceEvidenceNavigatorDetail(item.key, events),
-      children: traceEvidenceNavigatorChildren(item.key, events),
-    }));
-}
-
-function traceEvidenceNavigatorDetail(
-  filter: TraceFilter,
-  events: readonly NormalizedEvent[],
-): string {
-  if (filter === "sources") return sourceEvidenceNavigatorDetail(events);
-  if (filter === "files") return pathEvidenceNavigatorDetail(events);
-  if (filter === "commands") return commandEvidenceNavigatorDetail(events);
-  if (filter === "artifacts") return artifactEvidenceNavigatorDetail(events);
-  if (filter === "repairs") return repairEvidenceNavigatorDetail(events);
-  if (filter === "truncated") return truncationEvidenceNavigatorDetail(events);
-  if (filter === "unclassified")
-    return unclassifiedEvidenceNavigatorDetail(events);
-  return "matching trace entries";
-}
-
-function sourceEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const parts: string[] = [];
-  for (const event of events) {
-    if (event.type !== EventType.ToolResult) continue;
-    const info = describeSourceAccess(eventResultText(event));
-    if (!info) continue;
-    pushUnique(parts, readableURLHost(info.accessedUrl));
-    if (info.ref) pushUnique(parts, `ref ${info.ref}`);
-    if (info.httpStatus) pushUnique(parts, `http ${info.httpStatus}`);
-    if (info.contentType) pushUnique(parts, info.contentType);
-    if (parts.length >= 4) break;
-  }
-  return parts.length > 0
-    ? compactNavigatorDetail(parts)
-    : "source URLs and provenance";
-}
-
-function pathEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const paths: string[] = [];
-  for (const event of events) {
-    if (event.type !== EventType.ToolRequest) continue;
-    const tool = readEventString(event, "tool");
-    if (
-      tool !== "read_file" &&
-      tool !== "write_file" &&
-      tool !== "edit_file" &&
-      tool !== "list_files"
-    )
-      continue;
-    const args = readEventObject(event, "args");
-    const path =
-      readRecordString(args, "path") ?? readRecordString(args, "cwd");
-    if (path) pushUnique(paths, compactPath(path));
-  }
-  return paths.length > 0 ? compactNavigatorDetail(paths) : "workspace paths";
-}
-
-function commandEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const commands: string[] = [];
-  for (const event of events) {
-    if (
-      event.type !== EventType.ToolRequest ||
-      readEventString(event, "tool") !== "shell"
-    )
-      continue;
-    const args = readEventObject(event, "args");
-    const command =
-      readRecordString(args, "command") ??
-      readEventString(event, "original_args_summary");
-    if (command) pushUnique(commands, compactCommand(command));
-  }
-  return commands.length > 0
-    ? compactNavigatorDetail(commands)
-    : "shell commands";
-}
-
-function artifactEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const artifacts: string[] = [];
-  for (const event of events) {
-    const artifactPath = readEventString(event, "result_artifact_path");
-    if (artifactPath) pushUnique(artifacts, compactPath(artifactPath));
-  }
-  return artifacts.length > 0
-    ? compactNavigatorDetail(artifacts)
-    : "stored tool output";
-}
-
-function repairEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const tools: string[] = [];
-  for (const event of events) {
-    if (!eventHasRepair(event)) continue;
-    pushUnique(tools, readEventString(event, "tool") ?? "tool args");
-  }
-  return tools.length > 0
-    ? compactNavigatorDetail(tools)
-    : "repaired tool args";
-}
-
-function truncationEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const parts: string[] = [];
-  for (const event of events) {
-    if (!eventHasTruncation(event)) continue;
-    if (positiveNumber(readEventNumber(event, "result_omitted_bytes")))
-      pushUnique(parts, "result omitted");
-    else if (positiveNumber(readEventNumber(event, "args_omitted_bytes")))
-      pushUnique(parts, "args omitted");
-    else if (readEventBoolean(event, "result_truncated"))
-      pushUnique(parts, "result truncated");
-    else if (readEventBoolean(event, "args_truncated"))
-      pushUnique(parts, "args truncated");
-  }
-  return parts.length > 0 ? compactNavigatorDetail(parts) : "trimmed output";
-}
-
-function unclassifiedEvidenceNavigatorDetail(
-  events: readonly NormalizedEvent[],
-): string {
-  const types: string[] = [];
-  for (const event of events) {
-    if (!event.known) pushUnique(types, event.type);
-  }
-  return types.length > 0
-    ? compactNavigatorDetail(types)
-    : "unknown runtime events";
-}
-
-function traceEvidenceNavigatorChildren(
-  filter: TraceFilter,
-  events: readonly NormalizedEvent[],
-): TraceEvidenceNavigatorChild[] {
-  if (filter === "sources") return sourceEvidenceNavigatorChildren(events);
-  if (filter === "files") return pathEvidenceNavigatorChildren(events);
-  if (filter === "commands") return commandEvidenceNavigatorChildren(events);
-  return [];
-}
-
-function sourceEvidenceNavigatorChildren(
-  events: readonly NormalizedEvent[],
-): TraceEvidenceNavigatorChild[] {
-  const children: TraceEvidenceNavigatorChild[] = [];
-  const seen = new Set<string>();
-  for (const event of events) {
-    if (event.type !== EventType.ToolResult) continue;
-    const info = describeSourceAccess(eventResultText(event));
-    if (!info) continue;
-    const host = readableURLHost(info.accessedUrl);
-    const query = info.ref ? `ref ${info.ref}` : host;
-    if (seen.has(query)) continue;
-    seen.add(query);
-    children.push({
-      label: host,
-      detail: compactNavigatorDetail(
-        [
-          info.ref ? `ref ${info.ref}` : undefined,
-          info.httpStatus ? `http ${info.httpStatus}` : undefined,
-          info.contentType,
-        ].filter((part): part is string => Boolean(part)),
-      ),
-      query,
-    });
-    if (children.length >= 4) break;
-  }
-  return children;
-}
-
-function pathEvidenceNavigatorChildren(
-  events: readonly NormalizedEvent[],
-): TraceEvidenceNavigatorChild[] {
-  const children: TraceEvidenceNavigatorChild[] = [];
-  const seen = new Set<string>();
-  for (const event of events) {
-    if (event.type !== EventType.ToolRequest) continue;
-    const tool = readEventString(event, "tool");
-    if (
-      tool !== "read_file" &&
-      tool !== "write_file" &&
-      tool !== "edit_file" &&
-      tool !== "list_files"
-    )
-      continue;
-    const args = readEventObject(event, "args");
-    const path =
-      readRecordString(args, "path") ?? readRecordString(args, "cwd");
-    if (!path || seen.has(path)) continue;
-    seen.add(path);
-    children.push({
-      label: compactPath(path),
-      detail: tool,
-      query: `path:${path}`,
-    });
-    if (children.length >= 4) break;
-  }
-  return children;
-}
-
-function commandEvidenceNavigatorChildren(
-  events: readonly NormalizedEvent[],
-): TraceEvidenceNavigatorChild[] {
-  const children: TraceEvidenceNavigatorChild[] = [];
-  const seen = new Set<string>();
-  for (const event of events) {
-    if (
-      event.type !== EventType.ToolRequest ||
-      readEventString(event, "tool") !== "shell"
-    )
-      continue;
-    const args = readEventObject(event, "args");
-    const command =
-      readRecordString(args, "command") ??
-      readEventString(event, "original_args_summary");
-    if (!command || seen.has(command)) continue;
-    seen.add(command);
-    children.push({
-      label: compactCommand(command),
-      detail: "shell",
-      query: command,
-    });
-    if (children.length >= 4) break;
-  }
-  return children;
-}
-
-function compactNavigatorDetail(parts: readonly string[]): string {
-  const value = parts.slice(0, 4).join(" · ");
-  return value.length > 88 ? `${value.slice(0, 87)}...` : value;
-}
-
-function pushUnique(values: string[], value: string | undefined) {
-  const next = value?.trim();
-  if (!next || values.includes(next)) return;
-  values.push(next);
 }
 
 function readableURLHost(value: string): string {

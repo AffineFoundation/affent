@@ -35,6 +35,7 @@ export function SessionList({
   deletingId,
   onCollapse,
   onResizeStart,
+  searchOpenSignal = 0,
 }: {
   sessions: readonly SessionSummary[];
   selectedId?: string;
@@ -47,6 +48,7 @@ export function SessionList({
   deletingId?: string;
   onCollapse?: () => void;
   onResizeStart?: PointerEventHandler<HTMLSpanElement>;
+  searchOpenSignal?: number;
 }) {
   const [filter, setFilter] = useState<SessionListFilter>("all");
   const [query, setQuery] = useState("");
@@ -63,7 +65,7 @@ export function SessionList({
   const toolsActive = filter !== "all" || query.trim() !== "";
   const toolsExpanded = toolsOpen || toolsActive;
   const compact = demoActive || rows.length <= 1;
-  const showTools = !demoActive && rows.length > 1;
+  const showTools = !demoActive && (rows.length > 1 || toolsOpen);
   useEffect(() => {
     setMobileOpen(false);
   }, [selectedId]);
@@ -76,6 +78,11 @@ export function SessionList({
   useEffect(() => {
     if (toolsExpanded) searchInputRef.current?.focus({ preventScroll: true });
   }, [toolsExpanded]);
+
+  useEffect(() => {
+    if (searchOpenSignal <= 0 || demoActive) return;
+    setToolsOpen(true);
+  }, [demoActive, searchOpenSignal]);
 
   function reset() {
     setFilter("all");
@@ -130,11 +137,13 @@ export function SessionList({
           <button
             type="button"
             className="session-collapse-action"
-            aria-label="Hide chats"
-            title="Hide chats"
+            aria-label="Close sidebar"
+            title="Close sidebar"
             onClick={onCollapse}
           >
-            <span aria-hidden="true">‹</span>
+            <span className="session-sidebar-icon" aria-hidden="true">
+              <span />
+            </span>
           </button>
         ) : null}
         <button
@@ -145,18 +154,21 @@ export function SessionList({
         >
           Close
         </button>
-        {!demoActive ? (
+      </div>
+      {!demoActive ? (
+        <div className="session-create-row">
           <button
             type="button"
             className="new-chat-action"
             title="Start a new chat"
+            aria-label="New chat"
             onClick={onNew}
           >
-            <span aria-hidden="true">+</span>
-            New
+            <span className="new-chat-plus" aria-hidden="true">+</span>
+            <span>New chat</span>
           </button>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
       {showTools ? (
         <div className="session-tools" data-expanded={toolsExpanded ? "true" : "false"} data-testid="session-tools">
           {toolsExpanded ? (

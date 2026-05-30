@@ -219,7 +219,7 @@ describe("SessionList", () => {
   it("describes empty chats without internal metrics", () => {
     renderList([session({ id: "new-session" })]);
 
-    const row = screen.getByRole("button", { name: /New chat/ });
+    const row = within(screen.getByTestId("session-list")).getByRole("button", { name: /New chat/ });
     expect(row).toHaveTextContent("New chat");
     expect(row).toHaveTextContent("No messages yet");
     expect(row).not.toHaveTextContent("new-session");
@@ -334,7 +334,7 @@ describe("SessionList", () => {
   it("does not show chat filters before any chats exist", () => {
     renderList([]);
 
-    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New chat" })).toBeInTheDocument();
     expect(screen.getByText("No chats yet. Type a request to start.")).toBeInTheDocument();
     expect(screen.queryByTestId("session-tools")).toBeNull();
   });
@@ -344,7 +344,7 @@ describe("SessionList", () => {
     const onCollapse = vi.fn();
     renderList([session({ id: "s1", latest_user_message: "current affine research" })], { onCollapse });
 
-    await user.click(screen.getByRole("button", { name: "Hide chats" }));
+    await user.click(screen.getByRole("button", { name: "Close sidebar" }));
 
     expect(onCollapse).toHaveBeenCalled();
   });
@@ -658,7 +658,7 @@ describe("SessionList", () => {
     expect(screen.getByTestId("demo-session-row")).toHaveTextContent("Offline preview");
     expect(screen.getByTestId("demo-session-row")).toHaveTextContent("Read-only replay");
     expect(screen.queryByTestId("session-tools")).toBeNull();
-    expect(screen.queryByRole("button", { name: "New" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "New chat" })).toBeNull();
     expect(onNew).not.toHaveBeenCalled();
   });
 });

@@ -41,8 +41,23 @@ export function accountConfigDetail(settings?: AccountSettingsResponse): string 
 
 export function sshAccessDescription(ssh?: AccountSettingsResponse["ssh"]): string {
   if (ssh?.public_key) return "Public key is ready for private Git remotes. Existing keys are never overwritten.";
-  if (ssh?.exists) return "A private key exists, but its public key is unavailable.";
+  if (ssh?.exists) return sshPublicKeyIssueDescription(ssh) ?? "A private key exists, but its public key is unavailable.";
   return "Generate a key when this runtime needs private Git access.";
+}
+
+export function sshPublicKeyIssueDescription(ssh?: AccountSettingsResponse["ssh"]): string | undefined {
+  if (!ssh?.exists || ssh.public_key) return undefined;
+  const raw = ssh.public_key_error?.replace(/\s+/g, " ").trim();
+  if (!raw) return "Public key is missing for the existing SSH private key.";
+  if (/permission denied/i.test(raw)) {
+    return "Cannot read the SSH public key: permission denied.";
+  }
+  if (/missing|could not be derived|derive/i.test(raw)) {
+    return "Private key exists, but the public key is missing or cannot be derived.";
+  }
+  return raw.replace(/(?:lstat|stat|open) \S+/gi, (match) =>
+    /(?:\.ssh|ssh)/i.test(match) ? "read account SSH key" : match,
+  );
 }
 
 export function sshStorageDescription(ssh?: AccountSettingsResponse["ssh"]): string | undefined {
@@ -182,17 +197,20 @@ export function accountConfigReview(settings: AccountSettingsResponse): AccountC
   }
 
   if (settings.ssh.exists) {
+    const issue = sshPublicKeyIssueDescription(settings.ssh);
     return {
       tone: "attention",
       headline: "SSH key needs review",
-      detail: settings.ssh.public_key_error || "A private key exists, but the public key cannot be read.",
+      detail: issue || "A private key exists, but the public key cannot be read.",
       privateGit: "Blocked",
       publicKey: "Unavailable",
       keyPath,
       keyPathDetail,
       envCount: envLabel,
       latestEnvUpdate,
-      nextAction: "Fix or derive the public key in ~/.ssh, then refresh config before cloning private repositories.",
+      nextAction: /permission denied/i.test(issue ?? "")
+        ? "Fix ~/.ssh file permissions, then refresh config before cloning private repositories."
+        : "Fix or derive the public key in ~/.ssh, then refresh config before cloning private repositories.",
     };
   }
 

@@ -661,8 +661,7 @@ describe("App", () => {
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("No messages yet");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("New live chat");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("new-1");
-    expect(screen.queryByRole("button", { name: "New chat" })).toBeNull();
-    expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New chat" })).toBeInTheDocument();
   });
 
   it("keeps a newly submitted chat in the session list when the initial index returns stale", async () => {
@@ -2151,7 +2150,7 @@ describe("App", () => {
 
     const input = await screen.findByPlaceholderText("Message Affent...");
     expect(await screen.findAllByText("existing saved work")).not.toHaveLength(0);
-    await user.click(screen.getByRole("button", { name: "New" }));
+    await user.click(screen.getByRole("button", { name: "New chat" }));
 
     await waitFor(() => expect(input).toHaveFocus());
     expect(screen.getByTestId("connection-pill")).toHaveTextContent("Ready");
@@ -2629,12 +2628,14 @@ describe("App", () => {
 
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "collapsed");
     expect(screen.queryByTestId("session-list")).toBeNull();
-    expect(screen.getByRole("button", { name: "Show chats" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open sidebar" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "New chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Search chats" })).toBeInTheDocument();
     expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Attached chat");
     expect(screen.getByTestId("workbench-panel")).toHaveTextContent("0.0001M tokens");
     expect(screen.getByRole("separator", { name: "Resize Workbench" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Show chats" }));
+    await user.click(screen.getByRole("button", { name: "Open sidebar" }));
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
     expect(screen.getByTestId("session-list")).toHaveTextContent("Workbench layout fix");
     expect(screen.getByRole("separator", { name: "Resize chats" })).toBeInTheDocument();
