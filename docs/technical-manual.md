@@ -1197,7 +1197,11 @@ exercising durable recovery. The profile also requires `market`, `bittensor`,
 not hide that realistic stock analysis, Bittensor subnet research, code/PR
 execution, or long-running recovery workloads were skipped. It also gates both
 aggregate and per-domain expectation pass rate, so a failing Bittensor or
-code/PR scenario remains visible even if easier domains pass. No-hit session recall is
+code/PR scenario remains visible even if easier domains pass. The profile also
+requires `git_commit` and `git_push` TaskState evidence and runtime-surface
+refresh reasons `post_compaction` and `compact_window_observed`, so code/PR and
+model-window compaction regressions cannot hide behind broad pass rates.
+No-hit session recall is
 allowed only when `recent_sessions` exposes recovery anchors; no-hit recall
 without recent anchors trips the `empty_recall:no_recent_sessions` debug tag
 gate. Memory search misses are not gated merely for missing once, but misses

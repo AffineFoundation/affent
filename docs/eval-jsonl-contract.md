@@ -115,11 +115,15 @@ Shared metadata fields:
 - `required_task_state_evidence_sources`: optional list of TaskState evidence
   sources that must appear at least once in the batch summary. Use this when a
   run must prove concrete completion facts such as `git_commit` or `git_push`
-  through the canonical task-state snapshot rather than final-message text.
+  through the canonical task-state snapshot rather than final-message text. The
+  built-in `longrun` profile requires both sources so code/PR workloads must
+  leave structural completion evidence.
 - `required_runtime_surface_refresh_reasons`: optional list of
   `runtime.surface.refresh_reason` values that must appear at least once in the
   batch summary. This lets long-run suites require structural runtime refresh
-  facts such as `post_compaction` or `compact_window_observed`.
+  facts such as `post_compaction` or `compact_window_observed`; the built-in
+  `longrun` profile requires both to keep model-window compaction recovery
+  observable.
 
 ## Scenario Record
 
